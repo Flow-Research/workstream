@@ -430,8 +430,11 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| runtime `WS-XINT-002-07`, sub-wave `07A` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` (finding-slot availability only) |
-| runtime `WS-XINT-002-07`, sub-wave `07B` | no availability change; response-slot evaluator extension only |
+| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+
+Within that single runtime owner, planning sub-wave 07A is the only
+availability transition and initially permits finding slots; 07B changes no
+availability and only extends the evaluator to response slots.
 
 The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. WS-XINT-002-03 activates the three internal
@@ -468,8 +471,11 @@ remain planned and unavailable, and add no migration.
 | `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
-| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | runtime `WS-XINT-002-07`; sub-wave `07A` |
-| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | finding slot in 07A; response slot added by evaluator-only 07B | runtime `WS-XINT-002-07`; `07A` availability / `07B` extension |
+| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
+| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | finding slot in 07A; response slot added by evaluator-only 07B | `WS-XINT-002-07` |
+
+The owner cells above deliberately retain the exact runtime `ActionOwner`.
+07A/07B are contract sub-waves, not new catalogue owner values.
 
 The fixed internal service identities and their complete action sets are also
 closed:

@@ -101,8 +101,8 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-REV-11` | REV 11 Recovery And Reconciliation Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-12` | REV 12 Artifact Reconciliation And Projection Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-LIFECYCLE` | REV Lifecycle Repair Action Activation | L1 | Blocked until REV-REG and four hidden manifests merge |
-| runtime `WS-XINT-002-07`, sub-wave `07A` | Review Packet And Finding Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART finding evidence behavior |
-| runtime `WS-XINT-002-07`, sub-wave `07B` | Response Evidence Binding Evaluator Extension (no availability change) | L1 | 07A plus exact human revision obligation/preparation |
+| `WS-XINT-002-07A` (runtime owner `WS-XINT-002-07`) | Review Packet And Finding Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART finding evidence behavior |
+| `WS-XINT-002-07B` (runtime owner `WS-XINT-002-07`) | Response Evidence Binding Evaluator Extension (no availability change) | L1 | 07A plus exact human revision obligation/preparation |
 
 ## Dependency order
 

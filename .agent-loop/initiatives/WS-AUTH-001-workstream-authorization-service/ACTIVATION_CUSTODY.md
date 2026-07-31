@@ -49,8 +49,11 @@ mappings, and availability must remain identical.
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| runtime owner `WS-XINT-002-07`, sub-wave `07A` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` (finding-slot availability) |
-| runtime owner `WS-XINT-002-07`, sub-wave `07B` | no availability change; response-slot evaluator extension |
+| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+
+Runtime owner `WS-XINT-002-07` contains two planning sub-waves: 07A is the
+only availability transition and initially permits finding slots; 07B changes
+no availability and only extends the evaluator to response slots.
 
 `WS-AUTH-001-ART-CUSTODY` historically transferred 25 rows. WS-XINT-002-01
 reconciles the live catalogue by removing the six unused multi-step upload rows
