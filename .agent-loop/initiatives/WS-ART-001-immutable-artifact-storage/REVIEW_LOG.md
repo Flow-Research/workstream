@@ -264,3 +264,19 @@
   advice is recorded but is not a blocker for this bounded format adapter.
 - CodeRabbit's valid external findings add bounded `KeyError`/`IndexError`
   malformed-PDF mapping and document the 100,000-object inspection limit.
+
+## WS-ART-001-03B3B3A
+
+- Installed only the approved hash-bound `defusedxml` wheel and added hidden,
+  validation-only OOXML container security without activating a document
+  adapter, AUTH action, or sufficiency flow.
+- Initial internal review found broad package-part acceptance, active metadata,
+  DTD, nested-archive, root-relationship, shared-policy, and weak assertion
+  gaps. Repairs use exact-format positive policies, strict passive metadata,
+  parser-enforced XML denial, bounded read failures, canonical classifier facts,
+  and zero-body-read ordering proof.
+- Focused validation passes 136 tests with 93.92 percent OOXML coverage; lane,
+  dependency, lock, stale-contract, link, and diff gates pass.
+- Architecture, security, QA, senior engineering, product/ops, reuse, CI,
+  test-delta, and docs review tracks pass after repair. Hosted GitHub and
+  CodeRabbit evidence remain the publication gate.
