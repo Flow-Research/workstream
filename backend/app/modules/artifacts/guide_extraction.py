@@ -16,12 +16,13 @@ from typing import BinaryIO
 EXTRACTION_POLICY_VERSION = "guide-extraction-v1"
 PDF_EXTRACTION_POLICY_VERSION = "guide-extraction-v2"
 DOCX_EXTRACTION_POLICY_VERSION = "guide-extraction-v3"
+PPTX_EXTRACTION_POLICY_VERSION = "guide-extraction-v4"
 EXTRACTOR_VERSION = "1"
 MAXIMUM_INPUT_BYTES = 32 * 1024 * 1024
 MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024
 MAXIMUM_PROTOCOL_BYTES = (MAXIMUM_OUTPUT_BYTES * 6) + 1024
 WALL_TIMEOUT_SECONDS = 60
-_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf", "docx"})
+_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf", "docx", "pptx"})
 _DEFAULT_OMISSION_FACTS = {"truncated": False, "omitted": False}
 _DOCX_OMISSION_KEYS = frozenset(
     {
@@ -34,6 +35,17 @@ _DOCX_OMISSION_KEYS = frozenset(
         "embedded_objects",
         "hidden_text",
         "field_instructions",
+    }
+)
+_PPTX_OMISSION_KEYS = frozenset(
+    {
+        "truncated",
+        "omitted",
+        "masters",
+        "comments",
+        "hidden_metadata",
+        "non_text_objects",
+        "embedded_objects",
     }
 )
 
@@ -166,11 +178,12 @@ class GuideExtractionRunner:
             isinstance(key, str) and isinstance(item, bool) for key, item in value.items()
         ):
             return False
-        if detected_format != "docx" or status != "extracted":
+        if detected_format not in {"docx", "pptx"} or status != "extracted":
             return value == _DEFAULT_OMISSION_FACTS
-        if frozenset(value) != _DOCX_OMISSION_KEYS or value["truncated"]:
+        expected_keys = _DOCX_OMISSION_KEYS if detected_format == "docx" else _PPTX_OMISSION_KEYS
+        if frozenset(value) != expected_keys or value["truncated"]:
             return False
-        categories = _DOCX_OMISSION_KEYS - {"truncated", "omitted"}
+        categories = expected_keys - {"truncated", "omitted"}
         return value["omitted"] == any(value[key] for key in categories)
 
     @staticmethod
@@ -212,4 +225,6 @@ def extraction_policy_version(detected_format: str) -> str:
         return PDF_EXTRACTION_POLICY_VERSION
     if detected_format == "docx":
         return DOCX_EXTRACTION_POLICY_VERSION
+    if detected_format == "pptx":
+        return PPTX_EXTRACTION_POLICY_VERSION
     return EXTRACTION_POLICY_VERSION

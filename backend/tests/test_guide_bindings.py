@@ -183,6 +183,35 @@ def _docx_payload() -> bytes:
     return output.getvalue()
 
 
+def _pptx_payload() -> bytes:
+    output = BytesIO()
+    presentation = (
+        b'<p:presentation xmlns:p="http://schemas.openxmlformats.org/'
+        b'presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/'
+        b'officeDocument/2006/relationships"><p:sldIdLst>'
+        b'<p:sldId id="256" r:id="rId1"/></p:sldIdLst></p:presentation>'
+    )
+    relationships = (
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/'
+        b'relationships"><Relationship Id="rId1" Type="http://schemas.'
+        b'openxmlformats.org/officeDocument/2006/relationships/slide" '
+        b'Target="slides/slide1.xml"/></Relationships>'
+    )
+    slide = (
+        b'<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        b'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        b"<p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>visible</a:t>"
+        b"</a:r></a:p></p:txBody></p:sp><p:pic/></p:spTree></p:cSld></p:sld>"
+    )
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", b"<Types/>")
+        archive.writestr("_rels/.rels", b"<Relationships/>")
+        archive.writestr("ppt/presentation.xml", presentation)
+        archive.writestr("ppt/_rels/presentation.xml.rels", relationships)
+        archive.writestr("ppt/slides/slide1.xml", slide)
+    return output.getvalue()
+
+
 def _preparation(
     tmp_path: Path, **limit_changes: Any
 ) -> tuple[ArtifactPreparationService, ArtifactScratchManager]:
@@ -513,8 +542,23 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
                 "field_instructions": False,
             },
         ),
+        (
+            _pptx_payload(),
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "pptx",
+            '{"slides":[{"notes":[],"number":1,"text":["visible"]}]}',
+            {
+                "truncated": False,
+                "omitted": True,
+                "masters": False,
+                "comments": False,
+                "hidden_metadata": False,
+                "non_text_objects": True,
+                "embedded_objects": False,
+            },
+        ),
     ],
-    ids=("json", "docx"),
+    ids=("json", "docx", "pptx"),
 )
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
     isolated_database_env: str,
@@ -566,7 +610,9 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                     classification_facts={},
                 )
             )
-        prepared = await preparation.prepare(_byte_stream(payload), media_type=media_type)
+        prepared = await preparation.prepare(
+            _byte_stream(payload), media_type=media_type
+        )
         request = GuideExtractionRequest(
             project_id=ids["project"],
             guide_id=ids["guide"],
@@ -854,7 +900,7 @@ async def test_successful_replay_requires_the_current_extraction_policy(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("detected_format", ["pdf", "docx"])
+@pytest.mark.parametrize("detected_format", ["pdf", "docx", "pptx"])
 async def test_new_format_support_replaces_obsolete_policy_budget_without_replay(
     isolated_database_env: str,
     tmp_path: Path,
@@ -867,9 +913,12 @@ async def test_new_format_support_replaces_obsolete_policy_budget_without_replay
         writer.write(stream)
         payload = stream.getvalue()
         media_type = "application/pdf"
-    else:
+    elif detected_format == "docx":
         payload = _docx_payload()
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    else:
+        payload = _pptx_payload()
+        media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -950,9 +999,7 @@ async def test_new_format_support_replaces_obsolete_policy_budget_without_replay
             assert budget.policy_version == extraction_policy_version(detected_format)
             assert budget.claimed_slots == 1
         preparation, scratch = _preparation(tmp_path)
-        prepared = await preparation.prepare(
-            _byte_stream(payload), media_type=media_type
-        )
+        prepared = await preparation.prepare(_byte_stream(payload), media_type=media_type)
         service = GuideExtractionService(factory, GuideExtractionRegistry())
         extracted = await service.extract_prepared(request, prepared)
         replay = await service.claim_materialization_slot(request)

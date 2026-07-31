@@ -1304,13 +1304,32 @@ presence is recorded through the fixed boolean omission keys `truncated`,
 `omitted`, `headers`, `footers`, `comments`, `tracked_deletions`,
 `embedded_objects`, `hidden_text`, and `field_instructions`. Successful DOCX
 extraction always records `truncated=false`; `omitted` is true exactly when any
-category boolean is true. Other successful format extractors retain the exact
-default `{"truncated":false,"omitted":false}`. Active embedded
+category boolean is true. Successful PDF, plain-text, Markdown, JSON, and CSV
+extractors retain the exact default `{"truncated":false,"omitted":false}`.
+Active embedded
 content remains a malformed OOXML rejection. The isolated-child result protocol, immutable
 extracted-content fact, and replay comparison bind those omissions to the same
 canonical output. Output over 4 MiB fails before any partial result is usable.
 Traversal beyond 64 nested document/container levels fails deterministically as
 malformed rather than consuming a transient parser retry.
+
+PPTX extraction runs only after exact `pptx` classification and the same
+shared OOXML boundary. Policy `guide-extraction-v4` follows
+`ppt/presentation.xml` slide order and resolves only exact matching
+Transitional or Strict slide and notes-slide relationships; mixed namespaces,
+orphaned or duplicated parts, and cross-root targets fail closed. It emits
+compact sorted JSON with one `slides` array whose entries contain the exact
+one-based slide `number`, ordered paragraph `text`, and ordered `notes`.
+DrawingML run text, tabs, breaks, grouped shapes, and table paragraphs retain
+XML order. Non-content notes placeholders and non-text objects never enter the
+canonical output.
+
+Successful PPTX evidence binds the fixed boolean omission keys `truncated`,
+`omitted`, `masters`, `comments`, `hidden_metadata`, `non_text_objects`, and
+`embedded_objects` to the canonical output. Exactly 300 slides are accepted;
+301 fails before semantic extraction. Traversal beyond 64 levels and canonical
+output beyond 4 MiB fail without partial agent input. Active embedded content
+remains a malformed rejection at the shared OOXML boundary.
 
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
