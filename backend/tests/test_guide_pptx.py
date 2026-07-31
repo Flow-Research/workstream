@@ -211,57 +211,43 @@ def test_relationship_conflicts_and_orphans_fail_closed() -> None:
         "pptx_relationship_conflict",
     )
 
-    mixed = _package(
-        [_slide()],
-        notes={1: _notes()},
-        family=_TRANSITIONAL,
+    mixed = _replace_member(
+        _package([_slide()], notes={1: _notes()}, family=_TRANSITIONAL),
+        "ppt/slides/_rels/slide1.xml.rels",
+        _relationships([("rIdNotes", f"{_STRICT}/notesSlide", "../notesSlides/notesSlide1.xml")]),
     )
-    with zipfile.ZipFile(BytesIO(mixed)) as source:
-        members = {info.filename: source.read(info) for info in source.infolist()}
-    members["ppt/slides/_rels/slide1.xml.rels"] = _relationships(
-        [("rIdNotes", f"{_STRICT}/notesSlide", "../notesSlides/notesSlide1.xml")]
-    )
-    output = BytesIO()
-    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, body in members.items():
-            archive.writestr(name, body)
     with pytest.raises(PptxExtractionFailure) as namespace:
-        extract_pptx(output.getvalue())
+        extract_pptx(mixed)
     assert (namespace.value.status, namespace.value.code) == (
         "malformed",
         "pptx_relationship_conflict",
     )
 
-    wrong_type = _package([_slide()])
-    with zipfile.ZipFile(BytesIO(wrong_type)) as source:
-        members = {info.filename: source.read(info) for info in source.infolist()}
-    members["ppt/_rels/presentation.xml.rels"] = _relationships(
-        [("rIdSlide1", f"{_TRANSITIONAL}/slideLayout", "slides/slide1.xml")]
+    wrong_type = _replace_member(
+        _package([_slide()]),
+        "ppt/_rels/presentation.xml.rels",
+        _relationships([("rId1", f"{_TRANSITIONAL}/slideLayout", "slides/slide1.xml")]),
     )
-    output = BytesIO()
-    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, body in members.items():
-            archive.writestr(name, body)
     with pytest.raises(PptxExtractionFailure) as relationship_type:
-        extract_pptx(output.getvalue())
+        extract_pptx(wrong_type)
     assert (relationship_type.value.status, relationship_type.value.code) == (
         "malformed",
         "pptx_relationship_conflict",
     )
 
-    members["ppt/_rels/presentation.xml.rels"] = (
-        b'<NotRelationships xmlns="http://schemas.openxmlformats.org/package/2006/'
-        b'relationships"><Relationship Id="rIdSlide1" Type="http://schemas.'
-        b'openxmlformats.org/officeDocument/2006/relationships/slide" '
-        b'Target="slides/slide1.xml"/></NotRelationships>'
+    relationship_root = _replace_member(
+        _package([_slide()]),
+        "ppt/_rels/presentation.xml.rels",
+        (
+            b'<NotRelationships xmlns="http://schemas.openxmlformats.org/package/2006/'
+            b'relationships"><Relationship Id="rIdSlide1" Type="http://schemas.'
+            b'openxmlformats.org/officeDocument/2006/relationships/slide" '
+            b'Target="slides/slide1.xml"/></NotRelationships>'
+        ),
     )
-    output = BytesIO()
-    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name, body in members.items():
-            archive.writestr(name, body)
-    with pytest.raises(PptxExtractionFailure) as relationship_root:
-        extract_pptx(output.getvalue())
-    assert (relationship_root.value.status, relationship_root.value.code) == (
+    with pytest.raises(PptxExtractionFailure) as invalid_relationship_root:
+        extract_pptx(relationship_root)
+    assert (invalid_relationship_root.value.status, invalid_relationship_root.value.code) == (
         "malformed",
         "pptx_relationship_conflict",
     )
@@ -333,10 +319,12 @@ def test_complete_relationship_identity_and_ownership_matrix_fails_closed() -> N
 
 
 def test_hidden_slide_visibility_is_recorded_without_discarding_text() -> None:
-    payload = _replace_member(
-        _package([_slide(_text_shape(["<a:r><a:t>visible text</a:t></a:r>"]))]),
-        "ppt/presentation.xml",
-        _presentation(["rId1"]).replace(b'id="256"', b'id="256" show="0"'),
+    payload = _package(
+        [
+            _slide(_text_shape(["<a:r><a:t>visible text</a:t></a:r>"])).replace(
+                b"<p:sld ", b'<p:sld show="0" '
+            )
+        ]
     )
     result = extract_pptx(payload)
     assert result.canonical_output == (
@@ -383,6 +371,16 @@ def test_output_and_nesting_limits_are_exact_and_never_partial() -> None:
     with pytest.raises(PptxExtractionFailure) as grouped_nesting:
         extract_pptx(_package([_slide(grouped)]))
     assert (grouped_nesting.value.status, grouped_nesting.value.code) == (
+        "malformed",
+        "pptx_nesting_limit",
+    )
+
+    outer = "<p:grpSp>" * 55
+    inner = "<a:r>" * 10 + "<a:t>deep</a:t>" + "</a:r>" * 10
+    combined = outer + _text_shape([inner]) + "</p:grpSp>" * 55
+    with pytest.raises(PptxExtractionFailure) as combined_nesting:
+        extract_pptx(_package([_slide(combined)]))
+    assert (combined_nesting.value.status, combined_nesting.value.code) == (
         "malformed",
         "pptx_nesting_limit",
     )

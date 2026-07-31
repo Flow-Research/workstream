@@ -60,7 +60,8 @@ guide-insufficiency decisions.
 
 - Ruff and approved extractor-dependency gate — pass.
 - Focused OOXML/PPTX/extraction/architecture/lane suite — pass.
-- PPTX module branch coverage — 94.43 percent (21 tests).
+- PPTX module branch coverage — 94.94 percent on the external-review repair
+  head (21 tests).
 - Stale artifact contracts, Markdown links, lane integrity, and
   `git diff --check` — pass.
 - Hosted Backend/Agent Gates retain DB-backed replay, repository-wide coverage,
@@ -81,8 +82,12 @@ contract/test findings were repaired and re-reviewed.
 
 ## External review
 
-CodeRabbit and hosted GitHub checks have not yet run on the committed PR head.
-They remain required before human merge approval.
+CodeRabbit identified two correctness gaps and one test-maintainability issue:
+depth reset at the paragraph boundary, slide visibility read from `p:sldId`
+instead of `p:sld`, and repeated ZIP-fixture mutation code. All three are
+repaired with focused regression proof. Its docstring warning was stale; the
+hosted Backend docstring gate passed. Hosted checks must rerun on the repair
+head before human merge approval.
 
 ## Remaining risks and follow-up
 

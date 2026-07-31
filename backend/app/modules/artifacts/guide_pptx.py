@@ -177,7 +177,7 @@ def _relationships(payload: bytes, *, part_name: str) -> dict[str, _Relationship
     return relationships
 
 
-def _paragraph_text(paragraph: ElementTree.Element) -> str:
+def _paragraph_text(paragraph: ElementTree.Element, depth: int) -> str:
     values: list[str] = []
 
     def walk(element: ElementTree.Element, depth: int) -> None:
@@ -195,7 +195,7 @@ def _paragraph_text(paragraph: ElementTree.Element) -> str:
         for child in element:
             walk(child, depth + 1)
 
-    walk(paragraph, 0)
+    walk(paragraph, depth)
     return "".join(values)
 
 
@@ -273,7 +273,7 @@ def _paragraphs(
         if element.tag == _TEXT_BODY_TAG:
             text_allowed = True
         if element.tag == _PARAGRAPH_TAG and text_allowed:
-            paragraphs.append(_paragraph_text(element))
+            paragraphs.append(_paragraph_text(element, depth))
             return
         for child in element:
             walk(child, depth + 1, text_allowed=text_allowed)
@@ -319,8 +319,6 @@ def _ordered_parts(
         if not canonical_slide_id or canonical_slide_id in seen_slide_ids:
             raise PptxExtractionFailure("malformed", "pptx_relationship_conflict")
         seen_slide_ids.add(canonical_slide_id)
-        if str(slide_id.get("show", "1")).casefold() in {"0", "false", "off", "no"}:
-            omissions["hidden_metadata"] = True
         relationship_ids = tuple(
             value
             for attribute in (_RELATIONSHIP_ID_ATTRIBUTE, _STRICT_RELATIONSHIP_ID_ATTRIBUTE)
@@ -395,6 +393,8 @@ def _canonical_slides(
             code="pptx_invalid_slide_xml",
             root_tag=_SLIDE_TAG,
         )
+        if str(slide.get("show", "1")).casefold() in {"0", "false", "off", "no"}:
+            omissions["hidden_metadata"] = True
         notes: list[str] = []
         if notes_name is not None:
             notes_root = _xml(
