@@ -145,8 +145,8 @@ Adds protected v1 routes:
 These routes require an actor role allowed to manage project setup.
 
 Normal project setup does not depend on manually calling the sufficiency or
-derivation routes. Creating a guide or a later guide-source snapshot enqueues
-the Celery project setup pipeline, which runs guide sufficiency first and only
+derivation routes. Creating guide-source snapshot metadata enqueues the Celery
+project setup pipeline; guide creation alone does not. The pipeline runs guide sufficiency first and only
 continues to submission artifact policy derivation when sufficiency is not
 blocked.
 

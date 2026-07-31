@@ -25,6 +25,7 @@ from app.modules.authorization.catalogue import (
 )
 from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
 from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
     PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
     PROJECT_GUIDE_TARGET_KIND_BY_ACTION,
@@ -62,6 +63,7 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectCreateResourceContext,
+    ProjectGuideMutationPrepareDenialResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
@@ -87,6 +89,14 @@ ContextRevalidator = Callable[
     ],
     Awaitable[HumanAuthorizationContext],
 ]
+
+_GUIDE_METADATA_MUTATIONS = frozenset(
+    {
+        ActionId.PROJECT_GUIDE_CREATE,
+        ActionId.PROJECT_GUIDE_UPDATE,
+        ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+    }
+)
 
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
@@ -239,6 +249,7 @@ class _PrelockedAuthority:
         "_frozen",
         "issuer",
         "matched_grant_id",
+        "matched_grant_scope_project_id",
         "matched_grant_status",
         "permission_id",
         "scope_project_id",
@@ -260,6 +271,7 @@ class _PrelockedAuthority:
         action_id: ActionId,
         scope_project_id: UUID | None,
         matched_grant_id: UUID | None,
+        matched_grant_scope_project_id: UUID | None,
         matched_grant_status: str | None,
         permission_id: PermissionId,
         artifact_resource_type: str | None = None,
@@ -271,6 +283,9 @@ class _PrelockedAuthority:
         object.__setattr__(self, "action_id", action_id)
         object.__setattr__(self, "scope_project_id", scope_project_id)
         object.__setattr__(self, "matched_grant_id", matched_grant_id)
+        object.__setattr__(
+            self, "matched_grant_scope_project_id", matched_grant_scope_project_id
+        )
         object.__setattr__(self, "matched_grant_status", matched_grant_status)
         object.__setattr__(self, "permission_id", permission_id)
         object.__setattr__(self, "artifact_resource_type", artifact_resource_type)
@@ -387,6 +402,7 @@ class AuthorizationService:
                 action_id=action_id,
                 scope_project_id=None,
                 matched_grant_id=None,
+                matched_grant_scope_project_id=None,
                 matched_grant_status=None,
                 permission_id=action.permission_id,
                 artifact_resource_type=scope.artifact_resource_type,
@@ -455,15 +471,35 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
+        elif action_id in _GUIDE_METADATA_MUTATIONS:
+            if (
+                not isinstance(context, HumanAuthorizationContext)
+                or scope.kind is not PreparedAuthorityScopeKind.PROJECT
+                or scope.project_id is None
+            ):
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
+            locked = await self._admin.lock_request_actor(
+                context.identity_link_id, context.actor_profile_id
+            )
+            context = self._locked_human_context(locked, context)
+            grant = await self._admin.find_effective_grant(
+                context.actor_profile_id,
+                action.permission_id,
+                scope_project_id=scope.project_id,
+                for_update=True,
+                allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}),
+            )
+            if grant is None:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
         elif action_id is ActionId.PROJECT_CREATE:
             if not isinstance(context, HumanAuthorizationContext):
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
             if scope.kind is not PreparedAuthorityScopeKind.SYSTEM:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
-                )
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
             locked = await self._admin.lock_request_actor(
                 context.identity_link_id, context.actor_profile_id
             )
@@ -515,6 +551,11 @@ class AuthorizationService:
             action_id=action_id,
             scope_project_id=scope.project_id,
             matched_grant_id=UUID(str(grant.id)) if grant is not None else None,
+            matched_grant_scope_project_id=(
+                UUID(str(grant.scope_project_id))
+                if grant is not None and getattr(grant, "scope_project_id", None) is not None
+                else None
+            ),
             matched_grant_status=grant.status if grant is not None else None,
             permission_id=action.permission_id,
         )
@@ -580,9 +621,14 @@ class AuthorizationService:
         """Persist one exact prepare-time denial without issuing a capability."""
         self._validate_prepared_consumer(consumer_token)
         action = ACTION_BY_ID.get(action_id)
-        if action_id is not ActionId.PROJECT_CREATE or not isinstance(
-            resource_context, ProjectCreateResourceContext
-        ):
+        supported = (
+            action_id is ActionId.PROJECT_CREATE
+            and isinstance(resource_context, ProjectCreateResourceContext)
+        ) or (
+            action_id in _GUIDE_METADATA_MUTATIONS
+            and isinstance(resource_context, ProjectGuideMutationPrepareDenialResourceContext)
+        )
+        if not supported:
             raise TypeError("unsupported prepared denial")
         await self._complete_decision(
             action=action,
@@ -902,19 +948,40 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
                 matched_project_id = authority.scope_project_id
+        elif action_id in _GUIDE_METADATA_MUTATIONS:
+            denial = self._lifecycle_denial(context)
+            expected = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
+            if denial is None and action.availability is not ActionAvailability.ACTIVE:
+                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+            if denial is None and (expected is None or not isinstance(resource_context, expected)):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None and (resource_context.scope_project_id != authority.scope_project_id):
+                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+            guide_kind = PROJECT_GUIDE_TARGET_KIND_BY_ACTION.get(action_id)
+            if (
+                denial is None
+                and guide_kind is not None
+                and (resource_context.target_kind != guide_kind)
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None and (
+                authority.matched_grant_id is None or authority.matched_grant_status != "active"
+            ):
+                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
+                matched_grant_id = authority.matched_grant_id
+                matched_project_id = authority.matched_grant_scope_project_id
         elif action_id is ActionId.PROJECT_CREATE:
             denial = self._lifecycle_denial(context)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
                 denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if denial is None and not isinstance(
-                resource_context, ProjectCreateResourceContext
-            ):
+            if denial is None and not isinstance(resource_context, ProjectCreateResourceContext):
                 denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if denial is None and authority.scope_project_id is not None:
                 denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
             if denial is None and (
-                authority.matched_grant_id is None
-                or authority.matched_grant_status != "active"
+                authority.matched_grant_id is None or authority.matched_grant_status != "active"
             ):
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if denial is None:
@@ -1248,9 +1315,7 @@ class AuthorizationService:
         resource_context = self._pending_denial_resource_context
         if resource_context is None:
             raise TypeError("missing authorization denial resource context")
-        await self._stage_decision(
-            decision, self._context.actor_profile_id, resource_context
-        )
+        await self._stage_decision(decision, self._context.actor_profile_id, resource_context)
         self._pending_denial = None
         self._pending_denial_resource_context = None
 
@@ -1333,6 +1398,11 @@ class AuthorizationService:
         audit_resource_id = None
         target_ref_kind = None
         target_ref_id = None
+        audit_project_id = (
+            str(decision.matched_scope_project_id)
+            if decision.matched_scope_project_id is not None
+            else None
+        )
         if target_is_actor:
             audit_resource_type = "actor_profile"
         elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
@@ -1342,20 +1412,28 @@ class AuthorizationService:
             audit_resource_id = str(resource_context.resource_id)
             target_ref_kind = "project"
             target_ref_id = str(resource_context.requested_project_id)
+        elif decision.action_id in _GUIDE_METADATA_MUTATIONS:
+            if resource_context is not None:
+                project_id = self._resource_project_id(resource_context)
+                if project_id is not None:
+                    audit_project_id = str(project_id)
+                    audit_resource_type = "project"
+                    audit_resource_id = str(project_id)
+                    target_ref_kind = "project"
+                    target_ref_id = str(project_id)
         after_facts: dict[str, object] = {"allowed": decision.allowed}
-        if (
-            decision.resource_type
-            in {
-                "artifact_put_attempt",
-                "artifact_verification_job",
-                "artifact_pending_work",
-                "project_diagnostic",
-                "project_policy_read",
-                "project_active_guide_read",
-            }
-            or decision.action_id
-            in {ActionId.ARTIFACT_GUIDE_SOURCE_INGEST, ActionId.PROJECT_CREATE}
-        ):
+        if decision.resource_type in {
+            "artifact_put_attempt",
+            "artifact_verification_job",
+            "artifact_pending_work",
+            "project_diagnostic",
+            "project_policy_read",
+            "project_active_guide_read",
+        } or decision.action_id in {
+            ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+            ActionId.PROJECT_CREATE,
+            *_GUIDE_METADATA_MUTATIONS,
+        }:
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:
             await self._audit.add_authority_event(
@@ -1383,11 +1461,7 @@ class AuthorizationService:
                     ),
                     permission_id=decision.permission_id,
                     action_id=decision.action_id,
-                    project_id=(
-                        str(decision.matched_scope_project_id)
-                        if decision.matched_scope_project_id is not None
-                        else None
-                    ),
+                    project_id=audit_project_id,
                     resource_type=audit_resource_type,
                     resource_id=(
                         audit_resource_id

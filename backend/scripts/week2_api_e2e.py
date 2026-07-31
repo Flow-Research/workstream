@@ -28,6 +28,7 @@ from api_contract_e2e import (
     issue_flow_token,
     project_root,
     request_json,
+    seed_active_guide_for_pre_12h_e2e,
     sha256_token,
     wait_for_health,
 )
@@ -367,7 +368,9 @@ async def create_project_with_guide(
         "POST",
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
         manager_token,
+        expected_status=404,
     )
+    await seed_active_guide_for_pre_12h_e2e(project["id"], guide["id"])
     return project
 
 

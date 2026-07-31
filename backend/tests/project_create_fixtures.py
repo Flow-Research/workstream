@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from httpx import Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
@@ -21,6 +22,51 @@ from app.modules.authorization.runtime import (
     authorization_resource_digest,
 )
 from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
+from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.schemas.auth import ActorContext
+
+
+async def activate_guide_for_downstream_test(
+    session_factory,
+    *,
+    project_id: str,
+    guide_id: str,
+) -> Response:
+    """Seed the pre-12H active-guide prerequisite without exposing an API route.
+
+    AUTH-12D deliberately removes the legacy activation endpoint. Downstream
+    subsystem tests still need active historical state until AUTH-12H installs
+    the authorized activation mutation, so this fixture exercises the existing
+    product validation while explicitly suspending only the new custody trigger.
+    """
+    actor = ActorContext(
+        actor_id="project-manager-subject",
+        external_subject="project-manager-subject",
+        external_issuer="flow-test",
+        roles=("project_manager",),
+        claim_snapshot={},
+        auth_source="dev_mock",
+        is_dev_auth=True,
+    )
+    async with session_factory() as session:
+        database_name = await session.scalar(text("select current_database()"))
+        if not str(database_name).startswith("workstream_test_"):
+            raise RuntimeError("downstream activation fixture requires an isolated test database")
+        await session.execute(
+            text("alter table project_guides disable trigger guide_mutation_product_custody")
+        )
+        await session.commit()
+        try:
+            result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
+            return Response(status_code=200, json=result.model_dump(mode="json"))
+        except ProjectServiceError as exc:
+            await session.rollback()
+            return Response(status_code=exc.status_code, json={"detail": str(exc)})
+        finally:
+            await session.execute(
+                text("alter table project_guides enable trigger guide_mutation_product_custody")
+            )
+            await session.commit()
 
 
 async def grant_system_project_manager(

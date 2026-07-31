@@ -69,7 +69,10 @@ from app.modules.tasks.models import (
     TaskAssignment,
     WorkstreamTask,
 )
-from project_create_fixtures import grant_system_project_manager
+from project_create_fixtures import (
+    activate_guide_for_downstream_test,
+    grant_system_project_manager,
+)
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (
@@ -1110,9 +1113,10 @@ async def create_active_project(client: AsyncClient) -> dict:
     guide = guide_response.json()
     await create_policy_bundle_for_guide(client, project["id"], guide["id"])
 
-    activation_response = await client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
-        headers=auth_headers(),
+    activation_response = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide["id"],
     )
     assert activation_response.status_code == 200, activation_response.text
     return project
@@ -2943,9 +2947,10 @@ async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
         guide_v2.json()["id"],
         policy_v2,
     )
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
     assert activate_v2.json()["guide"]["version"] == "v2"
@@ -4754,9 +4759,10 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
     assert activate_v2.json()["guide"]["version"] == "v2"
@@ -5086,9 +5092,10 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
 

@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import threading
 import time
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
 from alembic import command
@@ -22,17 +22,34 @@ from migration_contracts.service_identity_0023 import (
     protected_mapping_roots as frozen_protected_mapping_roots,
     validate_mapping_path as validate_frozen_mapping_path,
 )
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.auth.dev import actor_id_from_external_identity
+from app.core.hashing import canonical_json_hash
+from app.modules.audit.schemas import (
+    ActorReferenceKind,
+    AuthorityAuditEventInput,
+    AuthorityEventType,
+)
+from app.modules.audit.service import AuditService
 from app.modules.authorization.catalogue import (
     ACTION_DEFINITIONS,
     HISTORICAL_PERMISSION_IDS,
     NEW_PERMISSION_IDS,
+    ActionId,
     ActionOwner,
     PermissionId,
+)
+from app.modules.authorization.runtime import (
+    ProjectGuideMutationResourceContext,
+    authorization_resource_digest,
+)
+from app.modules.projects.models import (
+    GuideMutationIdempotencyRecord,
+    ProjectCreateIdempotencyRecord,
+    ProjectGuide,
 )
 from project_create_fixtures import insert_historical_project, seed_authorized_project
 
@@ -56,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0044_project_create_authority"
+HEAD_REVISION = "0045_guide_metadata_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -2143,19 +2160,13 @@ def test_0043_project_setup_service_refuses_in_use_downgrade(
                 match="cannot downgrade project setup service identity",
             ):
                 command.downgrade(config, "0042_guide_extraction")
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                HEAD_REVISION
-            )
-            asyncio.run(
-                _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == (HEAD_REVISION)
+            asyncio.run(_remove_fixed_service_actor(isolated_database_env, actor_profile_id))
             actor_profile_id = ""
             command.downgrade(config, "0042_guide_extraction")
         finally:
             if actor_profile_id:
-                asyncio.run(
-                    _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
-                )
+                asyncio.run(_remove_fixed_service_actor(isolated_database_env, actor_profile_id))
             command.downgrade(config, "base")
 
 
@@ -2180,13 +2191,16 @@ async def _project_create_authority_schema_state(database_url: str) -> tuple[boo
                     )
                 )
             )
-            privacy = await connection.scalar(
-                text(
-                    "select pg_get_constraintdef(oid) from pg_constraint "
-                    "where conrelid='audit_events'::regclass "
-                    "and conname='ck_audit_events_authority_privacy_bounds'"
+            privacy = (
+                await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint "
+                        "where conrelid='audit_events'::regclass "
+                        "and conname='ck_audit_events_authority_privacy_bounds'"
+                    )
                 )
-            ) or ""
+                or ""
+            )
             return (
                 table_exists,
                 provenance_exists,
@@ -2205,17 +2219,23 @@ def test_0044_project_create_authority_round_trip(
         try:
             command.downgrade(config, "base")
             command.upgrade(config, "0043_project_setup_service")
-            assert asyncio.run(
-                _project_create_authority_schema_state(isolated_database_env)
-            ) == (False, False, False)
+            assert asyncio.run(_project_create_authority_schema_state(isolated_database_env)) == (
+                False,
+                False,
+                False,
+            )
             command.upgrade(config, "head")
-            assert asyncio.run(
-                _project_create_authority_schema_state(isolated_database_env)
-            ) == (True, True, True)
+            assert asyncio.run(_project_create_authority_schema_state(isolated_database_env)) == (
+                True,
+                True,
+                True,
+            )
             command.downgrade(config, "0043_project_setup_service")
-            assert asyncio.run(
-                _project_create_authority_schema_state(isolated_database_env)
-            ) == (False, False, False)
+            assert asyncio.run(_project_create_authority_schema_state(isolated_database_env)) == (
+                False,
+                False,
+                False,
+            )
             command.upgrade(config, "head")
         finally:
             command.downgrade(config, "base")
@@ -2241,9 +2261,7 @@ async def _assert_0044_rejects_new_unattributed_project(database_url: str) -> No
         await engine.dispose()
 
 
-def test_0044_rejects_new_unattributed_project(
-    isolated_database_env: str, migration_lock
-) -> None:
+def test_0044_rejects_new_unattributed_project(isolated_database_env: str, migration_lock) -> None:
     """Historical null provenance survives, but new null-provenance rows deny."""
     config = _alembic_config()
     historical_id = str(uuid4())
@@ -2268,9 +2286,7 @@ def test_0044_rejects_new_unattributed_project(
 
             asyncio.run(seed_historical())
             command.upgrade(config, "head")
-            asyncio.run(
-                _assert_0044_rejects_new_unattributed_project(isolated_database_env)
-            )
+            asyncio.run(_assert_0044_rejects_new_unattributed_project(isolated_database_env))
 
             async def remove_historical() -> None:
                 engine = create_async_engine(isolated_database_env)
@@ -2326,6 +2342,338 @@ def test_0044_refuses_populated_project_create_downgrade(
                 RuntimeError, match="cannot downgrade non-empty project creation authority"
             ):
                 command.downgrade(config, "0043_project_setup_service")
+        finally:
+            asyncio.run(reset_schema())
+
+
+async def _guide_metadata_authority_schema_state(
+    database_url: str,
+) -> tuple[bool, bool, bool, bool]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return (
+                bool(
+                    await connection.scalar(
+                        text(
+                            "select to_regclass('public.guide_mutation_idempotency_records') "
+                            "is not null"
+                        )
+                    )
+                ),
+                bool(
+                    await connection.scalar(
+                        text(
+                            "select exists(select 1 from information_schema.columns "
+                            "where table_schema='public' and table_name='project_guides' "
+                            "and column_name='mutation_generation')"
+                        )
+                    )
+                ),
+                bool(
+                    await connection.scalar(
+                        text(
+                            "select exists(select 1 from information_schema.columns "
+                            "where table_schema='public' and table_name='guide_source_snapshots' "
+                            "and column_name='creation_generation')"
+                        )
+                    )
+                ),
+                bool(
+                    await connection.scalar(
+                        text(
+                            "select exists(select 1 from pg_trigger "
+                            "where tgname='guide_mutation_reservation_custody')"
+                        )
+                    )
+                ),
+            )
+    finally:
+        await engine.dispose()
+
+
+def test_0045_guide_source_metadata_authority_round_trip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0045 installs and exactly removes the guide-mutation custody seam."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0044_project_create_authority")
+            assert asyncio.run(_guide_metadata_authority_schema_state(isolated_database_env)) == (
+                False,
+                False,
+                False,
+                False,
+            )
+            command.upgrade(config, "head")
+            assert asyncio.run(_guide_metadata_authority_schema_state(isolated_database_env)) == (
+                True,
+                True,
+                True,
+                True,
+            )
+            command.downgrade(config, "0044_project_create_authority")
+            assert asyncio.run(_guide_metadata_authority_schema_state(isolated_database_env)) == (
+                False,
+                False,
+                False,
+                False,
+            )
+            command.upgrade(config, "head")
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migration_lock) -> None:
+    """Pre-0045 guide rows remain readable with explicitly null custody."""
+    config = _alembic_config()
+    project_id, guide_id, snapshot_id, setup_run_id = (str(uuid4()) for _ in range(4))
+    snapshot_hash = "sha256:" + "0" * 64
+
+    async def seed_and_read(*, seed: bool) -> tuple | None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            if seed:
+                factory = async_sessionmaker(engine, expire_on_commit=False)
+                async with factory() as session:
+                    await insert_historical_project(
+                        session,
+                        project_id=project_id,
+                        name="Historical guide project",
+                        slug=f"historical-guide-{uuid4()}",
+                    )
+                    await session.execute(
+                        text(
+                            "insert into project_guides "
+                            "(id,project_id,version,status,content_markdown,created_by) "
+                            "values (:id,:project_id,'v1','draft','# Historical','legacy')"
+                        ),
+                        {"id": guide_id, "project_id": project_id},
+                    )
+                    await session.execute(
+                        text(
+                            "insert into guide_source_snapshots "
+                            "(id,project_id,guide_id,guide_version,manifest_schema_version,"
+                            "manifest_json,bundle_hash,captured_by) values "
+                            "(:id,:project_id,:guide_id,'v1','guide_source_snapshot.v1',"
+                            "cast(:manifest as jsonb),:hash,'legacy')"
+                        ),
+                        {
+                            "id": snapshot_id,
+                            "project_id": project_id,
+                            "guide_id": guide_id,
+                            "manifest": '{"schema_version":"guide_source_snapshot.v1","items":[]}',
+                            "hash": snapshot_hash,
+                        },
+                    )
+                    await session.execute(
+                        text(
+                            "insert into project_setup_runs "
+                            "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                            "source_snapshot_hash,setup_generation,status,current_step,created_by) "
+                            "values (:id,:project_id,:guide_id,'v1',:snapshot_id,:hash,1,"
+                            "'queued','queued','legacy')"
+                        ),
+                        {
+                            "id": setup_run_id,
+                            "project_id": project_id,
+                            "guide_id": guide_id,
+                            "snapshot_id": snapshot_id,
+                            "hash": snapshot_hash,
+                        },
+                    )
+                    await session.commit()
+                return None
+            async with engine.connect() as connection:
+                guide_result = await connection.execute(
+                    text(
+                        "select mutation_generation,last_mutated_by_actor_profile_id,"
+                        "last_authorization_decision_event_id from project_guides where id=:id"
+                    ),
+                    {"id": guide_id},
+                )
+                snapshot_result = await connection.execute(
+                    text(
+                        "select creation_generation,created_by_actor_profile_id,"
+                        "authorization_decision_event_id from guide_source_snapshots where id=:id"
+                    ),
+                    {"id": snapshot_id},
+                )
+                setup_result = await connection.execute(
+                    text(
+                        "select authorized_by_actor_profile_id,authorized_via_identity_link_id,"
+                        "authorization_decision_event_id from project_setup_runs where id=:id"
+                    ),
+                    {"id": setup_run_id},
+                )
+                return (*guide_result.one(), *snapshot_result.one(), *setup_result.one())
+        finally:
+            await engine.dispose()
+
+    async def reset_schema() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("drop schema public cascade"))
+                await connection.execute(text("create schema public"))
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0044_project_create_authority")
+            asyncio.run(seed_and_read(seed=True))
+            command.upgrade(config, "head")
+            assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
+            command.downgrade(config, "0044_project_create_authority")
+            command.upgrade(config, "head")
+            assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
+        finally:
+            asyncio.run(reset_schema())
+
+
+def test_0045_refuses_populated_guide_authority_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Committed 12D custody prevents destructive downgrade."""
+    config = _alembic_config()
+
+    async def seed() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            factory = async_sessionmaker(engine, expire_on_commit=False)
+            async with factory() as session:
+                project_id, guide_id = str(uuid4()), str(uuid4())
+                await seed_authorized_project(
+                    session,
+                    project_id=project_id,
+                    name="Guide downgrade custody",
+                    slug=f"guide-downgrade-{uuid4()}",
+                )
+                project_record = await session.scalar(
+                    select(ProjectCreateIdempotencyRecord).where(
+                        ProjectCreateIdempotencyRecord.project_id == project_id
+                    )
+                )
+                assert project_record is not None
+                operation_id, decision_id = uuid4(), uuid4()
+                resource = ProjectGuideMutationResourceContext(
+                    resource_type="project_guide_mutation",
+                    resource_id=UUID(guide_id),
+                    operation_id=operation_id,
+                    scope_project_id=UUID(project_id),
+                    guide_id=UUID(guide_id),
+                    target_kind="create",
+                    guide_exists=False,
+                    operation_generation=1,
+                )
+                resource_digest = authorization_resource_digest(resource)
+                audit_row = (
+                    await session.execute(
+                        text(
+                            "select id,matched_grant_id::uuid from audit_events "
+                            "where action_id='project.create' and target_ref_id=:project_id"
+                        ),
+                        {"project_id": project_id},
+                    )
+                ).one()
+                grant_id = audit_row[1]
+                assert grant_id is not None
+                await AuditService(session).add_authority_event(
+                    AuthorityAuditEventInput(
+                        event_id=decision_id,
+                        event_type=AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+                        entity_type="authorization_decision",
+                        entity_id=str(decision_id),
+                        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+                        actor_ref=project_record.actor_profile_id,
+                        request_id=uuid4(),
+                        correlation_id=uuid4(),
+                        matched_grant_id=str(grant_id),
+                        permission_id=PermissionId.PROJECT_GUIDE_MANAGE,
+                        action_id=ActionId.PROJECT_GUIDE_CREATE,
+                        project_id=project_id,
+                        resource_type="project",
+                        resource_id=project_id,
+                        target_ref_kind="project",
+                        target_ref_id=project_id,
+                        reason="authorization_evaluation",
+                        after_facts={
+                            "allowed": True,
+                            "resource_context_digest": resource_digest,
+                        },
+                    )
+                )
+                reservation = GuideMutationIdempotencyRecord(
+                    id=uuid4(),
+                    actor_profile_id=project_record.actor_profile_id,
+                    identity_link_id=project_record.identity_link_id,
+                    action_id=ActionId.PROJECT_GUIDE_CREATE.value,
+                    idempotency_key=uuid4(),
+                    request_digest=canonical_json_hash(
+                        {"domain": "workstream.test.guide_create", "guide_id": guide_id}
+                    ),
+                    resource_context_digest=resource_digest,
+                    operation_id=operation_id,
+                    project_id=project_id,
+                    resource_id=guide_id,
+                    operation_generation=1,
+                    status="pending",
+                )
+                session.add(reservation)
+                session.add(
+                    ProjectGuide(
+                        id=guide_id,
+                        project_id=project_id,
+                        version="v1",
+                        status="draft",
+                        content_markdown="# Custodied",
+                        created_by=project_record.actor_profile_id,
+                        mutation_generation=1,
+                        last_mutated_by_actor_profile_id=project_record.actor_profile_id,
+                        last_mutated_via_identity_link_id=project_record.identity_link_id,
+                        last_mutated_by_admin_role_grant_id=grant_id,
+                        last_mutation_scope_type="system",
+                        last_mutation_action_id=ActionId.PROJECT_GUIDE_CREATE.value,
+                        last_authorization_decision_event_id=str(decision_id),
+                    )
+                )
+                await session.flush()
+                reservation.status = "committed"
+                reservation.response_json = {"id": guide_id}
+                reservation.committed_at = datetime.now(UTC)
+                await session.commit()
+                with pytest.raises(DBAPIError, match="activation authority"):
+                    await session.execute(
+                        text("update project_guides set status='active' where id=:id"),
+                        {"id": guide_id},
+                    )
+                    await session.commit()
+                await session.rollback()
+        finally:
+            await engine.dispose()
+
+    async def reset_schema() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("drop schema public cascade"))
+                await connection.execute(text("create schema public"))
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(seed())
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade used guide source-metadata authority"
+            ):
+                command.downgrade(config, "0044_project_create_authority")
         finally:
             asyncio.run(reset_schema())
 

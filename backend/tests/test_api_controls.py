@@ -439,13 +439,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 77
+    assert len(route_inventory) == 76
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "e9d2f9074f61f3d464142515193514674e87f905d75c0b4d97fee6a7ea99f1fa"
+        "1df58dc46d473ed04a9c26b2b90899ed471fa9aaedced43b4f1e2dc477cac350"
     )
-    assert len(protected_inventory) == 75
+    assert len(protected_inventory) == 74
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "b005b2516a43e90437c0035301b56f2100024a2ca3d770fb7025b6bab8ca7378"
+        "8c629cd977bb0eedf99d5ea73f05708f6549f635974998b31abdd9a25636ad76"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
@@ -511,6 +511,11 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         ),
         "GET /api/v1/projects/{project_id}": "project.read",
         "POST /api/v1/projects": "project.create",
+        "POST /api/v1/projects/{project_id}/guides": "project.guide.create",
+        "PATCH /api/v1/projects/{project_id}/guides/{guide_id}": "project.guide.update",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots": (
+            "project.guide_source_snapshot.create"
+        ),
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest": (
             "project.setup_run.read"
         ),
@@ -593,11 +598,22 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         }
         assert schema["components"]["schemas"][schema_name]["additionalProperties"] is False
     assert not any("bootstrap" in path for path in schema["paths"])
-    assert {"404", "409"} <= set(
-        schema["paths"]["/api/v1/projects/{project_id}/guides/{guide_id}/activate"][
-            "post"
-        ]["responses"]
-    )
+    assert "/api/v1/projects/{project_id}/guides/{guide_id}/activate" not in schema["paths"]
+    for path, method in (
+        ("/api/v1/projects/{project_id}/guides", "post"),
+        ("/api/v1/projects/{project_id}/guides/{guide_id}", "patch"),
+        (
+            "/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
+            "post",
+        ),
+    ):
+        idempotency_parameters = [
+            parameter
+            for parameter in schema["paths"][path][method]["parameters"]
+            if parameter["name"] == "Idempotency-Key"
+        ]
+        assert len(idempotency_parameters) == 1
+        assert idempotency_parameters[0]["required"] is True
     for path_item in schema["paths"].values():
         for method, operation in path_item.items():
             if method not in {"get", "put", "post", "delete", "options", "head", "patch"}:

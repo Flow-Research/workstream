@@ -251,8 +251,8 @@ environment must include `OPENAI_API_KEY` and the approved model settings.
 Persisted sufficiency and derivation agent identity is Workstream-owned; runtime
 or provider-returned identity fields are not trusted as audit provenance.
 
-Run the Celery worker before creating project guides that should automatically prepare
-pre-submit policy, continue into post-submit policy derivation after setup
+Run the Celery worker before creating guide-source snapshots that should automatically
+prepare pre-submit policy, continue into post-submit policy derivation after setup
 submission artifact policy approval, and advance locked submissions through the
 automatic pre-review checker gate:
 

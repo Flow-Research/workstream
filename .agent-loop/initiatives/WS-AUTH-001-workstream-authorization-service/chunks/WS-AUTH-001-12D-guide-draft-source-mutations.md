@@ -2,8 +2,8 @@
 
 ## Status and prerequisite
 
-Active planning after merged 12C. Application code remains blocked until this
-repaired contract passes the required L1 pre-implementation reviews.
+Implementation in progress after merged 12C and completed L1
+pre-implementation review.
 
 ## Parent initiative
 
@@ -51,7 +51,10 @@ backend/tests/test_guide_artifacts.py
 backend/tests/test_alembic.py
 backend/tests/test_api_controls.py
 backend/tests/project_create_fixtures.py
+backend/tests/conftest.py
 backend/scripts/api_contract_e2e.py
+README.md
+docs/spec_chunk_3_project_guide_foundation.md
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 docs/spec_artifact_storage_service.md
@@ -61,10 +64,10 @@ docs/spec_artifact_storage_service.md
 ## Not allowed changes
 
 ART ingest/binding/read/provider behavior; sufficiency, submission/checker,
-activation, review, revision, payment/economic, contribution, or compensation
-policy mutation; project update/archive invention; issuer-claim or token-role
+activation, review, revision, retired economic/configuration, contribution-record,
+or payout-configuration mutation; project update/archive invention; issuer-claim or token-role
 fallback; a second authorization protocol; or a prepared handle crossing commit,
-Celery, serialization, or worker boundaries.
+Celery, serialization, or durable job boundaries.
 
 ## Action and product clean cut
 
@@ -73,10 +76,10 @@ Celery, serialization, or worker boundaries.
   action remains planned. OpenAPI exposes exactly one marker for each 12D route.
 - `ProjectGuideCreate.source_snapshot` is removed. Guide creation never creates a
   snapshot or setup run. Source metadata uses only its separate route/action/PREP.
-- Guide create/update hard-remove `review_policy`, `revision_policy`, and
-  `payment_policy` plus every retired economic, contribution, or compensation
-  alias. Review/revision returns only in 12D2. Economic/contribution/compensation
-  policy remains outside AUTH with no compatibility field, alias, route, or fallback.
+- Guide create/update hard-remove `review_policy`, `revision_policy`, and every
+  retired payout/economic configuration field or alias. Review/revision returns
+  only in 12D2. Economic and contribution-record policy remains outside AUTH with
+  no compatibility field, alias, route, or fallback.
 - `content_markdown` remains guide source material. It may change only before the
   first source snapshot exists. Once any snapshot captures the guide, content
   changes fail before product state or replay commit; bounded non-source metadata
@@ -117,7 +120,7 @@ Celery, serialization, or worker boundaries.
   `idempotency_pending`; denial and ordinary failure roll back pending state.
   Concurrent same-key consumption produces exactly one mutation.
 - Dedicated 12D router/service/repository boundaries replace legacy
-  `require_any_role`, self-commit, and embedded-policy behavior. No compatibility
+  request-role gating, self-commit, and embedded-policy behavior. No compatibility
   path remains in the legacy projects router/service.
 
 ## Per-mutation lock and consume order
@@ -143,8 +146,9 @@ Celery, serialization, or worker boundaries.
   link, matched Project Manager grant, scope type/project, action, operation
   generation, and allowed decision-event provenance. The idempotency ledger
   retains every committed operation so later updates do not erase prior custody.
-- Exact migration `0045_guide_source_metadata_authority` follows
-  `0044_project_create_authority`. It adds nullable historical columns, foreign
+- Exact migration file `0045_guide_source_metadata_authority.py` (revision id
+  `0045_guide_metadata_authority`) follows `0044_project_create_authority`. It
+  adds nullable historical columns, foreign
   keys, action/scope/shape checks, the 12D replay ledger, immutable transition
   guards, and deferrable triggers tying new guide/snapshot/setup participants to
   exact allowed evidence and resource-context digest. Historical rows remain

@@ -63,8 +63,8 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.setup_queue import (
     ProjectSetupQueueError,
+    dispatch_pre_submit_setup_pipeline_after_commit,
     enqueue_post_submit_setup_continuation,
-    enqueue_pre_submit_setup_pipeline,
 )
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
@@ -86,9 +86,7 @@ from app.modules.projects.schemas import (
     PostSubmitCheckerPolicySetupResponse,
     PostSubmitCheckerPolicySetupSummaryResponse,
     ContributorProjectResponse,
-    ProjectGuideCreate,
     ProjectGuideResponse,
-    ProjectGuideUpdate,
     ProjectResponse,
     ProjectSetupRunResponse,
     RevisionPolicyInput,
@@ -491,181 +489,6 @@ class ProjectService:
         if contributor_only:
             return ContributorProjectResponse.model_validate(project)
         return ProjectResponse.model_validate(project)
-
-    async def create_guide(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        payload: ProjectGuideCreate,
-    ) -> ProjectGuideResponse:
-        """Create a draft guide and optional policy records for one project.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            payload: Guide content plus optional post-submit, review, revision, and payment policies.
-
-        Returns:
-            Created draft guide response.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-            ProjectNotFound: If the parent project is unknown.
-            GuideVersionConflict: If the project already has the requested guide version.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        project = await self._repo.get_project(project_id)
-        if project is None:
-            raise ProjectNotFound("project not found")
-        guide = ProjectGuide(
-            id=str(uuid4()),
-            project_id=project_id,
-            version=payload.version,
-            status="draft",
-            content_markdown=payload.content_markdown,
-            change_summary=payload.change_summary,
-            created_by=actor.actor_id,
-        )
-        source_snapshot_payload = payload.source_snapshot
-        source_snapshot: GuideSourceSnapshot | None = None
-        setup_run: ProjectSetupRun | None = None
-        try:
-            guide = await self._repo.add_guide(guide)
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise GuideVersionConflict("guide version already exists for project") from exc
-        await self._upsert_optional_policies(project_id, payload.version, payload)
-        if (
-            source_snapshot_payload is not None
-            or get_settings().project_setup_pipeline_autostart
-        ):
-            source_snapshot = await self._create_guide_source_snapshot_model(
-                actor,
-                project_id,
-                guide,
-                source_snapshot_payload or GuideSourceSnapshotCreate(),
-            )
-            if get_settings().project_setup_pipeline_autostart:
-                setup_run = await self._create_project_setup_run_model(
-                    actor,
-                    guide,
-                    source_snapshot,
-                )
-        await self._session.commit()
-        await self._session.refresh(guide)
-        if source_snapshot is not None and setup_run is not None:
-            await self._enqueue_pre_submit_setup_pipeline_after_commit(
-                project_id=project_id,
-                guide_id=guide.id,
-                source_snapshot_id=source_snapshot.id,
-                setup_run_id=setup_run.id,
-            )
-        return ProjectGuideResponse.model_validate(guide)
-
-    async def update_draft_guide(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        payload: ProjectGuideUpdate,
-    ) -> ProjectGuideResponse:
-        """Apply edits to a draft guide and its optional policy records.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            guide_id: Draft guide to update.
-            payload: Partial guide and policy fields to apply.
-
-        Returns:
-            Updated draft guide response.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-            GuideNotFound: If the guide is missing or outside the project.
-            GuideEditBlocked: If the guide is no longer a draft.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can be edited")
-
-        changes = payload.model_dump(exclude_unset=True)
-        if GUIDE_SOURCE_MATERIAL_FIELDS.intersection(changes):
-            snapshots = await self._repo.list_guide_source_snapshots(
-                project_id,
-                guide.id,
-                guide.version,
-            )
-            if snapshots:
-                raise GuideEditBlocked(
-                    "guide source material cannot change after a source snapshot exists"
-                )
-        for field, value in changes.items():
-            if field in {
-                "review_policy",
-                "revision_policy",
-                "payment_policy",
-            }:
-                continue
-            setattr(guide, field, value)
-        await self._upsert_optional_policies(project_id, guide.version, payload)
-        await self._session.commit()
-        await self._session.refresh(guide)
-        return ProjectGuideResponse.model_validate(guide)
-
-    async def create_guide_source_snapshot(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        payload: GuideSourceSnapshotCreate,
-    ) -> GuideSourceSnapshotResponse:
-        """Create an immutable source-material snapshot for a draft guide.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            guide_id: Draft guide receiving the source snapshot.
-            payload: Source items to sanitize, canonicalize, and hash.
-
-        Returns:
-            Created guide-source snapshot response.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-            GuideNotFound: If the guide is missing or outside the project.
-            GuideEditBlocked: If the guide is not a draft.
-            SourceSnapshotInvalid: If source refs or hashes are unsafe.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can receive source snapshots")
-        snapshot = await self._create_guide_source_snapshot_model(
-            actor,
-            project_id,
-            guide,
-            payload,
-        )
-        setup_run: ProjectSetupRun | None = None
-        if get_settings().project_setup_pipeline_autostart:
-            setup_run = await self._create_project_setup_run_model(actor, guide, snapshot)
-        try:
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise PolicySetupConflict(
-                "guide source snapshot conflicted with concurrent setup; retry"
-            ) from exc
-        if setup_run is not None:
-            await self._enqueue_pre_submit_setup_pipeline_after_commit(
-                project_id=project_id,
-                guide_id=guide.id,
-                source_snapshot_id=snapshot.id,
-                setup_run_id=setup_run.id,
-            )
-        return await self._source_snapshot_response(snapshot)
 
     async def approve_current_post_submit_checker_policy(
         self,
@@ -1946,32 +1769,6 @@ class ProjectService:
             raise GuideNotFound("guide not found")
         return guide
 
-    async def _upsert_optional_policies(
-        self,
-        project_id: str,
-        guide_version: str,
-        payload: ProjectGuideCreate | ProjectGuideUpdate,
-    ) -> None:
-        """Create or replace policy records supplied with guide payloads.
-
-        Args:
-            project_id: Project that owns the policies.
-            guide_version: Guide version the policies apply to.
-            payload: Guide create or update payload carrying optional policies.
-        """
-        if payload.review_policy is not None:
-            await self._repo.upsert_review_policy(
-                self._review_policy_model(project_id, guide_version, payload.review_policy)
-            )
-        if payload.revision_policy is not None:
-            await self._repo.upsert_revision_policy(
-                self._revision_policy_model(project_id, guide_version, payload.revision_policy)
-            )
-        if payload.payment_policy is not None:
-            await self._repo.upsert_payment_policy(
-                self._payment_policy_model(project_id, guide_version, payload.payment_policy)
-            )
-
     async def _get_snapshot_for_guide(
         self,
         project_id: str,
@@ -2019,7 +1816,7 @@ class ProjectService:
         Returns:
             Persisted source snapshot pending transaction commit.
         """
-        manifest, sanitized_items = self._build_source_snapshot_manifest(payload, guide)
+        manifest, sanitized_items = build_guide_source_snapshot_manifest(payload, guide)
         bundle_hash = self._hash_canonical_json(manifest)
         snapshot = GuideSourceSnapshot(
             id=str(uuid4()),
@@ -2031,20 +1828,7 @@ class ProjectService:
             bundle_hash=bundle_hash,
             captured_by=actor.actor_id,
         )
-        item_models = [
-            GuideSourceSnapshotItem(
-                id=str(uuid4()),
-                source_snapshot_id=snapshot.id,
-                item_order=index,
-                source_kind=item["source_kind"],
-                durable_ref=item["durable_ref"],
-                ingestion_adapter=item["ingestion_adapter"],
-                content_hash=item["content_hash"],
-                content_cid=item.get("content_cid"),
-                media_type=item.get("media_type"),
-            )
-            for index, item in enumerate(sanitized_items)
-        ]
+        item_models = build_guide_source_snapshot_items(snapshot.id, sanitized_items)
         return await self._repo.add_guide_source_snapshot(snapshot, item_models)
 
     async def _create_project_setup_run_model(
@@ -2092,40 +1876,13 @@ class ProjectService:
         Returns:
             Celery task id when enqueue succeeds; otherwise ``None``.
         """
-        try:
-            task_id = await asyncio.to_thread(
-                enqueue_pre_submit_setup_pipeline,
-                project_id=project_id,
-                guide_id=guide_id,
-                source_snapshot_id=source_snapshot_id,
-                setup_run_id=setup_run_id,
-            )
-        except ProjectSetupQueueError as exc:
-            safe_summary = self._safe_project_setup_error_summary(str(exc))
-            logger.warning(
-                "project setup pipeline enqueue failed after commit",
-                extra={
-                    "project_id": project_id,
-                    "guide_id": guide_id,
-                    "source_snapshot_id": source_snapshot_id,
-                    "setup_run_id": setup_run_id,
-                    "error_code": exc.__class__.__name__,
-                    "error_summary": safe_summary,
-                },
-            )
-            await self.update_project_setup_run_status(
-                setup_run_id,
-                status="enqueue_failed",
-                current_step="enqueue",
-                error_code=exc.__class__.__name__,
-                error_summary=safe_summary,
-            )
-            return None
-        setup_run = await self._repo.get_project_setup_run(setup_run_id)
-        if setup_run is not None:
-            setup_run.celery_task_id = task_id
-            await self._session.commit()
-        return task_id
+        return await dispatch_pre_submit_setup_pipeline_after_commit(
+            self._session,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=source_snapshot_id,
+            setup_run_id=setup_run_id,
+        )
 
     async def _enqueue_post_submit_setup_continuation_after_commit(
         self,
@@ -3100,89 +2857,9 @@ class ProjectService:
         if manifest_row_items != row_items:
             fail()
 
-    def _build_source_snapshot_manifest(
-        self,
-        payload: GuideSourceSnapshotCreate,
-        guide: ProjectGuide,
-    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Sanitize source items and build a canonical manifest.
-
-        Args:
-            payload: Raw source snapshot request.
-            guide: Current draft guide whose source material is included.
-
-        Returns:
-            Canonical manifest and deterministic source item dictionaries.
-
-        Raises:
-            SourceSnapshotInvalid: If any source item is unsafe or duplicated.
-        """
-        guide_item = self._guide_material_snapshot_item(guide)
-        normalized_items = [guide_item]
-        seen_refs: set[tuple[str, str]] = {
-            (guide_item["source_kind"], guide_item["durable_ref"])
-        }
-        for item in payload.items:
-            source_kind = self._safe_source_token(item.source_kind, "source kind")
-            ingestion_adapter = self._safe_source_token(
-                item.ingestion_adapter,
-                "ingestion adapter",
-            )
-            durable_ref = self._sanitize_durable_source_ref(item.durable_ref)
-            self._require_sha256_hash(item.content_hash, "source item content hash")
-            content_cid = self._sanitize_content_cid(item.content_cid)
-            duplicate_key = (source_kind, durable_ref)
-            if duplicate_key in seen_refs:
-                raise SourceSnapshotInvalid("duplicate source item durable reference")
-            seen_refs.add(duplicate_key)
-            normalized_items.append(
-                {
-                    "source_kind": source_kind,
-                    "durable_ref": durable_ref,
-                    "ingestion_adapter": ingestion_adapter,
-                    "content_hash": item.content_hash,
-                    "content_cid": content_cid,
-                    "media_type": item.media_type,
-                    "content_excerpt": item.content_excerpt,
-                }
-            )
-
-        sorted_items = sorted(
-            normalized_items,
-            key=lambda item: (
-                item["source_kind"],
-                item["durable_ref"],
-                item["content_hash"],
-            ),
-        )
-        manifest = {
-            "schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
-            "items": sorted_items,
-        }
-        return manifest, sorted_items
-
-    def _guide_material_snapshot_item(self, guide: ProjectGuide) -> dict[str, Any]:
-        """Build the server-owned source item for the current guide body."""
-        guide_material = {
-            field: getattr(guide, field)
-            for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
-        }
-        return {
-            "source_kind": "project_guide",
-            "durable_ref": f"inline:/guides/{guide.id}/{guide.version}",
-            "ingestion_adapter": "workstream_project_guide",
-            "content_hash": self._hash_canonical_json(guide_material),
-            "content_cid": None,
-            "media_type": "application/json",
-            "content_excerpt": None,
-        }
-
     def _safe_source_token(self, value: str, label: str) -> str:
         """Validate a source token field used in durable policy records."""
-        normalized = value.strip().lower()
-        if not SAFE_TOKEN_PATTERN.fullmatch(normalized):
-            raise SourceSnapshotInvalid(f"invalid {label}")
-        return normalized
+        return _guide_source_token(value, label)
 
     def _sanitize_durable_source_ref(self, durable_ref: str) -> str:
         """Reject unsafe durable source refs and return a canonical ref.
@@ -3191,104 +2868,11 @@ class ProjectService:
         Query strings, fragments, credentials, signed URL material, local paths,
         and token-bearing values are rejected before persistence.
         """
-        raw_ref = durable_ref.strip()
-        decoded_ref = self._decode_percent_encoded_ref(raw_ref)
-        if "\\" in raw_ref or "\\" in decoded_ref:
-            raise SourceSnapshotInvalid("durable source refs cannot contain local path separators")
-        parsed = urlparse(raw_ref)
-        decoded_parsed = urlparse(decoded_ref)
-        if not parsed.scheme:
-            raise SourceSnapshotInvalid("durable source refs must use an approved scheme")
-        scheme = parsed.scheme.lower()
-        if scheme not in ALLOWED_SOURCE_REF_SCHEMES:
-            raise SourceSnapshotInvalid("durable source ref scheme is not approved")
-        if decoded_parsed.scheme and decoded_parsed.scheme.lower() != scheme:
-            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
-        if decoded_parsed.netloc and decoded_parsed.netloc != parsed.netloc:
-            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
-        if scheme in OPAQUE_SOURCE_REF_SCHEMES and (parsed.netloc or parsed.path.startswith("//")):
-            raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
-        if scheme in OPAQUE_SOURCE_REF_SCHEMES and (
-            decoded_parsed.netloc or decoded_parsed.path.startswith("//")
-        ):
-            raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
-        if parsed.username or parsed.password or "@" in parsed.netloc:
-            raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
-        if ";" in raw_ref or ";" in decoded_ref:
-            raise SourceSnapshotInvalid(
-                "durable source refs cannot contain query, fragment, or path parameters"
-            )
-        if (
-            parsed.query
-            or parsed.fragment
-            or parsed.params
-            or decoded_parsed.query
-            or decoded_parsed.fragment
-            or decoded_parsed.params
-        ):
-            raise SourceSnapshotInvalid(
-                "durable source refs cannot contain query, fragment, or path parameters"
-            )
-        if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
-            raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-        decoded_path = self._decode_percent_encoded_ref(parsed.path or "")
-        if "?" in decoded_path or "#" in decoded_path or ";" in decoded_path:
-            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
-        path_segments = [segment for segment in decoded_path.split("/") if segment]
-        if any(segment in {".", ".."} for segment in path_segments):
-            raise SourceSnapshotInvalid("durable source refs cannot contain path traversal")
-        if decoded_path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
-            r"^/?[A-Za-z]:/",
-            decoded_path,
-        ):
-            raise SourceSnapshotInvalid("durable source refs cannot be local filesystem paths")
-        if self._matches_forbidden_artifact(decoded_path, DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS):
-            raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-        if scheme in OPAQUE_SOURCE_REF_SCHEMES:
-            self._validate_opaque_source_ref_path(decoded_path)
-        if scheme in {"http", "https"} and not parsed.netloc:
-            raise SourceSnapshotInvalid("http source refs require a host")
-        netloc = parsed.netloc.lower()
-        path = parsed.path or ""
-        return f"{scheme}://{netloc}{path}" if netloc else f"{scheme}:{path}"
-
-    def _decode_percent_encoded_ref(self, value: str) -> str:
-        """Decode percent-encoded source refs until stable or fail closed."""
-        decoded = value
-        for _ in range(5):
-            next_decoded = unquote(decoded)
-            if next_decoded == decoded:
-                return decoded
-            decoded = next_decoded
-        raise SourceSnapshotInvalid("durable source refs cannot contain nested encoded locators")
-
-    def _validate_opaque_source_ref_path(self, decoded_path: str) -> None:
-        """Require opaque durable refs to use approved virtual namespaces."""
-        segments = [segment for segment in decoded_path.split("/") if segment]
-        if not decoded_path.startswith("/") or len(segments) < 2:
-            raise SourceSnapshotInvalid(
-                "opaque durable source refs must use an approved virtual namespace"
-            )
-        if segments[0] not in OPAQUE_SOURCE_REF_NAMESPACES:
-            raise SourceSnapshotInvalid(
-                "opaque durable source refs must use an approved virtual namespace"
-            )
+        return _guide_source_durable_ref(durable_ref)
 
     def _sanitize_content_cid(self, content_cid: str | None) -> str | None:
         """Validate optional immutable content identifiers before persistence."""
-        if content_cid is None:
-            return None
-        normalized = content_cid.strip()
-        parsed = urlparse(normalized)
-        if parsed.query or parsed.fragment or parsed.username or parsed.password:
-            raise SourceSnapshotInvalid("content CID cannot contain credentials or locators")
-        if SECRET_REF_PATTERN.search(normalized):
-            raise SourceSnapshotInvalid("content CID cannot contain credential material")
-        if normalized.startswith(("/", "\\", "~")) or parsed.scheme in {"file"}:
-            raise SourceSnapshotInvalid("content CID cannot be a local filesystem path")
-        if not CONTENT_CID_PATTERN.fullmatch(normalized):
-            raise SourceSnapshotInvalid("content CID must be an approved opaque identifier")
-        return normalized
+        return _guide_source_content_cid(content_cid)
 
     def _require_sha256_hash(self, value: str, label: str) -> None:
         """Validate platform hash shape."""
@@ -4276,3 +3860,175 @@ class ProjectService:
                 revision_policy,
             ),
         )
+
+
+def build_guide_source_snapshot_manifest(
+    payload: GuideSourceSnapshotCreate,
+    guide: ProjectGuide,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Compose one canonical guide-source manifest without service state."""
+    guide_material = {
+        field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
+    }
+    normalized_items = [
+        {
+            "source_kind": "project_guide",
+            "durable_ref": f"inline:/guides/{guide.id}/{guide.version}",
+            "ingestion_adapter": "workstream_project_guide",
+            "content_hash": canonical_json_hash(guide_material),
+            "content_cid": None,
+            "media_type": "application/json",
+            "content_excerpt": None,
+        }
+    ]
+    seen_refs = {("project_guide", normalized_items[0]["durable_ref"])}
+    for item in payload.items:
+        source_kind = _guide_source_token(item.source_kind, "source kind")
+        ingestion_adapter = _guide_source_token(
+            item.ingestion_adapter, "ingestion adapter"
+        )
+        durable_ref = _guide_source_durable_ref(item.durable_ref)
+        if not HASH_PATTERN.fullmatch(item.content_hash):
+            raise PolicySetupBlocked(
+                "source item content hash must be sha256:<64 lowercase hex>"
+            )
+        content_cid = _guide_source_content_cid(item.content_cid)
+        duplicate_key = (source_kind, durable_ref)
+        if duplicate_key in seen_refs:
+            raise SourceSnapshotInvalid("duplicate source item durable reference")
+        seen_refs.add(duplicate_key)
+        normalized_items.append(
+            {
+                "source_kind": source_kind,
+                "durable_ref": durable_ref,
+                "ingestion_adapter": ingestion_adapter,
+                "content_hash": item.content_hash,
+                "content_cid": content_cid,
+                "media_type": item.media_type,
+                "content_excerpt": item.content_excerpt,
+            }
+        )
+    sorted_items = sorted(
+        normalized_items,
+        key=lambda item: (item["source_kind"], item["durable_ref"], item["content_hash"]),
+    )
+    return {
+        "schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
+        "items": sorted_items,
+    }, sorted_items
+
+
+def _guide_source_token(value: str, label: str) -> str:
+    normalized = value.strip().lower()
+    if not SAFE_TOKEN_PATTERN.fullmatch(normalized):
+        raise SourceSnapshotInvalid(f"invalid {label}")
+    return normalized
+
+
+def _guide_source_durable_ref(durable_ref: str) -> str:
+    raw_ref = durable_ref.strip()
+    decoded_ref = _decode_guide_source_ref(raw_ref)
+    if "\\" in raw_ref or "\\" in decoded_ref:
+        raise SourceSnapshotInvalid("durable source refs cannot contain local path separators")
+    parsed, decoded_parsed = urlparse(raw_ref), urlparse(decoded_ref)
+    if not parsed.scheme or parsed.scheme.lower() not in ALLOWED_SOURCE_REF_SCHEMES:
+        raise SourceSnapshotInvalid("durable source ref scheme is not approved")
+    scheme = parsed.scheme.lower()
+    if decoded_parsed.scheme and decoded_parsed.scheme.lower() != scheme:
+        raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
+    if decoded_parsed.netloc and decoded_parsed.netloc != parsed.netloc:
+        raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
+    if scheme in OPAQUE_SOURCE_REF_SCHEMES and (
+        parsed.netloc
+        or parsed.path.startswith("//")
+        or decoded_parsed.netloc
+        or decoded_parsed.path.startswith("//")
+    ):
+        raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
+    if parsed.username or parsed.password or "@" in parsed.netloc:
+        raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
+    if (
+        ";" in raw_ref
+        or ";" in decoded_ref
+        or parsed.query
+        or parsed.fragment
+        or parsed.params
+        or decoded_parsed.query
+        or decoded_parsed.fragment
+        or decoded_parsed.params
+    ):
+        raise SourceSnapshotInvalid(
+            "durable source refs cannot contain query, fragment, or path parameters"
+        )
+    if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
+        raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
+    decoded_path = _decode_guide_source_ref(parsed.path or "")
+    if any(segment in {".", ".."} for segment in decoded_path.split("/") if segment):
+        raise SourceSnapshotInvalid("durable source refs cannot contain path traversal")
+    if decoded_path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
+        r"^/?[A-Za-z]:/", decoded_path
+    ):
+        raise SourceSnapshotInvalid("durable source refs cannot be local filesystem paths")
+    if SECRET_ARTIFACT_NAME_PATTERN.search(decoded_path):
+        raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
+    if scheme in OPAQUE_SOURCE_REF_SCHEMES:
+        segments = [segment for segment in decoded_path.split("/") if segment]
+        if (
+            not decoded_path.startswith("/")
+            or len(segments) < 2
+            or segments[0] not in OPAQUE_SOURCE_REF_NAMESPACES
+        ):
+            raise SourceSnapshotInvalid(
+                "opaque durable source refs must use an approved virtual namespace"
+            )
+    if scheme in {"http", "https"} and not parsed.netloc:
+        raise SourceSnapshotInvalid("http source refs require a host")
+    netloc, path = parsed.netloc.lower(), parsed.path or ""
+    return f"{scheme}://{netloc}{path}" if netloc else f"{scheme}:{path}"
+
+
+def _decode_guide_source_ref(value: str) -> str:
+    decoded = value
+    for _ in range(5):
+        next_decoded = unquote(decoded)
+        if next_decoded == decoded:
+            return decoded
+        decoded = next_decoded
+    raise SourceSnapshotInvalid("durable source refs cannot contain nested encoded locators")
+
+
+def _guide_source_content_cid(content_cid: str | None) -> str | None:
+    if content_cid is None:
+        return None
+    normalized = content_cid.strip()
+    parsed = urlparse(normalized)
+    if parsed.query or parsed.fragment or parsed.username or parsed.password:
+        raise SourceSnapshotInvalid("content CID cannot contain credentials or locators")
+    if SECRET_REF_PATTERN.search(normalized):
+        raise SourceSnapshotInvalid("content CID cannot contain credential material")
+    if normalized.startswith(("/", "\\", "~")) or parsed.scheme == "file":
+        raise SourceSnapshotInvalid("content CID cannot be a local filesystem path")
+    if not CONTENT_CID_PATTERN.fullmatch(normalized):
+        raise SourceSnapshotInvalid("content CID must be an approved opaque identifier")
+    return normalized
+
+
+def build_guide_source_snapshot_items(
+    snapshot_id: str,
+    items: list[dict[str, Any]],
+) -> list[GuideSourceSnapshotItem]:
+    """Build deterministic source-item rows shared by all snapshot writers."""
+    return [
+        GuideSourceSnapshotItem(
+            id=str(uuid4()),
+            source_snapshot_id=snapshot_id,
+            item_order=index,
+            source_kind=item["source_kind"],
+            durable_ref=item["durable_ref"],
+            ingestion_adapter=item["ingestion_adapter"],
+            content_hash=item["content_hash"],
+            content_cid=item.get("content_cid"),
+            media_type=item.get("media_type"),
+        )
+        for index, item in enumerate(items)
+    ]
