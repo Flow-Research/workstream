@@ -241,3 +241,26 @@
   All are repaired with regression proof. Its review-event checkout concern is
   rejected because hosted review-event run `30600808957` passed exact-head
   approval and executed the PR's lane inventory before its later failure.
+
+## WS-ART-001-03B3B2
+
+- Installed only the approved hash-bound `pypdf==6.14.2` wheel and added the
+  bounded passive-PDF adapter to the existing isolated extraction child.
+- Initial architecture review found eager pre-limit parser loading and obsolete
+  v1 `unsupported` replay. Repairs made loading PDF-only after resource limits,
+  retained seccomp before untrusted-byte parsing, introduced PDF policy v2,
+  and reset only an exact-lineage obsolete retry budget.
+- Initial QA/test-delta review found that generic action dictionaries and
+  several JavaScript/submit/import/launch variants lacked proof. Repairs reject
+  `/A` generically and cover real annotation actions and named active features.
+- The new policy regression now proves v1 `unsupported` evidence remains
+  historical while fresh v2 extraction succeeds and subsequent claims replay
+  only the v2 success. The isolated PostgreSQL test passes.
+- Focused PDF/extraction/architecture tests pass, PDF coverage remains above 90
+  percent, the dependency/lock gate and canonical lane inventory pass, and no
+  CI or coverage policy is weakened.
+- Final architecture, security, QA, product/ops, senior engineering, CI
+  integrity, docs, reuse/dedup, and test-delta reviews pass. Low future reuse
+  advice is recorded but is not a blocker for this bounded format adapter.
+- CodeRabbit's valid external findings add bounded `KeyError`/`IndexError`
+  malformed-PDF mapping and document the 100,000-object inspection limit.

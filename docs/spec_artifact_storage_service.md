@@ -1289,6 +1289,22 @@ Text/Markdown are normalized UTF-8 text; JSON is duplicate-free, finite,
 sorted compact JSON; CSV is strict fixed-dialect row data serialized as compact
 JSON. Failed outcomes may retain bounded status evidence but never canonical
 output, successful usage, or a sufficiency report.
+
+PDF extraction uses only the exact approved `pypdf==6.14.2` wheel inside that
+same isolated child. The adapter requires the server-classified `pdf` format,
+accepts at most 500 pages, and emits compact canonical JSON containing one text
+entry per page so page boundaries remain explicit. Recursive object inspection
+is capped at 100,000 objects; exceeding it returns the bounded internal
+`pdf_object_limit` outcome. Encrypted or malformed PDFs
+and PDFs containing forms, XFA, attachments, embedded files, open/additional
+actions, JavaScript, launch actions, external URIs, or other externally
+resolving actions fail with bounded internal outcomes. No raw PDF bytes,
+parser exception text, partial extraction, or active content reaches an agent.
+Adding PDF support advances the extraction policy to `guide-extraction-v2`, so
+an earlier terminal `unsupported` PDF attempt cannot replay as a current-policy
+result. The PDF-only child installs resource limits before loading the trusted
+approved adapter, installs seccomp before parsing bytes, and does not load the
+PDF dependency for text, Markdown, JSON, or CSV work.
 Numeric resource-limit termination maps to `limit_exceeded`; prohibited process
 creation, unavailable isolation, or other abnormal child termination maps to
 `parser_failure`.

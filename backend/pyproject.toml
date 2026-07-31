@@ -13,6 +13,7 @@ dependencies = [
   "httpx>=0.27,<1.0",
   "PyJWT[crypto]>=2.13,<3.0",
   "pydantic-settings>=2.6,<3.0",
+  "pypdf @ https://files.pythonhosted.org/packages/49/e6/136aa8993a2ae7214e0b0ef2edaa0d2e08d1d4e4982635b08a835ff31ec8/pypdf-6.14.2-py3-none-any.whl#sha256=3f07891af76dc002657e04993ab9b4de81de29f9013b9761d0b7968bff12e946",
   "sqlalchemy[asyncio]>=2.0,<3.0",
   "uvicorn[standard]>=0.30,<1.0",
 ]
