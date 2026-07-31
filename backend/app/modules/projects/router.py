@@ -24,20 +24,14 @@ from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.projects.schemas import (
-    ActiveGuideResponse,
     ActiveGuideReadResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
-    GuideSourceSnapshotCreate,
     GuideArtifactIngestResponse,
-    GuideSourceSnapshotResponse,
     GuideSufficiencyAcknowledgement,
     GuideSufficiencyReportCreate,
     GuideSufficiencyReportResponse,
     PreSubmitCheckerPolicySummaryResponse,
     ContributorProjectResponse,
-    ProjectGuideCreate,
-    ProjectGuideResponse,
-    ProjectGuideUpdate,
     ProjectResponse,
     ProjectSetupRunResponse,
     PostSubmitCheckerPolicyApproval,
@@ -131,70 +125,6 @@ async def get_project(
         )
         await session.commit()
         return response
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
-
-
-@router.post("/{project_id}/guides", response_model=ProjectGuideResponse, status_code=201)
-async def create_guide(
-    project_id: str,
-    payload: ProjectGuideCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ProjectGuideResponse:
-    """Create a draft guide and enqueue automatic pre-submit setup."""
-    try:
-        return await ProjectService(session).create_guide(actor, project_id, payload)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
-
-
-@router.patch("/{project_id}/guides/{guide_id}", response_model=ProjectGuideResponse)
-async def update_guide(
-    project_id: str,
-    guide_id: str,
-    payload: ProjectGuideUpdate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ProjectGuideResponse:
-    """Update a draft guide and optional review, revision, or payment policies."""
-    try:
-        return await ProjectService(session).update_draft_guide(
-            actor,
-            project_id,
-            guide_id,
-            payload,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
-
-
-@router.post(
-    "/{project_id}/guides/{guide_id}/source-snapshots",
-    response_model=GuideSourceSnapshotResponse,
-    status_code=201,
-)
-async def create_guide_source_snapshot(
-    project_id: str,
-    guide_id: str,
-    payload: GuideSourceSnapshotCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> GuideSourceSnapshotResponse:
-    """Create an immutable source-material snapshot for a draft guide."""
-    try:
-        return await ProjectService(session).create_guide_source_snapshot(
-            actor,
-            project_id,
-            guide_id,
-            payload,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
     except ProjectServiceError as exc:
         raise project_http_error(exc) from exc
 
@@ -713,22 +643,6 @@ async def request_post_submit_checker_policy_correction(
             guide_id,
             payload,
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
-
-
-@router.post("/{project_id}/guides/{guide_id}/activate", response_model=ActiveGuideResponse)
-async def activate_guide(
-    project_id: str,
-    guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ActiveGuideResponse:
-    """Activate a complete draft guide for a project."""
-    try:
-        return await ProjectService(session).activate_guide(actor, project_id, guide_id)
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except ProjectServiceError as exc:

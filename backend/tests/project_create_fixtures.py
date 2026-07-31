@@ -1,8 +1,13 @@
 """Test-only construction of historical and currently attributed projects."""
 
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Sequence
+import re
+
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from httpx import Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
@@ -21,6 +26,106 @@ from app.modules.authorization.runtime import (
     authorization_resource_digest,
 )
 from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
+from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.schemas.auth import ActorContext
+
+
+_ISOLATED_DATABASE_RE = re.compile(r"workstream_test_([a-f0-9]{12})")
+_ISOLATED_ROLE_RE = re.compile(r"workstream_role_([a-f0-9]{12})")
+
+
+@asynccontextmanager
+async def suspend_historical_product_custody(
+    session: AsyncSession,
+    *,
+    table: str,
+    triggers: Sequence[str],
+) -> AsyncIterator[None]:
+    """Suspend named custody triggers only inside an isolated test database."""
+    allowed = {
+        "project_guides": {
+            "guide_mutation_product_custody",
+            "guide_lineage_lifecycle_guard",
+        },
+        "guide_source_snapshots": {"source_snapshot_product_custody"},
+        "guide_source_snapshot_items": {"guide_source_snapshot_items_custody"},
+        "project_setup_runs": {"source_setup_run_custody"},
+    }
+    if table not in allowed or not triggers or not set(triggers) <= allowed[table]:
+        raise RuntimeError("unsupported historical custody suspension")
+    database_name, database_role = (
+        await session.execute(text("select current_database(), current_user"))
+    ).one()
+    database_match = _ISOLATED_DATABASE_RE.fullmatch(str(database_name))
+    role_match = _ISOLATED_ROLE_RE.fullmatch(str(database_role))
+    if (
+        database_match is None
+        or role_match is None
+        or database_match.group(1) != role_match.group(1)
+    ):
+        raise RuntimeError("historical custody suspension requires an isolated test database")
+    try:
+        for trigger in triggers:
+            await session.execute(text(f"alter table {table} disable trigger {trigger}"))
+        yield
+        for trigger in reversed(triggers):
+            await session.execute(text(f"alter table {table} enable trigger {trigger}"))
+    except BaseException:
+        await session.rollback()
+        for trigger in reversed(triggers):
+            await session.execute(text(f"alter table {table} enable trigger {trigger}"))
+        await session.commit()
+        raise
+
+
+async def activate_guide_for_downstream_test(
+    session_factory,
+    *,
+    project_id: str,
+    guide_id: str,
+) -> Response:
+    """Seed the pre-12H active-guide prerequisite without exposing an API route.
+
+    AUTH-12D deliberately removes the legacy activation endpoint. Downstream
+    subsystem tests still need active historical state until AUTH-12H installs
+    the authorized activation mutation, so this fixture exercises the existing
+    product validation while explicitly suspending the
+    ``guide_mutation_product_custody`` and ``guide_lineage_lifecycle_guard``
+    triggers.
+    """
+    async with session_factory() as session:
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        if link is None:
+            raise RuntimeError("downstream activation fixture requires an admitted actor")
+        actor = ActorContext(
+            actor_id=str(link.actor_profile_id),
+            external_subject=link.subject,
+            external_issuer=link.issuer,
+            roles=("project_manager",),
+            claim_snapshot={},
+            auth_source="dev_mock",
+            is_dev_auth=True,
+        )
+        try:
+            async with suspend_historical_product_custody(
+                session,
+                table="project_guides",
+                triggers=(
+                    "guide_mutation_product_custody",
+                    "guide_lineage_lifecycle_guard",
+                ),
+            ):
+                result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
+            await session.commit()
+            return Response(status_code=200, json=result.model_dump(mode="json"))
+        except ProjectServiceError as exc:
+            await session.rollback()
+            return Response(status_code=exc.status_code, json={"detail": str(exc)})
 
 
 async def grant_system_project_manager(

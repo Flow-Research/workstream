@@ -449,17 +449,13 @@ class ContributorProjectResponse(BaseModel):
 
 
 class ProjectGuideCreate(BaseModel):
-    """Request schema for guide material plus optional activation policies."""
+    """Request schema for draft guide material only."""
 
     model_config = ConfigDict(extra="forbid")
 
     version: str
     content_markdown: str
     change_summary: str | None = None
-    source_snapshot: GuideSourceSnapshotCreate | None = None
-    review_policy: ReviewPolicyInput | None = None
-    revision_policy: RevisionPolicyInput | None = None
-    payment_policy: PaymentPolicyInput | None = None
 
 
 class ProjectGuideUpdate(BaseModel):
@@ -469,9 +465,6 @@ class ProjectGuideUpdate(BaseModel):
 
     content_markdown: str | None = None
     change_summary: str | None = None
-    review_policy: ReviewPolicyInput | None = None
-    revision_policy: RevisionPolicyInput | None = None
-    payment_policy: PaymentPolicyInput | None = None
 
 
 class ProjectGuideResponse(BaseModel):

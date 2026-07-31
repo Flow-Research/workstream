@@ -86,7 +86,7 @@ from app.modules.projects.models import (
     ProjectGuide,
     ProjectSetupRun,
 )
-from project_create_fixtures import seed_historical_project
+from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 
 
 class _AllowBindingAuthority:
@@ -300,58 +300,79 @@ async def _seed_binding_lineage(
         status="draft",
     )
     await session.flush()
-    session.add(
-        ProjectGuide(
-            id=str(ids["guide"]),
-            project_id=str(ids["project"]),
-            version="v1",
-            status="draft",
-            content_markdown="# Guide",
-            created_by="test",
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody",),
+    ):
+        session.add(
+            ProjectGuide(
+                id=str(ids["guide"]),
+                project_id=str(ids["project"]),
+                version="v1",
+                status="draft",
+                content_markdown="# Guide",
+                created_by="test",
+            )
         )
-    )
-    await session.flush()
+        await session.flush()
     snapshot_hash = canonical_json_hash({"item": str(ids["item"])})
-    session.add(
-        GuideSourceSnapshot(
-            id=str(ids["snapshot"]),
-            project_id=str(ids["project"]),
-            guide_id=str(ids["guide"]),
-            guide_version="v1",
-            manifest_schema_version="v1",
-            manifest_json={"item": str(ids["item"])},
-            bundle_hash=snapshot_hash,
-            captured_by=str(ids["actor"]),
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshots",
+        triggers=("source_snapshot_product_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshot(
+                id=str(ids["snapshot"]),
+                project_id=str(ids["project"]),
+                guide_id=str(ids["guide"]),
+                guide_version="v1",
+                manifest_schema_version="v1",
+                manifest_json={"item": str(ids["item"])},
+                bundle_hash=snapshot_hash,
+                captured_by=str(ids["actor"]),
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshotItem(
-            id=str(ids["item"]),
-            source_snapshot_id=str(ids["snapshot"]),
-            item_order=0,
-            source_kind="file",
-            durable_ref="guide.pdf",
-            ingestion_adapter="pdf",
-            content_hash="caller-metadata-is-not-authority",
-            media_type=media_type,
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshot_items",
+        triggers=("guide_source_snapshot_items_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshotItem(
+                id=str(ids["item"]),
+                source_snapshot_id=str(ids["snapshot"]),
+                item_order=0,
+                source_kind="file",
+                durable_ref="guide.pdf",
+                ingestion_adapter="pdf",
+                content_hash="caller-metadata-is-not-authority",
+                media_type=media_type,
+            )
         )
-    )
-    session.add(
-        ProjectSetupRun(
-            id=str(ids["run"]),
-            project_id=str(ids["project"]),
-            guide_id=str(ids["guide"]),
-            guide_version="v1",
-            source_snapshot_id=str(ids["snapshot"]),
-            source_snapshot_hash=snapshot_hash,
-            setup_generation=1,
-            status="queued",
-            current_step="queued",
-            created_by="test",
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="project_setup_runs",
+        triggers=("source_setup_run_custody",),
+    ):
+        session.add(
+            ProjectSetupRun(
+                id=str(ids["run"]),
+                project_id=str(ids["project"]),
+                guide_id=str(ids["guide"]),
+                guide_version="v1",
+                source_snapshot_id=str(ids["snapshot"]),
+                source_snapshot_hash=snapshot_hash,
+                setup_generation=1,
+                status="queued",
+                current_step="queued",
+                created_by="test",
+            )
         )
-    )
-    await session.flush()
+        await session.flush()
     session.add(
         GuideSourceArtifactIngest(
             id=str(uuid4()),
@@ -555,6 +576,7 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
     )
     with migration_lock():
         await asyncio.to_thread(command.downgrade, config, "0042_guide_extraction")
+        await asyncio.to_thread(command.upgrade, config, "head")
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -1249,20 +1271,28 @@ async def test_post_read_lineage_drift_records_stale_incident(
 
         async def advance_setup_generation() -> None:
             async with factory() as session, session.begin():
-                session.add(
-                    ProjectSetupRun(
-                        id=str(uuid4()),
-                        project_id=str(ids["project"]),
-                        guide_id=str(ids["guide"]),
-                        guide_version="v1",
-                        source_snapshot_id=str(ids["snapshot"]),
-                        source_snapshot_hash=canonical_json_hash({"item": str(ids["item"])}),
-                        setup_generation=2,
-                        status="queued",
-                        current_step="queued",
-                        created_by="test",
+                async with suspend_historical_product_custody(
+                    session,
+                    table="project_setup_runs",
+                    triggers=("source_setup_run_custody",),
+                ):
+                    session.add(
+                        ProjectSetupRun(
+                            id=str(uuid4()),
+                            project_id=str(ids["project"]),
+                            guide_id=str(ids["guide"]),
+                            guide_version="v1",
+                            source_snapshot_id=str(ids["snapshot"]),
+                            source_snapshot_hash=canonical_json_hash(
+                                {"item": str(ids["item"])}
+                            ),
+                            setup_generation=2,
+                            status="queued",
+                            current_step="queued",
+                            created_by="test",
+                        )
                     )
-                )
+                    await session.flush()
 
         service = ArtifactMaterializationService(
             factory,
@@ -1583,20 +1613,26 @@ async def test_next_generation_explicitly_supersedes_prior_binding(
         async with factory() as session, session.begin():
             snapshot = await session.get(GuideSourceSnapshot, str(ids["snapshot"]))
             assert snapshot is not None
-            session.add(
-                ProjectSetupRun(
-                    id=str(second_run_id),
-                    project_id=str(ids["project"]),
-                    guide_id=str(ids["guide"]),
-                    guide_version="v1",
-                    source_snapshot_id=str(ids["snapshot"]),
-                    source_snapshot_hash=snapshot.bundle_hash,
-                    setup_generation=2,
-                    status="queued",
-                    current_step="queued",
-                    created_by="test",
+            async with suspend_historical_product_custody(
+                session,
+                table="project_setup_runs",
+                triggers=("source_setup_run_custody",),
+            ):
+                session.add(
+                    ProjectSetupRun(
+                        id=str(second_run_id),
+                        project_id=str(ids["project"]),
+                        guide_id=str(ids["guide"]),
+                        guide_version="v1",
+                        source_snapshot_id=str(ids["snapshot"]),
+                        source_snapshot_hash=snapshot.bundle_hash,
+                        setup_generation=2,
+                        status="queued",
+                        current_step="queued",
+                        created_by="test",
+                    )
                 )
-            )
+                await session.flush()
         second_authority = _AllowBindingAuthority()
         async with factory() as session, session.begin():
             second = await GuideSourceBindingService(session, second_authority).bind_guide_source(
@@ -1787,22 +1823,28 @@ async def test_binding_fails_closed_before_authority_or_effect(
                 verification_receipt=failure != "status_only",
             )
             if failure == "stale_generation":
-                session.add(
-                    ProjectSetupRun(
-                        id=str(uuid4()),
-                        project_id=str(ids["project"]),
-                        guide_id=str(ids["guide"]),
-                        guide_version="v1",
-                        source_snapshot_id=str(ids["snapshot"]),
-                        source_snapshot_hash=(
-                            await session.get(GuideSourceSnapshot, str(ids["snapshot"]))
-                        ).bundle_hash,
-                        setup_generation=2,
-                        status="queued",
-                        current_step="queued",
-                        created_by="test",
+                async with suspend_historical_product_custody(
+                    session,
+                    table="project_setup_runs",
+                    triggers=("source_setup_run_custody",),
+                ):
+                    session.add(
+                        ProjectSetupRun(
+                            id=str(uuid4()),
+                            project_id=str(ids["project"]),
+                            guide_id=str(ids["guide"]),
+                            guide_version="v1",
+                            source_snapshot_id=str(ids["snapshot"]),
+                            source_snapshot_hash=(
+                                await session.get(GuideSourceSnapshot, str(ids["snapshot"]))
+                            ).bundle_hash,
+                            setup_generation=2,
+                            status="queued",
+                            current_step="queued",
+                            created_by="test",
+                        )
                     )
-                )
+                    await session.flush()
                 await session.commit()
         authority = _AllowBindingAuthority()
         request = _request(

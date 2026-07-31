@@ -28,6 +28,7 @@ from api_contract_e2e import (
     issue_flow_token,
     project_root,
     request_json,
+    seed_active_guide_for_pre_12h_e2e,
     sha256_token,
     wait_for_health,
 )
@@ -317,6 +318,7 @@ async def create_project_with_guide(
     client: httpx.AsyncClient,
     manager_token: str,
     manager_subject: str,
+    manager_issuer: str,
     run_id: str,
     suffix: str,
     required_checkers: list[str] | None = None,
@@ -326,6 +328,8 @@ async def create_project_with_guide(
     Args:
         client: Real HTTP client.
         manager_token: Project manager Flow token.
+        manager_subject: External subject admitted by the manager token.
+        manager_issuer: External issuer that admitted the manager subject.
         run_id: Unique test run id.
         suffix: Scenario suffix used in the project slug.
         required_checkers: Optional checker policy override.
@@ -367,6 +371,10 @@ async def create_project_with_guide(
         "POST",
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
         manager_token,
+        expected_status=404,
+    )
+    await seed_active_guide_for_pre_12h_e2e(
+        project["id"], guide["id"], manager_subject, manager_issuer
     )
     return project
 
@@ -1074,6 +1082,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "clean",
         )
@@ -1203,6 +1212,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "trusted-retry",
         )
@@ -1322,6 +1332,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "revision",
         )
@@ -1406,6 +1417,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "no-evidence",
         )
@@ -1471,6 +1483,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "integrity",
         )
@@ -1535,6 +1548,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "attestation",
         )
@@ -1592,6 +1606,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "warning",
         )
@@ -1635,6 +1650,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "checker-revision",
             required_checkers=["check_low_quality_generated_artifacts"],
@@ -1942,6 +1958,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "forbidden",
         )
@@ -2006,6 +2023,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             manager_subject,
+            flow_issuer,
             run_id,
             "setup",
             required_checkers=["check_acceptance_criteria_present"],

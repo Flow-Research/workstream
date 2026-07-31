@@ -62,7 +62,7 @@ from app.modules.projects.models import (
     Project,
     ProjectGuide,
 )
-from project_create_fixtures import seed_historical_project
+from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
 from tests.artifact_store_helpers import artifact_admission_limit_settings, minted_source
 
@@ -302,32 +302,46 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
     assert project is not None
     project_id = project.id
     guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(3))
-    session.add(
-        ProjectGuide(
-            id=guide_id,
-            project_id=project_id,
-            version="v1",
-            status="draft",
-            content_markdown="# Guide",
-            created_by="test",
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody",),
+    ):
+        session.add(
+            ProjectGuide(
+                id=guide_id,
+                project_id=project_id,
+                version="v1",
+                status="draft",
+                content_markdown="# Guide",
+                created_by="test",
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshot(
-            id=snapshot_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version="v1",
-            manifest_schema_version="v1",
-            manifest_json={"items": [item_id]},
-            bundle_hash=canonical_json_hash({"items": [item_id]}),
-            captured_by=str(context.actor_profile_id),
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshots",
+        triggers=("source_snapshot_product_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshot(
+                id=snapshot_id,
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_version="v1",
+                manifest_schema_version="v1",
+                manifest_json={"items": [item_id]},
+                bundle_hash=canonical_json_hash({"items": [item_id]}),
+                captured_by=str(context.actor_profile_id),
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshotItem(
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshot_items",
+        triggers=("guide_source_snapshot_items_custody",),
+    ):
+        session.add(GuideSourceSnapshotItem(
             id=item_id,
             source_snapshot_id=snapshot_id,
             item_order=0,
@@ -336,8 +350,8 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
             ingestion_adapter="inline",
             content_hash=source.commitment.sha256,
             media_type=source.commitment.media_type,
-        )
-    )
+        ))
+        await session.flush()
     await session.commit()
     prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
     admission = await ArtifactAdmissionService(session, settings, namespace).admit(

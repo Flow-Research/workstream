@@ -24,20 +24,26 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from app.db import session as db_session
+from app.modules.actors.models import ActorIdentityLink
 from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
     RateControlService,
     rate_key_digest,
 )
 from app.modules.projects.models import (
+    PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectSetupRun,
+    ReviewPolicy,
+    RevisionPolicy,
 )
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
     compile_project_post_submit_checker_spec,
 )
+from app.modules.projects.service import ProjectService
+from app.schemas.auth import ActorContext
 from run_isolated_tests import NAME_RE as DERIVED_DATABASE_NAME
 from bootstrap_access_administrator import _run as run_admin_bootstrap
 
@@ -51,6 +57,55 @@ EXPECTED_DURABLE_CHECKERS = {
     "check_confidentiality_attestation",
     "check_low_quality_generated_artifacts",
 }
+
+
+async def seed_active_guide_for_pre_12h_e2e(
+    project_id: str,
+    guide_id: str,
+    manager_subject: str,
+    manager_issuer: str,
+) -> dict:
+    """Seed downstream active state while the public activation route is unavailable."""
+    async with db_session.get_session_factory()() as session:
+        database_name = await session.scalar(text("select current_database()"))
+        if DERIVED_DATABASE_NAME.fullmatch(str(database_name)) is None:
+            raise RuntimeError("pre-12H activation seed requires an isolated E2E database")
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == manager_issuer,
+                ActorIdentityLink.subject == manager_subject,
+            )
+        )
+        if link is None:
+            raise RuntimeError("pre-12H activation seed requires an admitted actor")
+        actor = ActorContext(
+            actor_id=str(link.actor_profile_id),
+            external_subject=link.subject,
+            external_issuer=link.issuer,
+            roles=("project_manager",),
+            claim_snapshot={},
+            auth_source="flow",
+            is_dev_auth=False,
+        )
+        await session.execute(
+            text("alter table project_guides disable trigger guide_mutation_product_custody")
+        )
+        await session.execute(
+            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
+        )
+        await session.commit()
+        try:
+            result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
+            return result.model_dump(mode="json")
+        finally:
+            await session.rollback()
+            await session.execute(
+                text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
+            )
+            await session.execute(
+                text("alter table project_guides enable trigger guide_mutation_product_custody")
+            )
+            await session.commit()
 DEFAULT_FLOW_ISSUER = "https://auth.flow.local/e2e"
 DEFAULT_FLOW_AUDIENCE = "workstream-api"
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -357,6 +412,7 @@ async def request_json(
     token: str | None = None,
     payload: dict | None = None,
     expected_status: int = 200,
+    idempotency_key: str | None = None,
 ) -> dict | list:
     """Call one API endpoint and assert its status.
 
@@ -367,6 +423,7 @@ async def request_json(
         token: Optional Flow bearer token.
         payload: Optional JSON payload.
         expected_status: Expected HTTP status code.
+        idempotency_key: Optional UUID replay key for mutation boundaries.
 
     Returns:
         Parsed JSON response body.
@@ -380,6 +437,8 @@ async def request_json(
     headers.update(
         {"X-Request-ID": request_id, "X-Correlation-ID": correlation_id}
     )
+    if idempotency_key is not None:
+        headers["Idempotency-Key"] = idempotency_key
     response = await client.request(
         method,
         path,
@@ -580,28 +639,52 @@ def guide_payload(run_id: str) -> dict:
             "data."
         ),
         "change_summary": "Initial real API guide",
-        "review_policy": {
-            "requires_second_review": False,
-            "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
-        },
-        "revision_policy": {
-            "max_revision_rounds": 7,
-            "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
-        },
-        "payment_policy": {
-            "base_amount": "25.00",
-            "currency": "USD",
-            "payout_type": "fixed",
-            "revision_payment_rule": "none",
-            "rejection_payment_rule": "none",
-            "accepted_payment_rule": "pay base amount",
-        },
     }
+
+
+async def seed_pending_policy_boundaries(project_id: str, guide_version: str) -> None:
+    """Seed policies whose clean-cut authorization routes arrive after AUTH-12D.
+
+    The E2E flow must keep proving the downstream lifecycle while guide create no
+    longer accepts embedded policy writes. These direct fixtures are removed as
+    each dedicated policy boundary is activated.
+    """
+    async with db_session.get_session_factory()() as session:
+        session.add_all(
+            [
+                ReviewPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide_version,
+                    requires_second_review=False,
+                    allowed_decisions=["accept", "needs_revision", "reject"],
+                    minimum_finding_fields=["issue", "required_fix"],
+                    sla_hours=24,
+                ),
+                RevisionPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide_version,
+                    max_revision_rounds=7,
+                    revision_deadline_hours=48,
+                    auto_reject_after_limit=True,
+                    allowed_resubmission_states=["needs_revision"],
+                    reviewer_reassignment_rule="same reviewer preferred",
+                ),
+                PaymentPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide_version,
+                    base_amount="25.00",
+                    currency="USD",
+                    payout_type="fixed",
+                    revision_payment_rule="none",
+                    rejection_payment_rule="none",
+                    accepted_payment_rule="pay base amount",
+                ),
+            ]
+        )
+        await session.commit()
 
 
 def sha256_token(seed: str) -> str:
@@ -683,7 +766,7 @@ async def create_policy_bundle_for_guide(
         client,
         "POST",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-        manager_token,
+        diagnostic_reader_token,
         {
             "items": [
                 {
@@ -696,6 +779,7 @@ async def create_policy_bundle_for_guide(
             ]
         },
         201,
+        idempotency_key=str(uuid4()),
     )
     report = await request_json(
         client,
@@ -1364,16 +1448,19 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client,
             "POST",
             f"/api/v1/projects/{project['id']}/guides",
-            manager_token,
+            project_reader_token,
             guide_payload(run_id),
             201,
+            idempotency_key=str(uuid4()),
         )
+        await seed_pending_policy_boundaries(project["id"], guide["version"])
         patched_guide = await request_json(
             client,
             "PATCH",
             f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
-            manager_token,
+            project_reader_token,
             {"change_summary": "Patched before activation through real API"},
+            idempotency_key=str(uuid4()),
         )
         assert patched_guide["change_summary"] == "Patched before activation through real API"
         await create_policy_bundle_for_guide(
@@ -1385,11 +1472,15 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             guide["id"],
             run_id,
         )
-        active = await request_json(
+        await request_json(
             client,
             "POST",
             f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
             manager_token,
+            expected_status=404,
+        )
+        active = await seed_active_guide_for_pre_12h_e2e(
+            project["id"], guide["id"], manager_subject, flow_issuer
         )
         assert active["guide"]["version"] == "v1"
         active_actor_context = await request_json(
@@ -1407,9 +1498,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client,
             "PATCH",
             f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
-            manager_token,
+            project_reader_token,
             {"change_summary": "Illegal active guide edit"},
             409,
+            idempotency_key=str(uuid4()),
         )
         await request_json(
             client,
