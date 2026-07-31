@@ -24,7 +24,7 @@ from migration_contracts.service_identity_0023 import (
 )
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.auth.dev import actor_id_from_external_identity
 from app.modules.authorization.catalogue import (
@@ -34,6 +34,7 @@ from app.modules.authorization.catalogue import (
     ActionOwner,
     PermissionId,
 )
+from project_create_fixtures import insert_historical_project, seed_authorized_project
 
 from app.modules.actors.legacy_classification import (
     CLASSIFICATION_FILE_ENV,
@@ -55,7 +56,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0043_project_setup_service"
+HEAD_REVISION = "0044_project_create_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -1829,6 +1830,12 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
                 "slug": f"migration-{ids['project']}",
                 "sha256": "sha256:" + "a" * 64,
             }
+            await insert_historical_project(
+                connection,
+                project_id=ids["project"],
+                name="Migration project",
+                slug=parameters["slug"],
+            )
             statements = (
                 (
                     "insert into actor_profiles "
@@ -1841,10 +1848,6 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
                     "linked_by, last_verified_at) values "
                     "(:identity_link, :actor, 'https://identity.test', :actor, 'human', "
                     "'active', 'migration-test', clock_timestamp())"
-                ),
-                (
-                    "insert into projects (id, name, slug, status) "
-                    "values (:project, 'Migration project', :slug, 'draft')"
                 ),
                 (
                     "insert into project_guides "
@@ -2154,6 +2157,177 @@ def test_0043_project_setup_service_refuses_in_use_downgrade(
                     _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
                 )
             command.downgrade(config, "base")
+
+
+async def _project_create_authority_schema_state(database_url: str) -> tuple[bool, bool, bool]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            table_exists = bool(
+                await connection.scalar(
+                    text(
+                        "select to_regclass('public.project_create_idempotency_records') "
+                        "is not null"
+                    )
+                )
+            )
+            provenance_exists = bool(
+                await connection.scalar(
+                    text(
+                        "select exists(select 1 from information_schema.columns "
+                        "where table_schema='public' and table_name='projects' "
+                        "and column_name='authorization_decision_event_id')"
+                    )
+                )
+            )
+            privacy = await connection.scalar(
+                text(
+                    "select pg_get_constraintdef(oid) from pg_constraint "
+                    "where conrelid='audit_events'::regclass "
+                    "and conname='ck_audit_events_authority_privacy_bounds'"
+                )
+            ) or ""
+            return (
+                table_exists,
+                provenance_exists,
+                "project_create_operation" in privacy and "target_ref_kind" in privacy,
+            )
+    finally:
+        await engine.dispose()
+
+
+def test_0044_project_create_authority_round_trip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0044 alone installs and exactly removes project-create persistence."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0043_project_setup_service")
+            assert asyncio.run(
+                _project_create_authority_schema_state(isolated_database_env)
+            ) == (False, False, False)
+            command.upgrade(config, "head")
+            assert asyncio.run(
+                _project_create_authority_schema_state(isolated_database_env)
+            ) == (True, True, True)
+            command.downgrade(config, "0043_project_setup_service")
+            assert asyncio.run(
+                _project_create_authority_schema_state(isolated_database_env)
+            ) == (False, False, False)
+            command.upgrade(config, "head")
+        finally:
+            command.downgrade(config, "base")
+
+
+async def _assert_0044_rejects_new_unattributed_project(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            await connection.execute(
+                text(
+                    "insert into projects (id,name,slug,status) "
+                    "values (:id,'Unattributed','unattributed','draft')"
+                ),
+                {"id": str(uuid4())},
+            )
+            with pytest.raises(IntegrityError):
+                await transaction.commit()
+            if transaction.is_active:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+def test_0044_rejects_new_unattributed_project(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Historical null provenance survives, but new null-provenance rows deny."""
+    config = _alembic_config()
+    historical_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0043_project_setup_service")
+
+            async def seed_historical() -> None:
+                engine = create_async_engine(isolated_database_env)
+                try:
+                    async with engine.begin() as connection:
+                        await connection.execute(
+                            text(
+                                "insert into projects (id,name,slug,status) "
+                                "values (:id,'Historical','historical','draft')"
+                            ),
+                            {"id": historical_id},
+                        )
+                finally:
+                    await engine.dispose()
+
+            asyncio.run(seed_historical())
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_0044_rejects_new_unattributed_project(isolated_database_env)
+            )
+
+            async def remove_historical() -> None:
+                engine = create_async_engine(isolated_database_env)
+                try:
+                    async with engine.begin() as connection:
+                        await connection.execute(
+                            text("delete from projects where id=:id"), {"id": historical_id}
+                        )
+                finally:
+                    await engine.dispose()
+
+            asyncio.run(remove_historical())
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0044_refuses_populated_project_create_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """A committed project custody chain prevents destructive downgrade."""
+    config = _alembic_config()
+
+    async def seed() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            factory = async_sessionmaker(engine, expire_on_commit=False)
+            async with factory() as session:
+                await seed_authorized_project(
+                    session,
+                    project_id=str(uuid4()),
+                    name="Downgrade custody",
+                    slug=f"downgrade-custody-{uuid4()}",
+                )
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+    async def reset_schema() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("drop schema public cascade"))
+                await connection.execute(text("create schema public"))
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(seed())
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade non-empty project creation authority"
+            ):
+                command.downgrade(config, "0043_project_setup_service")
+        finally:
+            asyncio.run(reset_schema())
 
 
 def test_0036_art_auth_catalogue_round_trip(isolated_database_env: str, migration_lock) -> None:
@@ -5689,15 +5863,16 @@ async def _outbox_downgrade_writer_race(
     engine = create_async_engine(database_url)
     event_id = str(uuid4())
     try:
+        async with engine.begin() as setup_connection:
+            await insert_historical_project(
+                setup_connection,
+                project_id=project_id,
+                name="Outbox migration",
+                slug=f"outbox-migration-{project_id}",
+                status="active",
+            )
         async with engine.connect() as connection:
             transaction = await connection.begin()
-            await connection.execute(
-                text(
-                    "insert into projects(id,name,slug,status) "
-                    "values (:id,'Outbox migration',:slug,'active')"
-                ),
-                {"id": project_id, "slug": f"outbox-migration-{project_id}"},
-            )
             await connection.execute(
                 text(
                     "insert into outbox_events "
@@ -11135,11 +11310,12 @@ async def _install_project_role_table_blockers(
     try:
         async with engine.begin() as connection:
             await _insert_canonical_actor(connection, ids["actor"], "auth10a-blocker", "human")
-            await connection.execute(
-                text(
-                    "insert into projects(id,name,slug,status) values (:id,'AUTH 10A blocker',:slug,'active')"
-                ),
-                {"id": ids["project"], "slug": f"auth-10a-blocker-{ids['project']}"},
+            await insert_historical_project(
+                connection,
+                project_id=ids["project"],
+                name="AUTH 10A blocker",
+                slug=f"auth-10a-blocker-{ids['project']}",
+                status="active",
             )
             await connection.execute(
                 text(

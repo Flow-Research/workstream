@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 import pytest  # type: ignore[import-not-found]
 from pydantic import TypeAdapter
-from sqlalchemy import insert, text
+from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     AsyncSession,
@@ -27,7 +27,7 @@ from app.modules.outbox.schemas import (
 )
 from app.modules.outbox.repository import OutboxRepository
 from app.modules.outbox.service import OutboxService
-from app.modules.projects.models import Project
+from project_create_fixtures import seed_historical_project
 from tests.assertion_helpers import assert_secret_not_retained
 
 
@@ -45,16 +45,15 @@ async def outbox_factory(
     engine = create_async_engine(outbox_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     project_id = uuid4()
-    async with engine.begin() as connection:
-        await connection.execute(
-            insert(Project),
-            {
-                "id": str(project_id),
-                "name": "Outbox test",
-                "slug": f"outbox-{project_id}",
-                "status": "active",
-            },
+    async with factory() as session:
+        await seed_historical_project(
+            session,
+            project_id=str(project_id),
+            name="Outbox test",
+            slug=f"outbox-{project_id}",
+            status="active",
         )
+        await session.commit()
     try:
         yield factory, project_id
     finally:

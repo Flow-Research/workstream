@@ -34,7 +34,6 @@ from app.modules.projects.schemas import (
     GuideSufficiencyReportCreate,
     GuideSufficiencyReportResponse,
     PreSubmitCheckerPolicySummaryResponse,
-    ProjectCreate,
     ContributorProjectResponse,
     ProjectGuideCreate,
     ProjectGuideResponse,
@@ -90,21 +89,6 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
         HTTP exception with a forbidden status.
     """
     return HTTPException(status_code=403, detail=str(exc))
-
-
-@router.post("", response_model=ProjectResponse, status_code=201)
-async def create_project(
-    payload: ProjectCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ProjectResponse:
-    """Create a draft project shell for future guide versions."""
-    try:
-        return await ProjectService(session).create_project(actor, payload)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
 
 
 @router.get(

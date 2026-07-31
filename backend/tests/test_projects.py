@@ -13,9 +13,10 @@ from uuid import UUID, uuid4
 
 import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event, select, update
+from sqlalchemy import event, func, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
 from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
@@ -51,12 +52,14 @@ from app.modules.projects.models import (
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
+    ProjectCreateIdempotencyRecord,
     ProjectGuide,
     ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import (
     AdminRoleGrant,
     AuthorityControl,
@@ -71,7 +74,21 @@ from app.modules.projects.authorization_reads import (
     authorize_project_diagnostic_read,
     authorize_project_policy_read,
 )
+from app.modules.projects.create_repository import ProjectCreateRepository
+from app.modules.projects.create_router import (
+    create_project as create_project_route,
+    get_project_create_authorization,
+    require_project_create_idempotency_key,
+)
+from app.modules.projects.create_service import (
+    ProjectCreateIdempotencyConflict,
+    ProjectCreateOutcome,
+    ProjectCreateService,
+)
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.schemas import ProjectCreate, ProjectResponse
+from app.modules.authorization.runtime import MatchedAuthorityKind
+from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
     PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
@@ -87,6 +104,7 @@ from app.modules.projects.service import (
     ProjectServiceError,
     StaleProjectSetupContinuation,
 )
+from project_create_fixtures import seed_historical_project
 
 
 from app.modules.projects.post_submit_policy import (
@@ -486,6 +504,377 @@ def test_activation_readiness_normalizes_hash_valid_malformed_policy_body() -> N
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("missing_stage", ["insert", "reload"])
+async def test_project_create_repository_rejects_disappeared_reservation(
+    missing_stage: str,
+) -> None:
+    record_id = uuid4()
+
+    class Session:
+        async def scalar(self, _statement):
+            return None if missing_stage == "insert" else record_id
+
+        async def get(self, _model, _record_id):
+            assert _record_id == record_id
+            return None
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    with pytest.raises(ProjectRepositoryIntegrityError, match="reservation disappeared"):
+        await repository.reserve(
+            actor_profile_id=str(uuid4()),
+            identity_link_id=str(uuid4()),
+            idempotency_key=uuid4(),
+            request_digest="sha256:" + ("a" * 64),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_identity", "stored_digest", "stored_status", "expected"),
+    [
+        ("other-link", "sha256:" + ("a" * 64), "pending", "mismatch"),
+        ("same-link", "sha256:" + ("b" * 64), "pending", "mismatch"),
+        ("same-link", "sha256:" + ("a" * 64), "pending", "pending"),
+        ("same-link", "sha256:" + ("a" * 64), "committed", "replayed"),
+    ],
+)
+async def test_project_create_repository_classifies_existing_reservation(
+    stored_identity: str,
+    stored_digest: str,
+    stored_status: str,
+    expected: str,
+) -> None:
+    record_id = uuid4()
+    record = types.SimpleNamespace(
+        id=record_id,
+        identity_link_id=stored_identity,
+        request_digest=stored_digest,
+        status=stored_status,
+    )
+
+    class Session:
+        async def scalar(self, _statement):
+            return record_id
+
+        async def get(self, _model, _record_id):
+            assert _record_id == record_id
+            return record
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    disposition, returned = await repository.reserve(
+        actor_profile_id=str(uuid4()),
+        identity_link_id="same-link",
+        idempotency_key=uuid4(),
+        request_digest="sha256:" + ("a" * 64),
+    )
+    assert disposition == expected
+    assert returned is record
+
+
+@pytest.mark.asyncio
+async def test_project_create_repository_rejects_invalid_completion() -> None:
+    class Session:
+        async def scalar(self, _statement):
+            return None
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    with pytest.raises(ProjectRepositoryIntegrityError, match="invalid project reservation"):
+        await repository.complete(types.SimpleNamespace(id=uuid4()))
+
+
+def _project_create_payload() -> ProjectCreate:
+    return ProjectCreate(name="Created project", slug="created-project", description="test")
+
+
+def _project_create_response() -> ProjectResponse:
+    now = datetime.now(UTC)
+    return ProjectResponse(
+        id=str(uuid4()),
+        name="Created project",
+        slug="created-project",
+        description="test",
+        status="draft",
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def test_project_create_idempotency_dependency_rejects_invalid_header() -> None:
+    request = types.SimpleNamespace(headers={"Idempotency-Key": "not-a-uuid"})
+
+    with pytest.raises(HTTPException) as captured:
+        require_project_create_idempotency_key(cast(Any, request))
+
+    assert captured.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_project_create_authorization_dependency_preserves_exact_inputs() -> None:
+    idempotency_key = uuid4()
+    resolved = object()
+    prepared = object()
+
+    result = await get_project_create_authorization(
+        idempotency_key,
+        cast(Any, resolved),
+        cast(Any, prepared),
+    )
+
+    assert result == (idempotency_key, resolved, prepared)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replayed", [False, True])
+async def test_project_create_route_owns_commit_or_replay_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+    replayed: bool,
+) -> None:
+    class Session:
+        commit_count = 0
+        rollback_count = 0
+
+        async def commit(self):
+            self.commit_count += 1
+
+        async def rollback(self):
+            self.rollback_count += 1
+
+    response = _project_create_response()
+
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        return ProjectCreateOutcome(response=response, replayed=replayed)
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    session = Session()
+    returned = await create_project_route(
+        _project_create_payload(),
+        (uuid4(), object(), object()),  # type: ignore[arg-type]
+        session,  # type: ignore[arg-type]
+    )
+    assert returned is response
+    assert (session.commit_count, session.rollback_count) == (
+        (0, 1) if replayed else (1, 0)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "status_code", "error_code"),
+    [
+        (PermissionDenied("denied"), 403, None),
+        (
+            ProjectCreateIdempotencyConflict("idempotency_mismatch"),
+            409,
+            "idempotency_mismatch",
+        ),
+        (ProjectServiceError("unavailable"), 400, None),
+    ],
+)
+async def test_project_create_route_translates_bounded_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    status_code: int,
+    error_code: str | None,
+) -> None:
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        raise failure
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    with pytest.raises(HTTPException) as exc_info:
+        await create_project_route(
+            _project_create_payload(),
+            (uuid4(), object(), object()),  # type: ignore[arg-type]
+            cast(Any, object()),
+        )
+    assert exc_info.value.status_code == status_code
+    if error_code is not None:
+        assert cast(Any, exc_info.value).error_code == error_code
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("constraint_source", "expected_code"),
+    [
+        (types.SimpleNamespace(constraint_name="projects_slug_key"), 409),
+        (
+            types.SimpleNamespace(
+                constraint_name=None,
+                diag=types.SimpleNamespace(constraint_name="uq_projects_slug"),
+            ),
+            409,
+        ),
+        (types.SimpleNamespace(constraint_name="other_constraint"), None),
+    ],
+)
+async def test_project_create_route_maps_only_slug_integrity_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+    constraint_source: object,
+    expected_code: int | None,
+) -> None:
+    class Session:
+        rollback_count = 0
+
+        async def rollback(self):
+            self.rollback_count += 1
+
+    failure = IntegrityError("insert", {}, constraint_source)
+
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        raise failure
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    session = Session()
+    if expected_code is None:
+        with pytest.raises(IntegrityError) as exc_info:
+            await create_project_route(
+                _project_create_payload(),
+                (uuid4(), object(), object()),  # type: ignore[arg-type]
+                session,  # type: ignore[arg-type]
+            )
+        assert exc_info.value is failure
+    else:
+        with pytest.raises(HTTPException) as exc_info:
+            await create_project_route(
+                _project_create_payload(),
+                (uuid4(), object(), object()),  # type: ignore[arg-type]
+                session,  # type: ignore[arg-type]
+            )
+        assert exc_info.value.status_code == expected_code
+    assert session.rollback_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("disposition", "project_exists", "expected_error"),
+    [
+        ("mismatch", True, ProjectCreateIdempotencyConflict),
+        ("pending", True, ProjectCreateIdempotencyConflict),
+        ("replayed", False, RuntimeError),
+    ],
+)
+async def test_project_create_service_rejects_noncreatable_reservation_states(
+    disposition: str,
+    project_exists: bool,
+    expected_error: type[Exception],
+) -> None:
+    reservation = types.SimpleNamespace(project_id=str(uuid4()))
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return disposition, reservation
+
+    class Projects:
+        async def get_project(self, _project_id):
+            return _project_create_response() if project_exists else None
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=str(uuid4())),
+        identity_link=types.SimpleNamespace(id=str(uuid4())),
+    )
+    with pytest.raises(expected_error):
+        await service.create(
+            resolved,
+            cast(Any, object()),
+            uuid4(),
+            _project_create_payload(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_project_create_service_replays_existing_project() -> None:
+    response = _project_create_response()
+    reservation = types.SimpleNamespace(project_id=response.id)
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return "replayed", reservation
+
+    class Projects:
+        async def get_project(self, _project_id):
+            return response
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=str(uuid4())),
+        identity_link=types.SimpleNamespace(id=str(uuid4())),
+    )
+    outcome = await service.create(
+        resolved,
+        cast(Any, object()),
+        uuid4(),
+        _project_create_payload(),
+    )
+    assert outcome.replayed is True
+    assert outcome.response == response
+
+
+@pytest.mark.asyncio
+async def test_project_create_service_consumes_system_authority_and_attributes_project() -> None:
+    reservation = types.SimpleNamespace(
+        operation_id=uuid4(),
+        project_id=str(uuid4()),
+        operation_generation=1,
+    )
+    completed = []
+    added = []
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return "claimed", reservation
+
+        async def complete(self, record):
+            completed.append(record)
+
+    class Projects:
+        async def add_project(self, project):
+            now = datetime.now(UTC)
+            project.created_at = now
+            project.updated_at = now
+            added.append(project)
+            return project
+
+    decision = types.SimpleNamespace(
+        matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=None,
+        decision_id=uuid4(),
+    )
+
+    class Prepared:
+        async def prepare(self, *_args):
+            return object()
+
+        async def consume(self, *_args):
+            return decision
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    actor_id, link_id = str(uuid4()), str(uuid4())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=actor_id),
+        identity_link=types.SimpleNamespace(id=link_id),
+    )
+    outcome = await service.create(
+        resolved,
+        cast(Any, Prepared()),
+        uuid4(),
+        _project_create_payload(),
+    )
+    assert outcome.replayed is False
+    assert outcome.response.id == reservation.project_id
+    assert completed == [reservation]
+    assert added[0].created_by_actor_profile_id == actor_id
+    assert added[0].created_via_identity_link_id == link_id
+    assert added[0].created_by_admin_role_grant_id == decision.matched_grant_id
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "method_name,locked_table",
     [
@@ -699,6 +1088,32 @@ async def project_client(project_database_env: str) -> AsyncIterator[AsyncClient
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
+        admission = await client.get("/api/v1/auth/me", headers=auth_headers())
+        assert admission.status_code == 200, admission.text
+        actor_id, _link_id, grantor_id = await ensure_access_administrator_bootstrap()
+        async with db_session.get_session_factory()() as session:
+            link = await session.scalar(
+                select(ActorIdentityLink).where(
+                    ActorIdentityLink.issuer == "flow-test",
+                    ActorIdentityLink.subject == "project-manager-subject",
+                )
+            )
+            assert link is not None
+            session.add(
+                AdminRoleGrant(
+                    id=uuid4(),
+                    target_actor_profile_id=link.actor_profile_id,
+                    role="project_manager",
+                    scope_type="system",
+                    scope_project_id=None,
+                    status="active",
+                    version=1,
+                    granted_by_actor_profile_id=actor_id,
+                    granted_by_admin_role_grant_id=grantor_id,
+                    grant_reason="Project test system-scoped manager authority",
+                )
+            )
+            await session.commit()
         yield client
 
 
@@ -871,14 +1286,6 @@ async def test_project_role_grant_repository_filters_and_uses_strict_keyset(
     granted_at = datetime(2026, 7, 22, tzinfo=UTC)
     grant_ids = sorted((uuid4(), uuid4(), uuid4()), key=str)
     async with db_session.get_session_factory()() as session:
-        session.add(
-            Project(
-                id=str(project_id),
-                name="Authorization read project",
-                slug=f"authorization-read-{project_id}",
-                status="archived",
-            )
-        )
         session.add_all(
             [
                 ActorProfile(
@@ -925,6 +1332,14 @@ async def test_project_role_grant_repository_filters_and_uses_strict_keyset(
         control.bootstrap_completed = True
         control.bootstrap_grant_id = admin_grant_id
         control.version = 1
+        await session.flush()
+        await seed_historical_project(
+            session,
+            project_id=str(project_id),
+            name="Authorization read project",
+            slug=f"authorization-read-{project_id}",
+            status="archived",
+        )
         snapshots = []
         grants = []
         for index, grant_id in enumerate(grant_ids):
@@ -1417,7 +1832,7 @@ async def create_project(client: AsyncClient, *, name: str = "STEM Eval") -> dic
     slug = f"{name.lower().replace(' ', '-')}-{uuid4()}"
     response = await client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": name,
             "slug": slug,
@@ -1428,12 +1843,40 @@ async def create_project(client: AsyncClient, *, name: str = "STEM Eval") -> dic
     return response.json()
 
 
+async def revoke_system_project_manager_for_default_actor() -> None:
+    """Remove fixture-only creation authority before testing narrower grants."""
+    async with db_session.get_session_factory()() as session:
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        assert link is not None
+        grant = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
+                AdminRoleGrant.role == "project_manager",
+                AdminRoleGrant.scope_type == "system",
+                AdminRoleGrant.status == "active",
+            )
+        )
+        assert grant is not None
+        grant.status = "revoked"
+        grant.version += 1
+        grant.revoked_by_actor_profile_id = grant.target_actor_profile_id
+        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
+        grant.revoked_reason = "Remove fixture-only project creation authority"
+        grant.revoked_at = datetime.now(UTC)
+        await session.commit()
+
+
 async def test_project_route_registers_project_manager_actor_without_auth_me(
     project_client: AsyncClient,
 ) -> None:
     response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "Registry Proof",
             "slug": "registry-proof",
@@ -1458,6 +1901,114 @@ async def test_project_route_registers_project_manager_actor_without_auth_me(
     assert profile.status == "active"
     assert legacy_identity is not None
     assert legacy_identity.last_seen_roles == ["project_manager"]
+
+
+async def test_project_create_exact_replay_and_mismatch_are_atomic(
+    project_client: AsyncClient,
+) -> None:
+    key = str(uuid4())
+    payload = {
+        "name": "Idempotent Project",
+        "slug": f"idempotent-project-{uuid4()}",
+        "description": "Exact replay proof",
+    }
+    headers = auth_headers() | {"Idempotency-Key": key}
+    created = await project_client.post("/api/v1/projects", headers=headers, json=payload)
+    replayed = await project_client.post("/api/v1/projects", headers=headers, json=payload)
+    mismatch = await project_client.post(
+        "/api/v1/projects",
+        headers=headers,
+        json={**payload, "name": "Changed replay"},
+    )
+    async with db_session.get_session_factory()() as session:
+        created_project = await session.get(Project, created.json()["id"])
+        assert created_project is not None
+        matched_grant_id = created_project.created_by_admin_role_grant_id
+        assert matched_grant_id is not None
+    await revoke_local_admin_role(matched_grant_id)
+    replayed_after_revocation = await project_client.post(
+        "/api/v1/projects", headers=headers, json=payload
+    )
+
+    assert created.status_code == replayed.status_code == 201, (
+        created.text,
+        replayed.text,
+    )
+    assert replayed.json() == created.json()
+    assert replayed_after_revocation.status_code == 201
+    assert replayed_after_revocation.json() == created.json()
+    assert mismatch.status_code == 409
+    assert mismatch.json()["error"]["code"] == "idempotency_mismatch"
+
+    async with db_session.get_session_factory()() as session:
+        project = await session.get(Project, created.json()["id"])
+        reservations = list(
+            (
+                await session.scalars(
+                    select(ProjectCreateIdempotencyRecord).where(
+                        ProjectCreateIdempotencyRecord.idempotency_key == UUID(key)
+                    )
+                )
+            ).all()
+        )
+        project_count = await session.scalar(
+            select(func.count()).select_from(Project).where(Project.slug == payload["slug"])
+        )
+        assert project is not None
+        event = await session.get(AuditEvent, project.authorization_decision_event_id)
+        allowed_event_count = await session.scalar(
+            select(func.count()).select_from(AuditEvent).where(
+                AuditEvent.action_id == "project.create",
+                AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                AuditEvent.target_ref_id == project.id,
+            )
+        )
+
+    assert project_count == 1
+    assert len(reservations) == 1
+    reservation = reservations[0]
+    assert reservation.status == "committed"
+    assert reservation.project_id == project.id
+    assert project.creation_scope_type == "system"
+    assert project.creation_action_id == "project.create"
+    assert event is not None
+    assert event.action_id == "project.create"
+    assert event.resource_type == "project_create_operation"
+    assert allowed_event_count == 1
+    assert event.resource_id == str(reservation.operation_id)
+    assert event.target_ref_kind == "project"
+    assert event.target_ref_id == project.id
+
+
+async def test_project_create_concurrent_exact_replay_commits_once(
+    project_client: AsyncClient,
+) -> None:
+    headers = auth_headers() | {"Idempotency-Key": str(uuid4())}
+    payload = {
+        "name": "Concurrent Project",
+        "slug": f"concurrent-project-{uuid4()}",
+        "description": "Concurrent exact replay proof",
+    }
+    first, second = await asyncio.gather(
+        project_client.post("/api/v1/projects", headers=headers, json=payload),
+        project_client.post("/api/v1/projects", headers=headers, json=payload),
+    )
+
+    assert first.status_code == second.status_code == 201
+    assert first.json() == second.json()
+    async with db_session.get_session_factory()() as session:
+        project_count = await session.scalar(
+            select(func.count()).select_from(Project).where(Project.slug == payload["slug"])
+        )
+        replay_count = await session.scalar(
+            select(func.count())
+            .select_from(ProjectCreateIdempotencyRecord)
+            .where(
+                ProjectCreateIdempotencyRecord.idempotency_key
+                == UUID(headers["Idempotency-Key"])
+            )
+        )
+    assert project_count == replay_count == 1
 
 
 async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> dict:
@@ -1631,6 +2182,7 @@ async def test_get_project_rejects_token_role_when_setup_queue_is_unavailable(
 ) -> None:
     """A token role cannot authorize project identity under any queue state."""
     project = await create_project(project_client)
+    await revoke_system_project_manager_for_default_actor()
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
     monkeypatch.delenv("WORKSTREAM_CELERY_BROKER_URL", raising=False)
@@ -1670,6 +2222,7 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
     """Live routes conceal cross-project, revoked, suspended, and revoked-link access."""
     project = await create_project(project_client, name="Visible project")
     other = await create_project(project_client, name="Other project")
+    await revoke_system_project_manager_for_default_actor()
     grant_id, link_id = await add_project_role_for_default_actor(project["id"], "submitter")
 
     identity = await project_client.get(f"/api/v1/projects/{project['id']}", headers=auth_headers())
@@ -2493,7 +3046,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
 
     second_project_response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "STEM Eval Visibility Two",
             "slug": "stem-eval-visibility-two",
@@ -4058,7 +4611,7 @@ async def test_project_setup_run_rejects_cross_context_worker_updates(
 
     second_project_response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "STEM Eval Two",
             "slug": "stem-eval-two",
@@ -4127,6 +4680,8 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
     project = await create_project(project_client)
+    other_project = await create_project(project_client, name="Wrong Scope")
+    await revoke_system_project_manager_for_default_actor()
     guide = await create_guide(
         project_client,
         project["id"],
@@ -4179,7 +4734,6 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     denied = [await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints]
     assert [response.status_code for response in denied] == [404] * len(endpoints)
 
-    other_project = await create_project(project_client, name="Wrong Scope")
     wrong_scope_grant = await add_local_admin_role_for_default_actor(
         "project_manager", project_id=other_project["id"]
     )
@@ -4226,7 +4780,7 @@ async def test_project_can_be_created(project_client: AsyncClient) -> None:
 async def test_project_create_rejects_payment_fields(project_client: AsyncClient) -> None:
     response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "Payment Field Project",
             "slug": "payment-field-project",
@@ -8551,11 +9105,12 @@ async def test_worker_cannot_create_project_records(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "worker")
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", "ungranted-worker-subject")
     get_settings.cache_clear()
 
     response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={"name": "Worker Project", "slug": "worker-project"},
     )
 
@@ -8565,9 +9120,180 @@ async def test_worker_cannot_create_project_records(
 async def test_project_create_validation_errors_are_structured(project_client: AsyncClient) -> None:
     response = await project_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={"slug": "missing-name"},
     )
 
     assert response.status_code == 422
     assert isinstance(response.json()["detail"], list)
+
+
+async def test_project_create_requires_valid_idempotency_before_actor_provisioning(
+    project_database_env: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subject = f"missing-idempotency-{uuid4()}"
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", subject)
+    get_settings.cache_clear()
+    app = create_app()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        for headers in (auth_headers(), auth_headers() | {"Idempotency-Key": "invalid"}):
+            response = await client.post(
+                "/api/v1/projects",
+                headers=headers,
+                json={"name": "Rejected", "slug": f"rejected-{uuid4()}"},
+            )
+            assert response.status_code == 422
+
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(
+            select(ActorIdentityLink).where(ActorIdentityLink.subject == subject)
+        ) is None
+
+
+async def test_project_create_different_keys_same_slug_rolls_back_authority(
+    project_client: AsyncClient,
+) -> None:
+    slug = f"same-slug-{uuid4()}"
+    first = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
+        json={"name": "First", "slug": slug},
+    )
+    conflict = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
+        json={"name": "Second", "slug": slug},
+    )
+    assert first.status_code == 201, first.text
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "project_slug_conflict"
+
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(Project).where(Project.slug == slug)
+        ) == 1
+        assert await session.scalar(
+            select(func.count())
+            .select_from(ProjectCreateIdempotencyRecord)
+            .where(ProjectCreateIdempotencyRecord.status == "pending")
+        ) == 0
+
+
+async def test_project_create_copied_key_cannot_cross_actor_namespace(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = str(uuid4())
+    payload = {
+        "name": "Actor-bound replay",
+        "slug": f"actor-bound-replay-{uuid4()}",
+    }
+    first = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers() | {"Idempotency-Key": key},
+        json=payload,
+    )
+    assert first.status_code == 201
+
+    second_subject = f"copied-key-actor-{uuid4()}"
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", second_subject)
+    get_settings.cache_clear()
+    admitted = await project_client.get("/api/v1/auth/me", headers=auth_headers())
+    assert admitted.status_code == 200
+    grantor_id, _, grantor_grant_id = await ensure_access_administrator_bootstrap()
+    async with db_session.get_session_factory()() as session:
+        second_link = await session.scalar(
+            select(ActorIdentityLink).where(ActorIdentityLink.subject == second_subject)
+        )
+        assert second_link is not None
+        session.add(
+            AdminRoleGrant(
+                id=uuid4(),
+                target_actor_profile_id=second_link.actor_profile_id,
+                role="project_manager",
+                scope_type="system",
+                scope_project_id=None,
+                status="active",
+                version=1,
+                granted_by_actor_profile_id=grantor_id,
+                granted_by_admin_role_grant_id=grantor_grant_id,
+                grant_reason="AUTH-12C copied-key actor boundary proof",
+            )
+        )
+        await session.commit()
+
+    copied = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers() | {"Idempotency-Key": key},
+        json=payload,
+    )
+    assert copied.status_code == 409
+    assert copied.json()["error"]["code"] == "project_slug_conflict"
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(Project).where(Project.slug == payload["slug"])
+        ) == 1
+        assert await session.scalar(
+            select(func.count()).select_from(ProjectCreateIdempotencyRecord).where(
+                ProjectCreateIdempotencyRecord.idempotency_key == UUID(key),
+                ProjectCreateIdempotencyRecord.status == "pending",
+            )
+        ) == 0
+
+
+async def test_project_create_denies_project_scoped_and_contributor_authority(
+    project_client: AsyncClient,
+) -> None:
+    seed = await create_project(project_client, name="Scope boundary seed")
+    async with db_session.get_session_factory()() as session:
+        system_manager = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.role == "project_manager",
+                AdminRoleGrant.scope_type == "system",
+                AdminRoleGrant.status == "active",
+            )
+        )
+        assert system_manager is not None
+        system_manager_id = system_manager.id
+    await revoke_local_admin_role(system_manager_id)
+    await add_project_manager_admin_grant(seed["id"])
+    await add_project_role_for_default_actor(seed["id"], "submitter")
+
+    denied = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
+        json={"name": "Wrong scope", "slug": f"wrong-scope-{uuid4()}"},
+    )
+    assert denied.status_code == 403
+
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(Project).where(Project.name == "Wrong scope")
+        ) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(ProjectCreateIdempotencyRecord).where(
+                ProjectCreateIdempotencyRecord.status == "pending"
+            )
+        ) == 0
+        assert await session.scalar(
+            select(func.count()).select_from(AuditEvent).where(
+                AuditEvent.action_id == "project.create",
+                AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                AuditEvent.target_ref_id != seed["id"],
+            )
+        ) == 0
+        denial_event = await session.scalar(
+            select(AuditEvent).where(
+                AuditEvent.action_id == "project.create",
+                AuditEvent.event_type == "SensitiveAuthorizationDenied",
+                AuditEvent.denial_code == "permission_not_granted",
+            )
+        )
+        assert denial_event is not None
+        assert denial_event.resource_type == "project_create_operation"
+        assert denial_event.target_ref_kind == "project"
+        assert denial_event.resource_id is not None
+        assert denial_event.target_ref_id is not None

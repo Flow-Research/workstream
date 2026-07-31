@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -31,12 +33,37 @@ class Project(Base):
     """Project container that owns guide versions."""
 
     __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint(
+            "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
+            "and created_by_admin_role_grant_id is null and creation_scope_type is null "
+            "and creation_action_id is null and authorization_decision_event_id is null) or "
+            "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and created_by_admin_role_grant_id is not null and creation_scope_type = 'system' "
+            "and creation_action_id = 'project.create' and authorization_decision_event_id is not null)",
+            name="creation_authority_shape",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -48,6 +75,49 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
+
+
+class ProjectCreateIdempotencyRecord(Base):
+    """Project-owned reservation and replay state for one project creation."""
+
+    __tablename__ = "project_create_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_profile_id",
+            "action_id",
+            "idempotency_key",
+            name="uq_project_create_replay_namespace",
+        ),
+        UniqueConstraint("operation_id", name="uq_project_create_operation_identity"),
+        UniqueConstraint("project_id", name="uq_project_create_project_identity"),
+        CheckConstraint("action_id = 'project.create'", name="ck_project_create_action"),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_project_create_request_digest",
+        ),
+        CheckConstraint("operation_generation = 1", name="ck_project_create_generation"),
+        CheckConstraint(
+            "status in ('pending','committed')", name="ck_project_create_status"
+        ),
+        CheckConstraint(
+            "(status = 'pending' and committed_at is null) or "
+            "(status = 'committed' and committed_at is not null)",
+            name="ck_project_create_state_shape",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(ForeignKey("actor_identity_links.id"))
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    operation_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProjectGuide(Base):

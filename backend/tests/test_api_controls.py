@@ -510,6 +510,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
             "project_role_grant.revoke"
         ),
         "GET /api/v1/projects/{project_id}": "project.read",
+        "POST /api/v1/projects": "project.create",
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest": (
             "project.setup_run.read"
         ),

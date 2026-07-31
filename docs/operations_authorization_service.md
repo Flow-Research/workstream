@@ -1269,3 +1269,24 @@ The final release owner coordinates a supported API/command drill proving:
 
 Committed proof uses approved redacted placeholders and never production
 tokens, private keys, raw claims, private actor/source IDs, or local paths.
+
+## Project creation authorization
+
+Project creation is a system-scoped administrative mutation. Operators should
+verify that the caller has an active local human profile, active identity link,
+and active system-scoped `project_manager` grant; a token role is observation
+only and grants no authority. `POST /api/v1/projects` also requires a UUID
+`Idempotency-Key`. Exact retries return the original project, while reuse with
+changed request facts returns `idempotency_mismatch` and creates nothing.
+An exact committed retry is response recovery: it returns the database-bound
+original response without a second authorization event even if the original
+grant was later revoked. Revocation still denies every new key or changed
+request.
+
+The protected transaction writes one draft project shell, its project-owned
+replay record, and an allowed authorization event that binds the distinct
+operation UUID to the future project UUID. If authorization, evidence, or the
+project write fails, the reservation rolls back with the transaction. Do not
+repair this path by inserting a project without the complete creation
+provenance columns or by granting project-scoped authority; project-scoped
+Project Manager grants cannot create projects.

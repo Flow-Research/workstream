@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from types import MappingProxyType
+from typing import NoReturn
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -60,6 +61,7 @@ from app.modules.authorization.runtime import (
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
+    ProjectCreateResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
@@ -301,6 +303,7 @@ class AuthorizationService:
         self._revalidate_actor_self = revalidate_actor_self
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
+        self._pending_denial_resource_context: AuthorizationResourceContext | None = None
         self._sealed_prelocked: set[_PrelockedAuthority] = set()
         self._prepared_consumers: dict[object, object] = {}
 
@@ -452,6 +455,30 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
+        elif action_id is ActionId.PROJECT_CREATE:
+            if not isinstance(context, HumanAuthorizationContext):
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
+            if scope.kind is not PreparedAuthorityScopeKind.SYSTEM:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+                )
+            locked = await self._admin.lock_request_actor(
+                context.identity_link_id, context.actor_profile_id
+            )
+            context = self._locked_human_context(locked, context)
+            grant = await self._admin.find_effective_grant(
+                context.actor_profile_id,
+                PermissionId.PROJECT_CREATE,
+                scope_project_id=None,
+                system_scope_only=True,
+                for_update=True,
+            )
+            if grant is None:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
             if (
                 not isinstance(context, HumanAuthorizationContext)
@@ -543,6 +570,32 @@ class AuthorizationService:
         """Release one unconsumed sealed authority during handle invalidation."""
         self._sealed_prelocked.discard(authority)
 
+    async def _complete_prepared_denial(
+        self,
+        consumer_token: object,
+        action_id: ActionId,
+        resource_context: AuthorizationResourceContext,
+        denial: AuthorizationDenialCode,
+    ) -> NoReturn:
+        """Persist one exact prepare-time denial without issuing a capability."""
+        self._validate_prepared_consumer(consumer_token)
+        action = ACTION_BY_ID.get(action_id)
+        if action_id is not ActionId.PROJECT_CREATE or not isinstance(
+            resource_context, ProjectCreateResourceContext
+        ):
+            raise TypeError("unsupported prepared denial")
+        await self._complete_decision(
+            action=action,
+            denial=denial,
+            resource_context=resource_context,
+            context=self._context,
+            matched_kind=None,
+            matched_grant_id=None,
+            matched_project_id=None,
+            revalidated=False,
+        )
+        raise RuntimeError("denied prepared authorization unexpectedly returned")
+
     async def require(
         self,
         action_id: ActionId,
@@ -550,6 +603,7 @@ class AuthorizationService:
     ) -> AuthorizationDecision:
         """Return an allowed decision or raise one bounded, evidenced denial."""
         self._pending_denial = None
+        self._pending_denial_resource_context = None
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         context = self._context
         revalidated = False
@@ -795,6 +849,7 @@ class AuthorizationService:
             raise TypeError("invalid prelocked authority")
         self._sealed_prelocked.remove(authority)
         self._pending_denial = None
+        self._pending_denial_resource_context = None
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         context = authority.context
         denial: AuthorizationDenialCode | None
@@ -847,6 +902,24 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
                 matched_project_id = authority.scope_project_id
+        elif action_id is ActionId.PROJECT_CREATE:
+            denial = self._lifecycle_denial(context)
+            if denial is None and action.availability is not ActionAvailability.ACTIVE:
+                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+            if denial is None and not isinstance(
+                resource_context, ProjectCreateResourceContext
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None and authority.scope_project_id is not None:
+                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+            if denial is None and (
+                authority.matched_grant_id is None
+                or authority.matched_grant_status != "active"
+            ):
+                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
+                matched_grant_id = authority.matched_grant_id
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
             denial = self._lifecycle_denial(context)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
@@ -907,9 +980,10 @@ class AuthorizationService:
             request_id=context.request_id,
             correlation_id=context.correlation_id,
         )
-        await self._stage_decision(decision, context.actor_profile_id)
+        await self._stage_decision(decision, context.actor_profile_id, resource_context)
         if not decision.allowed:
             self._pending_denial = decision
+            self._pending_denial_resource_context = resource_context
             raise AuthorizationDenied(decision)
         return decision
 
@@ -1171,8 +1245,14 @@ class AuthorizationService:
             or decision.correlation_id != self._context.correlation_id
         ):
             raise TypeError("invalid authorization denial evidence")
-        await self._stage_decision(decision, self._context.actor_profile_id)
+        resource_context = self._pending_denial_resource_context
+        if resource_context is None:
+            raise TypeError("missing authorization denial resource context")
+        await self._stage_decision(
+            decision, self._context.actor_profile_id, resource_context
+        )
         self._pending_denial = None
+        self._pending_denial_resource_context = None
 
     async def _restage_denial(self, decision: AuthorizationDecision) -> None:
         """Retain the existing AUTH-internal dependency seam."""
@@ -1230,6 +1310,7 @@ class AuthorizationService:
         self,
         decision: AuthorizationDecision,
         actor_profile_id,
+        resource_context: AuthorizationResourceContext | None = None,
     ) -> None:
         """Write one privacy-bounded event without taking transaction ownership."""
         if decision.action_id is None or decision.permission_id is None:
@@ -1249,10 +1330,18 @@ class AuthorizationService:
             "actor_admin_role_grant_history",
         }
         audit_resource_type = None
+        audit_resource_id = None
+        target_ref_kind = None
+        target_ref_id = None
         if target_is_actor:
             audit_resource_type = "actor_profile"
         elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
             audit_resource_type = decision.resource_type
+        if isinstance(resource_context, ProjectCreateResourceContext):
+            audit_resource_type = "project_create_operation"
+            audit_resource_id = str(resource_context.resource_id)
+            target_ref_kind = "project"
+            target_ref_id = str(resource_context.requested_project_id)
         after_facts: dict[str, object] = {"allowed": decision.allowed}
         if (
             decision.resource_type
@@ -1264,7 +1353,8 @@ class AuthorizationService:
                 "project_policy_read",
                 "project_active_guide_read",
             }
-            or decision.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST
+            or decision.action_id
+            in {ActionId.ARTIFACT_GUIDE_SOURCE_INGEST, ActionId.PROJECT_CREATE}
         ):
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:
@@ -1299,9 +1389,15 @@ class AuthorizationService:
                         else None
                     ),
                     resource_type=audit_resource_type,
-                    resource_id=(str(decision.resource_id) if audit_resource_type else None),
-                    target_ref_kind=audit_resource_type,
-                    target_ref_id=(str(decision.resource_id) if audit_resource_type else None),
+                    resource_id=(
+                        audit_resource_id
+                        or (str(decision.resource_id) if audit_resource_type else None)
+                    ),
+                    target_ref_kind=target_ref_kind or audit_resource_type,
+                    target_ref_id=(
+                        target_ref_id
+                        or (str(decision.resource_id) if audit_resource_type else None)
+                    ),
                     reason="authorization_evaluation",
                     denial_code=stored_denial,
                     after_facts=after_facts,

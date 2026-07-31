@@ -69,7 +69,7 @@ from app.modules.authorization.service_actor_service import (
     ServiceActorProvisioningService,
     ServiceActorProvisioningUnavailable,
 )
-from app.modules.projects.models import Project
+from project_create_fixtures import seed_historical_project
 from app.modules.tasks.models import AuditEvent
 from app.schemas.auth import normalize_legacy_roles
 from scripts.bootstrap_access_administrator import (
@@ -1796,20 +1796,20 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             target_row = await session.get(ActorProfile, str(target_id))
             assert target_row is not None
             target_row.contact_email = "auth09c-private-contact@example.test"
+            await seed_historical_project(
+                session,
+                project_id=str(project_one),
+                name="AUTH-08 scope one",
+                slug=f"auth08-scope-one-{project_one}",
+            )
+            await seed_historical_project(
+                session,
+                project_id=str(project_two),
+                name="AUTH-08 scope two",
+                slug=f"auth08-scope-two-{project_two}",
+            )
             session.add_all(
                 [
-                    Project(
-                        id=str(project_one),
-                        name="AUTH-08 scope one",
-                        slug=f"auth08-scope-one-{project_one}",
-                        status="draft",
-                    ),
-                    Project(
-                        id=str(project_two),
-                        name="AUTH-08 scope two",
-                        slug=f"auth08-scope-two-{project_two}",
-                        status="draft",
-                    ),
                     ActorProfile(
                         id=str(concealed_targets["service"]),
                         actor_kind="service",

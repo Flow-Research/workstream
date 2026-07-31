@@ -79,10 +79,10 @@ from app.modules.projects.models import (
     GuideSourceArtifactIngest,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
-    Project,
     ProjectGuide,
     ProjectSetupRun,
 )
+from project_create_fixtures import seed_historical_project
 
 
 class _AllowBindingAuthority:
@@ -243,13 +243,12 @@ async def _seed_binding_lineage(
             last_verified_at=datetime.now(UTC),
         )
     )
-    session.add(
-        Project(
-            id=str(ids["project"]),
-            name="Guide binding",
-            slug=f"guide-binding-{ids['project']}",
-            status="draft",
-        )
+    await seed_historical_project(
+        session,
+        project_id=str(ids["project"]),
+        name="Guide binding",
+        slug=f"guide-binding-{ids['project']}",
+        status="draft",
     )
     await session.flush()
     session.add(
@@ -449,6 +448,12 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
     isolated_database_env: str, tmp_path: Path, migration_lock
 ) -> None:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option(
+        "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
+    )
+    with migration_lock():
+        await asyncio.to_thread(command.downgrade, config, "0042_guide_extraction")
     payload = b'{"z":2,"a":1}'
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
@@ -518,10 +523,6 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                         ),
                         {"usage_id": str(result.usage_id)},
                     )
-        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-        config.set_main_option(
-            "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
-        )
         with (
             migration_lock(),
             pytest.raises(
