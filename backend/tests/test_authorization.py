@@ -78,7 +78,7 @@ from app.modules.authorization.models import (
     ProjectRoleGrant,
     ProjectRoleQualificationSnapshot,
 )
-from app.modules.projects.models import Project
+from project_create_fixtures import seed_historical_project
 from app.modules.authorization.pagination import (
     AuthorizationReadCursorCodec,
     InvalidPaginationCursor,
@@ -141,10 +141,10 @@ from app.modules.authorization.schemas import (
 )
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.project_role_service import (
-    _constraint_name,
     ProjectRoleGrantMutationService,
     project_role_issue_lock_key,
 )
+from app.db.errors import integrity_constraint_name
 from app.modules.authorization.project_role_schemas import (
     ProjectRoleGrantIssueBody,
     ProjectRoleGrantMutationResponse,
@@ -260,7 +260,7 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     )
     original = SimpleNamespace(constraint_name="uq_project_role_grants_active_exact_role")
     error = IntegrityError("insert", {}, original)
-    assert _constraint_name(error) == "uq_project_role_grants_active_exact_role"
+    assert integrity_constraint_name(error) == "uq_project_role_grants_active_exact_role"
 
 
 @pytest.mark.asyncio
@@ -1942,6 +1942,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.PROJECT_CREATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
@@ -2040,14 +2041,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 37
+        == 38
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 59
+        == 58
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2061,9 +2062,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
 def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
     """Bind every planned project mutation to one typed system/project scope."""
     project_id, guide_id, snapshot_id, report_id = (uuid4() for _ in range(4))
-    review_id, revision_id, submission_policy_id, checker_policy_id = (
-        uuid4() for _ in range(4)
-    )
+    review_id, revision_id, submission_policy_id, checker_policy_id = (uuid4() for _ in range(4))
     setup_run_id, operation_id, requested_project_id = (uuid4() for _ in range(3))
     setup_task_id, setup_correlation_id = uuid4(), uuid4()
     setup_custody_by_step = {
@@ -2232,9 +2231,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             lifecycle_status="draft",
             compiled_policy_digest=DIGEST,
             setup_service_custody=(
-                setup_custody_by_step["post_submit_policy"]
-                if target_kind == "derive"
-                else None
+                setup_custody_by_step["post_submit_policy"] if target_kind == "derive" else None
             ),
         )
         for action_id, target_kind in (
@@ -2359,9 +2356,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
     ):
         missing_custody = service_resource.model_dump()
         missing_custody["setup_service_custody"] = None
-        with pytest.raises(
-            ValidationError, match="service execution requires exact setup custody"
-        ):
+        with pytest.raises(ValidationError, match="service execution requires exact setup custody"):
             context_type.model_validate(missing_custody)
         if context_type is not ProjectGuideSufficiencyMutationResourceContext:
             human_derive = service_resource.model_dump()
@@ -2386,9 +2381,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
         with pytest.raises(ValidationError, match="setup-service step is inconsistent"):
             context_type.model_validate(wrong_step)
         wrong_stale_output = service_resource.model_dump()
-        wrong_stale_output["setup_service_custody"]["stale_output_digest"] = (
-            "sha256:" + "b" * 64
-        )
+        wrong_stale_output["setup_service_custody"]["stale_output_digest"] = "sha256:" + "b" * 64
         with pytest.raises(ValidationError, match="stale output is inconsistent"):
             context_type.model_validate(wrong_stale_output)
         changed_task = service_resource.model_copy(
@@ -2620,7 +2613,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-            "71 PermissionIds, 96 ActionIds, 37 active actions, and\n59 planned actions" in operations
+        "71 PermissionIds, 96 ActionIds, 37 active actions, and\n59 planned actions" in operations
     )
 
 
@@ -3460,13 +3453,11 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
     )
     project_id = uuid4()
     for action_id in PROJECT_MUTATION_RESOURCE_BY_ACTION:
+        if action_id is ActionId.PROJECT_CREATE:
+            continue
         scope = PreparedAuthorityScope(
-            kind=(
-                PreparedAuthorityScopeKind.SYSTEM
-                if action_id is ActionId.PROJECT_CREATE
-                else PreparedAuthorityScopeKind.PROJECT
-            ),
-            project_id=None if action_id is ActionId.PROJECT_CREATE else project_id,
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
         )
         with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
             await prepared.prepare(
@@ -3477,6 +3468,175 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
         assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
     assert prepared._issued == {}
     assert evidence.events == []
+
+
+class _ProjectCreateAuthorityFacts:
+    def __init__(self, context: HumanAuthorizationContext, *, grant=None) -> None:
+        self.context = context
+        self.grant = grant
+
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        assert identity_link_id == self.context.identity_link_id
+        assert actor_profile_id == self.context.actor_profile_id
+        return (
+            SimpleNamespace(
+                id=str(identity_link_id),
+                actor_profile_id=str(actor_profile_id),
+                status="active",
+            ),
+            SimpleNamespace(
+                id=str(actor_profile_id), actor_kind="human", status="active"
+            ),
+        )
+
+    async def find_effective_grant(
+        self,
+        actor_profile_id,
+        permission_id,
+        *,
+        scope_project_id,
+        system_scope_only,
+        for_update,
+    ):
+        assert actor_profile_id == self.context.actor_profile_id
+        assert permission_id is PermissionId.PROJECT_CREATE
+        assert scope_project_id is None
+        assert system_scope_only is True
+        assert for_update is True
+        return self.grant
+
+
+@pytest.mark.asyncio
+async def test_project_create_prepared_authority_is_system_scoped_and_evidenced() -> None:
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    grant_id = uuid4()
+    facts = _ProjectCreateAuthorityFacts(
+        context, grant=SimpleNamespace(id=grant_id, status="active")
+    )
+    authorization, evidence = _runtime_service(
+        context, session=session, admin_repository=facts
+    )
+    prepared = PreparedAuthorizationService(
+        session, context, authorization, facts  # type: ignore[arg-type]
+    )
+    operation_id, project_id, key = uuid4(), uuid4(), uuid4()
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=key,
+        request_value={
+            "operation_id": str(operation_id),
+            "project_id": str(project_id),
+            "operation_generation": 1,
+        },
+    )
+    handle = await prepared.prepare(
+        ActionId.PROJECT_CREATE,
+        caller_input,
+        PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+    )
+    decision = await prepared.consume(
+        handle,
+        ActionId.PROJECT_CREATE,
+        caller_input,
+        ProjectCreateResourceContext(
+            resource_type="project_create",
+            resource_id=operation_id,
+            requested_project_id=project_id,
+            operation_generation=1,
+        ),
+    )
+
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+    assert decision.matched_grant_id == grant_id
+    assert decision.matched_scope_project_id is None
+    assert evidence.events[0].after_facts == {
+        "allowed": True,
+        "resource_context_digest": decision.resource_context_digest,
+    }
+    assert evidence.events[0].resource_type == "project_create_operation"
+    assert evidence.events[0].resource_id == str(operation_id)
+    assert evidence.events[0].target_ref_kind == "project"
+    assert evidence.events[0].target_ref_id == str(project_id)
+
+    second = await prepared.prepare(
+        ActionId.PROJECT_CREATE,
+        caller_input,
+        PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            second,
+            ActionId.PROJECT_CREATE,
+            caller_input,
+            ProjectCreateResourceContext(
+                resource_type="project_create",
+                resource_id=uuid4(),
+                requested_project_id=project_id,
+                operation_generation=1,
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_project_create_preparation_denies_wrong_scope_missing_grant_and_service() -> None:
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    facts = _ProjectCreateAuthorityFacts(context)
+    authorization, evidence = _runtime_service(
+        context, session=session, admin_repository=facts
+    )
+    prepared = PreparedAuthorizationService(
+        session, context, authorization, facts  # type: ignore[arg-type]
+    )
+    operation_id = uuid4()
+    project_id = uuid4()
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(),
+        request_value={
+            "operation_id": str(operation_id),
+            "project_id": str(project_id),
+            "operation_generation": 1,
+        },
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as missing:
+        await prepared.prepare(
+            ActionId.PROJECT_CREATE,
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    assert missing.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+
+    with pytest.raises(PreparedAuthorizationUnsupported) as scoped:
+        await prepared.prepare(
+            ActionId.PROJECT_CREATE,
+            caller_input,
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()
+            ),
+        )
+    assert scoped.value.denial_code is AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+    assert evidence.events == []
+
+    service_context = _runtime_context(actor_kind=ActorKind.SERVICE)
+    service_authorization, _ = _runtime_service(
+        service_context, session=session, admin_repository=object()
+    )
+    service_prepared = PreparedAuthorizationService(
+        session,
+        service_context,
+        service_authorization,
+        service_authorization._admin,
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as service_denial:
+        await service_prepared.prepare(
+            ActionId.PROJECT_CREATE,
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    assert service_denial.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
 
 
 class _ProjectReadAuthorityFacts:
@@ -7706,10 +7866,14 @@ async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction
     assert session.rollback_count == 1
 
 
-async def test_prepared_dependency_closes_handles_without_committing() -> None:
+async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class Session:
-        commit_count = 0
-        rollback_count = 0
+        def __init__(self, *, transaction_open: bool = False) -> None:
+            self.commit_count = 0
+            self.rollback_count = 0
+            self.transaction_open = transaction_open
 
         async def commit(self):
             self.commit_count += 1
@@ -7718,7 +7882,7 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
             self.rollback_count += 1
 
         def in_transaction(self):
-            return False
+            return self.transaction_open
 
     actor_id, link_id = uuid4(), uuid4()
     resolved = SimpleNamespace(
@@ -7726,7 +7890,7 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
         identity_link=SimpleNamespace(id=str(link_id), status="active"),
     )
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
-    session = Session()
+    session = Session(transaction_open=True)
     dependency = get_prepared_authorization_service(
         request,
         resolved,  # type: ignore[arg-type]
@@ -7738,6 +7902,7 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
         await anext(dependency)
     assert service._closed is True
     assert session.commit_count == 0
+    assert session.rollback_count == 1
 
     denial_session = Session()
     denial_dependency = get_prepared_authorization_service(
@@ -7745,7 +7910,16 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
         resolved,  # type: ignore[arg-type]
         denial_session,  # type: ignore[arg-type]
     )
-    await anext(denial_dependency)
+    denial_service = await anext(denial_dependency)
+
+    async def accept_test_denial(_decision):
+        return None
+
+    monkeypatch.setattr(
+        denial_service._authorization,
+        "_restage_denial",
+        accept_test_denial,
+    )
     denied = AuthorizationDecision(
         decision_id=uuid4(),
         action_id=ActionId.ACTOR_PROFILE_UPDATE_SELF,
@@ -7771,7 +7945,32 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
             AuthorizationDenied(denied)
         )
     assert denial_session.rollback_count == 1
-    assert denial_session.commit_count == 0
+    assert denial_session.commit_count == 1
+
+    persistence_failure_session = Session()
+    persistence_failure_dependency = get_prepared_authorization_service(
+        request,
+        resolved,  # type: ignore[arg-type]
+        persistence_failure_session,  # type: ignore[arg-type]
+    )
+    persistence_failure_service = await anext(persistence_failure_dependency)
+
+    async def reject_test_denial(_decision):
+        raise AuthorizationEvidenceUnavailable("injected denial persistence failure")
+
+    monkeypatch.setattr(
+        persistence_failure_service._authorization,
+        "_restage_denial",
+        reject_test_denial,
+    )
+    with pytest.raises(StructuredHTTPException) as exc_info:
+        await persistence_failure_dependency.athrow(  # type: ignore[attr-defined]
+            AuthorizationDenied(denied)
+        )
+    assert exc_info.value.status_code == 503
+    assert persistence_failure_session.rollback_count == 2
+    assert persistence_failure_session.commit_count == 0
+    assert persistence_failure_service._closed is True
 
 
 async def test_authorization_dependency_admits_service_without_human_rate_control(
@@ -8814,18 +9013,6 @@ async def test_project_read_permissions_have_postgresql_role_scope_matrix(
     async with authorization_factory() as session:
         session.add_all(
             [
-                Project(
-                    id=str(project_id),
-                    name="AUTH-11A role matrix",
-                    slug=f"auth-11a-role-matrix-{project_id}",
-                    status="draft",
-                ),
-                Project(
-                    id=str(other_project_id),
-                    name="AUTH-11A other project",
-                    slug=f"auth-11a-other-project-{other_project_id}",
-                    status="draft",
-                ),
                 ActorProfile(
                     id=str(bootstrap_actor_id),
                     actor_kind="human",
@@ -8909,6 +9096,18 @@ async def test_project_read_permissions_have_postgresql_role_scope_matrix(
                 "bootstrap_grant_id=:grant_id, updated_at=clock_timestamp() where id=1"
             ),
             {"grant_id": str(bootstrap_grant_id)},
+        )
+        await seed_historical_project(
+            session,
+            project_id=str(project_id),
+            name="AUTH-11A role matrix",
+            slug=f"auth-11a-role-matrix-{project_id}",
+        )
+        await seed_historical_project(
+            session,
+            project_id=str(other_project_id),
+            name="AUTH-11A other project",
+            slug=f"auth-11a-other-project-{other_project_id}",
         )
         for (role, scope, scope_project_id, _allowed), (
             _case_role,
@@ -10843,12 +11042,6 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                     linked_by=str(target_id),
                     last_verified_at=now,
                 ),
-                Project(
-                    id=str(project_id),
-                    name="AUTH-10C PREP proof",
-                    slug=f"auth-10c-prep-{project_id}",
-                    status="draft",
-                ),
                 AdminRoleGrant(
                     id=bootstrap_grant_id,
                     target_actor_profile_id=str(caller_id),
@@ -10871,6 +11064,13 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                 "bootstrap_grant_id=:grant_id, updated_at=clock_timestamp() where id=1"
             ),
             {"grant_id": str(bootstrap_grant_id)},
+        )
+        await session.commit()
+        await seed_historical_project(
+            session,
+            project_id=str(project_id),
+            name="AUTH-10C PREP proof",
+            slug=f"auth-10c-prep-{project_id}",
         )
         await session.commit()
         session.add(

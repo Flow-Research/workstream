@@ -69,6 +69,7 @@ from app.modules.tasks.models import (
     TaskAssignment,
     WorkstreamTask,
 )
+from project_create_fixtures import grant_system_project_manager
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (
@@ -612,6 +613,15 @@ async def task_client(task_database_env: str) -> AsyncIterator[AsyncClient]:
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
+        admission = await client.get("/api/v1/auth/me", headers=auth_headers())
+        assert admission.status_code == 200, admission.text
+        async with db_session.get_session_factory()() as session:
+            await grant_system_project_manager(
+                session,
+                issuer="flow-test",
+                subject="project-manager-subject",
+            )
+            await session.commit()
         yield client
 
 
@@ -1081,7 +1091,7 @@ def complete_submission_payload(package_hash: str = "sha256:package-v1") -> dict
 async def create_active_project(client: AsyncClient) -> dict:
     project_response = await client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "Task Queue Project",
             "slug": "task-queue-project",
@@ -2274,7 +2284,7 @@ async def test_task_create_and_transitions_reject_client_supplied_policy_context
 async def test_screening_requires_active_guide_context(task_client: AsyncClient) -> None:
     project_response = await task_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={"name": "No Guide", "slug": "no-guide"},
     )
     assert project_response.status_code == 201, project_response.text

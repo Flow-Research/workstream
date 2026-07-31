@@ -434,7 +434,7 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_READ,
         ActionOwner.AUTH_11C2,
     ),
-    _planned(ActionId.PROJECT_CREATE, PermissionId.PROJECT_CREATE, ActionOwner.AUTH_12C),
+    _active(ActionId.PROJECT_CREATE, PermissionId.PROJECT_CREATE, ActionOwner.AUTH_12C),
     _planned(
         ActionId.PROJECT_GUIDE_CREATE,
         PermissionId.PROJECT_GUIDE_MANAGE,
@@ -796,6 +796,7 @@ def _index_actions(
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.PROJECT_CREATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,

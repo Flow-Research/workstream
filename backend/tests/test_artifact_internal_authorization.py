@@ -326,7 +326,7 @@ async def test_adapter_consumes_exact_fixed_service_resource_once(
     _install_principal(monkeypatch)
     staged = []
 
-    async def stage(self, decision, _actor_profile_id):
+    async def stage(self, decision, _actor_profile_id, _resource_context):
         staged.append(decision)
 
     monkeypatch.setattr(AuthorizationService, "_stage_decision", stage)
@@ -365,7 +365,7 @@ async def test_adapter_rejects_same_resource_fence_substitution(
     _install_principal(monkeypatch)
     staged = []
 
-    async def stage(self, decision, _actor_profile_id):
+    async def stage(self, decision, _actor_profile_id, _resource_context):
         staged.append(decision)
 
     monkeypatch.setattr(AuthorizationService, "_stage_decision", stage)
@@ -402,7 +402,7 @@ async def test_adapter_restages_lifecycle_denial_only_after_caller_rollback(
     _install_principal(monkeypatch, status="suspended")
     staged = []
 
-    async def stage(self, decision, _actor_profile_id):
+    async def stage(self, decision, _actor_profile_id, _resource_context):
         staged.append(decision)
 
     monkeypatch.setattr(AuthorizationService, "_stage_decision", stage)

@@ -85,7 +85,6 @@ from app.modules.projects.schemas import (
     PostSubmitCheckerPolicyResponse,
     PostSubmitCheckerPolicySetupResponse,
     PostSubmitCheckerPolicySetupSummaryResponse,
-    ProjectCreate,
     ContributorProjectResponse,
     ProjectGuideCreate,
     ProjectGuideResponse,
@@ -472,32 +471,6 @@ class ProjectService:
             return get_project_guide_agent_runtime()
         except ProjectAgentRuntimeError:
             raise AgentRuntimeUnavailable("project guide agent runtime is unavailable") from None
-
-    async def create_project(self, actor: ActorContext, payload: ProjectCreate) -> ProjectResponse:
-        """Create a draft project record after project setup authorization.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            payload: Validated project creation fields.
-
-        Returns:
-            Created project response.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        project = Project(
-            id=str(uuid4()),
-            name=payload.name,
-            slug=payload.slug,
-            description=payload.description,
-            status="draft",
-        )
-        project = await self._repo.add_project(project)
-        await self._session.commit()
-        await self._session.refresh(project)
-        return ProjectResponse.model_validate(project)
 
     async def resolve_project(self, project_id: str) -> Project:
         """Resolve one canonical project before authorization."""

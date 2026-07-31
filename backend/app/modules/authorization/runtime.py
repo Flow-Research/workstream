@@ -1275,6 +1275,7 @@ class AuthorizationDecision(BaseModel):
         "project_diagnostic",
         "project_policy_read",
         "project_active_guide_read",
+        "project_create",
         "actor_identity_link",
         "system",
         "permission_catalogue",

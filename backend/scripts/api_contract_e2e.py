@@ -1018,6 +1018,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
             "x-workstream-action-id"
         ] == "project_role_grant.issue"
+        assert openapi["paths"]["/api/v1/projects"]["post"][
+            "x-workstream-action-id"
+        ] == "project.create"
         assert openapi["paths"][
             "/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke"
         ]["post"]["x-workstream-action-id"] == "project_role_grant.revoke"
@@ -1050,6 +1053,17 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "/api/v1/actors/me",
             project_reader_token,
         )
+        creator_system_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": project_reader_profile["actor_profile_id"],
+                "role": "project_manager",
+                "scope_type": "system",
+                "reason": "Real API project creation authority proof",
+            },
+        )
+        assert creator_system_grant.status_code == 201, creator_system_grant.text
         service_payload = {
             "service_identity": "workstream.artifact.verifier",
             "subject": f"real-api-artifact-verifier-{run_id}",
@@ -1248,18 +1262,24 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert terminal_service.status_code == 409, terminal_service.text
         assert terminal_service.json()["error"]["code"] == "actor_deactivated_terminal"
 
-        project = await request_json(
-            client,
-            "POST",
+        project_response = await client.post(
             "/api/v1/projects",
-            manager_token,
-            {
+            headers=auth_headers(project_reader_token)
+            | {"Idempotency-Key": str(uuid4())},
+            json={
                 "name": f"API Contract Real API {run_id}",
                 "slug": f"api-contract-real-api-{run_id}",
                 "description": "Real backend API contract lifecycle QA",
             },
-            201,
         )
+        assert project_response.status_code == 201, project_response.text
+        project = project_response.json()
+        creator_revoke = await client.post(
+            f"/api/v1/admin-role-grants/{creator_system_grant.json()['resource_id']}/revoke",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Creation proof complete; restore bounded reader"},
+        )
+        assert creator_revoke.status_code == 200, creator_revoke.text
         await request_json(
             client,
             "GET",

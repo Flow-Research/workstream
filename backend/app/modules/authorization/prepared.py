@@ -29,6 +29,7 @@ from app.modules.authorization.runtime import (
     AuthorizationResourceContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
+    PreparedAuthorizationUnsupported,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
     PROJECT_MUTATION_RESOURCE_BY_ACTION,
@@ -70,6 +71,9 @@ class _PreparedAuthorizationBinding:
     scope: PreparedAuthorityScope
     idempotency_key: UUID
     request_digest: str
+    project_create_operation_id: UUID | None = None
+    project_create_project_id: UUID | None = None
+    project_create_generation: int | None = None
 
 
 @dataclass(slots=True)
@@ -83,6 +87,18 @@ class _Consumed:
     """Bounded replay tombstone retaining no session or authority graph."""
 
     __slots__ = ()
+
+
+def _project_create_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectCreateResourceContext,
+) -> bool:
+    """Return whether final project-create identity matches the prepared binding."""
+    return (
+        binding.project_create_operation_id == resource.resource_id
+        and binding.project_create_project_id == resource.requested_project_id
+        and binding.project_create_generation == resource.operation_generation
+    )
 
 
 _CONSUMED = _Consumed()
@@ -155,6 +171,10 @@ class PreparedAuthorizationService:
         final_scope = self._scope_from_resource(expected_action_id, final_resource_context)
         if final_scope != issuance.binding.scope:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(final_resource_context, ProjectCreateResourceContext) and not (
+            _project_create_binding_matches(issuance.binding, final_resource_context)
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
             self._consumer_token,
@@ -162,6 +182,33 @@ class PreparedAuthorizationService:
             final_resource_context,
             issuance.authority,
         )
+
+    async def deny_unsupported(
+        self,
+        action_id: ActionId,
+        caller_input: PreparedAuthorizationInput,
+        final_resource_context: AuthorizationResourceContext,
+        denial: PreparedAuthorizationUnsupported,
+    ) -> NoReturn:
+        """Evidence an exact prepare-time denial without issuing a handle."""
+        binding = self._binding(
+            action_id,
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+        if not isinstance(
+            final_resource_context, ProjectCreateResourceContext
+        ) or not _project_create_binding_matches(binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid(
+                "invalid prepared authorization handle"
+            )
+        await self._authorization._complete_prepared_denial(
+            self._consumer_token,
+            action_id,
+            final_resource_context,
+            denial.denial_code,
+        )
+        raise RuntimeError("denied prepared authorization unexpectedly returned")
 
     def close(self) -> None:
         """Invalidate all outstanding request-local capabilities."""
@@ -198,6 +245,25 @@ class PreparedAuthorizationService:
         caller_input: PreparedAuthorizationInput,
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
+        operation_id = project_id = None
+        operation_generation = None
+        if action_id is ActionId.PROJECT_CREATE:
+            try:
+                operation_id = UUID(str(caller_input.request_value["operation_id"]))
+                project_id = UUID(str(caller_input.request_value["project_id"]))
+                operation_generation = caller_input.request_value["operation_generation"]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PreparedAuthorizationHandleInvalid(
+                    "invalid prepared authorization handle"
+                ) from exc
+            if (
+                type(operation_generation) is not int
+                or operation_generation < 1
+                or operation_id == project_id
+            ):
+                raise PreparedAuthorizationHandleInvalid(
+                    "invalid prepared authorization handle"
+                )
         return _PreparedAuthorizationBinding(
             action_id=action_id,
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
@@ -210,6 +276,9 @@ class PreparedAuthorizationService:
                     "request": caller_input.request_value,
                 }
             ),
+            project_create_operation_id=operation_id,
+            project_create_project_id=project_id,
+            project_create_generation=operation_generation,
         )
 
     @staticmethod

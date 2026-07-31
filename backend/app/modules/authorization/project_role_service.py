@@ -10,6 +10,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.errors import integrity_constraint_name
+
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,
@@ -61,13 +63,6 @@ def project_role_issue_lock_key(actor_id: UUID, project_id: UUID, role: str) -> 
         separators=(",", ":"),
     ).encode()
     return int.from_bytes(hashlib.sha256(encoded).digest()[:8], "big", signed=True)
-
-
-def _constraint_name(exc: IntegrityError) -> str | None:
-    original = exc.orig
-    return getattr(original, "constraint_name", None) or getattr(
-        getattr(original, "diag", None), "constraint_name", None
-    )
 
 
 def _facts(grant: ProjectRoleGrant) -> dict[str, object]:
@@ -219,7 +214,10 @@ class ProjectRoleGrantMutationService:
                 )
             )
         except IntegrityError as exc:
-            if _constraint_name(exc) == "uq_project_role_grants_active_exact_role":
+            if (
+                integrity_constraint_name(exc)
+                == "uq_project_role_grants_active_exact_role"
+            ):
                 raise ProjectRoleGrantConflict("project_role_grant_exists", None) from exc
             raise
         common = dict(

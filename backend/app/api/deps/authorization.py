@@ -296,6 +296,12 @@ async def get_prepared_authorization_service(
         yield service
     except AuthorizationDenied as exc:
         await session.rollback()
+        try:
+            await authorization._restage_denial(exc.decision)
+            await session.commit()
+        except (AuthorizationEvidenceUnavailable, SQLAlchemyError) as persistence_error:
+            await session.rollback()
+            raise actor_registry_unavailable_error() from persistence_error
         raise authorization_http_error(exc) from exc
     except AuthorizationEvidenceUnavailable as exc:
         await session.rollback()

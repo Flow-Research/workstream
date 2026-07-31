@@ -97,12 +97,12 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
-    Project,
     ProjectGuide,
     ReviewPolicy,
     RevisionPolicy,
     SubmissionArtifactPolicy,
 )
+from project_create_fixtures import seed_historical_project
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 from tests.artifact_store_helpers import (
     artifact_admission_limit_settings,
@@ -276,12 +276,11 @@ async def _seed_guide(
     guide_id = str(uuid4())
     snapshot_id = str(uuid4())
     item_id = str(uuid4())
-    session.add(
-        Project(
-            id=project_id,
-            name="Admission project",
-            slug=f"admission-{project_id}",
-        )
+    await seed_historical_project(
+        session,
+        project_id=project_id,
+        name="Admission project",
+        slug=f"admission-{project_id}",
     )
     await session.flush()
     session.add(
@@ -335,12 +334,11 @@ async def _seed_contributor_items(
     project_id = str(uuid4())
     task_id = str(uuid4())
     upload_session_id = str(uuid4())
-    session.add(
-        Project(
-            id=project_id,
-            name="Contributor project",
-            slug=f"contributor-{project_id}",
-        )
+    await seed_historical_project(
+        session,
+        project_id=project_id,
+        name="Contributor project",
+        slug=f"contributor-{project_id}",
     )
     await session.flush()
     session.add(
@@ -430,7 +428,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     post_submit_policy_hash = canonical_json_hash(post_submit_policy_body)
     now = datetime.now(UTC)
 
-    session.add(Project(id=project_id, name="Checker project", slug=f"checker-{project_id}"))
+    await seed_historical_project(
+        session,
+        project_id=project_id,
+        name="Checker project",
+        slug=f"checker-{project_id}",
+    )
     await session.flush()
     session.add(
         ProjectGuide(
@@ -3655,15 +3658,15 @@ async def test_contributor_admission_rejects_cross_project_task_relationship(
                 upload_session = await session.get(ArtifactUploadSession, item.session_id)
                 assert upload_session is not None
                 unrelated_project_id = str(uuid4())
-                session.add(
-                    Project(
-                        id=unrelated_project_id,
-                        name="Unrelated admission project",
-                        slug=f"unrelated-{unrelated_project_id}",
-                    )
+                await seed_historical_project(
+                    session,
+                    project_id=unrelated_project_id,
+                    name="Unrelated admission project",
+                    slug=f"unrelated-{unrelated_project_id}",
                 )
                 await session.flush()
                 upload_session.project_id = unrelated_project_id
+                authority_audit_count = await _count(session, AuditEvent)
                 await session.commit()
 
                 with pytest.raises(
@@ -3682,7 +3685,7 @@ async def test_contributor_admission_rejects_cross_project_task_relationship(
             assert await _count(session, ArtifactAdmissionScope) == 0
             assert await _count(session, ArtifactAdmissionCharge) == 0
             assert await _count(session, ArtifactPutAttempt) == 0
-            assert await _count(session, AuditEvent) == 0
+            assert await _count(session, AuditEvent) == authority_audit_count
     finally:
         await engine.dispose()
 

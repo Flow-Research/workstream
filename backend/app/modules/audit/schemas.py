@@ -35,11 +35,18 @@ _ENTITY_TYPES = frozenset(
 _RESOURCE_TYPES = frozenset(
     """actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
     submission review contribution compensation_award compensation_delivery operations
-    audit_event""".split()
+    audit_event project_create_operation""".split()
 )
 _UUID_TARGET_KINDS = frozenset(
-    {"actor_profile", "actor_identity_link", "admin_role_grant", "qualification_snapshot", "project_role_grant"}
+    {
+        "actor_profile",
+        "actor_identity_link",
+        "admin_role_grant",
+        "qualification_snapshot",
+        "project_role_grant",
+    }
 )
+_TARGET_REF_KINDS = _UUID_TARGET_KINDS | {"project"}
 _DENIAL_CODES = frozenset(
     """required_scope_missing unsupported_subject_kind service_actor_not_provisioned
     identity_link_revoked actor_suspended actor_deactivated permission_not_granted
@@ -345,7 +352,7 @@ class AuthorityAuditEventInput(BaseModel):
             or data.get("denial_code") is not None and not _registered(data["denial_code"], _DENIAL_CODES)
             or data.get("resource_type") is not None and not _registered(data["resource_type"], _RESOURCE_TYPES)
             or data.get("target_ref_kind") is not None
-            and not _registered(data["target_ref_kind"], _UUID_TARGET_KINDS | {"permission_registry"})
+            and not _registered(data["target_ref_kind"], _TARGET_REF_KINDS | {"permission_registry"})
             or data.get("invalidation_target_kind") is not None
             and not _registered(data["invalidation_target_kind"], _UUID_TARGET_KINDS | {"permission_registry"})
             or event is not None and not _registered(data.get("reason"), _REASONS[event])
@@ -356,7 +363,10 @@ class AuthorityAuditEventInput(BaseModel):
             ref_kind = data.get(f"{prefix}_kind")
             ref = data.get(f"{prefix}_ref" if prefix == "invalidation_target" else f"{prefix}_id")
             invalid |= (ref_kind is None) != (ref is None)
-            invalid |= _registered(ref_kind, _UUID_TARGET_KINDS) and ref is not None and _uuid(ref) is None
+            valid_uuid_kinds = (
+                _UUID_TARGET_KINDS if prefix == "invalidation_target" else _TARGET_REF_KINDS
+            )
+            invalid |= _registered(ref_kind, valid_uuid_kinds) and ref is not None and _uuid(ref) is None
             invalid |= ref_kind == "permission_registry" and not _registered(ref, PERMISSION_IDS)
         target_kind, target_ref = data.get("target_actor_ref_kind"), data.get("target_actor_ref")
         invalid |= (target_kind is None) != (target_ref is None)
