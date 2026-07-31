@@ -73,9 +73,13 @@ package, lock, runtime import, or parser behavior change. Its approval gate
 requires independent protected GitHub review of the exact final PR head before
 merge; repository-authored evidence alone is not authority.
 
-03B3B2 is the active successor. It installs only the approved `pypdf` wheel and
-adds bounded passive-PDF text extraction inside the existing isolated child.
-It does not activate AUTH, invoke sufficiency, or begin OOXML/image work.
+03B3B2 is merged through PR #231. It installs only the approved `pypdf` wheel
+and adds bounded passive-PDF text extraction inside the existing isolated
+child.
+
+03B3B3A is the active successor. It installs only the approved `defusedxml`
+wheel and adds the shared bounded OPC/OOXML container security capability. It
+does not activate a DOCX, PPTX, or XLSX extractor, AUTH, or sufficiency.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the

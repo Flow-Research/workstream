@@ -29,8 +29,13 @@ P2
 
 ```text
 backend/app/modules/artifacts/guide_ooxml.py
+backend/app/modules/artifacts/guide_formats.py
 backend/app/modules/artifacts/guide_extraction_worker.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_guide_ooxml.py
+backend/tests/test_guide_extraction.py
+backend/tests/test_artifact_architecture.py
+backend/tests/test_guide_extractor_dependencies.py
 backend/tests/fixtures/guide_ooxml/**
 backend/pyproject.toml
 backend/uv.lock
@@ -59,13 +64,16 @@ No document adapter/registry activation, generic ZIP semantics, AUTH/Celery/subm
 - Require exact classification and reject ambiguity. Parser imports execute
   only in the isolated child. Prove every rejection class and boundary plus
   crash, timeout, cancellation, cleanup, and the dependency gate.
+- Assign the new focused test module to an existing canonical hosted semantic
+  lane without changing lane or coverage policy.
 
 ## Verification commands
 
 ```bash
 (cd backend && uv run ruff check app tests)
-(cd backend && python scripts/check_guide_extractor_dependencies.py)
-(cd backend && uv run pytest -q tests/test_guide_ooxml.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(cd backend && uv run python scripts/check_guide_extractor_dependencies.py)
+(cd backend && uv run pytest -q tests/test_guide_ooxml.py tests/test_guide_extraction.py tests/test_artifact_architecture.py)
+(cd backend && uv run pytest -q tests/test_guide_ooxml.py --cov=app.modules.artifacts.guide_ooxml --cov-report=term-missing --cov-fail-under=90)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py

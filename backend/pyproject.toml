@@ -9,6 +9,7 @@ dependencies = [
   "asyncpg>=0.29,<1.0",
   "botocore==1.43.0",
   "celery[redis]>=5.4,<6.0",
+  "defusedxml @ https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl#sha256=a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61",
   "fastapi>=0.115,<1.0",
   "httpx>=0.27,<1.0",
   "PyJWT[crypto]>=2.13,<3.0",

@@ -731,6 +731,14 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61" },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2654,6 +2662,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "botocore" },
     { name = "celery", extra = ["redis"] },
+    { name = "defusedxml" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic-settings" },
@@ -2683,6 +2692,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29,<1.0" },
     { name = "botocore", specifier = "==1.43.0" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4,<6.0" },
+    { name = "defusedxml", url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl" },
     { name = "docstr-coverage", marker = "extra == 'dev'", specifier = ">=2.3,<3.0" },
     { name = "fastapi", specifier = ">=0.115,<1.0" },
     { name = "httpx", specifier = ">=0.27,<1.0" },
