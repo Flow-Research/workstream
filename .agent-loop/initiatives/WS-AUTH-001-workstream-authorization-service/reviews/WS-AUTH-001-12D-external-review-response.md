@@ -60,6 +60,9 @@
 - Eleventh hosted CI: directly prove bounded pending/mismatch/ordinary error
   translation and transaction-finish commit, rollback, dispatch, and replay
   suppression behavior; the router's 90 percent gate remains unchanged.
+- Twelfth hosted CI: execute all three guide service mutations through their
+  real orchestration, including setup-run creation, and prove replay,
+  reservation, authority, and unsupported-PREP edges fail closed.
 
 ## Comments deferred
 
@@ -94,6 +97,8 @@ None. The user retains merge authority for PR #232.
 - Exact guide-mutation repository regression: 8 passed.
 - Exact guide-router composition regression: 1 passed.
 - Exact guide-router boundary regression: 3 passed.
+- Exact guide-mutation service regression: 2 passed at 91.33 percent per-file
+  coverage using Python's system-monitoring tracer.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

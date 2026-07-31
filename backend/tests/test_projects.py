@@ -74,6 +74,7 @@ from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import service as project_service_module
 from app.modules.projects import guide_mutation_router as guide_mutation_router_module
+from app.modules.projects import guide_mutation_service as guide_mutation_service_module
 from app.modules.projects import setup_queue as project_setup_queue_module
 from app.modules.projects.authorization_reads import (
     authorize_project_active_guide_read,
@@ -91,9 +92,20 @@ from app.modules.projects.create_service import (
     ProjectCreateOutcome,
     ProjectCreateService,
 )
+from app.modules.projects.guide_mutation_service import GuideMutationService
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
-from app.modules.projects.schemas import ProjectCreate, ProjectResponse
-from app.modules.authorization.runtime import MatchedAuthorityKind
+from app.modules.projects.schemas import (
+    GuideSourceSnapshotCreate,
+    ProjectCreate,
+    ProjectGuideCreate,
+    ProjectGuideUpdate,
+    ProjectResponse,
+)
+from app.modules.authorization.runtime import (
+    AuthorizationDenialCode,
+    MatchedAuthorityKind,
+    PreparedAuthorizationUnsupported,
+)
 from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
@@ -3011,6 +3023,313 @@ async def test_guide_mutation_router_finishes_commit_dispatch_and_replay(
     assert session.rollback_count == 1
     assert session.commit_count == 1
     assert len(dispatched) == 1
+
+
+async def test_guide_mutation_service_executes_all_three_authorized_happy_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        guide_mutation_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(project_setup_pipeline_autostart=True),
+    )
+    project_id = uuid4()
+    actor_id, link_id, grant_id = (uuid4() for _ in range(3))
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(actor_id)),
+        identity_link=SimpleNamespace(id=str(link_id)),
+    )
+
+    class Session:
+        flush_count = 0
+        refresh_count = 0
+
+        async def flush(self):
+            self.flush_count += 1
+
+        async def refresh(self, _record):
+            self.refresh_count += 1
+
+    class Repository:
+        project = SimpleNamespace(id=str(project_id))
+        guide = None
+        snapshot = None
+        items = None
+        setup_run = None
+
+        async def get_project(self, selected_id, *, for_update=False):
+            assert selected_id == str(project_id)
+            assert for_update is True
+            return self.project
+
+        async def get_guide_by_version(self, selected_project_id, _version):
+            assert selected_project_id == str(project_id)
+            return None
+
+        async def add_guide(self, guide):
+            guide.created_at = datetime.now(UTC)
+            guide.updated_at = guide.created_at
+            self.guide = guide
+
+        async def lock_project_guide(self, selected_id):
+            assert self.guide is not None
+            assert selected_id == self.guide.id
+            return self.guide
+
+        async def lock_latest_guide_source_snapshot(self, *_args):
+            return None
+
+        async def add_guide_source_snapshot(self, snapshot, items):
+            snapshot.captured_at = datetime.now(UTC)
+            for item in items:
+                item.created_at = snapshot.captured_at
+            self.snapshot = snapshot
+            self.items = items
+
+        async def next_project_setup_generation(self, selected_guide_id):
+            assert self.guide is not None
+            assert selected_guide_id == self.guide.id
+            return 1
+
+        async def add_project_setup_run(self, setup_run):
+            self.setup_run = setup_run
+
+    class Replay:
+        completed: list[tuple] = []
+
+        async def find(self, *_args):
+            return None
+
+        async def reserve(self, **_facts):
+            return "claimed", SimpleNamespace(response_json=None)
+
+        async def complete(self, record, **facts):
+            self.completed.append((record, facts))
+
+    class Prepared:
+        prepare_count = 0
+        consume_count = 0
+
+        async def prepare(self, *_args):
+            self.prepare_count += 1
+            return object()
+
+        async def consume(self, _handle, _action, _caller, resource):
+            self.consume_count += 1
+            return SimpleNamespace(
+                matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                matched_grant_id=grant_id,
+                matched_scope_project_id=project_id,
+                resource_context_digest=canonical_json_hash(resource.model_dump(mode="json")),
+                decision_id=uuid4(),
+            )
+
+    session = Session()
+    repository = Repository()
+    replay = Replay()
+    prepared = Prepared()
+    service = GuideMutationService(session)
+    service._repo = repository  # type: ignore[assignment]
+    service._replay = replay  # type: ignore[assignment]
+
+    created = await service.create_guide(
+        resolved,
+        prepared,
+        uuid4(),
+        project_id,
+        ProjectGuideCreate.model_validate(complete_guide_payload()),
+    )
+    guide_id = UUID(created.response.id)
+    updated = await service.update_guide(
+        resolved,
+        prepared,
+        uuid4(),
+        project_id,
+        guide_id,
+        ProjectGuideUpdate(change_summary="Clarified"),
+    )
+    snapshotted = await service.create_snapshot(
+        resolved,
+        prepared,
+        uuid4(),
+        project_id,
+        guide_id,
+        GuideSourceSnapshotCreate.model_validate(source_snapshot_payload()),
+    )
+
+    assert created.replayed is updated.replayed is snapshotted.replayed is False
+    assert updated.response.change_summary == "Clarified"
+    assert snapshotted.response.guide_id == str(guide_id)
+    assert snapshotted.response.items
+    assert snapshotted.setup_run_id == repository.setup_run.id
+    assert prepared.prepare_count == prepared.consume_count == 3
+    assert len(replay.completed) == 3
+    assert session.flush_count == session.refresh_count == 1
+    assert repository.snapshot is not None
+    assert repository.items
+
+
+async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edges() -> None:
+    actor_id, link_id, project_id = (uuid4() for _ in range(3))
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(actor_id)),
+        identity_link=SimpleNamespace(id=str(link_id)),
+    )
+
+    class ResponseType:
+        @classmethod
+        def model_validate(cls, value):
+            return ("validated", value)
+
+    class Replay:
+        record = None
+
+        async def find(self, *_args):
+            return self.record
+
+    replay = Replay()
+    service = GuideMutationService(object())
+    service._replay = replay  # type: ignore[assignment]
+    replay.record = SimpleNamespace(
+        identity_link_id=str(uuid4()),
+        request_digest="digest",
+        status="committed",
+        response_json={"id": "response"},
+    )
+    with pytest.raises(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict,
+        match="idempotency_mismatch",
+    ):
+        await service._existing(
+            resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+        )
+
+    replay.record = SimpleNamespace(
+        identity_link_id=str(link_id),
+        request_digest="digest",
+        status="pending",
+        response_json=None,
+    )
+    with pytest.raises(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict,
+        match="idempotency_pending",
+    ):
+        await service._existing(
+            resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+        )
+
+    replay.record.status = "committed"
+    replay.record.response_json = {"id": "response"}
+    existing = await service._existing(
+        resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+    )
+    assert existing.response == ("validated", {"id": "response"})
+    assert existing.replayed is True
+
+    cached = SimpleNamespace(replayed=True)
+
+    async def cached_existing(*_args):
+        return cached
+
+    cached_service = GuideMutationService(object())
+    cached_service._existing = cached_existing  # type: ignore[method-assign]
+    guide_id = uuid4()
+    assert (
+        await cached_service.create_guide(
+            resolved,
+            object(),
+            uuid4(),
+            project_id,
+            ProjectGuideCreate.model_validate(complete_guide_payload()),
+        )
+        is cached
+    )
+    assert (
+        await cached_service.update_guide(
+            resolved,
+            object(),
+            uuid4(),
+            project_id,
+            guide_id,
+            ProjectGuideUpdate(change_summary="cached"),
+        )
+        is cached
+    )
+    assert (
+        await cached_service.create_snapshot(
+            resolved,
+            object(),
+            uuid4(),
+            project_id,
+            guide_id,
+            GuideSourceSnapshotCreate.model_validate(source_snapshot_payload()),
+        )
+        is cached
+    )
+
+    record = SimpleNamespace(response_json={"id": "response"})
+    with pytest.raises(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict,
+        match="idempotency_mismatch",
+    ):
+        service._reservation_outcome("mismatch", record, ResponseType)
+    with pytest.raises(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict,
+        match="idempotency_pending",
+    ):
+        service._reservation_outcome("pending", record, ResponseType)
+    replayed = service._reservation_outcome("replayed", record, ResponseType)
+    assert replayed.response == ("validated", {"id": "response"})
+    assert replayed.replayed is True
+
+    with pytest.raises(RuntimeError, match="lacked Project Manager authority"):
+        service._prove(
+            SimpleNamespace(
+                matched_authority_kind=None,
+                matched_grant_id=None,
+                matched_scope_project_id=None,
+            ),
+            project_id,
+        )
+
+    class Prepared:
+        denied = None
+
+        async def prepare(self, *_args):
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
+
+        async def deny_unsupported(self, *args):
+            self.denied = args
+
+    prepared = Prepared()
+    caller, _ = service._input(
+        ActionId.PROJECT_GUIDE_CREATE,
+        "POST /api/v1/projects/{project_id}/guides",
+        resolved,
+        uuid4(),
+        ProjectGuideCreate.model_validate(complete_guide_payload()),
+        project_id=project_id,
+        target_resource_id=uuid4(),
+        operation_id=uuid4(),
+    )
+    assert (
+        await service._prepare(
+            prepared,
+            ActionId.PROJECT_GUIDE_CREATE,
+            caller,
+            project_id,
+            guide_id=None,
+            target_kind="guide_create",
+        )
+        is None
+    )
+    assert prepared.denied is not None
+    denial_resource = prepared.denied[2]
+    assert denial_resource.scope_project_id == project_id
+    assert denial_resource.requested_guide_id is None
+    assert denial_resource.requested_target_kind == "guide_create"
 async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_replay(
     project_client: AsyncClient,
 ) -> None:

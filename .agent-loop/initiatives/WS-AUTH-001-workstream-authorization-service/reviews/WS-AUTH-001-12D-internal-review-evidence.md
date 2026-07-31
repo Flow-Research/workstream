@@ -143,3 +143,15 @@ rollback, setup dispatch after commit, and dispatch suppression on replay.
 QA and CI integrity passed with hosted-verification risk only. QA's suggested
 counter-assertions now explicitly exclude rollback on commit and extra commit
 on replay; all sessions closed.
+
+The following hosted run passed repository and router at 100 and 90.77 percent,
+then reported the guide service at 34.10 percent. Two direct service tests now
+execute create, update, and snapshot orchestration, setup-run creation, cached
+replay, mismatch/pending classification, authority proof, and unsupported PREP
+denial. They independently pass the service's unchanged 90 percent floor at
+91.33 percent. The local coverage C tracer crashed during collection, so this
+proof used Python's system-monitoring tracer; plain pytest also passed.
+QA caught an accidental shared-fixture autostart change made while constructing
+the local setup-run proof. It was reverted immediately; autostart is enabled
+only through the direct test's service-module settings seam. QA then passed,
+CI integrity passed with hosted-verification risk only, and all sessions closed.
