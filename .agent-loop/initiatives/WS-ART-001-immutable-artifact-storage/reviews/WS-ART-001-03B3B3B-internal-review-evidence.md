@@ -14,8 +14,8 @@ activating AUTH, guide sufficiency, PPTX/XLSX, or contributor submissions.
 
 - Ruff, approved extractor-dependency gate, stale artifact contracts, stale
   wording, Markdown links, lane integrity, and `git diff --check`: PASS;
-- focused DOCX, OOXML, extraction, architecture, and lane suite: 151 passed;
-- focused DOCX adapter suite: 9 passed at 95.02 percent coverage;
+- focused DOCX, OOXML, extraction, architecture, and lane suite: 154 passed;
+- focused DOCX adapter suite: 12 passed at 93.24 percent coverage;
 - DB-backed binding/replay tests and repository-wide coverage remain delegated
   to the hosted sharded Backend gate; no local full-suite run was used.
 
@@ -46,6 +46,8 @@ activating AUTH, guide sufficiency, PPTX/XLSX, or contributor submissions.
 - corrected invalid-protocol tests so every assertion reaches its intended
   validation branch;
 - documented the exact canonical blocks and fixed omission schema.
+- bounded recursive traversal, preserved content-control-wrapped rows/cells,
+  and resolved case-variant validated OOXML part names after external review.
 
 ## Accepted Low Risks
 

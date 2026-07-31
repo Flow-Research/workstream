@@ -14,6 +14,7 @@ from collections.abc import Callable
 # Preload the ZIP filename codec before the isolated worker installs seccomp.
 codecs.lookup("cp437")
 MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024
+MAXIMUM_NESTING_DEPTH = 64
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _BODY_TAG = f"{{{_WORD_NS}}}body"
 _PARAGRAPH_TAG = f"{{{_WORD_NS}}}p"
@@ -54,6 +55,13 @@ _EMBEDDED_BODY_TAGS = frozenset(
         f"{{{_WORD_NS}}}drawing",
         f"{{{_WORD_NS}}}object",
         f"{{{_WORD_NS}}}pict",
+    }
+)
+_TRANSPARENT_CONTAINER_TAGS = frozenset(
+    {
+        f"{{{_WORD_NS}}}customXml",
+        f"{{{_WORD_NS}}}sdt",
+        f"{{{_WORD_NS}}}sdtContent",
     }
 )
 _DOCX_OMISSION_KEYS = (
@@ -155,6 +163,8 @@ def _paragraph_text(
     paragraph: ElementTree.Element,
     omissions: dict[str, bool],
     hidden_styles: _HiddenStyleFacts,
+    *,
+    depth: int = 0,
 ) -> str:
     paragraph_properties = paragraph.find(_PARAGRAPH_PROPERTIES_TAG)
     paragraph_style = (
@@ -170,7 +180,9 @@ def _paragraph_text(
         return ""
     values: list[str] = []
 
-    def walk(element: ElementTree.Element) -> None:
+    def walk(element: ElementTree.Element, current_depth: int) -> None:
+        if current_depth > MAXIMUM_NESTING_DEPTH:
+            raise DocxExtractionFailure("malformed", "docx_nesting_limit")
         if element.tag in _DELETION_CONTAINER_TAGS:
             omissions["tracked_deletions"] = True
             return
@@ -213,16 +225,20 @@ def _paragraph_text(
             omissions["embedded_objects"] = True
             return
         for child in element:
-            walk(child)
+            walk(child, current_depth + 1)
 
-    walk(paragraph)
+    walk(paragraph, depth)
     return "".join(values)
 
 
 def _contained_blocks(
     container: ElementTree.Element,
     omissions: dict[str, bool],
+    *,
+    depth: int = 0,
 ):
+    if depth > MAXIMUM_NESTING_DEPTH:
+        raise DocxExtractionFailure("malformed", "docx_nesting_limit")
     for child in container:
         if child.tag in _DELETION_CONTAINER_TAGS:
             omissions["tracked_deletions"] = True
@@ -231,24 +247,67 @@ def _contained_blocks(
         elif child.tag in _EMBEDDED_BODY_TAGS:
             omissions["embedded_objects"] = True
         else:
-            yield from _contained_blocks(child, omissions)
+            yield from _contained_blocks(child, omissions, depth=depth + 1)
+
+
+def _contained_structures(
+    container: ElementTree.Element,
+    target_tag: str,
+    omissions: dict[str, bool],
+    *,
+    depth: int,
+):
+    if depth > MAXIMUM_NESTING_DEPTH:
+        raise DocxExtractionFailure("malformed", "docx_nesting_limit")
+    for child in container:
+        if child.tag in _DELETION_CONTAINER_TAGS:
+            omissions["tracked_deletions"] = True
+        elif child.tag == target_tag:
+            yield child
+        elif child.tag in _EMBEDDED_BODY_TAGS:
+            omissions["embedded_objects"] = True
+        elif child.tag in _TRANSPARENT_CONTAINER_TAGS:
+            yield from _contained_structures(
+                child,
+                target_tag,
+                omissions,
+                depth=depth + 1,
+            )
 
 
 def _table_text(
     table: ElementTree.Element,
     omissions: dict[str, bool],
     hidden_styles: _HiddenStyleFacts,
+    *,
+    depth: int = 0,
 ) -> str:
+    if depth > MAXIMUM_NESTING_DEPTH:
+        raise DocxExtractionFailure("malformed", "docx_nesting_limit")
     rows: list[str] = []
-    for row in table.findall(_ROW_TAG):
+    for row in _contained_structures(table, _ROW_TAG, omissions, depth=depth + 1):
         cells: list[str] = []
-        for cell in row.findall(_CELL_TAG):
+        for cell in _contained_structures(row, _CELL_TAG, omissions, depth=depth + 1):
             cell_parts: list[str] = []
-            for child in _contained_blocks(cell, omissions):
+            for child in _contained_blocks(cell, omissions, depth=depth + 1):
                 if child.tag == _PARAGRAPH_TAG:
-                    cell_parts.append(_paragraph_text(child, omissions, hidden_styles))
+                    cell_parts.append(
+                        _paragraph_text(
+                            child,
+                            omissions,
+                            hidden_styles,
+                            depth=depth + 1,
+                        )
+                    )
                 elif child.tag == _TABLE_TAG:
-                    cell_parts.append(_table_text(child, omissions, hidden_styles))
+                    cell_parts.append(
+                        _table_text(
+                            child,
+                            omissions,
+                            hidden_styles,
+                            depth=depth + 1,
+                        )
+                    )
             cells.append("\n".join(cell_parts))
         rows.append("\t".join(cells))
     return "\n".join(rows)
@@ -271,7 +330,10 @@ def _canonical_blocks(
                 "text": _paragraph_text(child, omissions, hidden_styles),
             }
         elif child.tag == _TABLE_TAG:
-            block = {"type": "table", "text": _table_text(child, omissions, hidden_styles)}
+            block = {
+                "type": "table",
+                "text": _table_text(child, omissions, hidden_styles, depth=1),
+            }
         if block is None:
             continue
         encoded = json.dumps(block, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -293,9 +355,12 @@ def extract_docx(
     try:
         validate_ooxml(payload)
         with zipfile.ZipFile(BytesIO(payload)) as archive:
-            names = frozenset(info.filename.casefold() for info in archive.infolist())
-            document = archive.read("word/document.xml")
-            styles = archive.read("word/styles.xml") if "word/styles.xml" in names else None
+            stored = {info.filename.casefold(): info.filename for info in archive.infolist()}
+            names = frozenset(stored)
+            document = archive.read(stored["word/document.xml"])
+            styles = (
+                archive.read(stored["word/styles.xml"]) if "word/styles.xml" in stored else None
+            )
     except (KeyError, OSError, RuntimeError, ValueError, zipfile.BadZipFile) as exc:
         raise DocxExtractionFailure("malformed", "docx_document_unavailable") from exc
     try:

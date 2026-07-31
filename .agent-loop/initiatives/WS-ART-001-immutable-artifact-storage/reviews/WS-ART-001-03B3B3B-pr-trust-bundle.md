@@ -58,8 +58,8 @@ outcome, not a guide-insufficiency decision.
 ## Tests and checks
 
 - Ruff and approved extractor-dependency gate — pass.
-- Focused DOCX/OOXML/extraction/architecture/lane suite — 151 passed.
-- DOCX module coverage — 95.02 percent (9 tests).
+- Focused DOCX/OOXML/extraction/architecture/lane suite — 154 passed.
+- DOCX module coverage — 93.24 percent (12 tests).
 - Stale artifact contracts, stale wording, Markdown links, lane integrity, and
   `git diff --check` — pass.
 - Hosted Backend/Agent Gates retain DB-backed replay, repository-wide coverage,
@@ -87,7 +87,10 @@ now use the exact isolated-child result-protocol wording and the local gate
 passes. The first Backend run exposed a nondeterministic raw-ZIP pytest ID;
 explicit stable format IDs now produce identical repeated collections.
 CodeRabbit's first attempt was rate-limited without code findings and must be
-retriggered. Hosted checks remain required on the repaired PR head.
+retriggered. Its completed review then identified four valid gaps: recursive
+depth, content-control-wrapped rows/cells, case-folded part resolution, and the
+cross-process omission assertion. All four are repaired with focused regression
+proof. Hosted checks remain required on the repaired PR head.
 
 ## Remaining risks and follow-up
 

@@ -1309,6 +1309,8 @@ default `{"truncated":false,"omitted":false}`. Active embedded
 content remains a malformed OOXML rejection. The isolated-child result protocol, immutable
 extracted-content fact, and replay comparison bind those omissions to the same
 canonical output. Output over 4 MiB fails before any partial result is usable.
+Traversal beyond 64 nested document/container levels fails deterministically as
+malformed rather than consuming a transient parser retry.
 
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit

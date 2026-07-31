@@ -66,7 +66,8 @@ PPTX/XLSX behavior, package additions beyond approved lock, framework/AUTH/Celer
   display text stays in document order. Field instructions, hidden text,
   comment markers, tracked deletions, drawings, pictures, and other passive
   non-text body objects are omitted. Active embedded package content remains a
-  malformed OOXML rejection before DOCX extraction.
+  malformed OOXML rejection before DOCX extraction. Traversal deeper than 64
+  nested document/container levels returns stable `malformed` evidence.
 - Successful DOCX omission facts have the fixed bounded boolean schema
   `truncated`, `omitted`, `headers`, `footers`, `comments`,
   `tracked_deletions`, `embedded_objects`, `hidden_text`, and

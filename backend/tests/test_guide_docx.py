@@ -20,11 +20,16 @@ from app.modules.artifacts.guide_ooxml import OoxmlSecurityFailure, validate_oox
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-def _docx(document: bytes, *, additions: dict[str, bytes] | None = None) -> bytes:
+def _docx(
+    document: bytes,
+    *,
+    document_name: str = "word/document.xml",
+    additions: dict[str, bytes] | None = None,
+) -> bytes:
     members = {
         "[Content_Types].xml": b"<Types/>",
         "_rels/.rels": b"<Relationships/>",
-        "word/document.xml": document,
+        document_name: document,
         **(additions or {}),
     }
     output = BytesIO()
@@ -162,6 +167,27 @@ def test_style_hidden_text_is_omitted_and_simple_field_records_instructions() ->
     assert "hidden-by-style" not in result.canonical_output
 
 
+def test_validated_part_names_are_resolved_case_insensitively() -> None:
+    payload = _docx(
+        _document(
+            '<w:p><w:r><w:rPr><w:rStyle w:val="Hidden"/></w:rPr><w:t>hidden</w:t></w:r></w:p>'
+        ),
+        document_name="word/Document.xml",
+        additions={
+            "word/Styles.xml": f"""
+              <w:styles xmlns:w="{_W}">
+                <w:style w:type="character" w:styleId="Hidden"><w:rPr><w:vanish/></w:rPr></w:style>
+              </w:styles>
+            """.encode()
+        },
+    )
+
+    result = extract_docx(payload)
+
+    assert result.canonical_output == ('{"blocks":[{"text":"","type":"paragraph"}]}')
+    assert result.omission_facts["hidden_text"] is True
+
+
 def test_default_and_inherited_paragraph_style_hidden_text_is_omitted() -> None:
     paragraph_style_payload = _docx(
         _document(
@@ -223,6 +249,24 @@ def test_block_level_deleted_and_moved_content_never_enters_output() -> None:
     assert "moved-block" not in result.canonical_output
 
 
+def test_table_rows_and_cells_inside_content_controls_preserve_order() -> None:
+    payload = _docx(
+        _document(
+            """
+            <w:tbl><w:sdt><w:sdtContent><w:tr>
+              <w:sdt><w:sdtContent><w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc></w:sdtContent></w:sdt>
+              <w:tc><w:p><w:r><w:t>B</w:t></w:r></w:p></w:tc>
+            </w:tr></w:sdtContent></w:sdt></w:tbl>
+            """
+        )
+    )
+
+    result = extract_docx(payload)
+
+    assert result.canonical_output == ('{"blocks":[{"text":"A\\tB","type":"table"}]}')
+    assert result.omission_facts["omitted"] is False
+
+
 def test_active_content_and_missing_body_fail_with_bounded_codes() -> None:
     with pytest.raises(DocxExtractionFailure) as active:
         extract_docx(
@@ -257,6 +301,20 @@ def test_output_limit_is_exact_and_never_returns_partial_content() -> None:
     assert (over.value.status, over.value.code) == ("limit_exceeded", "output_limit")
 
 
+def test_excessive_wrapper_nesting_has_one_deterministic_malformed_outcome() -> None:
+    nested = "<w:p><w:r><w:t>deep</w:t></w:r></w:p>"
+    for _ in range(65):
+        nested = f"<w:sdt><w:sdtContent>{nested}</w:sdtContent></w:sdt>"
+
+    with pytest.raises(DocxExtractionFailure) as excessive:
+        extract_docx(_docx(_document(nested)))
+
+    assert (excessive.value.status, excessive.value.code) == (
+        "malformed",
+        "docx_nesting_limit",
+    )
+
+
 def test_malformed_document_xml_is_bounded_by_shared_security() -> None:
     with pytest.raises(DocxExtractionFailure) as malformed:
         extract_docx(_docx(b"<w:document"))
@@ -278,6 +336,15 @@ def test_real_isolated_runner_uses_docx_v3_and_preserves_omissions(tmp_path) -> 
     )
     assert (result.status, result.policy_version) == ("extracted", "guide-extraction-v3")
     assert result.canonical_output == ('{"blocks":[{"text":"visible","type":"paragraph"}]}')
-    assert result.omission_facts["tracked_deletions"] is True
-    assert result.omission_facts["omitted"] is True
+    assert result.omission_facts == {
+        "truncated": False,
+        "omitted": True,
+        "headers": False,
+        "footers": False,
+        "comments": False,
+        "tracked_deletions": True,
+        "embedded_objects": False,
+        "hidden_text": False,
+        "field_instructions": False,
+    }
     assert list(tmp_path.iterdir()) == []

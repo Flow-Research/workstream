@@ -11,11 +11,15 @@
   timestamps changed the collected node between the lane and independent
   inventory passes. Stable explicit `json` and `docx` IDs now make repeated
   collections identical.
+- CodeRabbit reported four valid DOCX hardening/test gaps. The extractor now
+  returns stable `malformed/docx_nesting_limit` beyond 64 recursive levels,
+  preserves `w:sdt`-wrapped rows and cells, resolves validated OOXML part names
+  through their case-folded stored-name map, and proves the full nine-key
+  omission schema across the isolated-child JSON round trip.
 
 ## Comments deferred
 
-- CodeRabbit's initial review was rate-limited and produced no code finding.
-  A new review will be requested when its reported review window reopens.
+None.
 
 ## Human decisions needed
 
@@ -28,8 +32,11 @@ None.
 - `git diff --check`
 - repeated `pytest --collect-only` for the affected binding module
 - `ruff check tests/test_guide_bindings.py`
+- `ruff check app tests scripts`
+- focused DOCX/OOXML/extraction/architecture/lane suite (154 passed)
+- DOCX coverage suite (12 passed, 93.24 percent)
 
 ## Remaining risks
 
-Hosted Backend/Agent Gates and a completed CodeRabbit review remain required on
-the repaired PR head before merge readiness.
+Hosted Backend/Agent Gates and CodeRabbit completion remain required on the
+repaired PR head before merge readiness.
