@@ -80,10 +80,10 @@ child.
 03B3B3A merged through PR #233. It installs only the approved `defusedxml`
 wheel and adds the shared bounded OPC/OOXML container security capability.
 03B3B3B merged through PR #234. It adds bounded DOCX extraction and durable
-omission facts on the shared OOXML boundary. 03B3B3C implements bounded PPTX
-slide/notes extraction and has passed focused deterministic gates and required
-internal review; hosted CI, CodeRabbit, and human merge remain pending. XLSX,
-image, AUTH, and sufficiency work remain inactive.
+omission facts on the shared OOXML boundary. 03B3B3C merged through PR #235 and
+adds bounded PPTX slide/notes extraction. 03B3B3D is the active successor and
+adds only bounded XLSX cell extraction. Image, AUTH, and sufficiency work remain
+inactive.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the

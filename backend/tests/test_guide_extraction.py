@@ -11,16 +11,19 @@ import sys
 import threading
 from types import SimpleNamespace
 from uuid import uuid4
+import zipfile
 
 import pytest
 
 import app.modules.artifacts.guide_extraction as extraction_module
 import app.modules.artifacts.guide_extraction_worker as worker_module
+import app.modules.artifacts.guide_xlsx as xlsx_module
 from app.modules.artifacts.guide_extraction import (
     MAXIMUM_INPUT_BYTES,
     MAXIMUM_OUTPUT_BYTES,
     BoundGuideExtractor,
     GuideExtractionRunner,
+    extraction_policy_version,
 )
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
@@ -33,10 +36,232 @@ from app.modules.artifacts.guide_extraction_service import (
     GuideExtractionPersistenceResult,
     GuideExtractionRequest,
 )
+from app.modules.artifacts.guide_xlsx import XlsxExtractionFailure, extract_xlsx
 
 
 async def _bytes(payload: bytes):
     yield payload
+
+
+def _xlsx_package(*, cell: str = '<c r="A1" t="s"><v>0</v></c>') -> bytes:
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package = "http://schemas.openxmlformats.org/package/2006/relationships"
+    members = {
+        "[Content_Types].xml": "<Types/>",
+        "_rels/.rels": "<Relationships/>",
+        "xl/workbook.xml": (
+            f'<workbook xmlns="{main}" xmlns:r="{relationships}"><sheets>'
+            '<sheet name="Guide" sheetId="1" r:id="rId1"/>'
+            "</sheets></workbook>"
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            f'<Relationships xmlns="{package}">'
+            f'<Relationship Id="rId1" Type="{relationships}/worksheet" '
+            'Target="worksheets/sheet1.xml"/>'
+            f'<Relationship Id="rId2" Type="{relationships}/sharedStrings" '
+            'Target="sharedStrings.xml"/>'
+            "</Relationships>"
+        ),
+        "xl/sharedStrings.xml": f'<sst xmlns="{main}"><si><t>Hello</t></si></sst>',
+        "xl/worksheets/sheet1.xml": (
+            f'<worksheet xmlns="{main}"><sheetData><row r="1">{cell}</row>'
+            '<row r="2"><c r="B2"><f>1+1</f><v>2</v></c></row></sheetData>'
+            '<mergeCells><mergeCell ref="C3:D4"/></mergeCells></worksheet>'
+        ),
+    }
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, body in members.items():
+            archive.writestr(name, body)
+    return output.getvalue()
+
+
+def _replace_xlsx_member(payload: bytes, name: str, body: str | None) -> bytes:
+    source = zipfile.ZipFile(BytesIO(payload))
+    output = BytesIO()
+    with source, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            if info.filename != name:
+                target.writestr(info, source.read(info))
+        if body is not None:
+            target.writestr(name, body)
+    return output.getvalue()
+
+
+def test_xlsx_extractor_canonicalizes_sheet_cells_formulas_and_merges() -> None:
+    result = extract_xlsx(_xlsx_package(), validate_ooxml=lambda _payload: object())
+    assert json.loads(result.canonical_output) == {
+        "worksheets": [
+            {
+                "cells": [
+                    {
+                        "coordinate": "A1",
+                        "formula": None,
+                        "value": {"type": "text", "value": "Hello"},
+                    },
+                    {
+                        "coordinate": "B2",
+                        "formula": "1+1",
+                        "value": {"type": "number", "value": "2"},
+                    },
+                ],
+                "merged_ranges": [{"anchor": "C3", "range": "C3:D4"}],
+                "name": "Guide",
+                "position": 1,
+                "visibility": "visible",
+            }
+        ]
+    }
+    assert result.omission_facts == {
+        "truncated": False,
+        "omitted": False,
+        "formatting": False,
+        "comments": False,
+        "drawings": False,
+        "hidden_metadata": False,
+        "unsupported_objects": False,
+    }
+    assert extraction_policy_version("xlsx") == "guide-extraction-v5"
+
+
+def test_xlsx_extractor_accepts_cacheless_formula_without_inventing_a_value() -> None:
+    result = extract_xlsx(
+        _xlsx_package(cell='<c r="A1"><f>NOW()</f></c>'),
+        validate_ooxml=lambda _payload: object(),
+    )
+    assert json.loads(result.canonical_output)["worksheets"][0]["cells"][0] == {
+        "coordinate": "A1",
+        "formula": "NOW()",
+        "value": None,
+    }
+
+
+def test_xlsx_runner_uses_isolated_adapter_and_v5_protocol(
+    runner: GuideExtractionRunner, tmp_path: Path
+) -> None:
+    result = runner.extract(BytesIO(_xlsx_package()), detected_format="xlsx", workspace=tmp_path)
+    assert result.status == "extracted"
+    assert result.error_code is None
+    assert result.policy_version == "guide-extraction-v5"
+    assert result.output_sha256 is not None
+    assert json.loads(result.canonical_output or "")["worksheets"][0]["name"] == "Guide"
+
+
+def test_xlsx_runner_preserves_complete_true_omission_facts(
+    runner: GuideExtractionRunner, tmp_path: Path
+) -> None:
+    payload = _replace_xlsx_member(_xlsx_package(), "xl/styles.xml", "<styleSheet/>")
+    result = runner.extract(BytesIO(payload), detected_format="xlsx", workspace=tmp_path)
+    assert result.status == "extracted"
+    assert result.omission_facts == {
+        "truncated": False,
+        "omitted": True,
+        "formatting": True,
+        "comments": False,
+        "drawings": False,
+        "hidden_metadata": False,
+        "unsupported_objects": False,
+    }
+
+
+def test_xlsx_extractor_rejects_cells_outside_direct_rows() -> None:
+    payload = _xlsx_package(cell='<ext><c r="A1"><v>1</v></c></ext>')
+    with pytest.raises(XlsxExtractionFailure) as raised:
+        extract_xlsx(payload, validate_ooxml=lambda _payload: object())
+    assert (raised.value.status, raised.value.code) == ("malformed", "xlsx_invalid_cell")
+
+
+@pytest.mark.parametrize(
+    ("cell", "expected"),
+    [
+        ('<c r="A1" t="inlineStr"><is><r><t>A</t></r><r><t>B</t></r></is></c>', ("text", "AB")),
+        ('<c r="A1" t="str"><f>TEXT(1,&quot;0&quot;)</f><v>1</v></c>', ("text", "1")),
+        ('<c r="A1" t="b"><v>1</v></c>', ("boolean", "true")),
+        ('<c r="A1" t="b"><v>false</v></c>', ("boolean", "false")),
+        ('<c r="A1" t="e"><v>#N/A</v></c>', ("error", "#N/A")),
+        ('<c r="A1" t="d"><v>2026-07-31</v></c>', ("date", "2026-07-31")),
+        (
+            '<c r="A1" t="d"><v>2026-07-31T12:30:00Z</v></c>',
+            ("date", "2026-07-31T12:30:00Z"),
+        ),
+    ],
+)
+def test_xlsx_extractor_supports_exact_scalar_types(cell: str, expected: tuple[str, str]) -> None:
+    result = extract_xlsx(_xlsx_package(cell=cell), validate_ooxml=lambda _payload: object())
+    value = json.loads(result.canonical_output)["worksheets"][0]["cells"][0]["value"]
+    assert value == {"type": expected[0], "value": expected[1]}
+
+
+@pytest.mark.parametrize(
+    ("cell", "status", "code"),
+    [
+        ('<c r="A1" t="unknown"><v>1</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1" t="b"><v>yes</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1" t="d"><v>2026-13-40</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1" t="s"><v>99</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1" t="inlineStr"><v>x</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1"><v>1</v><v>2</v></c>', "malformed", "xlsx_invalid_cell"),
+        ('<c r="A1"><f t="shared">A1</f><v>1</v></c>', "unsupported", "xlsx_formula_unsupported"),
+        ('<c r="A1"><f ref="A1">1</f><v>1</v></c>', "unsupported", "xlsx_formula_unsupported"),
+        ('<c r="A1"><f></f></c>', "unsupported", "xlsx_formula_unsupported"),
+        ('<c r="A1"><unknown/></c>', "malformed", "xlsx_invalid_cell"),
+    ],
+)
+def test_xlsx_extractor_fails_closed_for_invalid_cell_semantics(
+    cell: str, status: str, code: str
+) -> None:
+    with pytest.raises(XlsxExtractionFailure) as raised:
+        extract_xlsx(_xlsx_package(cell=cell), validate_ooxml=lambda _payload: object())
+    assert (raised.value.status, raised.value.code) == (status, code)
+
+
+def test_xlsx_extractor_rejects_populated_merged_non_anchor() -> None:
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    worksheet = (
+        f'<worksheet xmlns="{main}"><sheetData><row r="3"><c r="D3"><v>1</v></c>'
+        '</row></sheetData><mergeCells><mergeCell ref="C3:D4"/></mergeCells></worksheet>'
+    )
+    payload = _replace_xlsx_member(_xlsx_package(), "xl/worksheets/sheet1.xml", worksheet)
+    with pytest.raises(XlsxExtractionFailure) as raised:
+        extract_xlsx(payload, validate_ooxml=lambda _payload: object())
+    assert raised.value.code == "xlsx_merged_cell_conflict"
+
+
+def test_xlsx_extractor_records_fixed_omission_categories() -> None:
+    payload = _replace_xlsx_member(_xlsx_package(), "xl/styles.xml", "<styleSheet/>")
+    result = extract_xlsx(payload, validate_ooxml=lambda _payload: object())
+    assert result.omission_facts["formatting"] is True
+    assert result.omission_facts["omitted"] is True
+
+
+@pytest.mark.parametrize(
+    ("constant", "value", "code"),
+    [
+        ("MAXIMUM_WORKSHEETS", 0, "xlsx_sheet_limit"),
+        ("MAXIMUM_ROWS", 1, "xlsx_row_limit"),
+        ("MAXIMUM_CELLS", 1, "xlsx_cell_limit"),
+        ("MAXIMUM_CELL_CHARACTERS", 1, "xlsx_cell_character_limit"),
+    ],
+)
+def test_xlsx_extractor_enforces_exact_policy_limits(
+    monkeypatch: pytest.MonkeyPatch, constant: str, value: int, code: str
+) -> None:
+    monkeypatch.setattr(xlsx_module, constant, value)
+    with pytest.raises(XlsxExtractionFailure) as raised:
+        extract_xlsx(_xlsx_package(), validate_ooxml=lambda _payload: object())
+    assert raised.value.status == "limit_exceeded"
+    assert raised.value.code == code
+
+
+@pytest.mark.parametrize("value", ["+1", "1.", ".1", "NaN", " 1"])
+def test_xlsx_extractor_rejects_noncanonical_numbers(value: str) -> None:
+    with pytest.raises(XlsxExtractionFailure) as raised:
+        extract_xlsx(
+            _xlsx_package(cell=f'<c r="A1"><v>{value}</v></c>'),
+            validate_ooxml=lambda _payload: object(),
+        )
+    assert (raised.value.status, raised.value.code) == ("malformed", "xlsx_invalid_cell")
 
 
 @pytest.fixture
@@ -292,6 +517,57 @@ def test_pptx_worker_orders_limits_validator_adapter_seccomp_then_parsing(
         "status": "extracted",
         "error_code": None,
         "output": '{"slides":[]}',
+        "omission_facts": omissions,
+    }
+
+
+def test_xlsx_worker_orders_limits_validator_adapter_seccomp_then_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    writes: list[bytes] = []
+    omissions = {
+        "truncated": False,
+        "omitted": False,
+        "formatting": False,
+        "comments": False,
+        "drawings": False,
+        "hidden_metadata": False,
+        "unsupported_objects": False,
+    }
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: events.append("limits"))
+
+    def load_ooxml():
+        events.append("validator_import")
+        return lambda _payload, _detected_format: object()
+
+    def load_xlsx(validate_ooxml):
+        events.append("adapter_import")
+        assert validate_ooxml(b"PK", "xlsx") is not None
+
+        def parse(_payload: bytes) -> tuple[str, dict[str, bool]]:
+            events.append("parse")
+            return '{"worksheets":[]}', omissions
+
+        return parse
+
+    monkeypatch.setattr(worker_module, "_load_ooxml_security", load_ooxml)
+    monkeypatch.setattr(worker_module, "_load_xlsx_extractor", load_xlsx)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: events.append("seccomp"))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "xlsx"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"PK")))
+    monkeypatch.setattr(
+        worker_module.os,
+        "write",
+        lambda _fd, value: (writes.append(bytes(value)), len(value))[1],
+    )
+
+    assert worker_module.main() == 0
+    assert events == ["limits", "validator_import", "adapter_import", "seccomp", "parse"]
+    assert json.loads(b"".join(writes)) == {
+        "status": "extracted",
+        "error_code": None,
+        "output": '{"worksheets":[]}',
         "omission_facts": omissions,
     }
 

@@ -517,6 +517,7 @@ def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None
         APP_ROOT / "modules" / "artifacts" / "guide_extraction.py",
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_worker.py",
         APP_ROOT / "modules" / "artifacts" / "guide_pdf.py",
+        APP_ROOT / "modules" / "artifacts" / "guide_xlsx.py",
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_service.py",
     )
     forbidden_prefixes = (
@@ -614,6 +615,23 @@ def test_pptx_adapter_is_confined_to_the_isolated_worker() -> None:
             elif (
                 isinstance(node, ast.ImportFrom)
                 and node.module == "app.modules.artifacts.guide_pptx"
+            ):
+                adapter_importers.add(relative)
+    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
+
+
+def test_xlsx_adapter_is_confined_to_the_isolated_worker() -> None:
+    adapter_importers: set[str] = set()
+    for path in APP_ROOT.rglob("*.py"):
+        relative = path.relative_to(APP_ROOT).as_posix()
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name == "app.modules.artifacts.guide_xlsx" for alias in node.names
+            ):
+                adapter_importers.add(relative)
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "app.modules.artifacts.guide_xlsx"
             ):
                 adapter_importers.add(relative)
     assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
