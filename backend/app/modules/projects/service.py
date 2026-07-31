@@ -73,6 +73,7 @@ from app.modules.projects.post_submit_policy import (
     parse_locked_post_submit_checker_policy_body,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.create_repository import ProjectCreateRepository
 from app.modules.projects.setup_queue import (
     ProjectSetupQueueError,
     enqueue_post_submit_setup_continuation,
@@ -484,6 +485,7 @@ class ProjectService:
         """
         self._session = session
         self._repo = ProjectRepository(session)
+        self._create_repo = ProjectCreateRepository(session)
         self._agent_runtime = agent_runtime
 
     def _project_agent_runtime(self) -> ProjectGuideAgentRuntime:
@@ -533,7 +535,7 @@ class ProjectService:
                 "body": payload.model_dump(mode="json", exclude_none=True),
             }
         )
-        disposition, reservation = await self._repo.reserve_project_create(
+        disposition, reservation = await self._create_repo.reserve(
             actor_profile_id=actor_profile_id,
             identity_link_id=identity_link_id,
             idempotency_key=idempotency_key,
@@ -607,7 +609,7 @@ class ProjectService:
             authorization_decision_event_id=str(decision.decision_id),
         )
         project = await self._repo.add_project(project)
-        await self._repo.complete_project_create(reservation)
+        await self._create_repo.complete(reservation)
         return ProjectCreateOutcome(
             response=ProjectResponse.model_validate(project), replayed=False
         )

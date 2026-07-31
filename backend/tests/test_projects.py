@@ -73,6 +73,7 @@ from app.modules.projects.authorization_reads import (
     authorize_project_diagnostic_read,
     authorize_project_policy_read,
 )
+from app.modules.projects.create_repository import ProjectCreateRepository
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
@@ -486,6 +487,85 @@ def test_activation_readiness_normalizes_hash_valid_malformed_policy_body() -> N
             None,
             require_payment_policy=False,
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing_stage", ["insert", "reload"])
+async def test_project_create_repository_rejects_disappeared_reservation(
+    missing_stage: str,
+) -> None:
+    record_id = uuid4()
+
+    class Session:
+        async def scalar(self, _statement):
+            return None if missing_stage == "insert" else record_id
+
+        async def get(self, _model, _record_id):
+            assert _record_id == record_id
+            return None
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    with pytest.raises(ProjectRepositoryIntegrityError, match="reservation disappeared"):
+        await repository.reserve(
+            actor_profile_id=str(uuid4()),
+            identity_link_id=str(uuid4()),
+            idempotency_key=uuid4(),
+            request_digest="sha256:" + ("a" * 64),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_identity", "stored_digest", "stored_status", "expected"),
+    [
+        ("other-link", "sha256:" + ("a" * 64), "pending", "mismatch"),
+        ("same-link", "sha256:" + ("b" * 64), "pending", "mismatch"),
+        ("same-link", "sha256:" + ("a" * 64), "pending", "pending"),
+        ("same-link", "sha256:" + ("a" * 64), "committed", "replayed"),
+    ],
+)
+async def test_project_create_repository_classifies_existing_reservation(
+    stored_identity: str,
+    stored_digest: str,
+    stored_status: str,
+    expected: str,
+) -> None:
+    record_id = uuid4()
+    record = types.SimpleNamespace(
+        id=record_id,
+        identity_link_id=stored_identity,
+        request_digest=stored_digest,
+        status=stored_status,
+    )
+
+    class Session:
+        async def scalar(self, _statement):
+            return record_id
+
+        async def get(self, _model, _record_id):
+            assert _record_id == record_id
+            return record
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    disposition, returned = await repository.reserve(
+        actor_profile_id=str(uuid4()),
+        identity_link_id="same-link",
+        idempotency_key=uuid4(),
+        request_digest="sha256:" + ("a" * 64),
+    )
+    assert disposition == expected
+    assert returned is record
+
+
+@pytest.mark.asyncio
+async def test_project_create_repository_rejects_invalid_completion() -> None:
+    class Session:
+        async def scalar(self, _statement):
+            return None
+
+    repository = ProjectCreateRepository(cast(Any, Session()))
+    with pytest.raises(ProjectRepositoryIntegrityError, match="invalid project reservation"):
+        await repository.complete(types.SimpleNamespace(id=uuid4()))
 
 
 @pytest.mark.asyncio

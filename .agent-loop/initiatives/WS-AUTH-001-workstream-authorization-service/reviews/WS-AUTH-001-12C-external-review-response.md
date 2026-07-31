@@ -68,8 +68,13 @@ None.
   prepared dependency composition root. The existing lifecycle test now proves
   rollback of a forgotten successful transaction and fail-closed denial-evidence
   persistence, covering the four lines required to reach at least 90 percent.
-- A final hosted Backend rerun is pending this coverage-proof commit; CodeRabbit
-  must also review that exact head.
+- The next exact-tree retry passed lane custody and measured the composition root
+  at 90.37 percent. It then exposed that the gate also covered the broad legacy
+  project repository at 62.46 percent. Project-create reservation/completion now
+  has a dedicated repository boundary, restoring the legacy repository to its
+  prior scope; focused branch tests measure the new module at 96.43 percent.
+- A final hosted Backend rerun is pending this repository-boundary correction;
+  CodeRabbit must also review that exact head.
 
 ## Remaining risks
 
