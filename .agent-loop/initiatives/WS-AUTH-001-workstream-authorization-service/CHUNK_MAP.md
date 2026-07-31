@@ -84,7 +84,7 @@ feature manifest exists, then requires a separate explicit start.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-AUTH-001-REV-REG` | REV Lifecycle Action Registration | L1 | Blocked on complete REV typed manifests |
+| Historical alias `WS-AUTH-001-REV-REG` | Superseded by `WS-XINT-003-08R` registration | L1 | Not executable; use canonical XINT-003 custody |
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
@@ -100,7 +100,7 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-REV-09A` | REV 09A Finding Response Evidence Activation | L1 | Feature/ART-gated |
 | `WS-AUTH-001-REV-11` | REV 11 Recovery And Reconciliation Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-12` | REV 12 Artifact Reconciliation And Projection Activation | L1 | Feature/service-gated |
-| `WS-AUTH-001-REV-LIFECYCLE` | REV Lifecycle Repair Action Activation | L1 | Blocked until REV-REG and four hidden manifests merge |
+| Historical alias `WS-AUTH-001-REV-LIFECYCLE` | Superseded by `WS-XINT-003-08A` and `WS-XINT-003-08B` activation | L1 | Not executable; use canonical XINT-003 custody |
 | `WS-XINT-002-07A` (runtime owner `WS-XINT-002-07`) | Review Packet And Finding Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART finding evidence behavior |
 | `WS-XINT-002-07B` (runtime owner `WS-XINT-002-07`) | Response Evidence Binding Evaluator Extension (no availability change) | L1 | 07A plus exact human revision obligation/preparation |
 

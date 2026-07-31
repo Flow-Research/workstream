@@ -39,9 +39,10 @@ submission authorization protocol.
 - Exactly one N+1 Submission consumes one preparation/obligation; concurrent
   attempts have one winner and preserve all prior immutable history.
 - Human and checker revision sources remain mutually exclusive.
-- XINT-002-07B extends only the already-active ART response-slot evaluator,
-  changes no ActionId availability, and denies CheckerRun-rooted remediation;
-  XINT-003 owns the corresponding human action.
+- XINT-002-07B extends the active ART binding evaluator to response slots and
+  introduces response-slot evaluation without changing ActionId availability;
+  it denies CheckerRun-rooted remediation, and XINT-003 owns the corresponding
+  human action.
 
 ## Verification and reviewers
 

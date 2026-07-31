@@ -14,7 +14,7 @@
 | `WS-XINT-002-06` | Activate pre/post-submit materialization and checker output/binding. | L1 | 02 plus ART 04B/06A/06B evidence |
 | `WS-XINT-002-07A` | Activate lease-scoped packets and the one evidence-binding ActionId for reviewer-finding slots; response slots hard deny. | L1 | 02 plus merged ART/REV lease/finding manifests |
 | `WS-XINT-002-07B` | Extend the active evidence-binding evaluator to exact human-revision response slots; no availability change. | L1 | 07A plus merged hidden REV obligation/preparation behavior; precedes XINT-003-07 activation |
-| `WS-XINT-002-08` | Prove complete catalogue, least privilege, revocation, replay, concurrency, audit, and live lifecycle conformance. | L1 | 03-07 including 05A-D |
+| `WS-XINT-002-08` | Prove complete catalogue, least privilege, revocation, replay, concurrency, audit, and live lifecycle conformance. | L1 | 03-07B including 05A-D |
 
 Chunks 03-07B may be split only by the evidence boundaries named above. The
 guide wave is therefore fixed as 04A after ART-03A and 04B after ART-03B. A split

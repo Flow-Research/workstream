@@ -22,11 +22,13 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 - `ACTION_CUSTODY.md` is the canonical action/principal/resource/wave table.
 - REV-03P and AUTH-12D2 name one future append-only policy writer path.
-- XINT-002-07 is split into 07A availability and 07B evaluator extension.
+- Runtime owner XINT-002-07 is split into planned sub-wave 07A, the sole
+  reviewer-finding packet/evidence-binding availability transition, and 07B,
+  an evaluator-only response-slot extension that cannot change availability.
 - All registered review actions remain planned; four lifecycle/recovery actions
   remain missing until 08R; no service identity is provisioned by chunk 01.
 
 ## Next step
 
-Open the chunk-01 PR, run hosted exact-head gates, address external review, and
-obtain human merge. Then stop before runtime policy work in WS-XINT-003-02.
+Keep hosted exact-head gates green, resolve all external review, and obtain
+human merge. Then stop before runtime policy work in WS-XINT-003-02.

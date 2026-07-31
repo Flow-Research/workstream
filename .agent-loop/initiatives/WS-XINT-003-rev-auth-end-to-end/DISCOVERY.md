@@ -6,7 +6,9 @@
 - [Authorization service specification](../../../docs/spec_authorization_service.md)
 - [Roles and permissions](../../../docs/operations_roles_permissions.md)
 - [XINT-002 human-review revision owner](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-05D-human-review-revision.md)
-- [XINT-002 review artifact owner](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07-review-artifact-activation.md)
+- [XINT-002 reviewer artifact activation](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07A-reviewer-artifact-activation.md)
+- [XINT-002 response artifact extension](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07B-response-artifact-extension.md)
+- [Historical XINT-002 combined split record](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07-review-artifact-activation.md)
 
 ## Baseline
 

@@ -1,8 +1,10 @@
 # Risks: WS-AUTH-001 - Workstream Authorization Service
 
-Current REV controls prevent duplicate policy writers by permitting only the
-reconciled XINT-003-02 path, and prevent duplicate evidence-binding activation
-by making XINT-002-07A the sole availability transition and 07B evaluator-only.
+Planned REV custody permits only the reconciled XINT-003-02 policy-writer path
+and designates XINT-002-07A as the sole evidence-binding availability
+transition, with 07B evaluator-only. These are planning rules, not current
+runtime protections; enforcement begins only when the named activation gates
+merge and activate their exact actions.
 
 ## AUTH-12 planning risks — 2026-07-29
 

@@ -17,11 +17,15 @@ and the only mutation surface. The shared implementation is XINT-003-02.
 ## Canonical persistence path
 
 Adopt the existing project `ReviewPolicy` and `RevisionPolicy` models/tables as
-the sole records and upgrade them for immutable version provenance. Writes go
-only through `ProjectPolicyMutationService.replace_review_policy()` or
-`replace_revision_policy()` and append-only
+the sole records and upgrade them for immutable version provenance. Every
+external mutation enters only
+`ProjectPolicyMutationService.replace_review_policy()` or
+`replace_revision_policy()`; that service owns authorization preparation,
+grant/resource checks, final PREP consumption, and decision evidence. It alone
+invokes the internal append-only persistence primitives
 `ProjectRepository.add_review_policy_version()` or
-`add_revision_policy_version()`. Retire both repository `upsert_*` methods and
+`add_revision_policy_version()`. Those repository methods are never caller-
+facing mutation APIs. Retire both repository `upsert_*` methods and
 both `ProjectService._*_policy_model()` constructors. Do not add REV-local
 duplicate models, tables, repositories, routes, aliases, or fallback writers.
 
