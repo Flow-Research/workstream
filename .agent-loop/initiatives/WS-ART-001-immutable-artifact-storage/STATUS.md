@@ -70,7 +70,7 @@ installed until the human owner approves 03B3B1's exact pinned allowlist.
 03B3B1 implementation is active as a dependency-decision and CI-only chunk.
 It proposes exact hashed wheels for `pypdf`, `defusedxml`, and `Pillow`, with
 no package, lock, runtime import, or parser behavior change. Its approval gate
-requires independent protected GitHub review of the exact allowlist head before
+requires independent protected GitHub review of the exact final PR head before
 merge; repository-authored evidence alone is not authority.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and

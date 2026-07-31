@@ -24,6 +24,7 @@ PYPROJECT_PATH = BACKEND_ROOT / "pyproject.toml"
 ALLOWLIST_REPOSITORY_PATH = ALLOWLIST_PATH.relative_to(REPOSITORY_ROOT).as_posix()
 APPROVED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 APPROVED_SCOPES = frozenset({"pdf", "ooxml", "image_metadata"})
+STATE_BEARING_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
 PARSER_MODULES = (
     "guide_pdf.py",
     "guide_ooxml.py",
@@ -230,8 +231,11 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "guide_dependency_maintenance_shape_invalid",
         )
         _string(maintenance["assessment"], "guide_dependency_maintenance_assessment_missing")
+        release_uploaded_at = _string(
+            maintenance["release_uploaded_at"], "guide_dependency_release_timestamp_invalid"
+        )
         require(
-            maintenance["release_uploaded_at"].endswith("Z"),
+            release_uploaded_at.endswith("Z"),
             "guide_dependency_release_timestamp_invalid",
         )
         require(
@@ -256,8 +260,9 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
             require(filename.endswith(".whl"), "guide_dependency_artifact_not_wheel")
             require(filename not in filenames, "guide_dependency_artifact_duplicate")
             filenames.add(filename)
+            artifact_sha256 = _string(artifact["sha256"], "guide_dependency_artifact_hash_invalid")
             require(
-                SHA256_PATTERN.fullmatch(artifact["sha256"]) is not None,
+                SHA256_PATTERN.fullmatch(artifact_sha256) is not None,
                 "guide_dependency_artifact_hash_invalid",
             )
             wheel_prefix = f"{canonical_name.replace('-', '_')}-{version}-"
@@ -417,6 +422,8 @@ def validate_reviews(
         require(isinstance(user, dict), "guide_dependency_review_user_missing")
         login = user.get("login")
         require(isinstance(login, str) and login, "guide_dependency_review_login_missing")
+        if review.get("state") not in STATE_BEARING_REVIEW_STATES:
+            continue
         latest_by_reviewer[login.casefold()] = review
 
     candidates: list[dict[str, Any]] = []

@@ -99,8 +99,8 @@ review is rerun on the staged evidence.
 
 ## External review
 
-CodeRabbit reported a rate-limited pass with no substantive comments. The
-first approval-authorized
+CodeRabbit's later substantive review produced three valid repaired findings
+and one workflow-checkout finding rejected by direct hosted evidence. The first approval-authorized
 Backend run found one missing semantic-lane inventory entry, now repaired.
 Exact repaired-head hosted results remain required external evidence.
 

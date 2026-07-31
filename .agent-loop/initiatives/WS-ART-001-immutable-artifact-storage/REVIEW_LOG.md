@@ -236,3 +236,8 @@
   and correctly failed because the new focused test module had not been assigned
   to a lane. The repair adds it to `shared_foundations`; no lane, test, or
   coverage policy is weakened.
+- CodeRabbit's later review found three valid issues: ambiguous final-head
+  wording, unstable type failures, and `COMMENTED` reviews erasing approval.
+  All are repaired with regression proof. Its review-event checkout concern is
+  rejected because hosted review-event run `30600808957` passed exact-head
+  approval and executed the PR's lane inventory before its later failure.

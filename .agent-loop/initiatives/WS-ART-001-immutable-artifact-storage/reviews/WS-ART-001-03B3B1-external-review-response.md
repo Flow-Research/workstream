@@ -15,18 +15,25 @@
 
 ## Human decisions needed
 
-- None. `abiorh-claw` approved exact head `66ac70e6` before this repair; because
-  the repair changes the PR head, a fresh independent exact-head approval is
-  required by design.
+- A fresh independent approval of the exact final PR head is pending.
+  `abiorh-claw` approved `66ac70e6` before the CI repair, so that approval was
+  correctly dismissed when the head changed.
 
 ## CodeRabbit
 
-- CodeRabbit returned `pass` with `Review rate limited` and posted no review or
-  inline comments. This is not treated as substantive review evidence.
+- The initial check returned `pass` with `Review rate limited` and no comments.
+- The repaired-head review posted four findings. Three valid findings are
+  addressed: exact-final-head wording, stable type-validation failures, and
+  preserving an active approval across a later `COMMENTED` review.
+- The workflow-checkout finding is rejected with direct hosted evidence: review
+  event run `30600808957` passed exact-head approval against `66ac70e6`, executed
+  the PR's new code, and reached canonical lane collection. The checkout also
+  uses `fetch-depth: 0`, so both PR parents required by the diff were present.
 
 ## Commands rerun
 
 - Focused dependency gate and tests.
+- Stable malformed-value and approval-then-comment regression tests.
 - Canonical semantic-lane collect-only validation.
 - Ruff, markdown links, stale-contract checks, lightweight agent gates, and
   diff checks.

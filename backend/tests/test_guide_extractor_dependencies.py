@@ -71,6 +71,14 @@ def test_unreadable_allowlist_fails_closed(tmp_path: Path) -> None:
             "guide_dependency_artifact_hash_invalid",
         ),
         (
+            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(sha256=None),
+            "guide_dependency_artifact_hash_invalid",
+        ),
+        (
+            lambda data: data["dependencies"][0]["maintenance"].update(release_uploaded_at=None),
+            "guide_dependency_release_timestamp_invalid",
+        ),
+        (
             lambda data: data["dependencies"][0]["approved_artifacts"][0].update(
                 filename="other-6.14.2-py3-none-any.whl"
             ),
@@ -260,6 +268,17 @@ def test_latest_review_by_same_reviewer_must_remain_approved() -> None:
         match="guide_dependency_independent_head_approval_missing",
     ):
         gate.validate_reviews(reviews, author="contributor", head_sha=HEAD)
+
+
+def test_later_commented_review_does_not_erase_current_approval() -> None:
+    reviews = [
+        _review(review_id=1),
+        _review(state="COMMENTED", review_id=2),
+    ]
+
+    approval = gate.validate_reviews(reviews, author="contributor", head_sha=HEAD)
+
+    assert approval["id"] == 1
 
 
 def test_changed_allowlist_requires_live_approval(
