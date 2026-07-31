@@ -232,3 +232,7 @@
   Architecture, security, QA, product/ops, senior engineering, CI integrity,
   reuse/dedup, and test-delta reviews pass after repair. Docs confirmation and
   exact hosted PR-head behavior remain publication evidence.
+- The first approval-authorized hosted run reached the canonical lane inventory
+  and correctly failed because the new focused test module had not been assigned
+  to a lane. The repair adds it to `shared_foundations`; no lane, test, or
+  coverage policy is weakened.

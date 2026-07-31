@@ -23,6 +23,8 @@ chunk after PR #228 merged.
   hash-bound future declarations, prohibited packages, format-scoped imports,
   and independent exact-head GitHub approval.
 - Added focused failure tests and wired the gate before backend installation.
+- Registered the focused test module in the canonical `shared_foundations`
+  semantic lane after hosted inventory validation exposed the missing entry.
 - Updated the ART specification, chunk command, status, and review evidence.
 
 ## Why it changed
@@ -97,8 +99,10 @@ review is rerun on the staged evidence.
 
 ## External review
 
-CodeRabbit and hosted GitHub checks have not run yet. Their exact PR-head
-results remain required external evidence.
+CodeRabbit reported a rate-limited pass with no substantive comments. The
+first approval-authorized
+Backend run found one missing semantic-lane inventory entry, now repaired.
+Exact repaired-head hosted results remain required external evidence.
 
 ## Remaining risks
 

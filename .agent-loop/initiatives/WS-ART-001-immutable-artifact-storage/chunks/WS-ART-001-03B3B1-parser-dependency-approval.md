@@ -31,6 +31,7 @@ P2
 ```text
 backend/config/guide_extractor_dependencies.json
 backend/scripts/check_guide_extractor_dependencies.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_guide_extractor_dependencies.py
 .github/workflows/backend.yml
 .agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/**
