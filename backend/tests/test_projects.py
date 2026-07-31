@@ -2792,19 +2792,20 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
 
 
 @pytest.mark.parametrize(
-    ("identity_matches", "digest_matches", "status", "expected"),
+    ("identity_matches", "digest_matches", "status", "insert_wins", "expected"),
     [
-        (False, True, "pending", "mismatch"),
-        (True, False, "pending", "mismatch"),
-        (True, True, "pending", "pending"),
-        (True, True, "committed", "replayed"),
-        (True, True, "pending", "claimed"),
+        (False, True, "pending", False, "mismatch"),
+        (True, False, "pending", False, "mismatch"),
+        (True, True, "pending", False, "pending"),
+        (True, True, "committed", False, "replayed"),
+        (True, True, "pending", True, "claimed"),
     ],
 )
 async def test_guide_mutation_repository_classifies_existing_reservations(
     identity_matches: bool,
     digest_matches: bool,
     status: str,
+    insert_wins: bool,
     expected: str,
 ) -> None:
     record_id = uuid4()
@@ -2824,12 +2825,12 @@ async def test_guide_mutation_repository_classifies_existing_reservations(
             self.scalar_calls += 1
             if self.scalar_calls == 1:
                 return record
-            if expected == "claimed":
+            if insert_wins:
                 return statement.compile().params["id"]
             return record_id
 
         async def get(self, _model, selected_id):
-            if expected != "claimed":
+            if not insert_wins:
                 assert selected_id == record_id
             return record
 
@@ -3095,7 +3096,8 @@ async def test_guide_mutation_service_executes_all_three_authorized_happy_paths(
             self.setup_run = setup_run
 
     class Replay:
-        completed: list[tuple] = []
+        def __init__(self):
+            self.completed: list[tuple] = []
 
         async def find(self, *_args):
             return None
@@ -3169,20 +3171,22 @@ async def test_guide_mutation_service_executes_all_three_authorized_happy_paths(
     assert repository.items
 
 
-async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edges() -> None:
+class _GuideMutationTestResponse:
+    @classmethod
+    def model_validate(cls, value):
+        return ("validated", value)
+
+
+def _guide_mutation_edge_subject():
     actor_id, link_id, project_id = (uuid4() for _ in range(3))
     resolved = SimpleNamespace(
         profile=SimpleNamespace(id=str(actor_id)),
         identity_link=SimpleNamespace(id=str(link_id)),
     )
 
-    class ResponseType:
-        @classmethod
-        def model_validate(cls, value):
-            return ("validated", value)
-
     class Replay:
-        record = None
+        def __init__(self):
+            self.record = None
 
         async def find(self, *_args):
             return self.record
@@ -3190,6 +3194,11 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
     replay = Replay()
     service = GuideMutationService(object())
     service._replay = replay  # type: ignore[assignment]
+    return resolved, project_id, replay, service
+
+
+async def test_guide_mutation_service_classifies_existing_replay() -> None:
+    resolved, _project_id, replay, service = _guide_mutation_edge_subject()
     replay.record = SimpleNamespace(
         identity_link_id=str(uuid4()),
         request_digest="digest",
@@ -3201,11 +3210,15 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
         match="idempotency_mismatch",
     ):
         await service._existing(
-            resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+            resolved,
+            ActionId.PROJECT_GUIDE_CREATE,
+            uuid4(),
+            "digest",
+            _GuideMutationTestResponse,
         )
 
     replay.record = SimpleNamespace(
-        identity_link_id=str(link_id),
+        identity_link_id=resolved.identity_link.id,
         request_digest="digest",
         status="pending",
         response_json=None,
@@ -3215,17 +3228,28 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
         match="idempotency_pending",
     ):
         await service._existing(
-            resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+            resolved,
+            ActionId.PROJECT_GUIDE_CREATE,
+            uuid4(),
+            "digest",
+            _GuideMutationTestResponse,
         )
 
     replay.record.status = "committed"
     replay.record.response_json = {"id": "response"}
     existing = await service._existing(
-        resolved, ActionId.PROJECT_GUIDE_CREATE, uuid4(), "digest", ResponseType
+        resolved,
+        ActionId.PROJECT_GUIDE_CREATE,
+        uuid4(),
+        "digest",
+        _GuideMutationTestResponse,
     )
     assert existing.response == ("validated", {"id": "response"})
     assert existing.replayed is True
 
+
+async def test_guide_mutation_service_short_circuits_cached_operations() -> None:
+    resolved, project_id, _replay, _service = _guide_mutation_edge_subject()
     cached = SimpleNamespace(replayed=True)
 
     async def cached_existing(*_args):
@@ -3267,21 +3291,29 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
         is cached
     )
 
+
+def test_guide_mutation_service_classifies_reservation_outcomes() -> None:
+    _resolved, _project_id, _replay, service = _guide_mutation_edge_subject()
     record = SimpleNamespace(response_json={"id": "response"})
     with pytest.raises(
         guide_mutation_router_module.GuideMutationIdempotencyConflict,
         match="idempotency_mismatch",
     ):
-        service._reservation_outcome("mismatch", record, ResponseType)
+        service._reservation_outcome("mismatch", record, _GuideMutationTestResponse)
     with pytest.raises(
         guide_mutation_router_module.GuideMutationIdempotencyConflict,
         match="idempotency_pending",
     ):
-        service._reservation_outcome("pending", record, ResponseType)
-    replayed = service._reservation_outcome("replayed", record, ResponseType)
+        service._reservation_outcome("pending", record, _GuideMutationTestResponse)
+    replayed = service._reservation_outcome(
+        "replayed", record, _GuideMutationTestResponse
+    )
     assert replayed.response == ("validated", {"id": "response"})
     assert replayed.replayed is True
 
+
+def test_guide_mutation_service_rejects_invalid_authority_proof() -> None:
+    _resolved, project_id, _replay, service = _guide_mutation_edge_subject()
     with pytest.raises(RuntimeError, match="lacked Project Manager authority"):
         service._prove(
             SimpleNamespace(
@@ -3292,8 +3324,13 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
             project_id,
         )
 
+
+async def test_guide_mutation_service_composes_unsupported_prepare_denial() -> None:
+    resolved, project_id, _replay, service = _guide_mutation_edge_subject()
+
     class Prepared:
-        denied = None
+        def __init__(self):
+            self.denied = None
 
         async def prepare(self, *_args):
             raise PreparedAuthorizationUnsupported(
@@ -3330,6 +3367,8 @@ async def test_guide_mutation_service_fails_closed_for_replay_and_authority_edge
     assert denial_resource.scope_project_id == project_id
     assert denial_resource.requested_guide_id is None
     assert denial_resource.requested_target_kind == "guide_create"
+
+
 async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_replay(
     project_client: AsyncClient,
 ) -> None:

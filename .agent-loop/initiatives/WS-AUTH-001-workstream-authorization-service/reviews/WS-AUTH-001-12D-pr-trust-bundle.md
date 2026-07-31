@@ -54,6 +54,8 @@ outside this chunk.
 - Direct service tests cover all three authorized mutation orchestrations and
   fail-closed replay/PREP edges, independently reaching 91.33 percent without
   changing production or the hosted threshold.
+- CodeRabbit's three test-maintainability comments are resolved without losing
+  coverage or combining unrelated failure attribution.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

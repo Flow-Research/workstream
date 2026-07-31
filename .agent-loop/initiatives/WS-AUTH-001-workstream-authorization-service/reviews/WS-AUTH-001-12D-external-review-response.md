@@ -63,6 +63,9 @@
 - Twelfth hosted CI: execute all three guide service mutations through their
   real orchestration, including setup-run creation, and prove replay,
   reservation, authority, and unsupported-PREP edges fail closed.
+- Fresh CodeRabbit test review: make replay capture state instance-local, model
+  insert victory independently from the expected classification, and split the
+  broad fail-closed service test into five focused regressions.
 
 ## Comments deferred
 
@@ -99,6 +102,8 @@ None. The user retains merge authority for PR #232.
 - Exact guide-router boundary regression: 3 passed.
 - Exact guide-mutation service regression: 2 passed at 91.33 percent per-file
   coverage using Python's system-monitoring tracer.
+- CodeRabbit-corrected focused service/repository selection: 11 passed; the six
+  service tests retain 91.33 percent coverage.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

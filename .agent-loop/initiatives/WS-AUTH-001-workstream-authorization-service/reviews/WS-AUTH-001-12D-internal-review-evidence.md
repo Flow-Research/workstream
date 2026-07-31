@@ -155,3 +155,12 @@ QA caught an accidental shared-fixture autostart change made while constructing
 the local setup-run proof. It was reverted immediately; autostart is enabled
 only through the direct test's service-module settings seam. QA then passed,
 CI integrity passed with hosted-verification risk only, and all sessions closed.
+
+Fresh CodeRabbit review found three maintainability issues in the new tests.
+Replay capture is now instance-local, insert victory is an explicit fake input
+rather than inferred from the expected result, and the broad service edge test
+is split into focused replay, cache, reservation, authority, and PREP-denial
+tests. The corrected selection passes and preserves 91.33 percent service
+coverage.
+QA passed the corrected test structure, and CI integrity passed with only the
+expected exact-head hosted-verification risk. All reviewer sessions closed.
