@@ -49,6 +49,8 @@ outside this chunk.
 - The repository then passed at 100 percent; a focused router composition test
   covers its remaining key-gated actor/PREP dependency paths without changing
   the router or its 90 percent gate.
+- Direct router boundary tests additionally cover bounded conflict translation
+  and commit/rollback/dispatch/replay behavior; runtime and CI remain unchanged.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

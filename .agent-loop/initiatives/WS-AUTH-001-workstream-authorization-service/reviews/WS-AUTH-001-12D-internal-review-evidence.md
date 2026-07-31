@@ -135,3 +135,11 @@ PREP lifetime, and exact authority tuple propagation without changing runtime.
 QA and CI integrity passed with only hosted-verification risk; QA's cleanup
 suggestion was applied by explicitly observing PREP context exit. All sessions
 closed.
+
+The next hosted run showed the composition path had already been exercised and
+left the router at 84.62 percent. Direct boundary tests now prove pending versus
+mismatch retry semantics, ordinary service-error translation, commit versus
+rollback, setup dispatch after commit, and dispatch suppression on replay.
+QA and CI integrity passed with hosted-verification risk only. QA's suggested
+counter-assertions now explicitly exclude rollback on commit and extra commit
+on replay; all sessions closed.

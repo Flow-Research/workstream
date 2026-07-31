@@ -105,6 +105,7 @@ from app.modules.projects.service import (
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
     GuideActivationBlocked,
     PolicySetupBlocked,
+    ProjectNotFound,
     ProjectSetupQueueError,
     ProjectService,
     ProjectServiceError,
@@ -2924,6 +2925,92 @@ async def test_guide_mutation_router_composes_only_key_gated_authority(
         (request, resolved, session),
         ("prepared_closed",),
     ]
+
+
+def test_guide_mutation_router_translates_bounded_service_errors() -> None:
+    pending = guide_mutation_router_module._error(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict(
+            "idempotency_pending"
+        )
+    )
+    mismatch = guide_mutation_router_module._error(
+        guide_mutation_router_module.GuideMutationIdempotencyConflict(
+            "idempotency_mismatch"
+        )
+    )
+    missing = guide_mutation_router_module._error(ProjectNotFound("project not found"))
+
+    assert pending.status_code == 409
+    assert pending.retryable is True
+    assert pending.error_message == "Guide mutation is already in progress"
+    assert mismatch.status_code == 409
+    assert mismatch.retryable is False
+    assert mismatch.error_message == "Idempotency key does not match"
+    assert missing.status_code == 404
+    assert missing.detail == "project not found"
+
+
+async def test_guide_mutation_router_finishes_commit_dispatch_and_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Session:
+        commit_count = 0
+        rollback_count = 0
+
+        async def commit(self):
+            self.commit_count += 1
+
+        async def rollback(self):
+            self.rollback_count += 1
+
+    dispatched: list[dict] = []
+
+    async def dispatch(_session, **facts):
+        dispatched.append(facts)
+
+    monkeypatch.setattr(
+        guide_mutation_router_module,
+        "dispatch_pre_submit_setup_pipeline_after_commit",
+        dispatch,
+    )
+    response = SimpleNamespace(
+        project_id="project-1",
+        guide_id="guide-1",
+        id="snapshot-1",
+    )
+    session = Session()
+    assert (
+        await guide_mutation_router_module._finish(
+            session,
+            SimpleNamespace(
+                replayed=False,
+                setup_run_id="setup-1",
+                response=response,
+            ),
+        )
+        is response
+    )
+    assert session.commit_count == 1
+    assert session.rollback_count == 0
+    assert dispatched == [
+        {
+            "project_id": "project-1",
+            "guide_id": "guide-1",
+            "source_snapshot_id": "snapshot-1",
+            "setup_run_id": "setup-1",
+        }
+    ]
+
+    assert (
+        await guide_mutation_router_module._finish(
+            session,
+            SimpleNamespace(replayed=True, setup_run_id="setup-1", response=response),
+        )
+        is response
+    )
+    assert session.rollback_count == 1
+    assert session.commit_count == 1
+    assert len(dispatched) == 1
 async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_replay(
     project_client: AsyncClient,
 ) -> None:

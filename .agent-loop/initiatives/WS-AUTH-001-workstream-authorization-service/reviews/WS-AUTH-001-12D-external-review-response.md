@@ -57,6 +57,9 @@
 - Tenth hosted retry: directly prove the guide router preserves key-gated actor
   resolution, request-local PREP composition, and the exact authority tuple;
   the router's 90 percent gate is unchanged.
+- Eleventh hosted CI: directly prove bounded pending/mismatch/ordinary error
+  translation and transaction-finish commit, rollback, dispatch, and replay
+  suppression behavior; the router's 90 percent gate remains unchanged.
 
 ## Comments deferred
 
@@ -90,6 +93,7 @@ None. The user retains merge authority for PR #232.
 - Exact guide-metadata PREP denial regression: 1 passed.
 - Exact guide-mutation repository regression: 8 passed.
 - Exact guide-router composition regression: 1 passed.
+- Exact guide-router boundary regression: 3 passed.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks
