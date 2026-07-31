@@ -233,6 +233,7 @@ jobs:
             app/modules/authorization/kernel.py \
             app/modules/authorization/prepared.py \
             app/modules/authorization/runtime.py \
+            app/db/errors.py \
             app/modules/projects/models.py \
             app/modules/projects/create_repository.py \
             app/modules/projects/create_router.py \

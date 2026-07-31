@@ -46,6 +46,8 @@ backend/app/modules/authorization/runtime.py
 backend/app/modules/audit/schemas.py
 backend/app/api/deps/authorization.py
 backend/app/api/router.py
+backend/app/db/errors.py
+backend/app/modules/authorization/project_role_service.py
 backend/alembic/versions/0044_project_create_authority.py
 .github/workflows/backend.yml
 backend/tests/test_authorization.py

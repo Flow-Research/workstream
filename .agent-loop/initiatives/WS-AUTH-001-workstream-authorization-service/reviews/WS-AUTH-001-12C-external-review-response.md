@@ -78,11 +78,16 @@ None.
   58.96 percent. The route and orchestration now join persistence in focused
   project-create modules; legacy router/service diffs only remove their obsolete
   token-role create path. Sixteen focused PostgreSQL integration tests pass after
-  the split. Twenty focused unit tests also pass, with exact boundary coverage of
-  96.43 percent for the repository, 90.00 percent for the router, and 94.12
-  percent for the service.
+  the split. Twenty-two focused unit tests also pass, with exact boundary
+  coverage of 100 percent for the shared database-error helper, 96.43 percent
+  for the repository, 100 percent for the router, and 94.12 percent for the
+  service.
 - A final hosted Backend rerun is pending this complete boundary correction;
   CodeRabbit must also review that exact head.
+- Exact-head CodeRabbit review then identified one valid deduplication nit: the
+  supported-driver constraint-name lookup existed in both project creation and
+  project-role mutation. A shared database-error helper now owns that lookup;
+  both callers retain their existing constraint allowlists and re-raise behavior.
 
 ## Remaining risks
 

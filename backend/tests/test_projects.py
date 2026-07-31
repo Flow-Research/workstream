@@ -75,7 +75,11 @@ from app.modules.projects.authorization_reads import (
     authorize_project_policy_read,
 )
 from app.modules.projects.create_repository import ProjectCreateRepository
-from app.modules.projects.create_router import create_project as create_project_route
+from app.modules.projects.create_router import (
+    create_project as create_project_route,
+    get_project_create_authorization,
+    require_project_create_idempotency_key,
+)
 from app.modules.projects.create_service import (
     ProjectCreateIdempotencyConflict,
     ProjectCreateOutcome,
@@ -593,6 +597,30 @@ def _project_create_response() -> ProjectResponse:
         created_at=now,
         updated_at=now,
     )
+
+
+def test_project_create_idempotency_dependency_rejects_invalid_header() -> None:
+    request = types.SimpleNamespace(headers={"Idempotency-Key": "not-a-uuid"})
+
+    with pytest.raises(HTTPException) as captured:
+        require_project_create_idempotency_key(cast(Any, request))
+
+    assert captured.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_project_create_authorization_dependency_preserves_exact_inputs() -> None:
+    idempotency_key = uuid4()
+    resolved = object()
+    prepared = object()
+
+    result = await get_project_create_authorization(
+        idempotency_key,
+        cast(Any, resolved),
+        cast(Any, prepared),
+    )
+
+    assert result == (idempotency_key, resolved, prepared)
 
 
 @pytest.mark.asyncio

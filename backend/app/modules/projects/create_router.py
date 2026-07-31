@@ -15,6 +15,7 @@ from app.api.deps.authorization import (
 )
 from app.core.api_controls import StructuredHTTPException
 from app.core.permissions import PermissionDenied
+from app.db.errors import integrity_constraint_name
 from app.db.session import get_db_session
 from app.modules.actors.service import ResolvedActor
 from app.modules.authorization.catalogue import ActionId
@@ -104,13 +105,7 @@ async def create_project(
         raise project_create_http_error(exc) from exc
     except IntegrityError as exc:
         await session.rollback()
-        constraint_name = getattr(
-            getattr(exc.orig, "__cause__", None), "constraint_name", None
-        ) or getattr(exc.orig, "constraint_name", None)
-        if constraint_name is None:
-            constraint_name = getattr(
-                getattr(exc.orig, "diag", None), "constraint_name", None
-            )
+        constraint_name = integrity_constraint_name(exc)
         if constraint_name not in {
             "projects_slug_key",
             "ix_projects_slug",

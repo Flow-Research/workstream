@@ -141,10 +141,10 @@ from app.modules.authorization.schemas import (
 )
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.project_role_service import (
-    _constraint_name,
     ProjectRoleGrantMutationService,
     project_role_issue_lock_key,
 )
+from app.db.errors import integrity_constraint_name
 from app.modules.authorization.project_role_schemas import (
     ProjectRoleGrantIssueBody,
     ProjectRoleGrantMutationResponse,
@@ -260,7 +260,7 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     )
     original = SimpleNamespace(constraint_name="uq_project_role_grants_active_exact_role")
     error = IntegrityError("insert", {}, original)
-    assert _constraint_name(error) == "uq_project_role_grants_active_exact_role"
+    assert integrity_constraint_name(error) == "uq_project_role_grants_active_exact_role"
 
 
 @pytest.mark.asyncio
