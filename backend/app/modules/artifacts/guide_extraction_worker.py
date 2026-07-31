@@ -138,6 +138,7 @@ def _extract(
     detected_format: str,
     pdf_extractor: Callable[[bytes], str] | None = None,
     docx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
+    pptx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
 ) -> str | tuple[str, dict[str, bool]]:
     if detected_format == "pdf":
         if pdf_extractor is None:
@@ -147,6 +148,10 @@ def _extract(
         if docx_extractor is None:
             raise ExtractionFailure("parser_failure", "parser_unavailable")
         return docx_extractor(payload)
+    if detected_format == "pptx":
+        if pptx_extractor is None:
+            raise ExtractionFailure("parser_failure", "parser_unavailable")
+        return pptx_extractor(payload)
     text = _decode_text(payload)
     if detected_format in {"plain_text", "markdown"}:
         return text
@@ -225,6 +230,25 @@ def _load_docx_extractor(
     return bounded_extract
 
 
+def _load_pptx_extractor(
+    validate_ooxml: Callable[[bytes, str], object],
+) -> Callable[[bytes], tuple[str, dict[str, bool]]]:
+    """Load the PPTX adapter after limits but before descriptor-only seccomp."""
+    from app.modules.artifacts.guide_pptx import PptxExtractionFailure, extract_pptx
+
+    def bounded_extract(payload: bytes) -> tuple[str, dict[str, bool]]:
+        try:
+            extracted = extract_pptx(
+                payload,
+                validate_ooxml=lambda exact_payload: validate_ooxml(exact_payload, "pptx"),
+            )
+        except PptxExtractionFailure as exc:
+            raise ExtractionFailure(exc.status, exc.code) from exc
+        return extracted.canonical_output, extracted.omission_facts
+
+    return bounded_extract
+
+
 def main() -> int:
     """Apply resource/isolation controls and emit one bounded JSON result."""
     detected_format = sys.argv[1] if len(sys.argv) == 2 else ""
@@ -232,15 +256,24 @@ def main() -> int:
         _install_limits()
         pdf_extractor = None
         docx_extractor = None
+        pptx_extractor = None
         if detected_format == "pdf":
             pdf_extractor = _load_pdf_extractor()
         elif detected_format == "docx":
             docx_extractor = _load_docx_extractor(_load_ooxml_security())
+        elif detected_format == "pptx":
+            pptx_extractor = _load_pptx_extractor(_load_ooxml_security())
         _install_seccomp()
         payload = sys.stdin.buffer.read(_MAXIMUM_INPUT_BYTES + 1)
         if len(payload) > _MAXIMUM_INPUT_BYTES:
             raise ExtractionFailure("limit_exceeded", "input_limit")
-        extracted = _extract(payload, detected_format, pdf_extractor, docx_extractor)
+        extracted = _extract(
+            payload,
+            detected_format,
+            pdf_extractor,
+            docx_extractor,
+            pptx_extractor,
+        )
         if isinstance(extracted, tuple):
             output, omission_facts = extracted
         else:

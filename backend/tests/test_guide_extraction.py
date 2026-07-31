@@ -245,6 +245,57 @@ def test_docx_worker_orders_limits_trusted_import_seccomp_then_parsing(
     }
 
 
+def test_pptx_worker_orders_limits_validator_adapter_seccomp_then_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    writes: list[bytes] = []
+    omissions = {
+        "truncated": False,
+        "omitted": False,
+        "masters": False,
+        "comments": False,
+        "hidden_metadata": False,
+        "non_text_objects": False,
+        "embedded_objects": False,
+    }
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: events.append("limits"))
+
+    def load_ooxml():
+        events.append("validator_import")
+        return lambda _payload, _detected_format: object()
+
+    def load_pptx(validate_ooxml):
+        events.append("adapter_import")
+        assert validate_ooxml(b"PK", "pptx") is not None
+
+        def parse(_payload: bytes) -> tuple[str, dict[str, bool]]:
+            events.append("parse")
+            return '{"slides":[]}', omissions
+
+        return parse
+
+    monkeypatch.setattr(worker_module, "_load_ooxml_security", load_ooxml)
+    monkeypatch.setattr(worker_module, "_load_pptx_extractor", load_pptx)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: events.append("seccomp"))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "pptx"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"PK")))
+    monkeypatch.setattr(
+        worker_module.os,
+        "write",
+        lambda _fd, value: (writes.append(bytes(value)), len(value))[1],
+    )
+
+    assert worker_module.main() == 0
+    assert events == ["limits", "validator_import", "adapter_import", "seccomp", "parse"]
+    assert json.loads(b"".join(writes)) == {
+        "status": "extracted",
+        "error_code": None,
+        "output": '{"slides":[]}',
+        "omission_facts": omissions,
+    }
+
+
 @pytest.mark.parametrize(
     ("detected_format", "payload", "expected"),
     [
