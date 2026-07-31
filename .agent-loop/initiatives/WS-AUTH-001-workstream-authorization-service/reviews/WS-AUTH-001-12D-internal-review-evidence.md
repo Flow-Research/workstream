@@ -108,3 +108,12 @@ rollback and opaque-handle closure. The 90 percent gate remains unchanged.
 QA passed the failure-semantics proof, and CI integrity passed with only the
 expected low risk that the new exact head still requires hosted verification.
 Both review sessions completed with no required fix.
+
+The eighth hosted run confirmed the PREP dependency at 91.84 percent, then
+exposed the authorization kernel at 89.90 percent—one statement below its
+existing floor. A direct guide-metadata preparation regression now proves wrong
+scope, missing Project Manager authority, and service identity all deny before
+handle issuance. No production or CI code changed.
+QA and CI integrity passed this delta with low hosted-verification risk. QA's
+only strengthening suggestion was applied: both human and service denial paths
+now explicitly assert that no prepared handle was issued. All sessions closed.

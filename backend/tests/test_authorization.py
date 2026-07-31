@@ -3664,6 +3664,68 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
 
 
 @pytest.mark.asyncio
+async def test_guide_metadata_preparation_denies_wrong_scope_missing_grant_and_service() -> None:
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    facts = _GuideMutationAuthorityFacts(context)
+    authorization, evidence = _runtime_service(
+        context, session=session, admin_repository=facts
+    )
+    prepared = PreparedAuthorizationService(
+        session, context, authorization, facts  # type: ignore[arg-type]
+    )
+    project_id = uuid4()
+    guide_id = uuid4()
+    caller = PreparedAuthorizationInput(
+        idempotency_key=uuid4(),
+        request_value={
+            "project_id": str(project_id),
+            "guide_id": str(guide_id),
+            "target_resource_id": str(guide_id),
+            "operation_id": str(uuid4()),
+        },
+    )
+
+    with pytest.raises(PreparedAuthorizationUnsupported) as wrong_scope:
+        await prepared.prepare(
+            ActionId.PROJECT_GUIDE_CREATE,
+            caller,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    assert wrong_scope.value.denial_code is AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+
+    project_scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.PROJECT,
+        project_id=project_id,
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as missing_grant:
+        await prepared.prepare(ActionId.PROJECT_GUIDE_CREATE, caller, project_scope)
+    assert missing_grant.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    assert prepared._issued == {}
+    assert evidence.events == []
+
+    service_context = _runtime_context(actor_kind=ActorKind.SERVICE)
+    service_authorization, _ = _runtime_service(
+        service_context, session=session, admin_repository=object()
+    )
+    service_prepared = PreparedAuthorizationService(
+        session,
+        service_context,
+        service_authorization,
+        service_authorization._admin,
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as service_denial:
+        await service_prepared.prepare(
+            ActionId.PROJECT_GUIDE_CREATE,
+            caller,
+            project_scope,
+        )
+    assert service_denial.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    assert service_prepared._issued == {}
+
+
+@pytest.mark.asyncio
 async def test_project_create_prepared_authority_is_system_scoped_and_evidenced() -> None:
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)

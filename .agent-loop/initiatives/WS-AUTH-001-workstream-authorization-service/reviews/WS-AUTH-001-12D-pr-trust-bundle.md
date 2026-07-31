@@ -40,6 +40,9 @@ outside this chunk.
 - All semantic lanes then passed; explicit PREP failure-path regressions close
   the remaining shared-dependency per-file coverage gap without lowering its
   90 percent threshold.
+- The following hosted run confirmed that file at 91.84 percent and exposed a
+  one-statement kernel gap; guide PREP scope/grant/service denials now have
+  direct regression proof while the kernel's 90 percent gate remains intact.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

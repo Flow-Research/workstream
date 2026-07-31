@@ -48,6 +48,9 @@
 - Seventh hosted CI: add direct rollback, public-unavailable response, handle
   closure, and cancellation propagation coverage for every PREP dependency
   transaction-failure branch; the 90 percent per-file gate is unchanged.
+- Eighth hosted CI: prove guide-metadata PREP denies system scope, absent
+  Project Manager authority, and service actors before handle issuance; this
+  closes the one-statement kernel coverage gap without weakening the gate.
 
 ## Comments deferred
 
@@ -78,6 +81,7 @@ None. The user retains merge authority for PR #232.
   secretary/tokenizer/credentialing source refs: 3 passed.
 - Exact migration-0038 populated downgrade/replay regression: 1 passed.
 - Exact PREP transaction-failure regression: 3 passed.
+- Exact guide-metadata PREP denial regression: 1 passed.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks
