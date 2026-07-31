@@ -1,0 +1,127 @@
+{
+  "advisory_snapshot": {
+    "checked_at": "2026-07-30",
+    "provider": "OSV",
+    "query_url": "https://api.osv.dev/v1/query"
+  },
+  "dependencies": [
+    {
+      "advisories": [],
+      "approved_artifacts": [
+        {
+          "filename": "pypdf-6.14.2-py3-none-any.whl",
+          "sha256": "3f07891af76dc002657e04993ab9b4de81de29f9013b9761d0b7968bff12e946",
+          "url": "https://files.pythonhosted.org/packages/49/e6/136aa8993a2ae7214e0b0ef2edaa0d2e08d1d4e4982635b08a835ff31ec8/pypdf-6.14.2-py3-none-any.whl"
+        }
+      ],
+      "cancellation_timeout_implications": "Pure-Python parsing remains confined to the existing killable extraction child; cancellation never relies on cooperative parser shutdown.",
+      "direct": true,
+      "format_scopes": [
+        "pdf"
+      ],
+      "import_names": [
+        "pypdf"
+      ],
+      "license": "BSD-3-Clause",
+      "maintenance": {
+        "assessment": "active",
+        "release_uploaded_at": "2026-06-23T14:18:28.867545Z",
+        "source_url": "https://github.com/py-pdf/pypdf"
+      },
+      "malformed_input_history": "A mature untrusted-PDF parser with recurring malformed-input and denial-of-service hardening; ART still rejects active features and enforces page, byte, CPU, memory, and wall-clock limits outside the library.",
+      "name": "pypdf",
+      "native_code": false,
+      "network_behavior": "No network access is required for approved PDF text extraction; the extraction child remains no-network.",
+      "source_index": "https://pypi.org/simple",
+      "transitive_dependencies": [],
+      "version": "6.14.2"
+    },
+    {
+      "advisories": [],
+      "approved_artifacts": [
+        {
+          "filename": "defusedxml-0.7.1-py2.py3-none-any.whl",
+          "sha256": "a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61",
+          "url": "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl"
+        }
+      ],
+      "cancellation_timeout_implications": "Pure-Python XML safety checks run only inside the existing killable extraction child and remain subject to container, CPU, memory, and wall-clock limits.",
+      "direct": true,
+      "format_scopes": [
+        "ooxml"
+      ],
+      "import_names": [
+        "defusedxml"
+      ],
+      "license": "PSF-2.0",
+      "maintenance": {
+        "assessment": "stable_security_utility",
+        "release_uploaded_at": "2021-03-08T10:59:24.450195Z",
+        "source_url": "https://github.com/tiran/defusedxml"
+      },
+      "malformed_input_history": "Purpose-built rejection of XML entity expansion and external entity hazards; ART additionally rejects DTD/entity declarations before adapter dispatch and bounds the surrounding ZIP container.",
+      "name": "defusedxml",
+      "native_code": false,
+      "network_behavior": "No network access is required; external entities and external relationships remain rejected and the extraction child remains no-network.",
+      "source_index": "https://pypi.org/simple",
+      "transitive_dependencies": [],
+      "version": "0.7.1"
+    },
+    {
+      "advisories": [],
+      "approved_artifacts": [
+        {
+          "filename": "pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "python_version": "3.11",
+          "sha256": "23d27a3e0307ec2244cc51e7287b919aa68d097504ebe19df4e76a98a3eea5bd",
+          "url": "https://files.pythonhosted.org/packages/3b/2d/ede717bc1144f63886c21fd349bb95860b0d1a21149ff16f2bb362b612b6/pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+        },
+        {
+          "filename": "pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "python_version": "3.12",
+          "sha256": "78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91",
+          "url": "https://files.pythonhosted.org/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+        }
+      ],
+      "cancellation_timeout_implications": "Native decoders can block or crash, so all header inspection and metadata extraction remains in the killable child with pre-decode dimension checks and OS resource limits.",
+      "direct": true,
+      "format_scopes": [
+        "image_metadata"
+      ],
+      "import_names": [
+        "PIL"
+      ],
+      "license": "MIT-CMU",
+      "maintenance": {
+        "assessment": "active",
+        "release_uploaded_at": "2026-07-01T11:53:53.487322Z",
+        "source_url": "https://github.com/python-pillow/Pillow"
+      },
+      "malformed_input_history": "Native image codecs have a material malformed-input and decompression-bomb history; ART uses metadata-only output, fixed format allowlists, pre-allocation dimension limits, and subprocess termination.",
+      "name": "Pillow",
+      "native_code": true,
+      "network_behavior": "No network access is required for local PNG, JPEG, or WebP metadata; the extraction child remains no-network.",
+      "source_index": "https://pypi.org/simple",
+      "transitive_dependencies": [],
+      "version": "12.3.0"
+    }
+  ],
+  "installation_policy": {
+    "allow_source_distributions": false,
+    "approved_python_versions": [
+      "3.11",
+      "3.12"
+    ],
+    "approved_runtime_platform": "manylinux x86_64",
+    "index": "https://pypi.org/simple",
+    "require_hashes": true
+  },
+  "prohibited_packages": [
+    "lxml",
+    "openpyxl",
+    "python-docx",
+    "python-pptx",
+    "XlsxWriter"
+  ],
+  "schema_version": 1
+}

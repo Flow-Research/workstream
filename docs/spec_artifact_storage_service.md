@@ -1252,6 +1252,28 @@ generation extraction reaches the agent, delimited as untrusted source data
 with no tool, secret, provider, or instruction authority. Unsupported,
 ambiguous, malformed, stale, or failed required material stops setup internally.
 
+Complex-format parser dependencies are a closed, CI-owned supply-chain
+boundary. v0.1 approves only `pypdf==6.14.2` for PDF, `defusedxml==0.7.1` for
+the shared OOXML safety boundary, and `Pillow==12.3.0` for PNG/JPEG/WebP
+structural metadata. The OOXML adapters do not add `python-docx`,
+`python-pptx`, `openpyxl`, `lxml`, or `XlsxWriter`. The canonical allowlist
+records exact wheel URLs and hashes, licenses, imports, format scopes, native-code and
+runtime-isolation facts, maintenance evidence, and an advisory snapshot. It
+approves no source distribution and only the named Python 3.11/3.12 manylinux
+x86_64 Pillow wheels.
+
+Changing that allowlist requires an independent protected GitHub approval on
+the exact PR head after the final byte change. The reviewer must be a human
+repository owner, member, or collaborator other than the PR author; bot,
+self-authored, dismissed, stale-head, or unavailable review evidence fails
+closed. Repository evidence may mirror the decision for audit but cannot grant
+authority. On `main`, the protected merged history is the approval baseline;
+later parser chunks must use hash-bound direct wheel references and
+format-scoped approved imports without changing the baseline silently.
+`python-docx`, `python-pptx`, `openpyxl`, `lxml`, and `XlsxWriter` are an
+explicitly prohibited parser set across runtime, optional, and dependency-group
+declarations.
+
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
 syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB
