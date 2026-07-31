@@ -29,7 +29,7 @@ paths, feature expansion, adjudication, reputation, or unreviewed defect work.
   packet/context; evidence; all three decisions; human revision N+1 and return;
   distinct CheckerRun-rooted remediation that creates no Review, finding,
   preparation, or reviewer contribution and returns through checker admission;
-  revocation/expiry/reassignment; Project Manager/Operator recovery; worker
+  revocation/expiry/reassignment; Project Manager/Operator recovery; fixed-service
   retry; projection; artifact outage/integrity failure; contribution/award
   source integrity with no reputation side effect; controlled shutdown, drain,
   crash resume, coherent reactivation; and lifecycle release.

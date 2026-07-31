@@ -16,7 +16,7 @@ reason-bound `review.lifecycle.activation.manage`.
 
 ## Allowed files
 
-Enumerate exact REV jobs/controller, worker registration, AUTH identity/matrix
+Enumerate exact REV jobs/controller, Celery command registration, AUTH identity/matrix
 and Operator context, migrations, tests, docs, evidence at start.
 
 ## Not allowed
@@ -27,7 +27,7 @@ release before conformance.
 
 ## Acceptance criteria
 
-- Each worker uses its admitted identity and closed action membership; general
+- Each fixed service uses its admitted identity and closed action membership; general
   and invalidation reconciliation identities remain distinguishable.
 - Jobs are batched, resumable, idempotent, and reauthorize each transaction.
 - Projection/reconciliation never becomes canonical judgment and ART repair is
@@ -41,7 +41,7 @@ release before conformance.
 
 ## Verification and reviewers
 
-Worker/matrix/retry/control tests, coverage and hosted gates; architecture,
+Service-command/matrix/retry/control tests, coverage and hosted gates; architecture,
 security, product/ops, QA, senior, CI, reuse, docs, test-delta.
 
 ## Stop

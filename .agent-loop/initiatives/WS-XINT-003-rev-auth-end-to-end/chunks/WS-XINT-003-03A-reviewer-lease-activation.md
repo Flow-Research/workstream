@@ -19,7 +19,7 @@ route, test, documentation, and evidence files at current-main start.
 ## Not allowed
 
 Decision, finding, artifact byte, revision submission, contribution, recovery,
-or lifecycle-release behavior; token roles or direct grant queries in REV.
+or lifecycle-release behavior; issuer role claims or direct grant queries in REV.
 
 ## Acceptance criteria
 

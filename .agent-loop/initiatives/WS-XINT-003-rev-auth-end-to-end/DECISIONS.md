@@ -23,7 +23,7 @@
    distinct reason-bound recovery actions and never receive reviewer authority.
 10. Both reconciliation identities share one ActionId and therefore one
     activation wave; their server-derived modes and scopes remain distinct.
-11. Each fixed worker has a closed identity/action matrix. Prepared handles
+11. Each fixed service command has a closed identity/action matrix. Prepared handles
     never enter Celery payloads.
 12. XINT-002 retains sole custody of ART review actions and shared submission
     preparation/create activation. XINT-003 owns activation of the human REV

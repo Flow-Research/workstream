@@ -12,7 +12,7 @@
 | Human revision bypasses findings/deadline/round | Critical | Exact obligation/preparation/predecessor locks and closed revision context. |
 | Checker remediation is mistaken for human Review revision | Critical | Separate CheckerRun-rooted context and mutually exclusive persisted source. |
 | Operator recovery broadens product authority | Critical | Distinct reason-bound actions, bounded reads, no decision/artifact authority. |
-| Service identities collapse into catch-all worker | Critical | Closed enums, constraints, static matrices, provisioning, admission, all-pairs denial. |
+| Service identities collapse into a catch-all service | Critical | Closed enums, constraints, static matrices, provisioning, admission, all-pairs denial. |
 | Serialized prepared authority is replayed by Celery | Critical | Opaque non-serializable handles and static payload scanners/tests. |
 | Activation precedes hidden feature readiness | Critical | Planned-by-default catalogue and exact merged feature manifest gates. |
 | Historical counts/contracts are treated as current | High | Derive parity from current migrations/catalogue at every chunk start. |
