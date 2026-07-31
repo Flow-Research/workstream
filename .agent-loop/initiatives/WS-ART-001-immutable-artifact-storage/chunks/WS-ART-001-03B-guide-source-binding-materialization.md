@@ -15,7 +15,12 @@ implementation contracts.
 - `WS-ART-001-03B1`: authoritative binding and setup generation;
 - `WS-ART-001-03B2`: verified materialization, incidents, and classification;
 - `WS-ART-001-03B3A`: isolated framework and low-complexity extraction;
-- `WS-ART-001-03B3B`: approved complex document/image-metadata extractors;
+- `WS-ART-001-03B3B1`: pinned dependency approval and CI gate;
+- `WS-ART-001-03B3B2`: PDF extraction;
+- `WS-ART-001-03B3B3A`: shared OOXML container security;
+- `WS-ART-001-03B3B3B`, `WS-ART-001-03B3B3C`, and
+  `WS-ART-001-03B3B3D`: separate DOCX, PPTX, and XLSX extraction;
+- `WS-ART-001-03B3B4`: image metadata extraction;
 - `WS-ART-001-03B4`: same-generation Celery and sufficiency integration.
 
 Each subchunk is one PR. AUTH `WS-XINT-002-04B` activates fixed binding/read

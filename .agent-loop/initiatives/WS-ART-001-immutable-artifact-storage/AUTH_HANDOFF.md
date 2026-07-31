@@ -17,7 +17,8 @@ activation custody, and availability.
    exact resource/guard/surface manifest.
 3. AUTH activates only that exact action through a separately reviewed AUTH
    contract after consuming ART evidence.
-4. ART-03B1, 03B2, 03B3A, 03B3B, and 03B4 implement hidden authoritative binding, exact setup
+4. ART-03B1, 03B2, 03B3A, 03B3B1, 03B3B2, 03B3B3A, 03B3B3B,
+   03B3B3C, 03B3B3D, 03B3B4, and 03B4 implement hidden authoritative binding, exact setup
    generation, verified materialization, bounded extraction, and Celery
    sufficiency continuation. `artifact.guide_source.binding.create` maps to
    fixed permission `artifact.binding.create`; `artifact.guide_source.read`
