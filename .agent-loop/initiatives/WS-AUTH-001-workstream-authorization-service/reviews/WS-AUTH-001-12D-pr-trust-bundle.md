@@ -37,6 +37,9 @@ outside this chunk.
 - The final schema-lane failure was an old migration-0038 replay test running
   against head; its setup and replay checks are now pinned to 0038, and the
   exact isolated regression passes without weakening 0045 custody.
+- All semantic lanes then passed; explicit PREP failure-path regressions close
+  the remaining shared-dependency per-file coverage gap without lowering its
+  90 percent threshold.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

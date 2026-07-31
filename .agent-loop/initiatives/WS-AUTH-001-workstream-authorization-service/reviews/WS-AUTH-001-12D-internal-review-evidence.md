@@ -99,3 +99,12 @@ deny the seed. Setup and replay verification now remain at revision 0038; the
 production trigger is unchanged, and the exact migration regression passes.
 Architecture and QA re-reviewed this final narrow delta and passed it with no
 finding; all reviewer sessions completed.
+
+The seventh hosted run passed every semantic lane and then found the shared
+authorization dependency at 88.44 percent in the existing project-cutover
+per-file gate. Direct regressions now cover authorization-evidence failure,
+database failure, and cancellation across the PREP context manager, including
+rollback and opaque-handle closure. The 90 percent gate remains unchanged.
+QA passed the failure-semantics proof, and CI integrity passed with only the
+expected low risk that the new exact head still requires hosted verification.
+Both review sessions completed with no required fix.

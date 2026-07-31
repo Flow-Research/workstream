@@ -8130,6 +8130,52 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
     assert persistence_failure_service._closed is True
 
 
+@pytest.mark.parametrize(
+    ("failure", "expected_status"),
+    [
+        (AuthorizationEvidenceUnavailable("injected evidence failure"), 503),
+        (SQLAlchemyError("injected database failure"), 503),
+        (asyncio.CancelledError(), None),
+    ],
+)
+async def test_prepared_dependency_rolls_back_every_transaction_failure(
+    failure: BaseException,
+    expected_status: int | None,
+) -> None:
+    class Session:
+        rollback_count = 0
+
+        async def rollback(self) -> None:
+            self.rollback_count += 1
+
+        def in_transaction(self) -> bool:
+            return False
+
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(uuid4()), actor_kind="human", status="active"),
+        identity_link=SimpleNamespace(id=str(uuid4()), status="active"),
+    )
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+    session = Session()
+    dependency = get_prepared_authorization_service(
+        request,
+        resolved,  # type: ignore[arg-type]
+        session,  # type: ignore[arg-type]
+    )
+    service = await anext(dependency)
+
+    if expected_status is None:
+        with pytest.raises(asyncio.CancelledError):
+            await dependency.athrow(failure)  # type: ignore[attr-defined]
+    else:
+        with pytest.raises(StructuredHTTPException) as exc_info:
+            await dependency.athrow(failure)  # type: ignore[attr-defined]
+        assert exc_info.value.status_code == expected_status
+
+    assert session.rollback_count == 1
+    assert service._closed is True
+
+
 async def test_authorization_dependency_admits_service_without_human_rate_control(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
