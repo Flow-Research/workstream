@@ -42,6 +42,9 @@
 - Fifth hosted CI: distinguish lock-based lineage protection from the stronger
   immediate guide/item immutability guards, while preserving the post-lock
   stale-lineage assertion through the isolated historical fixture.
+- Sixth hosted CI: keep the migration-0038 populated replay test at its stated
+  0038 schema boundary instead of seeding historical rows under the active
+  0045 production mutation triggers.
 
 ## Comments deferred
 
@@ -70,6 +73,7 @@ None. The user retains merge authority for PR #232.
 - Exact guide-lineage lock/immutability regression: 1 passed.
 - Guide-source credential/local-ref denial matrix: 46 passed; benign
   secretary/tokenizer/credentialing source refs: 3 passed.
+- Exact migration-0038 populated downgrade/replay regression: 1 passed.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

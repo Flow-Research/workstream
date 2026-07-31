@@ -91,3 +91,11 @@ source-ref proof passes: 46 unsafe credential/local refs deny and three benign
 secretary/tokenizer/credentialing refs are accepted. Product re-review passed;
 security and QA also passed the final CodeRabbit/hosted-CI correction with no
 open finding.
+
+The sixth hosted run completed every semantic lane except one migration replay
+test. That test documented migration 0038 but upgraded to head before creating
+0038-era rows, causing the intentionally strict 0045 guide mutation trigger to
+deny the seed. Setup and replay verification now remain at revision 0038; the
+production trigger is unchanged, and the exact migration regression passes.
+Architecture and QA re-reviewed this final narrow delta and passed it with no
+finding; all reviewer sessions completed.

@@ -34,6 +34,9 @@ outside this chunk.
   snapshots reject legacy rewrites. Its exact local selection completed 36 tests
   without a failure before local execution was stopped for machine cost.
 - Ruff, diff check, Markdown links, and stale wording/docs: passed.
+- The final schema-lane failure was an old migration-0038 replay test running
+  against head; its setup and replay checks are now pinned to 0038, and the
+  exact isolated regression passes without weakening 0045 custody.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

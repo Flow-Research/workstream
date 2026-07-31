@@ -1701,7 +1701,7 @@ def test_guide_source_artifact_ingest_schema_and_replay(
     with migration_lock():
         try:
             command.downgrade(config, "base")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0038_guide_source_ingest")
             assert "guide_source_artifact_ingests" in asyncio.run(
                 _fetch_table_names(isolated_database_env)
             )
@@ -1716,7 +1716,7 @@ def test_guide_source_artifact_ingest_schema_and_replay(
             assert "guide_source_artifact_ingests" not in asyncio.run(
                 _fetch_table_names(isolated_database_env)
             )
-            command.upgrade(config, "head")
+            command.upgrade(config, "0038_guide_source_ingest")
             assert "guide_source_artifact_ingests" in asyncio.run(
                 _fetch_table_names(isolated_database_env)
             )
