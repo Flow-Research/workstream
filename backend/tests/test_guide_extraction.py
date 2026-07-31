@@ -145,6 +145,37 @@ def test_worker_main_writes_the_complete_result_after_short_writes(
     }
 
 
+def test_pdf_worker_orders_limits_trusted_import_seccomp_then_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    writes: list[bytes] = []
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: events.append("limits"))
+
+    def load_pdf():
+        events.append("trusted_import")
+
+        def parse(_payload: bytes) -> str:
+            events.append("parse")
+            return '{"pages":[]}'
+
+        return parse
+
+    monkeypatch.setattr(worker_module, "_load_pdf_extractor", load_pdf)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: events.append("seccomp"))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "pdf"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"%PDF-1.7")))
+    monkeypatch.setattr(
+        worker_module.os,
+        "write",
+        lambda _fd, value: (writes.append(bytes(value)), len(value))[1],
+    )
+
+    assert worker_module.main() == 0
+    assert events == ["limits", "trusted_import", "seccomp", "parse"]
+    assert json.loads(b"".join(writes))["status"] == "extracted"
+
+
 @pytest.mark.parametrize(
     ("detected_format", "payload", "expected"),
     [

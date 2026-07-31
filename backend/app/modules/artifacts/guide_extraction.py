@@ -14,12 +14,13 @@ from typing import BinaryIO
 
 
 EXTRACTION_POLICY_VERSION = "guide-extraction-v1"
+PDF_EXTRACTION_POLICY_VERSION = "guide-extraction-v2"
 EXTRACTOR_VERSION = "1"
 MAXIMUM_INPUT_BYTES = 32 * 1024 * 1024
 MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024
 MAXIMUM_PROTOCOL_BYTES = (MAXIMUM_OUTPUT_BYTES * 6) + 1024
 WALL_TIMEOUT_SECONDS = 60
-_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv"})
+_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,4 +161,12 @@ class GuideExtractionRunner:
             canonical_output=output,
             output_sha256=digest,
             extractor_name=f"workstream.{detected_format}",
+            policy_version=extraction_policy_version(detected_format),
         )
+
+
+def extraction_policy_version(detected_format: str) -> str:
+    """Return the policy identity that prevents obsolete format replay."""
+    if detected_format == "pdf":
+        return PDF_EXTRACTION_POLICY_VERSION
+    return EXTRACTION_POLICY_VERSION
