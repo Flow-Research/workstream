@@ -516,6 +516,7 @@ def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None
     extraction_paths = (
         APP_ROOT / "modules" / "artifacts" / "guide_extraction.py",
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_worker.py",
+        APP_ROOT / "modules" / "artifacts" / "guide_pdf.py",
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_service.py",
     )
     forbidden_prefixes = (
@@ -550,3 +551,35 @@ def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None
         assert "ArtifactStore" not in source
         assert "PreparedAuthorizationHandle" not in source
         assert "APIRouter" not in source
+
+
+def test_pdf_parser_dependency_is_confined_to_the_format_adapter() -> None:
+    parser_importers: list[str] = []
+    for path in APP_ROOT.rglob("*.py"):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name.split(".", 1)[0] == "pypdf" for alias in node.names
+            ):
+                parser_importers.append(path.relative_to(APP_ROOT).as_posix())
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and node.module.split(".", 1)[0] == "pypdf"
+            ):
+                parser_importers.append(path.relative_to(APP_ROOT).as_posix())
+
+    assert set(parser_importers) == {"modules/artifacts/guide_pdf.py"}
+
+    adapter_importers: set[str] = set()
+    for path in APP_ROOT.rglob("*.py"):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name == "app.modules.artifacts.guide_pdf" for alias in node.names
+            ):
+                adapter_importers.add(path.relative_to(APP_ROOT).as_posix())
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "app.modules.artifacts.guide_pdf"
+            ):
+                adapter_importers.add(path.relative_to(APP_ROOT).as_posix())
+    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}

@@ -11,6 +11,7 @@ import os
 import re
 import resource
 import sys
+from typing import Callable
 
 
 _ALLOW = 0x7FFF0000
@@ -132,7 +133,15 @@ def _validate_json(value: object, depth: int = 0) -> None:
         raise ExtractionFailure("malformed", "invalid_json_number")
 
 
-def _extract(payload: bytes, detected_format: str) -> str:
+def _extract(
+    payload: bytes,
+    detected_format: str,
+    pdf_extractor: Callable[[bytes], str] | None = None,
+) -> str:
+    if detected_format == "pdf":
+        if pdf_extractor is None:
+            raise ExtractionFailure("parser_failure", "parser_unavailable")
+        return pdf_extractor(payload)
     text = _decode_text(payload)
     if detected_format in {"plain_text", "markdown"}:
         return text
@@ -166,16 +175,32 @@ def _extract(payload: bytes, detected_format: str) -> str:
     raise ExtractionFailure("unsupported", "unsupported_format")
 
 
+def _load_pdf_extractor() -> Callable[[bytes], str]:
+    """Load the approved adapter after limits but before descriptor-only seccomp."""
+    from app.modules.artifacts.guide_pdf import PdfExtractionFailure, extract_pdf
+
+    def bounded_extract(payload: bytes) -> str:
+        try:
+            return extract_pdf(payload)
+        except PdfExtractionFailure as exc:
+            raise ExtractionFailure(exc.status, exc.code) from exc
+
+    return bounded_extract
+
+
 def main() -> int:
     """Apply resource/isolation controls and emit one bounded JSON result."""
     detected_format = sys.argv[1] if len(sys.argv) == 2 else ""
     try:
         _install_limits()
+        pdf_extractor = None
+        if detected_format == "pdf":
+            pdf_extractor = _load_pdf_extractor()
         _install_seccomp()
         payload = sys.stdin.buffer.read(_MAXIMUM_INPUT_BYTES + 1)
         if len(payload) > _MAXIMUM_INPUT_BYTES:
             raise ExtractionFailure("limit_exceeded", "input_limit")
-        output = _extract(payload, detected_format)
+        output = _extract(payload, detected_format, pdf_extractor)
         if len(output.encode("utf-8")) > 4 * 1024 * 1024:
             raise ExtractionFailure("limit_exceeded", "output_limit")
         result = {"status": "extracted", "error_code": None, "output": output}

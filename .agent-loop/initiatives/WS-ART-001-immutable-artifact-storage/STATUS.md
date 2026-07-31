@@ -67,11 +67,15 @@ approval, 03B3B2 PDF, 03B3B3A shared OOXML security, separate 03B3B3B DOCX,
 03B3B3C PPTX, and 03B3B3D XLSX adapters, and 03B3B4 image metadata. No dependency is
 installed until the human owner approves 03B3B1's exact pinned allowlist.
 
-03B3B1 implementation is active as a dependency-decision and CI-only chunk.
-It proposes exact hashed wheels for `pypdf`, `defusedxml`, and `Pillow`, with
-no package, lock, runtime import, or parser behavior change. Its approval gate
+03B3B1 is merged through PR #230 as the dependency-decision and CI-only chunk.
+It approved exact hashed wheels for `pypdf`, `defusedxml`, and `Pillow`, with no
+package, lock, runtime import, or parser behavior change. Its approval gate
 requires independent protected GitHub review of the exact final PR head before
 merge; repository-authored evidence alone is not authority.
+
+03B3B2 is the active successor. It installs only the approved `pypdf` wheel and
+adds bounded passive-PDF text extraction inside the existing isolated child.
+It does not activate AUTH, invoke sufficiency, or begin OOXML/image work.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the

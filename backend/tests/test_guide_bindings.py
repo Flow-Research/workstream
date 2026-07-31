@@ -6,12 +6,14 @@ import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 import hashlib
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from pypdf import PdfWriter
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select, text
@@ -33,6 +35,7 @@ from app.modules.artifacts.guide_formats import GuideFormatDetector, GuideFormat
 from app.modules.artifacts.guide_extraction import (
     EXTRACTION_POLICY_VERSION,
     GuideExtractionRegistry,
+    extraction_policy_version,
 )
 from app.modules.artifacts.guide_extraction_service import (
     GuideExtractionError,
@@ -771,6 +774,127 @@ async def test_successful_replay_requires_the_current_extraction_policy(
             assert budget.policy_version == EXTRACTION_POLICY_VERSION
             assert budget.claimed_slots == 1
     finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    stream = BytesIO()
+    writer.write(stream)
+    payload = stream.getvalue()
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    prepared = None
+    scratch = None
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        classification_id = uuid4()
+        async with factory() as session, session.begin():
+            session.add(
+                GuideSourceFormatClassification(
+                    id=str(classification_id),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    sha256=digest,
+                    byte_count=len(payload),
+                    media_type="application/pdf",
+                    detected_format="pdf",
+                    status="classified",
+                    detector_name="workstream.guide_format",
+                    detector_version="1",
+                    classification_facts={},
+                )
+            )
+            await session.flush()
+            session.add(
+                GuideSourceExtractionAttempt(
+                    id=str(uuid4()),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    classification_id=str(classification_id),
+                    setup_generation=1,
+                    detected_format="pdf",
+                    extractor_name="workstream.pdf",
+                    extractor_version="1",
+                    policy_version=EXTRACTION_POLICY_VERSION,
+                    attempt_number=1,
+                    status="unsupported",
+                    error_code="unsupported_format",
+                    bounded_facts={},
+                )
+            )
+            session.add(
+                GuideSourceExtractionRetryBudget(
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    classification_id=str(classification_id),
+                    setup_generation=1,
+                    policy_version=EXTRACTION_POLICY_VERSION,
+                    claimed_slots=1,
+                )
+            )
+        request = GuideExtractionRequest(
+            project_id=ids["project"],
+            guide_id=ids["guide"],
+            source_snapshot_id=ids["snapshot"],
+            source_item_id=ids["item"],
+            project_setup_run_id=ids["run"],
+            setup_generation=1,
+            binding_id=binding_id,
+            classification_id=classification_id,
+        )
+
+        result = await GuideExtractionService(
+            factory, GuideExtractionRegistry()
+        ).claim_materialization_slot(request)
+
+        assert result is None
+        async with factory() as session:
+            budget = await session.get(GuideSourceExtractionRetryBudget, str(binding_id))
+            assert budget is not None
+            assert budget.policy_version == extraction_policy_version("pdf")
+            assert budget.claimed_slots == 1
+        preparation, scratch = _preparation(tmp_path)
+        prepared = await preparation.prepare(
+            _byte_stream(payload), media_type="application/pdf"
+        )
+        service = GuideExtractionService(factory, GuideExtractionRegistry())
+        extracted = await service.extract_prepared(request, prepared)
+        replay = await service.claim_materialization_slot(request)
+
+        assert extracted.status == "extracted"
+        assert extracted.replayed is False
+        assert replay is not None
+        assert replay.replayed is True
+        assert replay.attempt_id == extracted.attempt_id
+        async with factory() as session:
+            attempts = (
+                await session.scalars(
+                    select(GuideSourceExtractionAttempt)
+                    .where(GuideSourceExtractionAttempt.binding_id == str(binding_id))
+                    .order_by(GuideSourceExtractionAttempt.created_at.asc())
+                )
+            ).all()
+            assert [(attempt.policy_version, attempt.status) for attempt in attempts] == [
+                (EXTRACTION_POLICY_VERSION, "unsupported"),
+                (extraction_policy_version("pdf"), "extracted"),
+            ]
+    finally:
+        if prepared is not None:
+            await prepared.close()
+        if scratch is not None:
+            scratch.close()
         await engine.dispose()
 
 
