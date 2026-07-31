@@ -8,6 +8,7 @@ import sys
 import types
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -60,6 +61,7 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.guide_mutation_repository import GuideMutationRepository
 from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import (
     AdminRoleGrant,
@@ -2743,6 +2745,7 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
         persisted_snapshot = await session.get(
             GuideSourceSnapshot, snapshotted.json()["id"]
         )
+
         records = (
             await session.scalars(
                 select(GuideMutationIdempotencyRecord).where(
@@ -2773,6 +2776,100 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
         )
 
 
+@pytest.mark.parametrize(
+    ("identity_matches", "digest_matches", "status", "expected"),
+    [
+        (False, True, "pending", "mismatch"),
+        (True, False, "pending", "mismatch"),
+        (True, True, "pending", "pending"),
+        (True, True, "committed", "replayed"),
+        (True, True, "pending", "claimed"),
+    ],
+)
+async def test_guide_mutation_repository_classifies_existing_reservations(
+    identity_matches: bool,
+    digest_matches: bool,
+    status: str,
+    expected: str,
+) -> None:
+    record_id = uuid4()
+    identity_link_id = str(uuid4())
+    request_digest = "sha256:" + "a" * 64
+    record = SimpleNamespace(
+        id=record_id,
+        identity_link_id=identity_link_id if identity_matches else str(uuid4()),
+        request_digest=request_digest if digest_matches else "sha256:" + "b" * 64,
+        status=status,
+    )
+
+    class Session:
+        scalar_calls = 0
+
+        async def scalar(self, statement):
+            self.scalar_calls += 1
+            if self.scalar_calls == 1:
+                return record
+            if expected == "claimed":
+                return statement.compile().params["id"]
+            return record_id
+
+        async def get(self, _model, selected_id):
+            if expected != "claimed":
+                assert selected_id == record_id
+            return record
+
+    repository = GuideMutationRepository(Session())  # type: ignore[arg-type]
+    assert await repository.find(str(uuid4()), "project.guide.create", uuid4()) is record
+    result, selected = await repository.reserve(
+        actor_profile_id=str(uuid4()),
+        identity_link_id=identity_link_id,
+        action_id="project.guide.create",
+        idempotency_key=uuid4(),
+        request_digest=request_digest,
+        resource_context_digest="sha256:" + "c" * 64,
+        operation_id=uuid4(),
+        project_id=str(uuid4()),
+        resource_id=str(uuid4()),
+        operation_generation=1,
+    )
+
+    assert result == expected
+    assert selected is record
+
+
+@pytest.mark.parametrize("missing_stage", ["insert", "load", "complete"])
+async def test_guide_mutation_repository_fails_closed_when_custody_disappears(
+    missing_stage: str,
+) -> None:
+    record_id = uuid4()
+
+    class Session:
+        async def scalar(self, _statement):
+            return None if missing_stage in {"insert", "complete"} else record_id
+
+        async def get(self, _model, _selected_id):
+            return None
+
+    repository = GuideMutationRepository(Session())  # type: ignore[arg-type]
+    with pytest.raises(ProjectRepositoryIntegrityError):
+        if missing_stage == "complete":
+            await repository.complete(
+                SimpleNamespace(id=record_id),  # type: ignore[arg-type]
+                response_json={},
+            )
+        else:
+            await repository.reserve(
+                actor_profile_id=str(uuid4()),
+                identity_link_id=str(uuid4()),
+                action_id="project.guide.create",
+                idempotency_key=uuid4(),
+                request_digest="sha256:" + "a" * 64,
+                resource_context_digest="sha256:" + "b" * 64,
+                operation_id=uuid4(),
+                project_id=str(uuid4()),
+                resource_id=str(uuid4()),
+                operation_generation=1,
+            )
 async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_replay(
     project_client: AsyncClient,
 ) -> None:

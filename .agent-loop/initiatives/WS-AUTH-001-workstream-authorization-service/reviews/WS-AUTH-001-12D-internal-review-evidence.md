@@ -117,3 +117,12 @@ handle issuance. No production or CI code changed.
 QA and CI integrity passed this delta with low hosted-verification risk. QA's
 only strengthening suggestion was applied: both human and service denial paths
 now explicitly assert that no prepared handle was issued. All sessions closed.
+
+The ninth hosted run advanced through the repaired shared dependency and kernel
+gates, then reported the new guide-mutation repository at 60 percent. Direct
+repository tests now cover replay lookup, identity/digest mismatch, pending and
+committed replay classification, and fail-closed insert/load/complete custody
+loss. The production repository and 90 percent gate are unchanged.
+QA required the lookup mock to return the real row shape and requested direct
+claimed-reservation proof. Both were added; QA then passed, CI integrity passed
+with only hosted-verification risk, and all sessions closed.
