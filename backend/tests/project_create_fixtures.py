@@ -94,9 +94,6 @@ async def activate_guide_for_downstream_test(
     triggers.
     """
     async with session_factory() as session:
-        database_name = await session.scalar(text("select current_database()"))
-        if not str(database_name).startswith("workstream_test_"):
-            raise RuntimeError("downstream activation fixture requires an isolated test database")
         link = await session.scalar(
             select(ActorIdentityLink).where(
                 ActorIdentityLink.issuer == "flow-test",
@@ -114,28 +111,21 @@ async def activate_guide_for_downstream_test(
             auth_source="dev_mock",
             is_dev_auth=True,
         )
-        await session.execute(
-            text("alter table project_guides disable trigger guide_mutation_product_custody")
-        )
-        await session.execute(
-            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
-        )
-        await session.commit()
         try:
-            result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
+            async with suspend_historical_product_custody(
+                session,
+                table="project_guides",
+                triggers=(
+                    "guide_mutation_product_custody",
+                    "guide_lineage_lifecycle_guard",
+                ),
+            ):
+                result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
+            await session.commit()
             return Response(status_code=200, json=result.model_dump(mode="json"))
         except ProjectServiceError as exc:
             await session.rollback()
             return Response(status_code=exc.status_code, json={"detail": str(exc)})
-        finally:
-            await session.rollback()
-            await session.execute(
-                text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
-            )
-            await session.execute(
-                text("alter table project_guides enable trigger guide_mutation_product_custody")
-            )
-            await session.commit()
 
 
 async def grant_system_project_manager(

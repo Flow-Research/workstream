@@ -114,7 +114,8 @@ CONTENT_CID_PATTERN = re.compile(
 SAFE_TOKEN_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 SAFE_PUBLIC_SUMMARY_LABEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9 _-]{0,79}$")
 SECRET_REF_PATTERN = re.compile(
-    r"(x-amz-|signature|credential|access[_-]?key|secret|token|password|private[_-]?key)",
+    r"(x-amz-|access[_-]?key|private[_-]?key|"
+    r"(?<![a-z0-9])(?:signature|credentials?|secrets?|tokens?|password)(?![a-z0-9]))",
     re.IGNORECASE,
 )
 CREDENTIAL_SHAPE_PATTERN = re.compile(
@@ -138,9 +139,9 @@ SECRET_ARTIFACT_NAME_PATTERN = re.compile(
     r"private[_\-]?key[^/]*|"
     r"api[_\-]?key[^/]*|"
     r"access[_\-]?key[^/]*|"
-    r"secret[^/]*|"
-    r"credential[^/]*|"
-    r"token[^/]*|"
+    r"secrets?(?=$|[_.\-])[^/]*|"
+    r"credentials?(?=$|[_.\-])[^/]*|"
+    r"tokens?(?=$|[_.\-])[^/]*|"
     r"service[_\-]?account[^/]*|"
     r"[^/]*\.pem"
     r")($|/)|"

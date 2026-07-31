@@ -76,3 +76,18 @@ exist at 0028. The newly active action set and guide-router dependency are also
 represented in their static contract assertions. Four representative database
 regressions and both static assertions pass. Architecture, security, and QA
 re-reviewed the expanded correction and all passed with no open finding.
+
+The fifth hosted run left one stale lock-only assertion: 1,862 shared-foundation
+tests passed, while immutable guide/item mutations denied before the expected
+lock timeout. The correction now accepts only the two safe outcomes appropriate
+to each row (held lock or the named immutable/lifecycle guard) and uses the
+strict isolated fixture for the final historical status transition. The exact
+regression passes locally. Fresh CodeRabbit review also identified and prompted
+closure of the remaining weak isolation check and over-broad secret-name prefix.
+
+Product review then found the same prefix issue in the earlier durable-ref
+scanner. Whole-token boundaries now apply there as well. The complete focused
+source-ref proof passes: 46 unsafe credential/local refs deny and three benign
+secretary/tokenizer/credentialing refs are accepted. Product re-review passed;
+security and QA also passed the final CodeRabbit/hosted-CI correction with no
+open finding.

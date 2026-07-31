@@ -5545,6 +5545,31 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
 
 
 @pytest.mark.parametrize(
+    "durable_ref",
+    [
+        "https://docs.flow.test/secretary-guide.pdf",
+        "https://docs.flow.test/tokenizer-spec.md",
+        "https://docs.flow.test/credentialing-guide.md",
+    ],
+)
+async def test_source_snapshot_allows_non_secret_keyword_prefixes(
+    project_client: AsyncClient,
+    durable_ref: str,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+
+    snapshot = await create_source_snapshot(
+        project_client,
+        project["id"],
+        guide["id"],
+        payload=source_snapshot_payload(durable_ref=durable_ref),
+    )
+
+    assert durable_ref in {item["durable_ref"] for item in snapshot["items"]}
+
+
+@pytest.mark.parametrize(
     ("durable_ref", "expected_detail"),
     [
         ("https://user:pass@docs.flow.test/guide.md", "credentials"),
@@ -8140,6 +8165,18 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
 
     assert response.status_code == 422
     assert "forbidden artifacts" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "artifact_path",
+    ["outputs/secretary.txt", "outputs/tokenizer.py", "outputs/credentialing.py"],
+)
+def test_submission_artifact_policy_allows_non_secret_keyword_prefixes(
+    artifact_path: str,
+) -> None:
+    service = ProjectService(None)  # type: ignore[arg-type]
+
+    assert not service._matches_forbidden_artifact(artifact_path, [])
 
 
 @pytest.mark.parametrize(

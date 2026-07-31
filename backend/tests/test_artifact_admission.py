@@ -3380,15 +3380,18 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                     (
                         "update projects set status = 'active' where id = :project_id",
                         {"project_id": facts.project_id},
+                        "lock timeout",
                     ),
                     (
                         "update project_guides set status = 'active' where id = :guide_id",
                         {"guide_id": facts.guide_id},
+                        "lock timeout|guide lifecycle mutation requires activation authority",
                     ),
                     (
                         "update guide_source_snapshot_items "
                         "set media_type = 'application/json' where id = :item_id",
                         {"item_id": item_id},
+                        "guide source snapshot items are immutable",
                     ),
                     (
                         "update guide_source_snapshots set captured_by = :captured_by "
@@ -3398,11 +3401,12 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                             "captured_by": str(uuid4()),
                             "item_id": item_id,
                         },
+                        "lock timeout",
                     ),
                 )
-                for statement, parameters in mutations:
+                for statement, parameters, denial in mutations:
                     async with factory() as session:
-                        with pytest.raises(DBAPIError, match="lock timeout"):
+                        with pytest.raises(DBAPIError, match=denial):
                             async with session.begin():
                                 await session.execute(
                                     text("set local lock_timeout = '200ms'"),
@@ -3417,11 +3421,19 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
             assert await _count(assertion_session, ArtifactAdmissionScope) == 0
             assert await _count(assertion_session, ArtifactAdmissionCharge) == 0
             assert await _count(assertion_session, ArtifactPutAttempt) == 0
-            await assertion_session.execute(
-                text("update project_guides set status = 'active' where id = :guide_id"),
-                {"guide_id": facts.guide_id},
-            )
-            await assertion_session.flush()
+            async with suspend_historical_product_custody(
+                assertion_session,
+                table="project_guides",
+                triggers=(
+                    "guide_lineage_lifecycle_guard",
+                    "guide_mutation_product_custody",
+                ),
+            ):
+                await assertion_session.execute(
+                    text("update project_guides set status = 'active' where id = :guide_id"),
+                    {"guide_id": facts.guide_id},
+                )
+                await assertion_session.flush()
             assert await ArtifactRepository(assertion_session).get_guide_lineage(item_id) is None
             await assertion_session.rollback()
     finally:
