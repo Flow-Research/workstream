@@ -188,6 +188,19 @@ def _load_pdf_extractor() -> Callable[[bytes], str]:
     return bounded_extract
 
 
+def _load_ooxml_security() -> Callable[[bytes, str], object]:
+    """Load the approved shared OOXML validator for later format adapters."""
+    from app.modules.artifacts.guide_ooxml import OoxmlSecurityFailure, validate_ooxml
+
+    def bounded_validate(payload: bytes, detected_format: str) -> object:
+        try:
+            return validate_ooxml(payload, detected_format=detected_format)
+        except OoxmlSecurityFailure as exc:
+            raise ExtractionFailure(exc.status, exc.code) from exc
+
+    return bounded_validate
+
+
 def main() -> int:
     """Apply resource/isolation controls and emit one bounded JSON result."""
     detected_format = sys.argv[1] if len(sys.argv) == 2 else ""

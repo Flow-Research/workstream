@@ -1274,6 +1274,21 @@ format-scoped approved imports without changing the baseline silently.
 explicitly prohibited parser set across runtime, optional, and dependency-group
 declarations.
 
+The shared OOXML security boundary is validation-only and does not extract
+DOCX, PPTX, or XLSX content. For an exact server classification it permits
+`[Content_Types].xml`, passive XML/relationship parts under `_rels/`,
+`docProps/`, and `customXml/`, and passive XML, relationship, image, or font
+parts under only the matching `word/`, `ppt/`, or `xl/` format root. Other
+format roots and arbitrary extensions fail closed. It inspects EOCD and
+central-directory metadata before reading any body; then it rejects unsafe
+XML, external or absolute relationship targets, active content-type and
+relationship metadata, nested archives (including prefixed archives), macros,
+embedded objects, executable-capable parts, unknown parts, and conflicting
+format markers. Directory entries cannot satisfy required file markers. Fixed limits are 2,000
+entries, 8 MiB central-directory metadata, 128 MiB decompressed bytes, 100:1
+compression ratio, and 1 MiB per relationships part, within the existing child
+CPU, wall-time, memory, descriptor, and process limits.
+
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
 syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB

@@ -89,6 +89,16 @@ def test_worker_controls_and_canonical_extractors_execute_in_parent_coverage(
         worker_module._extract(b"\xff", "plain_text")
 
 
+def test_ooxml_loader_maps_security_failures_without_activating_an_adapter() -> None:
+    validate = worker_module._load_ooxml_security()
+    with pytest.raises(worker_module.ExtractionFailure) as raised:
+        validate(b"not-a-package", "docx")
+    assert (raised.value.status, raised.value.code) == (
+        "malformed",
+        "ooxml_invalid_directory",
+    )
+
+
 @pytest.mark.parametrize(
     ("failure", "status", "error_code"),
     [
