@@ -926,7 +926,8 @@ conceal. Contributor guide requirements remain on task work-context and
 submission-requirements surfaces.
 
 AUTH-12A registered the complete project-mutation vocabulary below as planned
-and unavailable. AUTH-12C now activates only `project.create`; every remaining
+and unavailable. AUTH-12C activates `project.create`, and AUTH-12D activates
+the three draft guide/source-metadata actions identified below; every remaining
 row stays planned. A planned action fails with `action_unavailable` before a
 prepared handle or allowed decision evidence can exist. `project.create` alone
 derives system scope; every other action derives the exact project from its
@@ -951,12 +952,31 @@ committed custody chain, then returns the original response without new PREP or
 allowed evidence. Later grant revocation denies new or changed creation
 requests but does not rewrite an already committed idempotent response.
 
+Guide create, guide update, and source-snapshot metadata create require an
+active human with an effective system-scoped or exact-project Project Manager
+grant carrying `project.guide.manage`. Each route requires a UUID
+`Idempotency-Key` before actor first-access provisioning and consumes one opaque,
+transaction-bound PREP handle after locking the exact project, draft guide, and
+current source lineage. Guide create produces only a draft guide. Snapshot
+creation separately records the sanitized source manifest and may commit one
+setup-run queue intent; broker dispatch happens only after commit and never
+carries the prepared handle.
+
+Guide create/update no longer accept embedded review, revision, retired
+payout/economic, or contribution-record configuration fields. Guide source markdown
+may change before the first source snapshot, becomes immutable after capture,
+and bounded metadata such as `change_summary` remains editable while the guide
+is draft. Exact committed retries return the recorded response without another
+mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,
+stale-lineage, revoked, wrong-action, wrong-resource, or wrong-transaction use
+fails closed with no product write.
+
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
-| `project.guide.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
-| `project.guide.update` | `project.guide.manage` | `WS-AUTH-001-12D` |
-| `project.guide_source_snapshot.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide.update` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide_source_snapshot.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.review_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
 | `project.revision_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
 | `project.guide_sufficiency_report.create` | `project.guide.manage` | `WS-AUTH-001-12E` |

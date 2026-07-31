@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -47,6 +49,8 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId
 from app.schemas.auth import AuthVerificationResult
 
+logger = logging.getLogger(__name__)
+
 
 def _authorization_context(
     resolved: ResolvedActor,
@@ -78,6 +82,16 @@ async def get_authorization_actor(
     rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
 ) -> ResolvedActor:
     """Resolve an exact human or fixed-service target before kernel lifecycle denial."""
+    return await resolve_authorization_actor(request, result, session, rate_control)
+
+
+async def resolve_authorization_actor(
+    request: Request,
+    result: AuthVerificationResult,
+    session: AsyncSession,
+    rate_control: RateControlService,
+) -> ResolvedActor:
+    """Resolve an actor after any route-specific pre-provisioning prerequisites."""
     if result.token.subject_kind not in {"human", "service"}:
         raise actor_registry_http_error(UnsupportedSubjectKind("Unsupported subject kind"))
     service = ActorService(session)
@@ -106,6 +120,7 @@ async def get_authorization_actor(
         raise actor_registry_http_error(exc) from exc
     except SQLAlchemyError as exc:
         await session.rollback()
+        logger.exception("authorization actor resolution failed")
         raise actor_registry_unavailable_error() from exc
 
 
@@ -209,6 +224,7 @@ async def get_authorization_service(
         raise actor_registry_unavailable_error() from exc
     except SQLAlchemyError as exc:
         await session.rollback()
+        logger.exception("authorization decision transaction failed")
         raise actor_registry_unavailable_error() from exc
     except BaseException:
         await session.rollback()
@@ -280,6 +296,17 @@ async def get_prepared_authorization_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> AsyncIterator[PreparedAuthorizationService]:
     """Compose one request-local prepared service without taking commit ownership."""
+    async with prepared_authorization_service(request, resolved, session) as service:
+        yield service
+
+
+@asynccontextmanager
+async def prepared_authorization_service(
+    request: Request,
+    resolved: ResolvedActor,
+    session: AsyncSession,
+) -> AsyncIterator[PreparedAuthorizationService]:
+    """Yield PREP around an actor resolved by the caller's dependency chain."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
     repository = AdminAuthorizationRepository(session)
@@ -308,6 +335,7 @@ async def get_prepared_authorization_service(
         raise actor_registry_unavailable_error() from exc
     except SQLAlchemyError as exc:
         await session.rollback()
+        logger.exception("prepared authorization transaction failed")
         raise actor_registry_unavailable_error() from exc
     except BaseException:
         await session.rollback()

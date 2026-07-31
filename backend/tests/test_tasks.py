@@ -52,6 +52,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    ProjectGuide,
     ProjectSetupRun,
     ReviewPolicy,
     RevisionPolicy,
@@ -69,7 +70,10 @@ from app.modules.tasks.models import (
     TaskAssignment,
     WorkstreamTask,
 )
-from project_create_fixtures import grant_system_project_manager
+from project_create_fixtures import (
+    activate_guide_for_downstream_test,
+    grant_system_project_manager,
+)
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (
@@ -633,7 +637,10 @@ def alembic_config() -> Config:
 
 
 def auth_headers(token: str = "task-token") -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": str(uuid4()),
+    }
 
 
 _DEFAULT_DEV_ACTOR_FIELD = object()
@@ -706,27 +713,6 @@ def complete_guide_payload(version: str = "v1") -> dict:
             "submission intake while the guide gives human review context."
         ),
         "change_summary": f"Initial {version}",
-        "review_policy": {
-            "requires_second_review": False,
-            "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
-        },
-        "revision_policy": {
-            "max_revision_rounds": 7,
-            "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
-        },
-        "payment_policy": {
-            "base_amount": "25.00",
-            "currency": "USD",
-            "payout_type": "fixed",
-            "revision_payment_rule": "none",
-            "rejection_payment_rule": "none",
-            "accepted_payment_rule": "pay base amount",
-        },
     }
 
 
@@ -968,6 +954,45 @@ async def create_policy_bundle_for_guide(
     post_submit_warning_checkers: list[str] | None = None,
     post_submit_blocking_severities: list[str] | None = None,
 ) -> dict:
+    async with db_session.get_session_factory()() as session:
+        guide = await session.get(ProjectGuide, guide_id)
+        assert guide is not None
+        session.add_all(
+            [
+                ReviewPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    requires_second_review=False,
+                    allowed_decisions=["accept", "needs_revision", "reject"],
+                    minimum_finding_fields=["issue", "required_fix"],
+                    sla_hours=24,
+                ),
+                RevisionPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    max_revision_rounds=7,
+                    revision_deadline_hours=48,
+                    auto_reject_after_limit=True,
+                    allowed_resubmission_states=["needs_revision"],
+                    reviewer_reassignment_rule="same reviewer preferred",
+                ),
+                PaymentPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    base_amount="25.00",
+                    currency="USD",
+                    payout_type="fixed",
+                    revision_payment_rule="none",
+                    rejection_payment_rule="none",
+                    accepted_payment_rule="pay base amount",
+                ),
+            ]
+        )
+        await session.commit()
+
     snapshot_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
         headers=auth_headers(),
@@ -1110,9 +1135,10 @@ async def create_active_project(client: AsyncClient) -> dict:
     guide = guide_response.json()
     await create_policy_bundle_for_guide(client, project["id"], guide["id"])
 
-    activation_response = await client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
-        headers=auth_headers(),
+    activation_response = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide["id"],
     )
     assert activation_response.status_code == 200, activation_response.text
     return project
@@ -2786,6 +2812,10 @@ async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
             )
             assert snapshot is not None
             snapshot.manifest_json = {**snapshot.manifest_json, "tampered": True}
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
+            return
         elif mutation == "effective_policy_body":
             effective_policy = await session.get(
                 EffectiveProjectSubmissionArtifactPolicy,
@@ -2943,9 +2973,10 @@ async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
         guide_v2.json()["id"],
         policy_v2,
     )
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
     assert activate_v2.json()["guide"]["version"] == "v2"
@@ -4754,9 +4785,10 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
     assert activate_v2.json()["guide"]["version"] == "v2"
@@ -5086,9 +5118,10 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
-        headers=auth_headers(),
+    activate_v2 = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_v2.json()["id"],
     )
     assert activate_v2.status_code == 200, activate_v2.text
 

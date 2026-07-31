@@ -56,7 +56,10 @@ from tests.test_tasks import (
     seed_worker_profile,
     set_dev_actor,
 )
-from project_create_fixtures import grant_system_project_manager
+from project_create_fixtures import (
+    activate_guide_for_downstream_test,
+    grant_system_project_manager,
+)
 
 
 @pytest.fixture
@@ -1113,9 +1116,10 @@ async def create_checker_trial_project(
         guide_response.json()["id"],
         post_submit_required_checkers=required_checkers,
     )
-    activation_response = await client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
-        headers=auth_headers(),
+    activation_response = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_response.json()["id"],
     )
     assert activation_response.status_code == 200, activation_response.text
     return project
@@ -1811,9 +1815,10 @@ async def test_chunk8_default_blocking_checker_survives_omitted_blocking_severit
         post_submit_required_checkers=["check_policy_context_present"],
         post_submit_blocking_severities=None,
     )
-    activation_response = await checker_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
-        headers=auth_headers(),
+    activation_response = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_response.json()["id"],
     )
     assert activation_response.status_code == 200, activation_response.text
     started_task = await create_started_task(checker_client, project["id"], monkeypatch)
@@ -2183,9 +2188,10 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
         guide_response.json()["id"],
         post_submit_required_checkers=["check_acceptance_criteria_present"],
     )
-    activation_response = await checker_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
-        headers=auth_headers(),
+    activation_response = await activate_guide_for_downstream_test(
+        db_session.get_session_factory(),
+        project_id=project["id"],
+        guide_id=guide_response.json()["id"],
     )
     assert activation_response.status_code == 200, activation_response.text
     started_task = await create_started_task(checker_client, project["id"], monkeypatch)

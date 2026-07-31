@@ -120,6 +120,61 @@ class ProjectCreateIdempotencyRecord(Base):
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class GuideMutationIdempotencyRecord(Base):
+    """Replay custody for one authorized guide-metadata mutation."""
+
+    __tablename__ = "guide_mutation_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_profile_id",
+            "action_id",
+            "idempotency_key",
+            name="uq_guide_mutation_replay_namespace",
+        ),
+        UniqueConstraint("operation_id", name="uq_guide_mutation_operation_identity"),
+        CheckConstraint(
+            "action_id in ('project.guide.create','project.guide.update',"
+            "'project.guide_source_snapshot.create')",
+            name="ck_guide_mutation_action",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_guide_mutation_request_digest",
+        ),
+        CheckConstraint(
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_guide_mutation_resource_context_digest",
+        ),
+        CheckConstraint("operation_generation > 0", name="ck_guide_mutation_generation"),
+        CheckConstraint(
+            "status in ('pending','committed')", name="ck_guide_mutation_status"
+        ),
+        CheckConstraint(
+            "(status='pending' and response_json is null and committed_at is null "
+            "and setup_run_id is null) or "
+            "(status='committed' and response_json is not null and committed_at is not null)",
+            name="ck_guide_mutation_state_shape",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(ForeignKey("actor_identity_links.id"))
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    resource_context_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    operation_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    response_json: Mapped[dict | None] = mapped_column(JSON)
+    setup_run_id: Mapped[str | None] = mapped_column(ForeignKey("project_setup_runs.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ProjectGuide(Base):
     """Versioned human-facing project guide material."""
 
@@ -143,6 +198,22 @@ class ProjectGuide(Base):
     approved_by: Mapped[str | None] = mapped_column(String(100))
     effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    mutation_generation: Mapped[int | None] = mapped_column(Integer)
+    last_mutated_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    last_mutated_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    last_mutated_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    last_mutation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    last_mutation_scope_project_id: Mapped[str | None] = mapped_column(String(36))
+    last_mutation_action_id: Mapped[str | None] = mapped_column(String(160))
+    last_authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -390,6 +461,22 @@ class GuideSourceSnapshot(Base):
     manifest_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     bundle_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
     captured_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    creation_generation: Mapped[int | None] = mapped_column(Integer)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(String(36))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -529,6 +616,21 @@ class ProjectSetupRun(Base):
     error_code: Mapped[str | None] = mapped_column(String(100))
     error_summary: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    authorized_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    authorized_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    authorized_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    authorization_scope_type: Mapped[str | None] = mapped_column(String(16))
+    authorization_scope_project_id: Mapped[str | None] = mapped_column(String(36))
+    authorization_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

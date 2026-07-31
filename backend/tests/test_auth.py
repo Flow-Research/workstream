@@ -1426,7 +1426,12 @@ def test_legacy_compatibility_dependency_has_fixed_consumer_allowlist() -> None:
     }
     assert {
         path for path, source in sources.items() if "get_auth_verification_result" in source
-    } == {"api/deps/api_controls.py", "api/deps/auth.py", "api/deps/authorization.py"}
+    } == {
+        "api/deps/api_controls.py",
+        "api/deps/auth.py",
+        "api/deps/authorization.py",
+        "modules/projects/guide_mutation_router.py",
+    }
     assert {path for path, source in sources.items() if "AuthVerificationResult" in source} == {
         "adapters/auth/dev.py",
         "adapters/auth/flow.py",
@@ -1436,6 +1441,7 @@ def test_legacy_compatibility_dependency_has_fixed_consumer_allowlist() -> None:
         "api/deps/rate_controls.py",
         "core/auth.py",
         "interfaces/auth.py",
+        "modules/projects/guide_mutation_router.py",
         "schemas/auth.py",
     }
     assert {

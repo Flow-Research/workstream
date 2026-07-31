@@ -1290,3 +1290,33 @@ project write fails, the reservation rolls back with the transaction. Do not
 repair this path by inserting a project without the complete creation
 provenance columns or by granting project-scoped authority; project-scoped
 Project Manager grants cannot create projects.
+
+## Draft guide and source-metadata authorization
+
+`POST /api/v1/projects/{project_id}/guides`, its draft-guide `PATCH`, and the
+source-snapshot metadata `POST` each require a UUID `Idempotency-Key` and an
+active system or exact-project Project Manager grant. A 403 for an existing
+project is expected when that local grant is absent, revoked, stale, or scoped
+to another project; do not restore access from token roles or issuer claims.
+Use the request/correlation IDs to inspect the bounded denial event.
+
+Guide creation must not create source snapshots, policy rows, or setup runs.
+Source-snapshot creation is the separate boundary that may atomically commit
+one setup-run queue intent. Celery receives identifiers only after commit; a
+prepared authorization handle must never appear in task arguments, logs, or
+serialized state. If broker dispatch fails, inspect the exact setup run for
+`enqueue_failed` and use its bounded recovery path. Retrying the original HTTP
+request returns its recorded response and must not dispatch again.
+
+Source markdown can be corrected only until the first snapshot exists. After
+capture, source changes correctly return 409 while bounded draft metadata may
+still be updated. Embedded review, revision, retired payout/economic, and
+contribution-record configuration fields correctly return 422; do not reintroduce a
+compatibility payload or direct product-service authorization path.
+
+Migration `0045_guide_metadata_authority` leaves pre-existing guide, source
+snapshot, and setup-run rows readable with null authorization provenance; it
+does not invent or backfill historical custody. Every new covered mutation must
+commit its complete replay, decision, and row provenance atomically. Once any
+12D custody or attributed mutation exists, downgrade is intentionally refused;
+operators must not delete authority evidence merely to force rollback.

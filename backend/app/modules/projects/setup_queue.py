@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from celery.exceptions import CeleryError
 from kombu.exceptions import KombuError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.workers.errors import CeleryConfigurationError
 from app.workers.task_settings import sync_task_settings
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectSetupQueueError(RuntimeError):
@@ -44,6 +50,53 @@ def enqueue_pre_submit_setup_pipeline(
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
         raise ProjectSetupQueueError("project setup pipeline could not be enqueued") from exc
     return result.id
+
+
+async def dispatch_pre_submit_setup_pipeline_after_commit(
+    session: AsyncSession,
+    *,
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    setup_run_id: str,
+) -> str | None:
+    """Dispatch one committed setup intent and record its bounded outcome."""
+    from app.modules.projects.repository import ProjectRepository
+
+    repository = ProjectRepository(session)
+    try:
+        task_id = await asyncio.to_thread(
+            enqueue_pre_submit_setup_pipeline,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=source_snapshot_id,
+            setup_run_id=setup_run_id,
+        )
+    except ProjectSetupQueueError as exc:
+        logger.warning(
+            "project setup pipeline enqueue failed after commit",
+            extra={
+                "project_id": project_id,
+                "guide_id": guide_id,
+                "source_snapshot_id": source_snapshot_id,
+                "setup_run_id": setup_run_id,
+                "error_code": exc.__class__.__name__,
+                "error_summary": "project setup failed",
+            },
+        )
+        setup_run = await repository.get_project_setup_run(setup_run_id)
+        if setup_run is not None:
+            setup_run.status = "enqueue_failed"
+            setup_run.current_step = "enqueue"
+            setup_run.error_code = exc.__class__.__name__
+            setup_run.error_summary = "project setup failed"
+            await session.commit()
+        return None
+    setup_run = await repository.get_project_setup_run(setup_run_id)
+    if setup_run is not None:
+        setup_run.celery_task_id = task_id
+        await session.commit()
+    return task_id
 
 
 def enqueue_post_submit_setup_continuation(
