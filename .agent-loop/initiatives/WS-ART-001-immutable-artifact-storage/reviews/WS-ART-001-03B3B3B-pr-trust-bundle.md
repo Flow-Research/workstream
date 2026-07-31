@@ -84,8 +84,10 @@ re-reviewed.
 
 The first Agent Gates run found two stale human-worker vocabulary matches; both
 now use the exact isolated-child result-protocol wording and the local gate
-passes. CodeRabbit's first attempt was rate-limited without code findings and
-must be retriggered. Hosted checks remain required on the repaired PR head.
+passes. The first Backend run exposed a nondeterministic raw-ZIP pytest ID;
+explicit stable format IDs now produce identical repeated collections.
+CodeRabbit's first attempt was rate-limited without code findings and must be
+retriggered. Hosted checks remain required on the repaired PR head.
 
 ## Remaining risks and follow-up
 

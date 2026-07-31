@@ -493,6 +493,7 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
             },
         ),
     ],
+    ids=("json", "docx"),
 )
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
     isolated_database_env: str,

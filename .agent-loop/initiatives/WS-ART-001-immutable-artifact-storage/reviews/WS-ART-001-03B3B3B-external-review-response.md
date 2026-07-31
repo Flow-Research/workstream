@@ -6,6 +6,11 @@
   vocabulary in the chunk contract and storage specification. Both references
   now say `isolated-child result protocol`, and the exact stale authorization
   documentation check passes locally.
+- The first Backend gate reported `current_node_inventory_mismatch`. The DOCX
+  database-test parameter used generated ZIP bytes as its pytest ID, so ZIP
+  timestamps changed the collected node between the lane and independent
+  inventory passes. Stable explicit `json` and `docx` IDs now make repeated
+  collections identical.
 
 ## Comments deferred
 
@@ -21,6 +26,8 @@ None.
 - `python3 scripts/check_stale_authorization_docs.py`
 - `python3 scripts/check_markdown_links.py`
 - `git diff --check`
+- repeated `pytest --collect-only` for the affected binding module
+- `ruff check tests/test_guide_bindings.py`
 
 ## Remaining risks
 
