@@ -6,19 +6,15 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.artifacts import get_guide_artifact_ingest_command
 from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
-    get_authorization_actor,
     get_authorization_service,
-    get_prepared_authorization_service,
 )
 from app.core.permissions import PermissionDenied
-from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
@@ -38,7 +34,6 @@ from app.modules.projects.schemas import (
     GuideSufficiencyReportCreate,
     GuideSufficiencyReportResponse,
     PreSubmitCheckerPolicySummaryResponse,
-    ProjectCreate,
     ContributorProjectResponse,
     ProjectGuideCreate,
     ProjectGuideResponse,
@@ -53,11 +48,7 @@ from app.modules.projects.schemas import (
     SubmissionArtifactPolicyResponse,
     SubmissionArtifactPolicyUpdate,
 )
-from app.modules.projects.service import (
-    ProjectCreateIdempotencyConflict,
-    ProjectService,
-    ProjectServiceError,
-)
+from app.modules.projects.service import ProjectService, ProjectServiceError
 from app.modules.projects.authorization_reads import (
     authorize_project_active_guide_read,
     authorize_project_diagnostic_read,
@@ -66,8 +57,6 @@ from app.modules.projects.authorization_reads import (
 from app.modules.projects.repository import ProjectRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
-from app.modules.authorization.prepared import PreparedAuthorizationService
-from app.modules.actors.service import ResolvedActor
 from app.modules.authorization.runtime import (
     MatchedAuthorityKind,
     ProjectReadResourceContext,
@@ -76,32 +65,6 @@ from app.modules.authorization.runtime import (
 from app.schemas.auth import ActorContext
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-def require_project_create_idempotency_key(
-    request: Request,
-) -> UUID:
-    """Validate replay custody before actor first-access provisioning can run."""
-    try:
-        return UUID(request.headers["Idempotency-Key"])
-    except (KeyError, ValueError) as exc:
-        raise StructuredHTTPException(
-            status_code=422,
-            detail="Idempotency-Key must be a UUID",
-            error_code="validation_error",
-            error_message="Idempotency-Key must be a UUID",
-        ) from exc
-
-
-async def get_project_create_authorization(
-    idempotency_key: Annotated[UUID, Depends(require_project_create_idempotency_key)],
-    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
-    prepared: Annotated[
-        PreparedAuthorizationService, Depends(get_prepared_authorization_service)
-    ],
-) -> tuple[UUID, ResolvedActor, PreparedAuthorizationService]:
-    """Order idempotency validation before the mutating actor dependency graph."""
-    return idempotency_key, resolved, prepared
 
 
 def project_http_error(exc: ProjectServiceError) -> HTTPException:
@@ -113,19 +76,6 @@ def project_http_error(exc: ProjectServiceError) -> HTTPException:
     Returns:
         HTTP exception carrying the service error details.
     """
-    if isinstance(exc, ProjectCreateIdempotencyConflict):
-        code = str(exc)
-        return StructuredHTTPException(
-            status_code=exc.status_code,
-            detail=code,
-            error_code=code,
-            error_message=(
-                "Idempotency key does not match"
-                if code == "idempotency_mismatch"
-                else "Project creation is already in progress"
-            ),
-            retryable=code == "idempotency_pending",
-        )
     return HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
@@ -139,58 +89,6 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
         HTTP exception with a forbidden status.
     """
     return HTTPException(status_code=403, detail=str(exc))
-
-
-@router.post(
-    "",
-    response_model=ProjectResponse,
-    status_code=201,
-    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_CREATE.value},
-)
-async def create_project(
-    payload: ProjectCreate,
-    authorization: Annotated[
-        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
-        Depends(get_project_create_authorization),
-    ],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ProjectResponse:
-    """Create a draft project shell for future guide versions."""
-    idempotency_key, resolved, prepared = authorization
-    try:
-        outcome = await ProjectService(session).create_project(
-            resolved, prepared, idempotency_key, payload
-        )
-        if outcome.replayed:
-            await session.rollback()
-        else:
-            await session.commit()
-        return outcome.response
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
-    except IntegrityError as exc:
-        await session.rollback()
-        constraint_name = getattr(
-            getattr(exc.orig, "__cause__", None), "constraint_name", None
-        ) or getattr(exc.orig, "constraint_name", None)
-        if constraint_name is None:
-            constraint_name = getattr(
-                getattr(exc.orig, "diag", None), "constraint_name", None
-            )
-        if constraint_name not in {
-            "projects_slug_key",
-            "ix_projects_slug",
-            "uq_projects_slug",
-        }:
-            raise
-        raise StructuredHTTPException(
-            status_code=409,
-            detail="Project slug already exists",
-            error_code="project_slug_conflict",
-            error_message="Project slug already exists",
-        ) from exc
 
 
 @router.get(

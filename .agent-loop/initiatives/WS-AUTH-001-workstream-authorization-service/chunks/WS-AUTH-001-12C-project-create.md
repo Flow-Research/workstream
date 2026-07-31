@@ -33,6 +33,8 @@ P1
 ```text
 backend/app/modules/projects/models.py
 backend/app/modules/projects/create_repository.py
+backend/app/modules/projects/create_router.py
+backend/app/modules/projects/create_service.py
 backend/app/modules/projects/repository.py
 backend/app/modules/projects/router.py
 backend/app/modules/projects/schemas.py
@@ -43,6 +45,7 @@ backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/modules/audit/schemas.py
 backend/app/api/deps/authorization.py
+backend/app/api/router.py
 backend/alembic/versions/0044_project_create_authority.py
 .github/workflows/backend.yml
 backend/tests/test_authorization.py
@@ -153,10 +156,12 @@ project-scoped create authority, or token-role fallback.
   reserve or lock project-owned idempotency and obtain stable operation/project
   IDs; prepare the exact system authority; consume it against final server
   facts; insert project with provenance; mark replay state committed; commit
-  once in the route-owned root transaction. `ProjectService.create_project`
+  once in the route-owned root transaction. `ProjectCreateService.create`
   must neither authorize from token roles nor commit independently.
-- Every changed authorization/project module remains at least 90 percent
-  covered. Final pushed head SHA passes `Backend / test` and `Agent Gates`.
+- Every new or materially changed AUTH-12C authorization/project boundary
+  remains at least 90 percent covered. Legacy aggregation modules with
+  removal-only diffs remain protected by the global baseline and their existing
+  subsystem gates. Final pushed head SHA passes `Backend / test` and `Agent Gates`.
 
 ## Verification commands
 
@@ -200,10 +205,10 @@ git diff --check
 
 Final pushed head SHA must pass `Backend / test` and `Agent Gates`; hosted
 Backend owns fresh full-suite coverage and isolated PostgreSQL migration proof.
-The trust bundle must also show each changed backend module at or above 90
-percent; aggregate package coverage cannot conceal a changed file below the
-threshold. Hosted Backend adds a per-file 90-percent gate for the changed
-project-create modules using the combined full-suite coverage artifact; the
+The trust bundle must also show each new or materially changed AUTH-12C backend
+boundary at or above 90 percent; aggregate package coverage cannot conceal a
+new boundary below the threshold. Hosted Backend adds a per-file 90-percent
+gate for the focused project-create modules using the combined full-suite coverage artifact; the
 Ruff, test, or coverage gate may not be weakened.
 
 ## Required reviewers

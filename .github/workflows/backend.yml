@@ -235,8 +235,8 @@ jobs:
             app/modules/authorization/runtime.py \
             app/modules/projects/models.py \
             app/modules/projects/create_repository.py \
-            app/modules/projects/router.py \
-            app/modules/projects/service.py
+            app/modules/projects/create_router.py \
+            app/modules/projects/create_service.py
           do
             coverage report --include="${source}" --precision=2 --fail-under=90
           done

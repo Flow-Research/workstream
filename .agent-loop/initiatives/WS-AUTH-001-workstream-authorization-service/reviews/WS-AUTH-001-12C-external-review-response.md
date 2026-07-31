@@ -73,7 +73,15 @@ None.
   project repository at 62.46 percent. Project-create reservation/completion now
   has a dedicated repository boundary, restoring the legacy repository to its
   prior scope; focused branch tests measure the new module at 96.43 percent.
-- A final hosted Backend rerun is pending this repository-boundary correction;
+- The following hosted run passed the dedicated repository at 96.43 percent and
+  exposed the same whole-file mismatch for the broad legacy project router at
+  58.96 percent. The route and orchestration now join persistence in focused
+  project-create modules; legacy router/service diffs only remove their obsolete
+  token-role create path. Sixteen focused PostgreSQL integration tests pass after
+  the split. Twenty focused unit tests also pass, with exact boundary coverage of
+  96.43 percent for the repository, 90.00 percent for the router, and 94.12
+  percent for the service.
+- A final hosted Backend rerun is pending this complete boundary correction;
   CodeRabbit must also review that exact head.
 
 ## Remaining risks

@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, func, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
 from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
@@ -74,7 +75,16 @@ from app.modules.projects.authorization_reads import (
     authorize_project_policy_read,
 )
 from app.modules.projects.create_repository import ProjectCreateRepository
+from app.modules.projects.create_router import create_project as create_project_route
+from app.modules.projects.create_service import (
+    ProjectCreateIdempotencyConflict,
+    ProjectCreateOutcome,
+    ProjectCreateService,
+)
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.schemas import ProjectCreate, ProjectResponse
+from app.modules.authorization.runtime import MatchedAuthorityKind
+from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
     PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
@@ -566,6 +576,274 @@ async def test_project_create_repository_rejects_invalid_completion() -> None:
     repository = ProjectCreateRepository(cast(Any, Session()))
     with pytest.raises(ProjectRepositoryIntegrityError, match="invalid project reservation"):
         await repository.complete(types.SimpleNamespace(id=uuid4()))
+
+
+def _project_create_payload() -> ProjectCreate:
+    return ProjectCreate(name="Created project", slug="created-project", description="test")
+
+
+def _project_create_response() -> ProjectResponse:
+    now = datetime.now(UTC)
+    return ProjectResponse(
+        id=str(uuid4()),
+        name="Created project",
+        slug="created-project",
+        description="test",
+        status="draft",
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replayed", [False, True])
+async def test_project_create_route_owns_commit_or_replay_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+    replayed: bool,
+) -> None:
+    class Session:
+        commit_count = 0
+        rollback_count = 0
+
+        async def commit(self):
+            self.commit_count += 1
+
+        async def rollback(self):
+            self.rollback_count += 1
+
+    response = _project_create_response()
+
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        return ProjectCreateOutcome(response=response, replayed=replayed)
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    session = Session()
+    returned = await create_project_route(
+        _project_create_payload(),
+        (uuid4(), object(), object()),  # type: ignore[arg-type]
+        session,  # type: ignore[arg-type]
+    )
+    assert returned is response
+    assert (session.commit_count, session.rollback_count) == (
+        (0, 1) if replayed else (1, 0)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "status_code", "error_code"),
+    [
+        (PermissionDenied("denied"), 403, None),
+        (
+            ProjectCreateIdempotencyConflict("idempotency_mismatch"),
+            409,
+            "idempotency_mismatch",
+        ),
+        (ProjectServiceError("unavailable"), 400, None),
+    ],
+)
+async def test_project_create_route_translates_bounded_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    status_code: int,
+    error_code: str | None,
+) -> None:
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        raise failure
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    with pytest.raises(HTTPException) as exc_info:
+        await create_project_route(
+            _project_create_payload(),
+            (uuid4(), object(), object()),  # type: ignore[arg-type]
+            cast(Any, object()),
+        )
+    assert exc_info.value.status_code == status_code
+    if error_code is not None:
+        assert cast(Any, exc_info.value).error_code == error_code
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("constraint_source", "expected_code"),
+    [
+        (types.SimpleNamespace(constraint_name="projects_slug_key"), 409),
+        (
+            types.SimpleNamespace(
+                constraint_name=None,
+                diag=types.SimpleNamespace(constraint_name="uq_projects_slug"),
+            ),
+            409,
+        ),
+        (types.SimpleNamespace(constraint_name="other_constraint"), None),
+    ],
+)
+async def test_project_create_route_maps_only_slug_integrity_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+    constraint_source: object,
+    expected_code: int | None,
+) -> None:
+    class Session:
+        rollback_count = 0
+
+        async def rollback(self):
+            self.rollback_count += 1
+
+    failure = IntegrityError("insert", {}, constraint_source)
+
+    async def create(_service, _resolved, _prepared, _key, _payload):
+        raise failure
+
+    monkeypatch.setattr(ProjectCreateService, "create", create)
+    session = Session()
+    if expected_code is None:
+        with pytest.raises(IntegrityError) as exc_info:
+            await create_project_route(
+                _project_create_payload(),
+                (uuid4(), object(), object()),  # type: ignore[arg-type]
+                session,  # type: ignore[arg-type]
+            )
+        assert exc_info.value is failure
+    else:
+        with pytest.raises(HTTPException) as exc_info:
+            await create_project_route(
+                _project_create_payload(),
+                (uuid4(), object(), object()),  # type: ignore[arg-type]
+                session,  # type: ignore[arg-type]
+            )
+        assert exc_info.value.status_code == expected_code
+    assert session.rollback_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("disposition", "project_exists", "expected_error"),
+    [
+        ("mismatch", True, ProjectCreateIdempotencyConflict),
+        ("pending", True, ProjectCreateIdempotencyConflict),
+        ("replayed", False, RuntimeError),
+    ],
+)
+async def test_project_create_service_rejects_noncreatable_reservation_states(
+    disposition: str,
+    project_exists: bool,
+    expected_error: type[Exception],
+) -> None:
+    reservation = types.SimpleNamespace(project_id=str(uuid4()))
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return disposition, reservation
+
+    class Projects:
+        async def get_project(self, _project_id):
+            return _project_create_response() if project_exists else None
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=str(uuid4())),
+        identity_link=types.SimpleNamespace(id=str(uuid4())),
+    )
+    with pytest.raises(expected_error):
+        await service.create(
+            resolved,
+            cast(Any, object()),
+            uuid4(),
+            _project_create_payload(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_project_create_service_replays_existing_project() -> None:
+    response = _project_create_response()
+    reservation = types.SimpleNamespace(project_id=response.id)
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return "replayed", reservation
+
+    class Projects:
+        async def get_project(self, _project_id):
+            return response
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=str(uuid4())),
+        identity_link=types.SimpleNamespace(id=str(uuid4())),
+    )
+    outcome = await service.create(
+        resolved,
+        cast(Any, object()),
+        uuid4(),
+        _project_create_payload(),
+    )
+    assert outcome.replayed is True
+    assert outcome.response == response
+
+
+@pytest.mark.asyncio
+async def test_project_create_service_consumes_system_authority_and_attributes_project() -> None:
+    reservation = types.SimpleNamespace(
+        operation_id=uuid4(),
+        project_id=str(uuid4()),
+        operation_generation=1,
+    )
+    completed = []
+    added = []
+
+    class Reservations:
+        async def reserve(self, **_kwargs):
+            return "claimed", reservation
+
+        async def complete(self, record):
+            completed.append(record)
+
+    class Projects:
+        async def add_project(self, project):
+            now = datetime.now(UTC)
+            project.created_at = now
+            project.updated_at = now
+            added.append(project)
+            return project
+
+    decision = types.SimpleNamespace(
+        matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=None,
+        decision_id=uuid4(),
+    )
+
+    class Prepared:
+        async def prepare(self, *_args):
+            return object()
+
+        async def consume(self, *_args):
+            return decision
+
+    service = object.__new__(ProjectCreateService)
+    service._reservations = cast(Any, Reservations())
+    service._projects = cast(Any, Projects())
+    actor_id, link_id = str(uuid4()), str(uuid4())
+    resolved = types.SimpleNamespace(
+        profile=types.SimpleNamespace(id=actor_id),
+        identity_link=types.SimpleNamespace(id=link_id),
+    )
+    outcome = await service.create(
+        resolved,
+        cast(Any, Prepared()),
+        uuid4(),
+        _project_create_payload(),
+    )
+    assert outcome.replayed is False
+    assert outcome.response.id == reservation.project_id
+    assert completed == [reservation]
+    assert added[0].created_by_actor_profile_id == actor_id
+    assert added[0].created_via_identity_link_id == link_id
+    assert added[0].created_by_admin_role_grant_id == decision.matched_grant_id
 
 
 @pytest.mark.asyncio
