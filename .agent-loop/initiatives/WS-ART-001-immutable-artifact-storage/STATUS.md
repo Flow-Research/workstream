@@ -77,9 +77,12 @@ merge; repository-authored evidence alone is not authority.
 and adds bounded passive-PDF text extraction inside the existing isolated
 child.
 
-03B3B3A is the active successor. It installs only the approved `defusedxml`
-wheel and adds the shared bounded OPC/OOXML container security capability. It
-does not activate a DOCX, PPTX, or XLSX extractor, AUTH, or sufficiency.
+03B3B3A merged through PR #233. It installs only the approved `defusedxml`
+wheel and adds the shared bounded OPC/OOXML container security capability.
+03B3B3B is the active successor. Its bounded DOCX extraction and durable
+omission-fact implementation passed focused tests and required internal review;
+hosted CI, CodeRabbit, and human merge remain pending. PPTX, XLSX, image, AUTH,
+and sufficiency work remain inactive.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the

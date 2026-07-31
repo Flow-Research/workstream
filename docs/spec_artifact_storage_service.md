@@ -1289,6 +1289,27 @@ entries, 8 MiB central-directory metadata, 128 MiB decompressed bytes, 100:1
 compression ratio, and 1 MiB per relationships part, within the existing child
 CPU, wall-time, memory, descriptor, and process limits.
 
+DOCX extraction runs only after exact `docx` classification and the shared
+OOXML boundary. Policy `guide-extraction-v3` emits compact sorted JSON with one
+ordered `blocks` array. Its only block shapes are
+`{"type":"paragraph","text":"..."}` and
+`{"type":"table","text":"..."}`. Paragraph blocks preserve visible `w:t`, hyperlink
+display text, tabs, and line breaks in document order. Table blocks flatten
+rows with newline separators and cells with tab separators; multiple cell
+paragraphs and nested tables use newline separators at their containing-cell
+position. Empty paragraphs, rows, and cells remain explicit. Headers, footers,
+comments, tracked deletions, hidden text, field instructions, drawings,
+pictures, and passive non-text body objects never enter canonical output. Their
+presence is recorded through the fixed boolean omission keys `truncated`,
+`omitted`, `headers`, `footers`, `comments`, `tracked_deletions`,
+`embedded_objects`, `hidden_text`, and `field_instructions`. Successful DOCX
+extraction always records `truncated=false`; `omitted` is true exactly when any
+category boolean is true. Other successful format extractors retain the exact
+default `{"truncated":false,"omitted":false}`. Active embedded
+content remains a malformed OOXML rejection. The worker protocol, immutable
+extracted-content fact, and replay comparison bind those omissions to the same
+canonical output. Output over 4 MiB fails before any partial result is usable.
+
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
 syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB

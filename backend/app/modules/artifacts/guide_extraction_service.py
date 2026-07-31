@@ -205,7 +205,7 @@ class GuideExtractionService:
                         status="extracted",
                         output_sha256=extracted.output_sha256,
                         canonical_output=extracted.canonical_output,
-                        omission_facts={"truncated": False, "omitted": False},
+                        omission_facts=extracted.omission_facts,
                     )
                     .on_conflict_do_nothing(constraint="uq_guide_extracted_contents_identity")
                     .returning(GuideSourceExtractedContent.id)
@@ -230,6 +230,7 @@ class GuideExtractionService:
                 or content.source_byte_count != before.byte_count
                 or content.output_sha256 != extracted.output_sha256
                 or content.canonical_output != extracted.canonical_output
+                or content.omission_facts != extracted.omission_facts
             ):
                 raise GuideExtractionError("guide extraction result conflicts")
             usage = await session.scalar(

@@ -127,7 +127,12 @@ def test_worker_main_bounds_every_exception_class(
     monkeypatch.setattr(worker_module.os, "write", write)
 
     assert worker_module.main() == 0
-    assert json.loads(writes[0]) == {"status": status, "error_code": error_code, "output": None}
+    assert json.loads(writes[0]) == {
+        "status": status,
+        "error_code": error_code,
+        "output": None,
+        "omission_facts": {"truncated": False, "omitted": False},
+    }
 
 
 def test_worker_main_writes_the_complete_result_after_short_writes(
@@ -152,6 +157,7 @@ def test_worker_main_writes_the_complete_result_after_short_writes(
         "status": "extracted",
         "error_code": None,
         "output": "complete",
+        "omission_facts": {"truncated": False, "omitted": False},
     }
 
 
@@ -186,6 +192,59 @@ def test_pdf_worker_orders_limits_trusted_import_seccomp_then_parsing(
     assert json.loads(b"".join(writes))["status"] == "extracted"
 
 
+def test_docx_worker_orders_limits_trusted_import_seccomp_then_parsing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    writes: list[bytes] = []
+    omissions = {
+        "truncated": False,
+        "omitted": False,
+        "headers": False,
+        "footers": False,
+        "comments": False,
+        "tracked_deletions": False,
+        "embedded_objects": False,
+        "hidden_text": False,
+        "field_instructions": False,
+    }
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: events.append("limits"))
+
+    def load_ooxml():
+        events.append("validator_import")
+        return lambda _payload, _detected_format: object()
+
+    def load_docx(validate_ooxml):
+        events.append("adapter_import")
+        assert validate_ooxml(b"PK", "docx") is not None
+
+        def parse(_payload: bytes) -> tuple[str, dict[str, bool]]:
+            events.append("parse")
+            return '{"blocks":[]}', omissions
+
+        return parse
+
+    monkeypatch.setattr(worker_module, "_load_ooxml_security", load_ooxml)
+    monkeypatch.setattr(worker_module, "_load_docx_extractor", load_docx)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: events.append("seccomp"))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "docx"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"PK")))
+    monkeypatch.setattr(
+        worker_module.os,
+        "write",
+        lambda _fd, value: (writes.append(bytes(value)), len(value))[1],
+    )
+
+    assert worker_module.main() == 0
+    assert events == ["limits", "validator_import", "adapter_import", "seccomp", "parse"]
+    assert json.loads(b"".join(writes)) == {
+        "status": "extracted",
+        "error_code": None,
+        "output": '{"blocks":[]}',
+        "omission_facts": omissions,
+    }
+
+
 @pytest.mark.parametrize(
     ("detected_format", "payload", "expected"),
     [
@@ -208,6 +267,7 @@ def test_runner_produces_canonical_content(
     assert result.error_code is None
     assert result.canonical_output == expected
     assert result.output_sha256 is not None
+    assert result.omission_facts == {"truncated": False, "omitted": False}
     assert list(tmp_path.iterdir()) == []
 
 
@@ -429,7 +489,11 @@ def test_runner_launch_is_secret_free_and_process_isolated(
 
         def communicate(self, _payload, timeout):
             observed["timeout"] = timeout
-            return b'{"status":"extracted","error_code":null,"output":"ok"}', b""
+            return (
+                b'{"status":"extracted","error_code":null,"output":"ok",'
+                b'"omission_facts":{"truncated":false,"omitted":false}}',
+                b"",
+            )
 
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "must-not-leak")
     monkeypatch.setenv("HTTPS_PROXY", "must-not-leak")
@@ -449,16 +513,71 @@ def test_runner_launch_is_secret_free_and_process_isolated(
 
 
 @pytest.mark.parametrize(
+    "omission_facts",
+    [
+        {},
+        {"truncated": False, "omitted": "no"},
+        {"truncated": False, "omitted": False, "unexpected": False},
+        {
+            "truncated": False,
+            "omitted": False,
+            "headers": True,
+            "footers": False,
+            "comments": False,
+            "tracked_deletions": False,
+            "embedded_objects": False,
+            "hidden_text": False,
+            "field_instructions": False,
+        },
+    ],
+)
+def test_runner_rejects_invalid_omission_fact_shapes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    omission_facts: object,
+) -> None:
+    class CompletedProcess:
+        returncode = 0
+        pid = 123
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def communicate(self, _payload, timeout):
+            del timeout
+            return json.dumps(
+                {
+                    "status": "extracted",
+                    "error_code": None,
+                    "output": '{"blocks":[]}',
+                    "omission_facts": omission_facts,
+                }
+            ).encode(), b""
+
+    monkeypatch.setattr(subprocess, "Popen", CompletedProcess)
+    result = GuideExtractionRunner().extract(
+        BytesIO(b"guide"), detected_format="docx", workspace=tmp_path
+    )
+    assert (result.status, result.error_code) == (
+        "parser_failure",
+        "invalid_executor_output",
+    )
+
+
+@pytest.mark.parametrize(
     "worker_result",
     [
-        {"status": "extracted", "error_code": "conflict", "output": "ok"},
-        {"status": "extracted", "error_code": None, "output": None},
-        {"status": "extracted", "error_code": None, "output": 7},
-        {"status": "malformed", "error_code": None, "output": None},
-        {"status": "malformed", "error_code": 7, "output": None},
-        {"status": "malformed", "error_code": "x" * 81, "output": None},
-        {"status": "malformed", "error_code": "invalid", "output": "unexpected"},
-        {"status": "malformed", "error_code": "invalid", "output": 7},
+        {**result, "omission_facts": {"truncated": False, "omitted": False}}
+        for result in (
+            {"status": "extracted", "error_code": "conflict", "output": "ok"},
+            {"status": "extracted", "error_code": None, "output": None},
+            {"status": "extracted", "error_code": None, "output": 7},
+            {"status": "malformed", "error_code": None, "output": None},
+            {"status": "malformed", "error_code": 7, "output": None},
+            {"status": "malformed", "error_code": "x" * 81, "output": None},
+            {"status": "malformed", "error_code": "invalid", "output": "unexpected"},
+            {"status": "malformed", "error_code": "invalid", "output": 7},
+        )
     ],
 )
 def test_runner_rejects_invalid_worker_result_shapes(
