@@ -5,13 +5,19 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.authorization import get_authorization_actor, get_prepared_authorization_service
+from app.api.deps.auth import get_auth_verification_result
+from app.api.deps.authorization import (
+    prepared_authorization_service,
+    resolve_authorization_actor,
+)
+from app.api.deps.rate_controls import get_rate_control_service
 from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
 from app.modules.actors.service import ResolvedActor
+from app.modules.api_controls.service import RateControlService
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.projects.guide_mutation_service import (
@@ -27,6 +33,7 @@ from app.modules.projects.schemas import (
 )
 from app.modules.projects.service import ProjectServiceError
 from app.modules.projects.setup_queue import dispatch_pre_submit_setup_pipeline_after_commit
+from app.schemas.auth import AuthVerificationResult
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -46,10 +53,35 @@ def require_guide_mutation_key(
         ) from exc
 
 
+async def guide_authorization_actor(
+    key: Annotated[UUID, Depends(require_guide_mutation_key)],
+    request: Request,
+    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
+) -> ResolvedActor:
+    """Provision an actor only after the replay key is present and valid."""
+    del key
+    return await resolve_authorization_actor(request, result, session, rate_control)
+
+
+async def get_guide_prepared_authorization_service(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(guide_authorization_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Compose PREP only from the key-gated guide actor dependency."""
+    async with prepared_authorization_service(request, resolved, session) as service:
+        yield service
+
+
 async def guide_authorization(
     key: Annotated[UUID, Depends(require_guide_mutation_key)],
-    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
-    prepared: Annotated[PreparedAuthorizationService, Depends(get_prepared_authorization_service)],
+    resolved: Annotated[ResolvedActor, Depends(guide_authorization_actor)],
+    prepared: Annotated[
+        PreparedAuthorizationService,
+        Depends(get_guide_prepared_authorization_service),
+    ],
 ):
     return key, resolved, prepared
 

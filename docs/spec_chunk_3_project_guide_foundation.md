@@ -176,8 +176,8 @@ project-scoped `PreSubmitCheckerPolicy` contract with lifecycle status
 same approval path. Guide activation fails unless the compiled project
 pre-submit checker policy exists.
 
-`POST /activate` returns the lifecycle activation result with the full setup
-bundle:
+Guide activation is unavailable until AUTH-12H installs its prepared mutation
+boundary. The historical activation bundle will contain:
 
 - `guide_source_snapshot`
 - `guide_sufficiency_report`

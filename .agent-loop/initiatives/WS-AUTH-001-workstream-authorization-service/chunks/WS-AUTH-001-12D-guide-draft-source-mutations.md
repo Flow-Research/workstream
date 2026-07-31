@@ -2,8 +2,8 @@
 
 ## Status and prerequisite
 
-Implementation in progress after merged 12C and completed L1
-pre-implementation review.
+Implemented and internally reviewed; awaiting hosted CI, external review, and
+human merge approval.
 
 ## Parent initiative
 
@@ -50,9 +50,12 @@ backend/tests/test_projects.py
 backend/tests/test_guide_artifacts.py
 backend/tests/test_alembic.py
 backend/tests/test_api_controls.py
+backend/tests/test_checkers.py
 backend/tests/project_create_fixtures.py
 backend/tests/conftest.py
+backend/tests/test_tasks.py
 backend/scripts/api_contract_e2e.py
+backend/scripts/week2_api_e2e.py
 README.md
 docs/spec_chunk_3_project_guide_foundation.md
 docs/spec_authorization_service.md

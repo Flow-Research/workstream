@@ -5733,7 +5733,7 @@ async def test_submission_policy_rejects_snapshot_item_drift(
 
     async with db_session.get_session_factory()() as session:
         with pytest.raises(IntegrityError, match="snapshot items are immutable"):
-            await session.execute(text("truncate guide_source_snapshot_items"))
+            await session.execute(text("truncate guide_source_snapshot_items cascade"))
 
     async with db_session.get_session_factory()() as session:
         item = await session.scalar(

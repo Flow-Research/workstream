@@ -230,6 +230,27 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        create function guard_guide_lineage_and_lifecycle() returns trigger
+        language plpgsql as $$ begin
+          if (new.id,new.project_id,new.version)
+             is distinct from (old.id,old.project_id,old.version) then
+            raise exception 'guide identity and lineage are immutable' using errcode='23514';
+          end if;
+          if (new.status,new.approved_by,new.effective_at,new.superseded_at)
+             is distinct from (old.status,old.approved_by,old.effective_at,old.superseded_at) then
+            raise exception 'guide lifecycle mutation requires activation authority'
+              using errcode='23514';
+          end if;
+          return new;
+        end $$
+        """
+    )
+    op.execute(
+        "create trigger guide_lineage_lifecycle_guard before update on project_guides "
+        "for each row execute function guard_guide_lineage_and_lifecycle()"
+    )
+    op.execute(
+        """
         create function validate_guide_mutation_custody() returns trigger
         language plpgsql as $$
         declare reservation guide_mutation_idempotency_records%rowtype;
@@ -261,18 +282,6 @@ def upgrade() -> None:
                 from guide_source_snapshots where id=reservation.resource_id;
             end if;
           elsif tg_table_name='project_guides' then
-            if tg_op='UPDATE'
-               and (new.id,new.project_id,new.version)
-                   is distinct from (old.id,old.project_id,old.version) then
-              raise exception 'guide identity and lineage are immutable' using errcode='23514';
-            end if;
-            if tg_op='UPDATE'
-               and (new.status,new.approved_by,new.effective_at,new.superseded_at)
-                   is distinct from
-                   (old.status,old.approved_by,old.effective_at,old.superseded_at) then
-              raise exception 'guide lifecycle mutation requires activation authority'
-                using errcode='23514';
-            end if;
             if tg_op='UPDATE'
                and (new.content_markdown is distinct from old.content_markdown
                     or new.change_summary is distinct from old.change_summary)
@@ -482,6 +491,7 @@ def downgrade() -> None:
     op.execute("drop trigger source_setup_run_custody on project_setup_runs")
     op.execute("drop trigger source_snapshot_product_custody on guide_source_snapshots")
     op.execute("drop trigger guide_mutation_product_custody on project_guides")
+    op.execute("drop trigger guide_lineage_lifecycle_guard on project_guides")
     op.execute(
         "drop trigger guide_mutation_idempotency_reject_truncate on guide_mutation_idempotency_records"
     )
@@ -491,6 +501,7 @@ def downgrade() -> None:
     op.execute("drop function reject_guide_mutation_idempotency_truncate()")
     op.execute("drop function guard_guide_mutation_idempotency()")
     op.execute("drop function validate_guide_mutation_custody()")
+    op.execute("drop function guard_guide_lineage_and_lifecycle()")
     op.drop_table("guide_mutation_idempotency_records")
     op.drop_constraint("setup_run_authority_shape", "project_setup_runs", type_="check")
     _drop_authority_columns("project_setup_runs", prefix="authorized")

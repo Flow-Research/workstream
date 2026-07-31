@@ -66,7 +66,7 @@ async def seed_active_guide_for_pre_12h_e2e(project_id: str, guide_id: str) -> d
         external_issuer=DEFAULT_FLOW_ISSUER,
         roles=("project_manager",),
         claim_snapshot={},
-        auth_source="flow_jwt",
+        auth_source="flow",
         is_dev_auth=False,
     )
     async with db_session.get_session_factory()() as session:
@@ -76,11 +76,17 @@ async def seed_active_guide_for_pre_12h_e2e(project_id: str, guide_id: str) -> d
         await session.execute(
             text("alter table project_guides disable trigger guide_mutation_product_custody")
         )
+        await session.execute(
+            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
+        )
         await session.commit()
         try:
             result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
             return result.model_dump(mode="json")
         finally:
+            await session.execute(
+                text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
+            )
             await session.execute(
                 text("alter table project_guides enable trigger guide_mutation_product_custody")
             )

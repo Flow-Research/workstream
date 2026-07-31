@@ -55,6 +55,9 @@ async def activate_guide_for_downstream_test(
         await session.execute(
             text("alter table project_guides disable trigger guide_mutation_product_custody")
         )
+        await session.execute(
+            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
+        )
         await session.commit()
         try:
             result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
@@ -63,6 +66,9 @@ async def activate_guide_for_downstream_test(
             await session.rollback()
             return Response(status_code=exc.status_code, json={"detail": str(exc)})
         finally:
+            await session.execute(
+                text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
+            )
             await session.execute(
                 text("alter table project_guides enable trigger guide_mutation_product_custody")
             )
