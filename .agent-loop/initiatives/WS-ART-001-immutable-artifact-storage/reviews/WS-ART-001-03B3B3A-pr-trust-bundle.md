@@ -79,8 +79,11 @@ were repaired and re-reviewed.
 
 ## External review
 
-Pending CodeRabbit and hosted GitHub Backend/Agent Gates on the published PR
-head.
+CodeRabbit found one valid non-canonical root-relationship base issue. Root
+relationships are now restricted to `_rels/.rels`, malformed relationship-part
+shapes fail closed, and focused regressions cover the repair. Its generic
+docstring warning is superseded by the passing repository-owned hosted gate.
+Hosted GitHub Backend/Agent Gates must pass again on the repaired PR head.
 
 ## Remaining risks and follow-up
 

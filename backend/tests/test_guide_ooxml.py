@@ -237,6 +237,14 @@ def test_unknown_and_cross_format_directory_roots_fail_closed(directory: str) ->
     )
 
 
+@pytest.mark.parametrize("name", ["_rels/foo.rels", "_rels/nested/"])
+def test_noncanonical_root_relationship_parts_fail_closed(name: str) -> None:
+    assert _failure(_package(additions={name: b"<Relationships/>"})) == (
+        "malformed",
+        "ooxml_unknown_package_part",
+    )
+
+
 def test_rejects_nested_archive_magic_without_archive_suffix() -> None:
     nested = _package(additions={"word/inner.xml": b"<x/>"})
     sfx = _package(additions={"word/media/blob.xml": b"MZstub" + nested})

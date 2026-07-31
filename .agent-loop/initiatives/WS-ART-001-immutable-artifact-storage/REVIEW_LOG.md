@@ -280,3 +280,6 @@
 - Architecture, security, QA, senior engineering, product/ops, reuse, CI,
   test-delta, and docs review tracks pass after repair. Hosted GitHub and
   CodeRabbit evidence remain the publication gate.
+- CodeRabbit's one valid external finding closes non-canonical root
+  relationship parts and fails closed on malformed relationship-part shapes;
+  focused security and test-delta re-review cover the repair.

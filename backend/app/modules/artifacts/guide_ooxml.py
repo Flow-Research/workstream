@@ -141,6 +141,8 @@ def _part_is_allowed(name: str, *, detected_format: str) -> bool:
     lower = name.casefold()
     if lower == "[content_types].xml":
         return True
+    if lower.startswith("_rels/") and lower != "_rels/.rels":
+        return False
     if not (
         lower.startswith(_COMMON_PREFIXES)
         or lower.startswith(f"{_FORMAT_ROOT[detected_format]}/")
@@ -151,6 +153,8 @@ def _part_is_allowed(name: str, *, detected_format: str) -> bool:
 
 def _directory_is_allowed(name: str, *, detected_format: str) -> bool:
     lower = f"{name.casefold().rstrip('/')}/"
+    if lower.startswith("_rels/"):
+        return lower == "_rels/"
     allowed_roots = (*_COMMON_PREFIXES, f"{_FORMAT_ROOT[detected_format]}/")
     return any(lower == root or lower.startswith(root) for root in allowed_roots)
 
@@ -167,9 +171,12 @@ def _relationship_target_is_external(value: str, *, relationship_part: str) -> b
     parsed = urlsplit(target)
     if parsed.scheme or parsed.netloc or target.startswith("/"):
         return True
-    source_directory = (
-        "" if relationship_part == "_rels/.rels" else relationship_part.rsplit("/_rels/", 1)[0]
-    )
+    if relationship_part == "_rels/.rels":
+        source_directory = ""
+    elif "/_rels/" in relationship_part:
+        source_directory = relationship_part.rsplit("/_rels/", 1)[0]
+    else:
+        return True
     resolved = posixpath.normpath(posixpath.join(source_directory, parsed.path))
     return resolved == ".." or resolved.startswith("../")
 
