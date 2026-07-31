@@ -82,8 +82,10 @@ re-reviewed.
 
 ## External review
 
-CodeRabbit and hosted GitHub checks are pending on the PR head. Any valid
-findings will be repaired and recorded before merge readiness is reported.
+The first Agent Gates run found two stale human-worker vocabulary matches; both
+now use the exact isolated-child result-protocol wording and the local gate
+passes. CodeRabbit's first attempt was rate-limited without code findings and
+must be retriggered. Hosted checks remain required on the repaired PR head.
 
 ## Remaining risks and follow-up
 

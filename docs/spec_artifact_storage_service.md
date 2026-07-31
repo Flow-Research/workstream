@@ -1306,7 +1306,7 @@ presence is recorded through the fixed boolean omission keys `truncated`,
 extraction always records `truncated=false`; `omitted` is true exactly when any
 category boolean is true. Other successful format extractors retain the exact
 default `{"truncated":false,"omitted":false}`. Active embedded
-content remains a malformed OOXML rejection. The worker protocol, immutable
+content remains a malformed OOXML rejection. The isolated-child result protocol, immutable
 extracted-content fact, and replay comparison bind those omissions to the same
 canonical output. Output over 4 MiB fails before any partial result is usable.
 

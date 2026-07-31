@@ -70,7 +70,7 @@ PPTX/XLSX behavior, package additions beyond approved lock, framework/AUTH/Celer
 - Successful DOCX omission facts have the fixed bounded boolean schema
   `truncated`, `omitted`, `headers`, `footers`, `comments`,
   `tracked_deletions`, `embedded_objects`, `hidden_text`, and
-  `field_instructions`. The existing worker/result protocol carries these
+  `field_instructions`. The existing isolated-child result protocol carries these
   facts; other formats retain the exact default
   `{"truncated":false,"omitted":false}`. Persistence binds and replay-checks
   omission facts with the canonical output. DOCX uses exact policy identity
