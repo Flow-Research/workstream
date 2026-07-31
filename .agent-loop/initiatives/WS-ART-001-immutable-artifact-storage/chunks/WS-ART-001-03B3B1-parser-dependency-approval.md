@@ -31,6 +31,7 @@ P2
 ```text
 backend/config/guide_extractor_dependencies.json
 backend/scripts/check_guide_extractor_dependencies.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_guide_extractor_dependencies.py
 .github/workflows/backend.yml
 .agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/**
@@ -71,11 +72,11 @@ containing real customer data, AUTH/Celery/submission changes.
 ## Verification commands
 
 ```bash
-(cd backend && python scripts/check_guide_extractor_dependencies.py)
-(cd backend && uv run pytest -q tests/test_guide_extractor_dependencies.py)
+(cd backend && python3 scripts/check_guide_extractor_dependencies.py)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q -p pytest_cov.plugin tests/test_guide_extractor_dependencies.py --cov=scripts.check_guide_extractor_dependencies --cov-report=term-missing --cov-fail-under=90)
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_artifact_contracts.py
-python3 scripts/test_agent_gates.py
+python3 -m unittest -v scripts.test_lightweight_agent_gates
 git diff --check
 ```
 
