@@ -585,6 +585,23 @@ def test_pdf_parser_dependency_is_confined_to_the_format_adapter() -> None:
     assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
 
 
+def test_docx_adapter_is_confined_to_the_isolated_worker() -> None:
+    adapter_importers: set[str] = set()
+    for path in APP_ROOT.rglob("*.py"):
+        relative = path.relative_to(APP_ROOT).as_posix()
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name == "app.modules.artifacts.guide_docx" for alias in node.names
+            ):
+                adapter_importers.add(relative)
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "app.modules.artifacts.guide_docx"
+            ):
+                adapter_importers.add(relative)
+    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
+
+
 def test_ooxml_parser_dependency_and_adapter_are_confined_to_the_isolated_worker() -> None:
     dependency_importers: set[str] = set()
     adapter_importers: set[str] = set()
@@ -594,9 +611,7 @@ def test_ooxml_parser_dependency_and_adapter_are_confined_to_the_isolated_worker
             if isinstance(node, ast.Import):
                 if any(alias.name.split(".", 1)[0] == "defusedxml" for alias in node.names):
                     dependency_importers.add(relative)
-                if any(
-                    alias.name == "app.modules.artifacts.guide_ooxml" for alias in node.names
-                ):
+                if any(alias.name == "app.modules.artifacts.guide_ooxml" for alias in node.names):
                     adapter_importers.add(relative)
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
                 if node.module.split(".", 1)[0] == "defusedxml":

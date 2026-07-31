@@ -64,11 +64,26 @@ def main() -> int:
             os._exit(3)
         else:
             raise ExtractionFailure("parser_failure", "invalid_test_probe")
-        result = {"status": "extracted", "error_code": None, "output": output}
+        result = {
+            "status": "extracted",
+            "error_code": None,
+            "output": output,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     except ExtractionFailure as exc:
-        result = {"status": exc.status, "error_code": exc.code, "output": None}
+        result = {
+            "status": exc.status,
+            "error_code": exc.code,
+            "output": None,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     except MemoryError:
-        result = {"status": "limit_exceeded", "error_code": "memory_limit", "output": None}
+        result = {
+            "status": "limit_exceeded",
+            "error_code": "memory_limit",
+            "output": None,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     encoded = json.dumps(result, separators=(",", ":")).encode()
     os.write(1, encoded)
     return 0

@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
+import zipfile
 
 import pytest
 from pypdf import PdfWriter
@@ -164,6 +165,22 @@ class _BlockingReadStore(_ReadStore):
 
 async def _byte_stream(payload: bytes) -> AsyncIterator[bytes]:
     yield payload
+
+
+def _docx_payload() -> bytes:
+    output = BytesIO()
+    document = (
+        b'<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        b'wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>visible</w:t></w:r>'
+        b'<w:del><w:r><w:delText>deleted</w:delText></w:r></w:del></w:p>'
+        b"</w:body></w:document>"
+    )
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", b"<Types/>")
+        archive.writestr("_rels/.rels", b"<Relationships/>")
+        archive.writestr("word/document.xml", document)
+        archive.writestr("word/header1.xml", b"<header/>")
+    return output.getvalue()
 
 
 def _preparation(
@@ -469,8 +486,45 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
 
 @pytest.mark.asyncio
 @pytest.mark.postgres_schema_contract
+@pytest.mark.parametrize(
+    ("payload", "media_type", "detected_format", "expected_output", "expected_omissions"),
+    [
+        (
+            b'{"z":2,"a":1}',
+            "application/json",
+            "json",
+            '{"a":1,"z":2}',
+            {"truncated": False, "omitted": False},
+        ),
+        (
+            _docx_payload(),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "docx",
+            '{"blocks":[{"text":"visible","type":"paragraph"}]}',
+            {
+                "truncated": False,
+                "omitted": True,
+                "headers": True,
+                "footers": False,
+                "comments": False,
+                "tracked_deletions": True,
+                "embedded_objects": False,
+                "hidden_text": False,
+                "field_instructions": False,
+            },
+        ),
+    ],
+    ids=("json", "docx"),
+)
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
-    isolated_database_env: str, tmp_path: Path, migration_lock
+    isolated_database_env: str,
+    tmp_path: Path,
+    migration_lock,
+    payload: bytes,
+    media_type: str,
+    detected_format: str,
+    expected_output: str,
+    expected_omissions: dict[str, bool],
 ) -> None:
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     config.set_main_option(
@@ -479,7 +533,6 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
     with migration_lock():
         await asyncio.to_thread(command.downgrade, config, "0042_guide_extraction")
         await asyncio.to_thread(command.upgrade, config, "head")
-    payload = b'{"z":2,"a":1}'
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -491,7 +544,7 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                 session,
                 sha256=digest,
                 byte_count=len(payload),
-                media_type="application/json",
+                media_type=media_type,
             )
         binding_id = await _create_binding(factory, ids)
         classification_id = uuid4()
@@ -505,15 +558,15 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                     setup_generation=1,
                     sha256=digest,
                     byte_count=len(payload),
-                    media_type="application/json",
-                    detected_format="json",
+                    media_type=media_type,
+                    detected_format=detected_format,
                     status="classified",
                     detector_name="workstream.guide_format",
                     detector_version="1",
                     classification_facts={},
                 )
             )
-        prepared = await preparation.prepare(_byte_stream(payload), media_type="application/json")
+        prepared = await preparation.prepare(_byte_stream(payload), media_type=media_type)
         request = GuideExtractionRequest(
             project_id=ids["project"],
             guide_id=ids["guide"],
@@ -535,7 +588,8 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                 GuideSourceExtractedContent, str(result.extracted_content_id)
             )
             assert content is not None
-            assert content.canonical_output == '{"a":1,"z":2}'
+            assert content.canonical_output == expected_output
+            assert content.omission_facts == expected_omissions
             assert await session.scalar(select(func.count(GuideSourceExtractionAttempt.id))) == 1
             assert await session.scalar(select(func.count(GuideSourceExtractionUsage.id))) == 1
         async with factory() as session:
@@ -800,14 +854,22 @@ async def test_successful_replay_requires_the_current_extraction_policy(
 
 
 @pytest.mark.asyncio
-async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
-    isolated_database_env: str, tmp_path: Path
+@pytest.mark.parametrize("detected_format", ["pdf", "docx"])
+async def test_new_format_support_replaces_obsolete_policy_budget_without_replay(
+    isolated_database_env: str,
+    tmp_path: Path,
+    detected_format: str,
 ) -> None:
-    writer = PdfWriter()
-    writer.add_blank_page(width=72, height=72)
-    stream = BytesIO()
-    writer.write(stream)
-    payload = stream.getvalue()
+    if detected_format == "pdf":
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        stream = BytesIO()
+        writer.write(stream)
+        payload = stream.getvalue()
+        media_type = "application/pdf"
+    else:
+        payload = _docx_payload()
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -816,7 +878,7 @@ async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
     try:
         async with factory() as session:
             ids = await _seed_binding_lineage(
-                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+                session, sha256=digest, byte_count=len(payload), media_type=media_type
             )
         binding_id = await _create_binding(factory, ids)
         classification_id = uuid4()
@@ -830,8 +892,8 @@ async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
                     setup_generation=1,
                     sha256=digest,
                     byte_count=len(payload),
-                    media_type="application/pdf",
-                    detected_format="pdf",
+                    media_type=media_type,
+                    detected_format=detected_format,
                     status="classified",
                     detector_name="workstream.guide_format",
                     detector_version="1",
@@ -846,8 +908,8 @@ async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
                     content_id=str(ids["content"]),
                     classification_id=str(classification_id),
                     setup_generation=1,
-                    detected_format="pdf",
-                    extractor_name="workstream.pdf",
+                    detected_format=detected_format,
+                    extractor_name=f"workstream.{detected_format}",
                     extractor_version="1",
                     policy_version=EXTRACTION_POLICY_VERSION,
                     attempt_number=1,
@@ -885,11 +947,11 @@ async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
         async with factory() as session:
             budget = await session.get(GuideSourceExtractionRetryBudget, str(binding_id))
             assert budget is not None
-            assert budget.policy_version == extraction_policy_version("pdf")
+            assert budget.policy_version == extraction_policy_version(detected_format)
             assert budget.claimed_slots == 1
         preparation, scratch = _preparation(tmp_path)
         prepared = await preparation.prepare(
-            _byte_stream(payload), media_type="application/pdf"
+            _byte_stream(payload), media_type=media_type
         )
         service = GuideExtractionService(factory, GuideExtractionRegistry())
         extracted = await service.extract_prepared(request, prepared)
@@ -910,7 +972,7 @@ async def test_pdf_support_replaces_the_obsolete_policy_budget_without_replay(
             ).all()
             assert [(attempt.policy_version, attempt.status) for attempt in attempts] == [
                 (EXTRACTION_POLICY_VERSION, "unsupported"),
-                (extraction_policy_version("pdf"), "extracted"),
+                (extraction_policy_version(detected_format), "extracted"),
             ]
     finally:
         if prepared is not None:
