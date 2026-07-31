@@ -14,7 +14,10 @@ Activate `review.decision` for exactly `accept`, `needs_revision`, or `reject`.
 ## Allowed files
 
 Enumerate exact REV decision composition, AUTH final context/activation parity,
-CON typed participant wiring, route, tests, docs, and evidence at start.
+CON typed participant wiring, route, tests, docs, and evidence at start. CON may
+only flush the typed facts prepared by REV/AUTH; it performs no authority
+evaluation, decision, or lifecycle work. REV retains decision and lifecycle
+ownership.
 
 ## Not allowed
 
@@ -33,7 +36,8 @@ CON participant, manual FinalAcceptance route, or post-commit canonical repair.
   creates the exact initial human revision preparation. Reject creates neither
   FinalAcceptance nor submitter contribution.
 - Review, lifecycle effects, CON rows/awards, audit, and outbox commit once or
-  roll back together.
+  roll back together. The CON participant is flush-only and cannot authorize,
+  decide, advance lifecycle state, or commit independently.
 - Decision versus expiry/revocation/evidence drift/duplicate request races are
   deterministic and fail closed.
 

@@ -3,9 +3,8 @@
 ## Status and risk
 
 Non-implementable planning skeleton after 08A. Refresh exact files and commands
-on current main before an explicit user request. Requires hidden REV
-jobs/projection/control. L1 fixed-service and
-release-control authority.
+on current main before an explicit user request. REV jobs/projection/control
+must remain hidden. L1 fixed-service and release-control authority.
 
 ## Goal
 

@@ -3,9 +3,8 @@
 ## Status and risk
 
 Non-implementable planning skeleton after 08R. Refresh exact files and commands
-on current main before an explicit user request. Requires hidden REV recovery
-behavior. L1 privileged lifecycle
-recovery.
+on current main before an explicit user request. REV recovery behavior must
+remain hidden. L1 privileged lifecycle recovery.
 
 ## Goal
 

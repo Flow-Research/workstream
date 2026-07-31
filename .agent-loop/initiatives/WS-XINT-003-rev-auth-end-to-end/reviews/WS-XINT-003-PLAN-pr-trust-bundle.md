@@ -85,7 +85,13 @@ PASS WITH LOW RISKS; every low/informational wording risk was also corrected.
 
 ## External review
 
-Pending GitHub Actions and CodeRabbit on the planning PR.
+The initial Agent Gates run failed because the authorization-specific stale-doc
+scanner found retired human-worker vocabulary. Commit `2c17bc36` replaced it
+with exact fixed-service terminology; the local scanner and replacement
+exact-head Agent Gates then passed. Backend exact-head CI remains required.
+CodeRabbit completed substantive review with four comments: two already fixed
+by `2c17bc36`, and two addressed by the following corrective commit. Final
+exact-head statuses must be recorded before human merge.
 
 ## Remaining risks
 
