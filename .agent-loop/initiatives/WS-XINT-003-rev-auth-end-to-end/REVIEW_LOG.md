@@ -42,3 +42,12 @@ No reviewer finding remains open.
 
 External CI and CodeRabbit results belong to the planning PR trust bundle and
 external-review response.
+
+## WS-XINT-003-01 contract reconciliation
+
+Architecture, security/auth, product/operations, QA/test, senior engineering,
+docs, and reuse/dedup reviewed the completed docs-only reconciliation. Valid
+findings corrected fixed-service identity drift, ART global-matrix wording,
+runtime owner versus sub-wave ambiguity, missing per-action dependencies,
+07B/human activation order, and obsolete signed-start gates. All tracks passed;
+the final evidence is in `reviews/WS-XINT-003-01-internal-review.md`.

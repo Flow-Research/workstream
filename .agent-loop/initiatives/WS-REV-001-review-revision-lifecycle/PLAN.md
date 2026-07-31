@@ -1,5 +1,9 @@
 # Plan: WS-REV-001 Review And Revision Lifecycle
 
+Current cross-initiative authority and policy-writer sequencing is canonical in
+`../WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`. Planning artifacts do
+not require signed starts, active-chunk state, or merge intents.
+
 ## Boundary Reset — 2026-07-22
 
 This section supersedes every later passage that assigns Project Guide setup,
@@ -27,10 +31,10 @@ This PLAN3 candidate is reconciled from current trusted main
 changes are discovery evidence only. The detailed facts below were captured at
 the earlier PLAN2 snapshot and are historical unless independently re-proven.
 
-Signed loop memory still records retired 02A1 as the next chunk because that is
-the last merged successor declaration. PLAN3 does not treat that projection as
-implementation authority. Its schema-v2 merge intent replaces the successor
-with 03P; only the post-merge signed projection may then authorize a 03P start.
+Generated loop memory naming retired 02A1 is historical only and has no
+implementation authority. The current WS-XINT-003 chunk map governs future
+cross-initiative sequence; implementation still requires an explicit user
+request under the ordinary repository engineering loop.
 They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
 schema head, typed contract, and tests exist on trusted main.
 
@@ -308,11 +312,11 @@ errors but do not substitute for database enforcement.
 
 ## Chunk strategy
 
-PLAN3 is a proposed planning-only boundary correction, not signed active work. The entire 02A family,
+PLAN3 is merged historical boundary correction. The entire 02A family,
 02B, and 02C are retired historical records and are never executable by REV.
-03P is the first proposed REV runtime child and contains only REV-owned policy;
-it still requires current-main refresh, risk routing, plan review, signed start,
-and exact owner evidence. Queue persistence follows separately in 03A.
+03P is reconciled into WS-XINT-003-02 and is not independently executable.
+That chunk requires current-main refresh, risk routing, plan review, and exact
+owner evidence. Queue persistence follows separately in 03A.
 
 The detailed order is maintained in `CHUNK_MAP.md`. The important boundaries
 are:
@@ -375,12 +379,11 @@ head, preflight, upgrade, downgrade/re-upgrade where safe, protected-row refusal
 transactional failure behavior, and direct-SQL constraints.
 
 Every chunk runs stale Workstream/AUTH/ART/REV wording scans applicable on
-current main, Markdown links, `git diff --check`, merge-intent validation through
-agent gates, and required internal reviewer fanout. Test changes may not weaken,
+current main, Markdown links, `git diff --check`, agent gates, and required
+internal reviewer fanout. Test changes may not weaken,
 skip, or rewrite existing checker-caused revision coverage.
 
 ## Stop rule
 
-Complete PLAN3 and stop. Automated memory may name 03P only with a signed
-explicit-start gate. No runtime child starts automatically, and no retired 02A-family,
+Complete PLAN3 and stop. No runtime child starts automatically, and no retired 02A-family,
 02B, or 02C contract may be revived as REV work.

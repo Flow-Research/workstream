@@ -1,5 +1,9 @@
 # Chunk Map: WS-AUTH-001 - Workstream Authorization Service
 
+Review/revision activation custody is now planned canonically by
+`../WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`. Historical AUTH-REV
+labels are not alternate implementation paths.
+
 The complete ART-facing catalogue and runtime dependency is now planned in
 `../WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md`. The historical ART custody
 entries in this file remain baseline identifiers only until that planning
@@ -97,7 +101,8 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-REV-11` | REV 11 Recovery And Reconciliation Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-12` | REV 12 Artifact Reconciliation And Projection Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-LIFECYCLE` | REV Lifecycle Repair Action Activation | L1 | Blocked until REV-REG and four hidden manifests merge |
-| `WS-XINT-002-07` | Review Packet And Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART evidence behavior |
+| runtime `WS-XINT-002-07`, sub-wave `07A` | Review Packet And Finding Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART finding evidence behavior |
+| runtime `WS-XINT-002-07`, sub-wave `07B` | Response Evidence Binding Evaluator Extension (no availability change) | L1 | 07A plus exact human revision obligation/preparation |
 
 ## Dependency order
 

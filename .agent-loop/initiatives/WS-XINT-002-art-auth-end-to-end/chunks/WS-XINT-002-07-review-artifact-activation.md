@@ -1,9 +1,21 @@
-# Chunk Contract: WS-XINT-002-07 Review Artifact Authorization Activation
+# Split Record: WS-XINT-002-07 Review Artifact Authorization
 
-## Goal
+## Status
 
-Activate exact lease-scoped reviewer packets and verified finding/response
-evidence binding after both ART and REV publish their hidden manifests.
+Superseded before implementation by `WS-XINT-002-07A` and
+`WS-XINT-002-07B`. This record is not an activation path.
+
+## Split invariant
+
+07A is the only availability transition: it activates packet materialization
+and the one evidence-binding ActionId for reviewer-finding slots while hard-
+denying response-slot shapes. 07B changes no ActionId availability and extends
+only that evaluator after an exact human revision obligation and preparation
+exist. Human REV actions stay with XINT-003; shared submission actions stay
+with XINT-002-05D.
+
+Everything below is the historical combined design input allocated between 07A
+and 07B. It is retained for provenance and is not executable as one chunk.
 
 ## Risk class
 

@@ -9,9 +9,9 @@ authority and immutable predecessor lineage.
 ## Goal
 
 Activate human `review.finding_response_evidence.ingest` against the exact
-obligation/preparation. Coordinate XINT-002-05D as sole owner of shared artifact
-preparation/`submission.create` and XINT-002-07B as sole owner of ART response
-binding. XINT-002 owns no human REV action.
+obligation/preparation. Consume XINT-002-05D as sole owner of shared artifact
+preparation/`submission.create` and the already-merged XINT-002-07B ART response
+evaluator. XINT-002 owns no human REV action.
 
 ## Allowed files
 
@@ -39,9 +39,9 @@ submission authorization protocol.
 - Exactly one N+1 Submission consumes one preparation/obligation; concurrent
   attempts have one winner and preserve all prior immutable history.
 - Human and checker revision sources remain mutually exclusive.
-- XINT-002-07B response evidence activates only after the obligation and
-  preparation exist and denies every CheckerRun-rooted remediation shape; this
-  statement refers to ART binding, while XINT-003 owns the human action.
+- XINT-002-07B extends only the already-active ART response-slot evaluator,
+  changes no ActionId availability, and denies CheckerRun-rooted remediation;
+  XINT-003 owns the corresponding human action.
 
 ## Verification and reviewers
 

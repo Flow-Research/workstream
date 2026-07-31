@@ -1,5 +1,9 @@
 # Decisions: WS-REV-001 Review And Revision Lifecycle
 
+REV retains policy semantics and immutable version rules; XINT-003-02 owns the
+one AUTH-authorized persistence/writer cutover over existing project policy
+records. No duplicate REV writer is permitted.
+
 ## Decisions
 
 ### D1 - Existing Submission Is SubmissionVersion

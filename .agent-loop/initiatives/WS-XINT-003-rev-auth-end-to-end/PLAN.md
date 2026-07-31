@@ -11,16 +11,19 @@ activation waves:
    REV owns semantics; AUTH-12D2 owns authorization and PREP consumption.
 3. Activate concealed reviewer current-work, claim/release/preference, and timer
    services only after REV queue/lease behavior exists.
-4. Amend XINT-002-07 into two ART-only owner waves: packet materialization and
-   reviewer-evidence binding after lease readiness, then response-evidence
-   binding only after a human revision obligation exists. XINT-003 activates
-   the corresponding human REV actions and never takes custody of ART actions.
+4. Amend XINT-002-07 into two ART-only owner waves: 07A is the only ActionId
+   availability transition and activates packet materialization plus
+   finding-slot evidence binding after lease readiness; 07B changes no ActionId
+   availability and only extends the active binding evaluator to response slots
+   after a human revision obligation exists. XINT-003 activates the
+   corresponding human REV actions and never takes custody of ART actions.
 5. Activate bounded `review.chain.read` after the packet/context owner wave.
 6. Activate `review.decision` only after the complete hidden atomic
    Review/FinalAcceptance/CON composition exists.
 7. Let XINT-002-05D activate shared human-review revision preparation/Submission
-   actions and XINT-002-07B extend ART response binding. XINT-003 separately
-   activates contributor response authority against exact obligation facts.
+   actions, then let XINT-002-07B extend ART response binding after hidden REV
+   obligation/preparation behavior exists. XINT-003-07 consumes both merged
+   boundaries and separately activates contributor response authority.
 8. Register the four missing privileged lifecycle/recovery actions as planned,
    then activate Project Manager/Operator recovery and fixed service jobs with
    reason-bound least privilege and crossed-race proof.

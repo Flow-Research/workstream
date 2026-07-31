@@ -49,7 +49,8 @@ mappings, and availability must remain identical.
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+| runtime owner `WS-XINT-002-07`, sub-wave `07A` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` (finding-slot availability) |
+| runtime owner `WS-XINT-002-07`, sub-wave `07B` | no availability change; response-slot evaluator extension |
 
 `WS-AUTH-001-ART-CUSTODY` historically transferred 25 rows. WS-XINT-002-01
 reconciles the live catalogue by removing the six unused multi-step upload rows
@@ -67,6 +68,12 @@ reconciles PostgreSQL parity through migration `0036`; the live catalogue has
 eight fixed-service identities and sixteen matrix memberships.
 
 ## REV custody transfer
+
+The canonical current planning table is
+[`WS-XINT-003/ACTION_CUSTODY.md`](../WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md).
+It supersedes the historical placeholder grouping below for future planning,
+while leaving runtime `ActionOwner`, permission, mapping, and availability
+unchanged until each exact XINT-003 activation wave.
 
 | AUTH activation chunk | Exact planned ActionIds |
 |---|---|
@@ -86,6 +93,22 @@ custodian labels grant no reviewer, Operator, or service authority. The four
 proposed lifecycle actions remain unregistered, and PREP remains separately
 human-gated.
 
+The exact planning-wave replacement is:
+
+| XINT-003 wave | Registered planned REV ActionIds |
+|---|---|
+| `WS-XINT-003-03A` | `review.queue.read`, `review.claim`, `review.release`, `review.decline_preference` |
+| `WS-XINT-003-03B` | `review.preference_expiry.run`, `review.lease_expiry.run` |
+| `WS-XINT-003-04` | `review.context.read`, `review.finding_evidence.ingest` |
+| `WS-XINT-003-05` | `review.chain.read` |
+| `WS-XINT-003-06` | `review.decision` |
+| `WS-XINT-003-07` | `review.finding_response_evidence.ingest` |
+| `WS-XINT-003-08A` | `review.queue.inspect`, `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close` |
+| `WS-XINT-003-08B` | `review.reconcile.run`, `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+
+This is 19 rows with cardinalities `4/2/2/1/1/1/5/3`. XINT-002-owned ART
+actions and shared submission actions are excluded.
+
 ## Additive registration gates
 
 The following values are approved boundary proposals, not registered runtime
@@ -93,7 +116,7 @@ actions on trusted `main`:
 
 | Registration chunk | Future activation chunk | Proposed ActionId -> PermissionId |
 |---|---|---|
-| `WS-AUTH-001-REV-REG` | `WS-AUTH-001-REV-LIFECYCLE` | `review.revision_context.repair` -> `project.task.manage`; `review.revision_context.legacy_close` -> `operations.reconcile.run`; `review.revision_obligation.close` -> `project.task.manage`; `review.lifecycle.activation.manage` -> `operations.reconcile.run` |
+| `WS-XINT-003-08R` | `WS-XINT-003-08A` / `WS-XINT-003-08B` | `review.revision_context.repair` -> `project.task.manage`; `review.revision_context.legacy_close` -> `operations.reconcile.run`; `review.revision_obligation.close` -> `project.task.manage`; `review.lifecycle.activation.manage` -> `operations.reconcile.run` |
 
 These are declared future registration gates, not executable chunk contracts.
 Neither may receive a full contract or start until the owning feature publishes exact
@@ -110,7 +133,8 @@ fresh replay.
 
 Counts are derived from trusted `main` when a gate executes. REV registration
 adds exactly four planned actions and zero active actions. WS-XINT-002-01
-registers review-evidence binding under `WS-XINT-002-07` and adds it to the
+registers review-evidence binding under runtime owner `WS-XINT-002-07`; planned
+sub-wave 07A adds it to the
 existing `workstream.artifact.binding` static row without adding an identity or
 database grant.
 

@@ -44,6 +44,13 @@ requirements remain available only through task-scoped work surfaces.
 Administrative grants do not imply contributor capability. Holding one does
 not permit claiming tasks, submitting work, or recording review decisions.
 
+Review/revision authority follows the closed action custody in
+`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+Project Managers may configure policy or perform only covered-project recovery;
+Operators receive reason-bound operational recovery only. Neither receives a
+review decision or generic artifact capability without the independent exact
+grant/action required for that operation.
+
 ## Contributor Grants
 
 | Grant | Scope | Purpose |

@@ -304,6 +304,12 @@ action activates, its dedicated AUTH custodian must integrate the complete
 feature proof according to `ACTIVATION_CUSTODY.md` and the reviewed
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_REV_HANDOFF.md`.
 
+The AUTH-REV table immediately below is retained as runtime catalogue history.
+For all future work, the canonical planning custody, principals, resource
+families, fixed identities, and exact XINT-003 waves are in
+`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+Chunk 01 changes no runtime owner or availability.
+
 | AUTH activation custodian | Exact planned ActionIds |
 |---|---|
 | `WS-AUTH-001-REV-05` | `review.queue.read`, `review.queue.inspect` |
@@ -424,7 +430,8 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+| runtime `WS-XINT-002-07`, sub-wave `07A` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` (finding-slot availability only) |
+| runtime `WS-XINT-002-07`, sub-wave `07B` | no availability change; response-slot evaluator extension only |
 
 The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. WS-XINT-002-03 activates the three internal
@@ -461,8 +468,8 @@ remain planned and unavailable, and add no migration.
 | `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
-| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
-| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | exact verified review evidence slot | `WS-XINT-002-07` |
+| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | runtime `WS-XINT-002-07`; sub-wave `07A` |
+| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | finding slot in 07A; response slot added by evaluator-only 07B | runtime `WS-XINT-002-07`; `07A` availability / `07B` extension |
 
 The fixed internal service identities and their complete action sets are also
 closed:
