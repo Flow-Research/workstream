@@ -103,8 +103,11 @@ dependency checker; the lockfile records the same bytes.
 
 ## External review
 
-CodeRabbit and hosted GitHub gates have not run yet. Their findings remain
-external merge evidence and must be checked after the draft PR opens.
+CodeRabbit found one valid malformed-PDF exception mapping issue and one valid
+documentation omission. `KeyError`/`IndexError` now map to bounded terminal
+malformed outcomes with regression proof, and the 100,000-object limit is
+documented. Hosted Backend and Agent Gates passed before the repair and rerun on
+the final head.
 
 ## Remaining risks and follow-up
 

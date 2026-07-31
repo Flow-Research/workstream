@@ -17,6 +17,7 @@ from pypdf.generic import (
 )
 
 from app.modules.artifacts.guide_extraction import GuideExtractionRunner
+import app.modules.artifacts.guide_pdf as pdf_module
 from app.modules.artifacts.guide_pdf import PdfExtractionFailure, extract_pdf
 
 
@@ -119,6 +120,21 @@ def test_pdf_rejects_malformed_encrypted_interactive_and_embedded_content(
         extract_pdf(payload)
 
     assert (raised.value.status, raised.value.code) == (status, code)
+
+
+@pytest.mark.parametrize("failure", [KeyError("missing"), IndexError("truncated")])
+def test_pdf_maps_common_pypdf_structure_errors_to_malformed(
+    failure: Exception, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail_reader(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(pdf_module, "PdfReader", fail_reader)
+
+    with pytest.raises(PdfExtractionFailure) as raised:
+        extract_pdf(b"%PDF-1.7")
+
+    assert (raised.value.status, raised.value.code) == ("malformed", "invalid_pdf")
 
 
 @pytest.mark.parametrize(

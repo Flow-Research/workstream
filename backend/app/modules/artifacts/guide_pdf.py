@@ -122,6 +122,6 @@ def extract_pdf(payload: bytes) -> str:
         pages = [_canonical_page_text(page.extract_text()) for page in reader.pages]
     except PdfExtractionFailure:
         raise
-    except (PdfReadError, RecursionError, TypeError, ValueError) as exc:
+    except (PdfReadError, IndexError, KeyError, RecursionError, TypeError, ValueError) as exc:
         raise PdfExtractionFailure("malformed", "invalid_pdf") from exc
     return json.dumps({"pages": pages}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)

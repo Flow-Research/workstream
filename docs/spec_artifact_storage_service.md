@@ -1293,7 +1293,9 @@ output, successful usage, or a sufficiency report.
 PDF extraction uses only the exact approved `pypdf==6.14.2` wheel inside that
 same isolated child. The adapter requires the server-classified `pdf` format,
 accepts at most 500 pages, and emits compact canonical JSON containing one text
-entry per page so page boundaries remain explicit. Encrypted or malformed PDFs
+entry per page so page boundaries remain explicit. Recursive object inspection
+is capped at 100,000 objects; exceeding it returns the bounded internal
+`pdf_object_limit` outcome. Encrypted or malformed PDFs
 and PDFs containing forms, XFA, attachments, embedded files, open/additional
 actions, JavaScript, launch actions, external URIs, or other externally
 resolving actions fail with bounded internal outcomes. No raw PDF bytes,

@@ -262,3 +262,5 @@
 - Final architecture, security, QA, product/ops, senior engineering, CI
   integrity, docs, reuse/dedup, and test-delta reviews pass. Low future reuse
   advice is recorded but is not a blocker for this bounded format adapter.
+- CodeRabbit's valid external findings add bounded `KeyError`/`IndexError`
+  malformed-PDF mapping and document the 100,000-object inspection limit.
