@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 
 import pytest
+from packaging.requirements import Requirement
 
 from scripts import check_guide_extractor_dependencies as gate
 
@@ -152,6 +153,66 @@ def test_exact_declared_parser_pin_passes(tmp_path: Path, monkeypatch: pytest.Mo
     gate.validate_declared_dependencies(allowlist, data["prohibited_packages"])
 
 
+def test_approved_conditional_wheel_requirements_are_valid_pep508() -> None:
+    allowlist = gate.validate_manifest(_manifest())
+    requirements = gate._approved_requirements(allowlist["pillow"])
+
+    assert len(requirements) == 2
+    parsed = [Requirement(requirement) for requirement in requirements]
+    assert {str(requirement.marker) for requirement in parsed} == {
+        'python_version == "3.11"',
+        'python_version == "3.12"',
+    }
+
+
+def test_native_parser_rejects_project_python_outside_approved_wheels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _manifest()
+    allowlist = gate.validate_manifest(data)
+    pillow = sorted(gate._approved_requirements(allowlist["pillow"]))
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nrequires-python = ">=3.11"\ndependencies = ' + repr(pillow) + "\n"
+    )
+    monkeypatch.setattr(gate, "PYPROJECT_PATH", pyproject)
+
+    with pytest.raises(
+        gate.DependencyGateError,
+        match="guide_dependency_project_python_range_unsupported",
+    ):
+        gate.validate_declared_dependencies(allowlist, data["prohibited_packages"])
+
+
+@pytest.mark.parametrize(
+    "facts,failure",
+    [
+        ({"python_version": (3, 13)}, "guide_dependency_runtime_python_unsupported"),
+        ({"system": "Darwin"}, "guide_dependency_runtime_platform_unsupported"),
+        ({"machine": "aarch64"}, "guide_dependency_runtime_platform_unsupported"),
+        ({"libc": "musl"}, "guide_dependency_runtime_platform_unsupported"),
+    ],
+)
+def test_native_parser_runtime_fails_outside_approved_wheel_platform(
+    facts: dict[str, object], failure: str
+) -> None:
+    runtime = {
+        "python_version": (3, 12),
+        "system": "Linux",
+        "machine": "x86_64",
+        "libc": "glibc",
+    }
+    runtime.update(facts)
+    with pytest.raises(gate.DependencyGateError, match=failure):
+        gate.validate_runtime_platform(**runtime)  # type: ignore[arg-type]
+
+
+def test_approved_native_runtime_platform_passes() -> None:
+    gate.validate_runtime_platform(
+        python_version=(3, 12), system="Linux", machine="x86_64", libc="glibc"
+    )
+
+
 @pytest.mark.parametrize("table", ["project.optional-dependencies", "dependency-groups"])
 def test_optional_or_dependency_group_parser_declaration_is_forbidden(
     table: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -196,6 +257,24 @@ def test_parser_module_rejects_undeclared_third_party_import(
 
     with pytest.raises(gate.DependencyGateError, match="guide_dependency_parser_import_undeclared"):
         gate.validate_parser_imports(allowlist)
+
+
+def test_parser_module_requires_matching_runtime_dependency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parser_root = tmp_path / "app" / "modules" / "artifacts"
+    parser_root.mkdir(parents=True)
+    (parser_root / "guide_images.py").write_text("from PIL import Image\n")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("[project]\ndependencies = []\n")
+    monkeypatch.setattr(gate, "BACKEND_ROOT", tmp_path)
+    monkeypatch.setattr(gate, "PYPROJECT_PATH", pyproject)
+
+    with pytest.raises(
+        gate.DependencyGateError,
+        match="guide_dependency_parser_runtime_declaration_missing",
+    ):
+        gate.validate_parser_imports(gate.validate_manifest(_manifest()))
 
 
 def test_parser_module_allows_stdlib_project_and_approved_imports(

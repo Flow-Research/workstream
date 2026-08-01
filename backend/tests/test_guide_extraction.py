@@ -14,6 +14,7 @@ from uuid import uuid4
 import zipfile
 
 import pytest
+from PIL import Image
 
 import app.modules.artifacts.guide_extraction as extraction_module
 import app.modules.artifacts.guide_extraction_worker as worker_module
@@ -41,6 +42,13 @@ from app.modules.artifacts.guide_xlsx import XlsxExtractionFailure, extract_xlsx
 
 async def _bytes(payload: bytes):
     yield payload
+
+
+def _image_payload(format_name: str) -> bytes:
+    output = BytesIO()
+    mode = "RGBA" if format_name == "PNG" else "RGB"
+    Image.new(mode, (3, 2), 0).save(output, format=format_name)
+    return output.getvalue()
 
 
 def _xlsx_package(*, cell: str = '<c r="A1" t="s"><v>0</v></c>') -> bytes:
@@ -569,6 +577,78 @@ def test_xlsx_worker_orders_limits_validator_adapter_seccomp_then_parsing(
         "error_code": None,
         "output": '{"worksheets":[]}',
         "omission_facts": omissions,
+    }
+
+
+@pytest.mark.parametrize("detected_format", ["png", "jpeg", "webp"])
+def test_image_worker_orders_limits_plugin_import_seccomp_then_parsing(
+    monkeypatch: pytest.MonkeyPatch, detected_format: str
+) -> None:
+    events: list[str] = []
+    writes: list[bytes] = []
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: events.append("limits"))
+
+    def load_image(actual_format: str):
+        assert actual_format == detected_format
+        events.append("trusted_import")
+
+        def parse(_payload: bytes) -> str:
+            events.append("parse")
+            return (
+                '{"bit_depth":8,"color_model":"rgb","detected_format":"'
+                + detected_format
+                + '","frame_count":1,"height":2,"transparency":false,"width":3}'
+            )
+
+        return parse
+
+    monkeypatch.setattr(worker_module, "_load_image_extractor", load_image)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: events.append("seccomp"))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", detected_format])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"image")))
+    monkeypatch.setattr(
+        worker_module.os,
+        "write",
+        lambda _fd, value: (writes.append(bytes(value)), len(value))[1],
+    )
+
+    assert worker_module.main() == 0
+    assert events == ["limits", "trusted_import", "seccomp", "parse"]
+    assert json.loads(b"".join(writes))["status"] == "extracted"
+
+
+@pytest.mark.parametrize(
+    ("detected_format", "format_name", "color_model", "transparency"),
+    [
+        ("png", "PNG", "rgba", True),
+        ("jpeg", "JPEG", "ycbcr", False),
+        ("webp", "WEBP", "rgb", False),
+    ],
+)
+def test_real_isolated_image_runner_uses_v6_and_default_omissions(
+    runner: GuideExtractionRunner,
+    tmp_path: Path,
+    detected_format: str,
+    format_name: str,
+    color_model: str,
+    transparency: bool,
+) -> None:
+    result = runner.extract(
+        BytesIO(_image_payload(format_name)),
+        detected_format=detected_format,
+        workspace=tmp_path,
+    )
+    assert result.status == "extracted"
+    assert result.policy_version == "guide-extraction-v6"
+    assert result.omission_facts == {"truncated": False, "omitted": False}
+    assert json.loads(result.canonical_output or "") == {
+        "bit_depth": 8,
+        "color_model": color_model,
+        "detected_format": detected_format,
+        "frame_count": 1,
+        "height": 2,
+        "transparency": transparency,
+        "width": 3,
     }
 
 

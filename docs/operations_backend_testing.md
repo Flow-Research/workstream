@@ -1,4 +1,13 @@
 # Backend Testing Operations
+
+## Native guide-extractor runtime
+
+The approved v0.1 image extractor supports CPython 3.11 or 3.12 on Linux glibc
+x86_64. Its Pillow dependency is installed only from the approved hash-bound
+manylinux wheels. Python 3.13, macOS, ARM, and musl environments intentionally
+fail the guide-extractor dependency gate rather than resolving an unapproved
+native artifact.
+
 Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
 phase receives only a strict `workstream_test_<12 lowercase hex>` database and an ephemeral login without elevated authority.
