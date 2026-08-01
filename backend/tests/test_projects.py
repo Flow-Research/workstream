@@ -148,6 +148,42 @@ class _DiagnosticAuthorization:
         self.calls.append((action_id, resource))
 
 
+@pytest.mark.asyncio
+async def test_project_policy_lock_queries_lock_only_policy_rows() -> None:
+    statements: list[Any] = []
+
+    class Session:
+        async def scalar(self, statement: Any) -> None:
+            statements.append(statement)
+            return None
+
+    repository = ProjectRepository(cast(Any, Session()))
+    await repository.lock_review_policy("project-id", "v1")
+    await repository.lock_revision_policy("project-id", "v1")
+
+    rendered = [
+        str(statement.compile(dialect=postgresql.dialect())) for statement in statements
+    ]
+    assert "FOR UPDATE OF review_policies" in rendered[0]
+    assert "FOR UPDATE OF project_guides" not in rendered[0]
+    assert "FOR UPDATE OF revision_policies" in rendered[1]
+    assert "FOR UPDATE OF project_guides" not in rendered[1]
+
+
+def test_policy_identity_shape_metadata_matches_migration_contract() -> None:
+    expected = {
+        "ck_review_policies_review_policy_identity_shape": ReviewPolicy,
+        "ck_revision_policies_revision_policy_identity_shape": RevisionPolicy,
+    }
+    for name, model in expected.items():
+        constraint = next(item for item in model.__table__.constraints if item.name == name)
+        sql = str(constraint.sqltext)
+        assert "policy_generation > 0" in sql
+        assert "^sha256:[0-9a-f]{64}$" in sql
+        assert "complete" in sql
+        assert "legacy_incomplete" in sql
+
+
 class _DiagnosticRepository:
     def __init__(self, *, project_id: str, guide_id: str, target: Any) -> None:
         self.project = types.SimpleNamespace(id=project_id)
@@ -2031,19 +2067,18 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                 }
             )
             values.pop("sla_hours", None)
+            values = {
+                "review_preference_window_seconds": 3600,
+                "review_lease_duration_seconds": 1800,
+                "max_active_review_leases_per_reviewer": 1,
+                "self_review_allowed": False,
+                "reject_policy": "close_task",
+                "finding_evidence_requirement": "optional",
+                **values,
+            }
             review_hash = policy_digest(
                 "review",
-                ReviewPolicySemantics.model_validate(
-                    {
-                        "review_preference_window_seconds": 3600,
-                        "review_lease_duration_seconds": 1800,
-                        "max_active_review_leases_per_reviewer": 1,
-                        "self_review_allowed": False,
-                        "reject_policy": "close_task",
-                        "finding_evidence_requirement": "optional",
-                        **values,
-                    }
-                ),
+                ReviewPolicySemantics.model_validate(values),
             )
             review_id = str(uuid4())
             session.add(
@@ -2054,12 +2089,6 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                     policy_generation=1,
                     policy_hash=review_hash,
                     semantics_status="complete",
-                    review_preference_window_seconds=3600,
-                    review_lease_duration_seconds=1800,
-                    max_active_review_leases_per_reviewer=1,
-                    self_review_allowed=False,
-                    reject_policy="close_task",
-                    finding_evidence_requirement="optional",
                     **values,
                 )
             )

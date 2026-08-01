@@ -839,7 +839,7 @@ class ProjectRepository:
                 ProjectGuide.project_id == project_id,
                 ProjectGuide.version == guide_version,
             )
-            .with_for_update()
+            .with_for_update(of=ReviewPolicy)
         )
 
     async def lock_revision_policy(
@@ -863,7 +863,7 @@ class ProjectRepository:
                 ProjectGuide.project_id == project_id,
                 ProjectGuide.version == guide_version,
             )
-            .with_for_update()
+            .with_for_update(of=RevisionPolicy)
         )
 
     async def get_pre_submit_checker_policy(

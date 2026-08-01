@@ -64,6 +64,7 @@ docs/spec_chunk_6_checker_contract_records.md
 .agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/chunks/WS-XINT-003-02B-policy-mutation-activation.md
 .agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02A-preimplementation-review.md
 .agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02A-internal-review.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02A-external-review-response.md
 .agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02A-pr-trust-bundle.md
 ```
 

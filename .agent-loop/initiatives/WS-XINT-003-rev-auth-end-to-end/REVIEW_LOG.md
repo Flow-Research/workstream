@@ -74,3 +74,9 @@ CheckerRun-to-Submission Task binding, stale active E2E/docs surfaces, vacuous
 legacy assertions, asymmetric immutability proof, and the final schema
 fingerprint. All tracks passed after correction; no finding remains open. The
 final evidence is in `reviews/WS-XINT-003-02A-internal-review.md`.
+
+CodeRabbit's PR #242 review found missing ORM identity-shape metadata, overly
+broad joined row locks, invalid active-guide fixture ordering, and a duplicated
+test semantics mapping. All were valid and corrected. Incremental CodeRabbit
+attempts were then rate-limited; the exact response is in
+`reviews/WS-XINT-003-02A-external-review-response.md`.

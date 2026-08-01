@@ -54,6 +54,12 @@ and re-reviewed.
 GitHub Actions and CodeRabbit must review the exact final PR head. Every valid
 comment or failing check must be resolved before human merge.
 
+CodeRabbit's complete first-head review produced four valid points across three
+inline comments: policy identity metadata, scoped row locking, fixture
+activation ordering, and shared test semantics. All are fixed and recorded in
+`WS-XINT-003-02A-external-review-response.md`. Later incremental attempts were
+rate-limited; exact-head Agent Gates and Backend are the authoritative checks.
+
 ## Remaining risk and follow-up
 
 This chunk establishes identity and lineage but deliberately activates no

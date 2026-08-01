@@ -435,6 +435,11 @@ class ReviewPolicy(Base):
             "policy_hash",
             name="uq_review_policy_scoped_lineage",
         ),
+        CheckConstraint(
+            "policy_generation > 0 and policy_hash ~ '^sha256:[0-9a-f]{64}$' and "
+            "semantics_status in ('complete','legacy_incomplete')",
+            name="review_policy_identity_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -482,6 +487,11 @@ class RevisionPolicy(Base):
             "policy_generation",
             "policy_hash",
             name="uq_revision_policy_scoped_lineage",
+        ),
+        CheckConstraint(
+            "policy_generation > 0 and policy_hash ~ '^sha256:[0-9a-f]{64}$' and "
+            "semantics_status in ('complete','legacy_incomplete')",
+            name="revision_policy_identity_shape",
         ),
     )
 
