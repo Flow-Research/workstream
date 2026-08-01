@@ -82,7 +82,7 @@ PDF/OOXML packages, framework/AUTH/Celery/submission changes.
   metadata and must not concatenate its JSON into textual sufficiency input.
 - Parser imports and execution exist only in the isolated extraction child,
   never API, materialization/provider, AUTH, Celery, or agent assembly paths.
-- The worker imports the approved adapter before descriptor-only seccomp, as it
+- The extraction child imports the approved adapter before descriptor-only seccomp, as it
   does for other approved parsers. After seccomp, the adapter parses signature,
   dimensions, bit depth/color type, transparency markers, and structural frame
   declarations before `Image.open`, decoder entry, seeking frames, or any
@@ -138,7 +138,7 @@ PDF/OOXML packages, framework/AUTH/Celery/submission changes.
   isolate the pixel gate while remaining under the 16,384 dimension limit;
   tests assert the exact production constant, a production-feasible first
   over-limit product, and an exact configured-limit/one-over transition.
-- Tests prove the real 03B2 classifier and isolated worker agree for every
+- Tests prove the real 03B2 classifier and isolated extraction child agree for every
   format; malformed/truncated and metadata-bearing fixtures cover PNG, JPEG,
   and WebP; child-only imports and v6 persistence/replay are deterministic.
   The dedicated image module belongs to the existing canonical hosted semantic

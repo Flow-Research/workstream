@@ -89,9 +89,11 @@ re-reviewed.
 
 ## External review
 
-CodeRabbit and hosted GitHub checks have not yet reviewed the branch. They
-supplement but do not replace internal review, and valid findings must be
-repaired before human merge approval.
+The first Agent Gates run found two ambiguous uses of `worker` in the chunk
+contract; both were corrected to `extraction child`. CodeRabbit initially
+reported its review limit rather than code findings, so a fresh review remains
+to be requested. Hosted checks and CodeRabbit supplement but do not replace
+internal review, and valid findings must be repaired before human merge.
 
 ## Remaining risks and follow-up work
 
