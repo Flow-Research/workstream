@@ -19,6 +19,11 @@
   atomic setup-run output linkage, migration restoration, constraints, and
   absolute/relative persistence-import boundary detection.
 - Added the ART material adapter to the focused 90 percent coverage command.
+- Reconciled the closed artifact-interface export assertion with the three
+  canonical guide-sufficiency value types exposed by that interface.
+- Recreated the async database engine after the migration downgrade/upgrade
+  boundary so the round-trip test observes the freshly committed constraint
+  catalogue instead of reusing its pre-upgrade pool.
 
 ## Comments deferred
 
@@ -43,7 +48,8 @@ boundary.
 - Ruff over backend application, tests, and scripts.
 - Focused architecture, queue failure, router, prompt, migration, exact material,
   provenance/replay, stale-contract, authorization-doc, and Markdown-link checks.
-- Hosted Backend and Agent Gates on the repaired PR head.
+- Hosted Agent Gates on the repaired PR head; Backend is rerun after each exact
+  semantic-lane repair.
 
 ## Remaining risks
 

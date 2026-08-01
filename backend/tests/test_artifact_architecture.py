@@ -47,6 +47,11 @@ CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
 }
+CANONICAL_VALUE_TYPES = {
+    "GuideSufficiencyExtractionProvenance",
+    "GuideSufficiencyMaterialUnavailable",
+    "GuideSufficiencySourceItem",
+}
 PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
     "ArtifactRecoveryRequest",
     "GuideSufficiencyMaterialRequest",
@@ -326,7 +331,11 @@ def test_provider_methods_stay_inside_artifact_orchestration_and_adapters() -> N
 
 def test_artifact_operations_exports_only_canonical_closed_contracts() -> None:
     assert set(artifact_operations.__all__) == (
-        CLOSED_PORTS | CANONICAL_REQUESTS | CANONICAL_RESULTS | CANONICAL_TYPE_ALIASES
+        CLOSED_PORTS
+        | CANONICAL_REQUESTS
+        | CANONICAL_RESULTS
+        | CANONICAL_TYPE_ALIASES
+        | CANONICAL_VALUE_TYPES
     )
     tree = _tree(ARTIFACT_OPERATIONS)
     protocol_names = {
@@ -359,7 +368,11 @@ def test_artifact_operations_exports_only_canonical_closed_contracts() -> None:
         if isinstance(element, ast.Constant) and isinstance(element.value, str)
     }
     assert exported_names == (
-        CLOSED_PORTS | CANONICAL_REQUESTS | CANONICAL_RESULTS | CANONICAL_TYPE_ALIASES
+        CLOSED_PORTS
+        | CANONICAL_REQUESTS
+        | CANONICAL_RESULTS
+        | CANONICAL_TYPE_ALIASES
+        | CANONICAL_VALUE_TYPES
     )
 
     forbidden_fields = {

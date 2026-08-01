@@ -136,7 +136,11 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
                 text("select to_regclass('guide_sufficiency_report_source_usages')")
             )
         assert absent is None
+        # Do not reuse a connection pool established against the downgraded
+        # schema when asserting the freshly upgraded constraint catalogue.
+        await engine.dispose()
         await asyncio.to_thread(command.upgrade, config, "head")
+        engine = create_async_engine(isolated_database_env)
         async with engine.connect() as connection:
             present = await connection.scalar(
                 text("select to_regclass('guide_sufficiency_report_source_usages')")
