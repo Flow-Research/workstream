@@ -402,7 +402,8 @@ release charges or mutate capacity.
 
 The binding lookup resource vocabulary is exactly `project`, `project_guide`,
 `guide_source_snapshot`, `guide_source_snapshot_item`, `task`, `submission`, or
-`checker_run`. Review lookup remains deferred until WS-XINT-002-07. The audit
+`checker_run`. Review lookup remains deferred until WS-XINT-002-07A; response-
+slot evaluation is separately deferred to evaluator-only 07B. The audit
 resource vocabulary is exactly
 `artifact_binding`, `artifact_content`, `artifact_replica`, `artifact_receipt`,
 `artifact_verification_job`, or `artifact_recovery_attempt`. Adding a product or

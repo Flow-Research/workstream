@@ -6,7 +6,9 @@
 - [Authorization service specification](../../../docs/spec_authorization_service.md)
 - [Roles and permissions](../../../docs/operations_roles_permissions.md)
 - [XINT-002 human-review revision owner](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-05D-human-review-revision.md)
-- [XINT-002 review artifact owner](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07-review-artifact-activation.md)
+- [XINT-002 reviewer artifact activation](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07A-reviewer-artifact-activation.md)
+- [XINT-002 response artifact extension](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07B-response-artifact-extension.md)
+- [Historical XINT-002 combined split record](../WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-07-review-artifact-activation.md)
 
 ## Baseline
 
@@ -153,8 +155,9 @@ needs a closed typed context with only its valid shape.
 - AUTH-12D2 and REV-03P must be reconciled before either policy writer is built.
 - REV hidden feature chunks must merge before matching AUTH action activation.
 - XINT-002 remains the sole activation owner for ART review-artifact actions and
-  shared human-review submission actions. Its current combined review-artifact contract must split
-  response-evidence activation after the human revision obligation exists.
+  shared human-review submission actions. WS-XINT-003-01 split the combined
+  review-artifact contract into 07A finding availability and 07B response
+  evaluation after the human revision obligation exists.
 - CON atomic participant and FinalAcceptance integration must merge before
   `review.decision` activation.
 - Final product routes remain absent until the complete dependency conformance
@@ -162,9 +165,9 @@ needs a closed typed context with only its valid shape.
 
 ## Risks discovered
 
-- The current REV plan contains obsolete signed-start and generated-loop gates
-  contrary to current `AGENTS.md`; those statements are process history, not
-  implementation blockers.
+- The entry REV plan contained obsolete signed-start and generated-loop gates;
+  WS-XINT-003-01 removed them from current authority while preserving relevant
+  historical provenance.
 - Historical action counts and owner chunk names are stale after many AUTH/ART
   migrations and cannot be used as exact implementation inputs.
 - `review.finding_evidence.ingest -> review.decision` and
@@ -182,10 +185,9 @@ needs a closed typed context with only its valid shape.
 ## Unknowns to resolve at each activation wave
 
 - Exact merged feature symbol/manifest and migration head at chunk start.
-- Whether one existing policy table can be cleanly adopted as immutable
-  versioned REV policy without schema replacement.
 - Exact bounded fields for queue inspection and chain/context reads.
-- Exact service identity names and provisioning state on then-current main.
+- Provisioning/migration state for the exact fixed identities named in
+  `ACTION_CUSTODY.md` on then-current main.
 
 These are implementation-time evidence questions, not reasons to place product
 lifecycle logic in AUTH.

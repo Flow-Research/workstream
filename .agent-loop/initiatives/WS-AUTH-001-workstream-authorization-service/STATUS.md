@@ -1,5 +1,9 @@
 # Status: WS-AUTH-001 - Workstream Authorization Service
 
+WS-XINT-003-01 reconciles future REV activation custody and policy-writer
+ownership. It changes no catalogue/runtime state: all registered REV actions
+remain planned and four lifecycle actions remain unregistered.
+
 ## Current status
 
 Planning merged through PR #91 as

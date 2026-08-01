@@ -1,5 +1,8 @@
 # Status: WS-REV-001 Review And Revision Lifecycle
 
+WS-XINT-003-01 supersedes obsolete process gates for future REV-AUTH work and
+reconciles REV-03P with AUTH-12D2. No runtime action is activated.
+
 ## Current status
 
 On 2026-07-22 a complete reread of the canonical Markdown and PDF specification
@@ -10,11 +13,11 @@ Guide setup, activation, Task intake, and upstream publication fencing belong to
 their owning subsystems. REV reports gaps in those handoffs and does not repair
 them. The attempted 02A1 runtime candidate was reverted in full.
 
-`WS-REV-001-PLAN3` is proposed planning-only work, not canonically active. It retires
+`WS-REV-001-PLAN3` is merged historical planning. It retires
 02A/02A1/02A2/02A3/02A4/02B/02C as REV implementation authorization. The first
-future REV chunk is 03P: REV-owned ReviewPolicy/RevisionPolicy persistence.
-Canonical start requires the signed `Loop Memory Explicit Event` workflow on
-exact current main; chat and local work are not start evidence.
+future policy work is the reconciled WS-XINT-003-02 writer cutover; 03P is not
+an independent implementation path. Work starts through the repository's
+ordinary intent/plan/bounded-change loop after an explicit user request.
 
 The historical text below records the superseded PLAN2/02A state and is not
 current implementation authority. Trusted main at that time was `44f2467c`, which additionally
@@ -30,11 +33,9 @@ Current trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`
 with sole Alembic head `0033_authorization_read_rate_control`. The bullets below describe the
 older PLAN2 snapshot and are not current runtime proof.
 
-Canonical signed loop memory currently remains stopped after merged 02A and
-names retired 02A1 as next. That projection is accurate historical automation
-state but no longer a valid REV scope choice. PLAN3 is proposed—not active—and
-its reviewed merge intent changes the same-initiative successor to 03P. No
-runtime work may begin before that merge and a later signed 03P start.
+Generated loop state naming retired 02A1 is historical and is not an
+implementation gate. The canonical next cross-initiative sequence is the
+WS-XINT-003 chunk map.
 
 - Single Alembic head: `0028_artifact_admission`.
 - TaskAssignment and Submission expose canonical `contributor_id` with
@@ -108,7 +109,8 @@ start statement in it is void under D28 and PLAN3.
 
 ## Human-owned gates
 
-- Start 03P only through the signed workflow after this reviewed plan merges.
+- Implement policy work only through reconciled WS-XINT-003-02 after its
+  current-main contract review and an explicit user request.
 - Start 03A only after 03P and after its current-main refresh proves every exact
   `allow_review`, Submission, artifact, and reviewer owner handoff.
 - Exact human Review revision-round counting, deadline anchor, and boundary
@@ -121,6 +123,6 @@ start statement in it is void under D28 and PLAN3.
 
 ## Stop condition
 
-Complete the PLAN3 boundary correction and stop. Do not implement runtime code.
-Do not resume any 02A-family, 02B, or 02C chunk. After PLAN3 merges, await a
-signed explicit start on exact current main before implementing 03P.
+PLAN3 is complete historical boundary correction. Do not resume any 02A-family,
+02B, or 02C chunk. Future runtime work follows the current XINT-003 map and an
+explicit user request.

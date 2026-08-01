@@ -37,3 +37,9 @@
     release waits for complete conformance.
 15. Obsolete signed-start, active-chunk, and merge-intent language in historical
     REV planning does not govern current work under `AGENTS.md`.
+16. Existing project ReviewPolicy/RevisionPolicy tables are the sole future
+    persistence records. XINT-003-02 introduces the sole append-only writer and
+    removes the four legacy callable mutator/construction paths named in the
+    reconciled REV-03P/AUTH-12D2 contracts.
+17. XINT-002-07A is the only review-evidence binding availability transition;
+    07B adds response-slot evaluator shape without changing availability.

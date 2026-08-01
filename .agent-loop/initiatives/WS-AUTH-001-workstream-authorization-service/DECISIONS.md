@@ -1,5 +1,10 @@
 # Decisions: WS-AUTH-001 - Workstream Authorization Service
 
+WS-XINT-003 preserves REV ownership of policy semantics and selects one
+AUTH-authorized append-only policy writer. Its waves prospectively replace
+historical AUTH-REV placeholders; runtime ownership/availability changes only
+in each later activation chunk.
+
 ## D1: Adopt WS-AUTH-001 as the authorization authority source
 
 Status: accepted by the user on 2026-07-11.

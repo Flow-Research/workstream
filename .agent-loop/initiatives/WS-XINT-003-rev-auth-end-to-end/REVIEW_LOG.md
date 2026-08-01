@@ -42,3 +42,25 @@ No reviewer finding remains open.
 
 External CI and CodeRabbit results belong to the planning PR trust bundle and
 external-review response.
+
+PR #237 CodeRabbit review at head
+`8250adf3ac52bc4bfee69fd5299dd70f21fb3ad1` found four valid documentation
+integrity issues. The response reconciled 05A/05B availability versus 05D
+revision evaluator extension, preserved the registration-only 08R boundary,
+removed wording that implied 07A runtime activation, and recorded exact-head
+review evidence. No comment was deferred.
+
+The final CodeRabbit pass added two valid evidence clarifications: immutable
+check-run IDs are now recorded for reviewed head `8250adf3`, and the external
+response explicitly leaves the required human review open. Neither automated
+review nor this response substitutes for human approval of the named contract
+boundaries.
+
+## WS-XINT-003-01 contract reconciliation
+
+Architecture, security/auth, product/operations, QA/test, senior engineering,
+docs, and reuse/dedup reviewed the completed docs-only reconciliation. Valid
+findings corrected fixed-service identity drift, ART global-matrix wording,
+runtime owner versus sub-wave ambiguity, missing per-action dependencies,
+07B/human activation order, and obsolete signed-start gates. All tracks passed;
+the final evidence is in `reviews/WS-XINT-003-01-internal-review.md`.
