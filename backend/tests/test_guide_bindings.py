@@ -172,7 +172,7 @@ def _docx_payload() -> bytes:
     document = (
         b'<w:document xmlns:w="http://schemas.openxmlformats.org/'
         b'wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>visible</w:t></w:r>'
-        b'<w:del><w:r><w:delText>deleted</w:delText></w:r></w:del></w:p>'
+        b"<w:del><w:r><w:delText>deleted</w:delText></w:r></w:del></w:p>"
         b"</w:body></w:document>"
     )
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -209,6 +209,35 @@ def _pptx_payload() -> bytes:
         archive.writestr("ppt/presentation.xml", presentation)
         archive.writestr("ppt/_rels/presentation.xml.rels", relationships)
         archive.writestr("ppt/slides/slide1.xml", slide)
+    return output.getvalue()
+
+
+def _xlsx_payload() -> bytes:
+    output = BytesIO()
+    main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    relationships = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    package = "http://schemas.openxmlformats.org/package/2006/relationships"
+    members = {
+        "[Content_Types].xml": "<Types/>",
+        "_rels/.rels": "<Relationships/>",
+        "xl/workbook.xml": (
+            f'<workbook xmlns="{main}" xmlns:r="{relationships}"><sheets>'
+            '<sheet name="Guide" sheetId="1" r:id="rId1"/>'
+            "</sheets></workbook>"
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            f'<Relationships xmlns="{package}"><Relationship Id="rId1" '
+            f'Type="{relationships}/worksheet" Target="worksheets/sheet1.xml"/>'
+            "</Relationships>"
+        ),
+        "xl/worksheets/sheet1.xml": (
+            f'<worksheet xmlns="{main}"><sheetData><row r="1">'
+            '<c r="A1" t="str"><v>guide</v></c></row></sheetData></worksheet>'
+        ),
+    }
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, body in members.items():
+            archive.writestr(name, body)
     return output.getvalue()
 
 
@@ -557,8 +586,25 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
                 "embedded_objects": False,
             },
         ),
+        (
+            _xlsx_payload(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xlsx",
+            '{"worksheets":[{"cells":[{"coordinate":"A1","formula":null,'
+            '"value":{"type":"text","value":"guide"}}],"merged_ranges":[],'
+            '"name":"Guide","position":1,"visibility":"visible"}]}',
+            {
+                "truncated": False,
+                "omitted": False,
+                "formatting": False,
+                "comments": False,
+                "drawings": False,
+                "hidden_metadata": False,
+                "unsupported_objects": False,
+            },
+        ),
     ],
-    ids=("json", "docx", "pptx"),
+    ids=("json", "docx", "pptx", "xlsx"),
 )
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
     isolated_database_env: str,
@@ -571,9 +617,7 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
     expected_omissions: dict[str, bool],
 ) -> None:
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option(
-        "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
-    )
+    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
     with migration_lock():
         await asyncio.to_thread(command.downgrade, config, "0042_guide_extraction")
         await asyncio.to_thread(command.upgrade, config, "head")
@@ -610,9 +654,7 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                     classification_facts={},
                 )
             )
-        prepared = await preparation.prepare(
-            _byte_stream(payload), media_type=media_type
-        )
+        prepared = await preparation.prepare(_byte_stream(payload), media_type=media_type)
         request = GuideExtractionRequest(
             project_id=ids["project"],
             guide_id=ids["guide"],
@@ -900,7 +942,7 @@ async def test_successful_replay_requires_the_current_extraction_policy(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("detected_format", ["pdf", "docx", "pptx"])
+@pytest.mark.parametrize("detected_format", ["pdf", "docx", "pptx", "xlsx"])
 async def test_new_format_support_replaces_obsolete_policy_budget_without_replay(
     isolated_database_env: str,
     tmp_path: Path,
@@ -916,9 +958,12 @@ async def test_new_format_support_replaces_obsolete_policy_budget_without_replay
     elif detected_format == "docx":
         payload = _docx_payload()
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    else:
+    elif detected_format == "pptx":
         payload = _pptx_payload()
         media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    else:
+        payload = _xlsx_payload()
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -1283,9 +1328,7 @@ async def test_post_read_lineage_drift_records_stale_incident(
                             guide_id=str(ids["guide"]),
                             guide_version="v1",
                             source_snapshot_id=str(ids["snapshot"]),
-                            source_snapshot_hash=canonical_json_hash(
-                                {"item": str(ids["item"])}
-                            ),
+                            source_snapshot_hash=canonical_json_hash({"item": str(ids["item"])}),
                             setup_generation=2,
                             status="queued",
                             current_step="queued",

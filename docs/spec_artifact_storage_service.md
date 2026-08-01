@@ -1331,6 +1331,21 @@ Successful PPTX evidence binds the fixed boolean omission keys `truncated`,
 output beyond 4 MiB fail without partial agent input. Active embedded content
 remains a malformed rejection at the shared OOXML boundary.
 
+XLSX extraction runs only after exact `xlsx` classification and the shared
+OOXML boundary. Policy `guide-extraction-v5` resolves the workbook's exact
+Transitional or Strict worksheet and shared-string relationships, preserves
+workbook sheet order, normalizes worksheet visibility, and emits deterministic
+cells sorted by ascending row then column using canonical uppercase A1
+coordinates, plus canonical merged ranges. Formula
+source is preserved but never evaluated; scalar caches retain their typed
+lexical values. The fixed omission evidence records formatting, comments,
+drawings, hidden metadata, and passive unsupported spreadsheet objects.
+Duplicate or orphaned relationships, mixed namespace families, invalid grid
+coordinates, conflicting merged cells, unsafe formulas, and malformed scalar
+types fail closed. The adapter enforces 100 worksheets, 100,000 rows, 1,000,000
+cells, 32,768 characters per formula/value pair, 64 XML levels, and 4 MiB of
+canonical output without publishing a partial result.
+
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
 syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB
