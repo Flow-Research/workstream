@@ -7028,6 +7028,23 @@ async def test_openai_agent_sdk_adapter_rejects_oversized_prompt_before_sdk_impo
         await runtime.analyze_guide_sufficiency(material)
 
 
+async def test_openai_agent_sdk_adapter_wraps_canonical_serialization_type_error() -> None:
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
+
+    with pytest.raises(
+        ProjectAgentRuntimeError,
+        match="prompt is not canonically serializable",
+    ):
+        await runtime._run_structured_agent(
+            name="serialization-test",
+            instructions="Return structured output.",
+            material={"unsupported": {"set-value"}},
+            output_type=GuideSufficiencyAgentResult,
+        )
+
+
 async def test_openai_agent_sdk_sends_exact_canonical_verified_material(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

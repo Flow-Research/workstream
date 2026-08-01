@@ -242,7 +242,7 @@ class OpenAIAgentSdkProjectGuideRuntime:
                     allow_nan=False,
                 ).encode("utf-8")
             )
-        except ValueError:
+        except (TypeError, ValueError):
             raise ProjectAgentRuntimeError(
                 "OpenAI Agents SDK prompt is not canonically serializable"
             ) from None

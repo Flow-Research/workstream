@@ -12,7 +12,8 @@
   unexpected-failure setup codes.
 - Added report provenance shape, digest, size, and generation constraints plus
   the child canonical-output digest constraint in ORM and migration.
-- Wrapped non-finite prompt serialization as the port-owned runtime error.
+- Wrapped non-finite and unsupported-value prompt serialization as the
+  port-owned runtime error.
 - Added missing queue/task argument docs and corrected captured-payload typing.
 - Strengthened tests for obsolete extraction exclusion, exact prompt byte count,
   atomic setup-run output linkage, migration restoration, constraints, and
