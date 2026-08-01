@@ -5,6 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 import binascii
 import json
+import zlib
 
 import pytest
 from PIL import Image, PngImagePlugin
@@ -159,7 +160,9 @@ def test_dimension_and_pixel_limits_run_before_decoder_entry(
     assert decoder_called is False
 
 
-def test_exact_limit_constants_and_boundary_transitions() -> None:
+def test_exact_limit_constants_and_boundary_transitions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert (
         image_module.MAXIMUM_DIMENSION,
         image_module.MAXIMUM_PIXELS,
@@ -172,15 +175,11 @@ def test_exact_limit_constants_and_boundary_transitions() -> None:
     with pytest.raises(ImageExtractionFailure) as dimension:
         image_module._enforce_limits(ImageStructuralFacts("png", 16_385, 1, 1, "rgb", 8, False))
     assert dimension.value.code == "image_dimension_limit"
-    monkeypatch_limit = image_module.MAXIMUM_PIXELS
-    try:
-        image_module.MAXIMUM_PIXELS = 5
-        image_module._enforce_limits(ImageStructuralFacts("png", 5, 1, 1, "rgb", 8, False))
-        with pytest.raises(ImageExtractionFailure) as one_over:
-            image_module._enforce_limits(ImageStructuralFacts("png", 6, 1, 1, "rgb", 8, False))
-        assert one_over.value.code == "image_pixel_limit"
-    finally:
-        image_module.MAXIMUM_PIXELS = monkeypatch_limit
+    monkeypatch.setattr(image_module, "MAXIMUM_PIXELS", 5)
+    image_module._enforce_limits(ImageStructuralFacts("png", 5, 1, 1, "rgb", 8, False))
+    with pytest.raises(ImageExtractionFailure) as one_over:
+        image_module._enforce_limits(ImageStructuralFacts("png", 6, 1, 1, "rgb", 8, False))
+    assert one_over.value.code == "image_pixel_limit"
 
 
 @pytest.mark.parametrize(
@@ -454,6 +453,23 @@ def test_png_transparency_marker_is_semantic() -> None:
         (b"IEND", b""),
     )
     assert image_module._png(payload).transparency is True
+
+
+def test_sixteen_bit_grayscale_alpha_preserves_header_semantics() -> None:
+    payload = _png_with_chunks(
+        (b"IHDR", b"\0\0\0\1\0\0\0\1\x10\x04\0\0\0"),
+        (b"IDAT", zlib.compress(b"\0\x80\0\xff\xff")),
+        (b"IEND", b""),
+    )
+    assert json.loads(extract_image(payload, detected_format="png")) == {
+        "bit_depth": 16,
+        "color_model": "grayscale_alpha",
+        "detected_format": "png",
+        "frame_count": 1,
+        "height": 1,
+        "transparency": True,
+        "width": 1,
+    }
 
 
 @pytest.mark.parametrize(

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from io import BytesIO
 import binascii
 import json
+from typing import NoReturn
 import warnings
 
 from PIL import Image, UnidentifiedImageError
@@ -54,7 +55,7 @@ class ImageExtractionFailure(Exception):
         self.code = code
 
 
-def _fail(status: str, code: str) -> None:
+def _fail(status: str, code: str) -> NoReturn:
     raise ImageExtractionFailure(status, code)
 
 
@@ -328,7 +329,7 @@ def _expected_modes(facts: ImageStructuralFacts) -> frozenset[str]:
         return frozenset({"RGBA"}) if facts.transparency else frozenset({"RGB"})
     return {
         "grayscale": frozenset({"1", "L", "I", "I;16", "I;16B"}),
-        "grayscale_alpha": frozenset({"LA"}),
+        "grayscale_alpha": frozenset({"LA", "RGBA"}),
         "indexed": frozenset({"P"}),
         "rgb": frozenset({"RGB"}),
         "rgba": frozenset({"RGBA"}),

@@ -654,6 +654,8 @@ def test_image_adapter_is_confined_to_the_isolated_worker() -> None:
                 adapter_importers.add(relative)
     assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
 
+
+def test_pillow_is_confined_to_the_worker_and_image_adapter() -> None:
     pillow_importers: set[str] = set()
     for path in APP_ROOT.rglob("*.py"):
         for node in ast.walk(_tree(path)):

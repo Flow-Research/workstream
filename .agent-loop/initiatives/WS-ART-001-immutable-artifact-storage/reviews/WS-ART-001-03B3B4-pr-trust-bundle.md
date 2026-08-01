@@ -60,9 +60,9 @@ review, contribution, payment, or reputation behavior changes.
 
 - Dependency gate, `uv lock --check`, Ruff, stale-contract scan, Markdown links,
   and `git diff --check` — pass.
-- Image/dependency focused suite — 107 passed; image branch coverage 90.76%.
+- Image/dependency-focused suite — 108 passed; image branch coverage 90.78%.
 - Image/extraction/dependency suite with real isolated PNG/JPEG/WebP workers —
-  203 passed; image branch coverage 90.76%.
+  204 passed; image branch coverage 90.78%.
 - Format/image/extraction/architecture/dependency integration suite — 247
   passed.
 - DB-backed persistence/replay and repository-wide coverage remain assigned to
