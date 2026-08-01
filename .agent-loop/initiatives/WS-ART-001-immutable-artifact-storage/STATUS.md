@@ -81,8 +81,9 @@ child.
 wheel and adds the shared bounded OPC/OOXML container security capability.
 03B3B3B merged through PR #234. It adds bounded DOCX extraction and durable
 omission facts on the shared OOXML boundary. 03B3B3C merged through PR #235 and
-adds bounded PPTX slide/notes extraction. 03B3B3D is the active successor and
-adds only bounded XLSX cell extraction. Image, AUTH, and sufficiency work remain
+adds bounded PPTX slide/notes extraction. 03B3B3D merged through PR #238 and
+adds bounded XLSX cell extraction. 03B3B4 is the active successor and adds only
+bounded PNG/JPEG/WebP structural metadata. AUTH and sufficiency work remain
 inactive.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and

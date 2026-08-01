@@ -140,6 +140,7 @@ def _extract(
     docx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
     pptx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
     xlsx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
+    image_extractor: Callable[[bytes], str] | None = None,
 ) -> str | tuple[str, dict[str, bool]]:
     if detected_format == "pdf":
         if pdf_extractor is None:
@@ -157,6 +158,10 @@ def _extract(
         if xlsx_extractor is None:
             raise ExtractionFailure("parser_failure", "parser_unavailable")
         return xlsx_extractor(payload)
+    if detected_format in {"png", "jpeg", "webp"}:
+        if image_extractor is None:
+            raise ExtractionFailure("parser_failure", "parser_unavailable")
+        return image_extractor(payload)
     text = _decode_text(payload)
     if detected_format in {"plain_text", "markdown"}:
         return text
@@ -273,6 +278,23 @@ def _load_xlsx_extractor(
     return bounded_extract
 
 
+def _load_image_extractor(detected_format: str) -> Callable[[bytes], str]:
+    """Load approved native image plugins before descriptor-only seccomp."""
+    from PIL import Image
+
+    from app.modules.artifacts.guide_images import ImageExtractionFailure, extract_image
+
+    Image.init()
+
+    def bounded_extract(payload: bytes) -> str:
+        try:
+            return extract_image(payload, detected_format=detected_format)
+        except ImageExtractionFailure as exc:
+            raise ExtractionFailure(exc.status, exc.code) from exc
+
+    return bounded_extract
+
+
 def main() -> int:
     """Apply resource/isolation controls and emit one bounded JSON result."""
     detected_format = sys.argv[1] if len(sys.argv) == 2 else ""
@@ -282,6 +304,7 @@ def main() -> int:
         docx_extractor = None
         pptx_extractor = None
         xlsx_extractor = None
+        image_extractor = None
         if detected_format == "pdf":
             pdf_extractor = _load_pdf_extractor()
         elif detected_format == "docx":
@@ -290,6 +313,8 @@ def main() -> int:
             pptx_extractor = _load_pptx_extractor(_load_ooxml_security())
         elif detected_format == "xlsx":
             xlsx_extractor = _load_xlsx_extractor(_load_ooxml_security())
+        elif detected_format in {"png", "jpeg", "webp"}:
+            image_extractor = _load_image_extractor(detected_format)
         _install_seccomp()
         payload = sys.stdin.buffer.read(_MAXIMUM_INPUT_BYTES + 1)
         if len(payload) > _MAXIMUM_INPUT_BYTES:
@@ -301,6 +326,7 @@ def main() -> int:
             docx_extractor,
             pptx_extractor,
             xlsx_extractor,
+            image_extractor,
         )
         if isinstance(extracted, tuple):
             output, omission_facts = extracted
