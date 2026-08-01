@@ -504,9 +504,7 @@ def _evidence_candidate_tokens(evidence_item: dict) -> set[str]:
             if value is not None:
                 candidates.add(str(value))
     return {
-        normalized
-        for candidate in candidates
-        if (normalized := _normalize_policy_token(candidate))
+        normalized for candidate in candidates if (normalized := _normalize_policy_token(candidate))
     }
 
 
@@ -708,10 +706,7 @@ def _size_limit_outcome(manifest: list[dict], effective_policy: dict) -> Checker
             )
 
     maximum_package_size = effective_policy.get("maximum_package_size_bytes")
-    known_manifest_size = sum(
-        entry.get("size_bytes") or 0
-        for entry in manifest
-    )
+    known_manifest_size = sum(entry.get("size_bytes") or 0 for entry in manifest)
     if maximum_package_size is not None and known_manifest_size > maximum_package_size:
         return _fail(
             "check_submission_packet",
@@ -737,7 +732,9 @@ def _packaging_outcome(
     allowed_formats = packaging.get("allowed_package_formats") or []
     if allowed_formats and payload.package_uri:
         lowered_uri = payload.package_uri.lower()
-        if not any(lowered_uri.endswith(f".{str(fmt).lower().lstrip('.')}") for fmt in allowed_formats):
+        if not any(
+            lowered_uri.endswith(f".{str(fmt).lower().lstrip('.')}") for fmt in allowed_formats
+        ):
             return _fail(
                 "check_submission_packet",
                 "Submission package format is not allowed by the locked project policy.",
@@ -852,8 +849,12 @@ async def check_policy_context_present(context: CheckerContext) -> CheckerOutcom
             "locked_post_submit_checker_policy_hash": (
                 context.submission.locked_post_submit_checker_policy_hash
             ),
-            "locked_review_policy_version": context.submission.locked_review_policy_version,
-            "locked_revision_policy_version": context.submission.locked_revision_policy_version,
+            "locked_review_policy_id": context.submission.locked_review_policy_id,
+            "locked_review_policy_generation": context.submission.locked_review_policy_generation,
+            "locked_review_policy_hash": context.submission.locked_review_policy_hash,
+            "locked_revision_policy_id": context.submission.locked_revision_policy_id,
+            "locked_revision_policy_generation": context.submission.locked_revision_policy_generation,
+            "locked_revision_policy_hash": context.submission.locked_revision_policy_hash,
             "locked_payment_policy_version": context.submission.locked_payment_policy_version,
             "locked_guide_source_snapshot_id": context.submission.locked_guide_source_snapshot_id,
             "locked_guide_source_snapshot_hash": context.submission.locked_guide_source_snapshot_hash,

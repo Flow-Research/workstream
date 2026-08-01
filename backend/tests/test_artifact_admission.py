@@ -102,6 +102,11 @@ from app.modules.projects.models import (
     RevisionPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.policy_lineage import (
+    ReviewPolicySemantics,
+    RevisionPolicySemantics,
+    policy_digest,
+)
 from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 from tests.artifact_store_helpers import (
@@ -427,6 +432,8 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     effective_policy_id = str(uuid4())
     pre_submit_policy_id = str(uuid4())
     post_submit_policy_id = str(uuid4())
+    review_policy_id = str(uuid4())
+    revision_policy_id = str(uuid4())
     task_id = str(uuid4())
     submission_id = str(uuid4())
     contributor_id = str(uuid4())
@@ -443,6 +450,22 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     post_submit_policy_body = {"required_checkers": []}
     post_submit_policy_hash = canonical_json_hash(post_submit_policy_body)
     now = datetime.now(UTC)
+    review_hash = policy_digest(
+        "review",
+        ReviewPolicySemantics(
+            review_preference_window_seconds=3600,
+            review_lease_duration_seconds=1800,
+            allowed_decisions=("accept", "needs_revision", "reject"),
+        ),
+    )
+    revision_hash = policy_digest(
+        "revision",
+        RevisionPolicySemantics(
+            max_revision_rounds=1,
+            revision_deadline_hours=24,
+            allowed_resubmission_states=("needs_revision",),
+        ),
+    )
 
     await seed_historical_project(
         session,
@@ -571,20 +594,31 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
                 created_by="setup-actor",
             ),
             ReviewPolicy(
-                id=str(uuid4()),
+                id=review_policy_id,
                 project_id=project_id,
                 guide_version=guide_version,
+                policy_generation=1,
+                policy_hash=review_hash,
+                semantics_status="complete",
+                review_preference_window_seconds=3600,
+                review_lease_duration_seconds=1800,
+                max_active_review_leases_per_reviewer=1,
+                self_review_allowed=False,
+                reject_policy="close_task",
+                finding_evidence_requirement="optional",
                 requires_second_review=False,
                 allowed_decisions=["accept", "needs_revision", "reject"],
                 minimum_finding_fields=[],
             ),
             RevisionPolicy(
-                id=str(uuid4()),
+                id=revision_policy_id,
                 project_id=project_id,
                 guide_version=guide_version,
+                policy_generation=1,
+                policy_hash=revision_hash,
+                semantics_status="complete",
                 max_revision_rounds=1,
                 revision_deadline_hours=24,
-                auto_reject_after_limit=True,
                 allowed_resubmission_states=["needs_revision"],
             ),
             PaymentPolicy(
@@ -595,6 +629,20 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         ]
     )
     await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody",),
+    ):
+        guide = await session.get(ProjectGuide, guide_id)
+        assert guide is not None
+        guide.selected_review_policy_id = review_policy_id
+        guide.selected_review_policy_generation = 1
+        guide.selected_review_policy_hash = review_hash
+        guide.selected_revision_policy_id = revision_policy_id
+        guide.selected_revision_policy_generation = 1
+        guide.selected_revision_policy_hash = revision_hash
+        await session.flush()
     session.add(
         WorkstreamTask(
             id=task_id,
@@ -604,8 +652,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             locked_guide_source_snapshot_id=snapshot_id,
             locked_guide_source_snapshot_hash=snapshot_hash,
@@ -660,8 +712,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             locked_guide_source_snapshot_id=snapshot_id,
             locked_guide_source_snapshot_hash=snapshot_hash,
@@ -693,8 +749,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             package_hash=canonical_json_hash({"submission": submission_id}),
             artifact_hash_manifest=[],
@@ -4143,8 +4203,16 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                     locked_post_submit_checker_policy_body=(
                         canonical_task.locked_post_submit_checker_policy_body
                     ),
-                    locked_review_policy_version=canonical_task.locked_review_policy_version,
-                    locked_revision_policy_version=(canonical_task.locked_revision_policy_version),
+                    locked_review_policy_id=canonical_task.locked_review_policy_id,
+                    locked_review_policy_generation=(
+                        canonical_task.locked_review_policy_generation
+                    ),
+                    locked_review_policy_hash=canonical_task.locked_review_policy_hash,
+                    locked_revision_policy_id=canonical_task.locked_revision_policy_id,
+                    locked_revision_policy_generation=(
+                        canonical_task.locked_revision_policy_generation
+                    ),
+                    locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
                     locked_payment_policy_version=(canonical_task.locked_payment_policy_version),
                     locked_guide_source_snapshot_id=(
                         canonical_task.locked_guide_source_snapshot_id
@@ -4404,9 +4472,7 @@ def test_artifact_admission_migration_refuses_populated_downgrade(
             async with factory() as session:
                 context = _context()
                 await _seed_human_actor(session, context)
-                project_id, guide_id, snapshot_id, item_id = (
-                    str(uuid4()) for _ in range(4)
-                )
+                project_id, guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(4))
                 await session.execute(
                     text(
                         "insert into projects (id,name,slug,status) values "

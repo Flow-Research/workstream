@@ -153,8 +153,12 @@ class TaskResponse(BaseModel):
     id: str
     project_id: str
     locked_guide_version: str | None
-    locked_review_policy_version: str | None
-    locked_revision_policy_version: str | None
+    locked_review_policy_id: str | None
+    locked_review_policy_generation: int | None
+    locked_review_policy_hash: str | None
+    locked_revision_policy_id: str | None
+    locked_revision_policy_generation: int | None
+    locked_revision_policy_hash: str | None
     locked_payment_policy_version: str | None
     locked_guide_source_snapshot_id: str | None
     locked_guide_source_snapshot_hash: str | None
@@ -231,13 +235,17 @@ class TaskGuideContext(BaseModel):
 class TaskReviewPolicyContext(BaseModel):
     """Contributor-safe review policy summary for the locked guide version."""
 
-    guide_version: str
+    policy_id: str
+    policy_generation: int
+    policy_hash: str
 
 
 class TaskRevisionPolicyContext(BaseModel):
     """Contributor-safe revision policy summary for the locked guide version."""
 
-    guide_version: str
+    policy_id: str
+    policy_generation: int
+    policy_hash: str
 
 
 class TaskPaymentPolicyContext(BaseModel):
@@ -361,8 +369,12 @@ class TaskLockedContextResponse(BaseModel):
     locked_post_submit_checker_policy_version: str
     locked_post_submit_checker_policy_hash: str
     locked_post_submit_checker_policy_body_summary: PostSubmitPolicyBodySummary
-    locked_review_policy_version: str
-    locked_revision_policy_version: str
+    locked_review_policy_id: str
+    locked_review_policy_generation: int
+    locked_review_policy_hash: str
+    locked_revision_policy_id: str
+    locked_revision_policy_generation: int
+    locked_revision_policy_hash: str
     locked_payment_policy_version: str
 
 
@@ -429,8 +441,12 @@ class SubmissionResponse(BaseModel):
     artifact_hash_manifest: list[dict[str, Any]] | None
     worker_attestation: str | None
     locked_guide_version: str | None
-    locked_review_policy_version: str | None
-    locked_revision_policy_version: str | None
+    locked_review_policy_id: str | None
+    locked_review_policy_generation: int | None
+    locked_review_policy_hash: str | None
+    locked_revision_policy_id: str | None
+    locked_revision_policy_generation: int | None
+    locked_revision_policy_hash: str | None
     locked_payment_policy_version: str | None
     locked_guide_source_snapshot_id: str | None
     locked_guide_source_snapshot_hash: str | None

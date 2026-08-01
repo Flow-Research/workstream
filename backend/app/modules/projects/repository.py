@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
@@ -735,8 +735,7 @@ class ProjectRepository:
             .where(
                 EffectiveProjectSubmissionArtifactPolicy.project_id == project_id,
                 EffectiveProjectSubmissionArtifactPolicy.guide_version == guide_version,
-                EffectiveProjectSubmissionArtifactPolicy.source_snapshot_id
-                == source_snapshot_id,
+                EffectiveProjectSubmissionArtifactPolicy.source_snapshot_id == source_snapshot_id,
                 EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
             )
             .with_for_update()
@@ -821,15 +820,24 @@ class ProjectRepository:
             raise ProjectRepositoryIntegrityError("multiple current post-submit policies found")
         return rows[0] if rows else None
 
-    async def lock_review_policy(
-        self, project_id: str, guide_version: str
-    ) -> ReviewPolicy | None:
-        """Lock the review policy for one guide version."""
+    async def lock_review_policy(self, project_id: str, guide_version: str) -> ReviewPolicy | None:
+        """Lock the exact review-policy version selected by one guide."""
         return await self._session.scalar(
             select(ReviewPolicy)
+            .join(
+                ProjectGuide,
+                and_(
+                    ProjectGuide.project_id == ReviewPolicy.project_id,
+                    ProjectGuide.version == ReviewPolicy.guide_version,
+                    ProjectGuide.selected_review_policy_id == ReviewPolicy.id,
+                    ProjectGuide.selected_review_policy_generation
+                    == ReviewPolicy.policy_generation,
+                    ProjectGuide.selected_review_policy_hash == ReviewPolicy.policy_hash,
+                ),
+            )
             .where(
-                ReviewPolicy.project_id == project_id,
-                ReviewPolicy.guide_version == guide_version,
+                ProjectGuide.project_id == project_id,
+                ProjectGuide.version == guide_version,
             )
             .with_for_update()
         )
@@ -837,12 +845,23 @@ class ProjectRepository:
     async def lock_revision_policy(
         self, project_id: str, guide_version: str
     ) -> RevisionPolicy | None:
-        """Lock the revision policy for one guide version."""
+        """Lock the exact revision-policy version selected by one guide."""
         return await self._session.scalar(
             select(RevisionPolicy)
+            .join(
+                ProjectGuide,
+                and_(
+                    ProjectGuide.project_id == RevisionPolicy.project_id,
+                    ProjectGuide.version == RevisionPolicy.guide_version,
+                    ProjectGuide.selected_revision_policy_id == RevisionPolicy.id,
+                    ProjectGuide.selected_revision_policy_generation
+                    == RevisionPolicy.policy_generation,
+                    ProjectGuide.selected_revision_policy_hash == RevisionPolicy.policy_hash,
+                ),
+            )
             .where(
-                RevisionPolicy.project_id == project_id,
-                RevisionPolicy.guide_version == guide_version,
+                ProjectGuide.project_id == project_id,
+                ProjectGuide.version == guide_version,
             )
             .with_for_update()
         )
@@ -1047,29 +1066,6 @@ class ProjectRepository:
         )
         return result.scalar_one_or_none()
 
-    async def upsert_review_policy(self, policy: ReviewPolicy) -> ReviewPolicy:
-        """Create or replace a review policy for one guide version.
-
-        Args:
-            policy: Review policy model carrying the desired values.
-
-        Returns:
-            Persisted review policy model.
-        """
-        existing = await self.get_review_policy(policy.project_id, policy.guide_version)
-        if existing is None:
-            self._session.add(policy)
-            await self._session.flush()
-            await self._session.refresh(policy)
-            return policy
-        existing.requires_second_review = policy.requires_second_review
-        existing.allowed_decisions = policy.allowed_decisions
-        existing.minimum_finding_fields = policy.minimum_finding_fields
-        existing.sla_hours = policy.sla_hours
-        await self._session.flush()
-        await self._session.refresh(existing)
-        return existing
-
     async def get_review_policy(self, project_id: str, guide_version: str) -> ReviewPolicy | None:
         """Load a review policy by project and guide version.
 
@@ -1081,36 +1077,25 @@ class ProjectRepository:
             Review policy when found; otherwise ``None``.
         """
         result = await self._session.execute(
-            select(ReviewPolicy).where(
-                ReviewPolicy.project_id == project_id,
-                ReviewPolicy.guide_version == guide_version,
+            select(ReviewPolicy)
+            .join(
+                ProjectGuide,
+                and_(
+                    ProjectGuide.project_id == ReviewPolicy.project_id,
+                    ProjectGuide.version == ReviewPolicy.guide_version,
+                    ProjectGuide.selected_review_policy_id == ReviewPolicy.id,
+                    ProjectGuide.selected_review_policy_generation
+                    == ReviewPolicy.policy_generation,
+                    ProjectGuide.selected_review_policy_hash == ReviewPolicy.policy_hash,
+                ),
             )
+            .where(ProjectGuide.project_id == project_id, ProjectGuide.version == guide_version)
         )
         return result.scalar_one_or_none()
 
-    async def upsert_revision_policy(self, policy: RevisionPolicy) -> RevisionPolicy:
-        """Create or replace a revision policy for one guide version.
-
-        Args:
-            policy: Revision policy model carrying the desired values.
-
-        Returns:
-            Persisted revision policy model.
-        """
-        existing = await self.get_revision_policy(policy.project_id, policy.guide_version)
-        if existing is None:
-            self._session.add(policy)
-            await self._session.flush()
-            await self._session.refresh(policy)
-            return policy
-        existing.max_revision_rounds = policy.max_revision_rounds
-        existing.revision_deadline_hours = policy.revision_deadline_hours
-        existing.auto_reject_after_limit = policy.auto_reject_after_limit
-        existing.allowed_resubmission_states = policy.allowed_resubmission_states
-        existing.reviewer_reassignment_rule = policy.reviewer_reassignment_rule
-        await self._session.flush()
-        await self._session.refresh(existing)
-        return existing
+    async def get_review_policy_by_id(self, policy_id: str) -> ReviewPolicy | None:
+        """Load one immutable review-policy version by exact identity."""
+        return await self._session.get(ReviewPolicy, policy_id)
 
     async def get_revision_policy(
         self,
@@ -1127,12 +1112,25 @@ class ProjectRepository:
             Revision policy when found; otherwise ``None``.
         """
         result = await self._session.execute(
-            select(RevisionPolicy).where(
-                RevisionPolicy.project_id == project_id,
-                RevisionPolicy.guide_version == guide_version,
+            select(RevisionPolicy)
+            .join(
+                ProjectGuide,
+                and_(
+                    ProjectGuide.project_id == RevisionPolicy.project_id,
+                    ProjectGuide.version == RevisionPolicy.guide_version,
+                    ProjectGuide.selected_revision_policy_id == RevisionPolicy.id,
+                    ProjectGuide.selected_revision_policy_generation
+                    == RevisionPolicy.policy_generation,
+                    ProjectGuide.selected_revision_policy_hash == RevisionPolicy.policy_hash,
+                ),
             )
+            .where(ProjectGuide.project_id == project_id, ProjectGuide.version == guide_version)
         )
         return result.scalar_one_or_none()
+
+    async def get_revision_policy_by_id(self, policy_id: str) -> RevisionPolicy | None:
+        """Load one immutable revision-policy version by exact identity."""
+        return await self._session.get(RevisionPolicy, policy_id)
 
     async def upsert_payment_policy(self, policy: PaymentPolicy) -> PaymentPolicy:
         """Create or replace a payment policy for one guide version.

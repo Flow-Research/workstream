@@ -1290,6 +1290,32 @@ async def test_locked_submission_checker_run_persists_results_and_allows_review(
         == checker_run.locked_post_submit_checker_policy_hash
         == expected_post_submit_policy["policy_hash"]
     )
+    assert (
+        task.locked_review_policy_id,
+        task.locked_review_policy_generation,
+        task.locked_review_policy_hash,
+    ) == (
+        submission.locked_review_policy_id,
+        submission.locked_review_policy_generation,
+        submission.locked_review_policy_hash,
+    ) == (
+        checker_run.locked_review_policy_id,
+        checker_run.locked_review_policy_generation,
+        checker_run.locked_review_policy_hash,
+    )
+    assert (
+        task.locked_revision_policy_id,
+        task.locked_revision_policy_generation,
+        task.locked_revision_policy_hash,
+    ) == (
+        submission.locked_revision_policy_id,
+        submission.locked_revision_policy_generation,
+        submission.locked_revision_policy_hash,
+    ) == (
+        checker_run.locked_revision_policy_id,
+        checker_run.locked_revision_policy_generation,
+        checker_run.locked_revision_policy_hash,
+    )
     audit_response = await checker_client.get(
         f"/api/v1/tasks/{started_task['id']}/audit-events",
         headers=auth_headers(),
@@ -1560,6 +1586,37 @@ async def test_database_rejects_mismatched_submission_post_submit_policy_context
     assert submission.locked_post_submit_checker_policy_hash != "sha256:" + "0" * 64
     assert len(runs) == 1
     assert results != []
+
+
+async def test_database_rejects_checker_run_with_another_tasks_submission(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(checker_client)
+    first_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    first = await checker_client.post(
+        f"/api/v1/tasks/{first_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    second_task = await create_started_task(
+        checker_client, project["id"], monkeypatch, subject="worker-two"
+    )
+    second = await checker_client.post(
+        f"/api/v1/tasks/{second_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert first.status_code == second.status_code == 201
+
+    async with db_session.get_session_factory()() as session:
+        checker_run = await session.scalar(
+            select(CheckerRun).where(CheckerRun.submission_id == first.json()["id"])
+        )
+        assert checker_run is not None
+        checker_run.task_id = second_task["id"]
+        with pytest.raises(IntegrityError):
+            await session.commit()
 
 
 async def test_locked_submission_checker_run_enforces_required_evidence_key(
@@ -2577,8 +2634,15 @@ async def test_worker_can_read_only_worker_visible_checker_result_fields(
     assert "locked_post_submit_checker_policy_version" not in body
     assert "locked_post_submit_checker_policy_hash" not in body
     assert "locked_post_submit_checker_policy_body" not in body
-    assert "locked_review_policy_version" not in body
-    assert "locked_revision_policy_version" not in body
+    for field in (
+        "locked_review_policy_id",
+        "locked_review_policy_generation",
+        "locked_review_policy_hash",
+        "locked_revision_policy_id",
+        "locked_revision_policy_generation",
+        "locked_revision_policy_hash",
+    ):
+        assert field not in body
     assert "locked_payment_policy_version" not in body
     assert "package_hash" not in body
     assert "artifact_hash_manifest" not in body

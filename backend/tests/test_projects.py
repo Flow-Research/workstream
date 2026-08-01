@@ -62,6 +62,11 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.policy_lineage import (
+    ReviewPolicySemantics,
+    RevisionPolicySemantics,
+    policy_digest,
+)
 from app.modules.projects.guide_mutation_repository import GuideMutationRepository
 from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import (
@@ -185,9 +190,7 @@ class _DiagnosticStatementCaptureSession:
 
     async def execute(self, statement: Any) -> Any:
         self.statements.append(statement)
-        return types.SimpleNamespace(
-            scalars=lambda: types.SimpleNamespace(all=lambda: [])
-        )
+        return types.SimpleNamespace(scalars=lambda: types.SimpleNamespace(all=lambda: []))
 
 
 class _PolicyReadRepository:
@@ -486,9 +489,7 @@ async def test_project_active_guide_read_composer_binds_non_compensation_bundle(
         )
     assert authorization.calls[-1][1].target_exists is False
 
-    repository.post_submit.pre_submit_checker_bundle_hash = (
-        repository.checker.compiled_bundle_hash
-    )
+    repository.post_submit.pre_submit_checker_bundle_hash = repository.checker.compiled_bundle_hash
 
     def raise_policy_setup_blocked(*_args: Any, **_kwargs: Any) -> None:
         raise PolicySetupBlocked("invalid canonical policy")
@@ -674,9 +675,7 @@ async def test_project_create_route_owns_commit_or_replay_rollback(
         session,  # type: ignore[arg-type]
     )
     assert returned is response
-    assert (session.commit_count, session.rollback_count) == (
-        (0, 1) if replayed else (1, 0)
-    )
+    assert (session.commit_count, session.rollback_count) == ((0, 1) if replayed else (1, 0))
 
 
 @pytest.mark.asyncio
@@ -963,9 +962,7 @@ async def test_project_diagnostic_read_composer_binds_each_action(
         source_snapshot_hash=f"sha256:{'a' * 64}",
         output_post_submit_checker_policy_id=None,
     )
-    repository = _DiagnosticRepository(
-        project_id=project_id, guide_id=guide_id, target=target
-    )
+    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=target)
     authorization = _DiagnosticAuthorization()
 
     result = await authorize_project_diagnostic_read(
@@ -1024,9 +1021,7 @@ async def test_project_diagnostic_read_composer_fails_closed_for_invalid_or_miss
             guide_id=guide_id,
         )
     repository.project = types.SimpleNamespace(id=project_id)
-    repository.guide = types.SimpleNamespace(
-        id=guide_id, project_id=str(uuid4()), version="v1"
-    )
+    repository.guide = types.SimpleNamespace(id=guide_id, project_id=str(uuid4()), version="v1")
     with pytest.raises(RuntimeError, match="unexpectedly allowed"):
         await authorize_project_diagnostic_read(
             authorization=cast(Any, authorization),
@@ -1047,9 +1042,7 @@ async def test_project_diagnostic_read_composer_locks_post_submit_policy_binding
         "source_snapshot_id": snapshot_id,
         "source_snapshot_hash": f"sha256:{'c' * 64}",
     }
-    run = types.SimpleNamespace(
-        id=run_id, output_post_submit_checker_policy_id=policy_id, **shared
-    )
+    run = types.SimpleNamespace(id=run_id, output_post_submit_checker_policy_id=policy_id, **shared)
     policy = types.SimpleNamespace(id=policy_id, **shared)
     repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=run)
     repository.post_policy = policy
@@ -1216,9 +1209,7 @@ async def add_project_manager_admin_grant(project_id: str) -> UUID:
         return grant.id
 
 
-async def add_local_admin_role_for_default_actor(
-    role: str, *, project_id: str | None
-) -> UUID:
+async def add_local_admin_role_for_default_actor(role: str, *, project_id: str | None) -> UUID:
     """Add one valid local administrative grant through the fixture grantor."""
     actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
     async with db_session.get_session_factory()() as session:
@@ -1959,7 +1950,9 @@ async def test_project_create_exact_replay_and_mismatch_are_atomic(
         assert project is not None
         event = await session.get(AuditEvent, project.authorization_decision_event_id)
         allowed_event_count = await session.scalar(
-            select(func.count()).select_from(AuditEvent).where(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(
                 AuditEvent.action_id == "project.create",
                 AuditEvent.event_type == "SensitiveAuthorizationAllowed",
                 AuditEvent.target_ref_id == project.id,
@@ -2006,8 +1999,7 @@ async def test_project_create_concurrent_exact_replay_commits_once(
             select(func.count())
             .select_from(ProjectCreateIdempotencyRecord)
             .where(
-                ProjectCreateIdempotencyRecord.idempotency_key
-                == UUID(headers["Idempotency-Key"])
+                ProjectCreateIdempotencyRecord.idempotency_key == UUID(headers["Idempotency-Key"])
             )
         )
     assert project_count == replay_count == 1
@@ -2027,6 +2019,7 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
     assert response.status_code == 201, response.text
     guide = response.json()
     async with db_session.get_session_factory()() as session:
+        review_id = revision_id = None
         if review_policy is not None:
             values = (
                 review_policy
@@ -2035,14 +2028,38 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                     "requires_second_review": False,
                     "allowed_decisions": ["accept", "needs_revision", "reject"],
                     "minimum_finding_fields": ["issue", "required_fix"],
-                    "sla_hours": 24,
                 }
             )
+            values.pop("sla_hours", None)
+            review_hash = policy_digest(
+                "review",
+                ReviewPolicySemantics.model_validate(
+                    {
+                        "review_preference_window_seconds": 3600,
+                        "review_lease_duration_seconds": 1800,
+                        "max_active_review_leases_per_reviewer": 1,
+                        "self_review_allowed": False,
+                        "reject_policy": "close_task",
+                        "finding_evidence_requirement": "optional",
+                        **values,
+                    }
+                ),
+            )
+            review_id = str(uuid4())
             session.add(
                 ReviewPolicy(
-                    id=str(uuid4()),
+                    id=review_id,
                     project_id=project_id,
                     guide_version=guide["version"],
+                    policy_generation=1,
+                    policy_hash=review_hash,
+                    semantics_status="complete",
+                    review_preference_window_seconds=3600,
+                    review_lease_duration_seconds=1800,
+                    max_active_review_leases_per_reviewer=1,
+                    self_review_allowed=False,
+                    reject_policy="close_task",
+                    finding_evidence_requirement="optional",
                     **values,
                 )
             )
@@ -2053,16 +2070,23 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                 else {
                     "max_revision_rounds": 7,
                     "revision_deadline_hours": 48,
-                    "auto_reject_after_limit": True,
                     "allowed_resubmission_states": ["needs_revision"],
                     "reviewer_reassignment_rule": "same reviewer preferred",
                 }
             )
+            values.pop("auto_reject_after_limit", None)
+            revision_hash = policy_digest(
+                "revision", RevisionPolicySemantics.model_validate(values)
+            )
+            revision_id = str(uuid4())
             session.add(
                 RevisionPolicy(
-                    id=str(uuid4()),
+                    id=revision_id,
                     project_id=project_id,
                     guide_version=guide["version"],
+                    policy_generation=1,
+                    policy_hash=revision_hash,
+                    semantics_status="complete",
                     **values,
                 )
             )
@@ -2087,6 +2111,16 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                     **values,
                 )
             )
+        guide_row = await session.get(ProjectGuide, guide["id"])
+        assert guide_row is not None
+        if review_id is not None:
+            guide_row.selected_review_policy_id = review_id
+            guide_row.selected_review_policy_generation = 1
+            guide_row.selected_review_policy_hash = review_hash
+        if revision_id is not None:
+            guide_row.selected_revision_policy_id = revision_id
+            guide_row.selected_revision_policy_generation = 1
+            guide_row.selected_revision_policy_hash = revision_hash
         await session.commit()
     await add_project_manager_admin_grant(project_id)
     if source_snapshot is not None:
@@ -2757,9 +2791,7 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
 
     async with db_session.get_session_factory()() as session:
         persisted_guide = await session.get(ProjectGuide, guide["id"])
-        persisted_snapshot = await session.get(
-            GuideSourceSnapshot, snapshotted.json()["id"]
-        )
+        persisted_snapshot = await session.get(GuideSourceSnapshot, snapshotted.json()["id"])
 
         records = (
             await session.scalars(
@@ -2774,19 +2806,13 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
         assert persisted_guide.last_mutation_scope_type == "system"
         assert persisted_guide.last_mutation_scope_project_id is None
         assert persisted_guide.last_authorization_decision_event_id is not None
-        assert (
-            persisted_snapshot.creation_action_id
-            == "project.guide_source_snapshot.create"
-        )
+        assert persisted_snapshot.creation_action_id == "project.guide_source_snapshot.create"
         assert persisted_snapshot.authorization_decision_event_id is not None
         assert len(records) == 4
         assert all(record.status == "committed" for record in records)
         assert sum(record.action_id == "project.guide.create" for record in records) == 1
         assert (
-            sum(
-                record.action_id == "project.guide_source_snapshot.create"
-                for record in records
-            )
+            sum(record.action_id == "project.guide_source_snapshot.create" for record in records)
             == 1
         )
 
@@ -2921,17 +2947,25 @@ async def test_guide_mutation_router_composes_only_key_gated_authority(
 
     assert (
         await guide_mutation_router_module.guide_authorization_actor(
-            key, request, result, session, rate_control  # type: ignore[arg-type]
+            key,
+            request,
+            result,
+            session,
+            rate_control,  # type: ignore[arg-type]
         )
         is resolved
     )
     dependency = guide_mutation_router_module.get_guide_prepared_authorization_service(
-        request, resolved, session  # type: ignore[arg-type]
+        request,
+        resolved,
+        session,  # type: ignore[arg-type]
     )
     assert await anext(dependency) is prepared
     await dependency.aclose()
     assert await guide_mutation_router_module.guide_authorization(
-        key, resolved, prepared  # type: ignore[arg-type]
+        key,
+        resolved,
+        prepared,  # type: ignore[arg-type]
     ) == (key, resolved, prepared)
     assert calls == [
         (request, result, session, rate_control),
@@ -2942,14 +2976,10 @@ async def test_guide_mutation_router_composes_only_key_gated_authority(
 
 def test_guide_mutation_router_translates_bounded_service_errors() -> None:
     pending = guide_mutation_router_module._error(
-        guide_mutation_router_module.GuideMutationIdempotencyConflict(
-            "idempotency_pending"
-        )
+        guide_mutation_router_module.GuideMutationIdempotencyConflict("idempotency_pending")
     )
     mismatch = guide_mutation_router_module._error(
-        guide_mutation_router_module.GuideMutationIdempotencyConflict(
-            "idempotency_mismatch"
-        )
+        guide_mutation_router_module.GuideMutationIdempotencyConflict("idempotency_mismatch")
     )
     missing = guide_mutation_router_module._error(ProjectNotFound("project not found"))
 
@@ -3305,9 +3335,7 @@ def test_guide_mutation_service_classifies_reservation_outcomes() -> None:
         match="idempotency_pending",
     ):
         service._reservation_outcome("pending", record, _GuideMutationTestResponse)
-    replayed = service._reservation_outcome(
-        "replayed", record, _GuideMutationTestResponse
-    )
+    replayed = service._reservation_outcome("replayed", record, _GuideMutationTestResponse)
     assert replayed.response == ("validated", {"id": "response"})
     assert replayed.replayed is True
 
@@ -3333,9 +3361,7 @@ async def test_guide_mutation_service_composes_unsupported_prepare_denial() -> N
             self.denied = None
 
         async def prepare(self, *_args):
-            raise PreparedAuthorizationUnsupported(
-                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            )
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
 
         async def deny_unsupported(self, *args):
             self.denied = args
@@ -3455,9 +3481,12 @@ async def test_guide_source_metadata_authority_validates_key_before_actor_provis
                 assert response.status_code == 422
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(ActorIdentityLink).where(ActorIdentityLink.subject == subject)
-        ) is None
+        assert (
+            await session.scalar(
+                select(ActorIdentityLink).where(ActorIdentityLink.subject == subject)
+            )
+            is None
+        )
 
 
 async def test_create_guide_source_metadata_concurrent_replay_commits_once(
@@ -3483,18 +3512,28 @@ async def test_create_guide_source_metadata_concurrent_replay_commits_once(
     assert first.status_code == second.status_code == 201
     assert first.json() == second.json()
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(func.count()).select_from(ProjectGuide).where(
-                ProjectGuide.project_id == project["id"],
-                ProjectGuide.version == payload["version"],
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectGuide)
+                .where(
+                    ProjectGuide.project_id == project["id"],
+                    ProjectGuide.version == payload["version"],
+                )
             )
-        ) == 1
-        assert await session.scalar(
-            select(func.count()).select_from(GuideMutationIdempotencyRecord).where(
-                GuideMutationIdempotencyRecord.project_id == project["id"],
-                GuideMutationIdempotencyRecord.action_id == "project.guide.create",
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(GuideMutationIdempotencyRecord)
+                .where(
+                    GuideMutationIdempotencyRecord.project_id == project["id"],
+                    GuideMutationIdempotencyRecord.action_id == "project.guide.create",
+                )
             )
-        ) == 1
+            == 1
+        )
 
 
 async def test_guide_source_metadata_authority_enforces_exact_project_scope(
@@ -3525,11 +3564,14 @@ async def test_guide_source_metadata_authority_enforces_exact_project_scope(
         assert guide.last_mutated_by_admin_role_grant_id == grant_id
         assert guide.last_mutation_scope_type == "project"
         assert guide.last_mutation_scope_project_id == allowed_project["id"]
-        assert await session.scalar(
-            select(func.count()).select_from(ProjectGuide).where(
-                ProjectGuide.project_id == denied_project["id"]
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectGuide)
+                .where(ProjectGuide.project_id == denied_project["id"])
             )
-        ) == 0
+            == 0
+        )
         denial = await session.scalar(
             select(AuditEvent).where(
                 AuditEvent.action_id == "project.guide.create",
@@ -3588,14 +3630,12 @@ async def test_guide_source_metadata_replay_cannot_cross_project_or_guide(
     snapshot_headers = auth_headers() | {"Idempotency-Key": snapshot_key}
     snapshot_body = source_snapshot_payload()
     first_snapshot = await project_client.post(
-        f"/api/v1/projects/{first_project['id']}/guides/{first_guide['id']}"
-        "/source-snapshots",
+        f"/api/v1/projects/{first_project['id']}/guides/{first_guide['id']}/source-snapshots",
         headers=snapshot_headers,
         json=snapshot_body,
     )
     crossed_snapshot = await project_client.post(
-        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}"
-        "/source-snapshots",
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/source-snapshots",
         headers=snapshot_headers,
         json=snapshot_body,
     )
@@ -5838,9 +5878,7 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     assert [response.status_code for response in wrong_scope] == [404] * len(endpoints)
     await revoke_local_admin_role(wrong_scope_grant)
 
-    operator_grant = await add_local_admin_role_for_default_actor(
-        "operator", project_id=None
-    )
+    operator_grant = await add_local_admin_role_for_default_actor("operator", project_id=None)
     operator = [
         await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
     ]
@@ -5854,12 +5892,8 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     assert [response.status_code for response in audit] == [200] * len(endpoints)
     await revoke_local_admin_role(audit_grant)
 
-    await add_local_admin_role_for_default_actor(
-        "finance_authority", project_id=project["id"]
-    )
-    finance = [
-        await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
-    ]
+    await add_local_admin_role_for_default_actor("finance_authority", project_id=project["id"])
+    finance = [await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints]
     assert [response.status_code for response in finance] == [404] * len(endpoints)
 
 
@@ -9586,8 +9620,7 @@ async def test_post_submit_checker_policy_mutations_still_require_legacy_setup_r
         approve_post_submit_checker=False,
     )
     diagnostic = await project_client.get(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/setup",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
         headers=auth_headers(),
     )
     assert diagnostic.status_code == 200, diagnostic.text
@@ -9758,7 +9791,8 @@ async def test_review_policy_rejects_invalid_decision_names(project_client: Asyn
         "requires_second_review": False,
         "allowed_decisions": ["accept", "hold"],
         "minimum_finding_fields": ["issue", "required_fix"],
-        "sla_hours": 24,
+        "review_preference_window_seconds": 3600,
+        "review_lease_duration_seconds": 1800,
     }
 
     response = await project_client.post(
@@ -9801,7 +9835,6 @@ async def test_activation_requires_complete_revision_policy(project_client: Asyn
     payload["revision_policy"] = {
         "max_revision_rounds": 7,
         "revision_deadline_hours": 48,
-        "auto_reject_after_limit": True,
         "allowed_resubmission_states": [],
         "reviewer_reassignment_rule": "same reviewer preferred",
     }
@@ -9820,7 +9853,6 @@ async def test_revision_policy_requires_deadline(project_client: AsyncClient) ->
     payload = complete_guide_payload()
     payload["revision_policy"] = {
         "max_revision_rounds": 7,
-        "auto_reject_after_limit": True,
         "allowed_resubmission_states": ["needs_revision"],
         "reviewer_reassignment_rule": "same reviewer preferred",
     }
@@ -9865,7 +9897,6 @@ async def test_activation_rejects_unsupported_revision_resubmission_states(
     payload["revision_policy"] = {
         "max_revision_rounds": 7,
         "revision_deadline_hours": 48,
-        "auto_reject_after_limit": True,
         "allowed_resubmission_states": ["random_state"],
         "reviewer_reassignment_rule": "same reviewer preferred",
     }
@@ -10154,7 +10185,7 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
         == (bundle["pre_submit_checker_policy"]["checker_configs"])
     )
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
-    assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
+    assert "auto_reject_after_limit" not in active.json()["revision_policy"]
 
 
 async def test_draft_guide_edit_and_active_guide_edit_block(project_client: AsyncClient) -> None:
@@ -10340,9 +10371,12 @@ async def test_project_create_requires_valid_idempotency_before_actor_provisioni
             assert response.status_code == 422
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(ActorIdentityLink).where(ActorIdentityLink.subject == subject)
-        ) is None
+        assert (
+            await session.scalar(
+                select(ActorIdentityLink).where(ActorIdentityLink.subject == subject)
+            )
+            is None
+        )
 
 
 async def test_project_create_different_keys_same_slug_rolls_back_authority(
@@ -10364,14 +10398,20 @@ async def test_project_create_different_keys_same_slug_rolls_back_authority(
     assert conflict.json()["error"]["code"] == "project_slug_conflict"
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(func.count()).select_from(Project).where(Project.slug == slug)
-        ) == 1
-        assert await session.scalar(
-            select(func.count())
-            .select_from(ProjectCreateIdempotencyRecord)
-            .where(ProjectCreateIdempotencyRecord.status == "pending")
-        ) == 0
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(Project).where(Project.slug == slug)
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectCreateIdempotencyRecord)
+                .where(ProjectCreateIdempotencyRecord.status == "pending")
+            )
+            == 0
+        )
 
 
 async def test_project_create_copied_key_cannot_cross_actor_namespace(
@@ -10425,15 +10465,23 @@ async def test_project_create_copied_key_cannot_cross_actor_namespace(
     assert copied.status_code == 409
     assert copied.json()["error"]["code"] == "project_slug_conflict"
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(func.count()).select_from(Project).where(Project.slug == payload["slug"])
-        ) == 1
-        assert await session.scalar(
-            select(func.count()).select_from(ProjectCreateIdempotencyRecord).where(
-                ProjectCreateIdempotencyRecord.idempotency_key == UUID(key),
-                ProjectCreateIdempotencyRecord.status == "pending",
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(Project).where(Project.slug == payload["slug"])
             )
-        ) == 0
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectCreateIdempotencyRecord)
+                .where(
+                    ProjectCreateIdempotencyRecord.idempotency_key == UUID(key),
+                    ProjectCreateIdempotencyRecord.status == "pending",
+                )
+            )
+            == 0
+        )
 
 
 async def test_project_create_denies_project_scoped_and_contributor_authority(
@@ -10462,21 +10510,32 @@ async def test_project_create_denies_project_scoped_and_contributor_authority(
     assert denied.status_code == 403
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(
-            select(func.count()).select_from(Project).where(Project.name == "Wrong scope")
-        ) == 0
-        assert await session.scalar(
-            select(func.count()).select_from(ProjectCreateIdempotencyRecord).where(
-                ProjectCreateIdempotencyRecord.status == "pending"
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(Project).where(Project.name == "Wrong scope")
             )
-        ) == 0
-        assert await session.scalar(
-            select(func.count()).select_from(AuditEvent).where(
-                AuditEvent.action_id == "project.create",
-                AuditEvent.event_type == "SensitiveAuthorizationAllowed",
-                AuditEvent.target_ref_id != seed["id"],
+            == 0
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectCreateIdempotencyRecord)
+                .where(ProjectCreateIdempotencyRecord.status == "pending")
             )
-        ) == 0
+            == 0
+        )
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.action_id == "project.create",
+                    AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                    AuditEvent.target_ref_id != seed["id"],
+                )
+            )
+            == 0
+        )
         denial_event = await session.scalar(
             select(AuditEvent).where(
                 AuditEvent.action_id == "project.create",

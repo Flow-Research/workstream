@@ -40,17 +40,41 @@ class CheckerRun(Base):
                 "locked_post_submit_checker_policy_version",
                 "locked_post_submit_checker_policy_hash",
             ],
-            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            [
+                "checker_policies.id",
+                "checker_policies.guide_version",
+                "checker_policies.policy_hash",
+            ],
             name="fk_checker_runs_locked_post_submit_policy_hash",
         ),
         ForeignKeyConstraint(
-            ["task_id", "locked_review_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_review_policy_version"],
+            [
+                "task_id",
+                "locked_review_policy_id",
+                "locked_review_policy_generation",
+                "locked_review_policy_hash",
+            ],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_review_policy_id",
+                "workstream_tasks.locked_review_policy_generation",
+                "workstream_tasks.locked_review_policy_hash",
+            ],
             name="fk_checker_runs_task_locked_review_policy",
         ),
         ForeignKeyConstraint(
-            ["task_id", "locked_revision_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_revision_policy_version"],
+            [
+                "task_id",
+                "locked_revision_policy_id",
+                "locked_revision_policy_generation",
+                "locked_revision_policy_hash",
+            ],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_revision_policy_id",
+                "workstream_tasks.locked_revision_policy_generation",
+                "workstream_tasks.locked_revision_policy_hash",
+            ],
             name="fk_checker_runs_task_locked_revision_policy",
         ),
         ForeignKeyConstraint(
@@ -59,8 +83,8 @@ class CheckerRun(Base):
             name="fk_checker_runs_task_locked_payment_policy",
         ),
         ForeignKeyConstraint(
-            ["submission_id", "submission_version"],
-            ["submissions.id", "submissions.version"],
+            ["submission_id", "task_id", "submission_version"],
+            ["submissions.id", "submissions.task_id", "submissions.version"],
             name="fk_checker_runs_submission_version",
         ),
         ForeignKeyConstraint(
@@ -105,8 +129,12 @@ class CheckerRun(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    task_id: Mapped[str] = mapped_column(ForeignKey("workstream_tasks.id"), nullable=False, index=True)
-    submission_id: Mapped[str] = mapped_column(ForeignKey("submissions.id"), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id"), nullable=False, index=True
+    )
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("submissions.id"), nullable=False, index=True
+    )
     submission_version: Mapped[int] = mapped_column(Integer, nullable=False)
     trigger_source: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued", index=True)
@@ -137,8 +165,12 @@ class CheckerRun(Base):
     )
     locked_post_submit_checker_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     locked_post_submit_checker_policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
-    locked_review_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    locked_revision_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    locked_review_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_review_policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    locked_review_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_revision_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_revision_policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    locked_revision_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     locked_payment_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     package_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     artifact_hash_manifest: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
@@ -171,8 +203,12 @@ class CheckerResult(Base):
         nullable=False,
         index=True,
     )
-    task_id: Mapped[str] = mapped_column(ForeignKey("workstream_tasks.id"), nullable=False, index=True)
-    submission_id: Mapped[str] = mapped_column(ForeignKey("submissions.id"), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id"), nullable=False, index=True
+    )
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("submissions.id"), nullable=False, index=True
+    )
     checker_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     severity: Mapped[str] = mapped_column(String(30), nullable=False)

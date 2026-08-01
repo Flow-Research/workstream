@@ -469,15 +469,15 @@ def guide_payload(fixture: TerminalBenchmarkFixture, run_id: str) -> dict:
         ),
         "change_summary": "Initial Terminal Benchmark real-world guide",
         "review_policy": {
+            "review_preference_window_seconds": 3600,
+            "review_lease_duration_seconds": 1800,
             "requires_second_review": False,
             "allowed_decisions": ["accept", "needs_revision", "reject"],
             "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
         },
         "revision_policy": {
             "max_revision_rounds": 7,
             "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
             "allowed_resubmission_states": ["needs_revision"],
             "reviewer_reassignment_rule": "same reviewer preferred",
         },
@@ -813,15 +813,19 @@ async def create_started_terminal_benchmark_task(
         manager_token,
     )
     ensure(
-        {
-            locked_context["locked_post_submit_checker_policy_version"],
-            locked_context["locked_review_policy_version"],
-            locked_context["locked_revision_policy_version"],
-            locked_context["locked_payment_policy_version"],
-        }
-        == {"v1"},
-        "screening did not stamp every policy version",
+        locked_context["locked_post_submit_checker_policy_version"] == "v1",
+        "screening did not stamp the checker policy version",
     )
+    ensure(locked_context["locked_review_policy_id"], "review policy id missing")
+    ensure(locked_context["locked_review_policy_generation"] == 1, "review generation drifted")
+    ensure(locked_context["locked_review_policy_hash"], "review policy hash missing")
+    ensure(locked_context["locked_revision_policy_id"], "revision policy id missing")
+    ensure(
+        locked_context["locked_revision_policy_generation"] == 1,
+        "revision generation drifted",
+    )
+    ensure(locked_context["locked_revision_policy_hash"], "revision policy hash missing")
+    ensure(locked_context["locked_payment_policy_version"] == "v1", "payment policy drifted")
     await request_json(
         client,
         "POST",

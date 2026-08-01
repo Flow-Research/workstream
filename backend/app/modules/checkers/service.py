@@ -267,9 +267,7 @@ class CheckerService:
             else task.locked_pre_submit_checker_bundle_hash
         )
         guide_version = (
-            submission.locked_guide_version
-            if submission is not None
-            else task.locked_guide_version
+            submission.locked_guide_version if submission is not None else task.locked_guide_version
         )
         source_snapshot_id = (
             submission.locked_guide_source_snapshot_id
@@ -337,8 +335,7 @@ class CheckerService:
         ):
             raise CheckerPolicyInvalid("locked project pre-submit checker policy is invalid")
         if (
-            compiled_bundle.get("effective_policy_hash")
-            != effective_policy_hash
+            compiled_bundle.get("effective_policy_hash") != effective_policy_hash
             or canonical_json_hash(compiled_bundle) != pre_submit_checker_bundle_hash
         ):
             raise CheckerPolicyInvalid("locked project pre-submit checker policy is invalid")
@@ -350,7 +347,9 @@ class CheckerService:
                 compiler_version=pre_submit_checker_policy.compiler_version,
             )
         except PreSubmitCheckerCompilerError as exc:
-            raise CheckerPolicyInvalid("locked project pre-submit checker policy is invalid") from exc
+            raise CheckerPolicyInvalid(
+                "locked project pre-submit checker policy is invalid"
+            ) from exc
         checker_names = list(pre_submit_checker_policy.checker_names or [])
         if checker_names != compiled_checker_names:
             raise CheckerPolicyInvalid("locked project pre-submit checker projection is invalid")
@@ -542,7 +541,9 @@ class CheckerService:
         if latest_submission is None or latest_submission.id != submission.id:
             raise CheckerExecutionBlocked("only latest submission version can be checked")
         if task.status not in CHECKER_RUN_ALLOWED_TASK_STATUSES:
-            raise CheckerExecutionBlocked("task must be submitted or in checker gate before checkers run")
+            raise CheckerExecutionBlocked(
+                "task must be submitted or in checker gate before checkers run"
+            )
         execution_actor = audit_actor or actor
         requester_payload = requester_provenance_payload(requester_actor) if requester_actor else {}
         current_run = await self._checker_repo.get_current_run_for_submission(submission.id)
@@ -668,9 +669,8 @@ class CheckerService:
 
         current_run = await self._checker_repo.get_current_run_for_submission(submission.id)
         if current_run is not None:
-            if (
-                current_run.status == "queued"
-                and self._is_automatic_pre_review_gate_run(current_run)
+            if current_run.status == "queued" and self._is_automatic_pre_review_gate_run(
+                current_run
             ):
                 return (
                     self._run_response_for_actor(
@@ -740,8 +740,12 @@ class CheckerService:
             locked_post_submit_checker_policy_body=(
                 submission.locked_post_submit_checker_policy_body
             ),
-            locked_review_policy_version=submission.locked_review_policy_version,
-            locked_revision_policy_version=submission.locked_revision_policy_version,
+            locked_review_policy_id=submission.locked_review_policy_id,
+            locked_review_policy_generation=submission.locked_review_policy_generation,
+            locked_review_policy_hash=submission.locked_review_policy_hash,
+            locked_revision_policy_id=submission.locked_revision_policy_id,
+            locked_revision_policy_generation=submission.locked_revision_policy_generation,
+            locked_revision_policy_hash=submission.locked_revision_policy_hash,
             locked_payment_policy_version=submission.locked_payment_policy_version,
             package_hash=submission.package_hash,
             artifact_hash_manifest=submission.artifact_hash_manifest,
@@ -828,9 +832,8 @@ class CheckerService:
         candidate = await self._checker_repo.get_run(checker_run_id)
         if candidate is None:
             raise CheckerRunNotFound("checker run not found")
-        if (
-            not candidate.is_current_for_submission
-            or not self._is_automatic_pre_review_gate_run(candidate)
+        if not candidate.is_current_for_submission or not self._is_automatic_pre_review_gate_run(
+            candidate
         ):
             raise CheckerExecutionBlocked("checker run is not an automatic pre-review gate")
         if not await self._claim_queued_pre_review_gate(checker_run_id):
@@ -1178,8 +1181,7 @@ class CheckerService:
             routing_recommendation=routing_recommendation,
             outcome_source=(
                 "auto_checker"
-                if routing_recommendation
-                in {ROUTING_NEEDS_REVISION, ROUTING_TASK_SETUP_BLOCKED}
+                if routing_recommendation in {ROUTING_NEEDS_REVISION, ROUTING_TASK_SETUP_BLOCKED}
                 else "none"
             ),
             triggered_by=actor.actor_id,
@@ -1202,8 +1204,12 @@ class CheckerService:
             locked_post_submit_checker_policy_body=(
                 submission.locked_post_submit_checker_policy_body
             ),
-            locked_review_policy_version=submission.locked_review_policy_version,
-            locked_revision_policy_version=submission.locked_revision_policy_version,
+            locked_review_policy_id=submission.locked_review_policy_id,
+            locked_review_policy_generation=submission.locked_review_policy_generation,
+            locked_review_policy_hash=submission.locked_review_policy_hash,
+            locked_revision_policy_id=submission.locked_revision_policy_id,
+            locked_revision_policy_generation=submission.locked_revision_policy_generation,
+            locked_revision_policy_hash=submission.locked_revision_policy_hash,
             locked_payment_policy_version=submission.locked_payment_policy_version,
             package_hash=submission.package_hash,
             artifact_hash_manifest=submission.artifact_hash_manifest,
@@ -1247,8 +1253,7 @@ class CheckerService:
             PRE_REVIEW_GATE_UNKNOWN_CHECKER_FAILURE_CODE,
         }
         is_retryable_failure = (
-            checker_run.status == "failed"
-            and checker_run.failure_code in retryable_failure_codes
+            checker_run.status == "failed" and checker_run.failure_code in retryable_failure_codes
         )
         if not is_retryable_failure or not self._is_automatic_pre_review_gate_run(checker_run):
             return False
@@ -1294,9 +1299,7 @@ class CheckerService:
             supersedes_checker_run_id=checker_run.id,
             is_current_for_submission=True,
             locked_guide_version=checker_run.locked_guide_version,
-            locked_post_submit_checker_policy_id=(
-                checker_run.locked_post_submit_checker_policy_id
-            ),
+            locked_post_submit_checker_policy_id=(checker_run.locked_post_submit_checker_policy_id),
             locked_post_submit_checker_policy_version=(
                 checker_run.locked_post_submit_checker_policy_version
             ),
@@ -1306,8 +1309,12 @@ class CheckerService:
             locked_post_submit_checker_policy_body=(
                 checker_run.locked_post_submit_checker_policy_body
             ),
-            locked_review_policy_version=checker_run.locked_review_policy_version,
-            locked_revision_policy_version=checker_run.locked_revision_policy_version,
+            locked_review_policy_id=checker_run.locked_review_policy_id,
+            locked_review_policy_generation=checker_run.locked_review_policy_generation,
+            locked_review_policy_hash=checker_run.locked_review_policy_hash,
+            locked_revision_policy_id=checker_run.locked_revision_policy_id,
+            locked_revision_policy_generation=checker_run.locked_revision_policy_generation,
+            locked_revision_policy_hash=checker_run.locked_revision_policy_hash,
             locked_payment_policy_version=checker_run.locked_payment_policy_version,
             package_hash=checker_run.package_hash,
             artifact_hash_manifest=checker_run.artifact_hash_manifest,
@@ -1687,8 +1694,12 @@ class CheckerService:
             "locked_post_submit_checker_policy_hash": (
                 submission.locked_post_submit_checker_policy_hash
             ),
-            "locked_review_policy_version": submission.locked_review_policy_version,
-            "locked_revision_policy_version": submission.locked_revision_policy_version,
+            "locked_review_policy_id": submission.locked_review_policy_id,
+            "locked_review_policy_generation": submission.locked_review_policy_generation,
+            "locked_review_policy_hash": submission.locked_review_policy_hash,
+            "locked_revision_policy_id": submission.locked_revision_policy_id,
+            "locked_revision_policy_generation": submission.locked_revision_policy_generation,
+            "locked_revision_policy_hash": submission.locked_revision_policy_hash,
             "locked_payment_policy_version": submission.locked_payment_policy_version,
         }
         if event_payload:
@@ -1769,8 +1780,12 @@ class CheckerService:
                     "locked_post_submit_checker_policy_hash": (
                         submission.locked_post_submit_checker_policy_hash
                     ),
-                    "locked_review_policy_version": submission.locked_review_policy_version,
-                    "locked_revision_policy_version": submission.locked_revision_policy_version,
+                    "locked_review_policy_id": submission.locked_review_policy_id,
+                    "locked_review_policy_generation": submission.locked_review_policy_generation,
+                    "locked_review_policy_hash": submission.locked_review_policy_hash,
+                    "locked_revision_policy_id": submission.locked_revision_policy_id,
+                    "locked_revision_policy_generation": submission.locked_revision_policy_generation,
+                    "locked_revision_policy_hash": submission.locked_revision_policy_hash,
                     "locked_payment_policy_version": submission.locked_payment_policy_version,
                     **requester_payload,
                 },
@@ -1806,8 +1821,7 @@ class CheckerService:
         if any(outcome.routing_recommendation == ROUTING_CHECKER_RETRY for outcome in outcomes):
             return ROUTING_CHECKER_RETRY
         if any(
-            outcome.routing_recommendation == ROUTING_TASK_SETUP_BLOCKED
-            for outcome in outcomes
+            outcome.routing_recommendation == ROUTING_TASK_SETUP_BLOCKED for outcome in outcomes
         ):
             return ROUTING_TASK_SETUP_BLOCKED
         if any(outcome.blocks_review for outcome in outcomes):
@@ -1839,14 +1853,11 @@ class CheckerService:
             metadata = dict(outcome.metadata)
             if required_warning:
                 metadata["required_checker_warning_escalated"] = True
-            blocks_review = (
-                status == "failed"
-                and (
-                    outcome.blocks_review
-                    or outcome.checker_name in context.required_checker_names
-                    or outcome.severity in context.blocking_severities
-                    or severity in context.blocking_severities
-                )
+            blocks_review = status == "failed" and (
+                outcome.blocks_review
+                or outcome.checker_name in context.required_checker_names
+                or outcome.severity in context.blocking_severities
+                or severity in context.blocking_severities
             )
             adjusted.append(
                 replace(
@@ -1980,11 +1991,23 @@ class CheckerService:
                 if has_checker_admin_access
                 else None
             ),
-            locked_review_policy_version=(
-                checker_run.locked_review_policy_version if has_checker_admin_access else None
+            locked_review_policy_id=(
+                checker_run.locked_review_policy_id if has_checker_admin_access else None
             ),
-            locked_revision_policy_version=(
-                checker_run.locked_revision_policy_version if has_checker_admin_access else None
+            locked_review_policy_generation=(
+                checker_run.locked_review_policy_generation if has_checker_admin_access else None
+            ),
+            locked_review_policy_hash=(
+                checker_run.locked_review_policy_hash if has_checker_admin_access else None
+            ),
+            locked_revision_policy_id=(
+                checker_run.locked_revision_policy_id if has_checker_admin_access else None
+            ),
+            locked_revision_policy_generation=(
+                checker_run.locked_revision_policy_generation if has_checker_admin_access else None
+            ),
+            locked_revision_policy_hash=(
+                checker_run.locked_revision_policy_hash if has_checker_admin_access else None
             ),
             locked_payment_policy_version=(
                 checker_run.locked_payment_policy_version if has_checker_admin_access else None

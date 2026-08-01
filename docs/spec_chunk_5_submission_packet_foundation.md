@@ -61,8 +61,12 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `locked_post_submit_checker_policy_version`
 - `locked_post_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_body`
-- `locked_review_policy_version`
-- `locked_revision_policy_version`
+- `locked_review_policy_id`
+- `locked_review_policy_generation`
+- `locked_review_policy_hash`
+- `locked_revision_policy_id`
+- `locked_revision_policy_generation`
+- `locked_revision_policy_hash`
 - `locked_payment_policy_version`
 - `submitted_at`
 - `locked_at`

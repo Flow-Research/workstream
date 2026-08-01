@@ -62,6 +62,11 @@ from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
     compile_project_post_submit_checker_spec,
 )
+from app.modules.projects.policy_lineage import (
+    ReviewPolicySemantics,
+    RevisionPolicySemantics,
+    policy_digest,
+)
 from app.modules.tasks.lifecycle import InvalidTaskTransition, ensure_allowed_transition
 from app.modules.tasks.models import (
     AuditEvent,
@@ -957,24 +962,54 @@ async def create_policy_bundle_for_guide(
     async with db_session.get_session_factory()() as session:
         guide = await session.get(ProjectGuide, guide_id)
         assert guide is not None
+        review_policy_id = str(uuid4())
+        revision_policy_id = str(uuid4())
+        review_hash = policy_digest(
+            "review",
+            ReviewPolicySemantics(
+                review_preference_window_seconds=3600,
+                review_lease_duration_seconds=1800,
+                allowed_decisions=("accept", "needs_revision", "reject"),
+                minimum_finding_fields=("issue", "required_fix"),
+            ),
+        )
+        revision_hash = policy_digest(
+            "revision",
+            RevisionPolicySemantics(
+                max_revision_rounds=7,
+                revision_deadline_hours=48,
+                allowed_resubmission_states=("needs_revision",),
+                reviewer_reassignment_rule="same reviewer preferred",
+            ),
+        )
         session.add_all(
             [
                 ReviewPolicy(
-                    id=str(uuid4()),
+                    id=review_policy_id,
                     project_id=project_id,
                     guide_version=guide.version,
+                    policy_generation=1,
+                    policy_hash=review_hash,
+                    semantics_status="complete",
+                    review_preference_window_seconds=3600,
+                    review_lease_duration_seconds=1800,
+                    max_active_review_leases_per_reviewer=1,
+                    self_review_allowed=False,
+                    reject_policy="close_task",
+                    finding_evidence_requirement="optional",
                     requires_second_review=False,
                     allowed_decisions=["accept", "needs_revision", "reject"],
                     minimum_finding_fields=["issue", "required_fix"],
-                    sla_hours=24,
                 ),
                 RevisionPolicy(
-                    id=str(uuid4()),
+                    id=revision_policy_id,
                     project_id=project_id,
                     guide_version=guide.version,
+                    policy_generation=1,
+                    policy_hash=revision_hash,
+                    semantics_status="complete",
                     max_revision_rounds=7,
                     revision_deadline_hours=48,
-                    auto_reject_after_limit=True,
                     allowed_resubmission_states=["needs_revision"],
                     reviewer_reassignment_rule="same reviewer preferred",
                 ),
@@ -991,6 +1026,13 @@ async def create_policy_bundle_for_guide(
                 ),
             ]
         )
+        await session.flush()
+        guide.selected_review_policy_id = review_policy_id
+        guide.selected_review_policy_generation = 1
+        guide.selected_review_policy_hash = review_hash
+        guide.selected_revision_policy_id = revision_policy_id
+        guide.selected_revision_policy_generation = 1
+        guide.selected_revision_policy_hash = revision_hash
         await session.commit()
 
     snapshot_response = await client.post(
@@ -2406,8 +2448,12 @@ async def test_screening_locks_guide_policy_context_and_payment_fields(
     body = response.json()
     assert body["status"] == "screening"
     assert body["locked_guide_version"] == "v1"
-    assert body["locked_review_policy_version"] == "v1"
-    assert body["locked_revision_policy_version"] == "v1"
+    assert body["locked_review_policy_id"]
+    assert body["locked_review_policy_generation"] == 1
+    assert body["locked_review_policy_hash"].startswith("sha256:")
+    assert body["locked_revision_policy_id"]
+    assert body["locked_revision_policy_generation"] == 1
+    assert body["locked_revision_policy_hash"].startswith("sha256:")
     assert body["locked_payment_policy_version"] == "v1"
     assert body["locked_guide_source_snapshot_id"]
     assert body["locked_guide_source_snapshot_hash"].startswith("sha256:")
@@ -2418,7 +2464,31 @@ async def test_screening_locks_guide_policy_context_and_payment_fields(
     expected_post_submit_policy = await load_post_submit_checker_policy(project["id"])
     async with db_session.get_session_factory()() as session:
         persisted_task = await session.get(WorkstreamTask, task["id"])
+        selected_guide = await session.scalar(
+            select(ProjectGuide).where(
+                ProjectGuide.project_id == project["id"], ProjectGuide.status == "active"
+            )
+        )
     assert persisted_task is not None
+    assert selected_guide is not None
+    assert (
+        body["locked_review_policy_id"],
+        body["locked_review_policy_generation"],
+        body["locked_review_policy_hash"],
+    ) == (
+        selected_guide.selected_review_policy_id,
+        selected_guide.selected_review_policy_generation,
+        selected_guide.selected_review_policy_hash,
+    )
+    assert (
+        body["locked_revision_policy_id"],
+        body["locked_revision_policy_generation"],
+        body["locked_revision_policy_hash"],
+    ) == (
+        selected_guide.selected_revision_policy_id,
+        selected_guide.selected_revision_policy_generation,
+        selected_guide.selected_revision_policy_hash,
+    )
     assert persisted_task.locked_post_submit_checker_policy_id == expected_post_submit_policy["id"]
     assert persisted_task.locked_post_submit_checker_policy_version == "v1"
     assert (
@@ -3199,8 +3269,12 @@ async def test_full_task_claim_start_flow_writes_audit_events(
     release_event = next(event for event in events if event["to_status"] == "ready")
     for event in (screening_event, release_event):
         assert event["event_payload"]["locked_guide_version"] == "v1"
-        assert event["event_payload"]["locked_review_policy_version"] == "v1"
-        assert event["event_payload"]["locked_revision_policy_version"] == "v1"
+        assert event["event_payload"]["locked_review_policy_id"]
+        assert event["event_payload"]["locked_review_policy_generation"] == 1
+        assert event["event_payload"]["locked_review_policy_hash"].startswith("sha256:")
+        assert event["event_payload"]["locked_revision_policy_id"]
+        assert event["event_payload"]["locked_revision_policy_generation"] == 1
+        assert event["event_payload"]["locked_revision_policy_hash"].startswith("sha256:")
         assert event["event_payload"]["locked_payment_policy_version"] == "v1"
     claim_event = next(event for event in events if event["to_status"] == "claimed")
     assert claim_event["actor_id"] == worker_actor_id
@@ -3758,8 +3832,12 @@ async def test_assigned_worker_submit_auto_enters_pre_review_gate(
         "artifact_hash_manifest",
         "worker_attestation",
         "locked_guide_version",
-        "locked_review_policy_version",
-        "locked_revision_policy_version",
+        "locked_review_policy_id",
+        "locked_review_policy_generation",
+        "locked_review_policy_hash",
+        "locked_revision_policy_id",
+        "locked_revision_policy_generation",
+        "locked_revision_policy_hash",
         "locked_payment_policy_version",
         "locked_guide_source_snapshot_id",
         "locked_guide_source_snapshot_hash",
@@ -3792,6 +3870,24 @@ async def test_assigned_worker_submit_auto_enters_pre_review_gate(
     assert (
         persisted_submission.locked_post_submit_checker_policy_hash
         == persisted_task.locked_post_submit_checker_policy_hash
+    )
+    assert (
+        persisted_submission.locked_review_policy_id,
+        persisted_submission.locked_review_policy_generation,
+        persisted_submission.locked_review_policy_hash,
+    ) == (
+        persisted_task.locked_review_policy_id,
+        persisted_task.locked_review_policy_generation,
+        persisted_task.locked_review_policy_hash,
+    )
+    assert (
+        persisted_submission.locked_revision_policy_id,
+        persisted_submission.locked_revision_policy_generation,
+        persisted_submission.locked_revision_policy_hash,
+    ) == (
+        persisted_task.locked_revision_policy_id,
+        persisted_task.locked_revision_policy_generation,
+        persisted_task.locked_revision_policy_hash,
     )
 
     task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
@@ -3894,8 +3990,12 @@ async def test_submission_schema_rejects_worker_supplied_locked_context(
             "locked_post_submit_checker_policy_version": "malicious",
             "locked_post_submit_checker_policy_hash": "sha256:" + "0" * 64,
             "locked_post_submit_checker_policy_body": {"required_checkers": []},
-            "locked_review_policy_version": "malicious",
-            "locked_revision_policy_version": "malicious",
+            "locked_review_policy_id": "malicious",
+            "locked_review_policy_generation": 99,
+            "locked_review_policy_hash": "sha256:" + "1" * 64,
+            "locked_revision_policy_id": "malicious",
+            "locked_revision_policy_generation": 99,
+            "locked_revision_policy_hash": "sha256:" + "2" * 64,
             "locked_payment_policy_version": "malicious",
             "locked_guide_source_snapshot_id": "malicious",
             "locked_guide_source_snapshot_hash": "sha256:" + "0" * 64,
@@ -4643,8 +4743,12 @@ async def test_database_rejects_submission_without_post_submit_policy_context(
             locked_post_submit_checker_policy_version=None,
             locked_post_submit_checker_policy_hash=None,
             locked_post_submit_checker_policy_body=None,
-            locked_review_policy_version=task.locked_review_policy_version,
-            locked_revision_policy_version=task.locked_revision_policy_version,
+            locked_review_policy_id=task.locked_review_policy_id,
+            locked_review_policy_generation=task.locked_review_policy_generation,
+            locked_review_policy_hash=task.locked_review_policy_hash,
+            locked_revision_policy_id=task.locked_revision_policy_id,
+            locked_revision_policy_generation=task.locked_revision_policy_generation,
+            locked_revision_policy_hash=task.locked_revision_policy_hash,
             locked_payment_policy_version=task.locked_payment_policy_version,
             locked_guide_source_snapshot_id=task.locked_guide_source_snapshot_id,
             locked_guide_source_snapshot_hash=task.locked_guide_source_snapshot_hash,
@@ -4699,8 +4803,12 @@ async def test_database_rejects_checker_run_without_post_submit_policy_context(
             locked_post_submit_checker_policy_version=None,
             locked_post_submit_checker_policy_hash=None,
             locked_post_submit_checker_policy_body=None,
-            locked_review_policy_version=submission.locked_review_policy_version,
-            locked_revision_policy_version=submission.locked_revision_policy_version,
+            locked_review_policy_id=submission.locked_review_policy_id,
+            locked_review_policy_generation=submission.locked_review_policy_generation,
+            locked_review_policy_hash=submission.locked_review_policy_hash,
+            locked_revision_policy_id=submission.locked_revision_policy_id,
+            locked_revision_policy_generation=submission.locked_revision_policy_generation,
+            locked_revision_policy_hash=submission.locked_revision_policy_hash,
             locked_payment_policy_version=submission.locked_payment_policy_version,
             package_hash=submission.package_hash,
             artifact_hash_manifest=submission.artifact_hash_manifest,
@@ -5129,8 +5237,8 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
         task.locked_guide_version = "v2"
-        task.locked_review_policy_version = "v2"
-        task.locked_revision_policy_version = "v2"
+        task.locked_review_policy_hash = "sha256:" + "f" * 64
+        task.locked_revision_policy_hash = "sha256:" + "e" * 64
         task.locked_payment_policy_version = "v2"
         with pytest.raises(IntegrityError):
             await session.commit()
@@ -6660,8 +6768,12 @@ async def test_database_enforces_unique_submission_version(
                 locked_post_submit_checker_policy_body=(
                     persisted.locked_post_submit_checker_policy_body
                 ),
-                locked_review_policy_version=persisted.locked_review_policy_version,
-                locked_revision_policy_version=persisted.locked_revision_policy_version,
+                locked_review_policy_id=persisted.locked_review_policy_id,
+                locked_review_policy_generation=persisted.locked_review_policy_generation,
+                locked_review_policy_hash=persisted.locked_review_policy_hash,
+                locked_revision_policy_id=persisted.locked_revision_policy_id,
+                locked_revision_policy_generation=persisted.locked_revision_policy_generation,
+                locked_revision_policy_hash=persisted.locked_revision_policy_hash,
                 locked_payment_policy_version=persisted.locked_payment_policy_version,
             )
         )

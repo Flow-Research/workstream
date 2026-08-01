@@ -2,8 +2,9 @@
 
 ## Current status
 
-WS-XINT-003-01 contract reconciliation is complete and awaiting human
-review/merge. No runtime code or action availability is changed.
+WS-XINT-003-01 is merged. WS-XINT-003-02A immutable policy identity and
+downstream lineage is implemented on its bounded branch and has passed final
+internal review. No policy mutation action or public surface is activated.
 
 ## Baseline
 
@@ -28,8 +29,20 @@ REV-owned semantics with AUTH-owned mutation authorization.
 - All registered review actions remain planned; four lifecycle/recovery actions
   remain missing until 08R; no service identity is provisioned by chunk 01.
 
+## WS-XINT-003-02A implementation
+
+- ReviewPolicy and RevisionPolicy are append-only identities with generation,
+  canonical digest, semantics status, and predecessor lineage.
+- ProjectGuide selects exact policy identities; Task locks them, and Submission
+  and CheckerRun copy and foreign-key chain the same immutable facts.
+- Historical rows become readable `legacy_incomplete` records and fail the
+  canonical readiness predicate. No preference or lease meaning is inferred.
+- PostgreSQL rejects update, delete, truncate, cross-project/guide lineage, and
+  unsafe populated downgrade.
+- Focused migration, activation, task, submission/checker, digest, and coverage
+  proof is green. Repository-wide coverage remains assigned to hosted CI.
+
 ## Next step
 
-Keep hosted exact-head gates green, resolve all external review, and obtain
-human merge. Parent 02 plan review then required 02A immutable identity/lineage
-before 02B runtime policy mutation activation.
+Open the 02A PR, run exact-head hosted CI and CodeRabbit, obtain human merge,
+and stop. WS-XINT-003-02B requires a new explicit user start after 02A merges.

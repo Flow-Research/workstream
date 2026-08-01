@@ -41,7 +41,16 @@ backend/tests/test_checkers.py
 backend/tests/test_alembic.py
 backend/tests/test_artifact_admission.py
 backend/tests/test_policy_identity_lineage.py
+backend/tests/conftest.py
+backend/scripts/api_contract_e2e.py
+backend/scripts/week2_api_e2e.py
+examples/terminal_benchmark/terminal_benchmark_api_e2e.py
 docs/spec_review_lifecycle.md
+docs/template_project_guide.md
+docs/architecture_data_model.md
+docs/glossary.md
+docs/spec_chunk_5_submission_packet_foundation.md
+docs/spec_chunk_6_checker_contract_records.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-12D2-guide-bound-policy-mutations.md
 .agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-03P-review-revision-policy-persistence.md
 .agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/CHUNK_MAP.md

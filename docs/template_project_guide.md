@@ -142,6 +142,13 @@ before guide activation.
 
 ## Review Policy
 
+- review preference window seconds (positive):
+- review lease duration seconds (positive):
+- maximum active review leases per reviewer: `1` (fixed in v0.1)
+- self review allowed: `false` (fixed in v0.1)
+- reject policy: `close_task` (fixed in v0.1)
+- finding evidence requirement: `optional | required_for_blocking | required_for_all`
+
 Allowed decisions:
 
 - accept
@@ -174,17 +181,13 @@ Define:
 - maximum revision rounds:
 - revision deadline hours:
 - allowed resubmission states:
-- `RevisionPolicyInput.auto_reject_after_limit`: `false` (required explicitly
-  on project create/update; the backend schema default is not the v0.1 REV
-  contract)
 - limit/deadline exhaustion behavior: block preparation and submission pending
   reason-bound covered-manager closure; never synthesize reject
 - reviewer reassignment rule:
 
-Revision-policy activation and task screening must reject an effective policy
-whose `auto_reject_after_limit` value is not `false`. That runtime enforcement
-belongs to `WS-REV-001-02`; until it activates, this template is a required
-configuration precondition and does not claim the guard is available.
+Revision-policy activation and task screening require positive limit and
+deadline values. Exhaustion blocks further preparation and submission; it never
+auto-rejects, auto-closes, or fabricates a human review decision.
 
 ## Acceptance Policy
 
