@@ -55,8 +55,8 @@ The six proposed REV identities are fixed planning names; they are not provision
 |---|---|---|---|
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed ART materializer; exact active-lease packet | runtime `WS-XINT-002-07`; activation sub-wave `07A` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed ART binding service; exact finding/response slot | runtime `WS-XINT-002-07`; availability sub-wave `07A`, evaluator extension `07B` |
-| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor; exact human-revision preparation | `WS-XINT-002-05D` |
-| `submission.create` | `submission.create` | assigned contributor; exact prepared human revision | `WS-XINT-002-05D` |
+| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor; exact human-revision preparation | availability `WS-XINT-002-05A`; revision-context evaluator extension `05D` |
+| `submission.create` | `submission.create` | assigned contributor; exact prepared human revision | availability `WS-XINT-002-05B`; revision-context evaluator extension `05D` |
 
 These actions are not XINT-003 custody. Generic artifact download, adjudication, automated routing, reputation, settlement, and agent workspace authority are out of scope.
 

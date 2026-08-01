@@ -24,8 +24,9 @@ activation waves:
    actions, then let XINT-002-07B extend ART response binding after hidden REV
    obligation/preparation behavior exists. XINT-003-07 consumes both merged
    boundaries and separately activates contributor response authority.
-8. Register the four missing privileged lifecycle/recovery actions as planned,
-   then activate Project Manager/Operator recovery and fixed service jobs with
+8. Record the four missing privileged lifecycle/recovery actions as future 08R
+   work. Keep their ActionIds unregistered until 08R, then activate
+   Project Manager/Operator recovery and fixed service jobs with
    reason-bound least privilege and crossed-race proof.
 9. Run complete conformance, then permit REV's single product-route release.
 

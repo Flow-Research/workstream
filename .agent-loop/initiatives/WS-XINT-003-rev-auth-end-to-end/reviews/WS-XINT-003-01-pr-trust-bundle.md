@@ -30,8 +30,9 @@ lifecycle behavior changed.
 - Existing project ReviewPolicy/RevisionPolicy records are reused. XINT-003-02
   will introduce the sole append-only writer and retire the four named legacy
   callable mutation/construction paths.
-- Runtime ART owner remains `WS-XINT-002-07`. Planning sub-wave 07A alone
-  activates packet/finding binding; 07B only extends response evaluation.
+- Runtime ART owner remains `WS-XINT-002-07`. Planning sub-wave 07A records the
+  future packet/finding binding availability boundary; it does not register or
+  enable a runtime ActionId. 07B only extends planned response evaluation.
 - Hidden REV obligation/preparation precedes 07B; human response activation
   follows both.
 
@@ -51,7 +52,8 @@ static membership, forbidden principals, and audit/provenance facts.
   facts.
 - REV-03P/AUTH-12D2 name one external service and internal repository writer
   path plus the exact legacy mutators to retire.
-- Runtime ART owner remains `WS-XINT-002-07`; 07A alone changes availability,
+- Runtime ART owner remains `WS-XINT-002-07`; 07A alone records the planned
+  availability transition. No runtime ActionId becomes registered or callable,
   and 07B is evaluator-only after hidden REV obligation/preparation behavior.
 - All runtime actions remain planned/unavailable and four actions remain
   unregistered.
@@ -89,6 +91,12 @@ internal review and does not create duplicate identifiers or behavior.
 
 CodeRabbit is required. Every valid comment must be fixed or explicitly
 resolved before human merge.
+
+CodeRabbit reviewed PR head `8250adf3ac52bc4bfee69fd5299dd70f21fb3ad1` and
+reported the four corrections recorded in the external-review response. The
+post-correction commit is bound by GitHub's immutable PR-head check-suite SHA;
+embedding that commit's own SHA inside the commit is not possible. Human merge
+must use the head for which Agent Gates, Backend, and CodeRabbit are successful.
 
 ## Remaining risks
 
