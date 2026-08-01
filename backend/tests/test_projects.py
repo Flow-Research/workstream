@@ -2113,11 +2113,10 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
             )
         guide_row = await session.get(ProjectGuide, guide["id"])
         assert guide_row is not None
-        if review_id is not None:
+        if review_id is not None and revision_id is not None:
             guide_row.selected_review_policy_id = review_id
             guide_row.selected_review_policy_generation = 1
             guide_row.selected_review_policy_hash = review_hash
-        if revision_id is not None:
             guide_row.selected_revision_policy_id = revision_id
             guide_row.selected_revision_policy_generation = 1
             guide_row.selected_revision_policy_hash = revision_hash
@@ -9747,7 +9746,7 @@ async def test_activation_requires_review_policy(project_client: AsyncClient) ->
     )
 
     assert response.status_code == 422
-    assert "review policy" in response.json()["detail"]
+    assert "review and revision policy selections" in response.json()["detail"]
 
 
 async def test_activation_requires_payment_policy(project_client: AsyncClient) -> None:
@@ -9781,7 +9780,7 @@ async def test_activation_requires_revision_policy(project_client: AsyncClient) 
     )
 
     assert response.status_code == 422
-    assert "revision policy is required" in response.json()["detail"]
+    assert "review and revision policy selections" in response.json()["detail"]
 
 
 async def test_review_policy_rejects_invalid_decision_names(project_client: AsyncClient) -> None:

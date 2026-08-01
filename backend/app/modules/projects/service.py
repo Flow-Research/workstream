@@ -3595,10 +3595,12 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "post-submit checker policy references unregistered checker"
             ) from exc
-        if review_policy is None or not review_policy.allowed_decisions:
+        if review_policy is None or revision_policy is None:
+            raise GuideActivationBlocked(
+                "complete review and revision policy selections are required"
+            )
+        if not review_policy.allowed_decisions:
             raise GuideActivationBlocked("review policy with allowed decisions is required")
-        if revision_policy is None:
-            raise GuideActivationBlocked("revision policy is required")
         try:
             require_complete_policy(
                 kind="review",

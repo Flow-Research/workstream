@@ -16,7 +16,7 @@ from alembic import command
 from alembic.config import Config
 import pytest
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     async_sessionmaker,
     create_async_engine,
@@ -484,7 +484,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
                 id=guide_id,
                 project_id=project_id,
                 version=guide_version,
-                status="active",
+                status="draft",
                 content_markdown="# Checker guide",
                 approved_by="setup-actor",
                 effective_at=now,
@@ -632,7 +632,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     async with suspend_historical_product_custody(
         session,
         table="project_guides",
-        triggers=("guide_mutation_product_custody",),
+        triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard"),
     ):
         guide = await session.get(ProjectGuide, guide_id)
         assert guide is not None
@@ -642,6 +642,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         guide.selected_revision_policy_id = revision_policy_id
         guide.selected_revision_policy_generation = 1
         guide.selected_revision_policy_hash = revision_hash
+        guide.status = "active"
         await session.flush()
     session.add(
         WorkstreamTask(
@@ -4242,7 +4243,9 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
             checker_run = await session.get(CheckerRun, checker_run_id)
             assert checker_run is not None
             checker_run.task_id = unrelated_task_id
-            await session.commit()
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
 
             async with minted_source(tmp_path / "scratch-source", b"checker") as source:
                 service = ArtifactAdmissionService(session, settings, namespace)
@@ -4264,29 +4267,6 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                 assert await _count(session, ArtifactAdmissionCharge) == 0
                 assert await _count(session, ArtifactPutAttempt) == 0
                 await session.rollback()
-
-                with pytest.raises(
-                    ArtifactAdmissionRelationshipError,
-                    match="checker run relationship is unavailable",
-                ):
-                    await service.admit(
-                        CheckerOutputArtifactAdmissionRequest(
-                            authorization_context=context,
-                            checker_run_id=UUID(checker_run_id),
-                            logical_role="platform-review",
-                            source=source,
-                        )
-                    )
-                assert await _count(session, ArtifactStorageNamespace) == 0
-                assert await _count(session, ArtifactAdmissionScope) == 0
-                assert await _count(session, ArtifactAdmissionCharge) == 0
-                assert await _count(session, ArtifactPutAttempt) == 0
-                await session.rollback()
-
-                checker_run = await session.get(CheckerRun, checker_run_id)
-                assert checker_run is not None
-                checker_run.task_id = task_id
-                await session.commit()
 
                 request = CheckerOutputArtifactAdmissionRequest(
                     authorization_context=context,

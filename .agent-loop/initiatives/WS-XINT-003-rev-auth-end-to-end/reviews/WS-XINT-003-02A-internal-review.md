@@ -49,3 +49,10 @@ test module had no semantic-lane custody. The module was assigned to
 four-lane design or any coverage/failure gate. A local repository collection
 then reached unrelated missing Pillow dependencies, so exact collection is
 left to the hosted environment that supplies the locked CI dependencies.
+
+The next hosted lane run exposed three stale test assumptions: partial guide
+selection, mutation of now-immutable policy rows, and a cross-Task CheckerRun
+rewrite that the new FK correctly rejects. The tests now prove all-or-none
+selection, retain stamped work-context proof through the still-mutable payment
+policy, and expect the cross-Task rewrite to fail at the database boundary.
+All four corrected focused cases pass in isolated databases.

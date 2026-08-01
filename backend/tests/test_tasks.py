@@ -2778,7 +2778,7 @@ async def test_ready_worker_work_context_omits_private_task_source_fields(
         assert private_field not in body["task"]
 
 
-async def test_work_context_uses_stamped_policy_values_after_same_version_policy_mutation(
+async def test_work_context_uses_stamped_policy_values_after_payment_policy_mutation(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2792,31 +2792,13 @@ async def test_work_context_uses_stamped_policy_values_after_same_version_policy
     before = before_response.json()
 
     async with db_session.get_session_factory()() as session:
-        review_policy = await session.scalar(
-            select(ReviewPolicy).where(
-                ReviewPolicy.project_id == project["id"],
-                ReviewPolicy.guide_version == "v1",
-            )
-        )
-        revision_policy = await session.scalar(
-            select(RevisionPolicy).where(
-                RevisionPolicy.project_id == project["id"],
-                RevisionPolicy.guide_version == "v1",
-            )
-        )
         payment_policy = await session.scalar(
             select(PaymentPolicy).where(
                 PaymentPolicy.project_id == project["id"],
                 PaymentPolicy.guide_version == "v1",
             )
         )
-        assert review_policy is not None
-        assert revision_policy is not None
         assert payment_policy is not None
-        review_policy.requires_second_review = True
-        review_policy.allowed_decisions = ["reject"]
-        revision_policy.max_revision_rounds = 1
-        revision_policy.revision_deadline_hours = 1
         payment_policy.base_amount = Decimal("999.00")
         payment_policy.currency = "EUR"
         payment_policy.payout_type = "manual"
