@@ -5674,6 +5674,7 @@ async def test_hidden_verified_worker_persists_stable_material_failure(
     [
         (PolicySetupConflict("changed"), "guide_source_material_changed"),
         (PolicySetupBlocked("unavailable"), "verified_guide_sufficiency_unavailable"),
+        (ProjectServiceError("stale"), "guide_source_stale"),
         (RuntimeError("sensitive failure"), "project_setup_failed"),
     ],
 )

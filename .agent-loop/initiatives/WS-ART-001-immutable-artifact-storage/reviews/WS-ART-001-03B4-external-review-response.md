@@ -29,6 +29,9 @@
 - Advanced the canonical Alembic test head from the merged `0045` revision to
   this chunk's `0046_guide_sufficiency` revision so every downgrade guard
   restores and asserts the actual repository head.
+- Added the generic stale `ProjectServiceError` worker outcome to the focused
+  failure matrix, closing the remaining worker coverage gap without changing
+  production behavior.
 
 ## Comments deferred
 
