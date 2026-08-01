@@ -2,13 +2,36 @@
 
 ## Status
 
-Proposed only. It may start only through a signed `Loop Memory Explicit Event`
-on exact current main after PLAN3 merges and this contract is refreshed/reviewed.
+Reconciled planning input to `WS-XINT-003-02`. It is not an independent
+implementation path.
 
 ## Goal
 
 Persist only REV-owned immutable ReviewPolicy and RevisionPolicy facts needed by
 later routing, lease, decision, and human revision behavior.
+
+REV owns field semantics, version identity, draft/active immutability, and the
+facts later lifecycle code consumes. AUTH-12D2 owns authority, PREP, evidence,
+and the only mutation surface. The shared implementation is XINT-003-02.
+
+## Canonical persistence path
+
+Adopt the existing project `ReviewPolicy` and `RevisionPolicy` models/tables as
+the sole records and upgrade them for immutable version provenance. Every
+external mutation enters only
+`ProjectPolicyMutationService.replace_review_policy()` or
+`replace_revision_policy()`; that service owns authorization preparation,
+grant/resource checks, final PREP consumption, and decision evidence. It alone
+invokes the internal append-only persistence primitives
+`ProjectRepository.add_review_policy_version()` or
+`add_revision_policy_version()`. Those repository methods are never caller-
+facing mutation APIs. Retire both repository `upsert_*` methods and
+both `ProjectService._*_policy_model()` constructors. Do not add REV-local
+duplicate models, tables, repositories, routes, aliases, or fallback writers.
+
+The exact guide must still be a draft at final PREP consumption. Policy
+versions selected by guide activation become immutable; changes thereafter
+require a new draft guide/version.
 
 ## Risk
 
@@ -16,8 +39,9 @@ L1: policy immutability, duration/limit semantics, and later decision authority.
 
 ## Allowed files
 
-To be fixed at signed start: REV-owned policy models, migration, schemas,
-focused tests, and this initiative's evidence/merge-intent files only.
+The exact current-main project models, migration, policy schemas, canonical
+writer service/repository, AUTH PREP integration, focused tests, and initiative
+evidence must be fixed in the refreshed XINT-003-02 contract.
 
 ## Not allowed
 
@@ -35,6 +59,10 @@ focused tests, and this initiative's evidence/merge-intent files only.
 - Missing upstream Task/Assignment compatibility is reported to its owner and
   cannot be repaired in this chunk.
 - No review lifecycle transition is activated.
+- PostgreSQL proof refuses update/delete of immutable versions and proves stale
+  draft/active guide, stale policy, revocation, replay, wrong grant/resource,
+  copied handle, concurrent replacement, and rollback leave no partial policy
+  or allowed decision evidence.
 
 ## Verification
 
@@ -49,4 +77,5 @@ reuse/dedup, docs, test-delta, and CI integrity.
 
 ## Stop
 
-Do not implement without a signed start on exact current main.
+Do not implement this parent contract independently. Refresh and implement only
+WS-XINT-003-02 after an explicit user request.

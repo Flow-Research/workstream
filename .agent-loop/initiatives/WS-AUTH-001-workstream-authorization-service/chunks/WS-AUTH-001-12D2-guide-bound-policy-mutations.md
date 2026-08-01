@@ -13,6 +13,36 @@ Proposed and inactive after 12D.
 Add separately authorized routes for review and revision policy records after
 12D alone removes the embedded guide create/update fields.
 
+This contract is reconciled with REV-03P by WS-XINT-003-01. REV owns the
+immutable/versioned policy semantics; AUTH owns the mutation authorization,
+PREP consumption, and decision evidence. Chunk WS-XINT-003-02 implements the
+single path below; neither parent contract may build an alternate writer.
+
+## One writer path
+
+- Surviving API: separate `PUT /projects/{project_id}/review-policy` and
+  `PUT /projects/{project_id}/revision-policy` routes in
+  `backend/app/modules/projects/router.py`, each declaring its exact primary
+  ActionId.
+- Surviving service: new `ProjectPolicyMutationService` methods
+  `replace_review_policy()` and `replace_revision_policy()`.
+- Surviving repository: new append-only
+  `ProjectRepository.add_review_policy_version()` and
+  `ProjectRepository.add_revision_policy_version()` methods over the existing
+  `ReviewPolicy` and `RevisionPolicy` tables/models, upgraded as necessary for
+  immutable version provenance.
+- Retired callable mutators: `ProjectRepository.upsert_review_policy()`,
+  `ProjectRepository.upsert_revision_policy()`,
+  `ProjectService._review_policy_model()`, and
+  `ProjectService._revision_policy_model()`.
+- No compatibility route, alias, second model/table, fallback constructor, or
+  dual repository path survives.
+
+Policies may be appended or replaced only while the exact guide version is a
+draft. Activation freezes the selected policy versions: active-guide policy
+rows are immutable, and later edits require a new draft guide/version rather
+than an in-place update.
+
 ## Why this chunk exists
 
 Guide management must not imply review/revision-policy authority. Retired
@@ -72,6 +102,11 @@ compatibility.
   and concurrency follow the parent invariants.
 - OpenAPI declares exactly one primary action per new route and no compatibility
   endpoint is added.
+- Tests prove old mutators are absent, direct update/delete of persisted policy
+  versions is refused, stale draft/active guide, stale current policy,
+  revocation, wrong grant/project/guide, replay, copied/wrong PREP handles, and
+  crossed concurrent replacements deny without a partial policy or allowed
+  decision record.
 
 ## Verification commands
 

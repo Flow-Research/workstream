@@ -1,5 +1,11 @@
 # Risks: WS-AUTH-001 - Workstream Authorization Service
 
+Planned REV custody permits only the reconciled XINT-003-02 policy-writer path
+and designates XINT-002-07A as the sole evidence-binding availability
+transition, with 07B evaluator-only. These are planning rules, not current
+runtime protections; enforcement begins only when the named activation gates
+merge and activate their exact actions.
+
 ## AUTH-12 planning risks — 2026-07-29
 
 - Guide create/update currently co-mutate review, revision, and retired

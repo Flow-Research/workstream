@@ -1,5 +1,9 @@
 # Risks: WS-REV-001 Review And Revision Lifecycle
 
+Duplicate policy models/writers are prohibited. Active-guide policy history is
+protected by append-only versions, a draft-only final PREP guard, and database
+update/delete refusal proof in XINT-003-02.
+
 | ID | Risk | Severity | Mitigation |
 |---|---|---:|---|
 | R0 | REV converts a consumed upstream dependency into feature ownership and edits Project Guide, Task intake, Checker, AUTH, ART, or CON internals | Critical | REV starts at final current `allow_review`; record missing typed owner contracts and stop. Boundary review blocks any REV chunk that edits upstream behavior rather than a declared participant owned by that subsystem. |

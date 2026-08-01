@@ -1,4 +1,4 @@
-# Chunk Contract: WS-XINT-003-08A — Human And Operator Recovery Activation
+# Chunk Contract: WS-XINT-003-08A — Project Manager And Operator Recovery Activation
 
 ## Status and risk
 

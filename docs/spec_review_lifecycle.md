@@ -8,11 +8,20 @@ here is not yet available in the production API. Each owning REV chunk must
 merge hidden behavior, AUTH must activate the exact registered actions, and
 `WS-REV-001-13C` must pass the joint release gate before any surface is exposed.
 
-The implementation sequence is defined by
-`WS-REV-001-review-revision-lifecycle/CHUNK_MAP.md` under `.agent-loop`. This
-contract defines product behavior and subsystem boundaries; it does not itself
+The WS-REV chunk map under `.agent-loop` records feature-owned hidden behavior.
+For current REV-AUTH integration and activation order, the WS-XINT-003 chunk
+map and canonical action custody supersede its historical activation labels.
+This contract defines product behavior and subsystem boundaries; it does not itself
 implement a route, database table, job, authorization evaluator, artifact
 capability, contribution participant, or frontend.
+
+The canonical REV-AUTH action custody is
+`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+REV owns lifecycle and immutable policy semantics; AUTH owns evaluation, PREP,
+and decision evidence. ReviewPolicy and RevisionPolicy use one future
+append-only project-policy writer from XINT-003-02. XINT-002-07A alone activates
+the ART evidence-binding ActionId for finding slots; 07B only extends its
+evaluator to response slots after an exact human revision obligation exists.
 
 ## Precedence And Archival Inputs
 

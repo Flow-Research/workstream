@@ -1,5 +1,8 @@
 # Plan: WS-AUTH-001 - Workstream Authorization Service
 
+For review/revision work, use the canonical WS-XINT-003 action custody and
+sequence. Historical AUTH-REV wave labels remain evidence only.
+
 ## Goal
 
 Replace the token-role bootstrap with the adopted Workstream-owned actor,

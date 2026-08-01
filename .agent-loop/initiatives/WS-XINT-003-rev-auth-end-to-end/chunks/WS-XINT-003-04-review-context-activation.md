@@ -8,15 +8,14 @@ on current main before an explicit user request. L1 confidential artifact access
 ## Goal
 
 Activate human `review.context.read` and `review.finding_evidence.ingest` against
-the exact lease/packet/finding context. Amend XINT-002-07A to own only fixed
-`artifact.review_packet.materialize` and reviewer-evidence binding. XINT-002-07B
-remains ART-only and extends response binding after a human revision obligation
-exists.
+the exact lease/packet/finding context. Consume the already-merged XINT-002-07A
+fixed `artifact.review_packet.materialize` and reviewer-finding binding
+capabilities. The ART contract split is completed by WS-XINT-003-01, not here.
 
 ## Allowed files
 
 Enumerate exact REV context/finding service, AUTH composers/activation parity,
-XINT-002 ART-only contract amendments, routes, tests, canonical specs, docs, and
+merged XINT-002-07A ART-only manifest, routes, tests, canonical specs, docs, and
 evidence files at current-main start.
 
 ## Not allowed
