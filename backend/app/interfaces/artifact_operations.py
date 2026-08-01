@@ -31,11 +31,92 @@ __all__ = (
     "GuideSourceBindingResult",
     "GuideSourceMaterializationRequest",
     "GuideSourceMaterializationResult",
+    "GuideSufficiencyMaterialPort",
+    "GuideSufficiencyMaterialRequest",
+    "GuideSufficiencyMaterialResult",
     "PreparedBundleMaterializationRequest",
     "SubmissionBundlePreparationPort",
     "SubmissionBundlePreparationRequest",
     "SubmissionBindingRequest",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSufficiencyMaterialRequest:
+    """Exact durable setup generation selected for canonical guide material."""
+
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSufficiencyMaterialResult:
+    """Complete bounded canonical material and its exact ART provenance."""
+
+    source_items: tuple[GuideSufficiencySourceItem, ...]
+    provenance: tuple[GuideSufficiencyExtractionProvenance, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSufficiencySourceItem:
+    """One canonical ART-owned extracted item without agent coupling."""
+
+    source_kind: str
+    ingestion_adapter: str
+    source_item_id: UUID
+    item_order: int
+    binding_id: UUID
+    content_id: UUID
+    artifact_sha256: str
+    artifact_byte_count: int
+    media_type: str
+    classification_id: UUID
+    detected_format: str
+    extraction_attempt_id: UUID
+    extraction_usage_id: UUID
+    extracted_content_id: UUID
+    extractor_name: str
+    extractor_version: str
+    extraction_policy_version: str
+    canonical_output_sha256: str
+    omission_facts: dict[str, bool]
+    canonical_content: str | None
+    structural_metadata: dict[str, object] | None
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSufficiencyExtractionProvenance:
+    """Exact normalized ART usage lineage selected for a report."""
+
+    item_order: int
+    source_item_id: UUID
+    binding_id: UUID
+    content_id: UUID
+    extraction_usage_id: UUID
+    extraction_attempt_id: UUID
+    extracted_content_id: UUID
+    canonical_output_sha256: str
+
+
+class GuideSufficiencyMaterialPort(Protocol):
+    """Load complete policy-current material without exposing ART persistence."""
+
+    async def load(
+        self, request: GuideSufficiencyMaterialRequest
+    ) -> GuideSufficiencyMaterialResult:
+        """Return current canonical material or fail with a bounded internal code."""
+
+
+class GuideSufficiencyMaterialUnavailable(RuntimeError):
+    """Bounded ART material failure safe for setup-run persistence."""
+
+    def __init__(self, code: str, *, incident_id: UUID | None = None) -> None:
+        super().__init__(code)
+        self.code = code
+        self.incident_id = incident_id
 
 ArtifactBindingResourceType = Literal[
     "project",

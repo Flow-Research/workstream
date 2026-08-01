@@ -28,6 +28,43 @@ activation custody, and availability.
    permission or inherit Project Manager authority.
 6. ART-03C performs the legacy clean cut. No ART chunk writes availability.
 
+### Exact AUTH-04B Activation Manifest
+
+AUTH-04B may activate only these two existing planned actions after every
+split-03B merge is present:
+
+- `artifact.guide_source.binding.create`, mapped only to existing permission
+  `artifact.binding.create` and fixed service identity
+  `workstream.artifact.binding`. Its transaction-bound facts are exactly:
+  `project_id`, `guide_id`, `guide_source_snapshot_id`,
+  `guide_source_item_id`, `project_setup_run_id`, `setup_generation`,
+  `content_id`, `verified_replica_id`, `sha256`, `byte_count`, and the fixed
+  `logical_role=guide_source_original`.
+- `artifact.guide_source.read`, mapped only to its existing read permission and
+  fixed service identity `workstream.artifact.guide_reader`. Its fresh
+  transaction-bound facts are exactly: `project_id`, `guide_id`,
+  `guide_source_snapshot_id`, `guide_source_item_id`, `project_setup_run_id`,
+  `setup_generation`, `binding_id`, `content_id`, `verified_replica_id`,
+  `storage_namespace_id`, `namespace_fingerprint`, `verification_receipt_id`,
+  `verification_generation`, `sha256`, `byte_count`, and `media_type`.
+
+Both consumers lock and revalidate the draft guide, latest snapshot, exact
+source item, current setup run/generation, verified content, replica, and
+receipt lineage before consuming the opaque prepared handle and before any
+protected mutation or provider read. Prepared handles are process-local,
+single-use, action/session/transaction/resource bound, and never enter Celery.
+Wrong service, action, session, transaction, generation, project, guide,
+snapshot, item, binding, content, replica, receipt, digest, size, media type,
+replay, copied handle, replacement, or stale lineage denies before provider I/O
+or mutation.
+
+ART-03B4 adds no new AUTH action. The sufficiency continuation receives only
+project, guide, snapshot, setup-run, and setup-generation identifiers, reloads canonical
+rows, and consumes only complete policy-current extraction usages. Both actions
+must remain planned and unavailable until AUTH-04B merges. They are never
+granted to a Project Manager, never inherit uploader authority, and do not
+create generic artifact-download authority.
+
 ## Submission Bundle Sequence
 
 Before ART-04A starts, AUTH must merge a separately reviewed registration

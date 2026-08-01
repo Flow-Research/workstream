@@ -595,6 +595,17 @@ class GuideSourceExtractionUsage(Base):
             name="fk_guide_extraction_usages_exact_content",
         ),
         UniqueConstraint("binding_id", "extracted_content_id", name="uq_guide_extraction_usages"),
+        UniqueConstraint(
+            "id",
+            "source_item_id",
+            "binding_id",
+            "content_id",
+            "extraction_attempt_id",
+            "extracted_content_id",
+            "project_setup_run_id",
+            "setup_generation",
+            name="uq_guide_extraction_usages_exact_provenance",
+        ),
         CheckConstraint(
             "attempt_status = 'extracted'",
             name="ck_guide_extraction_usages_successful_attempt",

@@ -22,6 +22,7 @@ CLOSED_PORTS = {
     "CheckerArtifactOutputPort",
     "ArtifactOperatorReadPort",
     "ArtifactOperatorRecoveryPort",
+    "GuideSufficiencyMaterialPort",
 }
 CANONICAL_REQUESTS = {
     "GuideArtifactIngestRequest",
@@ -34,17 +35,22 @@ CANONICAL_REQUESTS = {
     "BindingMaterializationRequest",
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
+    "GuideSufficiencyMaterialRequest",
 }
 CANONICAL_RESULTS = {
     "GuideArtifactIngestResult",
     "GuideSourceBindingResult",
     "GuideSourceMaterializationResult",
+    "GuideSufficiencyMaterialResult",
 }
 CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
 }
-PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {"ArtifactRecoveryRequest"}
+PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
+    "ArtifactRecoveryRequest",
+    "GuideSufficiencyMaterialRequest",
+}
 PREPARED_HANDLE_FORBIDDEN_ROOTS = (
     APP_ROOT / "adapters",
     APP_ROOT / "api",
@@ -194,6 +200,16 @@ def test_artifact_domain_does_not_import_adapter_modules() -> None:
                 for alias in node.names:
                     if alias.name.startswith("app.adapters.artifacts"):
                         violations.append(f"{path.relative_to(BACKEND_ROOT)} imports {alias.name}")
+    assert violations == []
+
+
+def test_project_domain_does_not_query_artifact_persistence_models() -> None:
+    """Require project orchestration to consume the narrow material port."""
+    violations: list[str] = []
+    for path in _python_files(APP_ROOT / "modules" / "projects"):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.ImportFrom) and node.module == "app.modules.artifacts.models":
+                violations.append(str(path.relative_to(BACKEND_ROOT)))
     assert violations == []
 
 

@@ -614,6 +614,9 @@ class ProjectSetupRun(Base):
     )
     post_submit_derivation_summary: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(100))
+    error_artifact_incident_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_source_artifact_incidents.id", use_alter=True), index=True
+    )
     error_summary: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     authorized_by_actor_profile_id: Mapped[str | None] = mapped_column(
@@ -681,12 +684,70 @@ class GuideSufficiencyReport(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     agent_name: Mapped[str | None] = mapped_column(String(100))
     agent_version: Mapped[str | None] = mapped_column(String(50))
+    project_setup_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("project_setup_runs.id", use_alter=True), index=True
+    )
+    setup_generation: Mapped[int | None] = mapped_column(BigInteger)
+    agent_material_sha256: Mapped[str | None] = mapped_column(String(71))
+    agent_material_byte_count: Mapped[int | None] = mapped_column(BigInteger)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     warnings_acknowledged_by_role: Mapped[str | None] = mapped_column(String(50))
     warnings_acknowledged_by_actor: Mapped[str | None] = mapped_column(String(100))
     warnings_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     acknowledgement_note: Mapped[str | None] = mapped_column(Text)
+
+
+class GuideSufficiencyReportSourceUsage(Base):
+    """Exact ART extraction usages consumed by one agent-created report."""
+
+    __tablename__ = "guide_sufficiency_report_source_usages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [
+                "extraction_usage_id",
+                "source_item_id",
+                "binding_id",
+                "content_id",
+                "extraction_attempt_id",
+                "extracted_content_id",
+                "project_setup_run_id",
+                "setup_generation",
+            ],
+            [
+                "guide_source_extraction_usages.id",
+                "guide_source_extraction_usages.source_item_id",
+                "guide_source_extraction_usages.binding_id",
+                "guide_source_extraction_usages.content_id",
+                "guide_source_extraction_usages.extraction_attempt_id",
+                "guide_source_extraction_usages.extracted_content_id",
+                "guide_source_extraction_usages.project_setup_run_id",
+                "guide_source_extraction_usages.setup_generation",
+            ],
+            name="fk_sufficiency_report_source_usage_exact_extraction",
+        ),
+        UniqueConstraint("report_id", "item_order", name="uq_sufficiency_report_item_order"),
+        UniqueConstraint(
+            "report_id", "extraction_usage_id", name="uq_sufficiency_report_extraction_usage"
+        ),
+        CheckConstraint("item_order >= 0", name="ck_sufficiency_report_item_order"),
+        CheckConstraint("setup_generation > 0", name="ck_sufficiency_report_usage_generation"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    report_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_sufficiency_reports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_item_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    binding_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    extraction_usage_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    extraction_attempt_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    extracted_content_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_setup_run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    canonical_output_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
 
 
 class SubmissionArtifactPolicy(Base):

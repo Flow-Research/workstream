@@ -356,6 +356,7 @@ Fields:
 - `post_submit_derivation_summary`
 - `error_code`
 - `error_summary`
+- `error_artifact_incident_id`
 - `created_by`
 - `created_at`
 - `updated_at`
@@ -452,6 +453,10 @@ Fields:
 - `summary`
 - `agent_name`
 - `agent_version`
+- `project_setup_run_id`
+- `setup_generation`
+- `agent_material_sha256`
+- `agent_material_byte_count`
 - `created_by`
 - `created_at`
 - `warnings_acknowledged_by_role`
@@ -478,12 +483,40 @@ covered Project Manager before activation.
 
 `source_snapshot_hash` is server-derived from the referenced
 `GuideSourceSnapshot.bundle_hash`. Clients cannot supply a conflicting hash.
+
+Agent-created reports also bind to the exact setup run and generation and to
+the SHA-256 and byte count of the canonical material sent to the agent. Their
+source provenance is normalized into `GuideSufficiencyReportSourceUsage` rows.
+
 Manual sufficiency reports persist `agent_name` and `agent_version` as null.
 Reports created through the agent route persist Workstream-owned agent identity;
 provider-returned names or versions are not trusted as audit provenance.
 A source snapshot has one sufficiency report. If a manual report already exists
 for a snapshot, operators either continue through manual policy creation after
 clearance or create a new guide-source snapshot to run the agent path.
+
+## GuideSufficiencyReportSourceUsage
+
+Fields:
+
+- `id`
+- `report_id`
+- `item_order`
+- `source_item_id`
+- `binding_id`
+- `content_id`
+- `extraction_usage_id`
+- `extraction_attempt_id`
+- `extracted_content_id`
+- `project_setup_run_id`
+- `setup_generation`
+- `canonical_output_sha256`
+
+Each row proves which exact verified ART binding and extraction lineage supplied
+one ordered source item to a sufficiency report. Composite foreign keys prevent
+mixing source items, content, extraction attempts, setup runs, or generations.
+A report cannot consume the same extraction usage twice or assign two items the
+same order.
 
 ## SubmissionArtifactPolicy
 

@@ -105,12 +105,15 @@ async def _finish(session, outcome):
     await (session.rollback() if outcome.replayed else session.commit())
     if outcome.setup_run_id and not outcome.replayed:
         snapshot = outcome.response
+        if outcome.setup_generation is None:
+            raise RuntimeError("committed project setup generation is unavailable")
         await dispatch_pre_submit_setup_pipeline_after_commit(
             session,
             project_id=snapshot.project_id,
             guide_id=snapshot.guide_id,
             source_snapshot_id=snapshot.id,
             setup_run_id=outcome.setup_run_id,
+            setup_generation=outcome.setup_generation,
         )
     return outcome.response
 

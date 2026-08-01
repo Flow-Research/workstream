@@ -25,6 +25,7 @@ def enqueue_pre_submit_setup_pipeline(
     guide_id: str,
     source_snapshot_id: str,
     setup_run_id: str,
+    setup_generation: int,
 ) -> str:
     """Enqueue the Celery project setup pipeline.
 
@@ -45,7 +46,7 @@ def enqueue_pre_submit_setup_pipeline(
 
         sync_task_settings(run_pre_submit_setup_pipeline)
         result = run_pre_submit_setup_pipeline.apply_async(
-            args=(project_id, guide_id, source_snapshot_id, setup_run_id)
+            args=(project_id, guide_id, source_snapshot_id, setup_run_id, setup_generation)
         )
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
         raise ProjectSetupQueueError("project setup pipeline could not be enqueued") from exc
@@ -59,6 +60,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     guide_id: str,
     source_snapshot_id: str,
     setup_run_id: str,
+    setup_generation: int,
 ) -> str | None:
     """Dispatch one committed setup intent and record its bounded outcome."""
     from app.modules.projects.repository import ProjectRepository
@@ -71,6 +73,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             guide_id=guide_id,
             source_snapshot_id=source_snapshot_id,
             setup_run_id=setup_run_id,
+            setup_generation=setup_generation,
         )
     except ProjectSetupQueueError as exc:
         logger.warning(

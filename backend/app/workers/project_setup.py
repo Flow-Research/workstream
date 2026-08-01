@@ -8,6 +8,10 @@ from celery.utils.log import get_task_logger
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.session import get_database_url
+from app.interfaces.artifact_operations import GuideSufficiencyMaterialUnavailable
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 from app.modules.projects.service import (
     ProjectService,
     ProjectServiceError,
@@ -48,6 +52,7 @@ def run_pre_submit_setup_pipeline(
     guide_id: str,
     source_snapshot_id: str,
     setup_run_id: str,
+    setup_generation: int,
 ) -> dict[str, Any]:
     """Run guide sufficiency and policy derivation for a source snapshot.
 
@@ -66,6 +71,7 @@ def run_pre_submit_setup_pipeline(
             guide_id,
             source_snapshot_id,
             setup_run_id,
+            setup_generation,
         )
     )
 
@@ -108,6 +114,7 @@ async def _run_pre_submit_setup_pipeline(
     guide_id: str,
     source_snapshot_id: str,
     setup_run_id: str,
+    setup_generation: int,
 ) -> dict[str, Any]:
     """Execute the project setup pipeline using async service contracts."""
     actor = project_setup_pipeline_actor()
@@ -122,6 +129,7 @@ async def _run_pre_submit_setup_pipeline(
                     project_id=project_id,
                     guide_id=guide_id,
                     source_snapshot_id=source_snapshot_id,
+                    setup_generation=setup_generation,
                 )
                 await service.update_project_setup_run_status(
                     setup_run_id,
@@ -221,6 +229,91 @@ async def _run_pre_submit_setup_pipeline(
                     "error": public_error,
                     "guide_sufficiency_report_id": None,
                     "submission_artifact_policy_id": None,
+                }
+    finally:
+        await engine.dispose()
+
+
+async def _run_verified_pre_submit_sufficiency_continuation(
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    setup_run_id: str,
+    setup_generation: int,
+) -> dict[str, Any]:
+    """Exercise the hidden ART-backed continuation before AUTH-04B activation."""
+    actor = project_setup_pipeline_actor()
+    engine = create_async_engine(get_database_url(), pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with session_factory() as session:
+            service = ProjectService(
+                session,
+                guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+            )
+            try:
+                report, created = await service.run_verified_guide_sufficiency_agent(
+                    actor,
+                    project_id,
+                    guide_id,
+                    source_snapshot_id,
+                    setup_run_id,
+                    setup_generation,
+                )
+                if report.status == "blocked":
+                    await service.update_project_setup_run_status(
+                        setup_run_id,
+                        status="sufficiency_blocked",
+                        current_step="guide_sufficiency",
+                        output_sufficiency_report_id=report.id,
+                    )
+                    return {
+                        "status": "sufficiency_blocked",
+                        "guide_sufficiency_report_id": report.id,
+                        "idempotent": not created,
+                    }
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="running_policy_derivation_agent",
+                    current_step="submission_artifact_policy_derivation",
+                    output_sufficiency_report_id=report.id,
+                )
+                return {
+                    "status": "sufficiency_complete",
+                    "guide_sufficiency_report_id": report.id,
+                    "idempotent": not created,
+                }
+            except GuideSufficiencyMaterialUnavailable as exc:
+                await session.rollback()
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=exc.code,
+                    error_artifact_incident_id=(
+                        str(exc.incident_id) if exc.incident_id is not None else None
+                    ),
+                    error_summary="project setup failed; inspect server logs with the setup run id",
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": exc.code,
+                    "guide_sufficiency_report_id": None,
+                }
+            except ProjectServiceError:
+                await session.rollback()
+                error_code = "guide_source_stale"
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=error_code,
+                    error_summary="project setup failed; inspect server logs with the setup run id",
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": error_code,
+                    "guide_sufficiency_report_id": None,
                 }
     finally:
         await engine.dispose()
