@@ -37,6 +37,8 @@ unavailable.
   `git diff --check`: passed.
 - Hosted GitHub Actions retains the full-suite 78-percent gate and the existing
   targeted 90-percent subsystem gate; no threshold or failure behavior changed.
+- The new policy-lineage test module has explicit `shared_foundations` semantic-
+  lane custody; the initial fail-closed missing-inventory result was corrected.
 
 ## Review
 

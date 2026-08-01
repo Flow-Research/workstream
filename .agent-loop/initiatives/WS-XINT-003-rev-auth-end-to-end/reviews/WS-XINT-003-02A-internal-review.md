@@ -42,3 +42,10 @@ No blocking finding remains. All reviewer sessions completed.
 
 The repository-wide 78-percent coverage suite remains assigned to hosted
 GitHub Actions on the exact PR head.
+
+The first hosted run failed closed during inventory collection because the new
+test module had no semantic-lane custody. The module was assigned to
+`shared_foundations`; all 31 CI lane-contract tests pass without changing the
+four-lane design or any coverage/failure gate. A local repository collection
+then reached unrelated missing Pillow dependencies, so exact collection is
+left to the hosted environment that supplies the locked CI dependencies.

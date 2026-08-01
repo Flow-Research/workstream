@@ -43,6 +43,7 @@ backend/tests/test_artifact_admission.py
 backend/tests/test_policy_identity_lineage.py
 backend/tests/conftest.py
 backend/scripts/api_contract_e2e.py
+backend/scripts/run_test_lanes.py
 backend/scripts/week2_api_e2e.py
 examples/terminal_benchmark/terminal_benchmark_api_e2e.py
 docs/spec_review_lifecycle.md
