@@ -50,6 +50,12 @@ revision evaluator extension, preserved the registration-only 08R boundary,
 removed wording that implied 07A runtime activation, and recorded exact-head
 review evidence. No comment was deferred.
 
+The final CodeRabbit pass added two valid evidence clarifications: immutable
+check-run IDs are now recorded for reviewed head `8250adf3`, and the external
+response explicitly leaves the required human review open. Neither automated
+review nor this response substitutes for human approval of the named contract
+boundaries.
+
 ## WS-XINT-003-01 contract reconciliation
 
 Architecture, security/auth, product/operations, QA/test, senior engineering,

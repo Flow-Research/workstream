@@ -20,19 +20,28 @@ None.
 
 ## Human decisions needed
 
-None. The corrections preserve the already-approved activation order and do
-not introduce runtime behavior.
+Human review remains required for action completeness, policy-writer
+boundaries, ART ownership, and activation sequencing. This response does not
+close those decisions.
 
-## Commands rerun
+## Commands and exact-head checks
 
-- `python3 scripts/check_stale_authorization_docs.py`
-- `python3 scripts/check_stale_artifact_contracts.py`
-- `python3 scripts/check_stale_workstream_wording.py`
-- `python3 scripts/check_markdown_links.py`
-- `git diff --check`
+- PASS — `python3 scripts/check_stale_authorization_docs.py`
+- PASS — `python3 scripts/check_stale_artifact_contracts.py`
+- PASS — `python3 scripts/check_stale_workstream_wording.py`
+- PASS — `python3 scripts/check_markdown_links.py`
+- PASS — `git diff --check`
 
-Agent Gates, Backend, and CodeRabbit must complete successfully on the final PR
-head before human merge.
+For reviewed head `8250adf3ac52bc4bfee69fd5299dd70f21fb3ad1`, immutable
+GitHub check runs completed successfully:
+
+- Agent Gates jobs `91360730659` and `91360846607`;
+- Backend test jobs `91360730691` and `91361080477`; and
+- CodeRabbit review completed against that head.
+
+The same deterministic commands pass on correction head `c65489a7`. Agent
+Gates, Backend, and CodeRabbit must also complete successfully on the final PR
+head before human merge; a later passing head does not erase this evidence.
 
 ## Remaining risks
 
