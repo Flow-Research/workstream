@@ -31,4 +31,5 @@ REV-owned semantics with AUTH-owned mutation authorization.
 ## Next step
 
 Keep hosted exact-head gates green, resolve all external review, and obtain
-human merge. Then stop before runtime policy work in WS-XINT-003-02.
+human merge. Parent 02 plan review then required 02A immutable identity/lineage
+before 02B runtime policy mutation activation.

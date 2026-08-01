@@ -15,15 +15,18 @@ Add separately authorized routes for review and revision policy records after
 
 This contract is reconciled with REV-03P by WS-XINT-003-01. REV owns the
 immutable/versioned policy semantics; AUTH owns the mutation authorization,
-PREP consumption, and decision evidence. Chunk WS-XINT-003-02 implements the
-single path below; neither parent contract may build an alternate writer.
+PREP consumption, and decision evidence. WS-XINT-003-02A first installs exact
+immutable policy identity and downstream lineage without activation; 02B then
+implements the single writer path below. Neither parent contract may build an
+alternate writer.
 
 ## One writer path
 
 - Surviving API: separate `PUT /projects/{project_id}/review-policy` and
-  `PUT /projects/{project_id}/revision-policy` routes in
-  `backend/app/modules/projects/router.py`, each declaring its exact primary
-  ActionId.
+  `PUT /projects/{project_id}/revision-policy` routes in the dedicated
+  `backend/app/modules/projects/policy_mutation_router.py`, registered once by
+  `backend/app/api/router.py`, each declaring its exact primary ActionId. This
+  follows the project-create and guide-mutation router boundary on current main.
 - Surviving service: new `ProjectPolicyMutationService` methods
   `replace_review_policy()` and `replace_revision_policy()`.
 - Surviving repository: new append-only
@@ -31,6 +34,8 @@ single path below; neither parent contract may build an alternate writer.
   `ProjectRepository.add_revision_policy_version()` methods over the existing
   `ReviewPolicy` and `RevisionPolicy` tables/models, upgraded as necessary for
   immutable version provenance.
+- A separate `PolicyMutationReplayRepository` may own only the idempotency
+  ledger. It must not read or write either policy table.
 - Retired callable mutators: `ProjectRepository.upsert_review_policy()`,
   `ProjectRepository.upsert_revision_policy()`,
   `ProjectService._review_policy_model()`, and
