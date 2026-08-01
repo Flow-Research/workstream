@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0045_guide_metadata_authority"
+HEAD_REVISION = "0046_guide_sufficiency"
 
 pytestmark = pytest.mark.postgres_schema_contract
 

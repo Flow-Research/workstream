@@ -26,6 +26,9 @@
   clean-schema fingerprint gate remains the single canonical assertion for the
   complete constraint catalogue, avoiding duplicate order-sensitive schema
   custody inside an ordinary semantic lane.
+- Advanced the canonical Alembic test head from the merged `0045` revision to
+  this chunk's `0046_guide_sufficiency` revision so every downgrade guard
+  restores and asserts the actual repository head.
 
 ## Comments deferred
 
