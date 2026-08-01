@@ -33,5 +33,6 @@ None.
 
 ## Remaining risks
 
-Hosted Backend must pass again on the repaired head. Agent Gates and the prior
-hosted Backend run passed.
+No unresolved external finding remains. Hosted Backend and Agent Gates pass on
+the repaired head, and CodeRabbit's final incremental review reported no new
+finding. Human approval remains required before merge.

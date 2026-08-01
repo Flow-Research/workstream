@@ -90,10 +90,11 @@ re-reviewed.
 ## External review
 
 The first Agent Gates run found two ambiguous uses of `worker` in the chunk
-contract; both were corrected to `extraction child`. CodeRabbit initially
-reported its review limit rather than code findings, so a fresh review remains
-to be requested. Hosted checks and CodeRabbit supplement but do not replace
-internal review, and valid findings must be repaired before human merge.
+contract; both were corrected to `extraction child`. CodeRabbit's valid
+16-bit grayscale-alpha decoder-mode finding and maintainability suggestions
+were fixed; its final incremental review reported no new finding. Hosted
+Backend and Agent Gates pass on the repaired head. These external checks
+supplement but do not replace internal review.
 
 ## Remaining risks and follow-up work
 
