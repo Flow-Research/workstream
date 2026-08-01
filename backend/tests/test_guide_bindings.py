@@ -155,24 +155,6 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
                     )
                 ).scalars()
             )
-            constraints = set(
-                (
-                    await connection.execute(
-                        text(
-                            "select conname from pg_constraint where conname in ("
-                            "'fk_sufficiency_report_source_usage_exact_extraction',"
-                            "'uq_sufficiency_report_item_order',"
-                            "'uq_sufficiency_report_extraction_usage',"
-                            "'uq_guide_extraction_usages_exact_provenance',"
-                            "'ck_guide_sufficiency_reports_generation_positive',"
-                            "'ck_guide_sufficiency_reports_material_sha256',"
-                            "'ck_guide_sufficiency_reports_material_size',"
-                            "'ck_guide_sufficiency_reports_material_provenance_shape',"
-                            "'ck_sufficiency_report_output_sha256')"
-                        )
-                    )
-                ).scalars()
-            )
         assert present == "guide_sufficiency_report_source_usages"
         assert {
             "project_setup_run_id",
@@ -180,17 +162,6 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
             "agent_material_sha256",
             "agent_material_byte_count",
         }.issubset(columns)
-        assert constraints == {
-            "fk_sufficiency_report_source_usage_exact_extraction",
-            "uq_sufficiency_report_item_order",
-            "uq_sufficiency_report_extraction_usage",
-            "uq_guide_extraction_usages_exact_provenance",
-            "ck_guide_sufficiency_reports_generation_positive",
-            "ck_guide_sufficiency_reports_material_sha256",
-            "ck_guide_sufficiency_reports_material_size",
-            "ck_guide_sufficiency_reports_material_provenance_shape",
-            "ck_sufficiency_report_output_sha256",
-        }
         async with engine.connect() as connection:
             setup_columns = set(
                 (

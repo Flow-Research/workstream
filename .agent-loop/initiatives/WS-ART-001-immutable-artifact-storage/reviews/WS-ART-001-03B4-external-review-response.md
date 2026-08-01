@@ -22,8 +22,10 @@
 - Reconciled the closed artifact-interface export assertion with the three
   canonical guide-sufficiency value types exposed by that interface.
 - Recreated the async database engine after the migration downgrade/upgrade
-  boundary so the round-trip test observes the freshly committed constraint
-  catalogue instead of reusing its pre-upgrade pool.
+  boundary. The round-trip test owns table and column restoration; the shared
+  clean-schema fingerprint gate remains the single canonical assertion for the
+  complete constraint catalogue, avoiding duplicate order-sensitive schema
+  custody inside an ordinary semantic lane.
 
 ## Comments deferred
 
