@@ -667,6 +667,26 @@ class GuideSufficiencyReport(Base):
             "source_snapshot_id",
             name="uq_guide_sufficiency_reports_source_snapshot",
         ),
+        CheckConstraint(
+            "setup_generation is null or setup_generation > 0",
+            name="ck_guide_sufficiency_reports_generation_positive",
+        ),
+        CheckConstraint(
+            "agent_material_sha256 is null or "
+            "agent_material_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_guide_sufficiency_reports_material_sha256",
+        ),
+        CheckConstraint(
+            "agent_material_byte_count is null or agent_material_byte_count >= 0",
+            name="ck_guide_sufficiency_reports_material_size",
+        ),
+        CheckConstraint(
+            "(project_setup_run_id is null and setup_generation is null "
+            "and agent_material_sha256 is null and agent_material_byte_count is null) or "
+            "(project_setup_run_id is not null and setup_generation is not null "
+            "and agent_material_sha256 is not null and agent_material_byte_count is not null)",
+            name="ck_guide_sufficiency_reports_material_provenance_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -732,6 +752,10 @@ class GuideSufficiencyReportSourceUsage(Base):
         ),
         CheckConstraint("item_order >= 0", name="ck_sufficiency_report_item_order"),
         CheckConstraint("setup_generation > 0", name="ck_sufficiency_report_usage_generation"),
+        CheckConstraint(
+            "canonical_output_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_sufficiency_report_output_sha256",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)

@@ -230,17 +230,22 @@ class OpenAIAgentSdkProjectGuideRuntime:
         output_type: type[TStructuredOutput],
     ) -> TStructuredOutput:
         """Run one structured OpenAI agent without leaking SDK types upstream."""
-        prompt_bytes = (
-            canonical_guide_source_material_bytes(material)
-            if isinstance(material, GuideSourceMaterial)
-            else json.dumps(
-                material,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-                allow_nan=False,
-            ).encode("utf-8")
-        )
+        try:
+            prompt_bytes = (
+                canonical_guide_source_material_bytes(material)
+                if isinstance(material, GuideSourceMaterial)
+                else json.dumps(
+                    material,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+            )
+        except ValueError:
+            raise ProjectAgentRuntimeError(
+                "OpenAI Agents SDK prompt is not canonically serializable"
+            ) from None
         maximum_prompt_bytes = (
             MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES
             if isinstance(material, GuideSourceMaterial) and material.verified_artifact_material

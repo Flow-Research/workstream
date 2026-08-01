@@ -159,7 +159,12 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
                             "'fk_sufficiency_report_source_usage_exact_extraction',"
                             "'uq_sufficiency_report_item_order',"
                             "'uq_sufficiency_report_extraction_usage',"
-                            "'uq_guide_extraction_usages_exact_provenance')"
+                            "'uq_guide_extraction_usages_exact_provenance',"
+                            "'ck_guide_sufficiency_reports_generation_positive',"
+                            "'ck_guide_sufficiency_reports_material_sha256',"
+                            "'ck_guide_sufficiency_reports_material_size',"
+                            "'ck_guide_sufficiency_reports_material_provenance_shape',"
+                            "'ck_sufficiency_report_output_sha256')"
                         )
                     )
                 ).scalars()
@@ -176,6 +181,11 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
             "uq_sufficiency_report_item_order",
             "uq_sufficiency_report_extraction_usage",
             "uq_guide_extraction_usages_exact_provenance",
+            "ck_guide_sufficiency_reports_generation_positive",
+            "ck_guide_sufficiency_reports_material_sha256",
+            "ck_guide_sufficiency_reports_material_size",
+            "ck_guide_sufficiency_reports_material_provenance_shape",
+            "ck_sufficiency_report_output_sha256",
         }
         async with engine.connect() as connection:
             setup_columns = set(
@@ -190,6 +200,7 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
             )
         assert "error_artifact_incident_id" in setup_columns
     finally:
+        await asyncio.to_thread(command.upgrade, config, "head")
         await engine.dispose()
 
 
@@ -210,6 +221,9 @@ async def test_sufficiency_material_uses_only_exact_current_extraction(
             )
         binding_id = await _create_binding(factory, ids)
         classification_id, attempt_id, extracted_id, usage_id = (uuid4() for _ in range(4))
+        obsolete_attempt_id, obsolete_extracted_id, obsolete_usage_id = (
+            uuid4() for _ in range(3)
+        )
         async with factory() as session, session.begin():
             session.add(
                 GuideSourceFormatClassification(
@@ -221,6 +235,7 @@ async def test_sufficiency_material_uses_only_exact_current_extraction(
                     classification_facts={},
                 )
             )
+            await session.flush()
             session.add(
                 GuideSourceExtractionAttempt(
                     id=str(attempt_id), binding_id=str(binding_id), content_id=str(ids["content"]),
@@ -244,6 +259,35 @@ async def test_sufficiency_material_uses_only_exact_current_extraction(
                 GuideSourceExtractionUsage(
                     id=str(usage_id), extracted_content_id=str(extracted_id),
                     extraction_attempt_id=str(attempt_id), attempt_status="extracted",
+                    binding_id=str(binding_id), content_id=str(ids["content"]),
+                    source_item_id=str(ids["item"]), project_setup_run_id=str(ids["run"]),
+                    setup_generation=1,
+                )
+            )
+            session.add_all(
+                [
+                    GuideSourceExtractionAttempt(
+                        id=str(obsolete_attempt_id), binding_id=str(binding_id),
+                        content_id=str(ids["content"]), classification_id=str(classification_id),
+                        setup_generation=1, detected_format="plain_text",
+                        extractor_name="workstream.plain_text", extractor_version="0",
+                        policy_version="guide-extraction-obsolete", attempt_number=2,
+                        status="extracted", error_code=None, bounded_facts={},
+                    ),
+                    GuideSourceExtractedContent(
+                        id=str(obsolete_extracted_id), content_id=str(ids["content"]),
+                        detected_format="plain_text", extractor_name="workstream.plain_text",
+                        extractor_version="0", policy_version="guide-extraction-obsolete",
+                        source_sha256=digest, source_byte_count=len(payload), status="extracted",
+                        output_sha256=output_digest, canonical_output=output, omission_facts={},
+                    ),
+                ]
+            )
+            await session.flush()
+            session.add(
+                GuideSourceExtractionUsage(
+                    id=str(obsolete_usage_id), extracted_content_id=str(obsolete_extracted_id),
+                    extraction_attempt_id=str(obsolete_attempt_id), attempt_status="extracted",
                     binding_id=str(binding_id), content_id=str(ids["content"]),
                     source_item_id=str(ids["item"]), project_setup_run_id=str(ids["run"]),
                     setup_generation=1,
@@ -299,9 +343,11 @@ async def test_verified_sufficiency_report_commits_exact_usage_provenance(
 ) -> None:
     class Runtime:
         calls = 0
+        material = None
 
         async def analyze_guide_sufficiency(self, material):
             type(self).calls += 1
+            type(self).material = material
             assert material.source_items[0].untrusted_data is True
             assert (
                 material.source_items[0].untrusted_data_label
@@ -394,16 +440,23 @@ async def test_verified_sufficiency_report_commits_exact_usage_provenance(
         assert report.project_setup_run_id == str(ids["run"])
         assert report.setup_generation == 1
         assert report.agent_material_sha256.startswith("sha256:")
+        assert Runtime.material is not None
+        assert report.agent_material_byte_count == len(
+            bounded_canonical_guide_material(Runtime.material)
+        )
         async with factory() as session:
             usage = await session.scalar(
                 select(GuideSufficiencyReportSourceUsage).where(
                     GuideSufficiencyReportSourceUsage.report_id == report.id
                 )
             )
+            persisted_run = await session.get(ProjectSetupRun, str(ids["run"]))
         assert usage is not None
         assert usage.extraction_usage_id == str(usage_id)
         assert usage.binding_id == str(binding_id)
         assert usage.canonical_output_sha256 == output_digest
+        assert persisted_run is not None
+        assert persisted_run.output_sufficiency_report_id == report.id
         async with factory() as session:
             replay, replay_created = await ProjectService(
                 session,

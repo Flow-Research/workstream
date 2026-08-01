@@ -80,8 +80,10 @@ non-finite values. Final rereviews are recorded before merge readiness.
 
 ## External review
 
-Hosted Backend/Agent Gates and CodeRabbit have not yet run on the final PR head.
-Their valid findings will be addressed before merge readiness.
+CodeRabbit's valid integrity, failure-mapping, test, documentation, and CI-stub
+findings were repaired and recorded in the external-review response. Hosted
+Backend/Agent Gates rerun on the repaired head; final outcomes remain required
+before merge readiness.
 
 ## Remaining risks and follow-up work
 

@@ -130,7 +130,7 @@ be used by the new hidden verified continuation.
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
 (cd backend && .venv/bin/python scripts/run_isolated_tests.py --metadata-json /tmp/ws-art-03b4.json --timeout-seconds 900 -- .venv/bin/python -m pytest tests/test_projects.py tests/test_guide_bindings.py tests/test_artifact_architecture.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
 (cd backend && .venv/bin/coverage report --precision=2 --fail-under=78)
-(cd backend && .venv/bin/coverage report --include='app/modules/projects/*,app/*ers/project_setup.py' --precision=2 --fail-under=90)
+(cd backend && .venv/bin/coverage report --include='app/modules/projects/*,app/modules/artifacts/guide_sufficiency_material.py,app/*ers/project_setup.py' --precision=2 --fail-under=90)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 python3 scripts/test_agent_gates.py

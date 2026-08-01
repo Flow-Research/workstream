@@ -205,10 +205,26 @@ def test_artifact_domain_does_not_import_adapter_modules() -> None:
 
 def test_project_domain_does_not_query_artifact_persistence_models() -> None:
     """Require project orchestration to consume the narrow material port."""
+    forbidden_prefixes = (
+        "app.modules.artifacts.models",
+        "app.modules.artifacts.repository",
+    )
     violations: list[str] = []
     for path in _python_files(APP_ROOT / "modules" / "projects"):
         for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.ImportFrom) and node.module == "app.modules.artifacts.models":
+            modules: list[str] = []
+            if isinstance(node, ast.ImportFrom):
+                if node.level >= 2 and node.module is not None:
+                    modules.append(f"app.modules.{node.module}")
+                elif node.level == 0 and node.module is not None:
+                    modules.append(node.module)
+            elif isinstance(node, ast.Import):
+                modules.extend(alias.name for alias in node.names)
+            if any(
+                module == prefix or module.startswith(f"{prefix}.")
+                for module in modules
+                for prefix in forbidden_prefixes
+            ):
                 violations.append(str(path.relative_to(BACKEND_ROOT)))
     assert violations == []
 

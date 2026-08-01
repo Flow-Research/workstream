@@ -119,6 +119,7 @@ from app.modules.projects.service import (
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
     GuideActivationBlocked,
     PolicySetupBlocked,
+    PolicySetupConflict,
     ProjectNotFound,
     ProjectSetupQueueError,
     ProjectService,
@@ -2118,7 +2119,7 @@ async def test_create_guide_never_enqueues_setup_or_runs_agents(
             """Fail if the guide create request invokes policy derivation."""
             raise AssertionError("derivation runtime must not run in request path")
 
-    enqueued: list[dict[str, str]] = []
+    enqueued: list[dict[str, object]] = []
 
     def capture_enqueue(
         *,
@@ -2510,7 +2511,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    enqueued: list[dict[str, str]] = []
+    enqueued: list[dict[str, object]] = []
 
     def capture_enqueue(
         *,
@@ -2585,6 +2586,7 @@ async def test_create_source_snapshot_returns_created_when_post_commit_enqueue_f
         guide_id: str,
         source_snapshot_id: str,
         setup_run_id: str,
+        setup_generation: int,
     ) -> str:
         """Simulate a broker outage after the snapshot transaction commits."""
         raise ProjectSetupQueueError("queue failed after commit")
@@ -5662,6 +5664,72 @@ async def test_hidden_verified_worker_persists_stable_material_failure(
             "current_step": "guide_sufficiency",
             "error_code": error_code,
             "error_artifact_incident_id": str(incident_id) if incident_id else None,
+            "error_summary": "project setup failed; inspect server logs with the setup run id",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failure", "error_code"),
+    [
+        (PolicySetupConflict("changed"), "guide_source_material_changed"),
+        (PolicySetupBlocked("unavailable"), "verified_guide_sufficiency_unavailable"),
+        (RuntimeError("sensitive failure"), "project_setup_failed"),
+    ],
+)
+async def test_hidden_verified_worker_preserves_sanitized_domain_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    error_code: str,
+) -> None:
+    from app.workers import project_setup as worker
+
+    updates: list[dict[str, object]] = []
+
+    class Session:
+        async def rollback(self) -> None:
+            pass
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Session()
+
+        async def __aexit__(self, *_: object) -> None:
+            pass
+
+    class Engine:
+        async def dispose(self) -> None:
+            pass
+
+    class Service:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        async def run_verified_guide_sufficiency_agent(self, *_: object):
+            raise failure
+
+        async def update_project_setup_run_status(self, _run_id: str, **facts: object):
+            updates.append(facts)
+
+    monkeypatch.setattr(worker, "create_async_engine", lambda *_args, **_kwargs: Engine())
+    monkeypatch.setattr(worker, "get_database_url", lambda: "postgresql+asyncpg://unused")
+    monkeypatch.setattr(worker, "async_sessionmaker", lambda *_args, **_kwargs: SessionContext)
+    monkeypatch.setattr(worker, "ProjectService", Service)
+
+    result = await worker._run_verified_pre_submit_sufficiency_continuation(
+        str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4()), 1
+    )
+
+    assert result == {
+        "status": "setup_blocked",
+        "error_code": error_code,
+        "guide_sufficiency_report_id": None,
+    }
+    assert updates == [
+        {
+            "status": "setup_blocked",
+            "current_step": "guide_sufficiency",
+            "error_code": error_code,
             "error_summary": "project setup failed; inspect server logs with the setup run id",
         }
     ]

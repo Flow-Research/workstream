@@ -59,11 +59,6 @@ class SqlAlchemyGuideSufficiencyMaterialAdapter:
         guide_id = str(request.guide_id)
         snapshot_id = str(request.guide_source_snapshot_id)
         setup_run_id = str(request.project_setup_run_id)
-        latest_generation = await self._session.scalar(
-            select(func.max(ProjectSetupRun.setup_generation)).where(
-                ProjectSetupRun.guide_id == guide_id
-            )
-        )
         header = (
             await self._session.execute(
                 select(ProjectGuide, GuideSourceSnapshot, ProjectSetupRun)
@@ -88,7 +83,14 @@ class SqlAlchemyGuideSufficiencyMaterialAdapter:
                 .with_for_update(of=(ProjectGuide, GuideSourceSnapshot, ProjectSetupRun))
             )
         ).one_or_none()
-        if header is None or latest_generation != request.setup_generation:
+        if header is None:
+            raise GuideSufficiencyMaterialUnavailable("guide_source_stale")
+        latest_generation = await self._session.scalar(
+            select(func.max(ProjectSetupRun.setup_generation)).where(
+                ProjectSetupRun.guide_id == guide_id
+            )
+        )
+        if latest_generation != request.setup_generation:
             raise GuideSufficiencyMaterialUnavailable("guide_source_stale")
 
         items = (
@@ -196,6 +198,8 @@ class SqlAlchemyGuideSufficiencyMaterialAdapter:
                     structural = json.loads(canonical)
                 except (TypeError, ValueError):
                     raise GuideSufficiencyMaterialUnavailable("guide_source_malformed") from None
+                if not isinstance(structural, dict):
+                    raise GuideSufficiencyMaterialUnavailable("guide_source_malformed")
                 canonical = None
             dto = GuideSufficiencySourceItem(
                 source_kind=item.source_kind,

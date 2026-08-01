@@ -34,6 +34,7 @@ def enqueue_pre_submit_setup_pipeline(
         guide_id: Guide whose source snapshot should be processed.
         source_snapshot_id: Immutable source snapshot to analyze.
         setup_run_id: Project setup run ledger row to update from the worker.
+        setup_generation: Exact setup generation to fence the continuation.
 
     Returns:
         Celery task id.

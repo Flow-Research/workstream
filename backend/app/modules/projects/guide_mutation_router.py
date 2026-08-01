@@ -102,11 +102,11 @@ def _error(exc: ProjectServiceError):
 
 
 async def _finish(session, outcome):
+    if outcome.setup_run_id and not outcome.replayed and outcome.setup_generation is None:
+        raise RuntimeError("committed project setup generation is unavailable")
     await (session.rollback() if outcome.replayed else session.commit())
     if outcome.setup_run_id and not outcome.replayed:
         snapshot = outcome.response
-        if outcome.setup_generation is None:
-            raise RuntimeError("committed project setup generation is unavailable")
         await dispatch_pre_submit_setup_pipeline_after_commit(
             session,
             project_id=snapshot.project_id,

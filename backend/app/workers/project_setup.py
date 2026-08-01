@@ -13,6 +13,8 @@ from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
 from app.modules.projects.service import (
+    PolicySetupBlocked,
+    PolicySetupConflict,
     ProjectService,
     ProjectServiceError,
     StaleProjectSetupContinuation,
@@ -61,6 +63,7 @@ def run_pre_submit_setup_pipeline(
         guide_id: Guide whose latest source snapshot should be processed.
         source_snapshot_id: Immutable source snapshot to analyze.
         setup_run_id: Project setup run ledger row to update.
+        setup_generation: Exact generation associated with this setup run.
 
     Returns:
         Machine-readable terminal pipeline state.
@@ -300,9 +303,55 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                     "error_code": exc.code,
                     "guide_sufficiency_report_id": None,
                 }
+            except PolicySetupConflict:
+                await session.rollback()
+                error_code = "guide_source_material_changed"
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=error_code,
+                    error_summary="project setup failed; inspect server logs with the setup run id",
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": error_code,
+                    "guide_sufficiency_report_id": None,
+                }
+            except PolicySetupBlocked:
+                await session.rollback()
+                error_code = "verified_guide_sufficiency_unavailable"
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=error_code,
+                    error_summary="project setup failed; inspect server logs with the setup run id",
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": error_code,
+                    "guide_sufficiency_report_id": None,
+                }
             except ProjectServiceError:
                 await session.rollback()
                 error_code = "guide_source_stale"
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=error_code,
+                    error_summary="project setup failed; inspect server logs with the setup run id",
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": error_code,
+                    "guide_sufficiency_report_id": None,
+                }
+            except Exception:
+                await session.rollback()
+                logger.exception("verified guide sufficiency continuation failed")
+                error_code = "project_setup_failed"
                 await service.update_project_setup_run_status(
                     setup_run_id,
                     status="setup_blocked",

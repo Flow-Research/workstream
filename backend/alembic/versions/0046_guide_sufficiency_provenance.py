@@ -68,6 +68,29 @@ def upgrade() -> None:
         "guide_sufficiency_reports",
         ["project_setup_run_id"],
     )
+    for name, condition in (
+        (
+            "ck_guide_sufficiency_reports_generation_positive",
+            "setup_generation is null or setup_generation > 0",
+        ),
+        (
+            "ck_guide_sufficiency_reports_material_sha256",
+            "agent_material_sha256 is null or "
+            "agent_material_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+        ),
+        (
+            "ck_guide_sufficiency_reports_material_size",
+            "agent_material_byte_count is null or agent_material_byte_count >= 0",
+        ),
+        (
+            "ck_guide_sufficiency_reports_material_provenance_shape",
+            "(project_setup_run_id is null and setup_generation is null "
+            "and agent_material_sha256 is null and agent_material_byte_count is null) or "
+            "(project_setup_run_id is not null and setup_generation is not null "
+            "and agent_material_sha256 is not null and agent_material_byte_count is not null)",
+        ),
+    ):
+        op.create_check_constraint(name, "guide_sufficiency_reports", condition)
     op.create_table(
         "guide_sufficiency_report_source_usages",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -118,6 +141,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "setup_generation > 0", name="ck_sufficiency_report_usage_generation"
         ),
+        sa.CheckConstraint(
+            "canonical_output_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_sufficiency_report_output_sha256",
+        ),
     )
     op.create_index(
         "ix_sufficiency_report_source_usage_report_id",
@@ -148,6 +175,13 @@ def downgrade() -> None:
     op.drop_constraint(
         "fk_sufficiency_reports_setup_run", "guide_sufficiency_reports", type_="foreignkey"
     )
+    for name in (
+        "ck_guide_sufficiency_reports_material_provenance_shape",
+        "ck_guide_sufficiency_reports_material_size",
+        "ck_guide_sufficiency_reports_material_sha256",
+        "ck_guide_sufficiency_reports_generation_positive",
+    ):
+        op.drop_constraint(name, "guide_sufficiency_reports", type_="check")
     for name in (
         "agent_material_byte_count",
         "agent_material_sha256",
