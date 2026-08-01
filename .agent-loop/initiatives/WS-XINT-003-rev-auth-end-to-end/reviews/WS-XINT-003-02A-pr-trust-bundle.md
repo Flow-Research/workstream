@@ -34,7 +34,7 @@ unavailable.
 - Policy-lineage branch coverage: 9 passed, 100 percent.
 - Direct isolated cross-Task CheckerRun mismatch: 1 passed.
 - Hosted-lane regression corrections for activation, immutable work-context,
-  and checker admission: 4 focused cases passed in isolated databases.
+  and checker admission: 5 focused cases passed in isolated databases.
 - Ruff, Python compilation, stale contract/wording scans, Markdown links, and
   `git diff --check`: passed.
 - Hosted GitHub Actions retains the full-suite 78-percent gate and the existing

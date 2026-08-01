@@ -3491,7 +3491,7 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                 ),
             ):
                 await assertion_session.execute(
-                    text("update project_guides set status = 'active' where id = :guide_id"),
+                    text("update project_guides set status = 'inactive' where id = :guide_id"),
                     {"guide_id": facts.guide_id},
                 )
                 await assertion_session.flush()

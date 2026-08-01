@@ -55,4 +55,6 @@ selection, mutation of now-immutable policy rows, and a cross-Task CheckerRun
 rewrite that the new FK correctly rejects. The tests now prove all-or-none
 selection, retain stamped work-context proof through the still-mutable payment
 policy, and expect the cross-Task rewrite to fail at the database boundary.
-All four corrected focused cases pass in isolated databases.
+All five corrected focused cases pass in isolated databases. The fifth retains
+the guide-lineage lock test by making a rolled-back non-draft transition that
+does not violate the newly required active-policy selection invariant.
