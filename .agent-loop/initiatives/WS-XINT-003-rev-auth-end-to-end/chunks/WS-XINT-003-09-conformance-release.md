@@ -33,10 +33,12 @@ paths, feature expansion, adjudication, reputation, or unreviewed defect work.
   retry; projection; artifact outage/integrity failure; contribution/award
   source integrity with no reputation side effect; controlled shutdown, drain,
   crash resume, coherent reactivation; and lifecycle release.
-- Cross-project, self-review, wrong-role/service/action, stale/replayed/copied
-  handle, stale lease/packet/predecessor/preparation/policy, and concurrent
-  consumption all fail closed with no partial product, CON, audit, or outbox
-  state.
+- The universal mutation matrix proves forged, copied, replayed, and already-
+  consumed handles; wrong session, transaction, action, actor, or fixed service;
+  cross-project, task, Submission, lease, or Review; self-review and wrong role;
+  stale lease, packet, predecessor, preparation, or policy; expired or revoked
+  authority; and concurrent consumption all fail closed with no partial
+  product, CON, audit, or outbox state.
 - No token-role, direct grant-query, generic artifact-read, serialized PREP, or
   alternate authorization path remains.
 - Hosted full coverage, per-subsystem floors, internal reviewers, CodeRabbit,

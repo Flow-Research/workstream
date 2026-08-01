@@ -4,9 +4,14 @@
 
 The first Agent Gates run failed because
 `scripts/check_stale_authorization_docs.py` found retired human-worker and
-token-role wording. Commit `2c17bc36` replaced those phrases with exact
-fixed-service and issuer-claim terminology. The scanner passed locally and the
-replacement exact-head Agent Gates run passed.
+token-role wording. The failed reviewed artifact was head `44aa60a3` in Agent
+Gates run [30663559758](https://github.com/Flow-Research/workstream/actions/runs/30663559758).
+Commit `2c17bc36` replaced those phrases with exact fixed-service and issuer-
+claim terminology. The scanner passed locally and replacement exact-head Agent
+Gates run [30663651764](https://github.com/Flow-Research/workstream/actions/runs/30663651764)
+passed on head `2c17bc36`. The final reviewed planning head `85c94f0e` then
+passed Agent Gates run
+[30663969053](https://github.com/Flow-Research/workstream/actions/runs/30663969053).
 
 ## CodeRabbit
 
