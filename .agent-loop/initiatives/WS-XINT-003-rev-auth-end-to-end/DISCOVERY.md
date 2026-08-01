@@ -12,8 +12,9 @@
 
 ## Baseline
 
-Discovery was performed from `origin/main` merge `99dc0b34`, after AUTH-12D.
-This initiative begins read-only and changes no application behavior.
+Initial discovery was performed from `origin/main` merge `99dc0b34`, after
+AUTH-12D. The 02 refresh re-ran discovery at merge `ad8da7e5`, after PRs #236
+and #237. This refresh changes planning only and no application behavior.
 
 ## Current implementation and plans
 
@@ -30,6 +31,21 @@ This initiative begins read-only and changes no application behavior.
   `service.py` contain existing `ReviewPolicy` and `RevisionPolicy` behavior.
   `backend/app/modules/projects/authorization_reads.py` locks and composes these
   policies into current project authorization facts.
+- Current Alembic head is `0045_guide_metadata_authority`; the old PR #195
+  migration descended from historical head 0033 and is preservation input, not
+  a mergeable migration.
+- `ProjectRepository.upsert_review_policy()`,
+  `upsert_revision_policy()`, `ProjectService._review_policy_model()`, and
+  `_revision_policy_model()` remain in current code but have no call sites.
+  Their removal is therefore a clean-cut deletion, not a compatibility break.
+- `ActionId.PROJECT_REVIEW_POLICY_UPDATE` and
+  `PROJECT_REVISION_POLICY_UPDATE`, their catalogue mappings, and their strict
+  typed resource contexts already exist. Both actions remain planned and the
+  PREP service does not yet accept them.
+- `GuideMutationService` and `guide_mutation_router.py` provide the current
+  project-scoped PREP/idempotency/decision-evidence composition convention.
+  Policy mutation must reuse that convention without turning guide mutation
+  into a generic service locator or retaining a second writer path.
 - AUTH-12D2 proposes separate review-policy and revision-policy mutation routes.
   REV-03P also proposes policy persistence. This is an ownership collision:
   there must be one persistence model and one mutation path.
@@ -153,6 +169,9 @@ needs a closed typed context with only its valid shape.
 ## Dependencies
 
 - AUTH-12D2 and REV-03P must be reconciled before either policy writer is built.
+- The reconciled implementation is split: 02A can merge because it activates
+  no route/action and removes only unused mutation callables; 02B is the only
+  action-availability and external-writer transition.
 - REV hidden feature chunks must merge before matching AUTH action activation.
 - XINT-002 remains the sole activation owner for ART review-artifact actions and
   shared human-review submission actions. WS-XINT-003-01 split the combined

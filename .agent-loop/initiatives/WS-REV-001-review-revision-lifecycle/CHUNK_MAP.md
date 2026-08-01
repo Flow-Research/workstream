@@ -1,7 +1,8 @@
 # Chunk Map: WS-REV-001 Review And Revision Lifecycle
 
-REV-03P is reconciled into WS-XINT-003-02 and is not an independent policy
-writer. AUTH activation follows the exact XINT-003 waves.
+REV-03P is reconciled into WS-XINT-003-02A persistence and 02B mutation
+activation and is not an independent policy writer. AUTH activation follows the
+exact XINT-003 waves.
 
 ## Rule
 
@@ -27,9 +28,9 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | Historical | Superseded; any upstream gap is reported to its owner |
 | `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | Historical | Superseded as an ownership chunk; REV consumes owner-supplied Submission lineage |
 | `WS-REV-001-PLAN3` | Allow-Review Boundary Reset | L1 | Historical | Merged boundary correction |
-| `WS-REV-001-03P` | Review And Revision Policy Persistence | L1 | Reconciled into `WS-XINT-003-02` | Planning input only; never executable independently |
+| `WS-REV-001-03P` | Review And Revision Policy Persistence | L1 | Reconciled into `WS-XINT-003-02A` and `02B` | Planning input only; never executable independently |
 | `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | PLAN3 | Non-executable split record |
-| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | merged `WS-XINT-003-02`; exact `allow_review`, Submission/artifact, and actor handoffs | Proposed contract; requires current-main refresh and explicit user request |
+| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | merged `WS-XINT-003-02B`; exact `allow_review`, Submission/artifact, and actor handoffs | Proposed contract; requires current-main refresh and explicit user request |
 | `WS-REV-001-03B` | Normalized Review Packet Manifest Persistence | L1 | 03A; exact ART packet-membership owner chunk merged | Proposed; owner chunk unscheduled |
 | `WS-REV-001-04` | Review Chain Persistence | L1 | 03B | Non-executable split record |
 | `WS-REV-001-04A` | Immutable Review Chain And Decision Request Persistence | L1 | 03B; current actor constraints | Proposed; no contract yet |
@@ -76,7 +77,7 @@ typed symbol/manifest, and tests.
 
 ```text
 PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(historical, superseded)
--> PLAN3(boundary reset) -> WS-XINT-003-02 (03P planning input)
+-> PLAN3(boundary reset) -> WS-XINT-003-02A -> WS-XINT-003-02B (03P planning input)
 -> 03(parent) -> 03A -> 03B
 -> 04(parent) -> 04A -> 04B
 -> 05(parent) -> 05A -> 05B
@@ -129,6 +130,6 @@ configuration, or coverage changes add CI integrity.
 ## Stop condition
 
 PLAN3 is complete. Never resume 02A, 02A1, 02A2, 02A3, 02A4, 02B, or 02C as
-REV implementation. Policy work proceeds only through `WS-XINT-003-02`; later
-REV feature chunks require current-main contract refresh and an explicit user
-request under the ordinary engineering loop.
+REV implementation. Policy work proceeds only through `WS-XINT-003-02A` and
+then `WS-XINT-003-02B`; later REV feature chunks require current-main contract
+refresh and an explicit user request under the ordinary engineering loop.

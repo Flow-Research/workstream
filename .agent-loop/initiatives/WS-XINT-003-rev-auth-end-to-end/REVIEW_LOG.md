@@ -64,3 +64,14 @@ findings corrected fixed-service identity drift, ART global-matrix wording,
 runtime owner versus sub-wave ambiguity, missing per-action dependencies,
 07B/human activation order, and obsolete signed-start gates. All tracks passed;
 the final evidence is in `reviews/WS-XINT-003-01-internal-review.md`.
+
+## WS-XINT-003-02 planning refresh
+
+Architecture, QA/product, and security/docs/CI reviewed the current-main split
+of the non-executable 02 parent into 02A persistence adoption and 02B prepared
+mutation activation. Valid findings corrected replay-ledger custody and allowed
+files, route placement, stale 02 parent dependencies, 02B readiness ambiguity,
+and a no-activation test selector that initially collected zero tests. All
+tracks pass after correction; the exact replacement authorization run passed 2
+tests with 378 deselected. Final evidence is in
+`reviews/WS-XINT-003-02-PLAN-internal-review.md`.

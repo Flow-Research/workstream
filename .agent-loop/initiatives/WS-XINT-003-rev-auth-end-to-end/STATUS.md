@@ -2,12 +2,15 @@
 
 ## Current status
 
-WS-XINT-003-01 contract reconciliation is complete and awaiting human
-review/merge. No runtime code or action availability is changed.
+WS-XINT-003-01 is merged. Current-main reconciliation split policy work into
+02A immutable persistence adoption and 02B prepared mutation activation. No
+runtime code or action availability is changed by this planning refresh.
 
 ## Baseline
 
 - Planning branch began from `origin/main` at `99dc0b34` after AUTH-12D merged.
+- This refresh is reconciled against current `origin/main` at `ad8da7e5`, which
+  includes merged PRs #236 and #237 and uses migration head 0045.
 - Existing REV actions remain planned/unreleased as product surfaces.
 - XINT-002 remains the owner of review artifact materialization/binding and
   human-review submission-artifact activation.
@@ -30,5 +33,5 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-Keep hosted exact-head gates green, resolve all external review, and obtain
-human merge. Then stop before runtime policy work in WS-XINT-003-02.
+Review and merge this contract refresh, then implement only WS-XINT-003-02A.
+Do not begin 02B automatically and do not resume independent REV-03P work.

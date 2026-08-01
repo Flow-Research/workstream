@@ -43,3 +43,11 @@
     reconciled REV-03P/AUTH-12D2 contracts.
 17. XINT-002-07A is the only review-evidence binding availability transition;
     07B adds response-slot evaluator shape without changing availability.
+18. XINT-003-02 is split into 02A persistence adoption and 02B prepared mutation
+    activation. 02A is merge-safe because the four retired callables have no
+    current-main call sites and both ActionIds remain planned. 02B is the only
+    external writer and policy-action availability transition.
+19. PR #195 is preservation evidence, not a merge base or authorization source.
+    Valid policy semantics and PostgreSQL proofs must be recreated from current
+    head 0045; its historical 0034 migration, old writer path, merge intent, and
+    signed-start records are not adopted.

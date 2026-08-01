@@ -15,9 +15,9 @@ them. The attempted 02A1 runtime candidate was reverted in full.
 
 `WS-REV-001-PLAN3` is merged historical planning. It retires
 02A/02A1/02A2/02A3/02A4/02B/02C as REV implementation authorization. The first
-future policy work is the reconciled WS-XINT-003-02 writer cutover; 03P is not
-an independent implementation path. Work starts through the repository's
-ordinary intent/plan/bounded-change loop after an explicit user request.
+future policy work is reconciled WS-XINT-003-02A persistence adoption followed
+by 02B prepared writer activation; 03P is not an independent implementation
+path. Work follows the repository's ordinary intent/plan/bounded-change loop.
 
 The historical text below records the superseded PLAN2/02A state and is not
 current implementation authority. Trusted main at that time was `44f2467c`, which additionally
@@ -109,8 +109,8 @@ start statement in it is void under D28 and PLAN3.
 
 ## Human-owned gates
 
-- Implement policy work only through reconciled WS-XINT-003-02 after its
-  current-main contract review and an explicit user request.
+- Implement policy work only through reconciled WS-XINT-003-02A and 02B, one
+  reviewed PR at a time. Do not begin 02B automatically after 02A.
 - Start 03A only after 03P and after its current-main refresh proves every exact
   `allow_review`, Submission, artifact, and reviewer owner handoff.
 - Exact human Review revision-round counting, deadline anchor, and boundary

@@ -15,18 +15,22 @@ Add separately authorized routes for review and revision policy records after
 
 This contract is reconciled with REV-03P by WS-XINT-003-01. REV owns the
 immutable/versioned policy semantics; AUTH owns the mutation authorization,
-PREP consumption, and decision evidence. Chunk WS-XINT-003-02 implements the
-single path below; neither parent contract may build an alternate writer.
+PREP consumption, and decision evidence. XINT-003-02A first adopts inactive
+append-only persistence and removes the unused legacy paths; 02B implements and
+activates the single path below. Neither parent contract may build an alternate
+writer.
 
 ## One writer path
 
-- Surviving API: separate `PUT /projects/{project_id}/review-policy` and
-  `PUT /projects/{project_id}/revision-policy` routes in
-  `backend/app/modules/projects/router.py`, each declaring its exact primary
-  ActionId.
-- Surviving service: new `ProjectPolicyMutationService` methods
+- Surviving API in 02B: separate
+  `PUT /projects/{project_id}/guides/{guide_id}/review-policy` and
+  `PUT /projects/{project_id}/guides/{guide_id}/revision-policy` routes in
+  `backend/app/modules/projects/policy_mutation_router.py`, each declaring its
+  exact primary ActionId.
+- Surviving service in 02B: new `ProjectPolicyMutationService` methods
   `replace_review_policy()` and `replace_revision_policy()`.
-- Surviving repository: new append-only
+- Surviving repository primitives introduced inactive in 02A and consumed only
+  by 02B: append-only
   `ProjectRepository.add_review_policy_version()` and
   `ProjectRepository.add_revision_policy_version()` methods over the existing
   `ReviewPolicy` and `RevisionPolicy` tables/models, upgraded as necessary for
@@ -37,6 +41,8 @@ single path below; neither parent contract may build an alternate writer.
   `ProjectService._revision_policy_model()`.
 - No compatibility route, alias, second model/table, fallback constructor, or
   dual repository path survives.
+- Replay custody is the generalized project-mutation ledger shared with guide
+  mutations; a policy-only or in-memory replay path is forbidden.
 
 Policies may be appended or replaced only while the exact guide version is a
 draft. Activation freezes the selected policy versions: active-guide policy
@@ -61,7 +67,11 @@ P1
 ```text
 backend/app/modules/projects/models.py
 backend/app/modules/projects/repository.py
-backend/app/modules/projects/router.py
+backend/app/modules/projects/policy_mutation_router.py
+backend/app/modules/projects/policy_mutation_service.py
+backend/app/modules/projects/project_mutation_repository.py
+backend/app/modules/projects/guide_mutation_repository.py
+backend/app/modules/projects/guide_mutation_service.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/app/modules/projects/authorization_reads.py

@@ -6,8 +6,8 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 
 | ActionId | PermissionId | Principal and scope | Resource family | Surface owner | State | Activation wave |
 |---|---|---|---|---|---|---|
-| `project.review_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + ReviewPolicy version | project/REV semantics; AUTH mutation | registered planned | `WS-XINT-003-02` |
-| `project.revision_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + RevisionPolicy version | project/REV semantics; AUTH mutation | registered planned | `WS-XINT-003-02` |
+| `project.review_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | exact draft guide + ReviewPolicy version | project/REV semantics; AUTH mutation | registered planned | persistence prerequisite `02A`; activation `WS-XINT-003-02B` |
+| `project.revision_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | exact draft guide + RevisionPolicy version | project/REV semantics; AUTH mutation | registered planned | persistence prerequisite `02A`; activation `WS-XINT-003-02B` |
 | `review.queue.read` | `review.queue.read` | reviewer grant; exact project; self-review denied | concealed current-work view | REV | registered planned | `WS-XINT-003-03A` |
 | `review.claim` | `review.claim` | reviewer grant; exact project; self-review denied | queue entry + global reviewer lease state | REV | registered planned | `WS-XINT-003-03A` |
 | `review.release` | `review.release` | owning reviewer and active lease | ReviewLease | REV | registered planned | `WS-XINT-003-03A` |
@@ -64,8 +64,8 @@ These actions are not XINT-003 custody. Generic artifact download, adjudication,
 
 | ActionId | Exact prerequisite behavior/manifest |
 |---|---|
-| `project.review_policy.update` | existing policy records plus refreshed REV-03P/AUTH-12D2 contract; implemented only by `WS-XINT-003-02` |
-| `project.revision_policy.update` | existing policy records plus refreshed REV-03P/AUTH-12D2 contract; implemented only by `WS-XINT-003-02` |
+| `project.review_policy.update` | merged inactive `WS-XINT-003-02A` persistence; implemented and activated only by `WS-XINT-003-02B` |
+| `project.revision_policy.update` | merged inactive `WS-XINT-003-02A` persistence; implemented and activated only by `WS-XINT-003-02B` |
 | `review.queue.read` | merged hidden REV-05 concealed current-work view |
 | `review.claim` | merged hidden REV-05 queue admission and REV-06 atomic lease behavior |
 | `review.release` | merged hidden REV-06 lease release behavior |

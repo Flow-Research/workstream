@@ -1,25 +1,26 @@
-# Chunk Contract: WS-XINT-003-02 — Review And Revision Policy Mutation Activation
+# Chunk Contract: WS-XINT-003-02 — Policy Persistence And Mutation Split Record
 
 ## Status
 
-Non-implementable planning skeleton after 01. Before implementation, refresh on
-current main with exact allowed files and commands, then require an explicit
-user request for this chunk.
+Non-executable parent. Current-main discovery at `ad8da7e5` split implementation
+into 02A persistence adoption and 02B prepared mutation activation.
 
 ## Goal
 
-Implement one immutable/versioned policy persistence path and authorize the two
-covered-project policy mutation routes through the existing PREP protocol.
+Deliver one immutable/versioned REV policy persistence path and one
+AUTH-prepared covered-project mutation surface without a dual-writer interval.
 
 ## Risk class
 
 L1 policy and authorization mutation.
 
-## Allowed files
+## Child sequence
 
-Must be enumerated exactly at current-main start. Only policy-owned project/REV
-models, repository/service/routes, AUTH typed contexts/catalogue parity,
-migration, focused tests, docs, and this initiative's evidence may be included.
+1. `WS-XINT-003-02A`: adopt immutable persistence and remove unused legacy
+   writer/construction callables; keep both actions planned and add no route.
+2. `WS-XINT-003-02B`: add the sole mutation service/routes, AUTH PREP
+   consumption, append-only repository calls, atomic decision evidence, and the
+   exact two action activations.
 
 ## Not allowed
 
@@ -41,12 +42,15 @@ reputation, frontend, duplicate policy tables, or legacy writer compatibility.
   compatibility.
 - No review lifecycle action is activated.
 
-## Verification
+## Shared invariants
 
-Focused PostgreSQL policy/authorization/migration/concurrency tests, Ruff,
-90-percent changed-subsystem coverage, hosted full coverage, API contract proof,
-and all required L1 reviewers.
+- Existing ReviewPolicy and RevisionPolicy tables remain the only records.
+- REV owns policy meaning/history; AUTH owns authority/PREP/evidence.
+- ART, Task, Submission, Review execution, revision execution, and CON are not
+  modified by either child.
+- PR #195 is discovery/preservation input only. No historical migration SHA,
+  stale base, old writer, merge intent, or signed-start evidence is adopted.
 
 ## Stop condition
 
-Merge and stop before queue/lease activation.
+Do not implement this parent. Implement one child per PR and stop after each.

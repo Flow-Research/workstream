@@ -3,8 +3,10 @@
 | Chunk | Purpose | Risk | Dependency |
 |---|---|---|---|
 | `WS-XINT-003-01` | Reconcile policy ownership, complete REV catalogue, permissions, surfaces, resource families, and fixed-service matrix while actions stay planned. | L1 | approved plan |
-| `WS-XINT-003-02` | Join REV policy semantics/persistence to AUTH-12D2 prepared policy mutation cutover and remove duplicate writer paths. | L1 | 01 plus refreshed REV-03P/AUTH-12D2 |
-| `WS-XINT-003-03A` | Activate concealed reviewer current-work plus claim/release/preference with exact project grant, self-review denial, global lease limit, and atomic lease/packet-manifest freeze. | L1 | 02 plus hidden REV queue/lease behavior |
+| `WS-XINT-003-02` | Non-executable split record joining REV policy persistence to AUTH mutation custody. | L1 | 01 plus refreshed REV-03P/AUTH-12D2 |
+| `WS-XINT-003-02A` | Adopt immutable/versioned REV policy persistence on the current migration head and remove the four dead legacy writer/construction callables; activate nothing. | L1 | 01 and current-main persistence review |
+| `WS-XINT-003-02B` | Add the sole policy mutation service/routes, consume AUTH PREP, append immutable policy versions, record decision evidence atomically, and activate only the two policy actions. | L1 | merged 02A |
+| `WS-XINT-003-03A` | Activate concealed reviewer current-work plus claim/release/preference with exact project grant, self-review denial, global lease limit, and atomic lease/packet-manifest freeze. | L1 | merged 02B plus hidden REV queue/lease behavior |
 | `WS-XINT-003-03B` | Activate preference and lease expiry fixed services only. | L1 | 03A plus hidden timer behavior |
 | `WS-XINT-003-04` | Activate human `review.context.read` and reviewer finding evidence while consuming XINT-002-07A's ART-only packet/materialization/binding capability. | L1 | 03B plus hidden REV packet/evidence manifests and XINT-002-07A |
 | `WS-XINT-003-05` | Activate only bounded `review.chain.read`, consuming the active REV context and XINT-002 packet/materialization boundary. | L1 | 04 plus merged XINT-002-07A |
@@ -15,7 +17,8 @@
 | `WS-XINT-003-08B` | Activate both identities for the single `review.reconcile.run` ActionId together, plus artifact-reference, projection, and lifecycle-control surfaces. | L1 | 08A plus hidden REV jobs/projection/control |
 | `WS-XINT-003-09` | Prove end-to-end least privilege, revocation, replay, concurrency, atomicity, artifact isolation, and coherent route release. | L1 | 02-08B |
 
-Chunks 02 through 09 are planning skeletons, not implementation-ready contracts,
+Chunk 02B and chunks 03A through 09 are planning skeletons, not
+implementation-ready contracts,
 until refreshed on current main with exact allowed files and commands. Each row
 maps to one PR unless its current-main contract is split into smaller
 children before implementation. A split cannot add a new permission, action,

@@ -2,8 +2,9 @@
 
 ## Status
 
-Reconciled planning input to `WS-XINT-003-02`. It is not an independent
-implementation path.
+Reconciled planning input to `WS-XINT-003-02A` and `02B`. It is not an
+independent implementation path. PR #195 is preservation evidence only and
+must not merge its historical migration or writer architecture.
 
 ## Goal
 
@@ -12,7 +13,8 @@ later routing, lease, decision, and human revision behavior.
 
 REV owns field semantics, version identity, draft/active immutability, and the
 facts later lifecycle code consumes. AUTH-12D2 owns authority, PREP, evidence,
-and the only mutation surface. The shared implementation is XINT-003-02.
+and the only mutation surface. The shared implementation is XINT-003-02A for
+inactive persistence adoption and 02B for the sole authorized writer.
 
 ## Canonical persistence path
 
@@ -39,9 +41,9 @@ L1: policy immutability, duration/limit semantics, and later decision authority.
 
 ## Allowed files
 
-The exact current-main project models, migration, policy schemas, canonical
-writer service/repository, AUTH PREP integration, focused tests, and initiative
-evidence must be fixed in the refreshed XINT-003-02 contract.
+Exact files are fixed separately in the reviewed XINT-003-02A and 02B child
+contracts. 02A owns current-head migration and inactive append-only persistence;
+02B owns AUTH PREP integration and the only public writer.
 
 ## Not allowed
 
@@ -77,5 +79,5 @@ reuse/dedup, docs, test-delta, and CI integrity.
 
 ## Stop
 
-Do not implement this parent contract independently. Refresh and implement only
-WS-XINT-003-02 after an explicit user request.
+Do not implement this parent contract independently. Implement only one reviewed
+XINT-003-02 child at a time, beginning with 02A, and stop after each PR.

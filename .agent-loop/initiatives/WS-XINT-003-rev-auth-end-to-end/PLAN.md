@@ -7,8 +7,13 @@ activation waves:
 
 1. Reconcile policy ownership, the complete catalogue, permissions, principal
    classes, fixed-service matrix, surface manifests, and planned availability.
-2. Cut over review/revision policy configuration through one persistence path:
-   REV owns semantics; AUTH-12D2 owns authorization and PREP consumption.
+2. Cut over review/revision policy configuration in two merge-safe steps. 02A
+   adopts the existing tables as immutable/versioned REV records on the current
+   migration head and removes the four unused legacy writer/construction
+   callables while activating nothing. 02B adds the only public mutation routes
+   and service, consumes AUTH PREP, appends through the sole internal repository
+   primitives, records bounded authorization evidence atomically, and activates
+   only the two policy ActionIds.
 3. Activate concealed reviewer current-work, claim/release/preference, and timer
    services only after REV queue/lease behavior exists.
 4. Amend XINT-002-07 into two ART-only owner waves: 07A is the only ActionId
@@ -80,8 +85,21 @@ is required before returning a replayed mutation result.
 The existing policy persistence is adopted or migrated once; it is not
 duplicated. REV-03P defines immutable/versioned policy semantics and validation.
 AUTH-12D2 protects the two mutation routes and supplies authorization evidence.
-The implementing chunk must explicitly retire overlapping legacy writer paths
-and update both contracts together.
+02A must retire the unused `upsert_review_policy`, `upsert_revision_policy`,
+`_review_policy_model`, and `_revision_policy_model` callables before 02B
+introduces the sole active writer. The child contracts and both parent contracts
+must remain synchronized.
+
+## Policy mutation replay custody
+
+02B generalizes the existing project-owned guide mutation replay boundary into
+one project-mutation replay ledger/repository. The migration preserves existing
+guide replay rows, renames the guide-specific model/table/constraints and
+repository deliberately, and expands the closed action constraint only for the
+two policy actions. GuideMutationService and ProjectPolicyMutationService share
+that repository; neither owns an in-memory, alternate, or policy-only replay
+store. This is a bounded project composition abstraction, not a generic service
+locator.
 
 ## Verification strategy
 
@@ -105,8 +123,8 @@ hidden behavior are rejected.
 
 ## Stop boundary
 
-This planning amendment creates no runtime code and activates no action. Chunks
-02 through 09 are non-implementable planning skeletons until a current-main
-refresh replaces every file/command placeholder with exact boundaries and the
-user explicitly requests that chunk. Planning complete does not start runtime
-work.
+This planning amendment creates no runtime code and activates no action. 02A is
+the only implementation-ready child. 02B remains non-implementable until 02A
+merges and a current-main refresh freezes its exact migration and verification
+commands. Chunks 03A through 09 remain planning skeletons. Planning completion
+does not start the next child automatically.
