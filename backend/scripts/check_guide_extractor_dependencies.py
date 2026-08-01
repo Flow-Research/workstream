@@ -8,6 +8,7 @@ import ast
 import hashlib
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -24,6 +25,7 @@ PYPROJECT_PATH = BACKEND_ROOT / "pyproject.toml"
 ALLOWLIST_REPOSITORY_PATH = ALLOWLIST_PATH.relative_to(REPOSITORY_ROOT).as_posix()
 APPROVED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 APPROVED_SCOPES = frozenset({"pdf", "ooxml", "image_metadata"})
+APPROVED_NATIVE_PYTHON_RANGE = ">=3.11,<3.13"
 STATE_BEARING_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
 PARSER_MODULES = (
     "guide_pdf.py",
@@ -313,7 +315,7 @@ def _approved_requirements(entry: dict[str, Any]) -> set[str]:
     for artifact in entry["approved_artifacts"]:
         requirement = f"{entry['name']} @ {artifact['url']}#sha256={artifact['sha256']}"
         if python_version := artifact.get("python_version"):
-            requirement += f'; python_version == "{python_version}"'
+            requirement += f' ; python_version == "{python_version}"'
         requirements.add(requirement)
     return requirements
 
@@ -354,19 +356,60 @@ def validate_declared_dependencies(
         requirements = requirements_by_name.get(name)
         if requirements is None:
             continue
+        if entry["native_code"]:
+            require(
+                project.get("requires-python") == APPROVED_NATIVE_PYTHON_RANGE,
+                "guide_dependency_project_python_range_unsupported",
+            )
         require(
             requirements == _approved_requirements(entry),
             "guide_dependency_declared_artifact_mismatch",
         )
 
 
+def validate_runtime_platform(
+    *,
+    python_version: tuple[int, int] | None = None,
+    system: str | None = None,
+    machine: str | None = None,
+    libc: str | None = None,
+) -> None:
+    """Fail unless this process matches the approved native-wheel runtime."""
+    current_python = python_version or sys.version_info[:2]
+    current_system = system or platform.system()
+    current_machine = machine or platform.machine()
+    current_libc = libc or platform.libc_ver()[0]
+    require(
+        current_python in {(3, 11), (3, 12)},
+        "guide_dependency_runtime_python_unsupported",
+    )
+    require(
+        current_system == "Linux"
+        and current_machine in {"x86_64", "AMD64"}
+        and current_libc == "glibc",
+        "guide_dependency_runtime_platform_unsupported",
+    )
+
+
 def validate_parser_imports(allowlist: dict[str, dict[str, Any]]) -> None:
     """Reject undeclared third-party imports in format-specific parser modules."""
     parser_root = BACKEND_ROOT / "app" / "modules" / "artifacts"
+    with PYPROJECT_PATH.open("rb") as handle:
+        runtime_requirements = tomllib.load(handle)["project"].get("dependencies", [])
+    declared_names = {_dependency_name(requirement) for requirement in runtime_requirements}
     for module_name in PARSER_MODULES:
         module_path = parser_root / module_name
         if not module_path.exists():
             continue
+        scoped_dependencies = {
+            name
+            for name, entry in allowlist.items()
+            if set(entry["format_scopes"]) & PARSER_MODULE_SCOPES[module_name]
+        }
+        require(
+            scoped_dependencies <= declared_names,
+            "guide_dependency_parser_runtime_declaration_missing",
+        )
         approved_imports = {
             import_name.split(".", 1)[0]
             for entry in allowlist.values()
@@ -514,6 +557,7 @@ def main() -> int:
         data, raw = load_manifest()
         allowlist = validate_manifest(data)
         validate_declared_dependencies(allowlist, data["prohibited_packages"])
+        validate_runtime_platform()
         validate_parser_imports(allowlist)
         if args.require_pr_approval:
             validate_pr_approval(raw)

@@ -18,12 +18,15 @@ PDF_EXTRACTION_POLICY_VERSION = "guide-extraction-v2"
 DOCX_EXTRACTION_POLICY_VERSION = "guide-extraction-v3"
 PPTX_EXTRACTION_POLICY_VERSION = "guide-extraction-v4"
 XLSX_EXTRACTION_POLICY_VERSION = "guide-extraction-v5"
+IMAGE_EXTRACTION_POLICY_VERSION = "guide-extraction-v6"
 EXTRACTOR_VERSION = "1"
 MAXIMUM_INPUT_BYTES = 32 * 1024 * 1024
 MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024
 MAXIMUM_PROTOCOL_BYTES = (MAXIMUM_OUTPUT_BYTES * 6) + 1024
 WALL_TIMEOUT_SECONDS = 60
-_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf", "docx", "pptx", "xlsx"})
+_SUPPORTED = frozenset(
+    {"plain_text", "markdown", "json", "csv", "pdf", "docx", "pptx", "xlsx", "png", "jpeg", "webp"}
+)
 _DEFAULT_OMISSION_FACTS = {"truncated": False, "omitted": False}
 _DOCX_OMISSION_KEYS = frozenset(
     {
@@ -245,4 +248,6 @@ def extraction_policy_version(detected_format: str) -> str:
         return PPTX_EXTRACTION_POLICY_VERSION
     if detected_format == "xlsx":
         return XLSX_EXTRACTION_POLICY_VERSION
+    if detected_format in {"png", "jpeg", "webp"}:
+        return IMAGE_EXTRACTION_POLICY_VERSION
     return EXTRACTION_POLICY_VERSION

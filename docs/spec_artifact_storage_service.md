@@ -1347,6 +1347,37 @@ types fail closed. The adapter enforces 100 worksheets, 100,000 rows, 1,000,000
 cells, 32,768 characters per formula/value pair, 64 XML levels, and 4 MiB of
 canonical output without publishing a partial result.
 
+PNG, JPEG, and WebP extraction runs only after the exact server classification
+and uses the approved `Pillow==12.3.0` adapter inside the isolated child. Policy
+`guide-extraction-v6` emits exactly this compact sorted structural shape:
+
+```json
+{"bit_depth":8,"color_model":"rgb","detected_format":"png","frame_count":1,"height":480,"transparency":false,"width":640}
+```
+
+The keys are fixed. `detected_format` is `png`, `jpeg`, or `webp`; `color_model`
+is `grayscale`, `grayscale_alpha`, `indexed`, `rgb`, `rgba`, `ycbcr`, or
+`cmyk`; dimensions, bit depth, and frame count are positive integers; and
+transparency is boolean. The child independently validates PNG chunks and CRCs, JPEG SOF
+structure, or WebP RIFF/container markers before decoder entry. Either
+dimension above 16,384, more than 40,000,000 pixels, more than 1,000 frames, or
+a mismatch between independent facts and Pillow fails closed before any result
+is usable. Images retain the default non-truncated/non-omitted facts because
+EXIF, XMP, IPTC, ICC, comments, text chunks, thumbnails, and raw pixels are
+outside this capability and are never read into canonical output. Image
+structural JSON is typed metadata; it is never concatenated into textual guide
+sufficiency input and cannot satisfy required textual semantics without a
+future separately approved OCR capability.
+
+Stable image failures are
+`malformed/image_invalid_header`, `malformed/image_truncated`,
+`malformed/image_format_mismatch`, `malformed/image_decoder_mismatch`,
+`malformed/image_decoder_rejected`, `unsupported/image_bit_depth`,
+`unsupported/image_color_model`, `limit_exceeded/image_dimension_limit`,
+`limit_exceeded/image_pixel_limit`, `limit_exceeded/image_frame_limit`, and
+`limit_exceeded/image_decompression_bomb`. Successful image extraction retains
+exact omission facts `{"truncated":false,"omitted":false}`.
+
 For 03B3A the isolation contract is descriptor-only parsing after trusted
 imports, enforced by a default-deny Linux libseccomp profile with an explicit
 syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB

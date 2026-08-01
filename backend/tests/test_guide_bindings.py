@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 import zipfile
 
 import pytest
+from PIL import Image
 from pypdf import PdfWriter
 from alembic import command
 from alembic.config import Config
@@ -238,6 +239,13 @@ def _xlsx_payload() -> bytes:
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, body in members.items():
             archive.writestr(name, body)
+    return output.getvalue()
+
+
+def _image_payload(format_name: str) -> bytes:
+    output = BytesIO()
+    mode = "RGBA" if format_name == "PNG" else "RGB"
+    Image.new(mode, (3, 2), 0).save(output, format=format_name)
     return output.getvalue()
 
 
@@ -603,8 +611,32 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
                 "unsupported_objects": False,
             },
         ),
+        (
+            _image_payload("PNG"),
+            "image/png",
+            "png",
+            '{"bit_depth":8,"color_model":"rgba","detected_format":"png",'
+            '"frame_count":1,"height":2,"transparency":true,"width":3}',
+            {"truncated": False, "omitted": False},
+        ),
+        (
+            _image_payload("JPEG"),
+            "image/jpeg",
+            "jpeg",
+            '{"bit_depth":8,"color_model":"ycbcr","detected_format":"jpeg",'
+            '"frame_count":1,"height":2,"transparency":false,"width":3}',
+            {"truncated": False, "omitted": False},
+        ),
+        (
+            _image_payload("WEBP"),
+            "image/webp",
+            "webp",
+            '{"bit_depth":8,"color_model":"rgb","detected_format":"webp",'
+            '"frame_count":1,"height":2,"transparency":false,"width":3}',
+            {"truncated": False, "omitted": False},
+        ),
     ],
-    ids=("json", "docx", "pptx", "xlsx"),
+    ids=("json", "docx", "pptx", "xlsx", "png", "jpeg", "webp"),
 )
 async def test_extraction_publishes_deterministic_content_and_exact_usage(
     isolated_database_env: str,
@@ -942,7 +974,7 @@ async def test_successful_replay_requires_the_current_extraction_policy(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("detected_format", ["pdf", "docx", "pptx", "xlsx"])
+@pytest.mark.parametrize("detected_format", ["pdf", "docx", "pptx", "xlsx", "png", "jpeg", "webp"])
 async def test_new_format_support_replaces_obsolete_policy_budget_without_replay(
     isolated_database_env: str,
     tmp_path: Path,
@@ -961,9 +993,15 @@ async def test_new_format_support_replaces_obsolete_policy_budget_without_replay
     elif detected_format == "pptx":
         payload = _pptx_payload()
         media_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    else:
+    elif detected_format == "xlsx":
         payload = _xlsx_payload()
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        image_type = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}[detected_format]
+        payload = _image_payload(image_type)
+        media_type = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}[
+            detected_format
+        ]
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)

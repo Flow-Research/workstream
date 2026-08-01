@@ -518,6 +518,7 @@ def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_worker.py",
         APP_ROOT / "modules" / "artifacts" / "guide_pdf.py",
         APP_ROOT / "modules" / "artifacts" / "guide_xlsx.py",
+        APP_ROOT / "modules" / "artifacts" / "guide_images.py",
         APP_ROOT / "modules" / "artifacts" / "guide_extraction_service.py",
     )
     forbidden_prefixes = (
@@ -635,6 +636,43 @@ def test_xlsx_adapter_is_confined_to_the_isolated_worker() -> None:
             ):
                 adapter_importers.add(relative)
     assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
+
+
+def test_image_adapter_is_confined_to_the_isolated_worker() -> None:
+    adapter_importers: set[str] = set()
+    for path in APP_ROOT.rglob("*.py"):
+        relative = path.relative_to(APP_ROOT).as_posix()
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name == "app.modules.artifacts.guide_images" for alias in node.names
+            ):
+                adapter_importers.add(relative)
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "app.modules.artifacts.guide_images"
+            ):
+                adapter_importers.add(relative)
+    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
+
+
+def test_pillow_is_confined_to_the_worker_and_image_adapter() -> None:
+    pillow_importers: set[str] = set()
+    for path in APP_ROOT.rglob("*.py"):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.Import) and any(
+                alias.name.split(".", 1)[0] == "PIL" for alias in node.names
+            ):
+                pillow_importers.add(path.relative_to(APP_ROOT).as_posix())
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module is not None
+                and node.module.split(".", 1)[0] == "PIL"
+            ):
+                pillow_importers.add(path.relative_to(APP_ROOT).as_posix())
+    assert pillow_importers == {
+        "modules/artifacts/guide_extraction_worker.py",
+        "modules/artifacts/guide_images.py",
+    }
 
 
 def test_ooxml_parser_dependency_and_adapter_are_confined_to_the_isolated_worker() -> None:
