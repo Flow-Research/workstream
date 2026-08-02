@@ -46,6 +46,8 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
+    GuideSourceBindingResourceContext,
+    GuideSourceReadResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -167,6 +169,14 @@ _ADMIN_MUTATIONS = frozenset(
 )
 
 _ARTIFACT_INTERNAL_RESOURCES = {
+    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
+        "guide_source_binding",
+        GuideSourceBindingResourceContext,
+    ),
+    ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
+        "guide_source_read",
+        GuideSourceReadResourceContext,
+    ),
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
         "artifact_put_attempt",
         ArtifactPutAttemptResourceContext,
@@ -536,6 +546,10 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
+        elif action_id in _ARTIFACT_INTERNAL_RESOURCES:
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
         else:
             raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
         lifecycle = self._lifecycle_denial(context)
@@ -1426,6 +1440,8 @@ class AuthorizationService:
             "artifact_put_attempt",
             "artifact_verification_job",
             "artifact_pending_work",
+            "guide_source_binding",
+            "guide_source_read",
             "project_diagnostic",
             "project_policy_read",
             "project_active_guide_read",

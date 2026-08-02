@@ -709,13 +709,13 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 96 ActionIds, 37 active actions, and
-59 planned actions after AUTH-12A registers eighteen project-mutation actions
-without activation. AUTH-11C2 activates three current effective-policy and
-active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact route mapping
-is in `docs/spec_authorization_service.md`. WS-XINT-002-04A activates only
-guide-source ingest; the other 18 ART actions remain planned, including every
-Operator artifact action.
+Catalogue totals are 71 PermissionIds, 96 ActionIds, 43 active actions, and
+53 planned actions. AUTH-11C2 activates three current effective-policy and
+active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
+route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
+activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
+only the fixed-service guide binding and read actions. The other 16 ART actions
+remain planned, including every Operator artifact action.
 Migration `0037` keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
 

@@ -23,6 +23,8 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
+    GuideSourceBindingResourceContext,
+    GuideSourceReadResourceContext,
     GuideSourceIngestResourceContext,
     AuthorizationContext,
     AuthorizationDecision,
@@ -352,6 +354,17 @@ class PreparedAuthorizationService:
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:
+        artifact_internal_types = {
+            GuideSourceBindingResourceContext: "guide_source_binding",
+            GuideSourceReadResourceContext: "guide_source_read",
+        }
+        artifact_resource_type = artifact_internal_types.get(type(resource))
+        if artifact_resource_type is not None:
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+                artifact_resource_type=artifact_resource_type,
+                artifact_resource_id=resource.resource_id,
+            )
         if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF and isinstance(
             resource, ActorSelfResourceContext
         ):

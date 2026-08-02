@@ -230,12 +230,12 @@ class ActionOwner(StrEnum):
     AUTH_REV_12 = "WS-AUTH-001-REV-12"
     AUTH_ART_02D_INTERNAL = "WS-AUTH-001-ART-02D-INTERNAL"
     AUTH_ART_02D_OPERATOR = "WS-AUTH-001-ART-02D-OPERATOR"
-    AUTH_ART_03 = "WS-AUTH-001-ART-03"
     AUTH_ART_04B = "WS-AUTH-001-ART-04B"
     AUTH_ART_05 = "WS-AUTH-001-ART-05"
     AUTH_ART_06A = "WS-AUTH-001-ART-06A"
     AUTH_ART_06B = "WS-AUTH-001-ART-06B"
     XINT_002_04A = "WS-XINT-002-04A"
+    XINT_002_04B = "WS-XINT-002-04B"
     XINT_002_05A = "WS-XINT-002-05A"
     XINT_002_07 = "WS-XINT-002-07"
 
@@ -656,20 +656,20 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionOwner.XINT_002_04A,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
-        ActionOwner.AUTH_ART_03,
+        ActionOwner.XINT_002_04B,
     ),
     _planned(
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         PermissionId.SUBMISSION_CREATE,
         ActionOwner.XINT_002_05A,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
-        ActionOwner.AUTH_ART_03,
+        ActionOwner.XINT_002_04B,
     ),
     _planned(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
@@ -812,6 +812,8 @@ def _index_actions(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -915,7 +917,7 @@ def _index_service_actions(
         ),
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
-            ActionOwner.AUTH_ART_03,
+            ActionOwner.XINT_002_04B,
         ),
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
@@ -927,7 +929,7 @@ def _index_service_actions(
         ),
         ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
             PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
-            ActionOwner.AUTH_ART_03,
+            ActionOwner.XINT_002_04B,
         ),
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
             PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
@@ -979,6 +981,8 @@ def _index_service_actions(
                 ActionId.ARTIFACT_VERIFICATION_EXECUTE,
                 ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 ActionId.ARTIFACT_PENDING_WORK_SCAN,
+                ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+                ActionId.ARTIFACT_GUIDE_SOURCE_READ,
             }
             else ActionAvailability.PLANNED
         )

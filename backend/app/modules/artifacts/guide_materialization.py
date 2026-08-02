@@ -61,8 +61,31 @@ class GuideSourceMaterializationError(RuntimeError):
     """Concealed guide materialization failure."""
 
 
+class _GuideReadIncident(RuntimeError):
+    """Internal signal used to persist bounded incidents after lock rollback."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        observed_sha256: str | None = None,
+        observed_byte_count: int | None = None,
+    ) -> None:
+        self.code = code
+        self.observed_sha256 = observed_sha256
+        self.observed_byte_count = observed_byte_count
+        super().__init__(code)
+
+
 class GuideSourceReadPreparedAuthorization(Protocol):
     """AUTH-04B seam for one transaction-bound fixed-reader capability."""
+
+    async def prepare(
+        self,
+        *,
+        facts: GuideSourceReadAuthorityFacts,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle: ...
 
     async def consume(
         self,
@@ -80,6 +103,15 @@ class GuideSourceReadAuthorityFactory(Protocol):
 
 class DenyGuideSourceReadPreparedAuthorization:
     """Production default until AUTH-04B activates exact guide reads."""
+
+    async def prepare(
+        self,
+        *,
+        facts: GuideSourceReadAuthorityFacts,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle:
+        del facts, idempotency_key
+        raise ArtifactAuthorityDeniedError("guide source read is unavailable")
 
     async def consume(
         self,
@@ -142,65 +174,51 @@ class ArtifactMaterializationService:
         request: GuideSourceMaterializationRequest,
     ) -> GuideSourceMaterializationResult:
         """Authorize, read, verify, classify, revalidate, and persist one result."""
-        if (
-            type(request.prepared_authorization) is not PreparedAuthorizationHandle
-            or request.setup_generation <= 0
-        ):
+        if request.setup_generation <= 0:
             raise GuideSourceMaterializationError("guide source read is unavailable")
-        async with self._session_factory() as session, session.begin():
-            before = await self._load_read_facts(session, request)
-            if before is None:
-                raise GuideSourceMaterializationError("guide source read is unavailable")
-            await self._authority_factory(session).consume(
-                prepared_authorization=request.prepared_authorization,
-                facts=self._authority_facts(before),
-            )
-
+        before: _ReadFacts | None = None
         prepared = None
         try:
-            prepared = await self._preparation.prepare(
-                self._store.open(before.provider_object_ref),
-                media_type=before.media_type,
-            )
-            commitment = prepared.commitment
-            if commitment.sha256 != before.sha256 or commitment.byte_count != before.byte_count:
-                code = "truncated" if commitment.byte_count < before.byte_count else "changed"
-                await self._record_incident(
-                    before,
-                    code,
-                    observed_sha256=commitment.sha256,
-                    observed_byte_count=commitment.byte_count,
+            async with self._session_factory() as session, session.begin():
+                before = await self._load_read_facts(session, request)
+                if before is None:
+                    raise GuideSourceMaterializationError("guide source read is unavailable")
+                facts = self._authority_facts(before)
+                authority = self._authority_factory(session)
+                prepared_authorization = await authority.prepare(
+                    facts=facts,
+                    idempotency_key=request.idempotency_key,
                 )
-                raise GuideSourceMaterializationError("guide artifact incident")
-            detected = await prepared.inspect(
-                BoundGuideFormatInspector(
-                    detector=self._detector,
-                    declared_media_type=before.declared_media_type,
-                    ingestion_adapter=before.ingestion_adapter,
+                await authority.consume(
+                    prepared_authorization=prepared_authorization,
+                    facts=facts,
                 )
-            )
-        except ArtifactObjectMissingError:
-            await self._record_incident(before, "missing")
-            raise GuideSourceMaterializationError("guide artifact incident") from None
-        except ArtifactInputMismatchError:
-            # Kept fail-closed for alternate preparation implementations.
-            await self._record_incident(before, "changed")
-            raise GuideSourceMaterializationError("guide artifact incident") from None
-        except (ArtifactStoreUnavailableError, ArtifactPreparationDeadlineError):
-            await self._record_incident(before, "unavailable")
-            raise GuideSourceMaterializationError("guide artifact incident") from None
-        finally:
-            if prepared is not None:
-                await prepared.close()
-
-        stale = False
-        result: GuideSourceMaterializationResult | None = None
-        async with self._session_factory() as session, session.begin():
-            after = await self._load_read_facts(session, request)
-            if after != before:
-                await self._add_incident(session, before, "stale")
-                stale = True
-            else:
+                try:
+                    prepared = await self._preparation.prepare(
+                        self._store.open(before.provider_object_ref),
+                        media_type=before.media_type,
+                    )
+                except ArtifactObjectMissingError as exc:
+                    raise _GuideReadIncident("missing") from exc
+                except ArtifactInputMismatchError as exc:
+                    raise _GuideReadIncident("changed") from exc
+                except (ArtifactStoreUnavailableError, ArtifactPreparationDeadlineError) as exc:
+                    raise _GuideReadIncident("unavailable") from exc
+                commitment = prepared.commitment
+                if commitment.sha256 != before.sha256 or commitment.byte_count != before.byte_count:
+                    code = "truncated" if commitment.byte_count < before.byte_count else "changed"
+                    raise _GuideReadIncident(
+                        code,
+                        observed_sha256=commitment.sha256,
+                        observed_byte_count=commitment.byte_count,
+                    )
+                detected = await prepared.inspect(
+                    BoundGuideFormatInspector(
+                        detector=self._detector,
+                        declared_media_type=before.declared_media_type,
+                        ingestion_adapter=before.ingestion_adapter,
+                    )
+                )
                 existing = await session.scalar(
                     select(GuideSourceFormatClassification)
                     .where(GuideSourceFormatClassification.binding_id == before.binding_id)
@@ -221,31 +239,37 @@ class ArtifactMaterializationService:
                         or existing.detector_version != DETECTOR_VERSION
                     ):
                         raise GuideSourceMaterializationError("guide classification conflicts")
-                    result = self._result(existing, replayed=True)
-                else:
-                    classification = GuideSourceFormatClassification(
-                        id=str(uuid4()),
-                        binding_id=before.binding_id,
-                        content_id=before.content_id,
-                        verified_replica_id=before.replica_id,
-                        setup_generation=before.setup_generation,
-                        sha256=before.sha256,
-                        byte_count=before.byte_count,
-                        media_type=before.media_type,
-                        detected_format=detected.detected_format,
-                        status=detected.status,
-                        detector_name=DETECTOR_NAME,
-                        detector_version=DETECTOR_VERSION,
-                        classification_facts=detected.facts,
-                    )
-                    session.add(classification)
-                    await session.flush()
-                    result = self._result(classification, replayed=False)
-        if stale:
-            raise GuideSourceMaterializationError("guide artifact incident")
-        if result is None:
-            raise GuideSourceMaterializationError("guide source read is unavailable")
-        return result
+                    return self._result(existing, replayed=True)
+                classification = GuideSourceFormatClassification(
+                    id=str(uuid4()),
+                    binding_id=before.binding_id,
+                    content_id=before.content_id,
+                    verified_replica_id=before.replica_id,
+                    setup_generation=before.setup_generation,
+                    sha256=before.sha256,
+                    byte_count=before.byte_count,
+                    media_type=before.media_type,
+                    detected_format=detected.detected_format,
+                    status=detected.status,
+                    detector_name=DETECTOR_NAME,
+                    detector_version=DETECTOR_VERSION,
+                    classification_facts=detected.facts,
+                )
+                session.add(classification)
+                await session.flush()
+                return self._result(classification, replayed=False)
+        except _GuideReadIncident as incident:
+            if before is not None:
+                await self._record_incident(
+                    before,
+                    incident.code,
+                    observed_sha256=incident.observed_sha256,
+                    observed_byte_count=incident.observed_byte_count,
+                )
+            raise GuideSourceMaterializationError("guide artifact incident") from None
+        finally:
+            if prepared is not None:
+                await prepared.close()
 
     async def _load_read_facts(
         self,
@@ -344,7 +368,20 @@ class ArtifactMaterializationService:
                 )
                 .order_by(ArtifactVerificationReceipt.created_at.desc())
                 .limit(1)
-                .with_for_update(of=(GuideSourceArtifactBinding, ArtifactReplica, ProjectSetupRun))
+                .with_for_update(
+                    of=(
+                        ProjectGuide,
+                        GuideSourceSnapshot,
+                        GuideSourceSnapshotItem,
+                        ProjectSetupRun,
+                        GuideSourceArtifactBinding,
+                        ArtifactContent,
+                        ArtifactReplica,
+                        ArtifactVerificationJob,
+                        ArtifactVerificationReceipt,
+                        ArtifactStorageNamespace,
+                    )
+                )
             )
         ).one_or_none()
         if row is None:

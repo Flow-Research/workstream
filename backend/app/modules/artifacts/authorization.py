@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import asdict
 from typing import Annotated, Protocol
 from uuid import UUID
 
@@ -20,6 +21,8 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideArtifactIngestAuthorityFacts,
+    GuideSourceBindingAuthorityFacts,
+    GuideSourceReadAuthorityFacts,
     ArtifactInternalAuthorityFacts,
     ArtifactInternalResourceType,
     ArtifactPendingWorkAuthorityFacts,
@@ -46,6 +49,8 @@ from app.modules.authorization.runtime import (
     AuthorizationDecision,
     AuthorizationDenied,
     GuideSourceIngestResourceContext,
+    GuideSourceBindingResourceContext,
+    GuideSourceReadResourceContext,
     HumanAuthorizationContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
@@ -349,6 +354,239 @@ def get_guide_artifact_prepared_authorization(
     return PreparedGuideArtifactAuthorization(session)
 
 
+class _PreparedGuideSourceServiceAuthorization:
+    """Issue and consume one exact fixed-service guide capability."""
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        service_identity: ServiceIdentity,
+        action_id: ActionId,
+        request_id: UUID,
+        correlation_id: UUID,
+    ) -> None:
+        self._session = session
+        self._service_identity = service_identity
+        self._action_id = action_id
+        self._request_id = request_id
+        self._correlation_id = correlation_id
+        self._prepared: PreparedAuthorizationService | None = None
+        self._input: PreparedAuthorizationInput | None = None
+        self._handle: PreparedAuthorizationHandle | None = None
+        self._facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts | None = None
+
+    async def prepare(
+        self,
+        *,
+        facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle:
+        """Prepare one process-local capability bound to every canonical fact."""
+        if self._prepared is not None:
+            raise ArtifactAuthorityDeniedError("guide source authority is invalid")
+        resource = _guide_source_resource_context(facts)
+        context = await _fixed_service_context(
+            self._session,
+            self._service_identity,
+            self._request_id,
+            self._correlation_id,
+        )
+        repository = AdminAuthorizationRepository(self._session)
+
+        authorization = AuthorizationService(
+            self._session,
+            context,
+            revalidate_service=_fixed_service_revalidator(
+                repository, self._service_identity
+            ),
+            admin_repository=repository,
+        )
+        prepared = PreparedAuthorizationService(
+            self._session, context, authorization, repository
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=idempotency_key,
+            request_value=resource.model_dump(mode="json"),
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+            artifact_resource_type=resource.resource_type,
+            artifact_resource_id=resource.resource_id,
+        )
+        try:
+            handle = await prepared.prepare(self._action_id, caller_input, scope)
+        except (
+            AuthorizationDenied,
+            PreparedAuthorizationHandleInvalid,
+            PreparedAuthorizationUnsupported,
+            ValidationError,
+        ) as exc:
+            prepared.close()
+            raise ArtifactAuthorityDeniedError("guide source authority is unavailable") from exc
+        except BaseException:
+            prepared.close()
+            raise
+        self._prepared = prepared
+        self._input = caller_input
+        self._handle = handle
+        self._facts = facts
+        return handle
+
+    async def consume(
+        self,
+        *,
+        prepared_authorization: PreparedAuthorizationHandle,
+        facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
+    ) -> None:
+        """Consume only the exact handle and facts prepared by this adapter."""
+        if (
+            self._prepared is None
+            or self._input is None
+            or self._handle is not prepared_authorization
+            or self._facts != facts
+        ):
+            raise ArtifactAuthorityDeniedError("guide source authority is invalid")
+        prepared = self._prepared
+        try:
+            await prepared.consume(
+                prepared_authorization,
+                self._action_id,
+                self._input,
+                _guide_source_resource_context(facts),
+            )
+        except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, ValidationError) as exc:
+            raise ArtifactAuthorityDeniedError("guide source authority is unavailable") from exc
+        finally:
+            prepared.close()
+            self._prepared = None
+            self._input = None
+            self._handle = None
+            self._facts = None
+
+    def close(self) -> None:
+        """Invalidate an unconsumed capability."""
+        if self._prepared is not None:
+            self._prepared.close()
+        self._prepared = None
+        self._input = None
+        self._handle = None
+        self._facts = None
+
+
+class PreparedGuideSourceBindingAuthorization(_PreparedGuideSourceServiceAuthorization):
+    """Prepared authority reserved to the fixed guide binding service."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        super().__init__(
+            session,
+            service_identity=ServiceIdentity.ARTIFACT_BINDING,
+            action_id=ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+
+
+class PreparedGuideSourceReadAuthorization(_PreparedGuideSourceServiceAuthorization):
+    """Prepared authority reserved to the fixed guide reader service."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        super().__init__(
+            session,
+            service_identity=ServiceIdentity.ARTIFACT_GUIDE_READER,
+            action_id=ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+
+
+def _guide_source_resource_context(
+    facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
+) -> GuideSourceBindingResourceContext | GuideSourceReadResourceContext:
+    values = asdict(facts)
+    if isinstance(facts, GuideSourceBindingAuthorityFacts):
+        return GuideSourceBindingResourceContext(
+            resource_type="guide_source_binding",
+            resource_id=facts.guide_source_item_id,
+            **values,
+        )
+    return GuideSourceReadResourceContext(
+        resource_type="guide_source_read",
+        resource_id=facts.binding_id,
+        **values,
+    )
+
+
+async def _fixed_service_context(
+    session: AsyncSession,
+    service_identity: ServiceIdentity,
+    request_id: UUID,
+    correlation_id: UUID,
+) -> ServiceAuthorizationContext:
+    actors = ActorRepository(session)
+    profile = await actors.get_service_actor(service_identity.value)
+    if profile is None:
+        raise ArtifactAuthorityDeniedError("artifact service principal is unavailable")
+    link = await actors.get_identity_link_for_actor(profile.id)
+    if (
+        link is None
+        or link.actor_profile_id != profile.id
+        or link.subject_kind != ActorKind.SERVICE.value
+    ):
+        raise ArtifactAuthorityDeniedError("artifact service principal is unavailable")
+    try:
+        return ServiceAuthorizationContext(
+            actor_profile_id=UUID(profile.id),
+            actor_kind=ActorKind.SERVICE,
+            actor_status=ActorStatus(profile.status),
+            identity_link_id=UUID(link.id),
+            identity_link_status=IdentityLinkStatus(link.status),
+            service_identity=ServiceIdentity(profile.service_identity),
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
+
+
+def _fixed_service_revalidator(
+    repository: AdminAuthorizationRepository,
+    expected_identity: ServiceIdentity,
+):
+    """Build the single lifecycle revalidator shared by fixed ART adapters."""
+
+    async def revalidate(
+        original: ServiceAuthorizationContext,
+        _requested_action: ActionId,
+    ) -> ServiceAuthorizationContext | None:
+        locked = await repository.lock_request_actor(
+            original.identity_link_id, original.actor_profile_id
+        )
+        if locked is None:
+            return None
+        link, profile = locked
+        if (
+            profile.actor_kind != ActorKind.SERVICE.value
+            or profile.service_identity != expected_identity.value
+        ):
+            return None
+        try:
+            return ServiceAuthorizationContext(
+                actor_profile_id=UUID(profile.id),
+                actor_kind=ActorKind.SERVICE,
+                actor_status=ActorStatus(profile.status),
+                identity_link_id=UUID(link.id),
+                identity_link_status=IdentityLinkStatus(link.status),
+                service_identity=expected_identity,
+                request_id=original.request_id,
+                correlation_id=original.correlation_id,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    return revalidate
+
+
 class PreparedArtifactInternalAuthority:
     """Adapt one fixed ART service to the shared transaction-bound PREP kernel."""
 
@@ -393,36 +631,12 @@ class PreparedArtifactInternalAuthority:
         context = await self._service_context()
         repository = AdminAuthorizationRepository(self._session)
 
-        async def revalidate_service(
-            original: ServiceAuthorizationContext,
-            _requested_action: ActionId,
-        ) -> ServiceAuthorizationContext | None:
-            locked = await repository.lock_request_actor(
-                original.identity_link_id, original.actor_profile_id
-            )
-            if locked is None:
-                return None
-            link, profile = locked
-            if (
-                profile.actor_kind != ActorKind.SERVICE.value
-                or profile.service_identity != original.service_identity.value
-            ):
-                return None
-            return ServiceAuthorizationContext(
-                actor_profile_id=UUID(profile.id),
-                actor_kind=ActorKind.SERVICE,
-                actor_status=ActorStatus(profile.status),
-                identity_link_id=UUID(link.id),
-                identity_link_status=IdentityLinkStatus(link.status),
-                service_identity=original.service_identity,
-                request_id=original.request_id,
-                correlation_id=original.correlation_id,
-            )
-
         authorization = AuthorizationService(
             self._session,
             context,
-            revalidate_service=revalidate_service,
+            revalidate_service=_fixed_service_revalidator(
+                repository, self._service_identity
+            ),
             admin_repository=repository,
         )
         prepared = PreparedAuthorizationService(self._session, context, authorization, repository)
@@ -513,30 +727,12 @@ class PreparedArtifactInternalAuthority:
         await self._session.commit()
 
     async def _service_context(self) -> ServiceAuthorizationContext:
-        actors = ActorRepository(self._session)
-        profile = await actors.get_service_actor(self._service_identity.value)
-        if profile is None:
-            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable")
-        link = await actors.get_identity_link_for_actor(profile.id)
-        if (
-            link is None
-            or link.actor_profile_id != profile.id
-            or link.subject_kind != ActorKind.SERVICE.value
-        ):
-            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable")
-        try:
-            return ServiceAuthorizationContext(
-                actor_profile_id=UUID(profile.id),
-                actor_kind=ActorKind.SERVICE,
-                actor_status=ActorStatus(profile.status),
-                identity_link_id=UUID(link.id),
-                identity_link_status=IdentityLinkStatus(link.status),
-                service_identity=ServiceIdentity(profile.service_identity),
-                request_id=self._request_id,
-                correlation_id=self._correlation_id,
-            )
-        except (TypeError, ValueError) as exc:
-            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
+        return await _fixed_service_context(
+            self._session,
+            self._service_identity,
+            self._request_id,
+            self._correlation_id,
+        )
 
 
 def _scope(

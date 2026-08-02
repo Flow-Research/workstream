@@ -237,9 +237,11 @@ permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 78 rows after AUTH-11C2: 37 active actions
-and 41 planned rows before AUTH-12A. AUTH-12A adds eighteen planned
-project-mutation rows, producing 96 total actions: 37 active and 59 planned.
+The closed action registry contained 78 rows after AUTH-11C2: 37 active actions
+and 41 planned rows before AUTH-12A. AUTH-12A added eighteen planned
+project-mutation rows, producing the historical 96-row state of 37 active and
+59 planned. Later project-mutation and ART activation chunks advance the current
+state to 43 active and 53 planned without adding identifiers.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -255,8 +257,10 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
-other registry rows cover three planned Operator recovery actions, 19 other
-artifact actions—18 planned plus active `artifact.guide_source.ingest`—canonical
+other registry rows cover three planned Operator recovery actions and the ART
+catalogue: 16 planned, three active foundation-service actions, active
+`artifact.guide_source.ingest`, and active fixed-service guide binding/read;
+the remaining rows cover canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
@@ -372,7 +376,7 @@ The paired artifact hidden-behavior matrix is closed:
 | Resource-owning WS-ART chunk | Hidden actions/resources implemented by that chunk |
 |---|---|
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
-| `WS-ART-001-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, and `artifact.guide_source.binding.create` mapped to `artifact.binding.create` |
+| `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`, and `artifact.guide_source.binding.create -> artifact.binding.create`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
 | `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
 | `WS-ART-001-04A` through `04C` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; remains unavailable until 04C evidence and the later WS-XINT-002-05A activation contract |
 | `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
@@ -391,8 +395,11 @@ permission belongs only to the Project Manager role and is evaluated through an
 active covered grant: system-scoped or exact-project. Its prepared capability locks the
 actor, exact identity link, and matched grant before byte intake; final
 consumption binds the ART-locked project, draft guide, snapshot, item,
-operation/request digests, and server-computed byte facts. Guide-source read and
-binding creation remain planned.
+operation/request digests, and server-computed byte facts. `WS-XINT-002-04B`
+separately activates guide-source read and binding creation for their exact
+fixed service identities. Both use opaque transaction-bound PREP handles bound
+to the complete verified-content and setup-generation facts; neither authority
+is inherited from the Project Manager uploader.
 
 Every row requires AUTH-07A's registry and AUTH-07B's kernel first. A row with an Operator principal
 also requires its AUTH-08 grant definition; a row with a fixed service
@@ -424,7 +431,7 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-02D-INTERNAL` | Active: `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
-| `WS-AUTH-001-ART-03` | `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
 | `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
@@ -438,8 +445,9 @@ availability and only extends the evaluator to response slots.
 
 The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. WS-XINT-002-03 activates the three internal
-service actions and WS-XINT-002-04A activates guide-source ingest; the other 18
-ART actions remain planned and unavailable.
+service actions, WS-XINT-002-04A activates guide-source ingest, and
+WS-XINT-002-04B activates the two fixed-service guide binding/read actions; the
+other 16 ART actions remain planned and unavailable.
 Migration `0037` admits the exact privacy-bounded ART resource-context digest
 in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
@@ -460,7 +468,7 @@ remain planned and unavailable, and add no migration.
 | `artifact.audit.read` | `artifact.audit.read` | Operator | artifact audit scope | `02D` |
 | `operations.artifact_storage_admission.read` | `operations.status.read` | Operator | deployment artifact-storage namespace | `02D` |
 | `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | exact covered Project Manager | guide-source snapshot item | `03` |
-| `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source snapshot item | `03` |
+| `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source binding and verified replica | `03` |
 | `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `WS-XINT-002-05A` |
 | `artifact.guide_source.binding.create` | `artifact.binding.create` | fixed binding service | guide-source snapshot item | `03` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | fixed binding service | submission | `05` |
@@ -474,8 +482,9 @@ remain planned and unavailable, and add no migration.
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | finding slot in 07A; response slot added by evaluator-only 07B | `WS-XINT-002-07` |
 
-The owner cells above deliberately retain the exact runtime `ActionOwner`.
-07A/07B are contract sub-waves, not new catalogue owner values.
+The resource-owning chunk cells above identify ART hidden-behavior custody; they
+are distinct from the AUTH activation-custodian table and runtime
+`ActionOwner`. 07A/07B are contract sub-waves, not new catalogue owner values.
 
 The fixed internal service identities and their complete action sets are also
 closed:

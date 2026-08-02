@@ -19,7 +19,7 @@ from pypdf import PdfWriter
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
@@ -31,6 +31,11 @@ from app.interfaces.artifact_operations import (
 from app.interfaces.project_agents import GuideSourceMaterial, GuideSufficiencyAgentResult
 from app.interfaces.artifacts import ArtifactObjectMissingError, ArtifactStoreUnavailableError
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.artifacts.authorization import (
+    PreparedGuideSourceBindingAuthorization,
+    PreparedGuideSourceReadAuthorization,
+)
 from app.modules.artifacts.guide_bindings import (
     GuideSourceBindingError,
     GuideSourceBindingService,
@@ -522,6 +527,13 @@ class _AllowReadAuthority:
     def __init__(self, *, handle: PreparedAuthorizationHandle | None = None) -> None:
         self.handle = handle or object.__new__(PreparedAuthorizationHandle)
         self.facts: list[GuideSourceReadAuthorityFacts] = []
+        self.prepared_facts: list[GuideSourceReadAuthorityFacts] = []
+        self.idempotency_keys: list[UUID] = []
+
+    async def prepare(self, **values: Any) -> PreparedAuthorizationHandle:
+        self.prepared_facts.append(values["facts"])
+        self.idempotency_keys.append(values["idempotency_key"])
+        return self.handle
 
     async def consume(self, **values: Any) -> None:
         assert values["prepared_authorization"] is self.handle
@@ -915,6 +927,31 @@ async def _seed_binding_lineage(
     return ids
 
 
+def _service_principal(
+    service_identity: ServiceIdentity,
+) -> tuple[ActorProfile, ActorIdentityLink]:
+    profile_id, link_id = uuid4(), uuid4()
+    return (
+        ActorProfile(
+            id=str(profile_id),
+            actor_kind="service",
+            status="active",
+            provisioning_method="manual_service_provisioning",
+            service_identity=service_identity.value,
+            created_by="test",
+        ),
+        ActorIdentityLink(
+            id=str(link_id),
+            actor_profile_id=str(profile_id),
+            issuer="https://issuer.example.test",
+            subject=service_identity.value,
+            subject_kind="service",
+            status="active",
+            linked_by="test",
+        ),
+    )
+
+
 def _request(ids: dict[str, UUID], authority: _AllowBindingAuthority, **changes: Any):
     values = {
         "prepared_authorization": authority.handle,
@@ -939,7 +976,7 @@ def _materialization_request(
     **changes: Any,
 ) -> GuideSourceMaterializationRequest:
     values = {
-        "prepared_authorization": authority.handle,
+        "idempotency_key": uuid4(),
         "project_id": ids["project"],
         "guide_id": ids["guide"],
         "guide_source_snapshot_id": ids["snapshot"],
@@ -1599,12 +1636,65 @@ async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
         assert replay.classification_id == first.classification_id
         assert replay.replayed
         assert store.open_count == 2
+        assert authority.prepared_facts == authority.facts
+        assert authority.idempotency_keys == [request.idempotency_key] * 2
         assert authority.facts[0].namespace_fingerprint == "sha256:" + "b" * 64
         assert authority.facts[0].verification_generation == 0
         assert (await scratch.usage()).reservation_count == 0
         assert list((tmp_path / "scratch" / "files").iterdir()) == []
         async with factory() as session:
             assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 1
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_prepares_live_reader_authority_in_owned_session(
+    isolated_database_env: str,
+    tmp_path: Path,
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _ReadStore(payload)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session,
+                sha256=digest,
+                byte_count=len(payload),
+                media_type="application/pdf",
+            )
+            profile, link = _service_principal(ServiceIdentity.ARTIFACT_GUIDE_READER)
+            session.add_all((profile, link))
+            await session.commit()
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda session: PreparedGuideSourceReadAuthorization(
+                session,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            ),
+        )
+
+        result = await service.materialize_guide_source(
+            _materialization_request(
+                ids,
+                binding_id=binding_id,
+                authority=_AllowReadAuthority(),
+            )
+        )
+
+        assert result.binding_id == binding_id
+        assert store.open_count == 1
     finally:
         scratch.close()
         await engine.dispose()
@@ -1747,7 +1837,7 @@ async def test_same_size_changed_materialization_records_incident(
 
 
 @pytest.mark.asyncio
-async def test_post_read_lineage_drift_records_stale_incident(
+async def test_authorized_read_locks_lineage_through_provider_access(
     isolated_database_env: str, tmp_path: Path
 ) -> None:
     payload = b"%PDF-1.7\nverified"
@@ -1756,6 +1846,7 @@ async def test_post_read_lineage_drift_records_stale_incident(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     preparation, scratch = _preparation(tmp_path)
     authority = _AllowReadAuthority()
+    blocked = False
     try:
         async with factory() as session:
             ids = await _seed_binding_lineage(
@@ -1764,27 +1855,34 @@ async def test_post_read_lineage_drift_records_stale_incident(
         binding_id = await _create_binding(factory, ids)
 
         async def advance_setup_generation() -> None:
-            async with factory() as session, session.begin():
-                async with suspend_historical_product_custody(
-                    session,
-                    table="project_setup_runs",
-                    triggers=("source_setup_run_custody",),
-                ):
-                    session.add(
-                        ProjectSetupRun(
-                            id=str(uuid4()),
-                            project_id=str(ids["project"]),
-                            guide_id=str(ids["guide"]),
-                            guide_version="v1",
-                            source_snapshot_id=str(ids["snapshot"]),
-                            source_snapshot_hash=canonical_json_hash({"item": str(ids["item"])}),
-                            setup_generation=2,
-                            status="queued",
-                            current_step="queued",
-                            created_by="test",
+            nonlocal blocked
+            try:
+                async with factory() as session, session.begin():
+                    await session.execute(text("SET LOCAL lock_timeout = '100ms'"))
+                    async with suspend_historical_product_custody(
+                        session,
+                        table="project_setup_runs",
+                        triggers=("source_setup_run_custody",),
+                    ):
+                        session.add(
+                            ProjectSetupRun(
+                                id=str(uuid4()),
+                                project_id=str(ids["project"]),
+                                guide_id=str(ids["guide"]),
+                                guide_version="v1",
+                                source_snapshot_id=str(ids["snapshot"]),
+                                source_snapshot_hash=canonical_json_hash(
+                                    {"item": str(ids["item"])}
+                                ),
+                                setup_generation=2,
+                                status="queued",
+                                current_step="queued",
+                                created_by="test",
+                            )
                         )
-                    )
-                    await session.flush()
+                        await session.flush()
+            except DBAPIError:
+                blocked = True
 
         service = ArtifactMaterializationService(
             factory,
@@ -1795,16 +1893,15 @@ async def test_post_read_lineage_drift_records_stale_incident(
             authority_factory=lambda _: authority,
         )
 
-        with pytest.raises(GuideSourceMaterializationError, match="incident"):
-            await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
-            )
+        result = await service.materialize_guide_source(
+            _materialization_request(ids, binding_id=binding_id, authority=authority)
+        )
 
         async with factory() as session:
-            incident = await session.scalar(select(GuideSourceArtifactIncident))
-            assert incident is not None
-            assert incident.code == "stale"
-            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+            assert blocked
+            assert result.binding_id == binding_id
+            assert await session.scalar(select(GuideSourceArtifactIncident)) is None
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 1
     finally:
         scratch.close()
         await engine.dispose()
@@ -2088,6 +2185,50 @@ async def test_binding_is_exact_immutable_and_idempotent(isolated_database_env: 
 
 
 @pytest.mark.asyncio
+async def test_binding_uses_live_fixed_service_prepared_authority(
+    isolated_database_env: str,
+) -> None:
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(session)
+            profile, link = _service_principal(ServiceIdentity.ARTIFACT_BINDING)
+            session.add_all((profile, link))
+            await session.commit()
+
+        async with factory() as session, session.begin():
+            authority = PreparedGuideSourceBindingAuthorization(
+                session,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            )
+            facts = GuideSourceBindingAuthorityFacts(
+                project_id=ids["project"],
+                guide_id=ids["guide"],
+                guide_source_snapshot_id=ids["snapshot"],
+                guide_source_item_id=ids["item"],
+                project_setup_run_id=ids["run"],
+                setup_generation=1,
+                content_id=ids["content"],
+                verified_replica_id=ids["replica"],
+                sha256="sha256:" + "a" * 64,
+                byte_count=42,
+                logical_role="guide_source_original",
+            )
+            handle = await authority.prepare(facts=facts, idempotency_key=uuid4())
+            request = _request(ids, _AllowBindingAuthority())
+            request = request.model_copy(update={"prepared_authorization": handle})
+            result = await GuideSourceBindingService(session, authority).bind_guide_source(request)
+            assert not result.replayed
+
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GuideSourceArtifactBinding.id))) == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_next_generation_explicitly_supersedes_prior_binding(
     isolated_database_env: str,
 ) -> None:
@@ -2299,6 +2440,8 @@ async def _create_populated_incident(database_url: str) -> None:
         "cross_guide",
         "wrong_run",
         "stale_generation",
+        "wrong_content",
+        "wrong_logical_role",
     ],
 )
 async def test_binding_fails_closed_before_authority_or_effect(
@@ -2346,6 +2489,14 @@ async def test_binding_fails_closed_before_authority_or_effect(
             guide_id=uuid4() if failure == "cross_guide" else ids["guide"],
             source_item_id=uuid4() if failure == "missing_item" else ids["item"],
             project_setup_run_id=uuid4() if failure == "wrong_run" else ids["run"],
+            verified_content_id=(
+                uuid4() if failure == "wrong_content" else ids["content"]
+            ),
+            logical_role=(
+                "submission_original"
+                if failure == "wrong_logical_role"
+                else "guide_source_original"
+            ),
         )
         with pytest.raises(GuideSourceBindingError):
             async with factory() as session, session.begin():
