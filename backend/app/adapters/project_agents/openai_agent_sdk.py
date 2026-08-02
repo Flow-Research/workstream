@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from app.core.config import Settings
 from app.interfaces.project_agents import (
     GuideSourceMaterial,
+    MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES,
+    canonical_guide_source_material_bytes,
     GuideSufficiencyAgentResult,
     PostSubmitCheckerPolicyDerivationContext,
     PostSubmitCheckerPolicyDerivationResult,
@@ -228,14 +230,30 @@ class OpenAIAgentSdkProjectGuideRuntime:
         output_type: type[TStructuredOutput],
     ) -> TStructuredOutput:
         """Run one structured OpenAI agent without leaking SDK types upstream."""
-        prompt = json.dumps(
-            material.model_dump(mode="json") if isinstance(material, GuideSourceMaterial) else material,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
+        try:
+            prompt_bytes = (
+                canonical_guide_source_material_bytes(material)
+                if isinstance(material, GuideSourceMaterial)
+                else json.dumps(
+                    material,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+            )
+        except (TypeError, ValueError):
+            raise ProjectAgentRuntimeError(
+                "OpenAI Agents SDK prompt is not canonically serializable"
+            ) from None
+        maximum_prompt_bytes = (
+            MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES
+            if isinstance(material, GuideSourceMaterial) and material.verified_artifact_material
+            else self._max_prompt_bytes
         )
-        if len(prompt.encode("utf-8")) > self._max_prompt_bytes:
+        if len(prompt_bytes) > maximum_prompt_bytes:
             raise ProjectAgentRuntimeError("OpenAI Agents SDK prompt exceeds configured size limit")
+        prompt = prompt_bytes.decode("utf-8")
         try:
             from agents import Agent, AgentOutputSchema, Runner
         except ImportError:

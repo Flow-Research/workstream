@@ -28,7 +28,7 @@ Each chunk is one PR. No later chunk starts automatically.
 | `WS-ART-001-03B3B3C` | Add bounded PPTX extraction on the approved OOXML capability. | L1 | Proposed after 03B3B3A |
 | `WS-ART-001-03B3B3D` | Add bounded XLSX extraction on the approved OOXML capability. | L1 | Proposed after 03B3B3A |
 | `WS-ART-001-03B3B4` | Install only the approved image dependency and add PNG/JPEG/WebP structural metadata extraction. | L1 | Proposed after 03B3B1 approval |
-| `WS-ART-001-03B4` | Feed only complete same-generation canonical extracted material into the existing Celery sufficiency pipeline. | L1 | Proposed after 03B3B2, 03B3B3B, 03B3B3C, 03B3B3D, and 03B3B4 |
+| `WS-ART-001-03B4` | Feed only complete same-generation canonical extracted material into the existing Celery sufficiency pipeline. | L1 | Active; all prerequisites through 03B3B4 merged |
 | `WS-ART-001-03C` | Remove legacy guide-source identity and add exact same-generation setup continuation. | L1 | Proposed after 03B1-03B4 and AUTH-04B |
 | `WS-ART-001-04A` | Accept one outer ZIP in bounded scratch, safely inspect its tree, normalize executable intent, produce canonical identities, and reject unchanged work before provider I/O. | L1 | Proposed after 03C and AUTH planned action registration |
 | `WS-ART-001-04B` | Run mandatory platform and locked Project Guide pre-submit checks against the same scratch-bound tree and executable semantics without durable storage. | L1 | Proposed after 04A |

@@ -60,6 +60,7 @@ class GuideMutationOutcome:
     response: ProjectGuideResponse | GuideSourceSnapshotResponse
     replayed: bool
     setup_run_id: str | None = None
+    setup_generation: int | None = None
 
 
 class GuideMutationService:
@@ -399,7 +400,12 @@ class GuideMutationService:
             response_json=response.model_dump(mode="json"),
             setup_run_id=setup_run.id if setup_run else None,
         )
-        return GuideMutationOutcome(response, False, setup_run.id if setup_run else None)
+        return GuideMutationOutcome(
+            response,
+            False,
+            setup_run.id if setup_run else None,
+            setup_run.setup_generation if setup_run else None,
+        )
 
     async def update_guide(
         self,

@@ -136,6 +136,7 @@ class ProjectSetupRunResponse(BaseModel):
     output_post_submit_checker_policy_id: str | None
     post_submit_derivation_summary: dict[str, Any] | None
     error_code: str | None
+    error_artifact_incident_id: str | None
     error_summary: str | None
     created_by: str
     created_at: datetime
@@ -190,6 +191,10 @@ class GuideSufficiencyReportResponse(BaseModel):
     summary: str | None
     agent_name: str | None
     agent_version: str | None
+    project_setup_run_id: str | None
+    setup_generation: int | None
+    agent_material_sha256: str | None
+    agent_material_byte_count: int | None
     created_by: str
     created_at: datetime
     warnings_acknowledged_by_role: str | None
