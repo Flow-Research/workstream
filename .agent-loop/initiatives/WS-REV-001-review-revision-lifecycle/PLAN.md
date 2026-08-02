@@ -330,10 +330,12 @@ are:
 - 05A online checker admission; 05B server-selected reviewer/admin reads.
   Historical admission classification/scan belongs to 11C reconciliation.
 - 06A claim/freeze; 06B release/decline/preferences; 06C expiry/lazy recovery.
-- 07A lease-bounded context; 07B reviewer finding evidence only.
+- 07A lease-bounded context and packet; 07B reviewer decision note/findings,
+  with no reviewer artifact upload.
 - 08 pure decision schemas, validation, and typed participant inputs only.
 - 09A1 Review-rooted preparation schema; 09A2 preparation resolver and Task
-  Context; 09A3 human response evidence; 09A4 internal prepared human N+1 plus
+  Context; 09A3 revision-obligation response metadata only (no separate
+  artifact upload); 09A4 internal prepared human N+1 plus
   the exact source XOR that consumes the owner's immutable checker-remediation
   `remediation_source_checker_run_id`;
   09A5 replacement-assignment transfer; 09B replay/resolution/return routing.

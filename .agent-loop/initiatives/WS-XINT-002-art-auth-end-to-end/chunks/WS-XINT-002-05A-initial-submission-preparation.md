@@ -1,5 +1,8 @@
 # Chunk Contract: WS-XINT-002-05A Initial Submission Preparation
 
+Entry gate: merged `WS-XINT-002-06A` pre-submit materializer activation and
+complete hidden ART-04A1 through ART-04C2 evidence.
+
 ## Goal
 
 Activate one-ZIP preparation through one durable ready admission for an initial submission.

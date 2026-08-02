@@ -352,10 +352,10 @@ Initial and revision submissions share the same `submission.create` action,
 permission, and route. There is no `submission.revise`, `review.assign`,
 `review_revision.record`, or separately callable revision-preparation action.
 Revision preparation is an internal participant and lifecycle guard of the
-canonical submission command. Finding and finding-response evidence intake use
-distinct actions mapped to existing `review.decision` and `submission.create`
-permissions because each is a protected human command that can create artifact
-state before the final transaction.
+canonical submission command. The earlier finding/finding-response artifact
+intake design is superseded for v0.1: reviewers store note/findings, and the
+contributor's next outer ZIP is the revision artifact. Related evidence actions
+remain planned/unavailable pending separate REV-owned intent.
 
 `artifact_recovery.request` is rejected. Operator recovery consumes the already
 registered `artifact.verification_job.retry` action through the ART-owned
@@ -566,11 +566,10 @@ principal, typed context, facts, guards, surfaces, transaction ownership, and
 hidden dependency manifests. Registration is planned and availability-neutral,
 uses existing PermissionIds, and adds typed/PostgreSQL evidence parity.
 
-The review-evidence binding action extends only
-`workstream.artifact.binding`, making 12 exact matrix memberships across the
-same seven identities. Its activation requires separate human and service
-decisions, two evidence records, explicit lock order, and one transaction; a
-human request is never silently converted to service authority. REV timer,
+The review-evidence binding action remains a future planned/unavailable member
+of the closed `workstream.artifact.binding` matrix. It has no approved v0.1
+activation; a separate REV-owned intent must define any future human/service
+transaction. REV timer,
 expiry, reconciliation, projection, artifact-reference, and release-control
 services require later exact identity-specific contracts. No catch-all service
 identity is pre-created.

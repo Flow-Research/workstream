@@ -37,10 +37,10 @@ This initiative begins read-only and changes no application behavior.
   `allow_review` admission through queue, lease, packet context, immutable
   decisions/findings/resolutions, human revision preparation, contribution
   integration, recovery, projection, and final release.
-- `WS-XINT-002` owns `artifact.review_packet.materialize`,
-  `artifact.review_evidence.binding.create`, and human-review revision artifact
-  preparation/Submission binding. REV-AUTH must consume those exact merged
-  manifests rather than duplicate them.
+- `WS-XINT-002` owns `artifact.review_packet.materialize` and human-review
+  revision ZIP preparation/Submission binding. Review-evidence binding remains
+  future/planned and unavailable. REV-AUTH consumes the packet and submission
+  manifests rather than duplicating them.
 
 ## Principal classes
 
@@ -70,8 +70,9 @@ or artifact-read authority.
 
 Preference expiry, lease expiry, authority-invalidation reconciliation, general
 review reconciliation, artifact-reference reconciliation, projection rebuild,
-ART packet materialization, and ART evidence binding use separately admitted
-fixed service identities and closed action matrices. A Celery payload carries
+ART packet materialization uses a separately admitted fixed service identity
+and closed action matrix. Future ART evidence binding is not a v0.1 dependency.
+A Celery payload carries
 identifiers and provenance only, never a prepared handle or executable human
 authority.
 
@@ -120,7 +121,8 @@ Fixed-service actions:
 - `review.artifact_reference.reconcile`
 - `review.projection.rebuild`
 - XINT-002 `artifact.review_packet.materialize`
-- XINT-002 `artifact.review_evidence.binding.create`
+- future XINT-002 `artifact.review_evidence.binding.create` (planned/unavailable;
+  not consumed by v0.1 REV-AUTH)
 
 ## Required resource facts
 
@@ -154,10 +156,9 @@ needs a closed typed context with only its valid shape.
 
 - AUTH-12D2 and REV-03P must be reconciled before either policy writer is built.
 - REV hidden feature chunks must merge before matching AUTH action activation.
-- XINT-002 remains the sole activation owner for ART review-artifact actions and
-  shared human-review submission actions. WS-XINT-003-01 split the combined
-  review-artifact contract into 07A finding availability and 07B response
-  evaluation after the human revision obligation exists.
+- XINT-002 remains the sole activation owner for ART packet materialization and
+  shared human-review submission actions. 07A is packet-only; 07B evidence
+  binding is reserved pending separate approved REV intent.
 - CON atomic participant and FinalAcceptance integration must merge before
   `review.decision` activation.
 - Final product routes remain absent until the complete dependency conformance

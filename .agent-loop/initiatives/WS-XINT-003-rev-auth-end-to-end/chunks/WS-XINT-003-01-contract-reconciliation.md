@@ -72,13 +72,11 @@ compatibility aliases or duplicate policy paths
 - Historical counts and signed-start/process-gate language are corrected where
   they could misdirect current implementation.
 - XINT-002 artifact/revision boundaries are referenced by exact chunk IDs and
-  are not duplicated. XINT-002-07 becomes a split record: 07A activates packet
-  materialization and the one evidence-binding ActionId for reviewer-finding
-  slots while hard-denying response-slot shapes; 07B changes no availability
-  and extends only the response-slot evaluator after the exact human revision
-  obligation/preparation exists.
-- The XINT-002-07 split is ART-only: packet materialization and evidence binding
-  only. XINT-002-05D remains owner of shared human-review submission
+  are not duplicated. XINT-002-07A activates packet materialization only.
+  Evidence binding remains planned/unavailable; any uploaded reviewer or
+  response artifact requires a separate approved REV-owned intent.
+- The XINT-002-07 boundary is ART-only packet materialization. XINT-002-05D
+  remains owner of shared human-review submission
   preparation/create activation. Human REV action activation remains in the
   XINT-003 waves.
 - Every later activation remains planned and fail closed.

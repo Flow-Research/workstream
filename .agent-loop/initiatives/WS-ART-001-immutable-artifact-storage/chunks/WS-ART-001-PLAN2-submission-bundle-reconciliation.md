@@ -102,9 +102,10 @@ AUTH, task, checker, review, contribution, or delivery behavior.
   contracts and activation sequence;
 - the obsolete multi-step upload-session action plan is not reused blindly:
   AUTH first registers one planned contributor action
-  `artifact.submission_bundle.prepare` mapped to `submission.create`, ART-04A-C
-  then implement one hidden continuous orchestration, and AUTH alone activates
-  that action after exact manifest/guard proof; existing fixed service actions
+  `artifact.submission_bundle.prepare` mapped to `submission.create`; PLAN3
+  supersedes the old ART-04A-C shorthand with 04A1-04B, XINT-002-06A,
+  04C1-04C2, then XINT-002-05A activation after exact manifest/guard proof;
+  existing fixed service actions
   remain distinct for verification, pending-work scanning, put resolution,
   checker materialization, and binding;
 - every implementation successor is PR-sized, names exact allowed/forbidden

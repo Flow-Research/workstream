@@ -10,6 +10,19 @@ guards, surface manifests, and feature tests. AUTH owns ActionId/PermissionId
 catalogues, service identities, fixed matrices, evaluator integration, grants,
 activation custody, and availability.
 
+## 2026-08-02 Reconciliation
+
+XINT-002-01 already registered the one contributor action and removed the six
+obsolete upload-session actions. AUTH-04B has an approved corrected contract,
+but its implementation/activation has not merged; guide binding/read remain
+planned. No ART status may describe that planning merge as runtime activation.
+
+The remaining AUTH order requires one correction before submission work can go
+live: split XINT-06 into `06A` (pre-submit materializer only, after hidden
+ART-04B and before XINT-05A) and `06B` (post-submit materializer plus checker
+output write/binding, after ART-06A/06B). This prevents contributor preparation
+from activating while its mandatory fixed materializer still denies.
+
 ## Guide Source Sequence
 
 1. Existing guide-source actions remain planned and unavailable.
@@ -67,9 +80,7 @@ create generic artifact-download authority.
 
 ## Submission Bundle Sequence
 
-Before ART-04A starts, AUTH must merge a separately reviewed registration
-contract, provisionally named
-`WS-AUTH-001-ART-SUBMISSION-BUNDLE-REGISTRATION`, that:
+XINT-002-01 has already merged the registration contract that:
 
 - registers planned ActionId `artifact.submission_bundle.prepare`;
 - maps it only to existing human PermissionId `submission.create`;
@@ -81,16 +92,17 @@ contract, provisionally named
 - deletes the unused planned multi-step upload authority from the live closed
   catalogue, constraints, and service matrix without compatibility aliases.
 
-After that AUTH contract merges, the retired identifiers may remain only in
+The retired identifiers may remain only in
 immutable historical records and the deterministic deletion proof. They are
 not an active design, grant, route, compatibility alias, or permission to
 implement a second intake path.
 
-ART-04A through 04C then implement one hidden continuous surface and publish
+ART-04A1 through 04C2 then implement one hidden continuous surface and publish
 its exact route/resource/guard manifest. After 04C, a separate reviewed AUTH
 activation contract may integrate the evaluator and change only
 `artifact.submission_bundle.prepare` to active. ART-05 cannot start until that
-activation merges.
+activation merges. Before XINT-05A, XINT-06A must separately activate the fixed
+pre-submit materializer required by the locked-guide checker boundary.
 
 The preparation surface authorizes before scratch intake, but the initial
 decision cannot authorize the later durable mutation. Immediately before

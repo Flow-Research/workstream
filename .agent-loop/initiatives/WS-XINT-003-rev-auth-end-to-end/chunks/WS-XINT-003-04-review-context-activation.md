@@ -1,4 +1,4 @@
-# Chunk Contract: WS-XINT-003-04 — Review Context And Finding Authority Activation
+# Chunk Contract: WS-XINT-003-04 — Review Context Activation
 
 ## Status and risk
 
@@ -7,14 +7,13 @@ on current main before an explicit user request. L1 confidential artifact access
 
 ## Goal
 
-Activate human `review.context.read` and `review.finding_evidence.ingest` against
-the exact lease/packet/finding context. Consume the already-merged XINT-002-07A
-fixed `artifact.review_packet.materialize` and reviewer-finding binding
-capabilities. The ART contract split is completed by WS-XINT-003-01, not here.
+Activate human `review.context.read` against the exact lease/packet context and
+consume XINT-002-07A fixed `artifact.review_packet.materialize`. Reviewer
+note/findings require no artifact upload; evidence actions remain unavailable.
 
 ## Allowed files
 
-Enumerate exact REV context/finding service, AUTH composers/activation parity,
+Enumerate exact REV context service, AUTH composers/activation parity,
 merged XINT-002-07A ART-only manifest, routes, tests, canonical specs, docs, and
 evidence files at current-main start.
 
@@ -30,12 +29,10 @@ artifact authority.
   Submission and canonical immutable packet manifest/bindings.
 - Lease expiry/release/reassignment, actor/link/grant revocation, version drift,
   packet replacement, cross-resource, and wrong service/action deny bytes.
-- Materializer and binding services use separate fixed identities and cannot
-  claim, decide, submit, or inherit reviewer authority.
-- The ART materializer/binder receives only its fixed-service actions. Future
-  07B response evidence requires exact `Review(needs_revision)`, obligation,
-  preparation head/digest, contributor assignment, predecessor, response,
-  deadline, and round; CheckerRun remediation is ineligible.
+- The fixed ART materializer cannot claim, decide, submit, or inherit reviewer
+  authority. Review-evidence binding remains planned/unavailable.
+- Human-review revision uses XINT-002-05D and the normal contributor ZIP path;
+  07B is reserved and CheckerRun remediation remains a distinct context.
 
 ## Verification and reviewers
 

@@ -26,3 +26,12 @@ That rule prevents a merged PR from carrying stale pre-merge prose onto
 `main`. The durable successor order remains in `CHUNK_MAP.md`; this status file
 does not duplicate a transient “next chunk” pointer that becomes stale at
 merge.
+
+## 2026-08-02 Planning Correction
+
+04A is merged and active. 04B production implementation merged in PR #245 at
+`6babf81b`; guide read and binding are active for their fixed services.
+Future chunk 06 must split: 06A activates pre-submit materialization before
+05A, and 06B later activates post-submit materialization plus checker output
+write/binding. Reviewer packet activation is independent; review-evidence
+binding remains planned without approved reviewer-upload intent.

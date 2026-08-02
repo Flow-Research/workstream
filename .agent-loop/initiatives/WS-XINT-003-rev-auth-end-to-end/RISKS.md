@@ -17,5 +17,5 @@
 | Activation precedes hidden feature readiness | Critical | Planned-by-default catalogue and exact merged feature manifest gates. |
 | Historical counts/contracts are treated as current | High | Derive parity from current migrations/catalogue at every chunk start. |
 | One PR becomes unreviewable | High | Narrow activation waves and explicit allowed/not-allowed files per chunk. |
-| One evidence-binding ActionId is activated twice | Critical | 07A alone changes availability; 07B is evaluator-only and requires the exact human obligation/preparation. |
+| Review-evidence binding is activated without an approved v0.1 upload lifecycle | Critical | Keep it planned/unavailable; packet-only 07A proceeds, and any evidence upload requires separate REV-owned intent. |
 | Policy edits mutate active-guide history | Critical | Append-only versions, draft-only final PREP guard, and PostgreSQL update/delete refusal proof in chunk 02. |

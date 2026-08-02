@@ -1,6 +1,8 @@
 # Chunk Contract: WS-ART-001-05 - Submission Bundle Binding Cutover
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04C and exact AUTH activation
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by PLAN3 (`05A`-`05B`)
+
+Historical design input only. This file is not an executable chunk contract.
 
 Artifact contract phase: `submission_cutover`
 

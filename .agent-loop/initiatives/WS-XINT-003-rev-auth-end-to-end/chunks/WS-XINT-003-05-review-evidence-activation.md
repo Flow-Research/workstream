@@ -9,7 +9,8 @@ confidential history access.
 ## Goal
 
 Activate only `review.chain.read` for the exact active lease. Evidence and ART
-binding actions remain owned by XINT-002-07A/07B.
+binding actions remain future/planned/unavailable; 07A supplies packet
+materialization only and 07B is reserved.
 
 ## Allowed files
 

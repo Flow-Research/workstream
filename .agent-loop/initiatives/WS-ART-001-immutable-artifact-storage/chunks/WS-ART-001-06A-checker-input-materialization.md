@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05B
 
 Artifact contract phase: `submission_cutover`
 

@@ -40,7 +40,8 @@ redesign, or gate weakening.
   availability, resource type, service membership, and human/service isolation.
 - Live proof covers guide ingest/use, initial and revision submission, checker
   remediation submission, human-review revision submission, checker input/output,
-  reviewer packet/evidence, recovery, Operator reads/retry, and bounded audit behavior.
+  reviewer packet materialization, recovery, Operator reads/retry, and bounded
+  audit behavior; reviewer evidence binding remains unavailable.
 - Crossed proof covers actor/link/grant/assignment/lease revocation, action
   disablement, stale guide/policy/predecessor/version facts, concurrent consume,
   transaction replacement, evidence/participant/commit failure, timeout, and

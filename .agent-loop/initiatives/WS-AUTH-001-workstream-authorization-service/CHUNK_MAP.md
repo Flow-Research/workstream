@@ -88,11 +88,10 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
-| `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A-C hidden behavior |
-| `WS-AUTH-001-ART-04B` | ART 04B Pre-Submit Materialization Activation | L1 | Feature-gated |
-| `WS-AUTH-001-ART-05` | ART 05 Submission Binding Activation | L1 | Feature-gated |
-| `WS-AUTH-001-ART-06A` | ART 06A Post-Submit Materialization Activation | L1 | Feature-gated |
-| `WS-AUTH-001-ART-06B` | ART 06B Checker Output Action Activation | L1 | Feature-gated |
+| `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | After hidden ART-04B; before 05A |
+| `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A1-04C2 hidden behavior and 06A |
+| `WS-XINT-002-05B` | Submission Binding Activation | L1 | Feature-gated on hidden ART-05A |
+| `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on ART-06A/06B |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-07` | REV 07 Context Chain And Finding Evidence Activation | L1 | Feature/ART-gated |
@@ -101,8 +100,8 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-REV-11` | REV 11 Recovery And Reconciliation Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-12` | REV 12 Artifact Reconciliation And Projection Activation | L1 | Feature/service-gated |
 | Historical alias `WS-AUTH-001-REV-LIFECYCLE` | Superseded by `WS-XINT-003-08A` and `WS-XINT-003-08B` activation | L1 | Not executable; use canonical XINT-003 custody |
-| `WS-XINT-002-07A` (runtime owner `WS-XINT-002-07`) | Review Packet And Finding Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART finding evidence behavior |
-| `WS-XINT-002-07B` (runtime owner `WS-XINT-002-07`) | Response Evidence Binding Evaluator Extension (no availability change) | L1 | 07A plus exact human revision obligation/preparation |
+| `WS-XINT-002-07A` (runtime owner `WS-XINT-002-07`) | Review Packet Materialization Activation Only | L1 | Feature-gated on exact REV lease/version and ART packet behavior |
+| `WS-XINT-002-07B` (runtime owner `WS-XINT-002-07`) | Reserved future review-evidence binding | L1 | Not approved for v0.1 |
 
 ## Dependency order
 

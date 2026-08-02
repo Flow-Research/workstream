@@ -1,5 +1,20 @@
 # Status: WS-ART-001 Immutable Artifact Storage
 
+## Audited Durable State At 2026-08-02
+
+ART-03A and every split ART-03B chunk through 03B4 are merged. The complete
+verified guide binding, materialization, classification, extraction, and hidden
+same-generation sufficiency continuation exist on `main`.
+
+AUTH-04B production implementation merged in PR #245 at `6babf81b`. The fixed
+guide binding and guide-reader services are live, and
+`artifact.guide_source.binding.create` plus `artifact.guide_source.read` are
+active under `XINT_002_04B`. ART-03C's dependency is satisfied.
+
+`WS-ART-001-PLAN3` is the planning-only end-to-end audit of remaining v0.1
+work. It splits oversized chunks, repairs activation order, and adds explicit
+reviewer/contribution custody handoffs. It starts no implementation.
+
 ## Completed Foundation
 
 Planning and the artifact foundation merged through PR #97 and PR #101. The
@@ -58,11 +73,11 @@ the guide-content boundary is being corrected explicitly: verified binding,
 full-read materialization, format classification, isolated extraction,
 canonical extraction provenance, incremental complex-format support, and
 same-generation sufficiency continuation are separate PR-sized contracts.
-`WS-ART-001-03B4` is active: its reviewed contract fixes the artifact-owned
+`WS-ART-001-03B4` is merged: its reviewed contract fixes the artifact-owned
 material port, all-items-required semantics, deterministic 12 MiB assembly,
 normalized report-to-extraction provenance, and the hidden pre-submit
-identifier/generation continuation. AUTH binding/read actions remain planned
-and unavailable; ART-03C remains blocked on AUTH-04B.
+identifier/generation continuation. AUTH binding/read production activation
+remains unmerged; ART-03C remains blocked on that implementation.
 
 After 03B3A merged, the original complex-format chunk was found too broad for
 one dependency and parser-security review. It is replaced by 03B3B1 dependency
@@ -76,6 +91,7 @@ package, lock, runtime import, or parser behavior change. Its approval gate
 requires independent protected GitHub review of the exact final PR head before
 merge; repository-authored evidence alone is not authority.
 
+03B1 merged through PR #222, 03B2 through PR #223, and 03B3A through PR #225.
 03B3B2 is merged through PR #231. It installs only the approved `pypdf` wheel
 and adds bounded passive-PDF text extraction inside the existing isolated
 child.
@@ -86,9 +102,9 @@ wheel and adds the shared bounded OPC/OOXML container security capability.
 omission facts on the shared OOXML boundary. 03B3B3C merged through PR #235 and
 adds bounded PPTX slide/notes extraction. 03B3B3D merged through PR #238 and
 adds bounded XLSX cell extraction. 03B3B4 merged through PR #239 and adds only
-bounded PNG/JPEG/WebP structural metadata. 03B4 is now the active hidden
-same-generation sufficiency continuation. AUTH binding/read actions remain
-inactive.
+bounded PNG/JPEG/WebP structural metadata. 03B4 merged through PR #240 and adds
+the hidden same-generation sufficiency continuation. AUTH binding/read actions
+remain planned.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the

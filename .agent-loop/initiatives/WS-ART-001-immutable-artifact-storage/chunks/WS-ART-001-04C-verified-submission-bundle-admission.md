@@ -1,6 +1,8 @@
 # Chunk Contract: WS-ART-001-04C - Verified Submission Bundle Admission
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04B
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by PLAN3 (`04C1`-`04C2`)
+
+Historical design input only. This file is not an executable chunk contract.
 
 Artifact contract phase: `upload_admission`
 

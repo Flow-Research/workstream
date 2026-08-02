@@ -1,4 +1,8 @@
-# Chunk Contract: WS-XINT-002-06 Checker Authorization Activation
+# Chunk Contract: WS-XINT-002-06 — Checker Authorization Activation (Superseded)
+
+Status: Superseded by `WS-XINT-002-06A` and `WS-XINT-002-06B`. The original
+contract could activate contributor preparation before its mandatory
+pre-submit materializer and combined two independently reviewable boundaries.
 
 ## Goal
 

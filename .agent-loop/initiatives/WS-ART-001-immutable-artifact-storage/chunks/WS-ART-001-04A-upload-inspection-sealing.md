@@ -1,6 +1,8 @@
 # Chunk Contract: WS-ART-001-04A - One-ZIP Scratch Intake And Manifest
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03C and AUTH planned registration
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by PLAN3 (`04A1`-`04A3`)
+
+Historical design input only. This file is not an executable chunk contract.
 
 Artifact contract phase: `upload_admission`
 
