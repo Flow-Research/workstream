@@ -47,8 +47,10 @@
 
 ## Verification
 
-- Exact corrective commit and hosted-run identifiers are recorded in the
-  internal review after the corrective commit and exact-head GitHub run exist.
+- Corrective implementation commit
+  `d3917e0b4cf30cba5b840cce2d76de39fd09ae68` and exact local commands are
+  recorded in the internal review. Hosted-run identifiers remain pending the
+  evidence-only follow-up commit and exact-head GitHub run.
 - Local Ruff, focused AUTH/audit/architecture tests, stale authorization docs,
   stale artifact contracts, Markdown links, and `git diff --check` pass.
 - Database-backed guide tests and repository-wide coverage remain assigned to

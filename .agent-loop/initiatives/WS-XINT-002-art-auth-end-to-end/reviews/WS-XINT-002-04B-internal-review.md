@@ -40,14 +40,19 @@ full coverage and database-backed guide tests on the exact PR head.
 
 ## Verification evidence
 
-Reviewed implementation commit: pending the CodeRabbit corrective commit.
+Reviewed implementation commit:
+`d3917e0b4cf30cba5b840cce2d76de39fd09ae68`.
 
-- Ruff over `backend/app`, `backend/tests`, and `backend/scripts`: passed.
-- Artifact architecture tests: 20 passed.
-- Focused AUTH catalogue, custody, fixed-service, exact-fact, human-denial,
-  replay, and evidence tests: passed.
-- Stale AUTH docs, stale ART contracts, Markdown links, and `git diff --check`:
+- `cd backend && .venv/bin/ruff check app tests scripts`: passed.
+- `cd backend && .venv/bin/pytest -q tests/test_audit.py
+  tests/test_authorization.py -k 'action_aware_audit_input or guide_service or
+  fixed_service_context or human_authority_cannot'`: 8 passed, 408 deselected.
+- `cd backend && .venv/bin/pytest -q tests/test_artifact_architecture.py`: 20
   passed.
+- `python3 scripts/check_stale_authorization_docs.py`: passed.
+- `python3 scripts/check_stale_artifact_contracts.py`: passed.
+- `python3 scripts/check_markdown_links.py`: passed.
+- `git diff --check`: passed.
 - Database-backed guide binding/materialization and full coverage remain assigned
   to hosted `Backend / test` because this local venv lacks Pillow and the local
   shell has no `WORKSTREAM_TEST_DATABASE_URL`.
