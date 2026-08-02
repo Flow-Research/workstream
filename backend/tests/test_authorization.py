@@ -61,6 +61,16 @@ from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIde
 from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
 from app.modules.authorization import router as authorization_router
+import app.modules.artifacts.authorization as artifact_authorization
+from app.modules.artifacts.authorization import (
+    PreparedGuideSourceBindingAuthorization,
+    PreparedGuideSourceReadAuthorization,
+)
+from app.modules.artifacts.schemas import (
+    ArtifactAuthorityDeniedError,
+    GuideSourceBindingAuthorityFacts,
+    GuideSourceReadAuthorityFacts,
+)
 from app.modules.authorization.admin_schemas import AdminRoleGrantRevokeBody
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
@@ -174,6 +184,8 @@ from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
     ActorStatus,
     ArtifactVerificationJobResourceContext,
+    GuideSourceBindingResourceContext,
+    GuideSourceReadResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -1598,13 +1610,13 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
     "artifact.guide_source.read": (
         "artifact.guide_source.read",
-        "WS-AUTH-001-ART-03",
-        "planned",
+        "WS-XINT-002-04B",
+        "active",
     ),
     "artifact.guide_source.binding.create": (
         "artifact.binding.create",
-        "WS-AUTH-001-ART-03",
-        "planned",
+        "WS-XINT-002-04B",
+        "active",
     ),
     "artifact.submission_bundle.prepare": (
         "submission.create",
@@ -1958,6 +1970,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1990,7 +2004,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         for owner in {
             ActionOwner.AUTH_ART_02D_OPERATOR,
             ActionOwner.AUTH_ART_02D_INTERNAL,
-            ActionOwner.AUTH_ART_03,
+            ActionOwner.XINT_002_04B,
             ActionOwner.AUTH_ART_04B,
             ActionOwner.AUTH_ART_05,
             ActionOwner.AUTH_ART_06A,
@@ -2002,7 +2016,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     } == {
         ActionOwner.AUTH_ART_02D_OPERATOR: 8,
         ActionOwner.AUTH_ART_02D_INTERNAL: 3,
-        ActionOwner.AUTH_ART_03: 2,
+        ActionOwner.XINT_002_04B: 2,
         ActionOwner.AUTH_ART_04B: 1,
         ActionOwner.AUTH_ART_05: 1,
         ActionOwner.AUTH_ART_06A: 1,
@@ -2044,14 +2058,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 41
+        == 43
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 55
+        == 53
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2516,6 +2530,8 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
     }
     assert {
         action
@@ -2540,6 +2556,7 @@ def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str
             "| AUTH activation custodian | Exact planned ActionIds |",
             "| AUTH activation custodian | Exact ActionIds and current availability |",
             "| AUTH activation chunk | Exact planned ActionIds |",
+            "| AUTH activation chunk | Exact ActionIds and current availability |",
         }:
             continue
         parsed: dict[str, str] = {}
@@ -2575,7 +2592,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     expected_owner_counts = {
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
-        "WS-AUTH-001-ART-03": 2,
+        "WS-XINT-002-04B": 2,
         "WS-XINT-002-04A": 1,
         "WS-XINT-002-05A": 1,
         "WS-AUTH-001-ART-04B": 1,
@@ -2621,7 +2638,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 96 ActionIds, 37 active actions, and\n59 planned actions" in operations
+        "71 PermissionIds, 96 ActionIds, 43 active actions, and\n53 planned actions" in operations
     )
 
 
@@ -2717,7 +2734,7 @@ def test_fixed_service_action_matrix_rejects_metadata_drift(
     if metadata == "permission":
         changed = replace(definition, permission_id=PermissionId.ARTIFACT_PENDING_WORK_SCAN)
     elif metadata == "owner":
-        changed = replace(definition, owner=ActionOwner.AUTH_ART_03)
+        changed = replace(definition, owner=ActionOwner.AUTH_ART_05)
     else:
         changed = replace(definition, availability=ActionAvailability.PLANNED)
     action_index = dict(ACTION_BY_ID)
@@ -5130,6 +5147,391 @@ async def test_prepared_fixed_service_rejects_generic_scope_before_actor_lock():
         )
     assert exc_info.value.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
     assert facts.calls == 0
+    assert evidence.events == []
+
+
+@pytest.mark.parametrize(
+    ("action_id", "service_identity", "resource_type"),
+    [
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+            ServiceIdentity.ARTIFACT_BINDING,
+            "guide_source_binding",
+        ),
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            ServiceIdentity.ARTIFACT_GUIDE_READER,
+            "guide_source_read",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_prepared_guide_service_authority_is_exact_and_single_use(
+    action_id: ActionId,
+    service_identity: ServiceIdentity,
+    resource_type: str,
+) -> None:
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=service_identity,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+    session = _PreparedTestSession()
+
+    class LockedServiceFacts:
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind="service",
+                    status="active",
+                    service_identity=service_identity.value,
+                ),
+            )
+
+    facts = LockedServiceFacts()
+
+    async def revalidate(current: ServiceAuthorizationContext, _action: ActionId):
+        return current
+
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=facts,
+        revalidate_service=revalidate,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,
+    )
+    project_id = uuid4()
+    guide_id = uuid4()
+    snapshot_id = uuid4()
+    item_id = uuid4()
+    setup_run_id = uuid4()
+    content_id = uuid4()
+    replica_id = uuid4()
+    if resource_type == "guide_source_binding":
+        resource = GuideSourceBindingResourceContext(
+            resource_type="guide_source_binding",
+            resource_id=item_id,
+            project_id=project_id,
+            guide_id=guide_id,
+            guide_source_snapshot_id=snapshot_id,
+            guide_source_item_id=item_id,
+            project_setup_run_id=setup_run_id,
+            setup_generation=1,
+            content_id=content_id,
+            verified_replica_id=replica_id,
+            sha256="sha256:" + "1" * 64,
+            byte_count=10,
+            logical_role="guide_source_original",
+        )
+    else:
+        binding_id = uuid4()
+        resource = GuideSourceReadResourceContext(
+            resource_type="guide_source_read",
+            resource_id=binding_id,
+            project_id=project_id,
+            guide_id=guide_id,
+            guide_source_snapshot_id=snapshot_id,
+            guide_source_item_id=item_id,
+            project_setup_run_id=setup_run_id,
+            setup_generation=1,
+            binding_id=binding_id,
+            content_id=content_id,
+            verified_replica_id=replica_id,
+            storage_namespace_id="guide-source",
+            namespace_fingerprint="sha256:" + "2" * 64,
+            verification_receipt_id=uuid4(),
+            verification_generation=1,
+            sha256="sha256:" + "1" * 64,
+            byte_count=10,
+            media_type="application/pdf",
+        )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+    )
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+        artifact_resource_type=resource_type,
+        artifact_resource_id=resource.resource_id,
+    )
+    handle = await prepared.prepare(action_id, caller_input, scope)
+    wrong_resource_id = uuid4()
+    selector_update = {"resource_id": wrong_resource_id}
+    if isinstance(resource, GuideSourceBindingResourceContext):
+        selector_update["guide_source_item_id"] = wrong_resource_id
+    else:
+        selector_update["binding_id"] = wrong_resource_id
+    mismatched = resource.model_copy(update=selector_update)
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(handle, action_id, caller_input, mismatched)
+    assert evidence.events == []
+
+    decision = await prepared.consume(handle, action_id, caller_input, resource)
+    assert decision.allowed is True
+    assert decision.resource_context_digest == authorization_resource_digest(resource)
+    assert len(evidence.events) == 1
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(handle, action_id, caller_input, resource)
+
+
+@pytest.mark.parametrize("authority_kind", ["binding", "read"])
+@pytest.mark.asyncio
+async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_replay(
+    authority_kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _PreparedTestSession()
+    service_identity = (
+        ServiceIdentity.ARTIFACT_BINDING
+        if authority_kind == "binding"
+        else ServiceIdentity.ARTIFACT_GUIDE_READER
+    )
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=service_identity,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+
+    async def fixed_context(*_args):
+        return context
+
+    class FakePrepared:
+        consumed = 0
+
+        def __init__(self, *_args) -> None:
+            self.handle = object.__new__(PreparedAuthorizationHandle)
+
+        async def prepare(self, *_args):
+            return self.handle
+
+        async def consume(self, handle, *_args):
+            assert handle is self.handle
+            self.consumed += 1
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(artifact_authorization, "_fixed_service_context", fixed_context)
+    monkeypatch.setattr(artifact_authorization, "PreparedAuthorizationService", FakePrepared)
+
+    common = {
+        "project_id": uuid4(),
+        "guide_id": uuid4(),
+        "guide_source_snapshot_id": uuid4(),
+        "guide_source_item_id": uuid4(),
+        "project_setup_run_id": uuid4(),
+        "setup_generation": 1,
+        "content_id": uuid4(),
+        "verified_replica_id": uuid4(),
+        "sha256": "sha256:" + "1" * 64,
+        "byte_count": 10,
+    }
+    if authority_kind == "binding":
+        facts = GuideSourceBindingAuthorityFacts(
+            **common,
+            logical_role="guide_source_original",
+        )
+        authority = PreparedGuideSourceBindingAuthorization(
+            session,  # type: ignore[arg-type]
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+    else:
+        facts = GuideSourceReadAuthorityFacts(
+            **common,
+            binding_id=uuid4(),
+            storage_namespace_id="guide-source",
+            namespace_fingerprint="sha256:" + "2" * 64,
+            verification_receipt_id=uuid4(),
+            verification_generation=1,
+            media_type="application/pdf",
+        )
+        authority = PreparedGuideSourceReadAuthorization(
+            session,  # type: ignore[arg-type]
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+    handle = await authority.prepare(facts=facts, idempotency_key=uuid4())
+    with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+        await authority.consume(
+            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+            facts=facts,
+        )
+
+    for field_name in facts.__dataclass_fields__:
+        original = getattr(facts, field_name)
+        if isinstance(original, UUID):
+            changed = uuid4()
+        elif isinstance(original, int):
+            changed = original + 1
+        else:
+            changed = f"changed-{original}"
+        with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+            await authority.consume(
+                prepared_authorization=handle,
+                facts=replace(facts, **{field_name: changed}),
+            )
+
+    await authority.consume(prepared_authorization=handle, facts=facts)
+    with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+        await authority.consume(prepared_authorization=handle, facts=facts)
+
+
+@pytest.mark.asyncio
+async def test_fixed_service_context_rejects_mismatched_loaded_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MismatchedActorRepository:
+        def __init__(self, _session) -> None:
+            pass
+
+        async def get_service_actor(self, _service_identity: str):
+            return SimpleNamespace(
+                id=str(uuid4()),
+                service_identity=ServiceIdentity.ARTIFACT_GUIDE_READER.value,
+            )
+
+    monkeypatch.setattr(
+        artifact_authorization,
+        "ActorRepository",
+        MismatchedActorRepository,
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="principal is unavailable"):
+        await artifact_authorization._fixed_service_context(
+            _PreparedTestSession(),  # type: ignore[arg-type]
+            ServiceIdentity.ARTIFACT_BINDING,
+            uuid4(),
+            uuid4(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("action_id", "resource_type", "wrong_identity"),
+    [
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+            "guide_source_binding",
+            ServiceIdentity.ARTIFACT_GUIDE_READER,
+        ),
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            "guide_source_read",
+            ServiceIdentity.ARTIFACT_BINDING,
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_prepared_guide_actions_deny_wrong_fixed_service_before_actor_lock(
+    action_id: ActionId,
+    resource_type: str,
+    wrong_identity: ServiceIdentity,
+) -> None:
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=wrong_identity,
+    )
+    session = _PreparedTestSession()
+
+    class NoActorLock:
+        calls = 0
+
+        async def lock_request_actor(self, *_args):
+            self.calls += 1
+            raise AssertionError("wrong service must deny before actor locking")
+
+    repository = NoActorLock()
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=repository,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        repository,  # type: ignore[arg-type]
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
+        await prepared.prepare(
+            action_id,
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+                artifact_resource_type=resource_type,
+                artifact_resource_id=uuid4(),
+            ),
+        )
+    assert exc_info.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    assert repository.calls == 0
+    assert evidence.events == []
+
+
+@pytest.mark.parametrize(
+    ("action_id", "resource_type"),
+    [
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+            "guide_source_binding",
+        ),
+        (
+            ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            "guide_source_read",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_human_authority_cannot_substitute_for_fixed_guide_services(
+    action_id: ActionId,
+    resource_type: str,
+) -> None:
+    context = _runtime_context()
+    session = _PreparedTestSession()
+
+    class NoHumanGrantLookup:
+        grant_calls = 0
+
+        async def find_effective_grant(self, *_args, **_kwargs):
+            self.grant_calls += 1
+            return SimpleNamespace(id=str(uuid4()), status="active")
+
+    repository = NoHumanGrantLookup()
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=repository,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        repository,  # type: ignore[arg-type]
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
+        await prepared.prepare(
+            action_id,
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+                artifact_resource_type=resource_type,
+                artifact_resource_id=uuid4(),
+            ),
+        )
+    assert exc_info.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    assert repository.grant_calls == 0
     assert evidence.events == []
 
 

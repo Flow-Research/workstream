@@ -110,6 +110,8 @@ class PreparedAuthorityScope(BaseModel):
             "artifact_put_attempt",
             "artifact_verification_job",
             "artifact_pending_work",
+            "guide_source_binding",
+            "guide_source_read",
         ]
         | None
     ) = None
@@ -164,7 +166,12 @@ class PreparedAuthorityScope(BaseModel):
                     )
                     or (
                         self.artifact_resource_type
-                        in {"artifact_put_attempt", "artifact_verification_job"}
+                        in {
+                            "artifact_put_attempt",
+                            "artifact_verification_job",
+                            "guide_source_binding",
+                            "guide_source_read",
+                        }
                         and isinstance(self.artifact_resource_id, UUID)
                     )
                 )
@@ -1214,6 +1221,63 @@ class ArtifactPendingWorkResourceContext(BaseModel):
         return self
 
 
+class GuideSourceBindingResourceContext(BaseModel):
+    """Exact verified guide-source lineage authorized for one binding write."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["guide_source_binding"]
+    resource_id: UUID
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int = Field(gt=0)
+    content_id: UUID
+    verified_replica_id: UUID
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    byte_count: int = Field(ge=0)
+    logical_role: Literal["guide_source_original"]
+
+    @model_validator(mode="after")
+    def bind_source_item(self):
+        """Use the exact source item as the prepared resource selector."""
+        if self.resource_id != self.guide_source_item_id:
+            raise ValueError("guide binding resource must match source item")
+        return self
+
+
+class GuideSourceReadResourceContext(BaseModel):
+    """Exact verified binding and replica facts authorized for one provider read."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["guide_source_read"]
+    resource_id: UUID
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int = Field(gt=0)
+    binding_id: UUID
+    content_id: UUID
+    verified_replica_id: UUID
+    storage_namespace_id: str = Field(min_length=1, max_length=255)
+    namespace_fingerprint: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    verification_receipt_id: UUID
+    verification_generation: int = Field(ge=0)
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    byte_count: int = Field(ge=0)
+    media_type: str = Field(min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def bind_artifact_binding(self):
+        """Use the exact immutable binding as the prepared resource selector."""
+        if self.resource_id != self.binding_id:
+            raise ValueError("guide read resource must match binding")
+        return self
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ProjectReadResourceContext
@@ -1253,6 +1317,8 @@ AuthorizationResourceContext = (
     | ArtifactPutAttemptResourceContext
     | ArtifactVerificationJobResourceContext
     | ArtifactPendingWorkResourceContext
+    | GuideSourceBindingResourceContext
+    | GuideSourceReadResourceContext
 )
 
 
@@ -1334,6 +1400,8 @@ class AuthorizationDecision(BaseModel):
         "artifact_put_attempt",
         "artifact_verification_job",
         "artifact_pending_work",
+        "guide_source_binding",
+        "guide_source_read",
     ]
     resource_id: (
         UUID

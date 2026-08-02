@@ -6,7 +6,7 @@ waves are superseded prospectively by
 trusted pre-reconciliation entry evidence; at its merge, WS-XINT-002-01
 replaced them with the then-live 71/78/22/56 catalogue recorded in the ART
 custody section without changing runtime availability. Subsequent AUTH chunks
-have advanced the current catalogue to 71/96/37/59.
+have advanced the current catalogue to 71/96/43/53.
 The pre-reconciliation baseline is trusted `main` commit
 `2fb322bd2249a5fe9d3fa706dc63f033074e38ce`: 76 PermissionIds, 81 ActionIds,
 22 active actions, and 59 planned actions. Older counts below are explicitly
@@ -38,18 +38,18 @@ mappings, and availability must remain identical.
 
 ## ART custody transfer
 
-| AUTH activation chunk | Exact planned ActionIds |
+| AUTH activation chunk | Exact ActionIds and current availability |
 |---|---|
-| `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
-| `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
-| `WS-AUTH-001-ART-03` | `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
-| `WS-XINT-002-04A` | `artifact.guide_source.ingest` |
-| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
-| `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
-| `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+| `WS-AUTH-001-ART-02D-INTERNAL` | Active: `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
+| `WS-AUTH-001-ART-02D-OPERATOR` | Planned: `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
+| `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
+| `WS-XINT-002-05A` | Planned: `artifact.submission_bundle.prepare` |
+| `WS-AUTH-001-ART-04B` | Planned: `artifact.pre_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-05` | Planned: `artifact.submission.binding.create` |
+| `WS-AUTH-001-ART-06A` | Planned: `artifact.post_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-06B` | Planned: `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+| `WS-XINT-002-07` | Planned: `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
 
 Runtime owner `WS-XINT-002-07` contains two planning sub-waves: 07A is the
 only availability transition and initially permits finding slots; 07B changes
@@ -60,14 +60,15 @@ reconciles the live catalogue by removing the six unused multi-step upload rows
 and registering three end-to-end bundle/review rows. The resulting 22 rows have
 exact owner cardinalities `3/8/2/1/1/1/1/1/2/2` in the table order above. The
 `OPERATOR` suffix denotes only future activation custody; it grants no Operator
-entitlement. Eighteen actions remain planned after the three fixed-service ART
-actions and `artifact.guide_source.ingest` activate. The independently
+entitlement. Sixteen actions remain planned after the three ART foundation
+service actions, `artifact.guide_source.ingest`, and the two fixed-service
+guide binding/read actions activate. The independently
 gated `artifact.verification_job.retry`
 remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`; the live catalogue has
-71 PermissionIds, 96 ActionIds, 37 active actions, and 59 planned actions, with
+71 PermissionIds, 96 ActionIds, 43 active actions, and 53 planned actions, with
 eight fixed-service identities and sixteen matrix memberships.
 
 ## REV custody transfer
