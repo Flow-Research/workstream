@@ -117,3 +117,31 @@
   fencing proof is spread across artifact admission, verification, and recovery
   suites, so the corrected contract names the actual tests and permits a new
   focused activation test module rather than assuming a pre-existing file.
+
+## WS-XINT-002-04B preimplementation reconciliation
+
+- Trusted `main` at `9618b938c213a98e33772c04185a6e5d6b8c35f8`
+  contains the complete hidden ART-03B1 through ART-03B4 guide binding,
+  verified materialization, classification, extraction, and sufficiency
+  pipeline required by the 04B entry gate.
+- `artifact.guide_source.binding.create` and `artifact.guide_source.read`
+  already exist in the closed catalogue with their correct permissions and
+  fixed service-matrix memberships, but both remain `planned` and retain the
+  historical `WS-AUTH-001-ART-03` owner. This is the observed preimplementation
+  state; the reviewed 04B acceptance criteria require replacing that owner with
+  `WS-XINT-002-04B` when the two actions activate.
+- `GuideSourceBindingAuthorityFacts` and `GuideSourceReadAuthorityFacts`
+  already carry the exact reviewed ART resource manifests. The feature
+  services lock and validate canonical ART/project lineage before calling
+  their authorization seams.
+- Production binding and read seams remain intentionally fail-closed through
+  `DenyGuideSourceBindingPreparedAuthorization` and
+  `DenyGuideSourceReadPreparedAuthorization`. Existing tests use test-only
+  allow adapters; no production 04B adapter is composed yet.
+- The shared `PreparedAuthorizationHandle` and fixed-service PREP kernel must
+  be extended, not replaced. The implementation must activate only the two
+  guide actions, preserve process-local single-use handles, and keep all
+  Celery messages identifier-only.
+- ART-03C remains blocked until 04B merges. XINT-003 policy mutation work is
+  independent but is not the immediate cross-initiative dependency while ART
+  is waiting for guide binding/read activation.

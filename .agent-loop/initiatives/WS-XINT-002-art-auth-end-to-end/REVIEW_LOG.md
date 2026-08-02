@@ -36,3 +36,15 @@ claim/terminal capability consumption, terminal-only authority drift, and the
 accurate active custody-table header. The isolated four-test PostgreSQL rerun
 and QA, test-delta, and CI-integrity re-reviews passed. Details are in
 `reviews/WS-XINT-002-03-external-review-response.md`.
+
+## WS-XINT-002-04B planning amendment
+
+Preimplementation security, architecture, and QA review rejected the original
+04B contract until it enumerated the exact guide binding/read manifests, closed
+PREP resource contexts, fixed-service mismatch proof, no-I/O ordering, and the
+ART-03C composition boundary. All three tracks passed after correction.
+
+PR #243 external review found one shell-invalid database placeholder and Agent
+Gates found two unqualified background-executor terms. Both were valid and corrected without
+changing the authorization boundary. The exact response is recorded in
+`reviews/WS-XINT-002-04B-external-review-response.md`.
