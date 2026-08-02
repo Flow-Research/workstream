@@ -132,9 +132,10 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
     config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("script_location", str(project_root / "alembic"))
     with migration_lock():
-        await asyncio.to_thread(command.downgrade, config, "0045_guide_metadata_authority")
-        engine = create_async_engine(isolated_database_env)
+        engine = None
         try:
+            await asyncio.to_thread(command.downgrade, config, "0045_guide_metadata_authority")
+            engine = create_async_engine(isolated_database_env)
             async with engine.connect() as connection:
                 absent = await connection.scalar(
                     text("select to_regclass('guide_sufficiency_report_source_usages')")
@@ -180,7 +181,8 @@ async def test_guide_sufficiency_provenance_migration_round_trip(
             assert "error_artifact_incident_id" in setup_columns
         finally:
             await asyncio.to_thread(command.upgrade, config, "head")
-            await engine.dispose()
+            if engine is not None:
+                await engine.dispose()
 
 
 @pytest.mark.asyncio

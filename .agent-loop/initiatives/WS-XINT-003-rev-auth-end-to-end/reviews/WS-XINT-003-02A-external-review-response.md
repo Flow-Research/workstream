@@ -15,6 +15,9 @@
 - CodeRabbit's test-helper duplication finding was valid. One merged semantics
   mapping now feeds both digest validation and persistence, preventing duplicate
   keyword failure and digest/row drift.
+- CodeRabbit's post-merge migration-test cleanup finding was valid. The initial
+  downgrade now runs inside the protected cleanup block, and engine disposal is
+  guarded so a partial downgrade failure still attempts restoration to head.
 
 ## Comments deferred
 
@@ -35,6 +38,5 @@ None beyond the repository-required human merge decision.
 
 ## Remaining risks
 
-CodeRabbit rate-limited incremental reviews after its complete first-head
-review. Exact-head Agent Gates and Backend must remain green; the external
+Exact-head Agent Gates, Backend, and CodeRabbit must remain green; the external
 comments are verified against and resolved in the current diff.

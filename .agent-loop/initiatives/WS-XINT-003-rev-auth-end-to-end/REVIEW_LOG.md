@@ -77,6 +77,7 @@ final evidence is in `reviews/WS-XINT-003-02A-internal-review.md`.
 
 CodeRabbit's PR #242 review found missing ORM identity-shape metadata, overly
 broad joined row locks, invalid active-guide fixture ordering, and a duplicated
-test semantics mapping. All were valid and corrected. Incremental CodeRabbit
-attempts were then rate-limited; the exact response is in
+test semantics mapping. Its post-main-merge review also found that the guide
+sufficiency migration test did not protect cleanup when the initial downgrade
+failed. All findings were valid and corrected; the exact response is in
 `reviews/WS-XINT-003-02A-external-review-response.md`.
