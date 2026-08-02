@@ -40,9 +40,11 @@ full coverage and database-backed guide tests on the exact PR head.
 
 ## Verification evidence
 
-Reviewed implementation commit:
-`8c48c01e137f861210bccfbc6bfaa91f13b0a354`. The following commit changes
-review evidence only; hosted checks must pass on that final evidence head too.
+Reviewed implementation commits:
+`8c48c01e137f861210bccfbc6bfaa91f13b0a354` for the CodeRabbit correction and
+`8b468881` for the behavior-preserving kernel coverage repair. The following
+commit changes review evidence only; hosted checks must pass on that final
+evidence head too.
 
 - `cd backend && .venv/bin/ruff check app tests scripts`: passed.
 - `cd backend && .venv/bin/pytest -q tests/test_audit.py
@@ -74,8 +76,17 @@ review evidence only; hosted checks must pass on that final evidence head too.
 - Reuse/dedup: pass after consolidating the two guide action maps.
 - Test delta: pass after adding scratch-cleanup and unchanged-incident-count
   assertions to the incident-write failure case.
+- Security and QA re-reviewed `8b468881`: its consolidated terminal denial
+  preserves `permission_not_granted` for known ART-internal actions and
+  `action_unavailable` for other unsupported actions, without creating an allow
+  path. Ruff and 15 focused behavior tests pass.
 
 ## Readiness dependency
 
 Planning/scope PR #244 is merged and the runtime branch is rebased onto current
 `main`. Hosted exact-head checks remain required before merge readiness.
+Run `30749925248` proved all 2,841 semantic nodes but found
+`authorization/kernel.py` at 89.93% against the unchanged 90% per-file gate.
+The `8b468881` repair restores the kernel to its prior 584 executable statements
+without exclusions or threshold changes; a fresh exact-head hosted run is
+required.

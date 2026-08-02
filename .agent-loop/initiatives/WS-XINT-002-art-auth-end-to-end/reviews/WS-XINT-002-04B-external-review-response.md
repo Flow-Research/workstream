@@ -47,16 +47,20 @@
 
 ## Verification
 
-- Reviewed implementation commit
-  `8c48c01e137f861210bccfbc6bfaa91f13b0a354` and exact local commands are
-  recorded in the internal review. The subsequent commit changes review
-  evidence only. Hosted-run identifiers remain pending its exact-head GitHub
-  run.
+- Reviewed implementation commits
+  `8c48c01e137f861210bccfbc6bfaa91f13b0a354` and `8b468881`, with exact local
+  commands, are recorded in the internal review. The subsequent commit changes
+  review evidence only.
 - Local Ruff, focused AUTH/audit/architecture tests, stale authorization docs,
   stale artifact contracts, Markdown links, and `git diff --check` pass.
 - Database-backed guide tests and repository-wide coverage remain assigned to
   hosted `Backend / test` because this shell has no
   `WORKSTREAM_TEST_DATABASE_URL`.
+- Hosted run `30749925248` passed all 2,841 semantic nodes and failed only the
+  unchanged 90% per-file kernel gate at 89.93%. Commit `8b468881` consolidates
+  equivalent terminal denial branches, restoring the prior kernel statement
+  count without exclusions, ignored lines, or threshold changes. Its successor
+  exact-head run remains required.
 
 ## Remaining risk
 

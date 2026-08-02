@@ -65,6 +65,10 @@ Admin authority implies binding/read service authority.
 - Stale AUTH docs, stale ART contracts, Markdown links, and diff check: passed.
 - Hosted full Backend coverage and database-backed guide tests: required on the
   exact PR head.
+- Hosted run `30749925248` passed all 2,841 semantic nodes, then found the kernel
+  at 89.93% against the unchanged 90% per-file gate. The narrow follow-up
+  preserves denial behavior while restoring the pre-chunk executable-statement
+  count; exact-head hosted proof is pending.
 
 ## CI integrity
 
