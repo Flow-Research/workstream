@@ -1,5 +1,9 @@
 # 30-Day Master Plan
 
+> Historical planning record. This calendar no longer controls current work or
+> status. Use [Current v0.1 Status](roadmap_status.md) and the
+> [Historical Planning Index](historical_planning.md).
+
 ## Review Lifecycle Status
 
 The schedule is planning guidance, not a claim that review/revision routes are

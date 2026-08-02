@@ -214,7 +214,7 @@ create adjudication state, overturn a Review, or mutate immutable history.
 
 ## Non-Mutating Quality Sampling
 
-During the first 30 days, audit at least:
+For v0.1 operations, audit at least:
 
 - 25 percent of accepted submissions
 - 25 percent of rejected submissions

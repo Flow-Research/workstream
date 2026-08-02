@@ -1,5 +1,8 @@
 # Chunk 6: Checker Contract And Records
 
+> Historical implementation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 Chunk 6 creates the durable checker run and checker result contract for Week 2.

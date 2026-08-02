@@ -11,7 +11,11 @@ the REV-13 joint release complete. `docs/spec_review_lifecycle.md` is normative.
 
 The architecture stays modular enough to support different project types without becoming abstract to the point that no project can use it.
 
-The visual architecture pack lives in [Architecture Diagrams](diagrams/README.md). It separates the 30-day v0.1 implementation from later adapter boundaries such as ERC-8004 agent identity and reputation, ERC-8183 task contract and escrow, x402 payment requests, OmniClaw settlement orchestration, and USDC settlement.
+The visual architecture pack lives in
+[Architecture Diagrams](diagrams/README.md). It separates the bounded v0.1
+implementation from later adapter boundaries such as ERC-8004 agent identity
+and reputation, ERC-8183 task contract and escrow, x402 payment requests,
+OmniClaw settlement orchestration, and USDC settlement.
 
 ## High-Level Components
 

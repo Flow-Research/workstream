@@ -1,5 +1,9 @@
 # Day-by-Day Execution Plan
 
+> Historical planning record. This calendar no longer controls current work or
+> status. Use [Current v0.1 Status](roadmap_status.md) and the
+> [Historical Planning Index](historical_planning.md).
+
 ## Review Lifecycle Status
 
 The calendar is sequencing guidance, not implementation status. Review and

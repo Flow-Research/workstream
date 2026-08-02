@@ -1,5 +1,8 @@
 # Chunk 8: Submission Artifact And Policy Checkers
 
+> Historical implementation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 Chunk 8 expands the checker registry from the first structural runner into the first policy-aware submission artifact gate.
