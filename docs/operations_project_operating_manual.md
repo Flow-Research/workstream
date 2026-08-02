@@ -103,12 +103,24 @@ remain task-scoped through work-context and submission-requirements APIs.
 The two collection routes return the newest 100 canonical rows. Use the exact
 single-record route for an older retained report or policy identifier.
 
-The remaining policy and mutation endpoints follow their separately owned
-activation chunks:
+The active review/revision policy setup endpoints are:
+
+- `PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy`
+- `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy`
+
+Other policy mutation endpoints follow their separately owned activation
+chunks:
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/request-correction`
+
+The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
+`If-Match` value. Use `"no-current-policy"` for the first version and the quoted
+opaque selector returned from the current policy ID, generation, and canonical
+digest for a replacement. An authorized Project
+Manager may attach review and revision policies in either order while the guide
+is draft; activation remains blocked until both are complete.
 
 `ProjectSetupRun` is only a setup ledger. Policy truth remains in the guide
 source snapshot, sufficiency report, submission artifact policy, effective

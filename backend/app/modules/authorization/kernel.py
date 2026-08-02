@@ -69,6 +69,7 @@ from app.modules.authorization.runtime import (
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
+    ProjectPolicyMutationPrepareDenialResourceContext,
     ProjectActiveGuideReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
@@ -92,11 +93,13 @@ ContextRevalidator = Callable[
     Awaitable[HumanAuthorizationContext],
 ]
 
-_GUIDE_METADATA_MUTATIONS = frozenset(
+_GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS = frozenset(
     {
         ActionId.PROJECT_GUIDE_CREATE,
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
     }
 )
 
@@ -293,9 +296,7 @@ class _PrelockedAuthority:
         object.__setattr__(self, "action_id", action_id)
         object.__setattr__(self, "scope_project_id", scope_project_id)
         object.__setattr__(self, "matched_grant_id", matched_grant_id)
-        object.__setattr__(
-            self, "matched_grant_scope_project_id", matched_grant_scope_project_id
-        )
+        object.__setattr__(self, "matched_grant_scope_project_id", matched_grant_scope_project_id)
         object.__setattr__(self, "matched_grant_status", matched_grant_status)
         object.__setattr__(self, "permission_id", permission_id)
         object.__setattr__(self, "artifact_resource_type", artifact_resource_type)
@@ -481,7 +482,7 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
-        elif action_id in _GUIDE_METADATA_MUTATIONS:
+        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             if (
                 not isinstance(context, HumanAuthorizationContext)
                 or scope.kind is not PreparedAuthorityScopeKind.PROJECT
@@ -636,11 +637,22 @@ class AuthorizationService:
         self._validate_prepared_consumer(consumer_token)
         action = ACTION_BY_ID.get(action_id)
         supported = (
-            action_id is ActionId.PROJECT_CREATE
-            and isinstance(resource_context, ProjectCreateResourceContext)
-        ) or (
-            action_id in _GUIDE_METADATA_MUTATIONS
-            and isinstance(resource_context, ProjectGuideMutationPrepareDenialResourceContext)
+            (
+                action_id is ActionId.PROJECT_CREATE
+                and isinstance(resource_context, ProjectCreateResourceContext)
+            )
+            or (
+                action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS
+                and isinstance(resource_context, ProjectGuideMutationPrepareDenialResourceContext)
+            )
+            or (
+                action_id
+                in {
+                    ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+                    ActionId.PROJECT_REVISION_POLICY_UPDATE,
+                }
+                and isinstance(resource_context, ProjectPolicyMutationPrepareDenialResourceContext)
+            )
         )
         if not supported:
             raise TypeError("unsupported prepared denial")
@@ -962,7 +974,7 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
                 matched_project_id = authority.scope_project_id
-        elif action_id in _GUIDE_METADATA_MUTATIONS:
+        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             denial = self._lifecycle_denial(context)
             expected = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
@@ -1426,7 +1438,7 @@ class AuthorizationService:
             audit_resource_id = str(resource_context.resource_id)
             target_ref_kind = "project"
             target_ref_id = str(resource_context.requested_project_id)
-        elif decision.action_id in _GUIDE_METADATA_MUTATIONS:
+        elif decision.action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             if resource_context is not None:
                 project_id = self._resource_project_id(resource_context)
                 if project_id is not None:
@@ -1448,7 +1460,7 @@ class AuthorizationService:
         } or decision.action_id in {
             ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
             ActionId.PROJECT_CREATE,
-            *_GUIDE_METADATA_MUTATIONS,
+            *_GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS,
         }:
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:

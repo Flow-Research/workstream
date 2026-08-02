@@ -93,7 +93,7 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12B2,
     ActionOwner.AUTH_12C,
     ActionOwner.AUTH_12D,
-    ActionOwner.AUTH_12D2,
+    ActionOwner.XINT_003_02B,
     ActionOwner.AUTH_12E,
     ActionOwner.AUTH_12F,
     ActionOwner.AUTH_12G,
@@ -11831,9 +11831,7 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
                 RuntimeError, match="cannot downgrade populated immutable policy lineage"
             ):
                 command.downgrade(config, "0045_guide_metadata_authority")
-            refused_state = asyncio.run(
-                _xint003_02a_policy_state(isolated_database_env, ids)
-            )
+            refused_state = asyncio.run(_xint003_02a_policy_state(isolated_database_env, ids))
         finally:
             asyncio.run(_remove_xint003_02a_immutable_policies(isolated_database_env, ids))
             command.downgrade(config, "0045_guide_metadata_authority")
@@ -11864,9 +11862,126 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
     assert refused_state == state
 
 
-async def _seed_xint003_02a_legacy_policies(
-    database_url: str, ids: dict[str, str]
+def test_xint003_02b_policy_authority_schema_and_roundtrip(
+    isolated_database_env: str,
+    migration_lock,
 ) -> None:
+    """Prove 0048 installs only the closed policy mutation custody boundary."""
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "0047_policy_identity_lineage")
+            command.upgrade(config, "0048_policy_authority")
+            shape = asyncio.run(_xint003_02b_authority_shape(isolated_database_env))
+            command.downgrade(config, "0047_policy_identity_lineage")
+            absent = asyncio.run(_xint003_02b_authority_shape(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert shape == {
+        "ledger": True,
+        "review_provenance": 8,
+        "revision_provenance": 8,
+        "custody_triggers": 3,
+        "selector_constraint": True,
+        "selector_custody": True,
+        "predecessor_custody": True,
+    }
+    assert absent == {
+        "ledger": False,
+        "review_provenance": 0,
+        "revision_provenance": 0,
+        "custody_triggers": 0,
+        "selector_constraint": True,
+        "selector_custody": False,
+        "predecessor_custody": False,
+    }
+
+
+async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | bool]:
+    engine = create_async_engine(database_url)
+    provenance = {
+        "predecessor_policy_hash",
+        "created_by_actor_profile_id",
+        "created_via_identity_link_id",
+        "created_by_admin_role_grant_id",
+        "creation_scope_type",
+        "creation_scope_project_id",
+        "creation_action_id",
+        "authorization_decision_event_id",
+    }
+    try:
+        async with engine.connect() as connection:
+            tables = set(
+                (
+                    await connection.execute(
+                        text(
+                            "select table_name from information_schema.tables "
+                            "where table_schema='public'"
+                        )
+                    )
+                ).scalars()
+            )
+            columns = {}
+            for table in ("review_policies", "revision_policies"):
+                columns[table] = set(
+                    (
+                        await connection.execute(
+                            text(
+                                "select column_name from information_schema.columns "
+                                "where table_schema='public' and table_name=:table"
+                            ),
+                            {"table": table},
+                        )
+                    ).scalars()
+                )
+            triggers = int(
+                await connection.scalar(
+                    text(
+                        "select count(*) from pg_trigger where not tgisinternal and tgname in "
+                        "('review_policy_mutation_custody',"
+                        "'revision_policy_mutation_custody',"
+                        "'policy_mutation_replay_custody')"
+                    )
+                )
+                or 0
+            )
+            selector = bool(
+                await connection.scalar(
+                    text(
+                        "select exists(select 1 from pg_constraint where "
+                        "conname='policy_selection_shape')"
+                    )
+                )
+            )
+            custody_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_functiondef(p.oid) from pg_proc p "
+                        "where p.proname='validate_policy_mutation_custody'"
+                    )
+                )
+                or ""
+            )
+            return {
+                "ledger": "policy_mutation_idempotency_records" in tables,
+                "review_provenance": len(columns["review_policies"] & provenance),
+                "revision_provenance": len(columns["revision_policies"] & provenance),
+                "custody_triggers": triggers,
+                "selector_constraint": selector,
+                "selector_custody": "selected_review_policy_id" in custody_definition
+                and "selected_revision_policy_id" in custody_definition,
+                "predecessor_custody": "prior.policy_generation=product_generation-1"
+                in custody_definition,
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _seed_xint003_02a_legacy_policies(database_url: str, ids: dict[str, str]) -> None:
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
@@ -11894,7 +12009,7 @@ async def _seed_xint003_02a_legacy_policies(
                     "insert into review_policies "
                     "(id,project_id,guide_version,requires_second_review,allowed_decisions,"
                     "minimum_finding_fields,sla_hours) values "
-                    "(:review,:project,'v1',false,'[\"accept\",\"needs_revision\","
+                    '(:review,:project,\'v1\',false,\'["accept","needs_revision",'
                     "\"reject\"]'::json,'[]'::json,24)"
                 ),
                 ids,
@@ -11912,9 +12027,7 @@ async def _seed_xint003_02a_legacy_policies(
         await engine.dispose()
 
 
-async def _xint003_02a_policy_state(
-    database_url: str, ids: dict[str, str]
-) -> dict[str, tuple]:
+async def _xint003_02a_policy_state(database_url: str, ids: dict[str, str]) -> dict[str, tuple]:
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
@@ -11958,9 +12071,7 @@ async def _xint003_02a_policy_state(
         await engine.dispose()
 
 
-async def _xint003_02a_policy_immutable_writes(
-    database_url: str, ids: dict[str, str]
-) -> set[str]:
+async def _xint003_02a_policy_immutable_writes(database_url: str, ids: dict[str, str]) -> set[str]:
     engine = create_async_engine(database_url)
     refused: set[str] = set()
     try:
@@ -11969,8 +12080,7 @@ async def _xint003_02a_policy_immutable_writes(
             with pytest.raises(IntegrityError):
                 await connection.execute(
                     text(
-                        "update project_guides set selected_review_policy_hash=null "
-                        "where id=:guide"
+                        "update project_guides set selected_review_policy_hash=null where id=:guide"
                     ),
                     ids,
                 )
@@ -12030,9 +12140,7 @@ async def _xint003_02a_policy_immutable_writes(
         await engine.dispose()
 
 
-async def _remove_xint003_02a_immutable_policies(
-    database_url: str, ids: dict[str, str]
-) -> None:
+async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[str, str]) -> None:
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
@@ -12064,9 +12172,7 @@ async def _remove_xint003_02a_immutable_policies(
                     ids,
                 )
             await connection.execute(text("delete from review_policies where id=:review"), ids)
-            await connection.execute(
-                text("delete from revision_policies where id=:revision"), ids
-            )
+            await connection.execute(text("delete from revision_policies where id=:revision"), ids)
             await connection.execute(text("delete from project_guides where id=:guide"), ids)
             await connection.execute(text("delete from projects where id=:project"), ids)
             for table in reversed(

@@ -81,3 +81,13 @@ test semantics mapping. Its post-main-merge review also found that the guide
 sufficiency migration test did not protect cleanup when the initial downgrade
 failed. All findings were valid and corrected; the exact response is in
 `reviews/WS-XINT-003-02A-external-review-response.md`.
+
+## WS-XINT-003-02B guide-bound policy mutation activation
+
+Architecture, security/auth, product/operations, QA/test, senior engineering,
+reuse/dedup, docs, test-delta, and CI integrity reviewed the completed runtime
+chunk. Valid findings corrected full PREP and denial binding, replay-before-PREP
+ordering, same-actor replay, exact opaque selectors, route rollback, database
+successor/predecessor custody, live fixture bypasses, and operator docs. All
+tracks passed after correction; no finding remains open. Final evidence is in
+`reviews/WS-XINT-003-02B-internal-review.md`.

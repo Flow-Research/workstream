@@ -1,5 +1,59 @@
 # Discovery: WS-XINT-003 REV-AUTH End-to-End Contract
 
+## WS-XINT-003-02B current-main refresh — 2026-08-02
+
+### Observed merged baseline
+
+- PR #242 merged 02A as `9618b938`; Alembic `0047` makes `ReviewPolicy` and
+  `RevisionPolicy` append-only identities with generation, digest, predecessor,
+  and complete/legacy semantics.
+- `ProjectGuide` selects exact policy identities, and Task, Submission, and
+  CheckerRun retain the immutable lineage. Existing reads lock the selected row
+  through `ProjectRepository.lock_review_policy()` and
+  `lock_revision_policy()`.
+- AUTH already registers strict
+  `ProjectReviewPolicyMutationResourceContext` and
+  `ProjectRevisionPolicyMutationResourceContext`; both actions remain planned.
+- No `ProjectPolicyMutationService`, policy mutation router, replay repository,
+  idempotency ledger, provenance/evidence columns, append-only repository
+  writers, or public mutation routes exist on merged main.
+
+### Existing conventions to preserve
+
+- Project-create and guide-mutation routes use dedicated router/service modules,
+  caller-owned root transactions, opaque PREP handles, exact locked facts, and
+  atomic decision evidence.
+- Committed idempotent replay is checked before fresh authority; pending or
+  changed reuse conflicts. A replay-only repository cannot write product rows.
+- `policy_lineage.py` owns strict semantic validation and domain-separated
+  policy digests. `0047` owns immutability and downstream lineage and must not be
+  weakened or duplicated.
+
+### Gaps owned by 02B
+
+- Add one dedicated two-route API and one orchestration service.
+- Add the two internal append-only repository primitives and a replay-only
+  ledger repository.
+- Add migration `0048` for the ledger and nullable historical provenance plus
+  evidence references.
+- Extend the existing PREP evaluator only for the two typed policy resources and
+  activate exactly their catalogue rows.
+- Add PostgreSQL tests for replay, revocation, stale/crossed replacement,
+  active-guide freeze, immutability, atomic rollback, and migration round trip.
+
+### Risks and resolved assumptions
+
+- A combined persistence/activation chunk was rejected earlier; 02A has now
+  removed that blocker. 02B does not modify policy meanings or downstream
+  lineage.
+- The API needs an explicit optimistic precondition. The implementation uses an
+  `If-Match` opaque selector binding the current policy ID, generation, and
+  canonical digest plus an explicit no-current sentinel for first creation;
+  wildcard/omitted preconditions deny. Digest-only matching was rejected because
+  equal policy semantics must not hide predecessor advancement.
+- No external credentials are required. PostgreSQL proof runs in hosted CI when
+  local isolated database variables are absent.
+
 ## Canonical references
 
 - [Review lifecycle specification](../../../docs/spec_review_lifecycle.md)

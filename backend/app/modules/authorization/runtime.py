@@ -563,11 +563,17 @@ class ProjectReviewPolicyMutationResourceContext(BaseModel):
 
     resource_type: Literal["project_review_policy_mutation"]
     resource_id: UUID
+    operation_id: UUID
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     scope_project_id: UUID
     guide_id: UUID
     guide_version: str
+    guide_status: Literal["draft"]
     review_policy_id: UUID
     policy_generation: int = Field(ge=1)
+    policy_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    predecessor_policy_id: UUID | None = None
+    predecessor_policy_generation: int | None = Field(default=None, ge=1)
     current_policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -575,6 +581,26 @@ class ProjectReviewPolicyMutationResourceContext(BaseModel):
         """Bind the resource selector to the review policy only."""
         if self.resource_id != self.review_policy_id:
             raise ValueError("review policy resource must match policy")
+        if (
+            len(
+                {
+                    self.predecessor_policy_id is None,
+                    self.predecessor_policy_generation is None,
+                    self.current_policy_digest is None,
+                }
+            )
+            != 1
+        ):
+            raise ValueError("review policy predecessor facts must be bound together")
+        if self.policy_generation == 1 and self.predecessor_policy_id is not None:
+            raise ValueError("first review policy cannot have a predecessor")
+        if self.policy_generation > 1 and self.predecessor_policy_id is None:
+            raise ValueError("replacement review policy requires a predecessor")
+        if (
+            self.predecessor_policy_generation is not None
+            and self.policy_generation != self.predecessor_policy_generation + 1
+        ):
+            raise ValueError("review policy successor generation must be exact")
         return self
 
 
@@ -585,11 +611,17 @@ class ProjectRevisionPolicyMutationResourceContext(BaseModel):
 
     resource_type: Literal["project_revision_policy_mutation"]
     resource_id: UUID
+    operation_id: UUID
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     scope_project_id: UUID
     guide_id: UUID
     guide_version: str
+    guide_status: Literal["draft"]
     revision_policy_id: UUID
     policy_generation: int = Field(ge=1)
+    policy_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    predecessor_policy_id: UUID | None = None
+    predecessor_policy_generation: int | None = Field(default=None, ge=1)
     current_policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -597,6 +629,45 @@ class ProjectRevisionPolicyMutationResourceContext(BaseModel):
         """Bind the resource selector to the revision policy only."""
         if self.resource_id != self.revision_policy_id:
             raise ValueError("revision policy resource must match policy")
+        if (
+            len(
+                {
+                    self.predecessor_policy_id is None,
+                    self.predecessor_policy_generation is None,
+                    self.current_policy_digest is None,
+                }
+            )
+            != 1
+        ):
+            raise ValueError("revision policy predecessor facts must be bound together")
+        if self.policy_generation == 1 and self.predecessor_policy_id is not None:
+            raise ValueError("first revision policy cannot have a predecessor")
+        if self.policy_generation > 1 and self.predecessor_policy_id is None:
+            raise ValueError("replacement revision policy requires a predecessor")
+        if (
+            self.predecessor_policy_generation is not None
+            and self.policy_generation != self.predecessor_policy_generation + 1
+        ):
+            raise ValueError("revision policy successor generation must be exact")
+        return self
+
+
+class ProjectPolicyMutationPrepareDenialResourceContext(BaseModel):
+    """Privacy-bounded requested selectors for policy PREP denial evidence."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_policy_mutation_request"]
+    resource_id: UUID
+    scope_project_id: UUID
+    requested_guide_id: UUID
+    requested_policy_kind: Literal["review", "revision"]
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_requested_guide(self):
+        if self.resource_id != self.requested_guide_id:
+            raise ValueError("policy mutation denial must identify the requested guide")
         return self
 
 
@@ -1385,6 +1456,9 @@ class AuthorizationDecision(BaseModel):
         "project_guide_mutation",
         "project_guide_source_snapshot_mutation",
         "project_guide_mutation_request",
+        "project_review_policy_mutation",
+        "project_revision_policy_mutation",
+        "project_policy_mutation_request",
         "actor_identity_link",
         "system",
         "permission_catalogue",
