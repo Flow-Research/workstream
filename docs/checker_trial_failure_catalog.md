@@ -7,7 +7,12 @@
 
 This catalog records the Chunk 10 checker trial outcomes. It is the audit note for the first real sample submissions run through the Week 2 checker framework.
 
-The trial does not add a lifecycle state, a review decision, or a frontend surface. It proves the current backend contracts for clean submissions, worker-fixable checker failures, internal task setup failures, and trusted checker retry.
+The trial does not add a lifecycle state, a review decision, or a frontend
+surface. It records early checker-trial evidence for clean submissions,
+contributor-fixable checker failures, internal task setup failures, and trusted
+checker retry. It does not establish current backend behavior; use
+[Current v0.1 Status](roadmap_status.md) and merged code and tests for current
+capabilities.
 
 ## Trial Results
 

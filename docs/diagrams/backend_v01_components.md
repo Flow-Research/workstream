@@ -22,7 +22,8 @@ Source: [backend_v01_components.puml](backend_v01_components.puml)
 
 ## Current Module Priority
 
-The v0.1 backend moves through the loop in this dependency order:
+The v0.1 backend follows the Workstream product lifecycle in this dependency
+order:
 
 ```text
 Projects and guides

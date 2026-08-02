@@ -21,7 +21,7 @@ Project Guide
 -> Revision when required
 -> Contribution Records
 -> Conditional Compensation Award / Fulfillment
--> Reputation Signals
+-> Contribution Evidence For Future Reputation Projection
 ```
 
 The release bar is one secured, observable, end-to-end lifecycle using the

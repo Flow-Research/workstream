@@ -5,8 +5,9 @@ validated. They are preserved for traceability. They do not define current
 priority, implementation status, contribution permission, or a delivery
 schedule.
 
-For current work, use [Current v0.1 Status](roadmap_status.md), the code and
-tests on `main`, accepted ADRs, and the canonical subsystem specifications.
+For current work, start with [CONTRIBUTING.md](../CONTRIBUTING.md) and follow its
+engineering loop. Then use [Current v0.1 Status](roadmap_status.md), the code
+and tests on `main`, accepted ADRs, and the canonical subsystem specifications.
 
 ## Superseded Calendar Plans
 

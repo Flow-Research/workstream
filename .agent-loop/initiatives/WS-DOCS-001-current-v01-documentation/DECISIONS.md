@@ -2,7 +2,7 @@
 
 ## Capability-Based Status
 
-Current status uses implemented, in-progress, remaining, and historical
+Current status uses Implemented, In progress, Planned, and Historical
 capability categories. It does not use weeks, days, or completion promises.
 
 ## Preserve History
