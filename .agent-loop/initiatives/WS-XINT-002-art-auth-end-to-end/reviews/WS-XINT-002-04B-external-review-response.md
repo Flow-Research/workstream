@@ -47,10 +47,11 @@
 
 ## Verification
 
-- Corrective implementation commit
-  `d3917e0b4cf30cba5b840cce2d76de39fd09ae68` and exact local commands are
-  recorded in the internal review. Hosted-run identifiers remain pending the
-  evidence-only follow-up commit and exact-head GitHub run.
+- Reviewed implementation commit
+  `8c48c01e137f861210bccfbc6bfaa91f13b0a354` and exact local commands are
+  recorded in the internal review. The subsequent commit changes review
+  evidence only. Hosted-run identifiers remain pending its exact-head GitHub
+  run.
 - Local Ruff, focused AUTH/audit/architecture tests, stale authorization docs,
   stale artifact contracts, Markdown links, and `git diff --check` pass.
 - Database-backed guide tests and repository-wide coverage remain assigned to
@@ -59,5 +60,5 @@
 
 ## Remaining risk
 
-PR #245 remains non-merge-ready until CodeRabbit threads are resolved and
+All seven CodeRabbit threads are resolved. PR #245 remains non-merge-ready until
 hosted exact-head `Backend / test` plus `Agent Gates / agent-gates` pass.

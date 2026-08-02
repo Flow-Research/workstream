@@ -79,9 +79,12 @@ resolved. Details are in `WS-XINT-002-04B-internal-review.md`.
 
 ## External review
 
-Planning PR #244 has Agent Gates passing; hosted Backend and external review run
-on its amended exact head. Runtime external review begins after this commit is
-pushed and the stacked PR is opened.
+PR #244 is merged and PR #245 now targets `main`. Every valid CodeRabbit finding
+was fixed, the one stale fact-model finding was rejected with code evidence, and
+all seven review threads are resolved. A fresh CodeRabbit invocation was
+requested but rate-limited, so the existing review and recorded dispositions
+remain the external review evidence. Hosted exact-head Backend coverage remains
+required before readiness.
 
 ## Remaining risks and follow-up work
 
@@ -95,4 +98,4 @@ pushed and the stacked PR is opened.
 
 Review exact fixed identities, full fact manifests, lock-through-read ordering,
 atomic decision evidence, no human inheritance, and the absence of ART-03C scope.
-Planning PR #244 must merge first. Human approval owns every merge.
+Human approval owns every merge.

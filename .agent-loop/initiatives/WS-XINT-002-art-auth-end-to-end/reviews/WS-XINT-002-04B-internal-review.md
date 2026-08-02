@@ -41,7 +41,8 @@ full coverage and database-backed guide tests on the exact PR head.
 ## Verification evidence
 
 Reviewed implementation commit:
-`d3917e0b4cf30cba5b840cce2d76de39fd09ae68`.
+`8c48c01e137f861210bccfbc6bfaa91f13b0a354`. The following commit changes
+review evidence only; hosted checks must pass on that final evidence head too.
 
 - `cd backend && .venv/bin/ruff check app tests scripts`: passed.
 - `cd backend && .venv/bin/pytest -q tests/test_audit.py
@@ -56,6 +57,23 @@ Reviewed implementation commit:
 - Database-backed guide binding/materialization and full coverage remain assigned
   to hosted `Backend / test` because this local venv lacks Pillow and the local
   shell has no `WORKSTREAM_TEST_DATABASE_URL`.
+
+## Corrective reviewer reruns
+
+- Security/auth: pass with low risk; the binding handle remains intentionally
+  process-local and caller-transaction-bound, while reading obtains fresh
+  authority inside the materializer transaction.
+- QA: pass with low risk; all CodeRabbit code findings are addressed and all
+  review threads are resolved.
+- Product/ops: pass after the PREP support and denial-restage documentation was
+  corrected.
+- Docs: runtime wording passes; this evidence now names the reviewed
+  implementation head.
+- Senior engineering: pass with low operational lock-duration risk deferred to
+  ART worker tuning.
+- Reuse/dedup: pass after consolidating the two guide action maps.
+- Test delta: pass after adding scratch-cleanup and unchanged-incident-count
+  assertions to the incident-write failure case.
 
 ## Readiness dependency
 
