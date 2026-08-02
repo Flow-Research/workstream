@@ -119,3 +119,29 @@ Commands rerun:
 Remaining risks:
 
 - Exact-head hosted evidence validation and full coverage remain required.
+
+## GitHub Actions round 4
+
+Comments addressed:
+
+- The table inventory passed, then the full public-schema object fingerprint
+  correctly detected migration 0048's new table, index, functions, triggers,
+  constraints, and columns. The expected fingerprint is updated to the exact
+  hosted value `0098edcd29ab2c7317fcd598e266742e592aa6bc571d3df0ed025ae150ebd22c`.
+
+Comments deferred:
+
+- None.
+
+Human decisions needed:
+
+- None.
+
+Commands rerun:
+
+- Exact-head hosted Backend and Agent Gates.
+
+Remaining risks:
+
+- The replacement Backend run must pass the complete lane, E2E, and coverage
+  sequence.

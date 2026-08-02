@@ -84,6 +84,9 @@ comment was deferred; details are in the external response.
 The next hosted run exposed a stale canonical database-reset fingerprint: the
 new replay ledger was treated as an unexpected table, interrupting all lanes.
 The ledger is now in the exact reset inventory and truncate-guard list.
+The following hosted run reached the independent full-schema fingerprint and
+reported the expected 0048 drift; the constant now uses the exact hosted
+fingerprint for the complete new schema.
 
 ## Remaining risks and follow-up
 
