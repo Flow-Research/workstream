@@ -10,7 +10,10 @@ ownership boundary, PR boundary, and v0.1 completion proof explicit.
 ## Allowed Files
 
 WS-ART planning artifacts and future contracts; WS-XINT-002 planning artifacts
-needed to correct dependency order; related specifications and review evidence.
+needed to correct dependency order; related specifications and review evidence;
+and only the independent custody expectation fixture in
+`backend/tests/test_authorization.py` when a reviewed custody split changes the
+exact documentation-to-catalogue parity assertion.
 
 ## Not Allowed Changes
 

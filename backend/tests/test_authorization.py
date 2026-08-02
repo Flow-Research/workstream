@@ -1660,6 +1660,33 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
 }
 
+ART_ACTIVATION_CUSTODY_EXPECTATIONS = {
+    "artifact.binding.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.replica.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.receipt.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.verification_job.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.verification_job.retry": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.recovery_attempt.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.audit.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "operations.artifact_storage_admission.read": "WS-AUTH-001-ART-02D-OPERATOR",
+    "artifact.verification.execute": "WS-AUTH-001-ART-02D-INTERNAL",
+    "artifact.pending_work.scan": "WS-AUTH-001-ART-02D-INTERNAL",
+    "artifact.put_attempt.resolve": "WS-AUTH-001-ART-02D-INTERNAL",
+    "artifact.guide_source.ingest": "WS-XINT-002-04A",
+    "artifact.guide_source.read": "WS-XINT-002-04B",
+    "artifact.guide_source.binding.create": "WS-XINT-002-04B",
+    "artifact.submission_bundle.prepare": "WS-XINT-002-05A",
+    "artifact.pre_submit.checker_input.materialize": "WS-XINT-002-06A",
+    "artifact.submission.binding.create": "WS-XINT-002-05B",
+    "artifact.post_submit.checker_input.materialize": "WS-XINT-002-06B",
+    "artifact.checker_output.write": "WS-XINT-002-06B",
+    "artifact.review_packet.materialize": "WS-XINT-002-07A",
+    "artifact.review_evidence.binding.create": (
+        "Future REV-owned activation, not approved for v0.1"
+    ),
+    "artifact.checker_output.binding.create": "WS-XINT-002-06B",
+}
+
 REV_CUSTODY_EXPECTATIONS = {
     "review.queue.read": ("review.queue.read", "WS-AUTH-001-REV-05", "planned"),
     "review.queue.inspect": ("review.queue.inspect", "WS-AUTH-001-REV-05", "planned"),
@@ -2577,7 +2604,7 @@ def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str
     raise AssertionError(f"exact custody table missing from {document}")
 
 
-def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
+def test_art_custody_documentation_matches_the_independent_activation_fixture() -> None:
     repository_root = Path(__file__).resolve().parents[2]
     custody_documents = (
         repository_root / "docs/spec_authorization_service.md",
@@ -2585,21 +2612,18 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
         / ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service"
         / "ACTIVATION_CUSTODY.md",
     )
-    expected_custody = {
-        action: owner
-        for action, (_permission, owner, _availability) in ART_CUSTODY_EXPECTATIONS.items()
-    }
+    expected_custody = ART_ACTIVATION_CUSTODY_EXPECTATIONS
     expected_owner_counts = {
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
         "WS-XINT-002-04B": 2,
         "WS-XINT-002-04A": 1,
         "WS-XINT-002-05A": 1,
-        "WS-AUTH-001-ART-04B": 1,
-        "WS-AUTH-001-ART-05": 1,
-        "WS-AUTH-001-ART-06A": 1,
-        "WS-AUTH-001-ART-06B": 2,
-        "WS-XINT-002-07": 2,
+        "WS-XINT-002-06A": 1,
+        "WS-XINT-002-05B": 1,
+        "WS-XINT-002-06B": 3,
+        "WS-XINT-002-07A": 1,
+        "Future REV-owned activation, not approved for v0.1": 1,
     }
 
     for document in custody_documents:

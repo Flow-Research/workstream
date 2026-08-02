@@ -64,3 +64,32 @@ user requested avoiding full local tests on the constrained machine.
 - Each successor must read PLAN3 and finalize any chunk-specific new test file
   name before implementation; PLAN3 supplies the mandatory minimum commands,
   mapped modules, crossed-state expectations, and coverage floors.
+
+## Hosted CI Repair Review
+
+After current `main` was merged into the branch, hosted Backend CI correctly
+failed because the revised activation-custody documentation no longer matched
+the independent documentation fixture. The repair keeps runtime catalogue
+ownership and future activation custody as separate exact assertions:
+
+- `ART_CUSTODY_EXPECTATIONS` remains the closed runtime catalogue fixture;
+- `ART_ACTIVATION_CUSTODY_EXPECTATIONS` independently records the future
+  activation-custody split used by both normative documentation tables;
+- the deferred review-evidence action remains planned/unavailable and requires
+  a future REV-owned approval.
+
+Focused security/auth, QA, test-delta, and CI-integrity re-review passed after
+the initial conflated-fixture repair was rejected. No test was skipped,
+weakened, or removed, and no application code, action availability, grant,
+workflow, migration, or CI configuration changed.
+
+```text
+ruff: passed
+closed runtime catalogue exactness: passed
+activation-custody documentation parity: passed
+Markdown links: passed
+stale artifact contracts: passed
+stale authorization documentation: passed
+stale Workstream wording: passed
+git diff --check: passed
+```

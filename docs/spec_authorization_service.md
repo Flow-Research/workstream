@@ -437,7 +437,8 @@ A mapping is not a permission alias.
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-XINT-002-05B` | `artifact.submission.binding.create` |
 | `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07A` | `artifact.review_packet.materialize` only; `artifact.review_evidence.binding.create` remains planned/unavailable |
+| `WS-XINT-002-07A` | `artifact.review_packet.materialize` only |
+| Future REV-owned activation, not approved for v0.1 | `artifact.review_evidence.binding.create` remains planned/unavailable |
 
 The approved v0.1 review flow has a reviewer decision plus note/findings bound
 to the reviewed Submission. It does not include a reviewer-uploaded artifact.
