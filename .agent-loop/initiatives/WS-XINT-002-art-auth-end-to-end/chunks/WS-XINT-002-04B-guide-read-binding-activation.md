@@ -25,11 +25,16 @@ backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/repository.py
 backend/app/modules/authorization/runtime.py
 backend/app/modules/artifacts/authorization.py
+backend/app/modules/artifacts/guide_materialization.py
+backend/app/interfaces/artifact_operations.py
 backend/tests/test_authorization.py
+backend/tests/test_artifact_architecture.py
 backend/tests/test_guide_artifacts.py
 backend/tests/test_guide_bindings.py
 docs/spec_authorization_service.md
 docs/spec_artifact_storage_service.md
+docs/operations_authorization_service.md
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-internal-review.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-pr-trust-bundle.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-external-review-response.md
@@ -37,12 +42,16 @@ docs/spec_artifact_storage_service.md
 
 ## Not allowed
 
-Human ingest behavior, ART byte/admission implementation, project lifecycle
+Human ingest behavior, ART byte/admission implementation outside the narrow
+guide-read authorization seam, project lifecycle
 changes, submission/review behavior, provider redesign, token roles, generic
 guide download, new ActionId or PermissionId values, Celery task payload or
 orchestration changes, production route composition, or ART-03C legacy removal.
 This contract, the chunk map, and other planning files are not editable by the
 04B implementation PR; any required scope change returns to planning review.
+The canonical AUTH activation-custody ledger listed above is the sole exception:
+04B must update its two existing action rows atomically with catalogue ownership
+and availability so documentation/runtime parity cannot become stale.
 
 ## Acceptance criteria
 
@@ -73,6 +82,13 @@ This contract, the chunk map, and other planning files are not editable by the
   `backend/app/modules/artifacts/authorization.py`. ART-03C owns the later live
   Celery task/route composition and legacy cutover; 04B neither serializes a handle
   nor changes Celery orchestration.
+- The existing guide-read seam must not require a handle prepared outside
+  `ArtifactMaterializationService`'s internally owned database session. The
+  materialization request carries an idempotency key and exact identifiers, not
+  a prepared handle. After locking and composing the exact read facts, the
+  service obtains a fresh fixed-reader adapter for that same session, prepares
+  and consumes its handle in that root transaction, and only then permits
+  provider access. This is the only ART behavior correction owned by 04B.
 - Both actions require exact prepared-authority validation and single-use
   consumption before any provider read or binding write. Stale, replayed,
   revoked, mismatched, cross-session, cross-action, or cross-resource authority
@@ -87,6 +103,9 @@ This contract, the chunk map, and other planning files are not editable by the
   access or protected mutation and create no allowed decision evidence.
 - Prepared handles remain opaque, process-local, transaction-bound, and absent
   from Celery messages, logs, Pydantic models, and other serialization surfaces.
+- Tests prove that no caller-supplied or earlier-session handle can enter the
+  guide materialization request, and that preparation plus consumption use the
+  exact session/transaction that authorizes the provider read.
 - No generic artifact-download permission or human-to-service authority
   inheritance is introduced.
 - ART-03C remains a separate clean-cut gate.
@@ -96,6 +115,7 @@ This contract, the chunk map, and other planning files are not editable by the
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
 (cd backend && WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?Set WORKSTREAM_TEST_DATABASE_URL}" .venv/bin/pytest tests/test_authorization.py tests/test_guide_artifacts.py tests/test_guide_bindings.py -q --cov=app.modules.authorization --cov=app.modules.artifacts --cov=app.modules.projects --cov-report=term-missing --cov-fail-under=90)
+(cd backend && .venv/bin/pytest tests/test_artifact_architecture.py -q)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
