@@ -26,3 +26,30 @@ Remaining risks:
 
 - GitHub Backend, Agent Gates, and CodeRabbit must pass on the replacement
   exact head before human merge.
+
+## GitHub Actions round 2
+
+Comments addressed:
+
+- The semantic-lane inventory failed closed because the new
+  `tests/test_project_policy_mutations.py` module had no canonical lane. It is
+  now assigned to `shared_foundations` beside authorization and immutable policy
+  lineage tests; no lane, threshold, or execution behavior changed.
+
+Comments deferred:
+
+- None.
+
+Human decisions needed:
+
+- None.
+
+Commands rerun:
+
+- The canonical collect-only runner passed the missing-lane check, then reached
+  unrelated locally absent Pillow dependencies supplied by hosted CI.
+- Focused CI lane-contract tests: 68 passed.
+
+Remaining risks:
+
+- Exact-head hosted checks and CodeRabbit remain required.

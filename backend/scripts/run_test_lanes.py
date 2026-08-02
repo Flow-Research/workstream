@@ -127,6 +127,7 @@ LANES = (
             "tests/test_db_session.py",
             "tests/test_outbox.py",
             "tests/test_policy_identity_lineage.py",
+            "tests/test_project_policy_mutations.py",
         ),
     ),
     TestLane(

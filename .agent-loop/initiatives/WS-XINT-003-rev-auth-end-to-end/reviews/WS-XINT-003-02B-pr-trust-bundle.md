@@ -70,6 +70,11 @@ percent because new 02B callables lacked docstrings. All 22 new callables were
 documented; the same gate now passes locally at 80.5 percent. The exact response
 is recorded in `WS-XINT-003-02B-external-review-response.md`.
 
+The second Backend run failed closed because the new test module lacked
+semantic-lane custody. It is assigned to the existing `shared_foundations`
+lane beside authorization and policy-lineage tests; the four-lane design and
+all thresholds remain unchanged.
+
 ## Remaining risks and follow-up
 
 The API may later expose the opaque replacement selector as a response ETag.

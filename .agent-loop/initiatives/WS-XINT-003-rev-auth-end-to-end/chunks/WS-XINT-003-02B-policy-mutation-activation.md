@@ -65,6 +65,7 @@ backend/tests/test_artifact_admission.py
 backend/tests/test_alembic.py
 backend/tests/test_artifact_architecture.py
 backend/scripts/api_contract_e2e.py
+backend/scripts/run_test_lanes.py
 docs/spec_authorization_service.md
 docs/spec_review_lifecycle.md
 docs/operations_authorization_service.md
