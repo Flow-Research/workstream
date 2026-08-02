@@ -1,6 +1,8 @@
 # Chunk Contract: WS-ART-001-07 - Real API And Provider Proof
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06B
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by PLAN3 (`07A`-`08C`)
+
+Historical design input only. This file is not an executable chunk contract.
 
 Artifact contract phase: `checker_cutover`
 

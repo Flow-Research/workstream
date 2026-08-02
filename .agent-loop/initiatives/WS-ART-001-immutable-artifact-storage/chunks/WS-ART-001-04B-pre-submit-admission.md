@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-04B - Scratch-Bound Pre-Submission Checks
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04A
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04A3
 
 Artifact contract phase: `upload_admission`
 
@@ -66,8 +66,8 @@ artifact content, provider object, or Submission.
   same scratch handle and exact predecessor observed in 04A; they do not make
   bytes authoritative or durable;
 - 04B remains an internal hidden library seam with no separately invocable
-  contributor route; 04C composes the one continuous same-process endpoint;
-- the complete operation remains process-local through 04C; process loss or
+  contributor route; 04C2 composes the one continuous same-process endpoint;
+- the complete operation remains process-local through 04C2; process loss or
   scratch loss invalidates the result and requires reupload rather than routing
   a later distributed service to a local path;
 - completion, failure, cancellation, deadline, and abandoned-work cleanup are

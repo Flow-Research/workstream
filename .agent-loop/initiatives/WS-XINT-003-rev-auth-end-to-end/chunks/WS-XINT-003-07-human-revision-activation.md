@@ -1,4 +1,4 @@
-# Chunk Contract: WS-XINT-003-07 — Human Revision And Response Authority Activation
+# Chunk Contract: WS-XINT-003-07 — Human Revision Submission Authority Activation
 
 ## Status and risk
 
@@ -8,10 +8,10 @@ authority and immutable predecessor lineage.
 
 ## Goal
 
-Activate human `review.finding_response_evidence.ingest` against the exact
-obligation/preparation. Consume XINT-002-05D as sole owner of shared artifact
-preparation/`submission.create` and the already-merged XINT-002-07B ART response
-evaluator. XINT-002 owns no human REV action.
+Activate the human-review revision context for normal contributor ZIP
+preparation/`submission.create` against the exact obligation through
+XINT-002-05D. No separate response/finding artifact upload is approved;
+XINT-002-07B remains reserved. XINT-002 owns no human REV action.
 
 ## Allowed files
 
@@ -30,7 +30,7 @@ submission authorization protocol.
   head/digest and frozen or approved rebased context; it never falls back to a
   stale or moving guide context.
 - Authority binds the exact Review(needs_revision), unresolved blocking
-  findings, immutable responses/evidence, active preparation head/digest,
+  findings and reviewer note, active preparation head/digest,
   predecessor Submission, active/replacement assignment, project/task, locked
   or approved rebased guide/policies, deadline, and remaining round.
 - Predecessor advancement, preparation replacement, finding changes,
@@ -39,10 +39,8 @@ submission authorization protocol.
 - Exactly one N+1 Submission consumes one preparation/obligation; concurrent
   attempts have one winner and preserve all prior immutable history.
 - Human and checker revision sources remain mutually exclusive.
-- XINT-002-07B extends the active ART binding evaluator to response slots and
-  introduces response-slot evaluation without changing ActionId availability;
-  it denies CheckerRun-rooted remediation, and XINT-003 owns the corresponding
-  human action.
+- XINT-002-07B remains reserved and unavailable. The new contributor ZIP is the
+  revision artifact; no parallel response-artifact binding path exists.
 
 ## Verification and reviewers
 

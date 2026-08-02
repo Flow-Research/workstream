@@ -1,8 +1,8 @@
 # Risks: WS-AUTH-001 - Workstream Authorization Service
 
-Planned REV custody permits only the reconciled XINT-003-02 policy-writer path
-and designates XINT-002-07A as the sole evidence-binding availability
-transition, with 07B evaluator-only. These are planning rules, not current
+Planned REV custody permits only the reconciled XINT-003-02 policy-writer path.
+XINT-002-07A may activate reviewer packet materialization only; evidence
+binding remains planned/unavailable and 07B is reserved. These are planning rules, not current
 runtime protections; enforcement begins only when the named activation gates
 merge and activate their exact actions.
 

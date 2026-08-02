@@ -10,10 +10,9 @@
    self-review. Submitter/adjudicator/admin roles do not substitute.
 5. `review.context.read` and `review.chain.read` expose bounded lease-scoped
    facts. Neither grants generic artifact or historical-byte access.
-6. Finding evidence, response evidence, and ART byte binding are separate
-   actions with separate human/service principals. Reviewer finding evidence
-   may activate before decision; contributor response evidence activates only
-   after `needs_revision` creates the exact obligation and preparation.
+6. Reviewer note/findings and bounded contributor response text require no
+   separate artifact upload in v0.1. ART review-evidence binding remains
+   planned/unavailable pending separate REV-owned intent.
 7. `review.decision` activates only after Review, findings/resolutions,
    FinalAcceptance when accepting, Task/Assignment effects, CON records, audit,
    and outbox are one fail-closed transaction.
@@ -41,5 +40,6 @@
     persistence records. XINT-003-02 introduces the sole append-only writer and
     removes the four legacy callable mutator/construction paths named in the
     reconciled REV-03P/AUTH-12D2 contracts.
-17. XINT-002-07A is the only review-evidence binding availability transition;
-    07B adds response-slot evaluator shape without changing availability.
+17. XINT-002-07A activates reviewer packet materialization only. Review-evidence
+    binding remains planned/unavailable; 07B is reserved pending separate
+    REV-owned intent.

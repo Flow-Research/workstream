@@ -676,3 +676,49 @@ declarations that have no active v0.1 provider meaning. Chunk 03 removes direct
 provider schemes from guide-source identity. Chunk 05 deletes the remaining
 caller transport as part of the submission binding clean cut. Later code must
 not preserve an alias, fallback, or compatibility parser.
+
+## 2026-08-02 Remaining v0.1 Execution Amendment
+
+This section supersedes the earlier unsplit future-chunk sequence. It does not
+change the merged foundation or guide extraction design.
+
+```text
+AUTH-04B implementation/activation [merged PR #245]
+-> ART-03C guide verified-pipeline clean cut
+-> ART-04A1 legacy contributor-intake removal
+-> ART-04A2 bounded outer-ZIP safety/intake
+-> ART-04A3 semantic manifest + unchanged-work gate
+-> ART-04B scratch-bound platform/project prechecks
+-> XINT-06A pre-submit materializer activation
+-> ART-04C1 durable intent + one provider write
+-> ART-04C2 verified ready-admission publication
+-> XINT-05A contributor preparation activation
+-> ART-05A atomic Submission/binding/admission consumption
+-> XINT-05B Submission/binding activation
+-> ART-05B legacy Submission transport/API + automatic dispatch clean cut
+-> ART-06A post-submit checker snapshot/materialization
+-> ART-06B checker output binding and routing
+-> XINT-06B post-submit/output activation
+-> ART-07A lease-scoped reviewer packet materialization
+-> XINT-07A reviewer packet activation only
+-> ART-07B accepted-contribution artifact identity handoff
+-> ART-08A Local/MinIO real API lifecycle proof
+-> ART-08B AWS production-readiness/activation proof
+-> XINT-08 + ART-08C final v0.1 conformance
+```
+
+04A1-04C2 remain hidden internal pieces of one continuous contributor request.
+No intermediate HTTP route, durable upload session, scratch handle, local path,
+or prepared authorization crosses those PR boundaries. 04C2 alone composes the
+hidden endpoint after every internal dependency exists.
+
+XINT-06 must split because live preparation requires the fixed pre-submit
+materializer before XINT-05A can safely activate the human preparation action.
+The later 06B activation owns only post-submit materialization plus checker
+output write/binding. This removes the previous dependency cycle.
+
+Reviewer packet materialization is an ART byte-custody capability consumed by
+REV under an exact active lease. ART creates no review aggregate or decision.
+Reviewer evidence upload/binding is not required by the approved v0.1 reviewer
+workflow and remains unavailable. CON records the accepted Submission and ART
+identity without provider I/O. Client delivery is explicitly deferred.

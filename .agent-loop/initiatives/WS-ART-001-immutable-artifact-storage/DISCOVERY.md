@@ -159,3 +159,28 @@ containers must pass one bounded classifier that distinguishes DOCX, PPTX, and
 XLSX by internal markers. Audio/video transcription and OCR are not required by
 current v0.1 setup and remain unsupported. PNG/JPEG/WebP classification and
 metadata do not imply OCR or textual sufficiency.
+
+## 2026-08-02 End-to-End v0.1 Planning Audit
+
+Current `main` contains all ART guide implementation through `03B4`. During
+this audit AUTH-04B was still pending; it subsequently merged in PR #245 at
+`6babf81b`. Both fixed-service guide binding/read actions are now active, so
+ART-03C may start after this planning reconciliation merges.
+
+The remaining map had four material defects:
+
+1. statuses still described merged 03B chunks as proposed or active;
+2. 04A, 04C, 05, and 07 crossed too many L1 boundaries for one PR;
+3. XINT-05A would activate contributor preparation before the fixed
+   `artifact.pre_submit.checker_input.materialize` service action, even though
+   hidden 04B makes that authority mandatory inside the continuous request;
+4. ART ended at checker routing while XINT expected later reviewer artifact
+   capabilities and the product intent required accepted contribution records
+   to retain the same artifact identity.
+
+The corrected finish line is bounded: ART owns guide cutover, one-ZIP intake,
+semantic identity, prechecks, durable ready admission, atomic Submission
+binding, checker materialization/output custody, reviewer packet byte access,
+and accepted-contribution identity projection. REV owns review lifecycle and
+notes/findings; CON owns ContributionRecord; client delivery remains a future
+owner and is not silently implemented by ART v0.1.

@@ -1,19 +1,26 @@
-# Chunk Contract: WS-XINT-002-07B — Response Artifact Evaluator Extension
+# Reserved Contract: WS-XINT-002-07B — Future Review Evidence Binding
+
+Status: Not approved for v0.1. `artifact.review_evidence.binding.create`
+remains planned and unavailable.
 
 ## Goal
 
-Extend the already-active `artifact.review_evidence.binding.create` evaluator to human-revision response slots after the exact REV obligation and preparation exist.
+Preserve the future design question for review-evidence or contributor-response
+artifacts without creating an implementation or activation path.
 
 ## Boundary
 
-This chunk changes no ActionId availability, registers no action, and creates no identity. It reuses `workstream.artifact.binding` and the existing opaque transaction-bound prepared authorization. Human response authority remains with XINT-003-07; shared Submission actions remain with XINT-002-05D.
+No implementation may begin until a separate REV-owned intent defines why an
+uploaded evidence artifact is required, its lifecycle, and its relationship to
+the approved reviewer decision plus note/findings workflow.
 
 ## Acceptance criteria
 
-- Server-derived `contributor_response` mode binds `Review(needs_revision)`, unresolved finding/response slot, obligation, preparation head/digest, contributor assignment, predecessor Submission, deadline/round, guide/policies, verified content, session, transaction, request, and decision evidence.
-- CheckerRun-rooted remediation, wrong service/action/mode, stale preparation, predecessor advancement, expired/exhausted obligation, copied/replayed handle, and cross-resource facts fail closed before durable mutation.
-- ART binding and the human REV mutation commit or roll back together. The binding service cannot create a Submission or inherit contributor authority.
+- no ActionId availability changes;
+- reviewer packet access remains independent from evidence binding;
+- reviewer decisions and note/findings require no artifact upload;
+- any future activation requires a new reviewed contract and explicit human approval.
 
 ## Stop
 
-Do not change catalogue availability or add generic artifact access.
+Do not implement or activate this reserved capability in v0.1.

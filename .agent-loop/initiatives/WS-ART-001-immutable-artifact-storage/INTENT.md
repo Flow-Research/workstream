@@ -130,8 +130,12 @@ v0.1 contribution lifecycle.
 - no candidate storage namespace, promotion copy, or temporary provider
   retention window;
 - no second artifact recovery aggregate;
-- no review packet or reviewer evidence implementation, which remains WS-REV;
+- no reviewer queue, lease, assignment, decision, or finding lifecycle, which
+  remains WS-REV; ART supplies only exact integrity-checking byte access;
 - no payment, reputation, blockchain, or marketplace expansion.
+- no client-delivery lifecycle in v0.1. Contribution records retain the
+  accepted Submission/binding identity; a future delivery owner must consume a
+  separately authorized ART egress capability without changing that identity.
 
 ## Proof
 

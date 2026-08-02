@@ -45,20 +45,20 @@ mappings, and availability must remain identical.
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-05A` | Planned: `artifact.submission_bundle.prepare` |
-| `WS-AUTH-001-ART-04B` | Planned: `artifact.pre_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-05` | Planned: `artifact.submission.binding.create` |
-| `WS-AUTH-001-ART-06A` | Planned: `artifact.post_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-06B` | Planned: `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07` | Planned: `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+| `WS-XINT-002-06A` | Planned: `artifact.pre_submit.checker_input.materialize` |
+| `WS-XINT-002-05B` | Planned: `artifact.submission.binding.create` |
+| `WS-XINT-002-06B` | Planned: `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+| `WS-XINT-002-07A` | Planned: `artifact.review_packet.materialize` only |
+| Future REV-owned activation, not approved for v0.1 | Planned/unavailable: `artifact.review_evidence.binding.create` |
 
-Runtime owner `WS-XINT-002-07` contains two planning sub-waves: 07A is the
-only availability transition and initially permits finding slots; 07B changes
-no availability and only extends the evaluator to response slots.
+Runtime owner `WS-XINT-002-07` retains catalogue custody. The only approved
+v0.1 availability transition is 07A packet materialization. Evidence binding
+remains planned and unavailable pending a separate REV-owned intent.
 
 `WS-AUTH-001-ART-CUSTODY` historically transferred 25 rows. WS-XINT-002-01
 reconciles the live catalogue by removing the six unused multi-step upload rows
 and registering three end-to-end bundle/review rows. The resulting 22 rows have
-exact owner cardinalities `3/8/2/1/1/1/1/1/2/2` in the table order above. The
+exact action cardinalities `3/8/2/1/1/1/1/3/1/1` in the table order above. The
 `OPERATOR` suffix denotes only future activation custody; it grants no Operator
 entitlement. Sixteen actions remain planned after the three ART foundation
 service actions, `artifact.guide_source.ingest`, and the two fixed-service
@@ -138,9 +138,9 @@ fresh replay.
 Counts are derived from trusted `main` when a gate executes. REV registration
 adds exactly four planned actions and zero active actions. WS-XINT-002-01
 registers review-evidence binding under runtime owner `WS-XINT-002-07`; planned
-sub-wave 07A adds it to the
-existing `workstream.artifact.binding` static row without adding an identity or
-database grant.
+and unavailable. It may remain named in the closed
+`workstream.artifact.binding` static matrix, but 07A does not activate or extend
+it. Any activation requires a separate approved REV-owned intent.
 
 ## Prepared mutation prerequisite
 

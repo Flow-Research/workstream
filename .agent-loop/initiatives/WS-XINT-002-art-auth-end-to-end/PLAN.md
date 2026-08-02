@@ -11,13 +11,20 @@ evidence-gated activation waves:
    their evidence-backed activation chunks.
 3. Activate fixed internal recovery services before any durable provider work.
 4. Activate guide ingest/use only after the matching hidden ART behavior.
-5. Activate initial contributor preparation, then atomic Submission/binding
-   consumption, then checker-remediation and human-review revision variants as
-   separate reviewable gates.
-6. Activate checker materialization/output only after exact checker behavior.
-7. Activate reviewer packet and evidence binding only after both ART and REV
-   provide their hidden typed facts and lease/revision guards.
+5. Activate pre-submit checker materialization after hidden ART-04B, then
+   activate initial contributor preparation only after the complete hidden
+   ready-admission path exists.
+6. Activate atomic Submission/binding consumption, then post-submit checker
+   materialization/output after exact ART/CHECKER behavior; remediation and
+   human-review revision contexts remain separate gates.
+7. Activate reviewer packet materialization only after ART and REV provide the
+   hidden typed facts and lease guards. Keep evidence binding unavailable.
 8. Run end-to-end conformance and crossed-state proof.
+
+The 2026-08-02 ART audit corrects two future waves: split chunk 06 into 06A
+pre-submit materialization before XINT-05A and 06B post-submit/output after
+ART-06A/06B; activate reviewer packet materialization independently while
+review-evidence binding remains planned absent separately approved REV intent.
 
 Registration is deliberately complete up front. Activation remains separate
 because AUTH cannot safely allow an action until the protected implementation,
@@ -54,6 +61,14 @@ change its availability; it may not invent another action or permission.
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | `workstream.artifact.materializer` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
+
+The canonical set records catalogue custody, not approval to activate every
+row. For v0.1, `review.finding_evidence.ingest`,
+`review.finding_response_evidence.ingest`, and
+`artifact.review_evidence.binding.create` remain planned/unavailable future
+rows. Reviewers record a decision plus note/findings without uploading an
+artifact. Only `artifact.review_packet.materialize` is in the approved reviewer
+artifact activation sequence.
 
 The existing bounded Operator actions remain unchanged. Fixed recovery services execute
 recovery; Operators request retry/reconciliation and inspect bounded state.

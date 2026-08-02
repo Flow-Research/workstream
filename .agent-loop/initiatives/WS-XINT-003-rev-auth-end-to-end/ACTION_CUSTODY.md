@@ -15,10 +15,10 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 | `review.preference_expiry.run` | `operations.timer.run` | fixed preference-expiry service only | due preference row | REV | registered planned | `WS-XINT-003-03B` |
 | `review.lease_expiry.run` | `operations.timer.run` | fixed lease-expiry service only | due ReviewLease | REV | registered planned | `WS-XINT-003-03B` |
 | `review.context.read` | `submission.read_for_review` | owning reviewer and active exact lease | immutable packet/context | REV | registered planned | `WS-XINT-003-04` |
-| `review.finding_evidence.ingest` | `review.decision` | owning reviewer and active exact lease | finding slot + verified commitment | REV | registered planned | `WS-XINT-003-04` |
+| `review.finding_evidence.ingest` | `review.decision` | future reviewer evidence-upload scope | future evidence slot | REV | registered planned/unavailable | future separate REV-owned intent |
 | `review.chain.read` | `review.chain.read` | owning reviewer and active exact lease | bounded task/Submission review chain | REV | registered planned | `WS-XINT-003-05` |
 | `review.decision` | `review.decision` | owning reviewer and active exact lease | Review + findings/resolutions + lifecycle effects | REV | registered planned | `WS-XINT-003-06` |
-| `review.finding_response_evidence.ingest` | `submission.create` | assigned contributor; exact human-revision obligation | response slot + preparation + predecessor | REV | registered planned | `WS-XINT-003-07` |
+| `review.finding_response_evidence.ingest` | `submission.create` | future contributor evidence-upload scope | future response evidence slot | REV | registered planned/unavailable | future separate REV-owned intent |
 | `review.queue.inspect` | `review.queue.inspect` | Operator; bounded/redacted operational scope | queue operational view | REV | registered planned | `WS-XINT-003-08A` |
 | `review.lease.force_release` | `review.lease.force_release` | Operator; canonical reason required | exact ReviewLease | REV | registered planned | `WS-XINT-003-08A` |
 | `review.queue.routing.override` | `review.queue.override` | Operator; canonical reason required | exact queue entry/routing state | REV | registered planned | `WS-XINT-003-08A` |
@@ -45,7 +45,7 @@ The 19 registered `review.*` rows move from historical `AUTH_REV_*` planning lab
 | `review.artifact_reference.reconcile` | `workstream.review.artifact_reference_reconciliation` | this action only | `artifact_reference`; bounded review/reference shard | every human and all other services | identity, reference IDs, reason, cursor, request/idempotency, decision event |
 | `review.projection.rebuild` | `workstream.review.projection` | this action only | `projection_rebuild`; named projection/shard | every human and all other services | identity, projection, watermark, cursor, request/idempotency, decision event |
 | `artifact.review_packet.materialize` | `workstream.artifact.materializer` | global matrix also contains pre/post-submit materialization; this is its review-surface action | exact active-lease packet manifest | every human and all other services | actor/link, lease/packet/Submission/content, digests, request/transaction, decision event |
-| `artifact.review_evidence.binding.create` | `workstream.artifact.binding` | global matrix also contains guide/submission/checker binding; this is its review-surface action | 07A `reviewer_finding`; 07B adds `contributor_response`; exact slot/content | every human and all other services; response mode denied until 07B | identity, mode, review/lease or obligation/preparation, slot/content, request/transaction, decision event |
+| `artifact.review_evidence.binding.create` | `workstream.artifact.binding` | future ART review-surface action | no approved v0.1 mode; planned/unavailable | every principal | future REV-owned contract required before implementation |
 
 The six proposed REV identities are fixed planning names; they are not provisioned or admitted until their activation chunks. Celery payloads contain identifiers and provenance only, and every command prepares fresh authority inside its transaction.
 
@@ -54,7 +54,7 @@ The six proposed REV identities are fixed planning names; they are not provision
 | ActionId | PermissionId | Principal/resource constraint | Runtime owner and planned wave |
 |---|---|---|---|
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed ART materializer; exact active-lease packet | runtime `WS-XINT-002-07`; activation sub-wave `07A` |
-| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed ART binding service; exact finding/response slot | runtime `WS-XINT-002-07`; availability sub-wave `07A`, evaluator extension `07B` |
+| `artifact.review_evidence.binding.create` | `artifact.binding.create` | future fixed ART binding service only | runtime catalogue custody `WS-XINT-002-07`; no approved activation wave |
 | `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor; exact human-revision preparation | availability `WS-XINT-002-05A`; revision-context evaluator extension `05D` |
 | `submission.create` | `submission.create` | assigned contributor; exact prepared human revision | availability `WS-XINT-002-05B`; revision-context evaluator extension `05D` |
 
@@ -73,10 +73,10 @@ These actions are not XINT-003 custody. Generic artifact download, adjudication,
 | `review.preference_expiry.run` | merged hidden REV-06 preference timer command |
 | `review.lease_expiry.run` | merged hidden REV-06 lease timer command |
 | `review.context.read` | merged hidden REV-07 context/packet membership plus XINT-002-07A packet materialization |
-| `review.finding_evidence.ingest` | merged hidden REV-07 finding-slot behavior plus XINT-002-07A finding binding |
+| `review.finding_evidence.ingest` | future only; approved v0.1 records note/findings without uploaded evidence |
 | `review.chain.read` | merged hidden REV-07 bounded chain behavior plus active context boundary |
 | `review.decision` | merged hidden REV-08 decision kernel plus required CON flush-only participant |
-| `review.finding_response_evidence.ingest` | merged hidden REV-09A obligation/preparation plus merged XINT-002-07B response evaluator |
+| `review.finding_response_evidence.ingest` | future only; requires separate approved REV evidence-upload intent |
 | `review.queue.inspect` | merged hidden REV-11 bounded/redacted queue inspection |
 | `review.lease.force_release` | merged hidden REV-11 force-release command |
 | `review.queue.routing.override` | merged hidden REV-11 override command |
@@ -90,6 +90,6 @@ These actions are not XINT-003 custody. Generic artifact download, adjudication,
 | `review.artifact_reference.reconcile` | merged hidden REV-12 artifact-reference command and typed ART repair port |
 | `review.projection.rebuild` | merged hidden REV-12 derived-projection command |
 | `artifact.review_packet.materialize` | XINT-002-07A after hidden ART packet behavior and REV active-lease manifest |
-| `artifact.review_evidence.binding.create` | XINT-002-07A finding-slot behavior; XINT-002-07B response-slot behavior after hidden REV obligation/preparation |
+| `artifact.review_evidence.binding.create` | future only; remains planned/unavailable in v0.1 |
 | `artifact.submission_bundle.prepare` | XINT-002-05D after hidden REV human-revision preparation |
 | `submission.create` | XINT-002-05D after a verified, consumable human-revision admission |

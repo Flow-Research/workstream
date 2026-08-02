@@ -501,3 +501,40 @@ incident reference to authorized Operators. A current-generation transient
 cancellation may retry; stale-generation cancellation commits no report. All
 other terminal source-format or content failures require a corrected item in a
 new snapshot. None creates a sufficiency decision.
+
+## D47 - Pre-Submit Materializer Activates Before Contributor Preparation
+
+The continuous submission-bundle request cannot become live while its fixed
+pre-submit materializer is unavailable. AUTH therefore splits checker
+activation: pre-submit materialization activates after hidden ART-04B evidence
+and before XINT-05A activates contributor preparation. Post-submit
+materialization and checker output/binding activate later after ART-06A/06B.
+
+## D48 - Remaining L1 Submission Work Is Split By Durable Boundary
+
+Legacy intake removal, ZIP safety, semantic identity/change detection, durable
+put intent, ready-admission publication, atomic Submission consumption, and
+legacy Submission API cutover are separate PRs. Process-local scratch remains
+continuous across hidden 04A/04B/04C orchestration; no split serializes a
+scratch handle or exposes an intermediate route.
+
+## D49 - Reviewer Access Is An ART Capability, Not An ART Review Aggregate
+
+ART supplies a hidden exact-binding review-packet materialization capability
+that recomputes full digest and size. REV owns packet manifest, lease, queue,
+assignment, decision, and note/findings. v0.1 has no reviewer-uploaded revision
+artifact. Review-evidence binding remains planned unless a separately approved
+REV requirement proves it is needed.
+
+## D50 - Contribution Preserves Identity Without Reading Bytes
+
+CON creates the ContributionRecord and references the accepted immutable
+Submission and ART binding/content identities. Core contribution creation does
+not require provider access or a new ART write. Client delivery is outside the
+v0.1 Workstream lifecycle and requires a future reviewed initiative.
+
+## D51 - Live Proof Is Split From Product Implementation
+
+Local/MinIO product lifecycle proof, AWS deployment activation proof, and final
+cross-domain conformance are separate PRs. AWS readiness cannot bury product
+behavior, and product API proof cannot claim AWS production eligibility.

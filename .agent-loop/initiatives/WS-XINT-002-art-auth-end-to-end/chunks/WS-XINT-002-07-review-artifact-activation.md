@@ -7,15 +7,14 @@ Superseded before implementation by `WS-XINT-002-07A` and
 
 ## Split invariant
 
-07A is the only availability transition: it activates packet materialization
-and the one evidence-binding ActionId for reviewer-finding slots while hard-
-denying response-slot shapes. 07B changes no ActionId availability and extends
-only that evaluator after an exact human revision obligation and preparation
-exist. Human REV actions stay with XINT-003; shared submission actions stay
-with XINT-002-05D.
+07A is the only approved v0.1 availability transition and activates packet
+materialization only. `artifact.review_evidence.binding.create` remains planned
+and unavailable. 07B is reserved pending a separately approved REV-owned
+evidence-upload intent. Human REV actions stay with XINT-003; shared submission
+actions stay with XINT-002-05D.
 
-Everything below is the historical combined design input allocated between 07A
-and 07B. It is retained for provenance and is not executable as one chunk.
+Everything below is historical combined design input. It is retained for
+provenance and is not executable as one chunk or approved v0.1 behavior.
 
 ## Risk class
 

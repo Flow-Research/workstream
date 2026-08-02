@@ -7,10 +7,10 @@
 | `WS-XINT-003-02B` | Activate the sole review/revision policy mutation service through AUTH PREP after immutable lineage exists. | L1 | merged 02A |
 | `WS-XINT-003-03A` | Activate concealed reviewer current-work plus claim/release/preference with exact project grant, self-review denial, global lease limit, and atomic lease/packet-manifest freeze. | L1 | 02B plus hidden REV queue/lease behavior |
 | `WS-XINT-003-03B` | Activate preference and lease expiry fixed services only. | L1 | 03A plus hidden timer behavior |
-| `WS-XINT-003-04` | Activate human `review.context.read` and reviewer finding evidence while consuming XINT-002-07A's ART-only packet/materialization/binding capability. | L1 | 03B plus hidden REV packet/evidence manifests and XINT-002-07A |
+| `WS-XINT-003-04` | Activate human `review.context.read` while consuming XINT-002-07A packet materialization; reviewer note/findings require no artifact upload. | L1 | 03B plus hidden REV packet manifest and XINT-002-07A |
 | `WS-XINT-003-05` | Activate only bounded `review.chain.read`, consuming the active REV context and XINT-002 packet/materialization boundary. | L1 | 04 plus merged XINT-002-07A |
 | `WS-XINT-003-06` | Activate `review.decision` only for the hidden atomic Review/FinalAcceptance/CON composition. | L1 | 05 plus REV decision and merged CON participant |
-| `WS-XINT-003-07` | Activate human contributor response evidence, consuming XINT-002-05D shared revision submission and the already-merged XINT-002-07B ART response evaluator. | L1 | 06 plus hidden REV revision behavior, XINT-002-05D, and merged XINT-002-07B |
+| `WS-XINT-003-07` | Activate human-review revision preparation/Submission context through XINT-002-05D; no response-artifact upload is approved. | L1 | 06 plus hidden REV revision behavior and XINT-002-05D |
 | `WS-XINT-003-08R` | Register four missing privileged recovery/lifecycle ActionIds as planned with complete catalogue/migration parity; activate nothing. | L1 | 07 plus exact hidden-feature registration manifests |
 | `WS-XINT-003-08A` | Activate Project Manager and Operator queue/revision recovery commands with exact scope and reasons. | L1 | 08R plus hidden REV recovery behavior |
 | `WS-XINT-003-08B` | Activate both identities for the single `review.reconcile.run` ActionId together, plus artifact-reference, projection, and lifecycle-control surfaces. | L1 | 08A plus hidden REV jobs/projection/control |

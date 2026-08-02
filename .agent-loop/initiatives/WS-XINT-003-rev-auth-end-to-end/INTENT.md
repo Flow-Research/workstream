@@ -57,7 +57,8 @@ separate from activation and product route release.
 - REV owns review/revision product semantics and canonical lifecycle rows.
 - AUTH owns identity, permissions, candidates, evaluation, PREP custody, and
   authorization evidence.
-- ART owns verified bytes, review packet materialization, and evidence binding.
+- ART owns verified bytes and review packet materialization. Review-evidence
+  binding is future/planned and unavailable absent separate REV-owned intent.
 - Task/Submission/Checker owners supply exact upstream and resubmission facts.
 - CON owns contribution rules and conditional award persistence.
 - The request route or service command owns the transaction and commits once.

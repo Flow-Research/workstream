@@ -378,7 +378,7 @@ The paired artifact hidden-behavior matrix is closed:
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`, and `artifact.guide_source.binding.create -> artifact.binding.create`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
 | `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
-| `WS-ART-001-04A` through `04C` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; remains unavailable until 04C evidence and the later WS-XINT-002-05A activation contract |
+| `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04B depends on 04A3, XINT-002-06A activates its fixed pre-submit materializer before 04C1, and the contributor action remains unavailable until complete 04C2 evidence and WS-XINT-002-05A |
 | `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
@@ -386,9 +386,10 @@ The paired artifact hidden-behavior matrix is closed:
 
 WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation
-may execute that ActionId while it remains planned; activation waits until
-ART-04A-C publish the complete hidden surface and WS-XINT-002-05A consumes its
-exact evidence.
+may execute that ActionId while it remains planned. The mandatory order is
+ART-04A1 -> 04A2 -> 04A3 -> 04B -> XINT-002-06A -> ART-04C1 -> 04C2 ->
+XINT-002-05A. This ensures fixed-service pre-submit materialization is active
+before contributor preparation can become live.
 
 WS-XINT-002-04A activates only `artifact.guide_source.ingest`. The existing
 permission belongs only to the Project Manager role and is evaluated through an
@@ -433,15 +434,15 @@ A mapping is not a permission alias.
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
-| `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
-| `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
-| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
+| `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
+| `WS-XINT-002-05B` | `artifact.submission.binding.create` |
+| `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+| `WS-XINT-002-07A` | `artifact.review_packet.materialize` only; `artifact.review_evidence.binding.create` remains planned/unavailable |
 
-Within that single runtime owner, planning sub-wave 07A is the only
-availability transition and initially permits finding slots; 07B changes no
-availability and only extends the evaluator to response slots.
+The approved v0.1 review flow has a reviewer decision plus note/findings bound
+to the reviewed Submission. It does not include a reviewer-uploaded artifact.
+Therefore 07A activates packet materialization only; evidence binding remains
+planned and unavailable unless a later REV-owned intent explicitly approves it.
 
 The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. WS-XINT-002-03 activates the three internal
@@ -469,7 +470,7 @@ remain planned and unavailable, and add no migration.
 | `operations.artifact_storage_admission.read` | `operations.status.read` | Operator | deployment artifact-storage namespace | `02D` |
 | `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | exact covered Project Manager | guide-source snapshot item | `03` |
 | `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source binding and verified replica | `03` |
-| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `WS-XINT-002-05A` |
+| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `04C2` |
 | `artifact.guide_source.binding.create` | `artifact.binding.create` | fixed binding service | guide-source snapshot item | `03` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | fixed binding service | submission | `05` |
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | fixed binding service | checker run | `06B` |
@@ -479,12 +480,12 @@ remain planned and unavailable, and add no migration.
 | `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
-| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
-| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | finding slot in 07A; response slot added by evaluator-only 07B | `WS-XINT-002-07` |
+| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `07A` |
+| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | future REV-owned evidence slot; no approved v0.1 activation | future |
 
 The resource-owning chunk cells above identify ART hidden-behavior custody; they
 are distinct from the AUTH activation-custodian table and runtime
-`ActionOwner`. 07A/07B are contract sub-waves, not new catalogue owner values.
+`ActionOwner`. XINT activation waves do not create new catalogue owner values.
 
 The fixed internal service identities and their complete action sets are also
 closed:
@@ -494,7 +495,7 @@ closed:
 | `workstream.artifact.verifier` | `artifact.verification.execute` |
 | `workstream.artifact.put_resolver` | `artifact.put_attempt.resolve` |
 | `workstream.artifact.scheduler` | `artifact.pending_work.scan` |
-| `workstream.artifact.binding` | `artifact.guide_source.binding.create`, `artifact.submission.binding.create`, `artifact.checker_output.binding.create`, `artifact.review_evidence.binding.create` |
+| `workstream.artifact.binding` | active/activatable v0.1: `artifact.guide_source.binding.create`, `artifact.submission.binding.create`, `artifact.checker_output.binding.create`; planned/unavailable future: `artifact.review_evidence.binding.create` |
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |

@@ -46,7 +46,8 @@ injection, and provider mutation calls outside the artifact-storage module.
 | content identity, product provenance, binding, lifecycle, audit | Workstream |
 | verification result and recovery coordination | Workstream/PostgreSQL |
 | private immutable bytes and protocol observations | configured object store |
-| review packet and reviewer evidence aggregates | WS-REV using artifact bindings |
+| review packet manifests | WS-REV using ART materialization |
+| reviewer evidence artifact aggregates/uploads | Future REV-owned intent; not approved for v0.1 |
 
 Provider credentials grant transport access only. They are not actor identity,
 product role, product authorization, or proof of stored content.
@@ -406,8 +407,9 @@ release charges or mutate capacity.
 
 The binding lookup resource vocabulary is exactly `project`, `project_guide`,
 `guide_source_snapshot`, `guide_source_snapshot_item`, `task`, `submission`, or
-`checker_run`. Review lookup remains deferred until WS-XINT-002-07A; response-
-slot evaluation is separately deferred to evaluator-only 07B. The audit
+`checker_run`. Review packet lookup remains deferred until WS-XINT-002-07A.
+Review/response evidence binding is future/planned and unavailable; 07B is
+reserved pending separate REV-owned intent. The audit
 resource vocabulary is exactly
 `artifact_binding`, `artifact_content`, `artifact_replica`, `artifact_receipt`,
 `artifact_verification_job`, or `artifact_recovery_attempt`. Adding a product or
@@ -1572,6 +1574,21 @@ preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact
 bytes in PostgreSQL.
 
 ## Verification Strategy
+
+### Remaining v0.1 dependency order
+
+The pre-submit checker materializer is a mandatory part of preparation, so its
+fixed-service AUTH activation must merge after hidden ART-04B and before
+contributor preparation is activated. Post-submit materialization and checker
+output actions remain a later activation after ART-06A/06B. This ordering
+prevents a live contributor route whose mandatory checker read is unavailable.
+
+ART later supplies an exact, authorized reviewer-packet byte capability, while
+REV owns queueing, leases, decisions, and the reviewer note/findings. The
+approved v0.1 review flow does not upload a reviewer revision artifact. CON owns
+ContributionRecord lifecycle and records the accepted immutable Submission and
+ART identity without provider I/O. Client delivery/export is outside this v0.1
+initiative and requires a separately planned egress capability.
 
 - one conformance suite runs against LocalStorage and real MinIO;
 - inactive validation proves the closed AWS S3 configuration contract, while

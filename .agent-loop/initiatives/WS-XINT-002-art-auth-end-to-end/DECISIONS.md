@@ -26,3 +26,7 @@
     resource contexts, locks, and race proof belong to chunks 03-07 and 05A-D.
 11. Initiative status records durable merged facts and reviewed delivery order,
     never transient “active” or “merge-pending” branch state.
+12. Pre-submit materialization activates before contributor preparation;
+    post-submit materialization and checker output/binding activate later.
+13. Reviewer packet activation does not imply reviewer evidence upload or
+    binding. That action remains planned without separately approved REV intent.

@@ -1,26 +1,27 @@
 # Chunk Map: WS-XINT-002 ART-AUTH End-to-End Contract
 
-| Chunk | Purpose | Risk | Dependency |
+| Chunk | Purpose | Risk | Dependency/status |
 |---|---|---|---|
-| `WS-XINT-002-01` | Reconcile the entire ART catalogue, permissions, owners, migration parity, and fixed-service matrix while every new action stays planned. | L1 | approved plan |
-| `WS-XINT-002-02` | Close the reusable PREP-to-ART operation interface: opaque prepared authority on durable mutation requests, no obsolete upload-session port, and no action activation. | L1 | 01 |
-| `WS-XINT-002-03` | Activate verifier, scheduler scan, and put resolver services from merged ART recovery evidence. | L1 | 02 plus ART 02C/02D evidence |
-| `WS-XINT-002-04A` | Activate Project Manager guide ingest through the one opaque PREP seam. | L1 | 02 plus merged ART 03A PREP-compatible evidence |
-| `WS-XINT-002-04B` | Activate fixed-service guide binding and guide read. | L1 | 04A plus merged ART 03B evidence |
-| `WS-XINT-002-05A` | Activate initial contributor bundle preparation and durable ready admission. | L1 | 02 plus ART 04A-C evidence |
-| `WS-XINT-002-05B` | Activate fresh human Submission creation plus fixed artifact binding with exactly-once admission consumption. | L1 | 05A plus ART 05/TASK evidence |
-| `WS-XINT-002-05C` | Activate checker-remediation submission preparation/creation against one final CheckerRun. | L1 | 05B plus checker remediation evidence |
-| `WS-XINT-002-05D` | Activate human-review revision preparation/creation against exact revision obligations. | L1 | 05B plus REV revision-preparation evidence |
-| `WS-XINT-002-06` | Activate pre/post-submit materialization and checker output/binding. | L1 | 02 plus ART 04B/06A/06B evidence |
-| `WS-XINT-002-07A` | Activate lease-scoped packets and the one evidence-binding ActionId for reviewer-finding slots; response slots hard deny. | L1 | 02 plus merged ART/REV lease/finding manifests |
-| `WS-XINT-002-07B` | Extend the active evidence-binding evaluator to exact human-revision response slots; no availability change. | L1 | 07A plus merged hidden REV obligation/preparation behavior; precedes XINT-003-07 activation |
-| `WS-XINT-002-08` | Prove complete catalogue, least privilege, revocation, replay, concurrency, audit, and live lifecycle conformance. | L1 | 03-07B including 05A-D |
+| `01` | Reconcile ART catalogue, permissions, owners, migration parity, and fixed matrix. | L1 | Merged |
+| `02` | Close reusable opaque PREP-to-ART operation interface. | L1 | Merged |
+| `03` | Activate verifier, scheduler scan, and put resolver. | L1 | Merged |
+| `04A` | Activate Project Manager guide ingest. | L1 | Merged/active |
+| `04B` | Activate fixed-service guide binding and read. | L1 | Merged/active in PR #245 (`6babf81b`) |
+| `06A` | Activate only pre-submit checker-input materialization. | L1 | Hidden ART-04B evidence; must precede 05A |
+| `05A` | Activate initial contributor preparation and durable ready admission. | L1 | 06A plus ART-04A1-04C2 evidence |
+| `05B` | Activate fresh human Submission creation plus fixed binding/consumption. | L1 | 05A plus ART-05A/TASK evidence |
+| `05C` | Activate checker-remediation submission context. | L1 | 05B plus checker remediation evidence |
+| `05D` | Activate human-review revision context. | L1 | 05B plus REV revision-obligation evidence |
+| `06B` | Activate post-submit materialization and checker output write/binding. | L1 | ART-06A/06B evidence |
+| `07A` | Activate lease-scoped reviewer packet materialization only. | L1 | ART-07A plus REV lease/packet evidence |
+| `07B` | Reserved review-evidence binding gate; keep unavailable absent new approved REV intent. | L1 | Future approved REV evidence-upload contract, if any |
+| `08` | Prove complete catalogue, least privilege, revocation, replay, concurrency, audit, and lifecycle conformance. | L1 | All activated v0.1 waves |
 
-Chunks 03-07B may be split only by the evidence boundaries named above. The
-guide wave is therefore fixed as 04A after ART-03A and 04B after ART-03B. A split
-cannot add catalogue values, permissions, identities, matrix rows, or a second
-runtime protocol; such a discovery is contract drift and returns to planning.
-Each activation chunk owns its exact feature resource contexts, non-forgeable
-session/root-bound composer proof, lock order, stale-fact matrix, and crossed
-race tests. Those facts must not be front-loaded into AUTH before the owning
-feature behavior exists.
+The split 06 ordering is mandatory: contributor preparation cannot activate
+while its fixed pre-submit materializer still denies. Review packet authority
+does not imply reviewer evidence upload or generic artifact download.
+
+Each activation chunk owns exact feature resource contexts, session/root-bound
+composer proof, lock order, stale-fact matrix, and crossed-race tests. A chunk
+cannot add catalogue values, permissions, identities, matrix rows, or another
+runtime protocol; that discovery returns to planning.

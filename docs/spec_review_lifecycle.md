@@ -20,9 +20,9 @@ The canonical REV-AUTH action custody is
 REV owns lifecycle and immutable policy semantics; AUTH owns evaluation, PREP,
 and decision evidence. ReviewPolicy and RevisionPolicy use immutable,
 append-only identities installed by XINT-003-02A; their only future writer is
-the PREP-bound mutation surface owned by XINT-003-02B. XINT-002-07A alone activates
-the ART evidence-binding ActionId for finding slots; 07B only extends its
-evaluator to response slots after an exact human revision obligation exists.
+the PREP-bound mutation surface owned by XINT-003-02B. XINT-002-07A activates
+reviewer packet materialization only. ART review-evidence binding remains
+planned/unavailable and 07B is reserved pending separate REV-owned intent.
 
 ## Precedence And Archival Inputs
 
@@ -177,7 +177,7 @@ REV adds these lifecycle records in later hidden chunks:
 - `ReviewPacketManifest`
 - `Review`
 - `ReviewFinding`
-- `ReviewEvidenceArtifact`
+- future `ReviewEvidenceArtifact` only if separately approved; not v0.1
 - `RevisionContextPreparation`
 - `SubmissionFindingResponse`
 - `FindingResolution`
@@ -286,7 +286,7 @@ keys, provider URIs, scratch paths, receipts, or credentials.
 
 `ReviewPacketManifest` is an immutable REV semantic projection naming the exact
 queue entry, lease, versioned Submission, admitting CheckerRun/results, stamped
-guide or revision context, response-evidence relations, and ART binding IDs. It
+guide or revision context, bounded response relations, and ART binding IDs. It
 stores no bytes, content digest, provider location, signed URL, scratch path,
 receipt, or authorization-matrix data.
 
@@ -304,32 +304,18 @@ still holds the exact project reviewer grant, or an explicitly authorized
 Project Manager/Operator. Prior participation grants metadata history only;
 artifact bytes still require the current active lease for the exact packet.
 
-## Review And Response Evidence
+## Review Notes, Findings, And Revision Responses
 
-Reviewer finding evidence and submitter response evidence use an ART-owned
-two-phase candidate/finalize capability:
+A reviewer records exactly one decision (`accept`, `needs_revision`, or
+`reject`) plus bounded note/findings related to the exact reviewed immutable
+Submission. When revision is required, the contributor may record bounded
+response text against unresolved findings and submits one new outer ZIP through
+the normal human-review revision path. The ZIP is the revision artifact.
 
-```text
-preflight authority
--> provider upload and verification outside lifecycle locks
--> AUTH prepares final human authority
--> REV locks exact lease/finding/response lineage
--> ART locks candidate/admission/binding state
--> REV recomposes final facts and AUTH evaluates once
--> ART binding and immutable ReviewEvidenceArtifact relation flush together
--> caller commits once
-```
-
-Authority loss, lease expiry, assignment loss, or preparation supersession may
-leave only an ART-owned unbound candidate governed by ART retention. It creates
-no canonical evidence relation or product effect. Decision and resubmission
-revalidate evidence lineage again.
-
-ART owns bytes, candidates, bindings, verification, retention, provider
-execution, and recovery. REV owns packet membership, evidence-slot purpose, and
-the immutable relation from a finalized ArtifactBinding to the exact Review,
-finding, response, or resolution evidence slot. Human bearer tokens and provider
-locators never cross into storage calls.
+There is no separate reviewer-finding or contributor-response artifact upload
+in v0.1. `artifact.review_evidence.binding.create` and related evidence-ingest
+actions remain planned/unavailable. Any future evidence-upload lifecycle needs
+a separate REV-owned intent and reviewed ART/AUTH contract.
 
 ## Decision Transaction
 
@@ -525,16 +511,15 @@ and change summary.
 ## Finding Replay And Resubmission
 
 For a human-review origin, every unresolved blocking ReviewFinding requires one
-immutable `SubmissionFindingResponse` from the assigned submitter, with response
-text and optional finalized
-evidence binding. Responses to advisory findings are optional unless the locked
+immutable `SubmissionFindingResponse` from the assigned submitter, with bounded
+response text. Responses to advisory findings are optional unless the locked
 policy explicitly requires them. The checker-remediation path instead exposes
 only bounded contributor-safe CheckerResult messages/suggested fixes, requires
 no fabricated ReviewFinding/response/resolution, and returns to open routing
 after corrected checker admission.
 
 A human-Review Submission N+1 links its immediate predecessor, exact preparation
-head, required responses, evidence relations, and target TaskAssignment. A
+head, required bounded response text, and target TaskAssignment. A
 checker-remediation Submission N+1 instead binds the exact final needs-revision
 CheckerRun through its server-derived immutable
 `remediation_source_checker_run_id` and retains the Task's existing locked
@@ -609,9 +594,9 @@ The review lifecycle currently depends on 24 unavailable actions:
 - four approved but unregistered REV actions defined below.
 
 The registered planned `artifact.review_evidence.binding.create ->
-artifact.binding.create` service action is separate and is not one of the 24.
-Future counts must be derived from trusted main at each AUTH gate; the four REV
-actions and separate ART action are never collapsed into a promised total.
+artifact.binding.create` service action is separate, unavailable, and not one
+of the 24. It has no approved v0.1 activation. Future counts must be derived
+from trusted main at each AUTH gate.
 
 The exact delivery order is:
 
@@ -736,7 +721,7 @@ surface includes separate capabilities for:
 - claim, release, and decline preference;
 - exact leased Review Context;
 - authorized bounded chain history;
-- finding and response evidence intake;
+- reviewer note/findings and bounded contributor response text;
 - review decision;
 - Task Context revision preparation read;
 - human-Review revision submission with responses and distinct checker-
@@ -826,7 +811,7 @@ become separately approved owner chunks; REV does not implement them
 opportunistically or add compatibility fallbacks.
 
 The final live proof covers first submit, checker admission, current-work
-selection, claim/release/expiry, active-lease packet access, evidence intake,
+selection, claim/release/expiry, active-lease packet access, note/findings,
 `needs_revision`, kept/forward/backward/blocked preparation, response/resolution
 replay, preferred return and takeover, accept with exactly one FinalAcceptance,
 reject, reviewer revocation, manager repair and closure, legacy recovery,
