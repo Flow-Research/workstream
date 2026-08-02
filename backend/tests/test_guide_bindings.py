@@ -2090,6 +2090,9 @@ async def test_materialization_inspection_timeout_cleans_scratch_and_records_inc
             await service.materialize_guide_source(
                 _materialization_request(ids, binding_id=binding_id)
             )
+        assert (await scratch.usage()).reservation_count == 0
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GuideSourceArtifactIncident.id))) == 1
     finally:
         scratch.close()
         await engine.dispose()

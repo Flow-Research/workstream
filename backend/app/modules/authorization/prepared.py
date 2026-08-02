@@ -67,13 +67,15 @@ class PreparedAuthorizationHandle:
 
 _HANDLE_CONSTRUCTOR_TOKEN = object()
 
-_GUIDE_RESOURCE_TYPE_BY_ACTION = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: "guide_source_binding",
-    ActionId.ARTIFACT_GUIDE_SOURCE_READ: "guide_source_read",
-}
-_GUIDE_RESOURCE_CONTEXT_BY_ACTION = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: GuideSourceBindingResourceContext,
-    ActionId.ARTIFACT_GUIDE_SOURCE_READ: GuideSourceReadResourceContext,
+_GUIDE_RESOURCE_BY_ACTION = {
+    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
+        "guide_source_binding",
+        GuideSourceBindingResourceContext,
+    ),
+    ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
+        "guide_source_read",
+        GuideSourceReadResourceContext,
+    ),
 }
 
 
@@ -363,14 +365,14 @@ class PreparedAuthorizationService:
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:
-        guide_resource_type = _GUIDE_RESOURCE_TYPE_BY_ACTION.get(action_id)
+        guide_resource = _GUIDE_RESOURCE_BY_ACTION.get(action_id)
         if (
-            guide_resource_type is not None
-            and isinstance(resource, _GUIDE_RESOURCE_CONTEXT_BY_ACTION[action_id])
+            guide_resource is not None
+            and isinstance(resource, guide_resource[1])
         ):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
-                artifact_resource_type=guide_resource_type,
+                artifact_resource_type=guide_resource[0],
                 artifact_resource_id=resource.resource_id,
             )
         if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF and isinstance(

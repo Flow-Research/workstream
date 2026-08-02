@@ -640,7 +640,11 @@ AUTH locks AuthorityControl first when final-admin safety applies
 
 The PREP foundation issues handles for `actor.profile.update_self`, the eight
 active AdminRoleGrant-backed administrative mutations, the three active fixed
-ART service actions, and Project Manager `artifact.guide_source.ingest`.
+ART foundation service actions, Project Manager
+`artifact.guide_source.ingest`, and the fixed-service
+`artifact.guide_source.binding.create` and `artifact.guide_source.read`
+actions. Submission, checker, review, and generic artifact-read actions remain
+planned and issue no handle.
 Actor-self preparation locks the exact caller
 profile and then its exact identity link. Administrative preparation locks
 `AuthorityControl(id=1)`, the exact request profile, exact request identity
