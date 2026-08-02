@@ -15,12 +15,19 @@ class ReviewPolicyInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    review_preference_window_seconds: int = Field(gt=0)
+    review_lease_duration_seconds: int = Field(gt=0)
+    max_active_review_leases_per_reviewer: Literal[1] = 1
+    self_review_allowed: Literal[False] = False
+    reject_policy: Literal["close_task"] = "close_task"
+    finding_evidence_requirement: Literal[
+        "optional", "required_for_blocking", "required_for_all"
+    ] = "optional"
     requires_second_review: bool = False
     allowed_decisions: list[Literal["accept", "needs_revision", "reject"]] = Field(
         default_factory=lambda: ["accept", "needs_revision", "reject"]
     )
     minimum_finding_fields: list[str] = Field(default_factory=list)
-    sla_hours: int | None = None
 
 
 class RevisionPolicyInput(BaseModel):
@@ -30,7 +37,6 @@ class RevisionPolicyInput(BaseModel):
 
     max_revision_rounds: int = Field(ge=1)
     revision_deadline_hours: int = Field(ge=1)
-    auto_reject_after_limit: bool = True
     allowed_resubmission_states: list[str] = Field(default_factory=lambda: ["needs_revision"])
     reviewer_reassignment_rule: str | None = None
 
@@ -592,10 +598,19 @@ class ReviewPolicyResponse(BaseModel):
     id: str
     project_id: str
     guide_version: str
+    policy_generation: int
+    policy_hash: str | None
+    semantics_status: Literal["complete", "legacy_incomplete"]
+    supersedes_policy_id: str | None
+    review_preference_window_seconds: int | None
+    review_lease_duration_seconds: int | None
+    max_active_review_leases_per_reviewer: int | None
+    self_review_allowed: bool | None
+    reject_policy: str | None
+    finding_evidence_requirement: str | None
     requires_second_review: bool
     allowed_decisions: list[str]
     minimum_finding_fields: list[str]
-    sla_hours: int | None
     created_at: datetime
 
 
@@ -607,9 +622,12 @@ class RevisionPolicyResponse(BaseModel):
     id: str
     project_id: str
     guide_version: str
+    policy_generation: int
+    policy_hash: str | None
+    semantics_status: Literal["complete", "legacy_incomplete"]
+    supersedes_policy_id: str | None
     max_revision_rounds: int
     revision_deadline_hours: int
-    auto_reject_after_limit: bool
     allowed_resubmission_states: list[str]
     reviewer_reassignment_rule: str | None
     created_at: datetime

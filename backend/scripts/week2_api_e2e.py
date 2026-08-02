@@ -505,13 +505,14 @@ def assert_finalized_submission_versions(submission: dict) -> None:
         submission: Locked submission response payload.
     """
     ensure(submission["finalized_at"] is not None, "locked submission missing finalized_at")
-    locked_versions = {
-        submission["locked_guide_version"],
-        submission["locked_review_policy_version"],
-        submission["locked_revision_policy_version"],
-        submission["locked_payment_policy_version"],
-    }
-    ensure(locked_versions == {"v1"}, f"locked context drifted: {locked_versions}")
+    ensure(submission["locked_guide_version"] == "v1", "locked guide context drifted")
+    ensure(submission["locked_review_policy_id"], "locked review policy id missing")
+    ensure(submission["locked_review_policy_generation"] == 1, "review generation drifted")
+    ensure(submission["locked_review_policy_hash"], "locked review policy hash missing")
+    ensure(submission["locked_revision_policy_id"], "locked revision policy id missing")
+    ensure(submission["locked_revision_policy_generation"] == 1, "revision generation drifted")
+    ensure(submission["locked_revision_policy_hash"], "locked revision policy hash missing")
+    ensure(submission["locked_payment_policy_version"] == "v1", "payment context drifted")
     ensure(
         all(item["finalized_at"] == submission["finalized_at"] for item in submission["evidence_items"]),
         "evidence item finalized_at does not match submission finalized_at",
@@ -806,13 +807,14 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 task.status == scenario["expected_final_task_status"],
                 f"{scenario['name']} final task status drifted: {task.status}",
             )
-            task_versions = {
-                task.locked_guide_version,
-                task.locked_review_policy_version,
-                task.locked_revision_policy_version,
-                task.locked_payment_policy_version,
-            }
-            ensure(task_versions == {"v1"}, f"{scenario['name']} task context drifted")
+            ensure(task.locked_guide_version == "v1", f"{scenario['name']} guide drifted")
+            ensure(task.locked_review_policy_id, f"{scenario['name']} review id missing")
+            ensure(task.locked_review_policy_generation == 1, "review generation drifted")
+            ensure(task.locked_review_policy_hash, f"{scenario['name']} review hash missing")
+            ensure(task.locked_revision_policy_id, f"{scenario['name']} revision id missing")
+            ensure(task.locked_revision_policy_generation == 1, "revision generation drifted")
+            ensure(task.locked_revision_policy_hash, f"{scenario['name']} revision hash missing")
+            ensure(task.locked_payment_policy_version == "v1", "payment context drifted")
             ensure(
                 task.locked_post_submit_checker_policy_id is not None
                 and task.locked_post_submit_checker_policy_version == "v1"
@@ -834,14 +836,23 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 and task.locked_pre_submit_checker_bundle_hash is not None,
                 f"{scenario['name']} task pre-submit checker lock missing",
             )
-            submission_versions = {
-                submission.locked_guide_version,
-                submission.locked_review_policy_version,
-                submission.locked_revision_policy_version,
-                submission.locked_payment_policy_version,
-            }
             ensure(
-                submission_versions == task_versions,
+                (
+                    submission.locked_review_policy_id,
+                    submission.locked_review_policy_generation,
+                    submission.locked_review_policy_hash,
+                    submission.locked_revision_policy_id,
+                    submission.locked_revision_policy_generation,
+                    submission.locked_revision_policy_hash,
+                )
+                == (
+                    task.locked_review_policy_id,
+                    task.locked_review_policy_generation,
+                    task.locked_review_policy_hash,
+                    task.locked_revision_policy_id,
+                    task.locked_revision_policy_generation,
+                    task.locked_revision_policy_hash,
+                ),
                 f"{scenario['name']} submission context drifted",
             )
             ensure(
@@ -922,13 +933,25 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 checker_run.package_hash == submission.package_hash,
                 f"{scenario['name']} package hash drifted on checker run",
             )
-            run_versions = {
-                checker_run.locked_guide_version,
-                checker_run.locked_review_policy_version,
-                checker_run.locked_revision_policy_version,
-                checker_run.locked_payment_policy_version,
-            }
-            ensure(run_versions == submission_versions, f"{scenario['name']} checker context drifted")
+            ensure(
+                (
+                    checker_run.locked_review_policy_id,
+                    checker_run.locked_review_policy_generation,
+                    checker_run.locked_review_policy_hash,
+                    checker_run.locked_revision_policy_id,
+                    checker_run.locked_revision_policy_generation,
+                    checker_run.locked_revision_policy_hash,
+                )
+                == (
+                    submission.locked_review_policy_id,
+                    submission.locked_review_policy_generation,
+                    submission.locked_review_policy_hash,
+                    submission.locked_revision_policy_id,
+                    submission.locked_revision_policy_generation,
+                    submission.locked_revision_policy_hash,
+                ),
+                f"{scenario['name']} checker context drifted",
+            )
             ensure(
                 checker_run.locked_post_submit_checker_policy_id
                 == submission.locked_post_submit_checker_policy_id,

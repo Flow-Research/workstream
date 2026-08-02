@@ -7,8 +7,10 @@ activation waves:
 
 1. Reconcile policy ownership, the complete catalogue, permissions, principal
    classes, fixed-service matrix, surface manifests, and planned availability.
-2. Cut over review/revision policy configuration through one persistence path:
-   REV owns semantics; AUTH-12D2 owns authorization and PREP consumption.
+2. First cut policy persistence and every downstream lock to immutable policy
+   identity in 02A without runtime activation. Then cut over review/revision
+   policy configuration through one persistence path in 02B: REV owns
+   semantics; AUTH-12D2 owns authorization and PREP consumption.
 3. Activate concealed reviewer current-work, claim/release/preference, and timer
    services only after REV queue/lease behavior exists.
 4. Amend XINT-002-07 into two ART-only owner waves: 07A is the only ActionId
@@ -106,7 +108,7 @@ hidden behavior are rejected.
 ## Stop boundary
 
 This planning amendment creates no runtime code and activates no action. Chunks
-02 through 09 are non-implementable planning skeletons until a current-main
+02A through 09 are non-implementable planning skeletons until a current-main
 refresh replaces every file/command placeholder with exact boundaries and the
 user explicitly requests that chunk. Planning complete does not start runtime
 work.

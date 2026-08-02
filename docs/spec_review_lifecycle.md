@@ -18,8 +18,9 @@ capability, contribution participant, or frontend.
 The canonical REV-AUTH action custody is
 `.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
 REV owns lifecycle and immutable policy semantics; AUTH owns evaluation, PREP,
-and decision evidence. ReviewPolicy and RevisionPolicy use one future
-append-only project-policy writer from XINT-003-02. XINT-002-07A alone activates
+and decision evidence. ReviewPolicy and RevisionPolicy use immutable,
+append-only identities installed by XINT-003-02A; their only future writer is
+the PREP-bound mutation surface owned by XINT-003-02B. XINT-002-07A alone activates
 the ART evidence-binding ActionId for finding slots; 07B only extends its
 evaluator to response slots after an exact human revision obligation exists.
 
@@ -204,6 +205,23 @@ also be submitted but are not fabricated merely to satisfy a schema.
 no-self-review, finding/evidence, and decision rules. `RevisionPolicy` locks
 revision limit and deadline inputs. Task execution context remains separate
 from contribution terms.
+
+Each policy version has its own opaque ID, positive generation, canonical
+SHA-256 digest, and exact Project Guide lineage. The Project Guide selects one
+review-policy identity and one revision-policy identity. A Task copies both
+exact identity triples when it enters screening; every Submission and
+CheckerRun then copies and foreign-key chains those same triples through the
+Task. Guide version identifies guide lineage only and is never used as a policy
+version alias.
+
+Rows migrated from the pre-lineage schema are retained as
+`legacy_incomplete`. They remain readable for historical explanation but cannot
+satisfy readiness or activate future review behavior because no lease or
+preference semantics are invented from the removed `sla_hours` field. Policy
+rows reject update, delete, and truncate at the database boundary. The removed
+`auto_reject_after_limit` value is not lifecycle authority: reaching a revision
+limit or deadline blocks preparation and never auto-rejects or auto-closes a
+Task.
 
 The submitter `ContributionPolicyVersion` freezes on the exact TaskAssignment.
 The reviewer version freezes independently on each ReviewLease. Project Guide

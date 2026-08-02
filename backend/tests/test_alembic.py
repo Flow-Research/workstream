@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0046_guide_sufficiency"
+HEAD_REVISION = "0047_policy_identity_lineage"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -11796,6 +11796,285 @@ async def _remove_project_role_table_blockers(database_url: str, ids: dict[str, 
                     "authority_control",
                     "actor_identity_links",
                     "actor_profiles",
+                )
+            ):
+                await connection.execute(text(f"alter table {table} enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove historical policies get exact identity without invented semantics."""
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+    ids = {
+        "project": str(uuid4()),
+        "guide": str(uuid4()),
+        "review": str(uuid4()),
+        "revision": str(uuid4()),
+    }
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "0045_guide_metadata_authority")
+            asyncio.run(_seed_xint003_02a_legacy_policies(isolated_database_env, ids))
+            command.upgrade(config, "0047_policy_identity_lineage")
+            state = asyncio.run(_xint003_02a_policy_state(isolated_database_env, ids))
+            immutable = asyncio.run(
+                _xint003_02a_policy_immutable_writes(isolated_database_env, ids)
+            )
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade populated immutable policy lineage"
+            ):
+                command.downgrade(config, "0045_guide_metadata_authority")
+            refused_state = asyncio.run(
+                _xint003_02a_policy_state(isolated_database_env, ids)
+            )
+        finally:
+            asyncio.run(_remove_xint003_02a_immutable_policies(isolated_database_env, ids))
+            command.downgrade(config, "0045_guide_metadata_authority")
+            command.upgrade(config, "head")
+
+    assert state["review"][0:3] == (ids["review"], 1, "legacy_incomplete")
+    assert state["revision"][0:3] == (ids["revision"], 1, "legacy_incomplete")
+    assert state["review"][3].startswith("sha256:")
+    assert state["revision"][3].startswith("sha256:")
+    assert state["guide"] == (
+        ids["review"],
+        1,
+        state["review"][3],
+        ids["revision"],
+        1,
+        state["revision"][3],
+    )
+    assert immutable == {
+        "partial_selection",
+        "active_selection_change",
+        "review_update",
+        "review_delete",
+        "review_truncate",
+        "revision_update",
+        "revision_delete",
+        "revision_truncate",
+    }
+    assert refused_state == state
+
+
+async def _seed_xint003_02a_legacy_policies(
+    database_url: str, ids: dict[str, str]
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            for table in ("projects", "project_guides"):
+                await connection.execute(text(f"alter table {table} disable trigger user"))
+            await connection.execute(
+                text(
+                    "insert into projects (id,name,slug,status) values "
+                    "(:project,'XINT 003 02A','xint-003-02a','draft')"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "insert into project_guides "
+                    "(id,project_id,version,status,content_markdown,created_by) values "
+                    "(:guide,:project,'v1','draft','# Legacy guide','migration-test')"
+                ),
+                ids,
+            )
+            for table in reversed(("projects", "project_guides")):
+                await connection.execute(text(f"alter table {table} enable trigger user"))
+            await connection.execute(
+                text(
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,requires_second_review,allowed_decisions,"
+                    "minimum_finding_fields,sla_hours) values "
+                    "(:review,:project,'v1',false,'[\"accept\",\"needs_revision\","
+                    "\"reject\"]'::json,'[]'::json,24)"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,max_revision_rounds,revision_deadline_hours,"
+                    "auto_reject_after_limit,allowed_resubmission_states) values "
+                    "(:revision,:project,'v1',3,48,false,'[\"needs_revision\"]'::json)"
+                ),
+                ids,
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _xint003_02a_policy_state(
+    database_url: str, ids: dict[str, str]
+) -> dict[str, tuple]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            review = tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,policy_generation,semantics_status,policy_hash "
+                            "from review_policies where id=:review"
+                        ),
+                        ids,
+                    )
+                ).one()
+            )
+            revision = tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,policy_generation,semantics_status,policy_hash "
+                            "from revision_policies where id=:revision"
+                        ),
+                        ids,
+                    )
+                ).one()
+            )
+            guide = tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select selected_review_policy_id,selected_review_policy_generation,"
+                            "selected_review_policy_hash,selected_revision_policy_id,"
+                            "selected_revision_policy_generation,selected_revision_policy_hash "
+                            "from project_guides where id=:guide"
+                        ),
+                        ids,
+                    )
+                ).one()
+            )
+            return {"review": review, "revision": revision, "guide": guide}
+    finally:
+        await engine.dispose()
+
+
+async def _xint003_02a_policy_immutable_writes(
+    database_url: str, ids: dict[str, str]
+) -> set[str]:
+    engine = create_async_engine(database_url)
+    refused: set[str] = set()
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            with pytest.raises(IntegrityError):
+                await connection.execute(
+                    text(
+                        "update project_guides set selected_review_policy_hash=null "
+                        "where id=:guide"
+                    ),
+                    ids,
+                )
+            refused.add("partial_selection")
+            await transaction.rollback()
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("alter table project_guides disable trigger guide_mutation_product_custody")
+            )
+            await connection.execute(
+                text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
+            )
+            await connection.execute(
+                text("update project_guides set status='active' where id=:guide"), ids
+            )
+            await connection.execute(
+                text("alter table project_guides enable trigger guide_mutation_product_custody")
+            )
+            await connection.execute(
+                text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
+            )
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            with pytest.raises(DBAPIError):
+                await connection.execute(
+                    text(
+                        "update project_guides set selected_review_policy_hash=:hash "
+                        "where id=:guide"
+                    ),
+                    ids | {"hash": "sha256:" + "f" * 64},
+                )
+            refused.add("active_selection_change")
+            await transaction.rollback()
+        statements = {
+            "review_update": (
+                "update review_policies set requires_second_review=true where id=:review",
+                ids,
+            ),
+            "review_delete": ("delete from review_policies where id=:review", ids),
+            "review_truncate": ("truncate review_policies", {}),
+            "revision_update": (
+                "update revision_policies set max_revision_rounds=4 where id=:revision",
+                ids,
+            ),
+            "revision_delete": ("delete from revision_policies where id=:revision", ids),
+            "revision_truncate": ("truncate revision_policies", {}),
+        }
+        for operation, (sql, params) in statements.items():
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                with pytest.raises(DBAPIError):
+                    await connection.execute(text(sql), params)
+                refused.add(operation)
+                await transaction.rollback()
+        return refused
+    finally:
+        await engine.dispose()
+
+
+async def _remove_xint003_02a_immutable_policies(
+    database_url: str, ids: dict[str, str]
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            has_lineage = bool(
+                await connection.scalar(
+                    text(
+                        "select exists(select 1 from information_schema.columns "
+                        "where table_schema='public' and table_name='project_guides' "
+                        "and column_name='selected_review_policy_id')"
+                    )
+                )
+            )
+            for table in (
+                "projects",
+                "project_guides",
+                "review_policies",
+                "revision_policies",
+            ):
+                await connection.execute(text(f"alter table {table} disable trigger user"))
+            if has_lineage:
+                await connection.execute(
+                    text(
+                        "update project_guides set status='draft',selected_review_policy_id=null,"
+                        "selected_review_policy_generation=null,selected_review_policy_hash=null,"
+                        "selected_revision_policy_id=null,"
+                        "selected_revision_policy_generation=null,"
+                        "selected_revision_policy_hash=null where id=:guide"
+                    ),
+                    ids,
+                )
+            await connection.execute(text("delete from review_policies where id=:review"), ids)
+            await connection.execute(
+                text("delete from revision_policies where id=:revision"), ids
+            )
+            await connection.execute(text("delete from project_guides where id=:guide"), ids)
+            await connection.execute(text("delete from projects where id=:project"), ids)
+            for table in reversed(
+                (
+                    "projects",
+                    "project_guides",
+                    "review_policies",
+                    "revision_policies",
                 )
             ):
                 await connection.execute(text(f"alter table {table} enable trigger user"))

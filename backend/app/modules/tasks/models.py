@@ -32,6 +32,25 @@ class WorkstreamTask(Base):
 
     __tablename__ = "workstream_tasks"
     __table_args__ = (
+        CheckConstraint(
+            "(locked_review_policy_id is null and locked_review_policy_generation is null "
+            "and locked_review_policy_hash is null and locked_revision_policy_id is null "
+            "and locked_revision_policy_generation is null and locked_revision_policy_hash is null) "
+            "or (locked_review_policy_id is not null and "
+            "locked_review_policy_generation is not null and locked_review_policy_hash is not null "
+            "and locked_revision_policy_id is not null and "
+            "locked_revision_policy_generation is not null and "
+            "locked_revision_policy_hash is not null)",
+            name="review_revision_policy_lock_shape",
+        ),
+        CheckConstraint(
+            "status = 'draft' or (locked_review_policy_id is not null and "
+            "locked_review_policy_generation is not null and locked_review_policy_hash is not null "
+            "and locked_revision_policy_id is not null and "
+            "locked_revision_policy_generation is not null and "
+            "locked_revision_policy_hash is not null)",
+            name="review_revision_policy_lock_required",
+        ),
         ForeignKeyConstraint(
             ["project_id", "locked_guide_version"],
             ["project_guides.project_id", "project_guides.version"],
@@ -43,17 +62,45 @@ class WorkstreamTask(Base):
                 "locked_post_submit_checker_policy_version",
                 "locked_post_submit_checker_policy_hash",
             ],
-            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            [
+                "checker_policies.id",
+                "checker_policies.guide_version",
+                "checker_policies.policy_hash",
+            ],
             name="fk_workstream_tasks_locked_post_submit_policy_hash",
         ),
         ForeignKeyConstraint(
-            ["project_id", "locked_review_policy_version"],
-            ["review_policies.project_id", "review_policies.guide_version"],
+            [
+                "project_id",
+                "locked_guide_version",
+                "locked_review_policy_id",
+                "locked_review_policy_generation",
+                "locked_review_policy_hash",
+            ],
+            [
+                "review_policies.project_id",
+                "review_policies.guide_version",
+                "review_policies.id",
+                "review_policies.policy_generation",
+                "review_policies.policy_hash",
+            ],
             name="fk_workstream_tasks_locked_review_policy",
         ),
         ForeignKeyConstraint(
-            ["project_id", "locked_revision_policy_version"],
-            ["revision_policies.project_id", "revision_policies.guide_version"],
+            [
+                "project_id",
+                "locked_guide_version",
+                "locked_revision_policy_id",
+                "locked_revision_policy_generation",
+                "locked_revision_policy_hash",
+            ],
+            [
+                "revision_policies.project_id",
+                "revision_policies.guide_version",
+                "revision_policies.id",
+                "revision_policies.policy_generation",
+                "revision_policies.policy_hash",
+            ],
             name="fk_workstream_tasks_locked_revision_policy",
         ),
         ForeignKeyConstraint(
@@ -92,12 +139,16 @@ class WorkstreamTask(Base):
         ),
         UniqueConstraint(
             "id",
-            "locked_review_policy_version",
+            "locked_review_policy_id",
+            "locked_review_policy_generation",
+            "locked_review_policy_hash",
             name="uq_workstream_tasks_id_locked_review_policy",
         ),
         UniqueConstraint(
             "id",
-            "locked_revision_policy_version",
+            "locked_revision_policy_id",
+            "locked_revision_policy_generation",
+            "locked_revision_policy_hash",
             name="uq_workstream_tasks_id_locked_revision_policy",
         ),
         UniqueConstraint(
@@ -160,8 +211,12 @@ class WorkstreamTask(Base):
     locked_post_submit_checker_policy_version: Mapped[str | None] = mapped_column(String(50))
     locked_post_submit_checker_policy_hash: Mapped[str | None] = mapped_column(String(71))
     locked_post_submit_checker_policy_body: Mapped[dict | None] = mapped_column(JSON)
-    locked_review_policy_version: Mapped[str | None] = mapped_column(String(50))
-    locked_revision_policy_version: Mapped[str | None] = mapped_column(String(50))
+    locked_review_policy_id: Mapped[str | None] = mapped_column(String(36))
+    locked_review_policy_generation: Mapped[int | None] = mapped_column(Integer)
+    locked_review_policy_hash: Mapped[str | None] = mapped_column(String(71))
+    locked_revision_policy_id: Mapped[str | None] = mapped_column(String(36))
+    locked_revision_policy_generation: Mapped[int | None] = mapped_column(Integer)
+    locked_revision_policy_hash: Mapped[str | None] = mapped_column(String(71))
     locked_payment_policy_version: Mapped[str | None] = mapped_column(String(50))
     locked_guide_source_snapshot_id: Mapped[str | None] = mapped_column(String(36))
     locked_guide_source_snapshot_hash: Mapped[str | None] = mapped_column(String(71))
@@ -239,7 +294,9 @@ class TaskAssignment(Base):
         index=True,
     )
     assigned_by: Mapped[str] = mapped_column(String(100), nullable=False)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="active", index=True)
@@ -273,13 +330,33 @@ class Submission(Base):
             name="fk_submissions_task_locked_post_submit_policy_hash",
         ),
         ForeignKeyConstraint(
-            ["task_id", "locked_review_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_review_policy_version"],
+            [
+                "task_id",
+                "locked_review_policy_id",
+                "locked_review_policy_generation",
+                "locked_review_policy_hash",
+            ],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_review_policy_id",
+                "workstream_tasks.locked_review_policy_generation",
+                "workstream_tasks.locked_review_policy_hash",
+            ],
             name="fk_submissions_task_locked_review_policy",
         ),
         ForeignKeyConstraint(
-            ["task_id", "locked_revision_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_revision_policy_version"],
+            [
+                "task_id",
+                "locked_revision_policy_id",
+                "locked_revision_policy_generation",
+                "locked_revision_policy_hash",
+            ],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_revision_policy_id",
+                "workstream_tasks.locked_revision_policy_generation",
+                "workstream_tasks.locked_revision_policy_hash",
+            ],
             name="fk_submissions_task_locked_revision_policy",
         ),
         ForeignKeyConstraint(
@@ -310,7 +387,11 @@ class Submission(Base):
             name="fk_submissions_task_locked_effective_policy_hash",
         ),
         ForeignKeyConstraint(
-            ["task_id", "locked_pre_submit_checker_policy_id", "locked_pre_submit_checker_bundle_hash"],
+            [
+                "task_id",
+                "locked_pre_submit_checker_policy_id",
+                "locked_pre_submit_checker_bundle_hash",
+            ],
             [
                 "workstream_tasks.id",
                 "workstream_tasks.locked_pre_submit_checker_policy_id",
@@ -345,11 +426,18 @@ class Submission(Base):
                 "locked_post_submit_checker_policy_version",
                 "locked_post_submit_checker_policy_hash",
             ],
-            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            [
+                "checker_policies.id",
+                "checker_policies.guide_version",
+                "checker_policies.policy_hash",
+            ],
             name="fk_submissions_locked_post_submit_policy_hash",
         ),
         UniqueConstraint("task_id", "version", name="uq_submissions_task_version"),
         UniqueConstraint("id", "version", name="uq_submissions_id_version"),
+        UniqueConstraint(
+            "id", "task_id", "version", name="uq_submissions_id_task_version"
+        ),
         UniqueConstraint(
             "id",
             "locked_post_submit_checker_policy_id",
@@ -385,7 +473,9 @@ class Submission(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    task_id: Mapped[str] = mapped_column(ForeignKey("workstream_tasks.id"), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id"), nullable=False, index=True
+    )
     contributor_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("actor_profiles.id"),
@@ -407,8 +497,12 @@ class Submission(Base):
     )
     locked_post_submit_checker_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     locked_post_submit_checker_policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
-    locked_review_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    locked_revision_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    locked_review_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_review_policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    locked_review_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_revision_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_revision_policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    locked_revision_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     locked_payment_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_guide_source_snapshot_id: Mapped[str | None] = mapped_column(String(36))
     locked_guide_source_snapshot_hash: Mapped[str | None] = mapped_column(String(71))
@@ -422,7 +516,9 @@ class Submission(Base):
     locked_pre_submit_checker_bundle_hash: Mapped[str | None] = mapped_column(
         String(71),
     )
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     supersedes_submission_id: Mapped[str | None] = mapped_column(
         ForeignKey("submissions.id"),

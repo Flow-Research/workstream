@@ -126,57 +126,63 @@ def test_sufficiency_material_limit_accepts_exact_boundary_and_rejects_one_over(
 @pytest.mark.postgres_schema_contract
 async def test_guide_sufficiency_provenance_migration_round_trip(
     isolated_database_env: str,
+    migration_lock,
 ) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    await asyncio.to_thread(command.downgrade, config, "0045_guide_metadata_authority")
-    engine = create_async_engine(isolated_database_env)
-    try:
-        async with engine.connect() as connection:
-            absent = await connection.scalar(
-                text("select to_regclass('guide_sufficiency_report_source_usages')")
-            )
-        assert absent is None
-        # Do not reuse a connection pool established against the downgraded
-        # schema when asserting the freshly upgraded constraint catalogue.
-        await engine.dispose()
-        await asyncio.to_thread(command.upgrade, config, "head")
-        engine = create_async_engine(isolated_database_env)
-        async with engine.connect() as connection:
-            present = await connection.scalar(
-                text("select to_regclass('guide_sufficiency_report_source_usages')")
-            )
-            columns = set(
-                (
-                    await connection.execute(
-                        text(
-                            "select column_name from information_schema.columns "
-                            "where table_name='guide_sufficiency_reports'"
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+    with migration_lock():
+        engine = None
+        try:
+            await asyncio.to_thread(command.downgrade, config, "0045_guide_metadata_authority")
+            engine = create_async_engine(isolated_database_env)
+            async with engine.connect() as connection:
+                absent = await connection.scalar(
+                    text("select to_regclass('guide_sufficiency_report_source_usages')")
+                )
+            assert absent is None
+            # Do not reuse a connection pool established against the downgraded
+            # schema when asserting the freshly upgraded constraint catalogue.
+            await engine.dispose()
+            await asyncio.to_thread(command.upgrade, config, "head")
+            engine = create_async_engine(isolated_database_env)
+            async with engine.connect() as connection:
+                present = await connection.scalar(
+                    text("select to_regclass('guide_sufficiency_report_source_usages')")
+                )
+                columns = set(
+                    (
+                        await connection.execute(
+                            text(
+                                "select column_name from information_schema.columns "
+                                "where table_name='guide_sufficiency_reports'"
+                            )
                         )
-                    )
-                ).scalars()
-            )
-        assert present == "guide_sufficiency_report_source_usages"
-        assert {
-            "project_setup_run_id",
-            "setup_generation",
-            "agent_material_sha256",
-            "agent_material_byte_count",
-        }.issubset(columns)
-        async with engine.connect() as connection:
-            setup_columns = set(
-                (
-                    await connection.execute(
-                        text(
-                            "select column_name from information_schema.columns "
-                            "where table_name='project_setup_runs'"
+                    ).scalars()
+                )
+            assert present == "guide_sufficiency_report_source_usages"
+            assert {
+                "project_setup_run_id",
+                "setup_generation",
+                "agent_material_sha256",
+                "agent_material_byte_count",
+            }.issubset(columns)
+            async with engine.connect() as connection:
+                setup_columns = set(
+                    (
+                        await connection.execute(
+                            text(
+                                "select column_name from information_schema.columns "
+                                "where table_name='project_setup_runs'"
+                            )
                         )
-                    )
-                ).scalars()
-            )
-        assert "error_artifact_incident_id" in setup_columns
-    finally:
-        await asyncio.to_thread(command.upgrade, config, "head")
-        await engine.dispose()
+                    ).scalars()
+                )
+            assert "error_artifact_incident_id" in setup_columns
+        finally:
+            await asyncio.to_thread(command.upgrade, config, "head")
+            if engine is not None:
+                await engine.dispose()
 
 
 @pytest.mark.asyncio

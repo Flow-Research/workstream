@@ -2,7 +2,7 @@
 
 ## Status
 
-Reconciled planning input to `WS-XINT-003-02`. It is not an independent
+Reconciled planning input to `WS-XINT-003-02A` and `02B`. It is not an independent
 implementation path.
 
 ## Goal
@@ -12,7 +12,8 @@ later routing, lease, decision, and human revision behavior.
 
 REV owns field semantics, version identity, draft/active immutability, and the
 facts later lifecycle code consumes. AUTH-12D2 owns authority, PREP, evidence,
-and the only mutation surface. The shared implementation is XINT-003-02.
+and the only mutation surface. XINT-003-02A owns immutable identity/lineage;
+02B owns the shared mutation activation.
 
 ## Canonical persistence path
 
@@ -41,7 +42,7 @@ L1: policy immutability, duration/limit semantics, and later decision authority.
 
 The exact current-main project models, migration, policy schemas, canonical
 writer service/repository, AUTH PREP integration, focused tests, and initiative
-evidence must be fixed in the refreshed XINT-003-02 contract.
+evidence must be fixed in the refreshed XINT-003-02A/02B contracts.
 
 ## Not allowed
 
@@ -78,4 +79,4 @@ reuse/dedup, docs, test-delta, and CI integrity.
 ## Stop
 
 Do not implement this parent contract independently. Refresh and implement only
-WS-XINT-003-02 after an explicit user request.
+WS-XINT-003-02A/02B after an explicit user request.

@@ -215,6 +215,12 @@ Fields:
 - `created_at`
 - `updated_at`
 - `superseded_at`
+- `selected_review_policy_id`
+- `selected_review_policy_generation`
+- `selected_review_policy_hash`
+- `selected_revision_policy_id`
+- `selected_revision_policy_generation`
+- `selected_revision_policy_hash`
 
 The guide is versioned and human-facing. Its persisted body is the project
 guide material itself, usually markdown or imported source material. The source
@@ -229,6 +235,10 @@ superseded rows retain one positive per-project activation sequence plus origina
 approval/effective provenance; superseded rows additionally retain
 `superseded_at`. The planned 02A migration enforces this shape and immutable
 chronology before Task stamping consumes it.
+
+Draft guides may have no selected review/revision policy while the authorized
+policy writer is unavailable. Active and superseded guides require both exact
+identity triples, and PostgreSQL freezes those selections after activation.
 
 Runtime enforcement uses machine-readable policies attached to the guide version. Workstream does not parse guide prose at submission time to decide which artifact checks to run.
 
@@ -992,9 +1002,18 @@ Fields:
 - `id`
 - `project_id`
 - `guide_version`
+- `policy_generation`
+- `policy_hash`
+- `semantics_status`: `complete | legacy_incomplete`
+- `supersedes_policy_id`
+- `review_preference_window_seconds`
+- `review_lease_duration_seconds`
+- `max_active_review_leases_per_reviewer`: `1` in v0.1
+- `self_review_allowed`: `false` in v0.1
+- `reject_policy`: `close_task` in v0.1
+- `finding_evidence_requirement`
 - `allowed_decisions`
 - `minimum_finding_fields`
-- `sla_hours`
 - `created_at`
 
 ## RevisionPolicy
@@ -1004,6 +1023,10 @@ Fields:
 - `id`
 - `project_id`
 - `guide_version`
+- `policy_generation`
+- `policy_hash`
+- `semantics_status`: `complete | legacy_incomplete`
+- `supersedes_policy_id`
 - `max_revision_rounds`
 - `revision_deadline_hours`
 - `allowed_resubmission_states`
@@ -1150,8 +1173,12 @@ Fields:
 - `locked_post_submit_checker_policy_version`
 - `locked_post_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_body`
-- `locked_review_policy_version`
-- `locked_revision_policy_version`
+- `locked_review_policy_id`
+- `locked_review_policy_generation`
+- `locked_review_policy_hash`
+- `locked_revision_policy_id`
+- `locked_revision_policy_generation`
+- `locked_revision_policy_hash`
 - `source_type`
 - `source_ref`
 - `source_payload_hash`
@@ -1199,9 +1226,10 @@ The task id points to the locked task contract. That contract includes the exact
 same-project guide ID/version/activation-sequence triplet, guide source snapshot
 id/hash, effective project submission artifact
 policy id/hash, generated project pre-submit checker policy id/bundle hash,
-post-submit checker policy id/version/hash, review policy version, revision
-policy version, acceptance criteria, derived display summaries, and skill tags.
-Contributors submit against the task id; they do not restate policy versions.
+post-submit checker policy id/version/hash, exact review and revision policy
+id/generation/hash identities, acceptance criteria, derived display summaries,
+and skill tags. Contributors submit against the task id; they do not restate
+policy identities.
 
 Durable post-submit checker execution uses
 `locked_post_submit_checker_policy_id`,
@@ -1261,8 +1289,12 @@ Fields:
 - `locked_post_submit_checker_policy_version`
 - `locked_post_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_body`
-- `locked_review_policy_version`
-- `locked_revision_policy_version`
+- `locked_review_policy_id`
+- `locked_review_policy_generation`
+- `locked_review_policy_hash`
+- `locked_revision_policy_id`
+- `locked_revision_policy_generation`
+- `locked_revision_policy_hash`
 - `submitted_at`
 - `locked_at`
 - `supersedes_submission_id`
@@ -1290,8 +1322,8 @@ checker, review, and revision policy provenance from trusted
 task/project state. The contributor does not provide submission version, evidence
 ids, checker results, checker run ids, guide versions, source snapshots,
 effective project policy ids/hashes, pre-submit checker ids/bundle hashes,
-post-submit checker policy ids/versions/hashes, review policy versions, or
-revision policy versions. Submitter award eligibility remains governed by the
+post-submit checker policy ids/versions/hashes, exact review policy identities,
+or exact revision policy identities. Submitter award eligibility remains governed by the
 immutable TaskAssignment-frozen `ContributionPolicyVersion` and is not restated
 on the submission.
 
@@ -1366,8 +1398,12 @@ Fields:
 - `locked_post_submit_checker_policy_version`
 - `locked_post_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_body`
-- `locked_review_policy_version`
-- `locked_revision_policy_version`
+- `locked_review_policy_id`
+- `locked_review_policy_generation`
+- `locked_review_policy_hash`
+- `locked_revision_policy_id`
+- `locked_revision_policy_generation`
+- `locked_revision_policy_hash`
 - `package_hash`
 - `artifact_hash_manifest`
 - `artifact_manifest_hash`
@@ -1514,7 +1550,9 @@ Fields:
 - `confidence`
 - `acceptance_evidence_refs`
 - `locked_guide_version`
-- `locked_review_policy_version`
+- `locked_review_policy_id`
+- `locked_review_policy_generation`
+- `locked_review_policy_hash`
 - `created_at`
 - `completed_at`
 
@@ -1592,10 +1630,10 @@ Fields:
 - `next_locked_effective_project_submission_artifact_policy_hash`
 - `prior_locked_pre_submit_checker_bundle_hash`
 - `next_locked_pre_submit_checker_bundle_hash`
-- `prior_locked_review_policy_version`
-- `next_locked_review_policy_version`
-- `prior_locked_revision_policy_version`
-- `next_locked_revision_policy_version`
+- `prior_locked_review_policy_id`, generation, and hash
+- `next_locked_review_policy_id`, generation, and hash
+- `prior_locked_revision_policy_id`, generation, and hash
+- `next_locked_revision_policy_id`, generation, and hash
 - `outcome`: `kept | rebased | blocked`
 - `direction`: `forward | backward | null`
 - `context_digest`

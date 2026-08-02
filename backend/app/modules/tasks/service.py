@@ -108,8 +108,12 @@ PRE_REVIEW_GATE_DISPATCH_FAILED_EVENT_TYPE = "pre_review_gate_dispatch_failed"
 CONTRIBUTOR_VISIBLE_AUDIT_PAYLOAD_KEYS = {
     "assignment_id",
     "locked_guide_version",
-    "locked_review_policy_version",
-    "locked_revision_policy_version",
+    "locked_review_policy_id",
+    "locked_review_policy_generation",
+    "locked_review_policy_hash",
+    "locked_revision_policy_id",
+    "locked_revision_policy_generation",
+    "locked_revision_policy_hash",
     "locked_payment_policy_version",
     "source_type",
     "submission_id",
@@ -137,8 +141,12 @@ LOCKED_CONTEXT_REQUIRED_FIELDS = (
     "locked_post_submit_checker_policy_version",
     "locked_post_submit_checker_policy_hash",
     "locked_post_submit_checker_policy_body",
-    "locked_review_policy_version",
-    "locked_revision_policy_version",
+    "locked_review_policy_id",
+    "locked_review_policy_generation",
+    "locked_review_policy_hash",
+    "locked_revision_policy_id",
+    "locked_revision_policy_generation",
+    "locked_revision_policy_hash",
     "locked_payment_policy_version",
     "locked_guide_source_snapshot_id",
     "locked_guide_source_snapshot_hash",
@@ -395,18 +403,14 @@ class TaskService:
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
         context = await self._load_locked_task_context(task)
-        eligibility = (
-            await self._legacy_workflow_eligibility.get_active_submitter_eligibility(
-                actor.actor_id
-            )
+        eligibility = await self._legacy_workflow_eligibility.get_active_submitter_eligibility(
+            actor.actor_id
         )
         return self._work_context_response(
             actor,
             task,
             context,
-            has_active_submitter_eligibility=(
-                "worker" in actor.roles and eligibility is not None
-            ),
+            has_active_submitter_eligibility=("worker" in actor.roles and eligibility is not None),
         )
 
     async def get_task_submission_requirements(
@@ -744,8 +748,12 @@ class TaskService:
             ),
             locked_post_submit_checker_policy_hash=task.locked_post_submit_checker_policy_hash,
             locked_post_submit_checker_policy_body=task.locked_post_submit_checker_policy_body,
-            locked_review_policy_version=task.locked_review_policy_version,
-            locked_revision_policy_version=task.locked_revision_policy_version,
+            locked_review_policy_id=task.locked_review_policy_id,
+            locked_review_policy_generation=task.locked_review_policy_generation,
+            locked_review_policy_hash=task.locked_review_policy_hash,
+            locked_revision_policy_id=task.locked_revision_policy_id,
+            locked_revision_policy_generation=task.locked_revision_policy_generation,
+            locked_revision_policy_hash=task.locked_revision_policy_hash,
             locked_payment_policy_version=task.locked_payment_policy_version,
             locked_guide_source_snapshot_id=task.locked_guide_source_snapshot_id,
             locked_guide_source_snapshot_hash=task.locked_guide_source_snapshot_hash,
@@ -1199,9 +1207,7 @@ class TaskService:
             raise ActiveContributorRequired(ActiveContributorRequired.message) from exc
         except (CanonicalWriteActorUnavailable, SQLAlchemyError) as exc:
             await self._session.rollback()
-            raise ContributorIdentityUnavailable(
-                ContributorIdentityUnavailable.message
-            ) from exc
+            raise ContributorIdentityUnavailable(ContributorIdentityUnavailable.message) from exc
 
     @staticmethod
     def _submission_audit_payload(submission: Submission) -> dict:
@@ -1400,10 +1406,8 @@ class TaskService:
                 {"field": "locked_guide_source_snapshot_hash"},
             )
 
-        effective_policy = (
-            await self._project_repo.get_effective_submission_artifact_policy_by_id(
-                task.locked_effective_project_submission_artifact_policy_id or "",
-            )
+        effective_policy = await self._project_repo.get_effective_submission_artifact_policy_by_id(
+            task.locked_effective_project_submission_artifact_policy_id or "",
         )
         if (
             effective_policy is None
@@ -1467,10 +1471,8 @@ class TaskService:
                 {"field": "locked_pre_submit_checker_policy_id"},
             )
 
-        post_submit_checker_policy = (
-            await self._project_repo.get_post_submit_checker_policy_by_id(
-                task.locked_post_submit_checker_policy_id or "",
-            )
+        post_submit_checker_policy = await self._project_repo.get_post_submit_checker_policy_by_id(
+            task.locked_post_submit_checker_policy_id or "",
         )
         if (
             post_submit_checker_policy is None
@@ -1478,8 +1480,7 @@ class TaskService:
             or post_submit_checker_policy.guide_version
             != task.locked_post_submit_checker_policy_version
             or post_submit_checker_policy.guide_version != task.locked_guide_version
-            or post_submit_checker_policy.policy_hash
-            != task.locked_post_submit_checker_policy_hash
+            or post_submit_checker_policy.policy_hash != task.locked_post_submit_checker_policy_hash
         ):
             raise TaskLockedContextInvalid(
                 "task locked post-submit checker policy is invalid",
@@ -1508,13 +1509,11 @@ class TaskService:
             blocking_severities=parsed_post_submit_body.blocking_severities,
         )
 
-        review_policy = await self._project_repo.get_review_policy(
-            task.project_id,
-            task.locked_review_policy_version or "",
+        review_policy = await self._project_repo.get_review_policy_by_id(
+            task.locked_review_policy_id or ""
         )
-        revision_policy = await self._project_repo.get_revision_policy(
-            task.project_id,
-            task.locked_revision_policy_version or "",
+        revision_policy = await self._project_repo.get_revision_policy_by_id(
+            task.locked_revision_policy_id or ""
         )
         payment_policy = await self._project_repo.get_payment_policy(
             task.project_id,
@@ -1522,9 +1521,15 @@ class TaskService:
         )
         if (
             review_policy is None
+            or review_policy.project_id != task.project_id
             or review_policy.guide_version != task.locked_guide_version
+            or review_policy.policy_generation != task.locked_review_policy_generation
+            or review_policy.policy_hash != task.locked_review_policy_hash
             or revision_policy is None
+            or revision_policy.project_id != task.project_id
             or revision_policy.guide_version != task.locked_guide_version
+            or revision_policy.policy_generation != task.locked_revision_policy_generation
+            or revision_policy.policy_hash != task.locked_revision_policy_hash
             or payment_policy is None
             or payment_policy.guide_version != task.locked_guide_version
         ):
@@ -1548,11 +1553,7 @@ class TaskService:
 
     def _missing_locked_context_fields(self, task: WorkstreamTask) -> list[str]:
         """Return missing locked-context fields for a task."""
-        return [
-            field
-            for field in LOCKED_CONTEXT_REQUIRED_FIELDS
-            if not getattr(task, field)
-        ]
+        return [field for field in LOCKED_CONTEXT_REQUIRED_FIELDS if not getattr(task, field)]
 
     def _work_context_response(
         self,
@@ -1579,10 +1580,14 @@ class TaskService:
                 effective_at=context.guide.effective_at,
             ),
             review_policy=TaskReviewPolicyContext(
-                guide_version=task.locked_review_policy_version or "",
+                policy_id=task.locked_review_policy_id or "",
+                policy_generation=task.locked_review_policy_generation or 0,
+                policy_hash=task.locked_review_policy_hash or "",
             ),
             revision_policy=TaskRevisionPolicyContext(
-                guide_version=task.locked_revision_policy_version or "",
+                policy_id=task.locked_revision_policy_id or "",
+                policy_generation=task.locked_revision_policy_generation or 0,
+                policy_hash=task.locked_revision_policy_hash or "",
             ),
             payment_policy=TaskPaymentPolicyContext(
                 guide_version=task.locked_payment_policy_version or "",
@@ -1885,20 +1890,20 @@ class TaskService:
             locked_pre_submit_checker_bundle_hash=(
                 task.locked_pre_submit_checker_bundle_hash or ""
             ),
-            locked_post_submit_checker_policy_id=(
-                task.locked_post_submit_checker_policy_id or ""
-            ),
+            locked_post_submit_checker_policy_id=(task.locked_post_submit_checker_policy_id or ""),
             locked_post_submit_checker_policy_version=(
                 task.locked_post_submit_checker_policy_version or ""
             ),
             locked_post_submit_checker_policy_hash=(
                 task.locked_post_submit_checker_policy_hash or ""
             ),
-            locked_post_submit_checker_policy_body_summary=(
-                context.locked_post_submit_policy_body
-            ),
-            locked_review_policy_version=task.locked_review_policy_version or "",
-            locked_revision_policy_version=task.locked_revision_policy_version or "",
+            locked_post_submit_checker_policy_body_summary=(context.locked_post_submit_policy_body),
+            locked_review_policy_id=task.locked_review_policy_id or "",
+            locked_review_policy_generation=task.locked_review_policy_generation or 0,
+            locked_review_policy_hash=task.locked_review_policy_hash or "",
+            locked_revision_policy_id=task.locked_revision_policy_id or "",
+            locked_revision_policy_generation=task.locked_revision_policy_generation or 0,
+            locked_revision_policy_hash=task.locked_revision_policy_hash or "",
             locked_payment_policy_version=task.locked_payment_policy_version or "",
         )
 
@@ -2037,8 +2042,12 @@ class TaskService:
         task.locked_post_submit_checker_policy_version = checker_policy.guide_version
         task.locked_post_submit_checker_policy_hash = checker_policy.policy_hash
         task.locked_post_submit_checker_policy_body = dict(checker_policy.policy_body or {})
-        task.locked_review_policy_version = review_policy.guide_version
-        task.locked_revision_policy_version = revision_policy.guide_version
+        task.locked_review_policy_id = review_policy.id
+        task.locked_review_policy_generation = review_policy.policy_generation
+        task.locked_review_policy_hash = review_policy.policy_hash
+        task.locked_revision_policy_id = revision_policy.id
+        task.locked_revision_policy_generation = revision_policy.policy_generation
+        task.locked_revision_policy_hash = revision_policy.policy_hash
         task.locked_payment_policy_version = payment_policy.guide_version
         task.locked_guide_source_snapshot_id = source_snapshot.id
         task.locked_guide_source_snapshot_hash = source_snapshot.bundle_hash
@@ -2047,9 +2056,7 @@ class TaskService:
             effective_policy.effective_policy_hash
         )
         task.locked_pre_submit_checker_policy_id = pre_submit_checker_policy.id
-        task.locked_pre_submit_checker_bundle_hash = (
-            pre_submit_checker_policy.compiled_bundle_hash
-        )
+        task.locked_pre_submit_checker_bundle_hash = pre_submit_checker_policy.compiled_bundle_hash
         task.base_amount = payment_policy.base_amount
         task.currency = payment_policy.currency
         task.payout_type = payment_policy.payout_type
@@ -2184,8 +2191,12 @@ class TaskService:
                 task.locked_post_submit_checker_policy_version
             ),
             "locked_post_submit_checker_policy_hash": task.locked_post_submit_checker_policy_hash,
-            "locked_review_policy_version": task.locked_review_policy_version,
-            "locked_revision_policy_version": task.locked_revision_policy_version,
+            "locked_review_policy_id": task.locked_review_policy_id,
+            "locked_review_policy_generation": task.locked_review_policy_generation,
+            "locked_review_policy_hash": task.locked_review_policy_hash,
+            "locked_revision_policy_id": task.locked_revision_policy_id,
+            "locked_revision_policy_generation": task.locked_revision_policy_generation,
+            "locked_revision_policy_hash": task.locked_revision_policy_hash,
             "locked_payment_policy_version": task.locked_payment_policy_version,
             "locked_guide_source_snapshot_id": task.locked_guide_source_snapshot_id,
             "locked_guide_source_snapshot_hash": task.locked_guide_source_snapshot_hash,
@@ -2290,8 +2301,12 @@ class TaskService:
             response.artifact_hash_manifest = None
             response.worker_attestation = None
             response.locked_guide_version = None
-            response.locked_review_policy_version = None
-            response.locked_revision_policy_version = None
+            response.locked_review_policy_id = None
+            response.locked_review_policy_generation = None
+            response.locked_review_policy_hash = None
+            response.locked_revision_policy_id = None
+            response.locked_revision_policy_generation = None
+            response.locked_revision_policy_hash = None
             response.locked_payment_policy_version = None
             response.locked_guide_source_snapshot_id = None
             response.locked_guide_source_snapshot_hash = None

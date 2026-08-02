@@ -62,6 +62,7 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.policy_lineage import require_complete_policy
 from app.modules.projects.post_submit_policy import (
     DEFAULT_DURABLE_CHECKERS,
     PostSubmitCheckerCompilerError,
@@ -97,9 +98,7 @@ from app.modules.projects.schemas import (
     ProjectGuideResponse,
     ProjectResponse,
     ProjectSetupRunResponse,
-    RevisionPolicyInput,
     RevisionPolicyResponse,
-    ReviewPolicyInput,
     ReviewPolicyResponse,
     SubmissionArtifactPolicyInput,
     SubmissionArtifactPolicyApprove,
@@ -111,7 +110,9 @@ from app.schemas.auth import ActorContext
 
 logger = logging.getLogger(__name__)
 
-PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = "project setup failed; inspect server logs with the setup run id"
+PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = (
+    "project setup failed; inspect server logs with the setup run id"
+)
 MAXIMUM_GUIDE_AGENT_MATERIAL_BYTES = MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES
 
 
@@ -186,6 +187,8 @@ def safe_project_setup_error_summary(summary: str | None) -> str:
         ):
             return f"unsupported post-submit checker requirements: {', '.join(unsupported_names)}"
     return PROJECT_SETUP_PUBLIC_ERROR_SUMMARY
+
+
 SECRET_ARTIFACT_TOKEN_SETS = [
     {"access", "key"},
     {"api", "key"},
@@ -214,9 +217,7 @@ AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE = "agent_derivation"
 PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME = "ProjectGuideSufficiencyAgent"
 PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION = "workstream-sufficiency-agent-v0.1"
 SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME = "SubmissionArtifactPolicyDerivationAgent"
-SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION = (
-    "workstream-policy-derivation-agent-v0.1"
-)
+SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION = "workstream-policy-derivation-agent-v0.1"
 POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_NAME = "PostSubmitCheckerPolicyDerivationAgent"
 POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_VERSION = (
     "workstream-post-submit-policy-derivation-agent-v0.1"
@@ -718,14 +719,13 @@ class ProjectService:
         try:
             result = await self._project_agent_runtime().analyze_guide_sufficiency(material)
         except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable("project guide sufficiency agent is unavailable") from None
+            raise AgentRuntimeUnavailable(
+                "project guide sufficiency agent is unavailable"
+            ) from None
         payload = GuideSufficiencyReportCreate(
             source_snapshot_id=material.source_snapshot_id,
             status=AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
-            findings=[
-                finding.model_dump(mode="json")
-                for finding in result.findings
-            ],
+            findings=[finding.model_dump(mode="json") for finding in result.findings],
             summary=result.summary,
         )
         self._validate_sufficiency_report_payload(payload)
@@ -1086,8 +1086,7 @@ class ProjectService:
         runtime_report = GuideSufficiencyAgentResult(
             status=REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS[sufficiency_report.status],
             findings=[
-                AgentFinding.model_validate(finding)
-                for finding in sufficiency_report.findings
+                AgentFinding.model_validate(finding) for finding in sufficiency_report.findings
             ],
             summary=sufficiency_report.summary,
             agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
@@ -1100,7 +1099,9 @@ class ProjectService:
                 runtime_report,
             )
         except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable("submission artifact policy agent is unavailable") from None
+            raise AgentRuntimeUnavailable(
+                "submission artifact policy agent is unavailable"
+            ) from None
 
         try:
             policy_input = SubmissionArtifactPolicyInput.model_validate(result.policy_body)
@@ -1239,29 +1240,23 @@ class ProjectService:
             raise PolicySetupBlocked(
                 "compiled project pre-submit checker policy is required before post-submit derivation"
             )
-        superseded_policy = (
-            await self._repo.get_latest_superseded_post_submit_checker_policy(
-                project_id,
-                guide.id,
-                guide.version,
-                snapshot.id,
-                snapshot.bundle_hash,
-                effective_policy.id,
-                effective_policy.effective_policy_hash,
-                pre_submit_checker_policy.id,
-                pre_submit_checker_policy.compiled_bundle_hash,
-            )
+        superseded_policy = await self._repo.get_latest_superseded_post_submit_checker_policy(
+            project_id,
+            guide.id,
+            guide.version,
+            snapshot.id,
+            snapshot.bundle_hash,
+            effective_policy.id,
+            effective_policy.effective_policy_hash,
+            pre_submit_checker_policy.id,
+            pre_submit_checker_policy.compiled_bundle_hash,
         )
         has_correction_feedback = (
             superseded_policy is not None
             and superseded_policy.supersession_kind == "correction_requested"
         )
-        superseded_policy_id = (
-            superseded_policy.id if has_correction_feedback else None
-        )
-        superseded_policy_hash = (
-            superseded_policy.policy_hash if has_correction_feedback else None
-        )
+        superseded_policy_id = superseded_policy.id if has_correction_feedback else None
+        superseded_policy_hash = superseded_policy.policy_hash if has_correction_feedback else None
 
         material = await self._guide_source_material(guide, snapshot)
         context = self._post_submit_derivation_context(
@@ -1286,8 +1281,7 @@ class ProjectService:
             {
                 "checker_name": reason.checker_name,
                 "evidence_refs": [
-                    self._safe_bounded_summary_value(ref.ref)
-                    for ref in reason.evidence_refs[:10]
+                    self._safe_bounded_summary_value(ref.ref) for ref in reason.evidence_refs[:10]
                 ],
             }
             for reason in result.reasons[:100]
@@ -1300,18 +1294,14 @@ class ProjectService:
                     ),
                     "reason_code": "unsupported_required_checker",
                     "evidence_refs": [
-                        self._safe_bounded_summary_value(ref.ref)
-                        for ref in gap.evidence_refs[:10]
+                        self._safe_bounded_summary_value(ref.ref) for ref in gap.evidence_refs[:10]
                     ],
                 }
                 for gap in result.unsupported_required_checks[:50]
             ]
-            unsupported_names = sorted(
-                {gap["requested_checker"] for gap in unsupported_gaps}
-            )
+            unsupported_names = sorted({gap["requested_checker"] for gap in unsupported_gaps})
             raise PolicySetupBlocked(
-                "unsupported post-submit checker requirements: "
-                + ", ".join(unsupported_names),
+                "unsupported post-submit checker requirements: " + ", ".join(unsupported_names),
                 details={"unsupported_required_checks": unsupported_gaps},
             )
         self._raise_for_unknown_post_submit_checkers(result)
@@ -1538,7 +1528,9 @@ class ProjectService:
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         if policy.source_snapshot_hash != snapshot.bundle_hash:
-            raise PolicySetupBlocked("submission artifact policy is bound to a stale source snapshot")
+            raise PolicySetupBlocked(
+                "submission artifact policy is bound to a stale source snapshot"
+            )
         if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
             raise PolicySetupBlocked("submission artifact policy body hash mismatch")
         if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
@@ -1927,9 +1919,7 @@ class ProjectService:
                 EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective_policy)
             ),
             "pre_submit_checker_policy": (
-                ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
-                    pre_submit_checker_policy
-                )
+                ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(pre_submit_checker_policy)
             ),
             "post_submit_checker_policy": PostSubmitCheckerPolicyResponse.model_validate(
                 post_submit_checker_policy
@@ -2159,8 +2149,8 @@ class ProjectService:
         if output_post_submit_checker_policy_id is not None:
             setup_run.output_post_submit_checker_policy_id = output_post_submit_checker_policy_id
         if post_submit_derivation_summary is not None:
-            setup_run.post_submit_derivation_summary = (
-                self._safe_post_submit_derivation_summary(post_submit_derivation_summary)
+            setup_run.post_submit_derivation_summary = self._safe_post_submit_derivation_summary(
+                post_submit_derivation_summary
             )
         setup_run.error_code = error_code
         setup_run.error_artifact_incident_id = error_artifact_incident_id
@@ -2248,9 +2238,7 @@ class ProjectService:
             "running_post_submit_derivation_agent",
             "post_submit_setup_blocked",
         }:
-            raise PolicySetupConflict(
-                "project setup run is not ready for post-submit derivation"
-            )
+            raise PolicySetupConflict("project setup run is not ready for post-submit derivation")
         now = datetime.now(UTC)
         setup_run.status = "running_post_submit_derivation_agent"
         setup_run.current_step = "post_submit_checker_policy_derivation"
@@ -2332,8 +2320,7 @@ class ProjectService:
             or post_submit_checker_policy.guide_id != setup_run.guide_id
             or post_submit_checker_policy.guide_version != setup_run.guide_version
             or post_submit_checker_policy.source_snapshot_id != setup_run.source_snapshot_id
-            or post_submit_checker_policy.source_snapshot_hash
-            != setup_run.source_snapshot_hash
+            or post_submit_checker_policy.source_snapshot_hash != setup_run.source_snapshot_hash
             or post_submit_checker_policy.effective_policy_id != effective_policy.id
             or post_submit_checker_policy.effective_policy_hash
             != effective_policy.effective_policy_hash
@@ -2364,8 +2351,7 @@ class ProjectService:
             or post_submit_checker_policy.guide_id != setup_run.guide_id
             or post_submit_checker_policy.guide_version != setup_run.guide_version
             or post_submit_checker_policy.source_snapshot_id != setup_run.source_snapshot_id
-            or post_submit_checker_policy.source_snapshot_hash
-            != setup_run.source_snapshot_hash
+            or post_submit_checker_policy.source_snapshot_hash != setup_run.source_snapshot_hash
             or post_submit_checker_policy.effective_policy_id != effective_policy_id
             or post_submit_checker_policy.pre_submit_checker_policy_id
             != pre_submit_checker_policy_id
@@ -2401,9 +2387,7 @@ class ProjectService:
                 setup_run,
                 post_submit_policy,
             ):
-                raise PolicySetupConflict(
-                    "project setup run post-submit policy output mismatch"
-                )
+                raise PolicySetupConflict("project setup run post-submit policy output mismatch")
 
     async def _post_submit_policy_from_setup_run(
         self,
@@ -2501,7 +2485,9 @@ class ProjectService:
             guide_version=setup_run.guide_version,
             setup_run=ProjectSetupRunResponse.model_validate(setup_run),
             post_submit_checker_policy=policy_summary,
-            derivation_input_summary=await self._post_submit_derivation_input_summary(setup_run, policy),
+            derivation_input_summary=await self._post_submit_derivation_input_summary(
+                setup_run, policy
+            ),
             correction_history=await self._post_submit_policy_correction_history(setup_run),
         )
 
@@ -2622,8 +2608,10 @@ class ProjectService:
                 summary["effective_policy_forbidden_artifact_count"] = len(
                     effective_body.get("forbidden_artifacts") or []
                 )
-                pre_submit_policy = await self._repo.get_pre_submit_checker_policy_for_effective_policy(
-                    effective_policy.id
+                pre_submit_policy = (
+                    await self._repo.get_pre_submit_checker_policy_for_effective_policy(
+                        effective_policy.id
+                    )
                 )
                 if (
                     pre_submit_policy is not None
@@ -2732,10 +2720,7 @@ class ProjectService:
     def _safe_public_unsupported_requirement(self, value: str) -> str:
         """Return a safe operator-visible label for an unsupported requirement."""
         normalized = value.strip().lower()
-        if (
-            not normalized.startswith("check_")
-            or not SAFE_TOKEN_PATTERN.fullmatch(normalized)
-        ):
+        if not normalized.startswith("check_") or not SAFE_TOKEN_PATTERN.fullmatch(normalized):
             return "unsupported checker requirement"
         return normalized
 
@@ -2777,9 +2762,7 @@ class ProjectService:
         """Build a snapshot response with ordered source items."""
         items = await self._repo.list_guide_source_snapshot_items(snapshot.id)
         response = GuideSourceSnapshotResponse.model_validate(snapshot)
-        response.items = [
-            GuideSourceSnapshotItemResponse.model_validate(item) for item in items
-        ]
+        response.items = [GuideSourceSnapshotItemResponse.model_validate(item) for item in items]
         return response
 
     async def _guide_source_material(
@@ -2799,8 +2782,7 @@ class ProjectService:
             source_snapshot_id=snapshot.id,
             source_snapshot_hash=snapshot.bundle_hash,
             guide_material={
-                field: getattr(guide, field)
-                for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
+                field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
             },
             source_items=source_items,
             source_refs=[item.durable_ref for item in source_items],
@@ -2815,9 +2797,7 @@ class ProjectService:
     ) -> list[GuideSourceItemMaterial]:
         """Return typed source items from a guide-source snapshot manifest."""
         return [
-            GuideSourceItemMaterial.model_validate(
-                self._normalized_source_manifest_item(item)
-            )
+            GuideSourceItemMaterial.model_validate(self._normalized_source_manifest_item(item))
             for item in snapshot.manifest_json["items"]
         ]
 
@@ -3159,8 +3139,7 @@ class ProjectService:
                 default_policy["manifest_required"] or project_policy["manifest_required"]
             ),
             "artifact_hash_required": bool(
-                default_policy["artifact_hash_required"]
-                or project_policy["artifact_hash_required"]
+                default_policy["artifact_hash_required"] or project_policy["artifact_hash_required"]
             ),
             "artifact_hash_algorithm": PLATFORM_HASH_ALGORITHM,
             "allowed_storage_schemes": allowed_storage_schemes,
@@ -3317,11 +3296,7 @@ class ProjectService:
         """Return whether any path segment uses credential-like words."""
         all_tokens: set[str] = set()
         for segment in value.split("/"):
-            tokens = {
-                token
-                for token in re.split(r"[^a-z0-9]+", segment.lower())
-                if token
-            }
+            tokens = {token for token in re.split(r"[^a-z0-9]+", segment.lower()) if token}
             all_tokens.update(tokens)
             if tokens.intersection(SECRET_ARTIFACT_SINGLE_TOKENS):
                 return True
@@ -3374,7 +3349,9 @@ class ProjectService:
     ) -> None:
         """Require report freshness and no blocking gaps before deriving policy."""
         if sufficiency_report is None:
-            raise PolicySetupBlocked("guide sufficiency report is required before policy derivation")
+            raise PolicySetupBlocked(
+                "guide sufficiency report is required before policy derivation"
+            )
         if sufficiency_report.source_snapshot_id != source_snapshot.id:
             raise PolicySetupBlocked("guide sufficiency report is bound to a stale snapshot")
         if sufficiency_report.source_snapshot_hash != source_snapshot.bundle_hash:
@@ -3424,15 +3401,14 @@ class ProjectService:
             )
         if (
             policy.derivation_agent_name != SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME
-            or policy.derivation_agent_version != SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION
+            or policy.derivation_agent_version
+            != SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION
         ):
             raise PolicySetupConflict(
                 "agent-derived submission artifact policy runtime provenance is not server-owned"
             )
         if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
-            raise PolicySetupConflict(
-                "agent-derived submission artifact policy body hash mismatch"
-            )
+            raise PolicySetupConflict("agent-derived submission artifact policy body hash mismatch")
 
     def _post_submit_derivation_context(
         self,
@@ -3566,9 +3542,7 @@ class ProjectService:
             reason = reason_by_checker.get(checker_name)
             unsupported_gaps.append(
                 {
-                    "requested_checker": self._safe_public_unsupported_requirement(
-                        checker_name
-                    ),
+                    "requested_checker": self._safe_public_unsupported_requirement(checker_name),
                     "reason_code": "unsupported_required_checker",
                     "evidence_refs": [
                         self._safe_bounded_summary_value(ref.ref)
@@ -3576,12 +3550,9 @@ class ProjectService:
                     ],
                 }
             )
-        unsupported_names = sorted(
-            {gap["requested_checker"] for gap in unsupported_gaps}
-        )
+        unsupported_names = sorted({gap["requested_checker"] for gap in unsupported_gaps})
         raise PolicySetupBlocked(
-            "unsupported post-submit checker requirements: "
-            + ", ".join(unsupported_names),
+            "unsupported post-submit checker requirements: " + ", ".join(unsupported_names),
             details={"unsupported_required_checks": unsupported_gaps},
         )
 
@@ -3661,7 +3632,10 @@ class ProjectService:
             raise GuideActivationBlocked("submission artifact policy is bound to a stale snapshot")
         if submission_artifact_policy.source_snapshot_hash != source_snapshot.bundle_hash:
             raise GuideActivationBlocked("submission artifact policy snapshot hash mismatch")
-        if submission_artifact_policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
+        if (
+            submission_artifact_policy.derivation_source
+            == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE
+        ):
             try:
                 self._validate_agent_derived_submission_artifact_policy(
                     submission_artifact_policy,
@@ -3674,14 +3648,21 @@ class ProjectService:
             != submission_artifact_policy.policy_hash
         ):
             raise GuideActivationBlocked("submission artifact policy body hash mismatch")
-        if not submission_artifact_policy.approved_by_actor or not submission_artifact_policy.approved_at:
-            raise GuideActivationBlocked("submission artifact policy approval provenance is required")
+        if (
+            not submission_artifact_policy.approved_by_actor
+            or not submission_artifact_policy.approved_at
+        ):
+            raise GuideActivationBlocked(
+                "submission artifact policy approval provenance is required"
+            )
         if submission_artifact_policy.approved_by_role not in PROJECT_SETUP_ROLES:
             raise GuideActivationBlocked("submission artifact policy approver role is invalid")
         if effective_policy is None:
             raise GuideActivationBlocked("effective project submission artifact policy is required")
         if effective_policy.lifecycle_status != "approved":
-            raise GuideActivationBlocked("effective project submission artifact policy is not approved")
+            raise GuideActivationBlocked(
+                "effective project submission artifact policy is not approved"
+            )
         if effective_policy.source_snapshot_id != source_snapshot.id:
             raise GuideActivationBlocked(
                 "effective project submission artifact policy is bound to a stale snapshot"
@@ -3702,10 +3683,11 @@ class ProjectService:
                 submission_artifact_policy.policy_body
             )
         except (KeyError, TypeError, ValueError, ProjectServiceError) as exc:
-            raise GuideActivationBlocked(
-                "submission artifact policy body is invalid"
-            ) from exc
-        if self._hash_canonical_json(expected_effective_policy) != effective_policy.effective_policy_hash:
+            raise GuideActivationBlocked("submission artifact policy body is invalid") from exc
+        if (
+            self._hash_canonical_json(expected_effective_policy)
+            != effective_policy.effective_policy_hash
+        ):
             raise GuideActivationBlocked(
                 "effective project submission artifact policy no longer matches submission policy"
             )
@@ -3713,7 +3695,10 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "effective project submission artifact policy is bound to the wrong policy"
             )
-        if effective_policy.submission_artifact_policy_hash != submission_artifact_policy.policy_hash:
+        if (
+            effective_policy.submission_artifact_policy_hash
+            != submission_artifact_policy.policy_hash
+        ):
             raise GuideActivationBlocked(
                 "effective project submission artifact policy hash provenance mismatch"
             )
@@ -3727,7 +3712,10 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "pre-submit checker policy is bound to the wrong effective policy"
             )
-        if pre_submit_checker_policy.effective_policy_hash != effective_policy.effective_policy_hash:
+        if (
+            pre_submit_checker_policy.effective_policy_hash
+            != effective_policy.effective_policy_hash
+        ):
             raise GuideActivationBlocked("pre-submit checker bundle provenance mismatch")
         if pre_submit_checker_policy.lifecycle_status != "compiled":
             raise GuideActivationBlocked("compiled project pre-submit checker policy is required")
@@ -3758,7 +3746,10 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "post-submit checker policy is bound to the wrong effective policy"
             )
-        if post_submit_checker_policy.effective_policy_hash != effective_policy.effective_policy_hash:
+        if (
+            post_submit_checker_policy.effective_policy_hash
+            != effective_policy.effective_policy_hash
+        ):
             raise GuideActivationBlocked("post-submit checker policy effective hash mismatch")
         if post_submit_checker_policy.pre_submit_checker_policy_id != pre_submit_checker_policy.id:
             raise GuideActivationBlocked(
@@ -3804,12 +3795,50 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "post-submit checker policy references unregistered checker"
             ) from exc
-        if review_policy is None or not review_policy.allowed_decisions:
+        if review_policy is None or revision_policy is None:
+            raise GuideActivationBlocked(
+                "complete review and revision policy selections are required"
+            )
+        if not review_policy.allowed_decisions:
             raise GuideActivationBlocked("review policy with allowed decisions is required")
+        try:
+            require_complete_policy(
+                kind="review",
+                status=review_policy.semantics_status,
+                policy_hash=review_policy.policy_hash,
+                semantic_values={
+                    "review_preference_window_seconds": (
+                        review_policy.review_preference_window_seconds
+                    ),
+                    "review_lease_duration_seconds": review_policy.review_lease_duration_seconds,
+                    "max_active_review_leases_per_reviewer": (
+                        review_policy.max_active_review_leases_per_reviewer
+                    ),
+                    "self_review_allowed": review_policy.self_review_allowed,
+                    "reject_policy": review_policy.reject_policy,
+                    "finding_evidence_requirement": review_policy.finding_evidence_requirement,
+                    "requires_second_review": review_policy.requires_second_review,
+                    "allowed_decisions": review_policy.allowed_decisions,
+                    "minimum_finding_fields": review_policy.minimum_finding_fields,
+                },
+            )
+            require_complete_policy(
+                kind="revision",
+                status=revision_policy.semantics_status,
+                policy_hash=revision_policy.policy_hash,
+                semantic_values={
+                    "max_revision_rounds": revision_policy.max_revision_rounds,
+                    "revision_deadline_hours": revision_policy.revision_deadline_hours,
+                    "allowed_resubmission_states": revision_policy.allowed_resubmission_states,
+                    "reviewer_reassignment_rule": revision_policy.reviewer_reassignment_rule,
+                },
+            )
+        except ValueError as exc:
+            raise GuideActivationBlocked(
+                "review and revision policy semantics are incomplete"
+            ) from exc
         if not set(review_policy.allowed_decisions).issubset(ALLOWED_REVIEW_DECISIONS):
             raise GuideActivationBlocked("review policy contains invalid decisions")
-        if revision_policy is None:
-            raise GuideActivationBlocked("revision policy is required")
         if (
             revision_policy.max_revision_rounds < 1
             or revision_policy.revision_deadline_hours < 1
@@ -3848,59 +3877,6 @@ class ProjectService:
             raise exception_type(
                 f"guide sufficiency warnings require admin/project_manager acknowledgement {action}"
             )
-
-    def _review_policy_model(
-        self,
-        project_id: str,
-        guide_version: str,
-        payload: ReviewPolicyInput,
-    ) -> ReviewPolicy:
-        """Build a review policy model from API input.
-
-        Args:
-            project_id: Project that owns the policy.
-            guide_version: Guide version the policy applies to.
-            payload: Validated review policy input.
-
-        Returns:
-            Unsaved review policy model.
-        """
-        return ReviewPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_version=guide_version,
-            requires_second_review=payload.requires_second_review,
-            allowed_decisions=payload.allowed_decisions,
-            minimum_finding_fields=payload.minimum_finding_fields,
-            sla_hours=payload.sla_hours,
-        )
-
-    def _revision_policy_model(
-        self,
-        project_id: str,
-        guide_version: str,
-        payload: RevisionPolicyInput,
-    ) -> RevisionPolicy:
-        """Build a revision policy model from API input.
-
-        Args:
-            project_id: Project that owns the policy.
-            guide_version: Guide version the policy applies to.
-            payload: Validated revision policy input.
-
-        Returns:
-            Unsaved revision policy model.
-        """
-        return RevisionPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_version=guide_version,
-            max_revision_rounds=payload.max_revision_rounds,
-            revision_deadline_hours=payload.revision_deadline_hours,
-            auto_reject_after_limit=payload.auto_reject_after_limit,
-            allowed_resubmission_states=payload.allowed_resubmission_states,
-            reviewer_reassignment_rule=payload.reviewer_reassignment_rule,
-        )
 
     def _payment_policy_model(
         self,
@@ -4000,14 +3976,10 @@ def build_guide_source_snapshot_manifest(
     seen_refs = {("project_guide", normalized_items[0]["durable_ref"])}
     for item in payload.items:
         source_kind = _guide_source_token(item.source_kind, "source kind")
-        ingestion_adapter = _guide_source_token(
-            item.ingestion_adapter, "ingestion adapter"
-        )
+        ingestion_adapter = _guide_source_token(item.ingestion_adapter, "ingestion adapter")
         durable_ref = _guide_source_durable_ref(item.durable_ref)
         if not HASH_PATTERN.fullmatch(item.content_hash):
-            raise PolicySetupBlocked(
-                "source item content hash must be sha256:<64 lowercase hex>"
-            )
+            raise PolicySetupBlocked("source item content hash must be sha256:<64 lowercase hex>")
         content_cid = _guide_source_content_cid(item.content_cid)
         duplicate_key = (source_kind, durable_ref)
         if duplicate_key in seen_refs:

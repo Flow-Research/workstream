@@ -50,9 +50,7 @@ class Project(Base):
     slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
-    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
-        ForeignKey("actor_profiles.id")
-    )
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
     created_via_identity_link_id: Mapped[str | None] = mapped_column(
         ForeignKey("actor_identity_links.id")
     )
@@ -96,9 +94,7 @@ class ProjectCreateIdempotencyRecord(Base):
             name="ck_project_create_request_digest",
         ),
         CheckConstraint("operation_generation = 1", name="ck_project_create_generation"),
-        CheckConstraint(
-            "status in ('pending','committed')", name="ck_project_create_status"
-        ),
+        CheckConstraint("status in ('pending','committed')", name="ck_project_create_status"),
         CheckConstraint(
             "(status = 'pending' and committed_at is null) or "
             "(status = 'committed' and committed_at is not null)",
@@ -146,9 +142,7 @@ class GuideMutationIdempotencyRecord(Base):
             name="ck_guide_mutation_resource_context_digest",
         ),
         CheckConstraint("operation_generation > 0", name="ck_guide_mutation_generation"),
-        CheckConstraint(
-            "status in ('pending','committed')", name="ck_guide_mutation_status"
-        ),
+        CheckConstraint("status in ('pending','committed')", name="ck_guide_mutation_status"),
         CheckConstraint(
             "(status='pending' and response_json is null and committed_at is null "
             "and setup_run_id is null) or "
@@ -181,6 +175,66 @@ class ProjectGuide(Base):
     __tablename__ = "project_guides"
     __table_args__ = (
         UniqueConstraint("project_id", "version", name="uq_project_guides_project_version"),
+        CheckConstraint(
+            "(selected_review_policy_id is null and "
+            "selected_review_policy_generation is null and selected_review_policy_hash is null "
+            "and selected_revision_policy_id is null and "
+            "selected_revision_policy_generation is null and "
+            "selected_revision_policy_hash is null) or "
+            "(selected_review_policy_id is not null and "
+            "selected_review_policy_generation is not null and "
+            "selected_review_policy_hash is not null and "
+            "selected_revision_policy_id is not null and "
+            "selected_revision_policy_generation is not null and "
+            "selected_revision_policy_hash is not null)",
+            name="policy_selection_shape",
+        ),
+        CheckConstraint(
+            "status not in ('active','superseded') or "
+            "(selected_review_policy_id is not null and "
+            "selected_review_policy_generation is not null and "
+            "selected_review_policy_hash is not null and "
+            "selected_revision_policy_id is not null and "
+            "selected_revision_policy_generation is not null and "
+            "selected_revision_policy_hash is not null)",
+            name="active_policy_selection_required",
+        ),
+        ForeignKeyConstraint(
+            [
+                "project_id",
+                "version",
+                "selected_review_policy_id",
+                "selected_review_policy_generation",
+                "selected_review_policy_hash",
+            ],
+            [
+                "review_policies.project_id",
+                "review_policies.guide_version",
+                "review_policies.id",
+                "review_policies.policy_generation",
+                "review_policies.policy_hash",
+            ],
+            name="fk_project_guides_selected_review_policy",
+            use_alter=True,
+        ),
+        ForeignKeyConstraint(
+            [
+                "project_id",
+                "version",
+                "selected_revision_policy_id",
+                "selected_revision_policy_generation",
+                "selected_revision_policy_hash",
+            ],
+            [
+                "revision_policies.project_id",
+                "revision_policies.guide_version",
+                "revision_policies.id",
+                "revision_policies.policy_generation",
+                "revision_policies.policy_hash",
+            ],
+            name="fk_project_guides_selected_revision_policy",
+            use_alter=True,
+        ),
         Index(
             "uq_project_guides_one_active_per_project",
             "project_id",
@@ -221,6 +275,12 @@ class ProjectGuide(Base):
         onupdate=func.now(),
     )
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    selected_review_policy_id: Mapped[str | None] = mapped_column(String(36))
+    selected_review_policy_generation: Mapped[int | None] = mapped_column(Integer)
+    selected_review_policy_hash: Mapped[str | None] = mapped_column(String(71))
+    selected_revision_policy_id: Mapped[str | None] = mapped_column(String(36))
+    selected_revision_policy_generation: Mapped[int | None] = mapped_column(Integer)
+    selected_revision_policy_hash: Mapped[str | None] = mapped_column(String(71))
 
     project: Mapped[Project] = relationship(back_populates="guides")
 
@@ -306,7 +366,9 @@ class PostSubmitCheckerPolicy(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),
@@ -358,16 +420,44 @@ class ReviewPolicy(Base):
             ["project_guides.project_id", "project_guides.version"],
             name="fk_review_policies_project_guide",
         ),
-        UniqueConstraint("project_id", "guide_version", name="uq_review_policies_project_version"),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "policy_generation",
+            name="uq_review_policies_project_version_generation",
+        ),
+        UniqueConstraint("id", "policy_generation", "policy_hash", name="uq_review_policy_lineage"),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "id",
+            "policy_generation",
+            "policy_hash",
+            name="uq_review_policy_scoped_lineage",
+        ),
+        CheckConstraint(
+            "policy_generation > 0 and policy_hash ~ '^sha256:[0-9a-f]{64}$' and "
+            "semantics_status in ('complete','legacy_incomplete')",
+            name="review_policy_identity_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    semantics_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    supersedes_policy_id: Mapped[str | None] = mapped_column(ForeignKey("review_policies.id"))
+    review_preference_window_seconds: Mapped[int | None] = mapped_column(Integer)
+    review_lease_duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    max_active_review_leases_per_reviewer: Mapped[int | None] = mapped_column(Integer)
+    self_review_allowed: Mapped[bool | None] = mapped_column(Boolean)
+    reject_policy: Mapped[str | None] = mapped_column(String(32))
+    finding_evidence_requirement: Mapped[str | None] = mapped_column(String(32))
     requires_second_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     allowed_decisions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     minimum_finding_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    sla_hours: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -384,16 +474,36 @@ class RevisionPolicy(Base):
         UniqueConstraint(
             "project_id",
             "guide_version",
-            name="uq_revision_policies_project_version",
+            "policy_generation",
+            name="uq_revision_policies_project_version_generation",
+        ),
+        UniqueConstraint(
+            "id", "policy_generation", "policy_hash", name="uq_revision_policy_lineage"
+        ),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "id",
+            "policy_generation",
+            "policy_hash",
+            name="uq_revision_policy_scoped_lineage",
+        ),
+        CheckConstraint(
+            "policy_generation > 0 and policy_hash ~ '^sha256:[0-9a-f]{64}$' and "
+            "semantics_status in ('complete','legacy_incomplete')",
+            name="revision_policy_identity_shape",
         ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    semantics_status: Mapped[str] = mapped_column(String(24), nullable=False)
+    supersedes_policy_id: Mapped[str | None] = mapped_column(ForeignKey("revision_policies.id"))
     max_revision_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     revision_deadline_hours: Mapped[int] = mapped_column(Integer, nullable=False)
-    auto_reject_after_limit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     allowed_resubmission_states: Mapped[list[str]] = mapped_column(
         JSON,
         nullable=False,
@@ -455,16 +565,16 @@ class GuideSourceSnapshot(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     manifest_schema_version: Mapped[str] = mapped_column(String(50), nullable=False)
     manifest_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     bundle_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
     captured_by: Mapped[str] = mapped_column(String(100), nullable=False)
     creation_generation: Mapped[int | None] = mapped_column(Integer)
-    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
-        ForeignKey("actor_profiles.id")
-    )
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
     created_via_identity_link_id: Mapped[str | None] = mapped_column(
         ForeignKey("actor_identity_links.id")
     )
@@ -477,7 +587,9 @@ class GuideSourceSnapshot(Base):
     authorization_decision_event_id: Mapped[str | None] = mapped_column(
         ForeignKey("audit_events.id")
     )
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class GuideSourceSnapshotItem(Base):
@@ -588,7 +700,9 @@ class ProjectSetupRun(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),
@@ -691,7 +805,9 @@ class GuideSufficiencyReport(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),
@@ -814,7 +930,9 @@ class SubmissionArtifactPolicy(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),
@@ -823,7 +941,9 @@ class SubmissionArtifactPolicy(Base):
     )
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="draft", index=True
+    )
     policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
     policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
     derivation_source: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -880,7 +1000,9 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),
@@ -888,9 +1010,13 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
         index=True,
     )
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    submission_artifact_policy_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    submission_artifact_policy_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True
+    )
     submission_artifact_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="approved", index=True)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="approved", index=True
+    )
     merge_algorithm_version: Mapped[str] = mapped_column(String(50), nullable=False)
     effective_policy: Mapped[dict] = mapped_column(JSON, nullable=False)
     effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
@@ -945,7 +1071,9 @@ class PreSubmitCheckerPolicy(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
-    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id"), nullable=False, index=True
+    )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     source_snapshot_id: Mapped[str] = mapped_column(
         ForeignKey("guide_source_snapshots.id"),

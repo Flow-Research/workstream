@@ -259,7 +259,8 @@ rules, hash algorithm, size limits, and attestation terms before submission.
 The permission-scoped Project Manager, Operator, or Audit projection of a task's
 locked guide and policy provenance, including guide source snapshot id/hash,
 effective policy id/hash, pre-submit checker policy id/hash, post-submit checker
-policy id/hash/body summary, and review and revision policy versions.
+policy id/hash/body summary, and exact review and revision policy
+id/generation/hash identities.
 
 ## Task Contract
 

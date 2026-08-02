@@ -16,7 +16,7 @@ from alembic import command
 from alembic.config import Config
 import pytest
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     async_sessionmaker,
     create_async_engine,
@@ -101,6 +101,11 @@ from app.modules.projects.models import (
     ReviewPolicy,
     RevisionPolicy,
     SubmissionArtifactPolicy,
+)
+from app.modules.projects.policy_lineage import (
+    ReviewPolicySemantics,
+    RevisionPolicySemantics,
+    policy_digest,
 )
 from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
@@ -427,6 +432,8 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     effective_policy_id = str(uuid4())
     pre_submit_policy_id = str(uuid4())
     post_submit_policy_id = str(uuid4())
+    review_policy_id = str(uuid4())
+    revision_policy_id = str(uuid4())
     task_id = str(uuid4())
     submission_id = str(uuid4())
     contributor_id = str(uuid4())
@@ -443,6 +450,22 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     post_submit_policy_body = {"required_checkers": []}
     post_submit_policy_hash = canonical_json_hash(post_submit_policy_body)
     now = datetime.now(UTC)
+    review_hash = policy_digest(
+        "review",
+        ReviewPolicySemantics(
+            review_preference_window_seconds=3600,
+            review_lease_duration_seconds=1800,
+            allowed_decisions=("accept", "needs_revision", "reject"),
+        ),
+    )
+    revision_hash = policy_digest(
+        "revision",
+        RevisionPolicySemantics(
+            max_revision_rounds=1,
+            revision_deadline_hours=24,
+            allowed_resubmission_states=("needs_revision",),
+        ),
+    )
 
     await seed_historical_project(
         session,
@@ -461,7 +484,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
                 id=guide_id,
                 project_id=project_id,
                 version=guide_version,
-                status="active",
+                status="draft",
                 content_markdown="# Checker guide",
                 approved_by="setup-actor",
                 effective_at=now,
@@ -571,20 +594,31 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
                 created_by="setup-actor",
             ),
             ReviewPolicy(
-                id=str(uuid4()),
+                id=review_policy_id,
                 project_id=project_id,
                 guide_version=guide_version,
+                policy_generation=1,
+                policy_hash=review_hash,
+                semantics_status="complete",
+                review_preference_window_seconds=3600,
+                review_lease_duration_seconds=1800,
+                max_active_review_leases_per_reviewer=1,
+                self_review_allowed=False,
+                reject_policy="close_task",
+                finding_evidence_requirement="optional",
                 requires_second_review=False,
                 allowed_decisions=["accept", "needs_revision", "reject"],
                 minimum_finding_fields=[],
             ),
             RevisionPolicy(
-                id=str(uuid4()),
+                id=revision_policy_id,
                 project_id=project_id,
                 guide_version=guide_version,
+                policy_generation=1,
+                policy_hash=revision_hash,
+                semantics_status="complete",
                 max_revision_rounds=1,
                 revision_deadline_hours=24,
-                auto_reject_after_limit=True,
                 allowed_resubmission_states=["needs_revision"],
             ),
             PaymentPolicy(
@@ -595,6 +629,21 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         ]
     )
     await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard"),
+    ):
+        guide = await session.get(ProjectGuide, guide_id)
+        assert guide is not None
+        guide.selected_review_policy_id = review_policy_id
+        guide.selected_review_policy_generation = 1
+        guide.selected_review_policy_hash = review_hash
+        guide.selected_revision_policy_id = revision_policy_id
+        guide.selected_revision_policy_generation = 1
+        guide.selected_revision_policy_hash = revision_hash
+        guide.status = "active"
+        await session.flush()
     session.add(
         WorkstreamTask(
             id=task_id,
@@ -604,8 +653,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             locked_guide_source_snapshot_id=snapshot_id,
             locked_guide_source_snapshot_hash=snapshot_hash,
@@ -660,8 +713,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             locked_guide_source_snapshot_id=snapshot_id,
             locked_guide_source_snapshot_hash=snapshot_hash,
@@ -693,8 +750,12 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             locked_post_submit_checker_policy_version=guide_version,
             locked_post_submit_checker_policy_hash=post_submit_policy_hash,
             locked_post_submit_checker_policy_body=post_submit_policy_body,
-            locked_review_policy_version=guide_version,
-            locked_revision_policy_version=guide_version,
+            locked_review_policy_id=review_policy_id,
+            locked_review_policy_generation=1,
+            locked_review_policy_hash=review_hash,
+            locked_revision_policy_id=revision_policy_id,
+            locked_revision_policy_generation=1,
+            locked_revision_policy_hash=revision_hash,
             locked_payment_policy_version=guide_version,
             package_hash=canonical_json_hash({"submission": submission_id}),
             artifact_hash_manifest=[],
@@ -3430,7 +3491,7 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                 ),
             ):
                 await assertion_session.execute(
-                    text("update project_guides set status = 'active' where id = :guide_id"),
+                    text("update project_guides set status = 'inactive' where id = :guide_id"),
                     {"guide_id": facts.guide_id},
                 )
                 await assertion_session.flush()
@@ -4143,8 +4204,16 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                     locked_post_submit_checker_policy_body=(
                         canonical_task.locked_post_submit_checker_policy_body
                     ),
-                    locked_review_policy_version=canonical_task.locked_review_policy_version,
-                    locked_revision_policy_version=(canonical_task.locked_revision_policy_version),
+                    locked_review_policy_id=canonical_task.locked_review_policy_id,
+                    locked_review_policy_generation=(
+                        canonical_task.locked_review_policy_generation
+                    ),
+                    locked_review_policy_hash=canonical_task.locked_review_policy_hash,
+                    locked_revision_policy_id=canonical_task.locked_revision_policy_id,
+                    locked_revision_policy_generation=(
+                        canonical_task.locked_revision_policy_generation
+                    ),
+                    locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
                     locked_payment_policy_version=(canonical_task.locked_payment_policy_version),
                     locked_guide_source_snapshot_id=(
                         canonical_task.locked_guide_source_snapshot_id
@@ -4174,7 +4243,9 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
             checker_run = await session.get(CheckerRun, checker_run_id)
             assert checker_run is not None
             checker_run.task_id = unrelated_task_id
-            await session.commit()
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
 
             async with minted_source(tmp_path / "scratch-source", b"checker") as source:
                 service = ArtifactAdmissionService(session, settings, namespace)
@@ -4196,29 +4267,6 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                 assert await _count(session, ArtifactAdmissionCharge) == 0
                 assert await _count(session, ArtifactPutAttempt) == 0
                 await session.rollback()
-
-                with pytest.raises(
-                    ArtifactAdmissionRelationshipError,
-                    match="checker run relationship is unavailable",
-                ):
-                    await service.admit(
-                        CheckerOutputArtifactAdmissionRequest(
-                            authorization_context=context,
-                            checker_run_id=UUID(checker_run_id),
-                            logical_role="platform-review",
-                            source=source,
-                        )
-                    )
-                assert await _count(session, ArtifactStorageNamespace) == 0
-                assert await _count(session, ArtifactAdmissionScope) == 0
-                assert await _count(session, ArtifactAdmissionCharge) == 0
-                assert await _count(session, ArtifactPutAttempt) == 0
-                await session.rollback()
-
-                checker_run = await session.get(CheckerRun, checker_run_id)
-                assert checker_run is not None
-                checker_run.task_id = task_id
-                await session.commit()
 
                 request = CheckerOutputArtifactAdmissionRequest(
                     authorization_context=context,
@@ -4404,9 +4452,7 @@ def test_artifact_admission_migration_refuses_populated_downgrade(
             async with factory() as session:
                 context = _context()
                 await _seed_human_actor(session, context)
-                project_id, guide_id, snapshot_id, item_id = (
-                    str(uuid4()) for _ in range(4)
-                )
+                project_id, guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(4))
                 await session.execute(
                     text(
                         "insert into projects (id,name,slug,status) values "

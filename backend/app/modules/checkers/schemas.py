@@ -123,8 +123,12 @@ class CheckerRunResponse(BaseModel):
     locked_post_submit_checker_policy_id: str | None = None
     locked_post_submit_checker_policy_version: str | None = None
     locked_post_submit_checker_policy_hash: str | None = None
-    locked_review_policy_version: str | None
-    locked_revision_policy_version: str | None
+    locked_review_policy_id: str | None
+    locked_review_policy_generation: int | None
+    locked_review_policy_hash: str | None
+    locked_revision_policy_id: str | None
+    locked_revision_policy_generation: int | None
+    locked_revision_policy_hash: str | None
     locked_payment_policy_version: str | None
     package_hash: str | None
     artifact_hash_manifest: list[dict[str, Any]] | None

@@ -34,9 +34,15 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    ProjectGuide,
     ProjectSetupRun,
     ReviewPolicy,
     RevisionPolicy,
+)
+from app.modules.projects.policy_lineage import (
+    ReviewPolicySemantics,
+    RevisionPolicySemantics,
+    policy_digest,
 )
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
@@ -650,26 +656,41 @@ async def seed_pending_policy_boundaries(project_id: str, guide_version: str) ->
     each dedicated policy boundary is activated.
     """
     async with db_session.get_session_factory()() as session:
+        review_id = str(uuid4())
+        revision_id = str(uuid4())
+        review_semantics = ReviewPolicySemantics(
+            review_preference_window_seconds=3600,
+            review_lease_duration_seconds=1800,
+            allowed_decisions=("accept", "needs_revision", "reject"),
+            minimum_finding_fields=("issue", "required_fix"),
+        )
+        revision_semantics = RevisionPolicySemantics(
+            max_revision_rounds=7,
+            revision_deadline_hours=48,
+            allowed_resubmission_states=("needs_revision",),
+            reviewer_reassignment_rule="same reviewer preferred",
+        )
+        review_hash = policy_digest("review", review_semantics)
+        revision_hash = policy_digest("revision", revision_semantics)
         session.add_all(
             [
                 ReviewPolicy(
-                    id=str(uuid4()),
+                    id=review_id,
                     project_id=project_id,
                     guide_version=guide_version,
-                    requires_second_review=False,
-                    allowed_decisions=["accept", "needs_revision", "reject"],
-                    minimum_finding_fields=["issue", "required_fix"],
-                    sla_hours=24,
+                    policy_generation=1,
+                    policy_hash=review_hash,
+                    semantics_status="complete",
+                    **review_semantics.model_dump(mode="python"),
                 ),
                 RevisionPolicy(
-                    id=str(uuid4()),
+                    id=revision_id,
                     project_id=project_id,
                     guide_version=guide_version,
-                    max_revision_rounds=7,
-                    revision_deadline_hours=48,
-                    auto_reject_after_limit=True,
-                    allowed_resubmission_states=["needs_revision"],
-                    reviewer_reassignment_rule="same reviewer preferred",
+                    policy_generation=1,
+                    policy_hash=revision_hash,
+                    semantics_status="complete",
+                    **revision_semantics.model_dump(mode="python"),
                 ),
                 PaymentPolicy(
                     id=str(uuid4()),
@@ -683,6 +704,35 @@ async def seed_pending_policy_boundaries(project_id: str, guide_version: str) ->
                     accepted_payment_rule="pay base amount",
                 ),
             ]
+        )
+        await session.flush()
+        guide = await session.scalar(
+            select(ProjectGuide).where(
+                ProjectGuide.project_id == project_id,
+                ProjectGuide.version == guide_version,
+            )
+        )
+        if guide is None:
+            raise RuntimeError("policy seed requires its exact project guide")
+        await session.execute(
+            text("alter table project_guides disable trigger guide_mutation_product_custody")
+        )
+        await session.execute(
+            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
+        )
+        guide.selected_review_policy_id = review_id
+        guide.selected_review_policy_generation = 1
+        guide.selected_review_policy_hash = review_hash
+        guide.selected_revision_policy_id = revision_id
+        guide.selected_revision_policy_generation = 1
+        guide.selected_revision_policy_hash = revision_hash
+        await session.flush()
+        await session.execute(text("set constraints all immediate"))
+        await session.execute(
+            text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
+        )
+        await session.execute(
+            text("alter table project_guides enable trigger guide_mutation_product_custody")
         )
         await session.commit()
 
@@ -1573,12 +1623,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             manager_token,
             {"reason": "real API screening passed"},
         )
-        assert {
-            screened["locked_guide_version"],
-            screened["locked_review_policy_version"],
-            screened["locked_revision_policy_version"],
-            screened["locked_payment_policy_version"],
-        } == {"v1"}
+        assert screened["locked_guide_version"] == "v1"
+        assert screened["locked_review_policy_generation"] == 1
+        assert screened["locked_review_policy_hash"].startswith("sha256:")
+        assert screened["locked_revision_policy_generation"] == 1
+        assert screened["locked_revision_policy_hash"].startswith("sha256:")
+        assert screened["locked_payment_policy_version"] == "v1"
         assert screened["base_amount"] == "25.00"
         assert screened["currency"] == "USD"
         assert screened["payout_type"] == "fixed"
@@ -1988,8 +2038,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "package_hash",
             "worker_attestation",
             "locked_guide_version",
-            "locked_review_policy_version",
-            "locked_revision_policy_version",
+            "locked_review_policy_id",
+            "locked_review_policy_generation",
+            "locked_review_policy_hash",
+            "locked_revision_policy_id",
+            "locked_revision_policy_generation",
+            "locked_revision_policy_hash",
             "locked_payment_policy_version",
             "locked_post_submit_checker_policy_hash",
         ):
@@ -2026,12 +2080,14 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert locked["finalized_at"] is not None
-        assert {
-            locked["locked_guide_version"],
-            locked["locked_review_policy_version"],
-            locked["locked_revision_policy_version"],
-            locked["locked_payment_policy_version"],
-        } == {"v1"}
+        assert locked["locked_guide_version"] == "v1"
+        assert locked["locked_review_policy_id"] == screened["locked_review_policy_id"]
+        assert locked["locked_review_policy_generation"] == 1
+        assert locked["locked_review_policy_hash"] == screened["locked_review_policy_hash"]
+        assert locked["locked_revision_policy_id"] == screened["locked_revision_policy_id"]
+        assert locked["locked_revision_policy_generation"] == 1
+        assert locked["locked_revision_policy_hash"] == screened["locked_revision_policy_hash"]
+        assert locked["locked_payment_policy_version"] == "v1"
         assert all(item["finalized_at"] == locked["finalized_at"] for item in locked["evidence_items"])
         checker_run = await wait_for_submission_checker_run(client, manager_token, submission["id"])
         assert checker_run["routing_recommendation"] == "allow_review"

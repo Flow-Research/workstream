@@ -64,3 +64,20 @@ findings corrected fixed-service identity drift, ART global-matrix wording,
 runtime owner versus sub-wave ambiguity, missing per-action dependencies,
 07B/human activation order, and obsolete signed-start gates. All tracks passed;
 the final evidence is in `reviews/WS-XINT-003-01-internal-review.md`.
+
+## WS-XINT-003-02A immutable policy identity and lineage
+
+Architecture, security/auth, product/operations, QA/test, senior engineering,
+reuse/dedup, docs, test-delta, and CI integrity reviewed the completed runtime
+chunk. Valid findings corrected guide-selection freezing and exact joins,
+CheckerRun-to-Submission Task binding, stale active E2E/docs surfaces, vacuous
+legacy assertions, asymmetric immutability proof, and the final schema
+fingerprint. All tracks passed after correction; no finding remains open. The
+final evidence is in `reviews/WS-XINT-003-02A-internal-review.md`.
+
+CodeRabbit's PR #242 review found missing ORM identity-shape metadata, overly
+broad joined row locks, invalid active-guide fixture ordering, and a duplicated
+test semantics mapping. Its post-main-merge review also found that the guide
+sufficiency migration test did not protect cleanup when the initial downgrade
+failed. All findings were valid and corrected; the exact response is in
+`reviews/WS-XINT-003-02A-external-review-response.md`.
