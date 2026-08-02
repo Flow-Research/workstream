@@ -3517,6 +3517,8 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,
             ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+            ActionId.PROJECT_REVISION_POLICY_UPDATE,
         }:
             continue
         scope = PreparedAuthorityScope(
