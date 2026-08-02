@@ -12,6 +12,8 @@
 4. Routed readers of the historical planning index through `CONTRIBUTING.md`.
 5. Clarified that v0.1 preserves contribution evidence for a future reputation
    projection; runtime reputation projection remains deferred.
+6. Reworded the residual historical-document risk as mitigation rather than an
+   absolute guarantee that archive notices prevent misuse.
 
 ## Comments Deferred
 
@@ -32,5 +34,5 @@ None.
 ## Remaining Risks
 
 Historical checker records intentionally retain their original scenario and
-result vocabulary. Their archive notice and current-evidence link prevent them
-from being used as current implementation authority.
+result vocabulary. Their archive notice and current-evidence link reduce the
+risk that they are used as current implementation authority.
