@@ -81,6 +81,10 @@ allow-listing, fixture copying, exact selector guidance, custody indexing,
 typing, migration-shape proof, and reservation-branch tests are corrected. No
 comment was deferred; details are in the external response.
 
+The next hosted run exposed a stale canonical database-reset fingerprint: the
+new replay ledger was treated as an unexpected table, interrupting all lanes.
+The ledger is now in the exact reset inventory and truncate-guard list.
+
 ## Remaining risks and follow-up
 
 The API may later expose the opaque replacement selector as a response ETag.

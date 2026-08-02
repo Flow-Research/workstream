@@ -92,3 +92,30 @@ Remaining risks:
 
 - PostgreSQL migration behavior and the full suite remain assigned to the
   replacement exact-head Backend run.
+
+## GitHub Actions round 3
+
+Comments addressed:
+
+- All four lanes executed, then evidence validation reported interruption
+  because database tests rejected the new replay ledger as an unexpected table.
+  The canonical reset fingerprint now includes
+  `policy_mutation_idempotency_records`, and its immutable truncate trigger is
+  included in the exact guarded-table reset list.
+
+Comments deferred:
+
+- None.
+
+Human decisions needed:
+
+- None.
+
+Commands rerun:
+
+- Policy mutation and non-database reset checks passed locally. Database-backed
+  reset proof remains on hosted CI because this worktree has no test database URL.
+
+Remaining risks:
+
+- Exact-head hosted evidence validation and full coverage remain required.
