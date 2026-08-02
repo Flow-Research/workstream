@@ -1,5 +1,8 @@
 # Checker Trial Failure Catalog
 
+> Historical validation record. It preserves early checker evidence and does
+> not define current sequencing or capability status.
+
 ## Purpose
 
 This catalog records the Chunk 10 checker trial outcomes. It is the audit note for the first real sample submissions run through the Week 2 checker framework.

@@ -1,5 +1,9 @@
 # Week 2 Checker Framework Specification
 
+> Historical implementation specification. It is preserved as evidence of the
+> early checker build, not as current sequencing or status. Use
+> [Current v0.1 Status](roadmap_status.md) and canonical subsystem documents.
+
 ## Purpose
 
 Week 2 adds the automated checker boundary between locked submissions and human review.

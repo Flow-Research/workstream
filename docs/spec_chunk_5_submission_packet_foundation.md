@@ -1,5 +1,8 @@
 # Chunk 5: Submission Packet Foundation
 
+> Historical implementation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 This chunk adds the backend record for Contributor submission packets. A

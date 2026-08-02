@@ -1,5 +1,8 @@
 # Chunk 9 Pre-Review Gate
 
+> Historical implementation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 Chunk 9 makes internal post-submit checks automatic.

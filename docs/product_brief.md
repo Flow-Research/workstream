@@ -114,7 +114,10 @@ The only v0.1 intake paths are:
 - manual task creation in the app
 - import from a controlled markdown or CSV template
 
-External source adapters, origin onboarding, webhook drop notifications, automated routing, owner-agent execution workspace, and on-chain settlement are later work. This keeps the first 30 days focused on proving the lifecycle, not integrating every source.
+External source adapters, origin onboarding, webhook drop notifications,
+automated routing, owner-agent execution workspace, and on-chain settlement are
+later work. This keeps v0.1 focused on proving the internal lifecycle instead
+of integrating every possible source or settlement rail.
 
 The first version excludes:
 
@@ -144,7 +147,7 @@ Avoid broad gig marketplace positioning until the quality engine is proven.
 
 ## Success Metrics
 
-By day 30:
+The v0.1 pilot is successful when it demonstrates:
 
 - 3 project templates configured
 - 20 tasks entered

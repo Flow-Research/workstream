@@ -35,6 +35,12 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - If updating the roadmap, update both local XLSX and CSV exports.
 - Do not import XLSX into Google Sheets with "replace spreadsheet"; use a temporary sheet and copy only the roadmap tab.
 - Prefer evidence-backed docs over vague product claims.
+- Treat `docs/roadmap_status.md` as the current capability ledger. Calendar
+  plans, early chunk specifications, imported files under
+  `docs/reference_specs/`, and internal reviews are historical evidence unless
+  a current entry page explicitly adopts them. Canonical repository
+  specifications remain normative. Do not use dates, weeks, or delivery
+  windows as implementation authority.
 - For workflow states, persisted tokens, API enum values, roles, and lifecycle names, prefer subsystem- or actor-specific names over vague labels. If the naming has product or security impact and the user is unavailable, run the required internal reviewer tracks before locking it.
 - Keep v0.1 focused on project guide -> task -> submission -> checks -> review -> revision -> contribution records -> conditional compensation awards/fulfillment -> reputation signals.
 - Review decision stored values are only accept, needs_revision, or reject.
@@ -42,7 +48,9 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Backend API is locked as Python with FastAPI.
 - ORM, migrations, and API schemas are locked as SQLAlchemy 2.x async + Alembic + Pydantic schemas.
 - Workstream verifies external Flow authentication tokens; do not add Workstream-owned login, signup, password reset, password storage, or primary auth sessions.
-- Week 1 implementation is backend-first; do not start frontend work until backend contracts and lifecycle guards are stable.
+- v0.1 delivery is backend-contract-first. Do not add frontend behavior until
+  the backing API contracts and lifecycle guards for that surface are stable
+  and tested.
 - Execution is async-first; do not document synchronous-first checkers or jobs.
 - FastAPI background tasks are acceptable for simple local v0.1 jobs; use Celery or equivalent durable workers when retries, scheduling, isolation, or distributed execution are needed.
 - Postgres is the record database.

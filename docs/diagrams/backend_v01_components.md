@@ -22,7 +22,7 @@ Source: [backend_v01_components.puml](backend_v01_components.puml)
 
 ## Current Module Priority
 
-The first 30 days move through the loop in this order:
+The v0.1 backend moves through the loop in this dependency order:
 
 ```text
 Projects and guides
