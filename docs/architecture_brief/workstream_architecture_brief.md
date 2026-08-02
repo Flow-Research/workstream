@@ -12,7 +12,7 @@ records, compensation award and fulfillment state, and reputation signals.
 
 Workstream is how Flow measures, certifies, and coordinates useful human-agent work.
 
-<p class="meta">Scope: v0.1 first 30 days, with future adapter context for identity, task contracts, settlement, and reputation.</p>
+<p class="meta">Scope: bounded v0.1 delivery, with future adapter context for identity, task contracts, settlement, and reputation.</p>
 
 </section>
 
@@ -26,7 +26,7 @@ evidence packet, every valid human decision an immutable Review and reviewer
 contribution, and every accepted task an immutable FinalAcceptance before the
 submitter contribution and conditional compensation.
 
-The first 30 days are focused on proving the internal lifecycle:
+v0.1 is focused on proving the internal lifecycle:
 
 ```text
 Project Guide -> Task Queue -> Submission Packet -> Checks -> Review
@@ -77,7 +77,10 @@ The context diagram shows Workstream as one system inside the broader Flow ecosy
 
 ## C2: v0.1 Container View
 
-The container view shows the first 30-day implementation. It is intentionally small: React + Vite for the planned internal operations UI, FastAPI for the backend, Postgres for records, a storage interface for artifacts, and an async checker/job boundary.
+The container view shows the bounded v0.1 implementation. It is intentionally
+small: React + Vite for the planned internal operations UI, FastAPI for the
+backend, Postgres for records, a storage interface for artifacts, and an async
+checker/job boundary.
 
 <div class="diagram wide">
   <img src="images/workstream_v01_container.png" alt="Workstream v0.1 container diagram" />
@@ -175,7 +178,7 @@ Future ERC-8004, ERC-8183, x402, OmniClaw, and USDC integrations do not replace 
 
 ## Scope Boundary
 
-### Current v0.1 / First 30 Days
+### Current v0.1 Boundary
 
 - project guide and versioned policy context
 - task queue and task records

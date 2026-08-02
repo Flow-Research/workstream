@@ -1,5 +1,8 @@
 # Chunk 10 Checker Trial
 
+> Historical validation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 Chunk 10 proves the Week 2 checker framework against real sample submission flows.

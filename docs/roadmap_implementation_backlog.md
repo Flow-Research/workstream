@@ -1,5 +1,9 @@
 # Implementation Backlog
 
+> Historical planning record. This backlog no longer controls current priority
+> or status. Use [Current v0.1 Status](roadmap_status.md) and the
+> [Historical Planning Index](historical_planning.md).
+
 ## Review Lifecycle Status
 
 Review/revision entries describe planned, unavailable v0.1 work. They become

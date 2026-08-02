@@ -61,22 +61,40 @@ Different projects speak different domain languages, but serious task evaluation
 
 Workstream turns that operating knowledge into reusable infrastructure.
 
-## Planning Package
+## Current v0.1 State
+
+Workstream is under active v0.1 development. Progress is tracked by proven
+capabilities, not by calendar weeks or promised dates.
+
+Implemented foundations on `main` include external Flow-token verification,
+canonical local actors and authorization, project guides and task records,
+submission packets, immutable artifact storage, automated checker execution,
+and the pre-review gate. Project-guide ingestion now has typed source handling,
+bounded extraction, security controls, and persisted sufficiency evidence.
+
+Active work is connecting those foundations into the remaining production
+lifecycle: authoritative guide binding and reads, review and revision,
+contribution records, conditional compensation awards and fulfillment, and
+reputation projections. Frontend product work follows stable and tested backend
+contracts for the surface it consumes.
+
+The release bar is a verified end-to-end v0.1 lifecycle, not the completion of
+an old timeboxed plan. See [Current v0.1 Status](docs/roadmap_status.md) for the
+capability ledger and explicit remaining work.
+
+## Start Here
 
 - [Contribution Guide](CONTRIBUTING.md)
-- [Codex Agent Loop](.agent-loop/README.md)
-- [Repository Engineering Policy](.agent-loop/policies/repository-engineering-policy.md)
-- [30-Day Master Plan](docs/roadmap_30_day_master_plan.md)
-- [Roadmap Status](docs/roadmap_status.md)
-- [Week 1 Backend Plan](docs/roadmap_week1_backend_plan.md)
-- [Week 2 Checker Framework Specification](docs/spec_week2_checker_framework.md)
-- [Chunk 6 Checker Contract And Records](docs/spec_chunk_6_checker_contract_records.md)
-- [Chunk 7 Checker Runner And Registry](docs/spec_chunk_7_checker_runner_registry.md)
-- [Chunk 8 Submission Artifact And Policy Checkers](docs/spec_chunk_8_submission_artifact_policy_checkers.md)
-- [Chunk 9 Pre-Review Gate](docs/spec_chunk_9_pre_review_gate.md)
-- [Chunk 10 Checker Trial](docs/spec_chunk_10_checker_trial.md)
-- [Day-by-Day Execution Plan](docs/roadmap_day_by_day_execution_plan.md)
-- [Implementation Backlog](docs/roadmap_implementation_backlog.md)
+- [Current v0.1 Status](docs/roadmap_status.md)
+- [Product Principles](docs/product_principles.md)
+- [Product Brief](docs/product_brief.md)
+- [Architecture Lockdown](docs/architecture_lockdown.md)
+- [System Architecture](docs/architecture_system_architecture.md)
+- [Glossary](docs/glossary.md)
+- [Historical Planning Index](docs/historical_planning.md)
+
+## Product And Operations Documentation
+
 - [Product Principles](docs/product_principles.md)
 - [Product Brief](docs/product_brief.md)
 - [First User Flows](docs/product_first_user_flows.md)
@@ -101,10 +119,13 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [Compensation And Reputation](docs/operations_payment_reputation.md)
 - [Risk Register](docs/risk_register.md)
 - [Process Pattern Baseline](docs/process_pattern_baseline.md)
-- [Architecture Lockdown](docs/architecture_lockdown.md)
 - [Glossary](docs/glossary.md)
 
-## Review Passes
+## Historical Review Records
+
+These records preserve earlier product, architecture, process, and adversarial
+reviews. They are evidence and design history, not current implementation
+status. Current changes receive review through [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - [Process Baseline Operations Review](docs/review_process_baseline_operations_review.md)
 - [Final Product Strategy Review](docs/review_final_product_strategy_review.md)

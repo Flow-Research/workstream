@@ -16,6 +16,27 @@ or higher-risk work, add a short initiative plan and chunk contract under
 `.agent-loop/initiatives/`. Existing planning artifacts are useful context, not
 runtime locks.
 
+## Find The Current Contract
+
+Before implementation, update from current `main` and read:
+
+1. [README.md](README.md) for the product boundary and current v0.1 summary.
+2. [Current v0.1 Status](docs/roadmap_status.md) for implemented, active, and
+   remaining capabilities.
+3. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
+   the canonical specification for the subsystem being changed.
+
+Code, migrations, tests, accepted ADRs, and canonical repository specifications
+define implemented or required behavior. Open pull requests describe work in
+progress. Calendar plans, early chunk specifications, imported files under
+`docs/reference_specs/`, internal review records, and closed initiative records
+are useful history unless a current document explicitly adopts them; they are
+not by themselves current sequencing or proof that behavior is live.
+
+Roadmaps and status documents must use capability milestones and evidence. Do
+not introduce delivery promises such as day plans, numbered weeks, or rolling
+time windows as repository authority.
+
 Contributors with GitHub write access may create a branch, implement a bounded
 change, and open a pull request without a signed start event, administrator
 dispatch, active-chunk lease, or loop-memory approval. Contributors without
