@@ -871,6 +871,7 @@ class ProjectRepository:
     ) -> ReviewPolicy:
         """Append one immutable review policy and advance its locked selector."""
         self._session.add(policy)
+        await self._session.flush([policy])
         guide.selected_review_policy_id = policy.id
         guide.selected_review_policy_generation = policy.policy_generation
         guide.selected_review_policy_hash = policy.policy_hash
@@ -883,6 +884,7 @@ class ProjectRepository:
     ) -> RevisionPolicy:
         """Append one immutable revision policy and advance its locked selector."""
         self._session.add(policy)
+        await self._session.flush([policy])
         guide.selected_revision_policy_id = policy.id
         guide.selected_revision_policy_generation = policy.policy_generation
         guide.selected_revision_policy_hash = policy.policy_hash
