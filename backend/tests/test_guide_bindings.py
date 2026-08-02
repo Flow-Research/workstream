@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime
 import hashlib
 from io import BytesIO
@@ -19,7 +20,7 @@ from pypdf import PdfWriter
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
@@ -972,7 +973,6 @@ def _materialization_request(
     ids: dict[str, UUID],
     *,
     binding_id: UUID,
-    authority: _AllowReadAuthority,
     **changes: Any,
 ) -> GuideSourceMaterializationRequest:
     values = {
@@ -1576,7 +1576,6 @@ async def test_materialization_denies_before_provider_read(
                 session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
             )
         binding_id = await _create_binding(factory, ids)
-        authority = _AllowReadAuthority()
         service = ArtifactMaterializationService(
             factory,
             store,  # type: ignore[arg-type]
@@ -1587,7 +1586,7 @@ async def test_materialization_denies_before_provider_read(
 
         with pytest.raises(ArtifactAuthorityDeniedError, match="unavailable"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         assert store.open_count == 0
@@ -1623,7 +1622,7 @@ async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
             _namespace(),
             authority_factory=lambda _: authority,
         )
-        request = _materialization_request(ids, binding_id=binding_id, authority=authority)
+        request = _materialization_request(ids, binding_id=binding_id)
 
         first = await service.materialize_guide_source(request)
         replay = await service.materialize_guide_source(request)
@@ -1689,7 +1688,6 @@ async def test_materialization_prepares_live_reader_authority_in_owned_session(
             _materialization_request(
                 ids,
                 binding_id=binding_id,
-                authority=_AllowReadAuthority(),
             )
         )
 
@@ -1725,7 +1723,7 @@ async def test_materialization_rejects_conflicting_immutable_classification(
             _namespace(),
             authority_factory=lambda _: authority,
         )
-        request = _materialization_request(ids, binding_id=binding_id, authority=authority)
+        request = _materialization_request(ids, binding_id=binding_id)
         first = await service.materialize_guide_source(request)
         async with factory() as session, session.begin():
             persisted = await session.get(
@@ -1777,7 +1775,7 @@ async def test_truncated_materialization_records_incident_without_classification
 
         with pytest.raises(GuideSourceMaterializationError, match="incident"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         async with factory() as session:
@@ -1821,7 +1819,7 @@ async def test_same_size_changed_materialization_records_incident(
 
         with pytest.raises(GuideSourceMaterializationError, match="incident"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         async with factory() as session:
@@ -1859,29 +1857,13 @@ async def test_authorized_read_locks_lineage_through_provider_access(
             try:
                 async with factory() as session, session.begin():
                     await session.execute(text("SET LOCAL lock_timeout = '100ms'"))
-                    async with suspend_historical_product_custody(
-                        session,
-                        table="project_setup_runs",
-                        triggers=("source_setup_run_custody",),
-                    ):
-                        session.add(
-                            ProjectSetupRun(
-                                id=str(uuid4()),
-                                project_id=str(ids["project"]),
-                                guide_id=str(ids["guide"]),
-                                guide_version="v1",
-                                source_snapshot_id=str(ids["snapshot"]),
-                                source_snapshot_hash=canonical_json_hash(
-                                    {"item": str(ids["item"])}
-                                ),
-                                setup_generation=2,
-                                status="queued",
-                                current_step="queued",
-                                created_by="test",
-                            )
-                        )
-                        await session.flush()
-            except DBAPIError:
+                    await session.scalar(
+                        select(ProjectSetupRun)
+                        .where(ProjectSetupRun.id == str(ids["run"]))
+                        .with_for_update()
+                    )
+            except DBAPIError as exc:
+                assert getattr(exc.orig, "sqlstate", None) == "55P03"
                 blocked = True
 
         service = ArtifactMaterializationService(
@@ -1894,7 +1876,7 @@ async def test_authorized_read_locks_lineage_through_provider_access(
         )
 
         result = await service.materialize_guide_source(
-            _materialization_request(ids, binding_id=binding_id, authority=authority)
+            _materialization_request(ids, binding_id=binding_id)
         )
 
         async with factory() as session:
@@ -1955,7 +1937,6 @@ async def test_cross_resource_materialization_denies_before_authority_and_provid
                 _materialization_request(
                     ids,
                     binding_id=request_binding_id,
-                    authority=authority,
                     **request_changes,
                 )
             )
@@ -2002,7 +1983,7 @@ async def test_composed_namespace_drift_denies_before_authority_and_provider_rea
 
         with pytest.raises(ArtifactStorageNamespaceError, match="active storage namespace"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         assert store.open_count == 0
@@ -2039,7 +2020,7 @@ async def test_materialization_cancellation_cleans_scratch_without_effect(
         )
         task = asyncio.create_task(
             service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
         )
         await asyncio.wait_for(store.started.wait(), timeout=5)
@@ -2059,7 +2040,9 @@ async def test_materialization_cancellation_cleans_scratch_without_effect(
 
 @pytest.mark.asyncio
 async def test_materialization_inspection_timeout_cleans_scratch_and_records_incident(
-    isolated_database_env: str, tmp_path: Path
+    isolated_database_env: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     payload = b"%PDF-1.7\nverified"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
@@ -2089,7 +2072,7 @@ async def test_materialization_inspection_timeout_cleans_scratch_and_records_inc
 
         with pytest.raises(GuideSourceMaterializationError, match="incident"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         assert (await scratch.usage()).reservation_count == 0
@@ -2098,6 +2081,15 @@ async def test_materialization_inspection_timeout_cleans_scratch_and_records_inc
             assert incident is not None
             assert incident.code == "unavailable"
             assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+
+        async def fail_incident_write(*_args: Any, **_kwargs: Any) -> None:
+            raise SQLAlchemyError("incident write unavailable")
+
+        monkeypatch.setattr(service, "_record_incident", fail_incident_write)
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id)
+            )
     finally:
         scratch.close()
         await engine.dispose()
@@ -2141,7 +2133,7 @@ async def test_provider_failure_records_only_bounded_artifact_incident(
 
         with pytest.raises(GuideSourceMaterializationError, match="incident"):
             await service.materialize_guide_source(
-                _materialization_request(ids, binding_id=binding_id, authority=authority)
+                _materialization_request(ids, binding_id=binding_id)
             )
 
         async with factory() as session:
@@ -2217,8 +2209,10 @@ async def test_binding_uses_live_fixed_service_prepared_authority(
                 logical_role="guide_source_original",
             )
             handle = await authority.prepare(facts=facts, idempotency_key=uuid4())
-            request = _request(ids, _AllowBindingAuthority())
-            request = request.model_copy(update={"prepared_authorization": handle})
+            request = replace(
+                _request(ids, _AllowBindingAuthority()),
+                prepared_authorization=handle,
+            )
             result = await GuideSourceBindingService(session, authority).bind_guide_source(request)
             assert not result.replayed
 

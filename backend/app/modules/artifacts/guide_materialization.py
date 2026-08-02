@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.interfaces.artifact_operations import (
@@ -55,6 +57,9 @@ from app.modules.projects.models import (
     ProjectGuide,
     ProjectSetupRun,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class GuideSourceMaterializationError(RuntimeError):
@@ -212,13 +217,16 @@ class ArtifactMaterializationService:
                         observed_sha256=commitment.sha256,
                         observed_byte_count=commitment.byte_count,
                     )
-                detected = await prepared.inspect(
-                    BoundGuideFormatInspector(
-                        detector=self._detector,
-                        declared_media_type=before.declared_media_type,
-                        ingestion_adapter=before.ingestion_adapter,
+                try:
+                    detected = await prepared.inspect(
+                        BoundGuideFormatInspector(
+                            detector=self._detector,
+                            declared_media_type=before.declared_media_type,
+                            ingestion_adapter=before.ingestion_adapter,
+                        )
                     )
-                )
+                except ArtifactPreparationDeadlineError as exc:
+                    raise _GuideReadIncident("unavailable") from exc
                 existing = await session.scalar(
                     select(GuideSourceFormatClassification)
                     .where(GuideSourceFormatClassification.binding_id == before.binding_id)
@@ -260,12 +268,15 @@ class ArtifactMaterializationService:
                 return self._result(classification, replayed=False)
         except _GuideReadIncident as incident:
             if before is not None:
-                await self._record_incident(
-                    before,
-                    incident.code,
-                    observed_sha256=incident.observed_sha256,
-                    observed_byte_count=incident.observed_byte_count,
-                )
+                try:
+                    await self._record_incident(
+                        before,
+                        incident.code,
+                        observed_sha256=incident.observed_sha256,
+                        observed_byte_count=incident.observed_byte_count,
+                    )
+                except SQLAlchemyError:
+                    logger.exception("guide source incident could not be recorded")
             raise GuideSourceMaterializationError("guide artifact incident") from None
         finally:
             if prepared is not None:
@@ -379,7 +390,6 @@ class ArtifactMaterializationService:
                         ArtifactReplica,
                         ArtifactVerificationJob,
                         ArtifactVerificationReceipt,
-                        ArtifactStorageNamespace,
                     )
                 )
             )

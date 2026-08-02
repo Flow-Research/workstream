@@ -2,7 +2,8 @@
 
 ## Result
 
-PASS with low operational risks after repair.
+Provisional local PASS after repair. Merge readiness remains pending hosted
+full coverage and database-backed guide tests on the exact PR head.
 
 ## Blocking findings resolved
 
@@ -39,6 +40,8 @@ PASS with low operational risks after repair.
 
 ## Verification evidence
 
+Reviewed implementation commit: pending the CodeRabbit corrective commit.
+
 - Ruff over `backend/app`, `backend/tests`, and `backend/scripts`: passed.
 - Artifact architecture tests: 20 passed.
 - Focused AUTH catalogue, custody, fixed-service, exact-fact, human-denial,
@@ -51,5 +54,5 @@ PASS with low operational risks after repair.
 
 ## Readiness dependency
 
-Planning/scope PR #244 must merge first. The runtime branch must then be rebased
-onto current `main`, and hosted exact-head checks must pass before merge readiness.
+Planning/scope PR #244 is merged and the runtime branch is rebased onto current
+`main`. Hosted exact-head checks remain required before merge readiness.

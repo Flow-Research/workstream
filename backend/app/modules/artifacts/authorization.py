@@ -525,7 +525,7 @@ async def _fixed_service_context(
 ) -> ServiceAuthorizationContext:
     actors = ActorRepository(session)
     profile = await actors.get_service_actor(service_identity.value)
-    if profile is None:
+    if profile is None or profile.service_identity != service_identity.value:
         raise ArtifactAuthorityDeniedError("artifact service principal is unavailable")
     link = await actors.get_identity_link_for_actor(profile.id)
     if (
@@ -541,7 +541,7 @@ async def _fixed_service_context(
             actor_status=ActorStatus(profile.status),
             identity_link_id=UUID(link.id),
             identity_link_status=IdentityLinkStatus(link.status),
-            service_identity=ServiceIdentity(profile.service_identity),
+            service_identity=service_identity,
             request_id=request_id,
             correlation_id=correlation_id,
         )

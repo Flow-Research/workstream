@@ -5391,6 +5391,34 @@ async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_
         await authority.consume(prepared_authorization=handle, facts=facts)
 
 
+@pytest.mark.asyncio
+async def test_fixed_service_context_rejects_mismatched_loaded_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MismatchedActorRepository:
+        def __init__(self, _session) -> None:
+            pass
+
+        async def get_service_actor(self, _service_identity: str):
+            return SimpleNamespace(
+                id=str(uuid4()),
+                service_identity=ServiceIdentity.ARTIFACT_GUIDE_READER.value,
+            )
+
+    monkeypatch.setattr(
+        artifact_authorization,
+        "ActorRepository",
+        MismatchedActorRepository,
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="principal is unavailable"):
+        await artifact_authorization._fixed_service_context(
+            _PreparedTestSession(),  # type: ignore[arg-type]
+            ServiceIdentity.ARTIFACT_BINDING,
+            uuid4(),
+            uuid4(),
+        )
+
+
 @pytest.mark.parametrize(
     ("action_id", "resource_type", "wrong_identity"),
     [
@@ -5453,27 +5481,23 @@ async def test_prepared_guide_actions_deny_wrong_fixed_service_before_actor_lock
 
 
 @pytest.mark.parametrize(
-    ("action_id", "resource_type", "human_authority"),
+    ("action_id", "resource_type"),
     [
         (
             ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
             "guide_source_binding",
-            "project_manager",
         ),
         (
             ActionId.ARTIFACT_GUIDE_SOURCE_READ,
             "guide_source_read",
-            "access_administrator",
         ),
     ],
 )
 @pytest.mark.asyncio
-async def test_human_admin_authority_cannot_substitute_for_fixed_guide_services(
+async def test_human_authority_cannot_substitute_for_fixed_guide_services(
     action_id: ActionId,
     resource_type: str,
-    human_authority: str,
 ) -> None:
-    del human_authority
     context = _runtime_context()
     session = _PreparedTestSession()
 
