@@ -1421,9 +1421,37 @@ replacement, integrity mismatch, or incomplete provenance rolls back the report
 commit and produces the applicable bounded internal failure; an earlier
 pre-agent validation is not sufficient authority for this durable mutation.
 
+The hidden v0.1 continuation crosses the ART/project boundary through one
+`GuideSufficiencyMaterialPort`. ART owns all joins over bindings,
+classifications, extraction attempts, immutable extracted content, and exact
+usage rows. Project setup receives a typed immutable DTO; it never queries ART
+persistence directly. Every snapshot item is required. Text-capable formats
+carry canonical text, while PNG/JPEG/WebP carry typed structural metadata only.
+Legacy durable references, CIDs, caller excerpts, provider coordinates, and raw
+bytes are excluded from authoritative agent material.
+
+Items are ordered by snapshot order inside the exact compact sorted-key UTF-8
+JSON prompt sent by the runtime, and every item is labeled
+`UNTRUSTED_GUIDE_SOURCE_DATA`. The aggregate limit counts every prompt byte,
+including trusted guide context, labels, escaping, JSON punctuation, and
+separators. An
+exact 12 MiB assembly is permitted; one byte more records
+`guide_source_limit_exceeded` before agent invocation. Agent-created reports
+store the setup run/generation and assembled-material digest/size, plus one
+normalized child row per item with a composite foreign key to its exact ART
+extraction usage lineage. The same locked facts are recomputed before report
+commit, and report, provenance children, and setup-run output commit atomically.
+
+Only the pre-submit Celery message gains `setup_generation`; its payload remains
+the five durable identifiers for project, guide, snapshot, setup run, and
+generation. Post-submit policy continuation payloads are unchanged. The
+verified continuation remains hidden until AUTH-04B, and ART-03C separately
+owns replacement of the legacy live material path.
+
 The public run remains `setup_blocked` with the redacted stable code defined for
 the exact extraction outcome in D46. Recoverable ART
-incidents wait for recovery and expose only a bounded incident reference to an
+incidents wait for recovery and expose only `error_artifact_incident_id`, a
+bounded database incident identifier, to an
 authorized Operator. Terminal corruption or source-content failure requires a
 new corrected Project Manager source item/snapshot; no outcome is a sufficiency
 decision.

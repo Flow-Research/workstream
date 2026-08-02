@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import fnmatch
+import hashlib
 import logging
 import re
 from collections.abc import Sequence
@@ -11,7 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import unquote, urlparse
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +33,13 @@ from app.interfaces.project_agents import (
     ProjectAgentRuntimeError,
     ProjectGuideAgentRuntime,
     RepresentativeTaskMaterialContext,
+    MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES,
+    canonical_guide_source_material_bytes,
+)
+from app.interfaces.artifact_operations import (
+    GuideSufficiencyMaterialPort,
+    GuideSufficiencyMaterialRequest,
+    GuideSufficiencyMaterialUnavailable,
 )
 from app.modules.checkers.compiler import (
     PreSubmitCheckerCompilerError,
@@ -43,6 +51,7 @@ from app.modules.projects.models import (
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
+    GuideSufficiencyReportSourceUsage,
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
@@ -104,6 +113,15 @@ logger = logging.getLogger(__name__)
 PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = (
     "project setup failed; inspect server logs with the setup run id"
 )
+MAXIMUM_GUIDE_AGENT_MATERIAL_BYTES = MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES
+
+
+def bounded_canonical_guide_material(material: GuideSourceMaterial) -> bytes:
+    """Return the exact agent payload when it fits the locked aggregate limit."""
+    payload = canonical_guide_source_material_bytes(material)
+    if len(payload) > MAXIMUM_GUIDE_AGENT_MATERIAL_BYTES:
+        raise GuideSufficiencyMaterialUnavailable("guide_source_limit_exceeded")
+    return payload
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
 ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
@@ -449,6 +467,7 @@ class ProjectService:
         self,
         session: AsyncSession,
         agent_runtime: ProjectGuideAgentRuntime | None = None,
+        guide_sufficiency_material: GuideSufficiencyMaterialPort | None = None,
     ) -> None:
         """Create a service instance bound to one database session.
 
@@ -459,6 +478,7 @@ class ProjectService:
         self._session = session
         self._repo = ProjectRepository(session)
         self._agent_runtime = agent_runtime
+        self._guide_sufficiency_material = guide_sufficiency_material
 
     def _project_agent_runtime(self) -> ProjectGuideAgentRuntime:
         """Return the configured project-agent runtime only for agent routes.
@@ -740,6 +760,182 @@ class ProjectService:
             existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
             if existing is not None:
                 return GuideSufficiencyReportResponse.model_validate(existing), False
+            raise PolicySetupConflict(
+                "guide sufficiency report conflicted with concurrent setup; retry"
+            ) from exc
+        await self._session.refresh(report)
+        return GuideSufficiencyReportResponse.model_validate(report), True
+
+    async def run_verified_guide_sufficiency_agent(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+        setup_run_id: str,
+        setup_generation: int,
+    ) -> tuple[GuideSufficiencyReportResponse, bool]:
+        """Run the hidden canonical ART-backed sufficiency continuation."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        if self._guide_sufficiency_material is None:
+            raise PolicySetupBlocked("verified guide sufficiency is unavailable")
+        request = GuideSufficiencyMaterialRequest(
+            project_id=UUID(project_id),
+            guide_id=UUID(guide_id),
+            guide_source_snapshot_id=UUID(source_snapshot_id),
+            project_setup_run_id=UUID(setup_run_id),
+            setup_generation=setup_generation,
+        )
+        guide = await self._get_project_guide(project_id, guide_id)
+        snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
+        guide_version = guide.version
+        source_snapshot_hash = snapshot.bundle_hash
+        first = await self._guide_sufficiency_material.load(request)
+        def agent_item(item) -> GuideSourceItemMaterial:
+            return GuideSourceItemMaterial(
+                source_kind=item.source_kind,
+                durable_ref="",
+                ingestion_adapter=item.ingestion_adapter,
+                content_hash=item.artifact_sha256,
+                media_type=item.media_type,
+                source_item_id=str(item.source_item_id),
+                item_order=item.item_order,
+                binding_id=str(item.binding_id),
+                artifact_content_id=str(item.content_id),
+                artifact_sha256=item.artifact_sha256,
+                artifact_byte_count=item.artifact_byte_count,
+                classification_id=str(item.classification_id),
+                detected_format=item.detected_format,
+                extraction_attempt_id=str(item.extraction_attempt_id),
+                extraction_usage_id=str(item.extraction_usage_id),
+                extracted_content_id=str(item.extracted_content_id),
+                extractor_name=item.extractor_name,
+                extractor_version=item.extractor_version,
+                extraction_policy_version=item.extraction_policy_version,
+                canonical_output_sha256=item.canonical_output_sha256,
+                omission_facts=item.omission_facts,
+                canonical_content=item.canonical_content,
+                structural_metadata=item.structural_metadata,
+                untrusted_data=True,
+                untrusted_data_label="UNTRUSTED_GUIDE_SOURCE_DATA",
+            )
+
+        material = GuideSourceMaterial(
+            project_id=guide.project_id,
+            guide_id=guide.id,
+            guide_version=guide_version,
+            source_snapshot_id=snapshot.id,
+            source_snapshot_hash=source_snapshot_hash,
+            guide_material={
+                field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
+            },
+            verified_artifact_material=True,
+            source_items=[agent_item(item) for item in first.source_items],
+            source_refs=[],
+            # Authoritative items already retain source_kind; do not duplicate
+            # canonical bytes in the legacy representative projection.
+            representative_task_material=RepresentativeTaskMaterialContext(items=[]),
+        )
+        first_prompt = bounded_canonical_guide_material(material)
+        first_prompt_sha256 = f"sha256:{hashlib.sha256(first_prompt).hexdigest()}"
+        existing = await self._repo.get_sufficiency_report_for_snapshot(source_snapshot_id)
+        if existing is not None:
+            if (
+                existing.project_setup_run_id == setup_run_id
+                and existing.setup_generation == setup_generation
+                and existing.agent_material_sha256 == first_prompt_sha256
+            ):
+                response = GuideSufficiencyReportResponse.model_validate(existing)
+                await self._session.rollback()
+                return response, False
+            await self._session.rollback()
+            raise PolicySetupConflict("guide sufficiency report provenance mismatch")
+        await self._session.rollback()
+        try:
+            result = await self._project_agent_runtime().analyze_guide_sufficiency(material)
+        except ProjectAgentRuntimeError:
+            raise AgentRuntimeUnavailable("project guide sufficiency agent is unavailable") from None
+        payload = GuideSufficiencyReportCreate(
+            source_snapshot_id=source_snapshot_id,
+            status=AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
+            findings=[finding.model_dump(mode="json") for finding in result.findings],
+            summary=result.summary,
+        )
+        self._validate_sufficiency_report_payload(payload)
+        second = await self._guide_sufficiency_material.load(request)
+        second_material = material.model_copy(
+            update={"source_items": [agent_item(item) for item in second.source_items]}
+        )
+        second_prompt = bounded_canonical_guide_material(second_material)
+        second_prompt_sha256 = f"sha256:{hashlib.sha256(second_prompt).hexdigest()}"
+        if second_prompt_sha256 != first_prompt_sha256 or second.provenance != first.provenance:
+            await self._session.rollback()
+            raise PolicySetupConflict("verified guide material changed")
+        existing = await self._repo.get_sufficiency_report_for_snapshot(source_snapshot_id)
+        if existing is not None:
+            if (
+                existing.project_setup_run_id == setup_run_id
+                and existing.setup_generation == setup_generation
+                and existing.agent_material_sha256 == second_prompt_sha256
+            ):
+                response = GuideSufficiencyReportResponse.model_validate(existing)
+                await self._session.rollback()
+                return response, False
+            await self._session.rollback()
+            raise PolicySetupConflict("guide sufficiency report provenance mismatch")
+        report = GuideSufficiencyReport(
+            id=str(uuid4()),
+            project_id=project_id,
+            guide_id=guide_id,
+            guide_version=guide_version,
+            source_snapshot_id=source_snapshot_id,
+            source_snapshot_hash=source_snapshot_hash,
+            status=payload.status,
+            findings=[finding.model_dump(mode="json") for finding in payload.findings],
+            summary=payload.summary,
+            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+            project_setup_run_id=setup_run_id,
+            setup_generation=setup_generation,
+            agent_material_sha256=second_prompt_sha256,
+            agent_material_byte_count=len(second_prompt),
+            created_by=actor.actor_id,
+        )
+        self._session.add(report)
+        for item in second.provenance:
+            self._session.add(
+                GuideSufficiencyReportSourceUsage(
+                    id=str(uuid4()),
+                    report_id=report.id,
+                    item_order=item.item_order,
+                    source_item_id=str(item.source_item_id),
+                    binding_id=str(item.binding_id),
+                    content_id=str(item.content_id),
+                    extraction_usage_id=str(item.extraction_usage_id),
+                    extraction_attempt_id=str(item.extraction_attempt_id),
+                    extracted_content_id=str(item.extracted_content_id),
+                    canonical_output_sha256=item.canonical_output_sha256,
+                    project_setup_run_id=setup_run_id,
+                    setup_generation=setup_generation,
+                )
+            )
+        setup_run = await self._repo.lock_project_setup_run(setup_run_id)
+        if setup_run is None or setup_run.setup_generation != setup_generation:
+            await self._session.rollback()
+            raise PolicySetupConflict("project setup run context mismatch")
+        setup_run.output_sufficiency_report_id = report.id
+        try:
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+            concurrent = await self._repo.get_sufficiency_report_for_snapshot(source_snapshot_id)
+            if (
+                concurrent is not None
+                and concurrent.project_setup_run_id == setup_run_id
+                and concurrent.setup_generation == setup_generation
+                and concurrent.agent_material_sha256 == second_prompt_sha256
+            ):
+                return GuideSufficiencyReportResponse.model_validate(concurrent), False
             raise PolicySetupConflict(
                 "guide sufficiency report conflicted with concurrent setup; retry"
             ) from exc
@@ -1885,6 +2081,7 @@ class ProjectService:
         output_post_submit_checker_policy_id: str | None = None,
         post_submit_derivation_summary: dict[str, Any] | None = None,
         error_code: str | None = None,
+        error_artifact_incident_id: str | None = None,
         error_summary: str | None = None,
         continuation_effective_policy_id: str | None = None,
         continuation_pre_submit_checker_policy_id: str | None = None,
@@ -1956,6 +2153,7 @@ class ProjectService:
                 post_submit_derivation_summary
             )
         setup_run.error_code = error_code
+        setup_run.error_artifact_incident_id = error_artifact_incident_id
         setup_run.error_summary = (
             self._safe_project_setup_error_summary(error_summary)
             if error_summary is not None
@@ -1972,6 +2170,7 @@ class ProjectService:
         project_id: str,
         guide_id: str,
         source_snapshot_id: str,
+        setup_generation: int | None = None,
     ) -> ProjectSetupRunResponse:
         """Validate that a worker payload matches the setup-run ledger row."""
         setup_run = await self._repo.get_project_setup_run(setup_run_id)
@@ -1981,6 +2180,7 @@ class ProjectService:
             setup_run.project_id != project_id
             or setup_run.guide_id != guide_id
             or setup_run.source_snapshot_id != source_snapshot_id
+            or (setup_generation is not None and setup_run.setup_generation != setup_generation)
         ):
             raise PolicySetupConflict("project setup run context mismatch")
         return ProjectSetupRunResponse.model_validate(setup_run)

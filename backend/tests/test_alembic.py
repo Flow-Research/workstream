@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0046_policy_identity_lineage"
+HEAD_REVISION = "0047_policy_identity_lineage"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -11822,7 +11822,7 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
         try:
             command.downgrade(config, "0045_guide_metadata_authority")
             asyncio.run(_seed_xint003_02a_legacy_policies(isolated_database_env, ids))
-            command.upgrade(config, "0046_policy_identity_lineage")
+            command.upgrade(config, "0047_policy_identity_lineage")
             state = asyncio.run(_xint003_02a_policy_state(isolated_database_env, ids))
             immutable = asyncio.run(
                 _xint003_02a_policy_immutable_writes(isolated_database_env, ids)

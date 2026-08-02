@@ -1,7 +1,7 @@
 """install immutable review and revision policy identity lineage
 
-Revision ID: 0046_policy_identity_lineage
-Revises: 0045_guide_metadata_authority
+Revision ID: 0047_policy_identity_lineage
+Revises: 0046_guide_sufficiency
 Create Date: 2026-08-01
 """
 
@@ -14,8 +14,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0046_policy_identity_lineage"
-down_revision = "0045_guide_metadata_authority"
+revision = "0047_policy_identity_lineage"
+down_revision = "0046_guide_sufficiency"
 branch_labels = depends_on = None
 
 

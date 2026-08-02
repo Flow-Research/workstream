@@ -34,7 +34,7 @@ backend/app/modules/checkers/models.py
 backend/app/modules/checkers/schemas.py
 backend/app/modules/checkers/service.py
 backend/app/modules/checkers/runner.py
-backend/alembic/versions/0046_immutable_review_revision_policy_lineage.py
+backend/alembic/versions/0047_immutable_review_revision_policy_lineage.py
 backend/tests/test_projects.py
 backend/tests/test_tasks.py
 backend/tests/test_checkers.py

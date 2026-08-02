@@ -44,7 +44,9 @@ from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,
     SubmissionArtifactPolicyDerivationResult,
+    canonical_guide_source_material_bytes,
 )
+from app.interfaces.artifact_operations import GuideSufficiencyMaterialUnavailable
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideMutationIdempotencyRecord,
@@ -122,6 +124,7 @@ from app.modules.projects.service import (
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
     GuideActivationBlocked,
     PolicySetupBlocked,
+    PolicySetupConflict,
     ProjectNotFound,
     ProjectSetupQueueError,
     ProjectService,
@@ -2178,7 +2181,7 @@ async def test_create_guide_never_enqueues_setup_or_runs_agents(
             """Fail if the guide create request invokes policy derivation."""
             raise AssertionError("derivation runtime must not run in request path")
 
-    enqueued: list[dict[str, str]] = []
+    enqueued: list[dict[str, object]] = []
 
     def capture_enqueue(
         *,
@@ -2186,6 +2189,7 @@ async def test_create_guide_never_enqueues_setup_or_runs_agents(
         guide_id: str,
         source_snapshot_id: str,
         setup_run_id: str,
+        setup_generation: int,
     ) -> str:
         """Capture queue arguments without running Celery."""
         enqueued.append(
@@ -2194,6 +2198,7 @@ async def test_create_guide_never_enqueues_setup_or_runs_agents(
                 "guide_id": guide_id,
                 "source_snapshot_id": source_snapshot_id,
                 "setup_run_id": setup_run_id,
+                "setup_generation": setup_generation,
             }
         )
         return "captured-task-id"
@@ -2449,6 +2454,7 @@ async def test_create_source_snapshot_marks_setup_run_when_post_commit_enqueue_f
         guide_id: str,
         source_snapshot_id: str,
         setup_run_id: str,
+        setup_generation: int,
     ) -> str:
         """Simulate a broker outage after the guide transaction commits."""
         raise ProjectSetupQueueError("queue failed after commit")
@@ -2567,7 +2573,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    enqueued: list[dict[str, str]] = []
+    enqueued: list[dict[str, object]] = []
 
     def capture_enqueue(
         *,
@@ -2575,6 +2581,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
         guide_id: str,
         source_snapshot_id: str,
         setup_run_id: str,
+        setup_generation: int,
     ) -> str:
         """Capture queue arguments without running Celery."""
         enqueued.append(
@@ -2583,6 +2590,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
                 "guide_id": guide_id,
                 "source_snapshot_id": source_snapshot_id,
                 "setup_run_id": setup_run_id,
+                "setup_generation": setup_generation,
             }
         )
         return "captured-task-id"
@@ -2608,6 +2616,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
             "guide_id": guide["id"],
             "source_snapshot_id": snapshot["id"],
             "setup_run_id": enqueued[0]["setup_run_id"],
+            "setup_generation": 1,
         }
     ]
     async with db_session.get_session_factory()() as session:
@@ -2639,6 +2648,7 @@ async def test_create_source_snapshot_returns_created_when_post_commit_enqueue_f
         guide_id: str,
         source_snapshot_id: str,
         setup_run_id: str,
+        setup_generation: int,
     ) -> str:
         """Simulate a broker outage after the snapshot transaction commits."""
         raise ProjectSetupQueueError("queue failed after commit")
@@ -3056,6 +3066,7 @@ async def test_guide_mutation_router_finishes_commit_dispatch_and_replay(
             SimpleNamespace(
                 replayed=False,
                 setup_run_id="setup-1",
+                setup_generation=7,
                 response=response,
             ),
         )
@@ -3069,6 +3080,7 @@ async def test_guide_mutation_router_finishes_commit_dispatch_and_replay(
             "guide_id": "guide-1",
             "source_snapshot_id": "snapshot-1",
             "setup_run_id": "setup-1",
+            "setup_generation": 7,
         }
     ]
 
@@ -5615,6 +5627,7 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
         guide["id"],
         snapshot_id,
         setup_run_id,
+        1,
     )
 
     async with db_session.get_session_factory()() as session:
@@ -5649,6 +5662,146 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     assert "raw-token" not in logged_payload
     assert "secret" not in logged_payload
     assert "/srv/private" not in logged_payload
+
+
+@pytest.mark.parametrize(
+    ("error_code", "incident"),
+    [
+        ("guide_source_format_unsupported", False),
+        ("guide_source_format_ambiguous", False),
+        ("guide_source_malformed", False),
+        ("guide_source_limit_exceeded", False),
+        ("guide_source_extraction_failed", False),
+        ("guide_source_extraction_cancelled", False),
+        ("guide_artifact_incident", True),
+    ],
+)
+async def test_hidden_verified_worker_persists_stable_material_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: str,
+    incident: bool,
+) -> None:
+    from app.workers import project_setup as worker
+
+    incident_id = uuid4() if incident else None
+    updates: list[dict[str, object]] = []
+
+    class Session:
+        async def rollback(self) -> None:
+            pass
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Session()
+
+        async def __aexit__(self, *_: object) -> None:
+            pass
+
+    class Engine:
+        async def dispose(self) -> None:
+            pass
+
+    class Service:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        async def run_verified_guide_sufficiency_agent(self, *_: object):
+            raise GuideSufficiencyMaterialUnavailable(
+                error_code,
+                incident_id=incident_id,
+            )
+
+        async def update_project_setup_run_status(self, _run_id: str, **facts: object):
+            updates.append(facts)
+
+    monkeypatch.setattr(worker, "create_async_engine", lambda *_args, **_kwargs: Engine())
+    monkeypatch.setattr(worker, "get_database_url", lambda: "postgresql+asyncpg://unused")
+    monkeypatch.setattr(worker, "async_sessionmaker", lambda *_args, **_kwargs: SessionContext)
+    monkeypatch.setattr(worker, "ProjectService", Service)
+
+    result = await worker._run_verified_pre_submit_sufficiency_continuation(
+        str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4()), 1
+    )
+
+    assert result["status"] == "setup_blocked"
+    assert result["error_code"] == error_code
+    assert result["guide_sufficiency_report_id"] is None
+    assert updates == [
+        {
+            "status": "setup_blocked",
+            "current_step": "guide_sufficiency",
+            "error_code": error_code,
+            "error_artifact_incident_id": str(incident_id) if incident_id else None,
+            "error_summary": "project setup failed; inspect server logs with the setup run id",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failure", "error_code"),
+    [
+        (PolicySetupConflict("changed"), "guide_source_material_changed"),
+        (PolicySetupBlocked("unavailable"), "verified_guide_sufficiency_unavailable"),
+        (ProjectServiceError("stale"), "guide_source_stale"),
+        (RuntimeError("sensitive failure"), "project_setup_failed"),
+    ],
+)
+async def test_hidden_verified_worker_preserves_sanitized_domain_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    error_code: str,
+) -> None:
+    from app.workers import project_setup as worker
+
+    updates: list[dict[str, object]] = []
+
+    class Session:
+        async def rollback(self) -> None:
+            pass
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Session()
+
+        async def __aexit__(self, *_: object) -> None:
+            pass
+
+    class Engine:
+        async def dispose(self) -> None:
+            pass
+
+    class Service:
+        def __init__(self, *_: object, **__: object) -> None:
+            pass
+
+        async def run_verified_guide_sufficiency_agent(self, *_: object):
+            raise failure
+
+        async def update_project_setup_run_status(self, _run_id: str, **facts: object):
+            updates.append(facts)
+
+    monkeypatch.setattr(worker, "create_async_engine", lambda *_args, **_kwargs: Engine())
+    monkeypatch.setattr(worker, "get_database_url", lambda: "postgresql+asyncpg://unused")
+    monkeypatch.setattr(worker, "async_sessionmaker", lambda *_args, **_kwargs: SessionContext)
+    monkeypatch.setattr(worker, "ProjectService", Service)
+
+    result = await worker._run_verified_pre_submit_sufficiency_continuation(
+        str(uuid4()), str(uuid4()), str(uuid4()), str(uuid4()), 1
+    )
+
+    assert result == {
+        "status": "setup_blocked",
+        "error_code": error_code,
+        "guide_sufficiency_report_id": None,
+    }
+    assert updates == [
+        {
+            "status": "setup_blocked",
+            "current_step": "guide_sufficiency",
+            "error_code": error_code,
+            "error_summary": "project setup failed; inspect server logs with the setup run id",
+        }
+    ]
 
 
 async def test_project_setup_worker_persists_sanitized_domain_failure(
@@ -5711,6 +5864,7 @@ async def test_project_setup_worker_persists_sanitized_domain_failure(
         guide["id"],
         snapshot_id,
         setup_run_id,
+        1,
     )
 
     async with db_session.get_session_factory()() as session:
@@ -6935,6 +7089,63 @@ async def test_openai_agent_sdk_adapter_rejects_oversized_prompt_before_sdk_impo
 
     with pytest.raises(ProjectAgentRuntimeError, match="prompt exceeds configured size limit"):
         await runtime.analyze_guide_sufficiency(material)
+
+
+async def test_openai_agent_sdk_adapter_wraps_canonical_serialization_type_error() -> None:
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
+
+    with pytest.raises(
+        ProjectAgentRuntimeError,
+        match="prompt is not canonically serializable",
+    ):
+        await runtime._run_structured_agent(
+            name="serialization-test",
+            instructions="Return structured output.",
+            material={"unsupported": {"set-value"}},
+            output_type=GuideSufficiencyAgentResult,
+        )
+
+
+async def test_openai_agent_sdk_sends_exact_canonical_verified_material(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeAgent:
+        def __init__(self, **_: object) -> None:
+            pass
+
+    class FakeRunner:
+        @staticmethod
+        async def run(_: FakeAgent, prompt: str) -> object:
+            captured["prompt"] = prompt
+            return types.SimpleNamespace(
+                final_output=GuideSufficiencyAgentResult(
+                    status="guide_sufficient", findings=[], agent_version="test-v1"
+                )
+            )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "agents",
+        types.SimpleNamespace(
+            Agent=FakeAgent,
+            AgentOutputSchema=lambda output_type, strict_json_schema=True: output_type,
+            Runner=FakeRunner,
+        ),
+    )
+    material = GuideSourceMaterial(
+        project_id="project-1", guide_id="guide-1", guide_version="v1",
+        source_snapshot_id="snapshot-1", source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={}, verified_artifact_material=True,
+    )
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
+    await runtime.analyze_guide_sufficiency(material)
+    assert captured["prompt"].encode() == canonical_guide_source_material_bytes(material)
 
 
 async def test_openai_runtime_misconfiguration_is_sanitized_and_agent_route_only(

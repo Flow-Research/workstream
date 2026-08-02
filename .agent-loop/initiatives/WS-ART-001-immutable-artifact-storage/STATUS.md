@@ -58,8 +58,11 @@ the guide-content boundary is being corrected explicitly: verified binding,
 full-read materialization, format classification, isolated extraction,
 canonical extraction provenance, incremental complex-format support, and
 same-generation sufficiency continuation are separate PR-sized contracts.
-`WS-ART-001-03B1` is the first proposed
-implementation successor; this planning change contains no implementation.
+`WS-ART-001-03B4` is active: its reviewed contract fixes the artifact-owned
+material port, all-items-required semantics, deterministic 12 MiB assembly,
+normalized report-to-extraction provenance, and the hidden pre-submit
+identifier/generation continuation. AUTH binding/read actions remain planned
+and unavailable; ART-03C remains blocked on AUTH-04B.
 
 After 03B3A merged, the original complex-format chunk was found too broad for
 one dependency and parser-security review. It is replaced by 03B3B1 dependency
@@ -82,8 +85,9 @@ wheel and adds the shared bounded OPC/OOXML container security capability.
 03B3B3B merged through PR #234. It adds bounded DOCX extraction and durable
 omission facts on the shared OOXML boundary. 03B3B3C merged through PR #235 and
 adds bounded PPTX slide/notes extraction. 03B3B3D merged through PR #238 and
-adds bounded XLSX cell extraction. 03B3B4 is the active successor and adds only
-bounded PNG/JPEG/WebP structural metadata. AUTH and sufficiency work remain
+adds bounded XLSX cell extraction. 03B3B4 merged through PR #239 and adds only
+bounded PNG/JPEG/WebP structural metadata. 03B4 is now the active hidden
+same-generation sufficiency continuation. AUTH binding/read actions remain
 inactive.
 
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and

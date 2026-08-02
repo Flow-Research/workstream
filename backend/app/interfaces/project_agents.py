@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+
+MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES = 12 * 1024 * 1024
 
 
 class ProjectAgentRuntimeError(Exception):
@@ -27,6 +30,26 @@ class GuideSourceItemMaterial(BaseModel):
     content_cid: str | None = None
     media_type: str | None = None
     content_excerpt: str | None = None
+    source_item_id: str | None = None
+    item_order: int | None = None
+    binding_id: str | None = None
+    artifact_content_id: str | None = None
+    artifact_sha256: str | None = None
+    artifact_byte_count: int | None = None
+    classification_id: str | None = None
+    detected_format: str | None = None
+    extraction_attempt_id: str | None = None
+    extraction_usage_id: str | None = None
+    extracted_content_id: str | None = None
+    extractor_name: str | None = None
+    extractor_version: str | None = None
+    extraction_policy_version: str | None = None
+    canonical_output_sha256: str | None = None
+    omission_facts: dict[str, Any] | None = None
+    canonical_content: str | None = None
+    structural_metadata: dict[str, Any] | None = None
+    untrusted_data: bool = False
+    untrusted_data_label: Literal["UNTRUSTED_GUIDE_SOURCE_DATA"] | None = None
 
 
 class RepresentativeTaskMaterialContext(BaseModel):
@@ -48,11 +71,23 @@ class GuideSourceMaterial(BaseModel):
     source_snapshot_id: str
     source_snapshot_hash: str
     guide_material: dict[str, Any]
+    verified_artifact_material: bool = False
     source_items: list[GuideSourceItemMaterial] = Field(default_factory=list)
     source_refs: list[str] = Field(default_factory=list)
     representative_task_material: RepresentativeTaskMaterialContext = Field(
         default_factory=RepresentativeTaskMaterialContext
     )
+
+
+def canonical_guide_source_material_bytes(material: GuideSourceMaterial) -> bytes:
+    """Serialize the exact deterministic UTF-8 payload supplied to the agent."""
+    return json.dumps(
+        material.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
 
 
 class AgentFinding(BaseModel):
