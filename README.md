@@ -289,9 +289,9 @@ WORKSTREAM_CELERY_BROKER_URL=redis://localhost:6379/0 \
 .venv/bin/celery -A app.workers.celery_app.celery_app worker --beat --loglevel=INFO
 ```
 
-The Beat scheduler must run with the worker (or as a separate Celery Beat
-process) so artifact pending-work and verified guide-continuation scans can
-recover publication failures automatically.
+The Beat scheduler must run alongside the Celery execution processes so
+artifact pending-work and verified guide-continuation scans can recover
+publication failures automatically.
 
 ## v0.1 Success Standard
 
