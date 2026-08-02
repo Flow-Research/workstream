@@ -117,8 +117,9 @@ chunks:
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
 `If-Match` value. Use `"no-current-policy"` for the first version and the quoted
-opaque selector returned from the current policy ID, generation, and canonical
-digest for a replacement. An authorized Project
+opaque selector constructed from the returned policy ID, generation, and
+canonical digest for a replacement. Remove the digest's `sha256:` prefix and
+send `"<id>.<generation>.<policy_hash_without_sha256_prefix>"`. An authorized Project
 Manager may attach review and revision policies in either order while the guide
 is draft; activation remains blocked until both are complete.
 

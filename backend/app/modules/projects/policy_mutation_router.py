@@ -57,6 +57,7 @@ async def policy_authorization_actor(
     rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
 ) -> ResolvedActor:
     """Resolve the authenticated actor only after key validation."""
+    # Keep this dependency so key validation precedes actor and rate-control work.
     del key
     return await resolve_authorization_actor(request, result, session, rate_control)
 
@@ -78,7 +79,7 @@ async def policy_authorization(
         PreparedAuthorizationService,
         Depends(get_policy_prepared_authorization_service),
     ],
-):
+) -> tuple[UUID, ResolvedActor, PreparedAuthorizationService]:
     """Compose the policy mutation authorization dependencies."""
     return key, resolved, prepared
 
@@ -113,7 +114,10 @@ async def replace_review_policy(
     guide_id: UUID,
     payload: ReviewPolicyInput,
     if_match: Annotated[str, Header(alias="If-Match")],
-    authorization: Annotated[tuple, Depends(policy_authorization)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Append and select one authorized review-policy version."""
@@ -138,7 +142,10 @@ async def replace_revision_policy(
     guide_id: UUID,
     payload: RevisionPolicyInput,
     if_match: Annotated[str, Header(alias="If-Match")],
-    authorization: Annotated[tuple, Depends(policy_authorization)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
     """Append and select one authorized revision-policy version."""

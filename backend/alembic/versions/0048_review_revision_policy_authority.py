@@ -153,6 +153,11 @@ def upgrade() -> None:
             name="ck_policy_mutation_state_shape",
         ),
     )
+    op.create_index(
+        "ix_policy_mutation_custody_lookup",
+        "policy_mutation_idempotency_records",
+        ["policy_id", "action_id", "policy_generation", "status"],
+    )
     op.execute(
         """
         create function guard_policy_mutation_replay() returns trigger language plpgsql as $$
@@ -171,13 +176,13 @@ def upgrade() -> None:
                   new.idempotency_key,new.request_digest,new.policy_hash,
                   new.resource_context_digest,
                   new.operation_id,new.project_id,new.guide_id,new.policy_id,
-                  new.policy_generation)
+                  new.policy_generation,new.created_at)
                  is not distinct from
                  (old.id,old.actor_profile_id,old.identity_link_id,old.action_id,
                   old.idempotency_key,old.request_digest,old.policy_hash,
                   old.resource_context_digest,
                   old.operation_id,old.project_id,old.guide_id,old.policy_id,
-                  old.policy_generation) then
+                  old.policy_generation,old.created_at) then
             return new;
           end if;
           raise exception 'policy mutation replay is immutable' using errcode='23514';
@@ -352,6 +357,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Remove 02B authority state while preserving 02A policy lineage."""
     bind = op.get_bind()
+    for table in (
+        "policy_mutation_idempotency_records",
+        "review_policies",
+        "revision_policies",
+    ):
+        bind.execute(sa.text(f"lock table {table} in share row exclusive mode"))
     has_custody = bool(
         bind.scalar(
             sa.text(

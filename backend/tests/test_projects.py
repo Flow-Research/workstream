@@ -2053,7 +2053,7 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
     guide = response.json()
     if review_policy is not None:
         values = (
-            review_policy
+            dict(review_policy)
             if isinstance(review_policy, dict)
             else {
                 "requires_second_review": False,
@@ -2079,7 +2079,7 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
         assert policy_response.status_code == 200, policy_response.text
     if revision_policy is not None:
         values = (
-            revision_policy
+            dict(revision_policy)
             if isinstance(revision_policy, dict)
             else {
                 "max_revision_rounds": 7,

@@ -37,6 +37,11 @@ No blocking finding remains. All reviewer sessions completed.
 The PostgreSQL-isolated migration/API cases and repository-wide 78-percent
 coverage suite remain assigned to hosted GitHub Actions on the exact PR head.
 
+Security and QA re-reviewed the final CodeRabbit corrective delta. Both passed
+after verifying replay timestamp immutability, downgrade locking, custody
+index parity, the historical trigger allow-list, independent selector proof,
+fixture copying, and all reservation dispositions.
+
 ## Residual low risks
 
 - Clients currently compose the documented opaque replacement selector from

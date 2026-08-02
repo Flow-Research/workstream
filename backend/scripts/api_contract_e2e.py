@@ -651,7 +651,15 @@ async def configure_policy_boundaries(
     guide_id: str,
     guide_version: str,
 ) -> None:
-    """Configure both policies through their sole active HTTP boundaries."""
+    """Configure both policies through their sole active HTTP boundaries.
+
+    Args:
+        client: Real HTTP client.
+        token: Project Manager Flow bearer token.
+        project_id: Project whose draft guide is configured.
+        guide_id: Exact draft guide receiving both policies.
+        guide_version: Guide version used by the direct PaymentPolicy fixture.
+    """
     await request_json(
         client,
         "PUT",

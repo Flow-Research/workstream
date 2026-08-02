@@ -53,3 +53,42 @@ Commands rerun:
 Remaining risks:
 
 - Exact-head hosted checks and CodeRabbit remain required.
+
+## CodeRabbit round 1
+
+Comments addressed:
+
+- Replay immutability now includes `created_at`, and downgrade locks all three
+  custody tables before its emptiness decision.
+- The historical-fixture custody helper admits only the two exact new
+  review/revision table-trigger pairs.
+- Project fixtures copy nested policy input before removing obsolete fields.
+- Operator guidance gives the exact replacement selector construction.
+- The custody lookup has a matching migration/ORM composite index.
+- Replay disposition, route dependency tuples, and `_existing` are typed.
+- Reservation mismatch, pending, and replayed service branches now have direct
+  tests; the migration test distinguishes independent upgraded selectors from
+  the coupled downgraded constraint.
+- The smaller ordering comment, exact exception, repository/E2E docstrings,
+  and argument documentation were also corrected.
+
+Comments deferred:
+
+- None.
+
+Human decisions needed:
+
+- None.
+
+Commands rerun:
+
+- Ruff: passed.
+- Policy mutation and lane-contract tests: 81 passed.
+- New-subsystem coverage: 13 passed, 92.86 percent.
+- Migration `0047:0048` offline SQL generation: passed.
+- Markdown links and whitespace: passed.
+
+Remaining risks:
+
+- PostgreSQL migration behavior and the full suite remain assigned to the
+  replacement exact-head Backend run.

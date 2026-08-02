@@ -37,7 +37,7 @@ from app.modules.projects.policy_mutation_service import (
 )
 from app.modules.projects.policy_mutation_router import require_policy_mutation_key
 from app.modules.projects.schemas import ReviewPolicyInput, RevisionPolicyInput
-from app.modules.projects.service import ProjectNotFound
+from app.modules.projects.service import GuideEditBlocked, ProjectNotFound
 
 
 def _review_payload() -> ReviewPolicyInput:
@@ -293,6 +293,57 @@ async def test_replay_claim_precedes_prepared_authority() -> None:
         guide_id,
         _review_payload(),
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("disposition", ["mismatch", "pending", "replayed"])
+async def test_service_handles_every_reservation_disposition(disposition: str) -> None:
+    service, resolved, prepared, replay, _repository, project_id, guide_id = _subject()
+    first = await service.replace_review_policy(
+        resolved,
+        prepared,
+        uuid4(),
+        NO_CURRENT_POLICY_ETAG,
+        project_id,
+        guide_id,
+        _review_payload(),
+    )
+    prepared.consumed.clear()
+
+    async def classify(**facts):
+        response = first.response.model_copy(
+            update={
+                "id": facts["policy_id"],
+                "policy_generation": facts["policy_generation"],
+                "policy_hash": facts["policy_hash"],
+                "supersedes_policy_id": first.response.id,
+            }
+        )
+        return disposition, SimpleNamespace(
+            status="committed" if disposition == "replayed" else "pending",
+            response_json=response.model_dump(mode="json") if disposition == "replayed" else None,
+        )
+
+    replay.reserve = classify
+    invocation = service.replace_review_policy(
+        resolved,
+        prepared,
+        uuid4(),
+        policy_selector_etag(
+            first.response.id,
+            first.response.policy_generation,
+            first.response.policy_hash,
+        ),
+        project_id,
+        guide_id,
+        _review_payload().model_copy(update={"review_lease_duration_seconds": 9000}),
+    )
+    if disposition == "replayed":
+        assert (await invocation).replayed is True
+    else:
+        with pytest.raises(PolicyMutationConflict, match=f"idempotency_{disposition}"):
+            await invocation
+    assert not prepared.consumed
 
 
 @pytest.mark.asyncio
@@ -619,7 +670,7 @@ async def test_policy_router_dependencies_errors_and_transaction_outcomes(monkey
 async def test_policy_service_denies_stale_guide_and_replay_mismatch() -> None:
     service, resolved, prepared, replay, repository, project_id, guide_id = _subject()
     repository.guide.status = "active"
-    with pytest.raises(Exception, match="only draft guides"):
+    with pytest.raises(GuideEditBlocked, match="only draft guides"):
         await service.replace_revision_policy(
             resolved,
             prepared,

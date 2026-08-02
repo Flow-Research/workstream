@@ -75,6 +75,12 @@ semantic-lane custody. It is assigned to the existing `shared_foundations`
 lane beside authorization and policy-lineage tests; the four-lane design and
 all thresholds remain unchanged.
 
+CodeRabbit then identified five valid correctness issues and related quality
+notes. Replay timestamp immutability, downgrade locking, historical trigger
+allow-listing, fixture copying, exact selector guidance, custody indexing,
+typing, migration-shape proof, and reservation-branch tests are corrected. No
+comment was deferred; details are in the external response.
+
 ## Remaining risks and follow-up
 
 The API may later expose the opaque replacement selector as a response ETag.

@@ -11887,6 +11887,7 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
         "revision_provenance": 8,
         "custody_triggers": 3,
         "selector_constraint": True,
+        "independent_selector_shape": True,
         "selector_custody": True,
         "predecessor_custody": True,
     }
@@ -11896,6 +11897,7 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
         "revision_provenance": 0,
         "custody_triggers": 0,
         "selector_constraint": True,
+        "independent_selector_shape": False,
         "selector_custody": False,
         "predecessor_custody": False,
     }
@@ -11957,6 +11959,16 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
                     )
                 )
             )
+            selector_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint "
+                        "where conname='policy_selection_shape'"
+                    )
+                )
+                or ""
+            )
+            normalized_selector = " ".join(selector_definition.lower().split())
             custody_definition = str(
                 await connection.scalar(
                     text(
@@ -11972,6 +11984,10 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
                 "revision_provenance": len(columns["revision_policies"] & provenance),
                 "custody_triggers": triggers,
                 "selector_constraint": selector,
+                "independent_selector_shape": (
+                    "selected_review_policy_hash is not null)) and "
+                    "((selected_revision_policy_id is null" in normalized_selector
+                ),
                 "selector_custody": "selected_review_policy_id" in custody_definition
                 and "selected_revision_policy_id" in custody_definition,
                 "predecessor_custody": "prior.policy_generation=product_generation-1"

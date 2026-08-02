@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
@@ -47,8 +48,11 @@ class PolicyMutationReplayRepository:
         guide_id: str,
         policy_id: str,
         policy_generation: int,
-    ) -> tuple[str, PolicyMutationIdempotencyRecord]:
-        """Claim or classify one exact policy mutation replay tuple."""
+    ) -> tuple[
+        Literal["claimed", "mismatch", "pending", "replayed"],
+        PolicyMutationIdempotencyRecord,
+    ]:
+        """Claim or classify an exact tuple as claimed, mismatch, pending, or replayed."""
         values = {
             "id": uuid4(),
             "actor_profile_id": actor_profile_id,

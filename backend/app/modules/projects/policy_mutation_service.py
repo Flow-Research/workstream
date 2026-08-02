@@ -155,7 +155,16 @@ class ProjectPolicyMutationService:
             else ProjectRevisionPolicyMutationResourceContext(**values)
         )
 
-    async def _existing(self, resolved, action, key, digest, project_id, guide_id, response_type):
+    async def _existing(
+        self,
+        resolved: ResolvedActor,
+        action: ActionId,
+        key: UUID,
+        digest: str,
+        project_id: UUID,
+        guide_id: UUID,
+        response_type: type[ReviewPolicyResponse] | type[RevisionPolicyResponse],
+    ) -> PolicyMutationOutcome | None:
         """Return an exact committed replay or reject unsafe reuse."""
         record = await self._replay.find(resolved.profile.id, action.value, key)
         if record is None:

@@ -97,3 +97,9 @@ The first hosted Backend run failed the unchanged docstring gate because 22 new
 and the same local gate passes at 80.5 percent without a threshold or workflow
 change. External evidence is in
 `reviews/WS-XINT-003-02B-external-review-response.md`.
+
+CodeRabbit's first pass found valid replay timestamp immutability, downgrade
+locking, historical trigger allow-list, fixture-copy, and replacement-selector
+documentation issues. Its related indexing, typing, exact-exception,
+constraint-shape, and reservation-branch notes were also valid. All were fixed;
+none was deferred.

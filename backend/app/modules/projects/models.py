@@ -181,6 +181,13 @@ class PolicyMutationIdempotencyRecord(Base):
             name="uq_policy_mutation_replay_namespace",
         ),
         UniqueConstraint("operation_id", name="uq_policy_mutation_operation_identity"),
+        Index(
+            "ix_policy_mutation_custody_lookup",
+            "policy_id",
+            "action_id",
+            "policy_generation",
+            "status",
+        ),
         CheckConstraint(
             "action_id in ('project.review_policy.update','project.revision_policy.update')",
             name="ck_policy_mutation_action",

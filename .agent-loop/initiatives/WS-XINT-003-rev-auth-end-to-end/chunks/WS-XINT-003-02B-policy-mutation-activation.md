@@ -62,6 +62,7 @@ backend/tests/test_policy_identity_lineage.py
 backend/tests/test_projects.py
 backend/tests/test_tasks.py
 backend/tests/test_artifact_admission.py
+backend/tests/project_create_fixtures.py
 backend/tests/test_alembic.py
 backend/tests/test_artifact_architecture.py
 backend/scripts/api_contract_e2e.py
