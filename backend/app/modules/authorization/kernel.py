@@ -546,12 +546,12 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
-        elif action_id in _ARTIFACT_INTERNAL_RESOURCES:
+        else:
             raise PreparedAuthorizationUnsupported(
                 AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                if action_id in _ARTIFACT_INTERNAL_RESOURCES
+                else AuthorizationDenialCode.ACTION_UNAVAILABLE
             )
-        else:
-            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
         lifecycle = self._lifecycle_denial(context)
         if lifecycle is not None or context.actor_kind is not ActorKind.HUMAN:
             raise PreparedAuthorizationUnsupported(
