@@ -197,7 +197,7 @@ class GuideSourceBindingResult:
 class GuideSourceMaterializationRequest:
     """Exact guide binding selected for one authorized verified read."""
 
-    prepared_authorization: PreparedAuthorizationHandle
+    idempotency_key: UUID
     project_id: UUID
     guide_id: UUID
     guide_source_snapshot_id: UUID

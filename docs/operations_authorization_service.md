@@ -709,13 +709,13 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 96 ActionIds, 37 active actions, and
-59 planned actions after AUTH-12A registers eighteen project-mutation actions
-without activation. AUTH-11C2 activates three current effective-policy and
-active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact route mapping
-is in `docs/spec_authorization_service.md`. WS-XINT-002-04A activates only
-guide-source ingest; the other 18 ART actions remain planned, including every
-Operator artifact action.
+Catalogue totals are 71 PermissionIds, 96 ActionIds, 43 active actions, and
+53 planned actions. AUTH-11C2 activates three current effective-policy and
+active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
+route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
+activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
+only the fixed-service guide binding and read actions. The other 16 ART actions
+remain planned, including every Operator artifact action.
 Migration `0037` keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
 
@@ -779,8 +779,11 @@ not this prepared authorization handle.
 
 PREP currently supports actor-self profile update, the eight active
 AdminRoleGrant-backed administrative mutations, the three active fixed-service
-ART actions, and Project Manager `artifact.guide_source.ingest`. No other
-production feature command is cut over. Callers begin and own one root transaction, call `prepare`,
+ART foundation actions, Project Manager `artifact.guide_source.ingest`, and the
+fixed-service `artifact.guide_source.binding.create` and
+`artifact.guide_source.read` actions. Submission, checker, review, and generic
+artifact-read actions remain planned; no other production feature command is
+cut over. Callers begin and own one root transaction, call `prepare`,
 lock their participant rows, compose final typed facts, call `consume` with the
 independently expected ActionId and the same strict request/idempotency input,
 flush participant work, and commit once. AUTH never commits in dependency
@@ -790,15 +793,18 @@ unchanged. The handle remains consumed after every exact attempt, including a
 rolled-back or cancelled attempt, and dependency teardown invalidates all
 outstanding handles.
 
-General human and administrative PREP callers do not restage a denial after
+General human, administrative, and guide binding/read PREP callers do not
+restage a denial after
 rollback; its staged decision belongs to the failed caller transaction and
-rolls back with participant state. The three active internal ART compositions
-are the deliberate exception: their adapter retains the exact denial, the
-composition root first rolls back ART state, and AUTH's public bounded restage
-operation commits the same denial in a clean AUTH-only transaction. Still-
-planned fixed-service preparation still issues no handle. When it enters the
-ART adapter with an exact resource context, its bounded `action_unavailable`
-denial follows the same rollback-then-clean-restage path.
+rolls back with participant state. The three active internal ART foundation
+compositions are the deliberate exception: their adapter retains the exact
+denial, the composition root first rolls back ART state, and AUTH's public
+bounded restage operation commits the same denial in a clean AUTH-only
+transaction. The two guide binding/read adapters do not use that exception.
+Still-planned fixed-service preparation still issues no handle. When a planned
+foundation action enters its ART adapter with an exact resource context, its
+bounded `action_unavailable` denial follows the same rollback-then-clean-restage
+path.
 
 Operationally, actor-self preparation locks profile then exact link. An
 administrative preparation locks `AuthorityControl(id=1)`, request profile,

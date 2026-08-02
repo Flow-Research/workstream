@@ -1,32 +1,68 @@
-# External Review Response: WS-XINT-002-04B Planning Amendment
+# External Review Response: WS-XINT-002-04B
 
-## Comments addressed
+## Runtime comments addressed
 
-- CodeRabbit correctly identified that the verification command's `<test-db>`
-  placeholder is parsed by the shell as redirection. The command now requires
-  and reuses an existing `WORKSTREAM_TEST_DATABASE_URL` value through an
-  executable shell expansion.
-- Agent Gates correctly rejected two unqualified background-executor references. They now use
-  the exact technical terms `Celery task payload` and `Celery task/route
-  composition`, preserving the separation from Workstream's human contributor
-  vocabulary.
+- The custody table now labels every action row as Active or Planned.
+- Review evidence now states that local review is provisional until hosted
+  database-backed full coverage passes on the exact PR head.
+- Guide materialization preserves its bounded public error when best-effort
+  incident persistence fails, and format-inspection deadline failures use the
+  same bounded incident path.
+- Concurrent guide reads no longer take an exclusive lock on the immutable
+  singleton storage-namespace row. Exact mutable lineage remains locked through
+  provider access and the protected write.
+- The lock-contention test now proves PostgreSQL SQLSTATE `55P03` directly
+  instead of accepting any `DBAPIError` as evidence of a lock.
+- Fixed-service context construction now verifies that the loaded profile has
+  the exact requested service identity.
+- Guide PREP scope composition is action-gated through one module-level map.
+- Inert test parameters and the unused materialization-helper authority were
+  removed. The dataclass binding request is updated with `dataclasses.replace`.
+- The hosted active-action audit expectation now includes both 04B actions.
 
-## Comments deferred
+## Runtime comment rejected as stale
 
-None.
+- The claimed authority-fact mismatch does not exist on this branch.
+  `GuideSourceBindingAuthorityFacts` already contains `logical_role`, and
+  `GuideSourceReadAuthorityFacts` already contains `binding_id`; focused tests
+  construct and consume both strict resource contexts.
 
-## Human decisions needed
+## Runtime comment deferred
 
-Human review and merge of the corrected 04B security boundary remain required.
+- A new database `lock_timeout`/`statement_timeout` and lock-duration metric are
+  not added in 04B. The provider operation already runs under the bounded
+  `ArtifactPreparationService` deadline. PostgreSQL `statement_timeout` does
+  not bound time spent awaiting provider I/O after the locking statement has
+  completed, while an observability surface is outside this activation chunk.
+  ART worker operational tuning can add a transaction-idle bound and metric in
+  a dedicated, evidence-backed chunk without weakening the required lineage
+  lock.
 
-## Commands rerun
+## Earlier planning comments addressed
 
-- `python3 scripts/check_stale_authorization_docs.py`
-- `python3 scripts/check_stale_artifact_contracts.py`
-- `python3 scripts/check_markdown_links.py`
-- `git diff --check`
+- The verification command no longer uses a shell-redirection-shaped
+  `<test-db>` placeholder; it consumes `WORKSTREAM_TEST_DATABASE_URL`.
+- Background executor wording uses the exact terms `Celery task payload` and
+  `Celery task/route composition`.
 
-## Remaining risks
+## Verification
 
-No runtime action is activated by this planning amendment. Exact-head Agent
-Gates, Backend, and CodeRabbit must pass before merge.
+- Reviewed implementation commits
+  `8c48c01e137f861210bccfbc6bfaa91f13b0a354` and `8b468881`, with exact local
+  commands, are recorded in the internal review. The subsequent commit changes
+  review evidence only.
+- Local Ruff, focused AUTH/audit/architecture tests, stale authorization docs,
+  stale artifact contracts, Markdown links, and `git diff --check` pass.
+- Database-backed guide tests and repository-wide coverage remain assigned to
+  hosted `Backend / test` because this shell has no
+  `WORKSTREAM_TEST_DATABASE_URL`.
+- Hosted run `30749925248` passed all 2,841 semantic nodes and failed only the
+  unchanged 90% per-file kernel gate at 89.93%. Commit `8b468881` consolidates
+  equivalent terminal denial branches, restoring the prior kernel statement
+  count without exclusions, ignored lines, or threshold changes. Its successor
+  exact-head run remains required.
+
+## Remaining risk
+
+All seven CodeRabbit threads are resolved. PR #245 remains non-merge-ready until
+hosted exact-head `Backend / test` plus `Agent Gates / agent-gates` pass.

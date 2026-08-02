@@ -376,7 +376,11 @@ schemas, outbox/Celery payloads, provider interfaces, or serialized contracts.
 `GuideArtifactIngestRequest` contains prepared authority, exact project, guide,
 guide-source snapshot and item IDs, logical role, media type, and authorized
 byte source. It accepts no caller digest, size, content ID, or provider
-reference. `SubmissionBundlePreparationRequest` contains
+reference. `GuideSourceMaterializationRequest` contains an idempotency key and
+the exact guide, source, setup-generation, and binding identifiers; it contains
+no prepared handle. The materializer creates and consumes fresh fixed-reader
+authority inside the same root transaction that locks the canonical read facts.
+`SubmissionBundlePreparationRequest` contains
 prepared authority, contributor task/assignment selectors, and one outer ZIP
 byte source. There is no upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
@@ -1233,14 +1237,23 @@ an artifact incident and never a guide-insufficiency result.
 The hidden v0.1 reader authorizes and locks the exact project, draft guide,
 source snapshot/item, setup run/generation, binding, content, verified replica,
 storage-namespace fingerprint, and terminal verification receipt/generation
-before opening the provider object. It releases database locks during the full
-provider read, then relocks and recomposes the same facts before persisting one
-immutable format classification. Any drift records only a bounded ART incident.
+before opening the provider object. It retains database locks throughout the
+provider read and releases them only after the verified bytes are materialized,
+classified, and the immutable classification is staged in that same root
+transaction. Exact
+guide, snapshot, item, setup generation, binding, content, replica, namespace,
+job, and receipt locks prevent lineage advancement between authorization and
+provider access. Known stale lineage denies before provider I/O.
 Classification records contain the server-observed digest, size, canonical
 media type, detector identity/version, detected format, outcome, and bounded
 structural facts; they contain no source filenames, provider references, raw
-document text, or parser exception strings. `artifact.guide_source.read`
-remains unavailable until AUTH-04B installs the fixed guide-reader adapter.
+document text, or parser exception strings. `WS-XINT-002-04B` activates
+`artifact.guide_source.read` only for `workstream.artifact.guide_reader` and
+`artifact.guide_source.binding.create` only for
+`workstream.artifact.binding`. Each fresh process-local capability is bound to
+the complete locked lineage, setup generation, verified content and replica
+facts, and the caller-owned root transaction before provider access or binding
+mutation. Project Manager ingest authority implies neither service action.
 
 Typed extractors run in a bounded no-network isolation boundary. Immutable
 attempt evidence carries bounded status/error facts. A separate successful

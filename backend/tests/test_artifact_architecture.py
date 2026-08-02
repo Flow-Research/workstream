@@ -55,6 +55,7 @@ CANONICAL_VALUE_TYPES = {
 PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
     "ArtifactRecoveryRequest",
     "GuideSufficiencyMaterialRequest",
+    "GuideSourceMaterializationRequest",
 }
 PREPARED_HANDLE_FORBIDDEN_ROOTS = (
     APP_ROOT / "adapters",
@@ -452,6 +453,19 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
     assert "ContributorArtifactUploadPort" not in source
     assert "ReadyUploadSetRequest" not in source
     assert "ActionId" not in source
+
+    materialization = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "GuideSourceMaterializationRequest"
+    )
+    materialization_fields = {
+        node.target.id: _annotation_names(node.annotation)
+        for node in materialization.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+    assert materialization_fields["idempotency_key"] == {"UUID"}
+    assert "prepared_authorization" not in materialization_fields
 
     expected_methods = {
         "GuideArtifactIngestPort": {"ingest"},
