@@ -91,3 +91,9 @@ ordering, same-actor replay, exact opaque selectors, route rollback, database
 successor/predecessor custody, live fixture bypasses, and operator docs. All
 tracks passed after correction; no finding remains open. Final evidence is in
 `reviews/WS-XINT-003-02B-internal-review.md`.
+
+The first hosted Backend run failed the unchanged docstring gate because 22 new
+02B callables reduced coverage to 79.7 percent. The new surface was documented,
+and the same local gate passes at 80.5 percent without a threshold or workflow
+change. External evidence is in
+`reviews/WS-XINT-003-02B-external-review-response.md`.

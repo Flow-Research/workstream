@@ -69,11 +69,13 @@ class ProjectPolicyMutationService:
     """Sole authorized writer for immutable guide policy versions."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind product and replay repositories to one transaction."""
         self._projects = ProjectRepository(session)
         self._replay = PolicyMutationReplayRepository(session)
 
     @staticmethod
     def _if_match_value(if_match: str) -> tuple[UUID, int, str] | None:
+        """Parse an exact initial sentinel or canonical policy selector."""
         if if_match == NO_CURRENT_POLICY_ETAG:
             return None
         if len(if_match) > 2 and if_match[0] == if_match[-1] == '"':
@@ -94,6 +96,7 @@ class ProjectPolicyMutationService:
 
     @staticmethod
     def _prove(decision, project_id: UUID) -> None:
+        """Require exact Project Manager authority proof."""
         if (
             decision.matched_authority_kind is not MatchedAuthorityKind.ADMIN_ROLE_GRANT
             or decision.matched_grant_id is None
@@ -105,6 +108,7 @@ class ProjectPolicyMutationService:
     def _guide_selector(
         kind: Literal["review", "revision"], guide: ProjectGuide
     ) -> tuple[UUID, int, str] | None:
+        """Read the exact selected policy tuple from one guide."""
         policy_id = getattr(guide, f"selected_{kind}_policy_id")
         generation = getattr(guide, f"selected_{kind}_policy_generation")
         digest = getattr(guide, f"selected_{kind}_policy_hash")
@@ -128,6 +132,7 @@ class ProjectPolicyMutationService:
         predecessor_generation: int | None,
         predecessor_digest: str | None,
     ) -> ProjectReviewPolicyMutationResourceContext | ProjectRevisionPolicyMutationResourceContext:
+        """Compose the exact final PREP resource facts."""
         values = {
             "resource_type": f"project_{kind}_policy_mutation",
             "resource_id": policy_id,
@@ -151,6 +156,7 @@ class ProjectPolicyMutationService:
         )
 
     async def _existing(self, resolved, action, key, digest, project_id, guide_id, response_type):
+        """Return an exact committed replay or reject unsafe reuse."""
         record = await self._replay.find(resolved.profile.id, action.value, key)
         if record is None:
             return None
@@ -177,6 +183,7 @@ class ProjectPolicyMutationService:
         guide_id: UUID,
         payload: ReviewPolicyInput,
     ) -> PolicyMutationOutcome:
+        """Authorize, append, and select one review-policy version."""
         semantics = ReviewPolicySemantics.model_validate(payload.model_dump())
         return await self._replace(
             "review",
@@ -200,6 +207,7 @@ class ProjectPolicyMutationService:
         guide_id: UUID,
         payload: RevisionPolicyInput,
     ) -> PolicyMutationOutcome:
+        """Authorize, append, and select one revision-policy version."""
         semantics = RevisionPolicySemantics.model_validate(payload.model_dump())
         return await self._replace(
             "revision",
@@ -225,6 +233,7 @@ class ProjectPolicyMutationService:
         semantics: ReviewPolicySemantics | RevisionPolicySemantics,
         response_type,
     ) -> PolicyMutationOutcome:
+        """Execute the shared exact policy mutation transaction."""
         expected_selector = self._if_match_value(if_match)
         action = (
             ActionId.PROJECT_REVIEW_POLICY_UPDATE

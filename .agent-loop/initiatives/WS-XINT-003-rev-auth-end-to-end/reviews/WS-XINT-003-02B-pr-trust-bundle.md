@@ -65,6 +65,11 @@ risks. Every blocking first-round finding was fixed and re-reviewed.
 GitHub `Backend / test`, `Agent Gates / agent-gates`, and CodeRabbit must pass
 on the exact final head. Valid findings must be corrected before human merge.
 
+The first Backend run failed the unchanged 80-percent docstring gate at 79.7
+percent because new 02B callables lacked docstrings. All 22 new callables were
+documented; the same gate now passes locally at 80.5 percent. The exact response
+is recorded in `WS-XINT-003-02B-external-review-response.md`.
+
 ## Remaining risks and follow-up
 
 The API may later expose the opaque replacement selector as a response ETag.

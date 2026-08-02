@@ -17,11 +17,13 @@ class PolicyMutationReplayRepository:
     """Own only policy-mutation replay records in the caller transaction."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind replay persistence to the caller-owned transaction."""
         self._session = session
 
     async def find(
         self, actor_profile_id: str, action_id: str, idempotency_key: UUID
     ) -> PolicyMutationIdempotencyRecord | None:
+        """Find one actor/action/key replay record."""
         return await self._session.scalar(
             select(PolicyMutationIdempotencyRecord).where(
                 PolicyMutationIdempotencyRecord.actor_profile_id == actor_profile_id,
@@ -46,6 +48,7 @@ class PolicyMutationReplayRepository:
         policy_id: str,
         policy_generation: int,
     ) -> tuple[str, PolicyMutationIdempotencyRecord]:
+        """Claim or classify one exact policy mutation replay tuple."""
         values = {
             "id": uuid4(),
             "actor_profile_id": actor_profile_id,
@@ -94,6 +97,7 @@ class PolicyMutationReplayRepository:
     async def complete(
         self, record: PolicyMutationIdempotencyRecord, *, response_json: dict
     ) -> None:
+        """Complete one pending replay record with its stable response."""
         completed = await self._session.scalar(
             update(PolicyMutationIdempotencyRecord)
             .where(

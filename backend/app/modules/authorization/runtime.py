@@ -666,6 +666,7 @@ class ProjectPolicyMutationPrepareDenialResourceContext(BaseModel):
 
     @model_validator(mode="after")
     def require_requested_guide(self):
+        """Require denial evidence to identify its exact requested guide."""
         if self.resource_id != self.requested_guide_id:
             raise ValueError("policy mutation denial must identify the requested guide")
         return self

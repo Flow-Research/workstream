@@ -37,6 +37,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 def require_policy_mutation_key(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
 ) -> UUID:
+    """Parse the required policy-mutation replay key."""
     try:
         return UUID(idempotency_key)
     except ValueError as exc:
@@ -55,6 +56,7 @@ async def policy_authorization_actor(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
 ) -> ResolvedActor:
+    """Resolve the authenticated actor only after key validation."""
     del key
     return await resolve_authorization_actor(request, result, session, rate_control)
 
@@ -64,6 +66,7 @@ async def get_policy_prepared_authorization_service(
     resolved: Annotated[ResolvedActor, Depends(policy_authorization_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
+    """Yield one request-local prepared authorization service."""
     async with prepared_authorization_service(request, resolved, session) as service:
         yield service
 
@@ -76,10 +79,12 @@ async def policy_authorization(
         Depends(get_policy_prepared_authorization_service),
     ],
 ):
+    """Compose the policy mutation authorization dependencies."""
     return key, resolved, prepared
 
 
 def _error(exc: ProjectServiceError):
+    """Translate one policy mutation domain error to HTTP."""
     if isinstance(exc, PolicyMutationConflict):
         code = str(exc)
         return StructuredHTTPException(
@@ -93,6 +98,7 @@ def _error(exc: ProjectServiceError):
 
 
 async def _finish(session: AsyncSession, outcome):
+    """Commit a new mutation or roll back a replay-only transaction."""
     await (session.rollback() if outcome.replayed else session.commit())
     return outcome.response
 
@@ -110,6 +116,7 @@ async def replace_review_policy(
     authorization: Annotated[tuple, Depends(policy_authorization)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
+    """Append and select one authorized review-policy version."""
     key, resolved, prepared = authorization
     try:
         outcome = await ProjectPolicyMutationService(session).replace_review_policy(
@@ -134,6 +141,7 @@ async def replace_revision_policy(
     authorization: Annotated[tuple, Depends(policy_authorization)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ):
+    """Append and select one authorized revision-policy version."""
     key, resolved, prepared = authorization
     try:
         outcome = await ProjectPolicyMutationService(session).replace_revision_policy(
