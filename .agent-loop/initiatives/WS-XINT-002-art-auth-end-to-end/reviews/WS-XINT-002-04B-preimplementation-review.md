@@ -21,7 +21,7 @@ from ART-03C live composition.
 - Required handles to remain process-local and absent from Celery and all
   serialization surfaces.
 - Added `backend/tests/test_guide_bindings.py` to allowed scope and verification.
-- Assigned production AUTH adapter delivery to 04B while retaining worker,
+- Assigned production AUTH adapter delivery to 04B while retaining Celery task,
   route, orchestration, and legacy cutover ownership in ART-03C.
 - Required the obsolete `WS-AUTH-001-ART-03` owner label to be replaced by
   `WS-XINT-002-04B` without aliases or duplicate action paths.

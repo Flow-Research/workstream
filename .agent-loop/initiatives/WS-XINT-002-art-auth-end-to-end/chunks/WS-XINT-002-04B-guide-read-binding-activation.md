@@ -39,7 +39,7 @@ docs/spec_artifact_storage_service.md
 
 Human ingest behavior, ART byte/admission implementation, project lifecycle
 changes, submission/review behavior, provider redesign, token roles, generic
-guide download, new ActionId or PermissionId values, worker/Celery payload or
+guide download, new ActionId or PermissionId values, Celery task payload or
 orchestration changes, production route composition, or ART-03C legacy removal.
 This contract, the chunk map, and other planning files are not editable by the
 04B implementation PR; any required scope change returns to planning review.
@@ -71,7 +71,7 @@ This contract, the chunk map, and other planning files are not editable by the
   `byte_count`, and `media_type`.
 - The production AUTH adapters are implemented in
   `backend/app/modules/artifacts/authorization.py`. ART-03C owns the later live
-  worker/route composition and legacy cutover; 04B neither serializes a handle
+  Celery task/route composition and legacy cutover; 04B neither serializes a handle
   nor changes Celery orchestration.
 - Both actions require exact prepared-authority validation and single-use
   consumption before any provider read or binding write. Stale, replayed,
@@ -95,7 +95,7 @@ This contract, the chunk map, and other planning files are not editable by the
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_authorization.py tests/test_guide_artifacts.py tests/test_guide_bindings.py -q --cov=app.modules.authorization --cov=app.modules.artifacts --cov=app.modules.projects --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?Set WORKSTREAM_TEST_DATABASE_URL}" .venv/bin/pytest tests/test_authorization.py tests/test_guide_artifacts.py tests/test_guide_bindings.py -q --cov=app.modules.authorization --cov=app.modules.artifacts --cov=app.modules.projects --cov-report=term-missing --cov-fail-under=90)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
