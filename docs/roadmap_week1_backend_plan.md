@@ -1,5 +1,9 @@
 # Week 1 Backend Plan
 
+> Historical planning record. This calendar no longer controls current work or
+> status. Use [Current v0.1 Status](roadmap_status.md) and the
+> [Historical Planning Index](historical_planning.md).
+
 ## Purpose
 
 This is the implementation plan for the June 2-5 foundation work.

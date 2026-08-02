@@ -2,7 +2,7 @@
 
 This diagram pack explains Workstream at two levels:
 
-- the 30-day v0.1 implementation that is being built now
+- the bounded v0.1 implementation that is being built now
 - the broader Workstream ecosystem that can connect later to external origins, agent identity, task contracts, settlement rails, and portable reputation
 
 The architecture diagrams use C4-PlantUML source files so they render with real C4 system, container, component, boundary, and external-system boxes. The task lifecycle sequence remains Mermaid because GitHub renders it directly and the sequence is easier to read in that format.
@@ -41,4 +41,8 @@ The rendered SVGs are written to `docs/diagrams/rendered/` and are committed so 
 
 ## Reading Order
 
-Start with the [System Context](workstream_context.md) to explain what Workstream is and what it does not own. Then use the [v0.1 Container View](workstream_v01_container.md) to show what is actually being implemented in the first 30 days. Use the backend component and lifecycle diagrams when the discussion moves from product architecture into implementation design.
+Start with the [System Context](workstream_context.md) to explain what
+Workstream is and what it does not own. Then use the
+[v0.1 Container View](workstream_v01_container.md) to show the bounded v0.1
+implementation. Use the backend component and lifecycle diagrams when the
+discussion moves from product architecture into implementation design.

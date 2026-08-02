@@ -1,6 +1,7 @@
 # Workstream v0.1 Container View
 
-This is the 30-day implementation architecture. It shows the deployable containers and internal runtime boundaries for the current build.
+This is the v0.1 implementation architecture. It shows the deployable
+containers and internal runtime boundaries for the current build.
 
 Future external origins, ERC-8004, ERC-8183, x402, OmniClaw, and USDC settlement are not active v0.1 dependencies. They remain later adapters behind the same records and interfaces.
 

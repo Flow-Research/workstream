@@ -1,5 +1,8 @@
 # Chunk 7: Checker Runner And Registry
 
+> Historical implementation record. It does not define current sequencing or
+> status; later canonical specifications and merged behavior take precedence.
+
 ## Purpose
 
 Chunk 7 turns the checker contract into a working backend slice.
