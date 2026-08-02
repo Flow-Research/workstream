@@ -64,6 +64,16 @@ class GuideLineageFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class VerifiedGuideContentCandidate:
+    """Canonical verified content/replica selected for one guide source item."""
+
+    content_id: str
+    replica_id: str
+    sha256: str
+    byte_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ContributorAdmissionFacts:
     """Authoritative upload-item ownership and state."""
 
@@ -89,6 +99,57 @@ class CheckerOutputAdmissionFacts:
 
 class ArtifactRepository:
     """Persist artifact state transitions under caller-owned transactions."""
+
+    async def get_verified_guide_content_candidate(
+        self,
+        guide_source_item_id: str,
+    ) -> VerifiedGuideContentCandidate | None:
+        """Select the one canonical fully verified replica for guide binding."""
+        row = (
+            await self._session.execute(
+                select(ArtifactContent, ArtifactReplica)
+                .join(ArtifactReplica, ArtifactReplica.content_id == ArtifactContent.id)
+                .join(ArtifactPutAttempt, ArtifactPutAttempt.replica_id == ArtifactReplica.id)
+                .join(
+                    ArtifactVerificationJob,
+                    ArtifactVerificationJob.originating_put_attempt_id == ArtifactPutAttempt.id,
+                )
+                .join(
+                    ArtifactVerificationReceipt,
+                    ArtifactVerificationReceipt.verification_job_id == ArtifactVerificationJob.id,
+                )
+                .where(
+                    ArtifactPutAttempt.guide_source_item_id == guide_source_item_id,
+                    ArtifactPutAttempt.status == "object_confirmed",
+                    ArtifactPutAttempt.sha256 == ArtifactContent.sha256,
+                    ArtifactPutAttempt.byte_count == ArtifactContent.byte_count,
+                    ArtifactVerificationJob.replica_id == ArtifactReplica.id,
+                    ArtifactReplica.verification_state == "verified",
+                    ArtifactReplica.availability_state == "available",
+                    ArtifactReplica.integrity_state == "valid",
+                    ArtifactVerificationJob.status == "verified",
+                    ArtifactVerificationJob.terminal_result_code == "verified",
+                    ArtifactVerificationJob.terminal_at.is_not(None),
+                    ArtifactVerificationReceipt.execution_generation
+                    == ArtifactVerificationJob.execution_generation,
+                    ArtifactVerificationReceipt.outcome == "verified",
+                    ArtifactVerificationReceipt.observed_sha256 == ArtifactContent.sha256,
+                    ArtifactVerificationReceipt.observed_byte_count == ArtifactContent.byte_count,
+                )
+                .order_by(ArtifactReplica.id)
+                .limit(1)
+                .with_for_update(of=ArtifactReplica)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        content, replica = row
+        return VerifiedGuideContentCandidate(
+            content_id=content.id,
+            replica_id=replica.id,
+            sha256=content.sha256,
+            byte_count=content.byte_count,
+        )
 
     def __init__(self, session: AsyncSession) -> None:
         """Bind the repository to one async database session."""

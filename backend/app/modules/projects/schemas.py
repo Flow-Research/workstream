@@ -60,12 +60,9 @@ class GuideSourceSnapshotItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_kind: str = Field(max_length=50)
-    durable_ref: str = Field(max_length=2048)
+    source_label: str = Field(max_length=500)
     ingestion_adapter: str = Field(max_length=100)
-    content_hash: str = Field(max_length=71)
-    content_cid: str | None = Field(default=None, max_length=200)
     media_type: str | None = Field(default=None, max_length=100)
-    content_excerpt: str | None = Field(default=None, max_length=12000)
 
 
 class GuideSourceSnapshotCreate(BaseModel):
@@ -73,7 +70,7 @@ class GuideSourceSnapshotCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    items: list[GuideSourceSnapshotItemInput] = Field(default_factory=list, max_length=100)
+    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1, max_length=100)
 
 
 class GuideSourceSnapshotItemResponse(BaseModel):
@@ -85,10 +82,8 @@ class GuideSourceSnapshotItemResponse(BaseModel):
     source_snapshot_id: str
     item_order: int
     source_kind: str
-    durable_ref: str
+    source_label: str
     ingestion_adapter: str
-    content_hash: str
-    content_cid: str | None
     media_type: str | None
     created_at: datetime
 
@@ -135,6 +130,8 @@ class ProjectSetupRunResponse(BaseModel):
     source_snapshot_id: str
     setup_generation: int
     celery_task_id: str | None
+    continuation_verification_job_id: str | None
+    continuation_started_at: datetime | None
     status: str
     current_step: str
     output_sufficiency_report_id: str | None

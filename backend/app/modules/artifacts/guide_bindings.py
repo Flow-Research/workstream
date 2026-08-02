@@ -15,10 +15,6 @@ from app.interfaces.artifact_operations import (
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.models import (
     ArtifactContent,
-    ArtifactPutAttempt,
-    ArtifactReplica,
-    ArtifactVerificationJob,
-    ArtifactVerificationReceipt,
     GuideSourceArtifactBinding,
 )
 from app.modules.artifacts.repository import ArtifactRepository
@@ -36,6 +32,36 @@ from app.modules.projects.models import (
 
 class GuideSourceBindingError(RuntimeError):
     """Fail-closed guide binding rejection without leaking lineage details."""
+
+
+def guide_source_binding_authority_facts(
+    *,
+    project_id: UUID,
+    guide_id: UUID,
+    source_snapshot_id: UUID,
+    source_item_id: UUID,
+    setup_run_id: UUID,
+    setup_generation: int,
+    content_id: UUID,
+    replica_id: UUID,
+    sha256: str,
+    byte_count: int,
+    logical_role: str = "guide_source_original",
+) -> GuideSourceBindingAuthorityFacts:
+    """Compose the one canonical AUTH fact set used to prepare and consume."""
+    return GuideSourceBindingAuthorityFacts(
+        project_id=project_id,
+        guide_id=guide_id,
+        guide_source_snapshot_id=source_snapshot_id,
+        guide_source_item_id=source_item_id,
+        project_setup_run_id=setup_run_id,
+        setup_generation=setup_generation,
+        content_id=content_id,
+        verified_replica_id=replica_id,
+        sha256=sha256,
+        byte_count=byte_count,
+        logical_role=logical_role,
+    )
 
 
 class GuideSourceBindingPreparedAuthorization(Protocol):
@@ -104,9 +130,7 @@ class GuideSourceBindingService:
             raise GuideSourceBindingError("guide source binding is unavailable")
 
         guide = await self._session.scalar(
-            select(ProjectGuide)
-            .where(ProjectGuide.id == str(request.guide_id))
-            .with_for_update()
+            select(ProjectGuide).where(ProjectGuide.id == str(request.guide_id)).with_for_update()
         )
         snapshot = await self._session.scalar(
             select(GuideSourceSnapshot)
@@ -141,57 +165,23 @@ class GuideSourceBindingService:
             raise GuideSourceBindingError("guide source binding is unavailable")
         assert content is not None
 
-        replica = await self._session.scalar(
-            select(ArtifactReplica)
-            .join(
-                ArtifactPutAttempt,
-                ArtifactPutAttempt.replica_id == ArtifactReplica.id,
-            )
-            .join(
-                ArtifactVerificationJob,
-                ArtifactVerificationJob.originating_put_attempt_id == ArtifactPutAttempt.id,
-            )
-            .join(
-                ArtifactVerificationReceipt,
-                ArtifactVerificationReceipt.verification_job_id == ArtifactVerificationJob.id,
-            )
-            .where(
-                ArtifactReplica.content_id == content.id,
-                ArtifactReplica.verification_state == "verified",
-                ArtifactReplica.availability_state == "available",
-                ArtifactReplica.integrity_state == "valid",
-                ArtifactPutAttempt.guide_source_item_id == admission.guide_source_item_id,
-                ArtifactPutAttempt.sha256 == admission.content_hash,
-                ArtifactPutAttempt.byte_count == admission.byte_count,
-                ArtifactPutAttempt.replica_id == ArtifactReplica.id,
-                ArtifactVerificationJob.replica_id == ArtifactReplica.id,
-                ArtifactVerificationJob.status == "verified",
-                ArtifactVerificationJob.terminal_result_code == "verified",
-                ArtifactVerificationJob.terminal_at.is_not(None),
-                ArtifactVerificationReceipt.execution_generation
-                == ArtifactVerificationJob.execution_generation,
-                ArtifactVerificationReceipt.outcome == "verified",
-                ArtifactVerificationReceipt.observed_sha256 == content.sha256,
-                ArtifactVerificationReceipt.observed_byte_count == content.byte_count,
-            )
-            .order_by(ArtifactReplica.id)
-            .limit(1)
-            .with_for_update(of=ArtifactReplica)
+        candidate = await self._repository.get_verified_guide_content_candidate(
+            admission.guide_source_item_id
         )
-        if replica is None:
+        if candidate is None or candidate.content_id != content.id:
             raise GuideSourceBindingError("guide source binding is unavailable")
 
-        facts = GuideSourceBindingAuthorityFacts(
+        facts = guide_source_binding_authority_facts(
             project_id=request.project_id,
             guide_id=request.guide_id,
-            guide_source_snapshot_id=request.guide_source_snapshot_id,
-            guide_source_item_id=request.source_item_id,
-            project_setup_run_id=request.project_setup_run_id,
+            source_snapshot_id=request.guide_source_snapshot_id,
+            source_item_id=request.source_item_id,
+            setup_run_id=request.project_setup_run_id,
             setup_generation=request.setup_generation,
             content_id=request.verified_content_id,
-            verified_replica_id=UUID(replica.id),
-            sha256=content.sha256,
-            byte_count=content.byte_count,
+            replica_id=UUID(candidate.replica_id),
+            sha256=candidate.sha256,
+            byte_count=candidate.byte_count,
             logical_role=request.logical_role,
         )
         await self._authority.consume(
@@ -208,7 +198,7 @@ class GuideSourceBindingService:
             .with_for_update()
         )
         if existing is not None:
-            if not self._binding_matches(existing, request, replica.id):
+            if not self._binding_matches(existing, request, candidate.replica_id):
                 raise GuideSourceBindingError("guide source binding conflicts")
             return GuideSourceBindingResult(
                 binding_id=UUID(existing.id),
@@ -236,7 +226,7 @@ class GuideSourceBindingService:
             project_setup_run_id=str(request.project_setup_run_id),
             setup_generation=request.setup_generation,
             content_id=str(request.verified_content_id),
-            verified_replica_id=replica.id,
+            verified_replica_id=candidate.replica_id,
             logical_role=request.logical_role,
             supersedes_binding_id=predecessor.id if predecessor is not None else None,
             created_by_service=ServiceIdentity.ARTIFACT_BINDING.value,

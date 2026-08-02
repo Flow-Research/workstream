@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import app.interfaces.artifact_operations  # noqa: F401 - cumulative contract coverage
 import app.adapters.artifacts.internal_workers as internal_worker_adapter
@@ -58,10 +58,10 @@ async def test_production_authority_denies_prepare_and_consume() -> None:
         )
     with pytest.raises(ArtifactAuthorityDeniedError):
         await authority.consume(
-                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
-                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-                facts=facts,
-            )
+            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=facts,
+        )
 
 
 def test_eager_internal_tasks_use_lazy_process_runtime(
@@ -116,6 +116,8 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         "run_artifact_internal_operation",
         internal_worker_adapter.run_artifact_internal_operation,
     )
+    continuation_delay = Mock()
+    monkeypatch.setattr(worker_module.continue_guide_setup, "delay", continuation_delay)
     attempt_id, job_id = uuid4(), uuid4()
 
     worker_module.resolve_put_attempt.delay(str(attempt_id))
@@ -124,14 +126,18 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
     assert initialize.await_count == 2
     orchestrator.resolve_put_attempt.assert_awaited_once_with(attempt_id)
     orchestrator.verify_object.assert_awaited_once_with(job_id)
+    continuation_delay.assert_called_once_with(str(job_id))
     celery_module = importlib.import_module("app.workers.celery_app")
     worker_module = importlib.import_module("app.workers.artifacts")
     celery_app = celery_module.celery_app
     assert "workstream.artifacts.resolve_put_attempt" in celery_app.tasks
     assert "workstream.artifacts.verify_object" in celery_app.tasks
     assert "workstream.artifacts.scan_pending_work" in celery_app.tasks
+    assert "workstream.artifacts.continue_guide_setup" in celery_app.tasks
+    assert "workstream.artifacts.scan_guide_setup_continuations" in celery_app.tasks
     scheduled_tasks = [entry["task"] for entry in celery_app.conf.beat_schedule.values()]
     assert scheduled_tasks.count("workstream.artifacts.scan_pending_work") == 1
+    assert scheduled_tasks.count("workstream.artifacts.scan_guide_setup_continuations") == 1
     assert scheduled_tasks.count("workstream.artifacts.cleanup_stale_scratch") == 1
     operation = AsyncMock(return_value=None)
     scanned: list[str] = []
@@ -142,8 +148,15 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         scanned.append("called")
         return 2
 
+    async def scan_guides(publish_job):
+        await publish_job("guide-job-id")
+        return 1
+
     monkeypatch.setattr(worker_module, "run_artifact_internal_operation", operation)
+    continuation_delay = Mock()
+    monkeypatch.setattr(worker_module.continue_guide_setup, "delay", continuation_delay)
     monkeypatch.setattr(worker_module, "scan_artifact_pending_work", scan)
+    monkeypatch.setattr(worker_module, "scan_guide_setup_continuations_page", scan_guides)
     put_delay = Mock()
     job_delay = Mock()
     monkeypatch.setattr(worker_module.resolve_put_attempt, "delay", put_delay)
@@ -155,10 +168,13 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
     assert operation.await_count == 2
     assert operation.await_args_list[0].args == ("put", UUID(attempt_id))
     assert operation.await_args_list[1].args == ("verification", UUID(job_id))
+    continuation_delay.assert_called_once_with(job_id)
     assert worker_module.scan_pending_work() == 2
+    assert worker_module.scan_guide_setup_continuations() == 1
     assert scanned == ["called"]
     put_delay.assert_called_once_with("put-id")
     job_delay.assert_called_once_with("job-id")
+    assert continuation_delay.call_args_list == [call(job_id), call("guide-job-id")]
     get_settings.cache_clear()
 
 
@@ -522,20 +538,13 @@ async def test_pending_scan_returns_count_and_restages_denial(
     )
     publish_put, publish_job = AsyncMock(), AsyncMock()
 
-    assert (
-        await internal_worker_adapter.scan_artifact_pending_work(
-            publish_put, publish_job
-        )
-        == 3
-    )
+    assert await internal_worker_adapter.scan_artifact_pending_work(publish_put, publish_job) == 3
 
     scanner.scan.side_effect = AuthorizationDenied(
         SimpleNamespace(allowed=False, denial_code="denied")  # type: ignore[arg-type]
     )
     with pytest.raises(ArtifactAuthorityDeniedError, match="authority denied"):
-        await internal_worker_adapter.scan_artifact_pending_work(
-            publish_put, publish_job
-        )
+        await internal_worker_adapter.scan_artifact_pending_work(publish_put, publish_job)
 
     session.rollback.assert_awaited_once_with()
     authority.persist_denial.assert_awaited_once_with()

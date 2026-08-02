@@ -333,9 +333,8 @@ async def _seed_guide(
                 source_snapshot_id=snapshot_id,
                 item_order=0,
                 source_kind="inline",
-                durable_ref="guide.md",
+                source_label="guide.md",
                 ingestion_adapter="inline",
-                content_hash=content_hash,
                 media_type=media_type,
             )
         )
@@ -4487,14 +4486,13 @@ def test_artifact_admission_migration_refuses_populated_downgrade(
                 await session.execute(
                     text(
                         "insert into guide_source_snapshot_items "
-                        "(id,source_snapshot_id,item_order,source_kind,durable_ref,"
-                        "ingestion_adapter,content_hash,media_type) values "
-                        "(:id,:snapshot_id,0,'inline','guide.md','inline',:hash,'text/markdown')"
+                        "(id,source_snapshot_id,item_order,source_kind,source_label,"
+                        "ingestion_adapter,media_type) values "
+                        "(:id,:snapshot_id,0,'inline','guide.md','inline','text/markdown')"
                     ),
                     {
                         "id": item_id,
                         "snapshot_id": snapshot_id,
-                        "hash": "sha256:" + "b" * 64,
                     },
                 )
                 namespace_fingerprint = "sha256:" + "c" * 64

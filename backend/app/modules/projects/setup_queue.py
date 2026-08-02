@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import logging
 
 from celery.exceptions import CeleryError
@@ -13,6 +14,12 @@ from app.workers.errors import CeleryConfigurationError
 from app.workers.task_settings import sync_task_settings
 
 logger = logging.getLogger(__name__)
+DISPATCH_RETRY_AFTER_SECONDS = 60
+
+
+def dispatch_stale_before() -> datetime:
+    """Return the shared cutoff for reclaiming an abandoned dispatch claim."""
+    return datetime.now(UTC) - timedelta(seconds=DISPATCH_RETRY_AFTER_SECONDS)
 
 
 class ProjectSetupQueueError(RuntimeError):
@@ -26,6 +33,7 @@ def enqueue_pre_submit_setup_pipeline(
     source_snapshot_id: str,
     setup_run_id: str,
     setup_generation: int,
+    task_id: str | None = None,
 ) -> str:
     """Enqueue the Celery project setup pipeline.
 
@@ -47,7 +55,8 @@ def enqueue_pre_submit_setup_pipeline(
 
         sync_task_settings(run_pre_submit_setup_pipeline)
         result = run_pre_submit_setup_pipeline.apply_async(
-            args=(project_id, guide_id, source_snapshot_id, setup_run_id, setup_generation)
+            args=(project_id, guide_id, source_snapshot_id, setup_run_id, setup_generation),
+            task_id=task_id,
         )
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
         raise ProjectSetupQueueError("project setup pipeline could not be enqueued") from exc
@@ -62,11 +71,35 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     source_snapshot_id: str,
     setup_run_id: str,
     setup_generation: int,
+    verification_job_id: str | None = None,
 ) -> str | None:
     """Dispatch one committed setup intent and record its bounded outcome."""
     from app.modules.projects.repository import ProjectRepository
 
     repository = ProjectRepository(session)
+    setup_run = await repository.lock_project_setup_run(setup_run_id)
+    if setup_run is None:
+        return None
+    if setup_run.status == "dispatch_pending" and setup_run.celery_task_id is not None:
+        if setup_run.updated_at > dispatch_stale_before():
+            return setup_run.celery_task_id
+        deterministic_task_id = setup_run.celery_task_id
+        setup_run.updated_at = datetime.now(UTC)
+    elif setup_run.status in {"queued", "enqueue_failed"}:
+        deterministic_task_id = f"guide-setup-{setup_run_id}-g{setup_generation}"
+        setup_run.status = "dispatch_pending"
+        setup_run.current_step = "dispatch"
+        setup_run.celery_task_id = deterministic_task_id
+    elif setup_run.celery_task_id is not None:
+        return setup_run.celery_task_id
+    else:
+        return None
+    if setup_run.continuation_verification_job_id is None and verification_job_id is not None:
+        setup_run.continuation_verification_job_id = verification_job_id
+        setup_run.continuation_started_at = datetime.now(UTC)
+    setup_run.error_code = None
+    setup_run.error_summary = None
+    await session.commit()
     try:
         task_id = await asyncio.to_thread(
             enqueue_pre_submit_setup_pipeline,
@@ -75,6 +108,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             source_snapshot_id=source_snapshot_id,
             setup_run_id=setup_run_id,
             setup_generation=setup_generation,
+            task_id=deterministic_task_id,
         )
     except ProjectSetupQueueError as exc:
         logger.warning(
@@ -88,18 +122,21 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
                 "error_summary": "project setup failed",
             },
         )
-        setup_run = await repository.get_project_setup_run(setup_run_id)
-        if setup_run is not None:
+        setup_run = await repository.lock_project_setup_run(setup_run_id)
+        if setup_run is not None and setup_run.status == "dispatch_pending":
             setup_run.status = "enqueue_failed"
             setup_run.current_step = "enqueue"
+            setup_run.celery_task_id = None
             setup_run.error_code = exc.__class__.__name__
             setup_run.error_summary = "project setup failed"
-            await session.commit()
-        return None
-    setup_run = await repository.get_project_setup_run(setup_run_id)
-    if setup_run is not None:
-        setup_run.celery_task_id = task_id
         await session.commit()
+        return None
+    setup_run = await repository.lock_project_setup_run(setup_run_id)
+    if setup_run is not None and setup_run.status == "dispatch_pending":
+        setup_run.status = "queued"
+        setup_run.current_step = "queued"
+        setup_run.celery_task_id = task_id
+    await session.commit()
     return task_id
 
 
@@ -143,7 +180,5 @@ def enqueue_post_submit_setup_continuation(
             )
         )
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
-        raise ProjectSetupQueueError(
-            "project setup continuation could not be enqueued"
-        ) from exc
+        raise ProjectSetupQueueError("project setup continuation could not be enqueued") from exc
     return result.id

@@ -37,6 +37,7 @@ from app.modules.artifacts.guide_extraction_service import (
     GuideExtractionPersistenceResult,
     GuideExtractionRequest,
 )
+from app.modules.artifacts.guide_materialization import GuideSourceMaterializationError
 from app.modules.artifacts.guide_xlsx import XlsxExtractionFailure, extract_xlsx
 
 
@@ -1236,7 +1237,9 @@ async def test_executor_failure_retries_once_with_fresh_authority_and_materializ
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["malformed", "limit_exceeded", "unsupported"])
-async def test_terminal_extraction_replay_does_not_materialize_again(status: str) -> None:
+async def test_terminal_extraction_replay_requires_fresh_authorized_materialization(
+    status: str,
+) -> None:
     request = GuideExtractionRequest(
         project_id=uuid4(),
         guide_id=uuid4(),
@@ -1262,11 +1265,49 @@ async def test_terminal_extraction_replay_does_not_materialize_again(status: str
             return terminal
 
     class Materializer:
-        async def materialize_with_fresh_authority(self, _request):
-            raise AssertionError("terminal extraction must not materialize again")
+        prepared = SimpleNamespace(closed=False)
 
+        async def materialize_with_fresh_authority(self, actual_request):
+            assert actual_request is request
+
+            async def close() -> None:
+                self.prepared.closed = True
+
+            self.prepared.close = close
+            return self.prepared
+
+    materializer = Materializer()
     result = await GuideExtractionCoordinator(  # type: ignore[arg-type]
         Service(),
-        Materializer(),  # type: ignore[arg-type]
+        materializer,  # type: ignore[arg-type]
     ).extract(request)
     assert result is terminal
+    assert materializer.prepared.closed is True
+
+
+@pytest.mark.asyncio
+async def test_read_authority_denial_precedes_extraction_slot_mutation() -> None:
+    request = GuideExtractionRequest(
+        project_id=uuid4(),
+        guide_id=uuid4(),
+        source_snapshot_id=uuid4(),
+        source_item_id=uuid4(),
+        project_setup_run_id=uuid4(),
+        setup_generation=1,
+        binding_id=uuid4(),
+        classification_id=uuid4(),
+    )
+
+    class Service:
+        async def claim_materialization_slot(self, _request):
+            raise AssertionError("denial must precede extraction mutation")
+
+    class Materializer:
+        async def materialize_with_fresh_authority(self, _request):
+            raise GuideSourceMaterializationError("guide source read is unavailable")
+
+    with pytest.raises(GuideSourceMaterializationError):
+        await GuideExtractionCoordinator(  # type: ignore[arg-type]
+            Service(),
+            Materializer(),  # type: ignore[arg-type]
+        ).extract(request)

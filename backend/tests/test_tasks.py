@@ -79,6 +79,7 @@ from project_create_fixtures import (
     activate_guide_for_downstream_test,
     grant_system_project_manager,
 )
+from test_projects import create_verified_report_fixture
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (
@@ -816,30 +817,26 @@ async def create_generated_post_submit_setup_output(
             approved_at=datetime.now(UTC),
             created_by="project-manager-subject",
         )
-        setup_run = ProjectSetupRun(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=snapshot.guide_version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            setup_generation=1,
-            status="post_submit_policy_compiled",
-            current_step="post_submit_checker_policy_compilation",
-            output_sufficiency_report_id=sufficiency_report["id"],
-            output_submission_artifact_policy_id=submission_artifact_policy["id"],
-            output_post_submit_checker_policy_id=post_submit_policy.id,
-            post_submit_derivation_summary={
-                "status": "compiled",
-                "post_submit_checker_policy_id": post_submit_policy.id,
-                "required_checkers": post_submit_policy.required_checkers,
-                "warning_checkers": post_submit_policy.warning_checkers,
-                "blocking_severities": post_submit_policy.blocking_severities,
-            },
-            created_by="project-manager-subject",
+        setup_run = await session.scalar(
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.source_snapshot_id == snapshot.id)
+            .order_by(ProjectSetupRun.setup_generation.desc())
+            .limit(1)
         )
+        assert setup_run is not None
+        setup_run.status = "post_submit_policy_compiled"
+        setup_run.current_step = "post_submit_checker_policy_compilation"
+        setup_run.output_sufficiency_report_id = sufficiency_report["id"]
+        setup_run.output_submission_artifact_policy_id = submission_artifact_policy["id"]
+        setup_run.output_post_submit_checker_policy_id = post_submit_policy.id
+        setup_run.post_submit_derivation_summary = {
+            "status": "compiled",
+            "post_submit_checker_policy_id": post_submit_policy.id,
+            "required_checkers": post_submit_policy.required_checkers,
+            "warning_checkers": post_submit_policy.warning_checkers,
+            "blocking_severities": post_submit_policy.blocking_severities,
+        }
         session.add(post_submit_policy)
-        session.add(setup_run)
         await session.commit()
         return {
             "id": post_submit_policy.id,
@@ -1042,9 +1039,8 @@ async def create_policy_bundle_for_guide(
             "items": [
                 {
                     "source_kind": "inline_markdown",
-                    "durable_ref": f"inline:/guides/{guide_id}/guide",
+                    "source_label": f"guide-{guide_id}.md",
                     "ingestion_adapter": "manual_import",
-                    "content_hash": sha256_hash(f"{guide_id}:guide"),
                     "media_type": "text/markdown",
                 }
             ]
@@ -1052,6 +1048,22 @@ async def create_policy_bundle_for_guide(
     )
     assert snapshot_response.status_code == 201, snapshot_response.text
     snapshot = snapshot_response.json()
+    async with db_session.get_session_factory()() as session:
+        session.add(
+            ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_version=snapshot["guide_version"],
+                source_snapshot_id=snapshot["id"],
+                source_snapshot_hash=snapshot["bundle_hash"],
+                setup_generation=1,
+                status="queued",
+                current_step="sufficiency_agent",
+                created_by="project-manager-subject",
+            )
+        )
+        await session.commit()
 
     report_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
@@ -1076,6 +1088,10 @@ async def create_policy_bundle_for_guide(
     )
     assert policy_response.status_code == 201, policy_response.text
     policy = policy_response.json()
+    verified_report_id = await create_verified_report_fixture(
+        report_response.json()["id"], snapshot["id"]
+    )
+    verified_report = {**report_response.json(), "id": verified_report_id}
 
     effective_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
@@ -1090,7 +1106,7 @@ async def create_policy_bundle_for_guide(
         project_id=project_id,
         guide_id=guide_id,
         source_snapshot=snapshot,
-        sufficiency_report=report_response.json(),
+        sufficiency_report=verified_report,
         submission_artifact_policy=policy,
         pre_submit_checker_policy=compiled_pre_submit_checker,
         required_checkers=post_submit_required_checkers,
@@ -1099,7 +1115,7 @@ async def create_policy_bundle_for_guide(
     )
     return {
         "source_snapshot": snapshot,
-        "sufficiency_report": report_response.json(),
+        "sufficiency_report": verified_report,
         "submission_artifact_policy": policy,
         "effective_policy": effective_policy,
         "pre_submit_checker_policy": compiled_pre_submit_checker,

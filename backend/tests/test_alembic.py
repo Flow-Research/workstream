@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0047_policy_identity_lineage"
+HEAD_REVISION = "0048_guide_source_v2"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -11831,9 +11831,7 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
                 RuntimeError, match="cannot downgrade populated immutable policy lineage"
             ):
                 command.downgrade(config, "0045_guide_metadata_authority")
-            refused_state = asyncio.run(
-                _xint003_02a_policy_state(isolated_database_env, ids)
-            )
+            refused_state = asyncio.run(_xint003_02a_policy_state(isolated_database_env, ids))
         finally:
             asyncio.run(_remove_xint003_02a_immutable_policies(isolated_database_env, ids))
             command.downgrade(config, "0045_guide_metadata_authority")
@@ -11864,9 +11862,7 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
     assert refused_state == state
 
 
-async def _seed_xint003_02a_legacy_policies(
-    database_url: str, ids: dict[str, str]
-) -> None:
+async def _seed_xint003_02a_legacy_policies(database_url: str, ids: dict[str, str]) -> None:
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
@@ -11894,7 +11890,7 @@ async def _seed_xint003_02a_legacy_policies(
                     "insert into review_policies "
                     "(id,project_id,guide_version,requires_second_review,allowed_decisions,"
                     "minimum_finding_fields,sla_hours) values "
-                    "(:review,:project,'v1',false,'[\"accept\",\"needs_revision\","
+                    '(:review,:project,\'v1\',false,\'["accept","needs_revision",'
                     "\"reject\"]'::json,'[]'::json,24)"
                 ),
                 ids,
@@ -11912,9 +11908,7 @@ async def _seed_xint003_02a_legacy_policies(
         await engine.dispose()
 
 
-async def _xint003_02a_policy_state(
-    database_url: str, ids: dict[str, str]
-) -> dict[str, tuple]:
+async def _xint003_02a_policy_state(database_url: str, ids: dict[str, str]) -> dict[str, tuple]:
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
@@ -11958,9 +11952,7 @@ async def _xint003_02a_policy_state(
         await engine.dispose()
 
 
-async def _xint003_02a_policy_immutable_writes(
-    database_url: str, ids: dict[str, str]
-) -> set[str]:
+async def _xint003_02a_policy_immutable_writes(database_url: str, ids: dict[str, str]) -> set[str]:
     engine = create_async_engine(database_url)
     refused: set[str] = set()
     try:
@@ -11969,8 +11961,7 @@ async def _xint003_02a_policy_immutable_writes(
             with pytest.raises(IntegrityError):
                 await connection.execute(
                     text(
-                        "update project_guides set selected_review_policy_hash=null "
-                        "where id=:guide"
+                        "update project_guides set selected_review_policy_hash=null where id=:guide"
                     ),
                     ids,
                 )
@@ -12030,9 +12021,7 @@ async def _xint003_02a_policy_immutable_writes(
         await engine.dispose()
 
 
-async def _remove_xint003_02a_immutable_policies(
-    database_url: str, ids: dict[str, str]
-) -> None:
+async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[str, str]) -> None:
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
@@ -12064,9 +12053,7 @@ async def _remove_xint003_02a_immutable_policies(
                     ids,
                 )
             await connection.execute(text("delete from review_policies where id=:review"), ids)
-            await connection.execute(
-                text("delete from revision_policies where id=:revision"), ids
-            )
+            await connection.execute(text("delete from revision_policies where id=:revision"), ids)
             await connection.execute(text("delete from project_guides where id=:guide"), ids)
             await connection.execute(text("delete from projects where id=:project"), ids)
             for table in reversed(

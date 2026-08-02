@@ -1548,6 +1548,11 @@ Implementation is a clean cut:
   execution-mode/observation fencing. Existing contributor receipt rows remain
   readable as contract v1. Downgrade refuses when verification evidence or a
   non-contributor receipt cannot be represented by the prior schema.
+- migration `0048_guide_source_v2` requires an empty guide-source snapshot
+  namespace, renames the non-authoritative declaration field to `source_label`,
+  removes caller-owned hash/content-id fields, installs the exact v2 manifest
+  trigger, and refuses downgrade when guide-source rows exist rather than
+  fabricating legacy byte identity.
 - migration `0039_guide_source_bindings` deterministically backfills positive,
   guide-local setup generations ordered by creation time and stable row ID,
   installs exact guide/snapshot/item/setup-run/content/replica lineage

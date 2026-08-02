@@ -11,14 +11,18 @@ from app.adapters.artifacts import (
 from app.core.config import get_settings
 from app.workers.async_runner import run_async_task
 from app.adapters.artifacts.internal_workers import (
+    continue_guide_setup_after_verification,
     run_artifact_internal_operation,
     scan_artifact_pending_work,
+    scan_guide_setup_continuations as scan_guide_setup_continuations_page,
 )
 from app.workers.celery_app import (
     ARTIFACT_PUT_RESOLUTION_TASK,
     ARTIFACT_PENDING_WORK_SCAN_TASK,
     ARTIFACT_SCRATCH_CLEANUP_TASK,
     ARTIFACT_VERIFICATION_TASK,
+    GUIDE_SETUP_CONTINUATION_SCAN_TASK,
+    GUIDE_SETUP_CONTINUATION_TASK,
     celery_app,
 )
 
@@ -42,12 +46,31 @@ def resolve_put_attempt(attempt_id: str) -> None:
 @celery_app.task(name=ARTIFACT_VERIFICATION_TASK)
 def verify_object(job_id: str) -> None:
     """Verify one exact object as the fixed verifier service."""
-    run_async_task(lambda: run_artifact_internal_operation("verification", UUID(job_id)))
+    identifier = UUID(job_id)
+    run_async_task(lambda: run_artifact_internal_operation("verification", identifier))
+    continue_guide_setup.delay(job_id)
+
+
+@celery_app.task(name=GUIDE_SETUP_CONTINUATION_TASK)
+def continue_guide_setup(job_id: str) -> None:
+    """Resume one verified guide generation from its durable verification id."""
+    run_async_task(lambda: continue_guide_setup_after_verification(UUID(job_id)))
+
+
+@celery_app.task(name=GUIDE_SETUP_CONTINUATION_SCAN_TASK)
+def scan_guide_setup_continuations() -> int:
+    """Republish a bounded page of stranded verified guide continuations."""
+
+    async def publish(job_id: str) -> None:
+        continue_guide_setup.delay(job_id)
+
+    return run_async_task(lambda: scan_guide_setup_continuations_page(publish))
 
 
 @celery_app.task(name=ARTIFACT_PENDING_WORK_SCAN_TASK)
 def scan_pending_work() -> int:
     """Publish one authority-bound database-cutoff page of pending work."""
+
     async def publish_put_attempt(attempt_id: str) -> None:
         resolve_put_attempt.delay(attempt_id)
 
