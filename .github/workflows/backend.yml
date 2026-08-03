@@ -305,6 +305,11 @@ jobs:
               "$(sha256sum "${destination}" | cut -d' ' -f1)"
           done
           coverage combine
+          semantic_coverage="${RUNNER_TEMP}/semantic-lanes.coverage"
+          test -f .coverage
+          test ! -L .coverage
+          test ! -e "${semantic_coverage}"
+          mv -- .coverage "${semantic_coverage}"
 
       - name: API contract real API e2e
         working-directory: backend
@@ -327,7 +332,12 @@ jobs:
           test "${#coverage_files[@]}" -eq 1
           test -f "${coverage_files[0]}"
           test ! -L "${coverage_files[0]}"
-          coverage combine --append
+          semantic_coverage="${RUNNER_TEMP}/semantic-lanes.coverage"
+          test -f "${semantic_coverage}"
+          test ! -L "${semantic_coverage}"
+          test ! -e .coverage
+          mv -- "${semantic_coverage}" .coverage
+          coverage combine --append "${coverage_files[0]}"
 
       - name: Backend full-suite coverage
         working-directory: backend
