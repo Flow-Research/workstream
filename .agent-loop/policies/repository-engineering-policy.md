@@ -11,12 +11,8 @@
 ## Contribution Authority
 
 GitHub repository permissions and branch protection govern contribution
-authority. Plans, contracts, review evidence, and `.agent-loop/` records are
-useful engineering context, not runtime authorization.
-
-The repository does not require signed starts, active-chunk leases,
-administrator dispatches, merge intents, recovery certificates, or generated
-loop memory before implementation or pull-request creation.
+authority. Plans, contracts, review evidence, and `.agent-loop/` records
+preserve engineering context and rationale.
 
 ## Engineering Loop
 
@@ -31,7 +27,6 @@ Intent -> Plan -> Bounded Change -> Tests -> Review -> PR -> Human Merge
   architecture, workflow, or product-lifecycle changes.
 - Different initiatives may proceed concurrently.
 - Explicit human approval is required before merge.
-- Derived process records must never block product development.
 
 ## Core Boundaries
 
