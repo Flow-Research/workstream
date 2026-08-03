@@ -112,6 +112,8 @@ LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
 ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
 NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
+TEST_MINIO_ACCESS_KEY = "workstream-minio"
+TEST_MINIO_SECRET_KEY = "workstream-minio-secret-key"
 STRONG_ATTESTATION = (
     "I attest this submission contains no confidential client data, credentials, "
     "secrets, tokens, passwords, API keys, private source material, source code, "
@@ -283,6 +285,32 @@ def api_environment() -> dict[str, str]:
     env["WORKSTREAM_CELERY_TASK_ALWAYS_EAGER"] = "true"
     env["WORKSTREAM_CELERY_BROKER_URL"] = "memory://"
     env["WORKSTREAM_CELERY_RESULT_BACKEND_URL"] = "cache+memory://"
+    minio_endpoint = env.get("WORKSTREAM_TEST_MINIO_ENDPOINT")
+    minio_bucket = env.get("WORKSTREAM_TEST_MINIO_BUCKET")
+    minio_prefix = env.get("WORKSTREAM_TEST_MINIO_PREFIX")
+    if minio_endpoint and minio_bucket and minio_prefix:
+        scratch_parent = Path(env.get("RUNNER_TEMP", "/tmp"))
+        env.update(
+            {
+                "WORKSTREAM_ARTIFACT_STORE_BACKEND": "s3_compatible",
+                "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(
+                    scratch_parent / "workstream-api-contract-scratch"
+                ),
+                "WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE": "minio",
+                "WORKSTREAM_ARTIFACT_S3_REGION": "us-east-1",
+                "WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL": minio_endpoint,
+                "WORKSTREAM_ARTIFACT_S3_BUCKET": minio_bucket,
+                "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX": minio_prefix,
+                "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "path",
+                "WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE": "local_static",
+                "WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID": TEST_MINIO_ACCESS_KEY,
+                "WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY": TEST_MINIO_SECRET_KEY,
+                "WORKSTREAM_ARTIFACT_ADMISSION_TASK_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES": "67108864",
+            }
+        )
     env.setdefault(
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
         base64.b64encode(os.urandom(32)).decode("ascii"),

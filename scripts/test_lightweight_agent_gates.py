@@ -114,6 +114,10 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("Require every semantic lane", workflow)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
+        self.assertIn(
+            "WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000",
+            workflow,
+        )
         self.assertIn("include-hidden-files: true", workflow)
         self.assertIn("coverage report --precision=2 --fail-under=78", workflow)
         self.assertGreaterEqual(workflow.count("--fail-under=90"), 10)

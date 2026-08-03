@@ -6,6 +6,8 @@ import sys
 
 import pytest
 
+from app.core.config import Settings
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 MODULES = [importlib.import_module("api_contract_e2e"), importlib.import_module("week2_api_e2e")]
@@ -57,3 +59,31 @@ def test_api_contract_drill_requires_isolated_database_without_leaking_url() -> 
         api_contract.assert_isolated_database_url(persistent_url)
     assert persistent_url not in str(exc_info.value)
     assert "persistent test database" in str(exc_info.value)
+
+
+def test_api_contract_uses_runner_owned_minio_namespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The hosted fan-in maps its isolated MinIO namespace into real ART settings."""
+    api_contract = MODULES[0]
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
+    monkeypatch.setenv("WORKSTREAM_TEST_MINIO_ENDPOINT", "http://127.0.0.1:9000")
+    monkeypatch.setenv("WORKSTREAM_TEST_MINIO_BUCKET", "workstream-ci-isolated-012345abcdef")
+    monkeypatch.setenv("WORKSTREAM_TEST_MINIO_PREFIX", "ci/isolated/012345abcdef")
+
+    env = api_contract.api_environment()
+
+    assert env["WORKSTREAM_ARTIFACT_STORE_BACKEND"] == "s3_compatible"
+    assert env["WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE"] == "minio"
+    assert env["WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL"] == "http://127.0.0.1:9000"
+    assert env["WORKSTREAM_ARTIFACT_S3_BUCKET"] == "workstream-ci-isolated-012345abcdef"
+    assert env["WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX"] == "ci/isolated/012345abcdef"
+    assert env["WORKSTREAM_ARTIFACT_SCRATCH_ROOT"] == str(
+        tmp_path / "workstream-api-contract-scratch"
+    )
+    for key, value in env.items():
+        if key.startswith("WORKSTREAM_ARTIFACT_"):
+            monkeypatch.setenv(key, value)
+    settings = Settings(_env_file=None, environment=env["WORKSTREAM_ENVIRONMENT"])
+    assert settings.artifact_store_backend == "s3_compatible"
+    assert settings.artifact_s3_bucket == "workstream-ci-isolated-012345abcdef"
