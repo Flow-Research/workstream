@@ -56,4 +56,7 @@ not overstate live REV behavior.
 
 ## External checks and merge
 
-GitHub CI, external review, and explicit human merge approval remain required.
+CodeRabbit's two valid findings were repaired: the checker outcome is now
+separate from the task lifecycle state, and the merged REV/AUTH readiness claim
+names PRs #242, #248, #255, and #257 as evidence. GitHub CI must pass again on
+the repaired exact head. Explicit human merge approval remains required.

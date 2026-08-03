@@ -60,7 +60,8 @@ remain outside v0.1.
 - Immutable review/revision policy identities, AUTH-owned policy mutation,
   complete planned REV action and fixed-service catalogues, and the typed
   fail-closed PREP/read handoff required for hidden REV implementation. These
-  readiness contracts do not make the review lifecycle available.
+  foundations merged through PRs #242, #248, #255, and #257 respectively.
+  These readiness contracts do not make the review lifecycle available.
 
 ### Project, task, submission, and checker foundations
 
