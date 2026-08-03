@@ -1,5 +1,7 @@
-# Chunk Map: Parallel Initiative Execution
+# Chunk Map: WS-ENG-005 — Historical
 
-| Chunk | Purpose | Status |
+| Chunk | Purpose | Final state |
 |---|---|---|
-| `WS-ENG-005-01` | Replace global serialization with one active chunk per initiative | Active by explicit user approval |
+| `WS-ENG-005-01` | Permit concurrent signed work across distinct initiatives | Merged through PR #172; signed enforcement retired by PR #207 |
+
+Current concurrency guidance lives in `CONTRIBUTING.md`. There is no successor.
