@@ -1,7 +1,7 @@
-# CHUNK MAP: WS-ENG-002
+# Chunk Map: WS-ENG-002 — Historical
 
-| Chunk | Purpose | Status |
-| --- | --- | --- |
-| `WS-ENG-002-01` | Make an authenticated GitHub dispatch the single explicit-start checkpoint | Active by user instruction on 2026-07-21 |
+| Chunk | Purpose | Final state |
+|---|---|---|
+| `WS-ENG-002-01` | Make authenticated dispatch the single signed-start checkpoint | Merged through PR #166; runtime retired by PR #207 |
 
-This initiative has one bounded chunk and no automatic successor.
+There is no successor.
