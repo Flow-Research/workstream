@@ -50,6 +50,8 @@ async def suspend_historical_product_custody(
         "guide_source_snapshots": {"source_snapshot_product_custody"},
         "guide_source_snapshot_items": {"guide_source_snapshot_items_custody"},
         "project_setup_runs": {"source_setup_run_custody"},
+        "review_policies": {"review_policy_mutation_custody"},
+        "revision_policies": {"revision_policy_mutation_custody"},
     }
     if table not in allowed or not triggers or not set(triggers) <= allowed[table]:
         raise RuntimeError("unsupported historical custody suspension")
@@ -257,8 +259,7 @@ async def insert_historical_project(
     try:
         await connection.execute(
             text(
-                "insert into projects (id, name, slug, status) "
-                "values (:id, :name, :slug, :status)"
+                "insert into projects (id, name, slug, status) values (:id, :name, :slug, :status)"
             ),
             {"id": project_id, "name": name, "slug": slug, "status": status},
         )

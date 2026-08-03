@@ -1327,3 +1327,26 @@ does not invent or backfill historical custody. Every new covered mutation must
 commit its complete replay, decision, and row provenance atomically. Once any
 12D custody or attributed mutation exists, downgrade is intentionally refused;
 operators must not delete authority evidence merely to force rollback.
+
+## Draft review and revision policy authorization
+
+The guide-bound review-policy and revision-policy `PUT` routes require a UUID
+`Idempotency-Key`, an active covered Project Manager grant carrying
+`project.review_policy.manage`, and a quoted `If-Match` value. The first version
+uses `"no-current-policy"`; replacements use the opaque selector composed from
+the current policy ID, generation, and canonical digest. Omitted, wildcard,
+unquoted, stale, cross-guide, or cross-project
+preconditions fail without advancing a selector.
+
+Each success appends one immutable policy version, records the exact actor,
+identity link, matched grant, action and authorization decision, and advances
+only the corresponding draft-guide selector in the same transaction. The two
+policies may be attached in either order. Never repair an active guide by
+changing these selectors: active and superseded guide selections remain frozen.
+
+Migration `0048_policy_authority` adds nullable historical provenance columns
+and the `policy_mutation_idempotency_records` custody ledger. Historical
+`legacy_incomplete` rows remain grandfathered and are not attributed. Downgrade
+is refused after any 02B mutation/replay custody exists; do not delete policy or
+authorization evidence to force rollback. A populated rollback requires an
+explicit reviewed data-retention and migration plan.

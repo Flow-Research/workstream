@@ -34,15 +34,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
-    ProjectGuide,
     ProjectSetupRun,
-    ReviewPolicy,
-    RevisionPolicy,
-)
-from app.modules.projects.policy_lineage import (
-    ReviewPolicySemantics,
-    RevisionPolicySemantics,
-    policy_digest,
 )
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
@@ -421,6 +413,7 @@ async def request_json(
     payload: dict | None = None,
     expected_status: int = 200,
     idempotency_key: str | None = None,
+    if_match: str | None = None,
 ) -> dict | list:
     """Call one API endpoint and assert its status.
 
@@ -432,6 +425,7 @@ async def request_json(
         payload: Optional JSON payload.
         expected_status: Expected HTTP status code.
         idempotency_key: Optional UUID replay key for mutation boundaries.
+        if_match: Optional exact HTTP policy selector precondition.
 
     Returns:
         Parsed JSON response body.
@@ -445,6 +439,8 @@ async def request_json(
     headers.update({"X-Request-ID": request_id, "X-Correlation-ID": correlation_id})
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
+    if if_match is not None:
+        headers["If-Match"] = if_match
     response = await client.request(
         method,
         path,
@@ -648,91 +644,68 @@ def guide_payload(run_id: str) -> dict:
     }
 
 
-async def seed_pending_policy_boundaries(project_id: str, guide_version: str) -> None:
-    """Seed policies whose clean-cut authorization routes arrive after AUTH-12D.
+async def configure_policy_boundaries(
+    client: httpx.AsyncClient,
+    token: str,
+    project_id: str,
+    guide_id: str,
+    guide_version: str,
+) -> None:
+    """Configure both policies through their sole active HTTP boundaries.
 
-    The E2E flow must keep proving the downstream lifecycle while guide create no
-    longer accepts embedded policy writes. These direct fixtures are removed as
-    each dedicated policy boundary is activated.
+    Args:
+        client: Real HTTP client.
+        token: Project Manager Flow bearer token.
+        project_id: Project whose draft guide is configured.
+        guide_id: Exact draft guide receiving both policies.
+        guide_version: Guide version used by the direct PaymentPolicy fixture.
     """
+    await request_json(
+        client,
+        "PUT",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/review-policy",
+        token,
+        {
+            "review_preference_window_seconds": 3600,
+            "review_lease_duration_seconds": 1800,
+            "max_active_review_leases_per_reviewer": 1,
+            "self_review_allowed": False,
+            "reject_policy": "close_task",
+            "finding_evidence_requirement": "optional",
+            "requires_second_review": False,
+            "allowed_decisions": ["accept", "needs_revision", "reject"],
+            "minimum_finding_fields": ["issue", "required_fix"],
+        },
+        idempotency_key=str(uuid4()),
+        if_match='"no-current-policy"',
+    )
+    await request_json(
+        client,
+        "PUT",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/revision-policy",
+        token,
+        {
+            "max_revision_rounds": 7,
+            "revision_deadline_hours": 48,
+            "allowed_resubmission_states": ["needs_revision"],
+            "reviewer_reassignment_rule": "same reviewer preferred",
+        },
+        idempotency_key=str(uuid4()),
+        if_match='"no-current-policy"',
+    )
     async with db_session.get_session_factory()() as session:
-        review_id = str(uuid4())
-        revision_id = str(uuid4())
-        review_semantics = ReviewPolicySemantics(
-            review_preference_window_seconds=3600,
-            review_lease_duration_seconds=1800,
-            allowed_decisions=("accept", "needs_revision", "reject"),
-            minimum_finding_fields=("issue", "required_fix"),
-        )
-        revision_semantics = RevisionPolicySemantics(
-            max_revision_rounds=7,
-            revision_deadline_hours=48,
-            allowed_resubmission_states=("needs_revision",),
-            reviewer_reassignment_rule="same reviewer preferred",
-        )
-        review_hash = policy_digest("review", review_semantics)
-        revision_hash = policy_digest("revision", revision_semantics)
-        session.add_all(
-            [
-                ReviewPolicy(
-                    id=review_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=review_hash,
-                    semantics_status="complete",
-                    **review_semantics.model_dump(mode="python"),
-                ),
-                RevisionPolicy(
-                    id=revision_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=revision_hash,
-                    semantics_status="complete",
-                    **revision_semantics.model_dump(mode="python"),
-                ),
-                PaymentPolicy(
-                    id=str(uuid4()),
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    base_amount="25.00",
-                    currency="USD",
-                    payout_type="fixed",
-                    revision_payment_rule="none",
-                    rejection_payment_rule="none",
-                    accepted_payment_rule="pay base amount",
-                ),
-            ]
-        )
-        await session.flush()
-        guide = await session.scalar(
-            select(ProjectGuide).where(
-                ProjectGuide.project_id == project_id,
-                ProjectGuide.version == guide_version,
+        session.add(
+            PaymentPolicy(
+                id=str(uuid4()),
+                project_id=project_id,
+                guide_version=guide_version,
+                base_amount="25.00",
+                currency="USD",
+                payout_type="fixed",
+                revision_payment_rule="none",
+                rejection_payment_rule="none",
+                accepted_payment_rule="pay base amount",
             )
-        )
-        if guide is None:
-            raise RuntimeError("policy seed requires its exact project guide")
-        await session.execute(
-            text("alter table project_guides disable trigger guide_mutation_product_custody")
-        )
-        await session.execute(
-            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
-        )
-        guide.selected_review_policy_id = review_id
-        guide.selected_review_policy_generation = 1
-        guide.selected_review_policy_hash = review_hash
-        guide.selected_revision_policy_id = revision_id
-        guide.selected_revision_policy_generation = 1
-        guide.selected_revision_policy_hash = revision_hash
-        await session.flush()
-        await session.execute(text("set constraints all immediate"))
-        await session.execute(
-            text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
-        )
-        await session.execute(
-            text("alter table project_guides enable trigger guide_mutation_product_custody")
         )
         await session.commit()
 
@@ -1516,7 +1489,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
             idempotency_key=str(uuid4()),
         )
-        await seed_pending_policy_boundaries(project["id"], guide["version"])
+        await configure_policy_boundaries(
+            client,
+            project_reader_token,
+            project["id"],
+            guide["id"],
+            guide["version"],
+        )
         patched_guide = await request_json(
             client,
             "PATCH",

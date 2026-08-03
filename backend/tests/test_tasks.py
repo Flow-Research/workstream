@@ -54,18 +54,11 @@ from app.modules.projects.models import (
     PreSubmitCheckerPolicy,
     ProjectGuide,
     ProjectSetupRun,
-    ReviewPolicy,
-    RevisionPolicy,
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
     compile_project_post_submit_checker_spec,
-)
-from app.modules.projects.policy_lineage import (
-    ReviewPolicySemantics,
-    RevisionPolicySemantics,
-    policy_digest,
 )
 from app.modules.tasks.lifecycle import InvalidTaskTransition, ensure_allowed_transition
 from app.modules.tasks.models import (
@@ -956,60 +949,42 @@ async def create_policy_bundle_for_guide(
     post_submit_warning_checkers: list[str] | None = None,
     post_submit_blocking_severities: list[str] | None = None,
 ) -> dict:
+    for kind, body in (
+        (
+            "review",
+            {
+                "review_preference_window_seconds": 3600,
+                "review_lease_duration_seconds": 1800,
+                "max_active_review_leases_per_reviewer": 1,
+                "self_review_allowed": False,
+                "reject_policy": "close_task",
+                "finding_evidence_requirement": "optional",
+                "requires_second_review": False,
+                "allowed_decisions": ["accept", "needs_revision", "reject"],
+                "minimum_finding_fields": ["issue", "required_fix"],
+            },
+        ),
+        (
+            "revision",
+            {
+                "max_revision_rounds": 7,
+                "revision_deadline_hours": 48,
+                "allowed_resubmission_states": ["needs_revision"],
+                "reviewer_reassignment_rule": "same reviewer preferred",
+            },
+        ),
+    ):
+        response = await client.put(
+            f"/api/v1/projects/{project_id}/guides/{guide_id}/{kind}-policy",
+            headers=auth_headers() | {"If-Match": '"no-current-policy"'},
+            json=body,
+        )
+        assert response.status_code == 200, response.text
     async with db_session.get_session_factory()() as session:
         guide = await session.get(ProjectGuide, guide_id)
         assert guide is not None
-        review_policy_id = str(uuid4())
-        revision_policy_id = str(uuid4())
-        review_hash = policy_digest(
-            "review",
-            ReviewPolicySemantics(
-                review_preference_window_seconds=3600,
-                review_lease_duration_seconds=1800,
-                allowed_decisions=("accept", "needs_revision", "reject"),
-                minimum_finding_fields=("issue", "required_fix"),
-            ),
-        )
-        revision_hash = policy_digest(
-            "revision",
-            RevisionPolicySemantics(
-                max_revision_rounds=7,
-                revision_deadline_hours=48,
-                allowed_resubmission_states=("needs_revision",),
-                reviewer_reassignment_rule="same reviewer preferred",
-            ),
-        )
         session.add_all(
             [
-                ReviewPolicy(
-                    id=review_policy_id,
-                    project_id=project_id,
-                    guide_version=guide.version,
-                    policy_generation=1,
-                    policy_hash=review_hash,
-                    semantics_status="complete",
-                    review_preference_window_seconds=3600,
-                    review_lease_duration_seconds=1800,
-                    max_active_review_leases_per_reviewer=1,
-                    self_review_allowed=False,
-                    reject_policy="close_task",
-                    finding_evidence_requirement="optional",
-                    requires_second_review=False,
-                    allowed_decisions=["accept", "needs_revision", "reject"],
-                    minimum_finding_fields=["issue", "required_fix"],
-                ),
-                RevisionPolicy(
-                    id=revision_policy_id,
-                    project_id=project_id,
-                    guide_version=guide.version,
-                    policy_generation=1,
-                    policy_hash=revision_hash,
-                    semantics_status="complete",
-                    max_revision_rounds=7,
-                    revision_deadline_hours=48,
-                    allowed_resubmission_states=["needs_revision"],
-                    reviewer_reassignment_rule="same reviewer preferred",
-                ),
                 PaymentPolicy(
                     id=str(uuid4()),
                     project_id=project_id,
@@ -1024,12 +999,6 @@ async def create_policy_bundle_for_guide(
             ]
         )
         await session.flush()
-        guide.selected_review_policy_id = review_policy_id
-        guide.selected_review_policy_generation = 1
-        guide.selected_review_policy_hash = review_hash
-        guide.selected_revision_policy_id = revision_policy_id
-        guide.selected_revision_policy_generation = 1
-        guide.selected_revision_policy_hash = revision_hash
         await session.commit()
 
     snapshot_response = await client.post(

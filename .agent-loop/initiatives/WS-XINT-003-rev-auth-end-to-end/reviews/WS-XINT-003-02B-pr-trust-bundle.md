@@ -1,0 +1,113 @@
+# PR Trust Bundle: WS-XINT-003-02B
+
+## Chunk
+
+`WS-XINT-003-02B` — Guide-bound policy mutation activation.
+
+## Goal and human-approved intent
+
+Activate exactly `project.review_policy.update` and
+`project.revision_policy.update` so a covered Project Manager can append and
+select immutable policy versions for one exact draft guide. Do not activate the
+review or revision lifecycle.
+
+## What changed and why
+
+- Added the two guide-bound `PUT` routes and one policy mutation service.
+- Added append-only ReviewPolicy/RevisionPolicy provenance and one replay ledger.
+- Extended the existing opaque PREP protocol with exact policy lineage facts.
+- Added deferred PostgreSQL custody joining the selected successor, real
+  predecessor, replay record, authority evidence, actor/link/grant, and digest.
+- Replaced remaining live fixture bypasses with the public policy routes and
+  retained explicitly historical incomplete fixtures only where required.
+
+This removes direct or embedded policy writes and makes the authorized path the
+sole live configuration boundary.
+
+## Design and alternatives rejected
+
+The design uses opaque exact `If-Match` selectors, UUID idempotency keys,
+replay classification before PREP, locked selector revalidation, single-use
+transaction-bound PREP consumption, append-only rows, and atomic evidence.
+Raw AuthorizationContext authority, role-only fallback, mutable policy rows,
+digest-only selectors, and a second authorization protocol were rejected.
+
+## Scope and product behavior
+
+Only draft-guide policy configuration changes. Reviewer queues, leases,
+findings, decisions, contributor revisions, artifacts, payments, contribution
+records, and reputation remain unavailable or unchanged.
+
+## Acceptance proof and tests
+
+- Focused policy/PREP tests: 11 passed.
+- New-subsystem coverage: 10 passed, 90.58 percent.
+- Artifact architecture: 20 passed.
+- Ruff, migration SQL generation, stale authorization/artifact/wording scans,
+  Markdown links, and `git diff --check`: passed.
+- Full PostgreSQL-isolated and repository coverage gates are delegated to
+  GitHub Actions as required; no local full-suite run was performed.
+
+## Test delta and CI integrity
+
+No tests were removed, skipped, or weakened. Live project/task/E2E fixtures now
+use the real routes. Historical artifact fixtures remain explicitly
+`legacy_incomplete`. No workflow, lane, threshold, or failure behavior changed.
+
+## Reviewer results
+
+Architecture, security, product/operations, docs, and CI integrity passed. QA,
+senior engineering, reuse/dedup, and test-delta passed with low non-blocking
+risks. Every blocking first-round finding was fixed and re-reviewed.
+
+## External review
+
+GitHub `Backend / test`, `Agent Gates / agent-gates`, and CodeRabbit must pass
+on the exact final head. Valid findings must be corrected before human merge.
+
+The first Backend run failed the unchanged 80-percent docstring gate at 79.7
+percent because new 02B callables lacked docstrings. All 22 new callables were
+documented; the same gate now passes locally at 80.5 percent. The exact response
+is recorded in `WS-XINT-003-02B-external-review-response.md`.
+
+The second Backend run failed closed because the new test module lacked
+semantic-lane custody. It is assigned to the existing `shared_foundations`
+lane beside authorization and policy-lineage tests; the four-lane design and
+all thresholds remain unchanged.
+
+CodeRabbit then identified five valid correctness issues and related quality
+notes. Replay timestamp immutability, downgrade locking, historical trigger
+allow-listing, fixture copying, exact selector guidance, custody indexing,
+typing, migration-shape proof, and reservation-branch tests are corrected. No
+comment was deferred; details are in the external response.
+
+The next hosted run exposed a stale canonical database-reset fingerprint: the
+new replay ledger was treated as an unexpected table, interrupting all lanes.
+The ledger is now in the exact reset inventory and truncate-guard list.
+The following hosted run reached the independent full-schema fingerprint and
+reported the expected 0048 drift; the constant now uses the exact hosted
+fingerprint for the complete new schema.
+
+CodeRabbit's second pass found that the pre-lock guide version was not compared
+again after locking. The service now rejects a changed version before PREP
+consumption. Later hosted migration runs exposed two stale exact-contract test
+assumptions: the head revision still named 0047, and the selector lookup ignored
+Alembic's constraint naming convention. Both are corrected; the installed
+constraint is behaviorally exercised across independent and partial selector
+cases, and the isolated 0048 PostgreSQL round trip passes.
+
+## Remaining risks and follow-up
+
+The API may later expose the opaque replacement selector as a response ETag.
+The next REV/AUTH lifecycle chunk remains separate and requires a new explicit
+start after this PR is human-merged.
+
+## Human review focus
+
+Confirm replay-before-PREP ordering, exact successor/predecessor custody,
+Project Manager scope, append-only behavior, denial side-effect ordering, and
+the absence of review/revision lifecycle activation.
+
+## Human merge ownership
+
+Only the human may merge this PR.

@@ -1,7 +1,7 @@
 """cut guide source declarations to verified ART identity
 
-Revision ID: 0048_guide_source_v2
-Revises: 0047_policy_identity_lineage
+Revision ID: 0049_guide_source_v2
+Revises: 0048_policy_authority
 Create Date: 2026-08-02
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0048_guide_source_v2"
-down_revision = "0047_policy_identity_lineage"
+revision = "0049_guide_source_v2"
+down_revision = "0048_policy_authority"
 branch_labels = depends_on = None
 
 

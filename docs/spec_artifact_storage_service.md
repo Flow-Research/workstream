@@ -1569,7 +1569,7 @@ Implementation is a clean cut:
   cross-binding/classification/content/generation usage and require usage to
   reference an `extracted` attempt. Downgrade locks the four tables and refuses
   while any extraction or retry-budget evidence exists.
-- migration `0048_guide_source_v2` requires an empty guide-source snapshot
+- migration `0049_guide_source_v2` requires an empty guide-source snapshot
   namespace, renames the non-authoritative declaration field to `source_label`,
   removes caller-owned hash/content-id fields, installs the exact v2 manifest
   trigger, and refuses downgrade when guide-source rows exist rather than

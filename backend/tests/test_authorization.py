@@ -1899,11 +1899,11 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ),
         "project.review_policy.update": (
             "project.review_policy.manage",
-            "WS-AUTH-001-12D2",
+            "WS-XINT-003-02B",
         ),
         "project.revision_policy.update": (
             "project.review_policy.manage",
-            "WS-AUTH-001-12D2",
+            "WS-XINT-003-02B",
         ),
         "project.guide_sufficiency_report.create": (
             "project.guide.manage",
@@ -1985,6 +1985,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_GUIDE_CREATE,
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
@@ -2085,14 +2087,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 43
+        == 45
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 53
+        == 51
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2172,20 +2174,28 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
     review_resource = ProjectReviewPolicyMutationResourceContext(
         resource_type="project_review_policy_mutation",
         resource_id=review_id,
+        operation_id=operation_id,
+        request_digest=DIGEST,
         scope_project_id=project_id,
         guide_id=guide_id,
         guide_version="1",
+        guide_status="draft",
         review_policy_id=review_id,
         policy_generation=1,
+        policy_digest=DIGEST,
     )
     revision_resource = ProjectRevisionPolicyMutationResourceContext(
         resource_type="project_revision_policy_mutation",
         resource_id=revision_id,
+        operation_id=operation_id,
+        request_digest=DIGEST,
         scope_project_id=project_id,
         guide_id=guide_id,
         guide_version="1",
+        guide_status="draft",
         revision_policy_id=revision_id,
         policy_generation=1,
+        policy_digest=DIGEST,
     )
     sufficiency_resources = {
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE: (
@@ -3507,6 +3517,8 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,
             ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+            ActionId.PROJECT_REVISION_POLICY_UPDATE,
         }:
             continue
         scope = PreparedAuthorityScope(
@@ -3538,9 +3550,7 @@ class _ProjectCreateAuthorityFacts:
                 actor_profile_id=str(actor_profile_id),
                 status="active",
             ),
-            SimpleNamespace(
-                id=str(actor_profile_id), actor_kind="human", status="active"
-            ),
+            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
         )
 
     async def find_effective_grant(
@@ -3561,9 +3571,16 @@ class _ProjectCreateAuthorityFacts:
 
 
 class _GuideMutationAuthorityFacts:
-    def __init__(self, context: HumanAuthorizationContext, *, grant=None) -> None:
+    def __init__(
+        self,
+        context: HumanAuthorizationContext,
+        *,
+        grant=None,
+        permission_id: PermissionId = PermissionId.PROJECT_GUIDE_MANAGE,
+    ) -> None:
         self.context = context
         self.grant = grant
+        self.permission_id = permission_id
 
     async def lock_request_actor(self, identity_link_id, actor_profile_id):
         assert identity_link_id == self.context.identity_link_id
@@ -3574,9 +3591,7 @@ class _GuideMutationAuthorityFacts:
                 actor_profile_id=str(actor_profile_id),
                 status="active",
             ),
-            SimpleNamespace(
-                id=str(actor_profile_id), actor_kind="human", status="active"
-            ),
+            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
         )
 
     async def find_effective_grant(
@@ -3589,7 +3604,7 @@ class _GuideMutationAuthorityFacts:
         allowed_roles,
     ):
         assert actor_profile_id == self.context.actor_profile_id
-        assert permission_id is PermissionId.PROJECT_GUIDE_MANAGE
+        assert permission_id is self.permission_id
         assert scope_project_id is not None
         assert for_update is True
         assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
@@ -3628,11 +3643,12 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
             scope_project_id=None if grant_scope == "system" else project_id,
         ),
     )
-    authorization, evidence = _runtime_service(
-        context, session=session, admin_repository=facts
-    )
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
     prepared = PreparedAuthorizationService(
-        session, context, authorization, facts  # type: ignore[arg-type]
+        session,
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
     )
     operation_id = uuid4()
     target_resource_id = resource_id if resource_type == "snapshot" else guide_id
@@ -3683,17 +3699,13 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
         )
     else:
         wrong_id = uuid4()
-        wrong_resource = resource.model_copy(
-            update={"resource_id": wrong_id, "guide_id": wrong_id}
-        )
+        wrong_resource = resource.model_copy(update={"resource_id": wrong_id, "guide_id": wrong_id})
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(handle, action_id, caller, wrong_resource)
     decision = await prepared.consume(handle, action_id, caller, resource)
     assert decision.allowed is True
     assert decision.matched_grant_id == grant_id
-    assert decision.matched_scope_project_id == (
-        None if grant_scope == "system" else project_id
-    )
+    assert decision.matched_scope_project_id == (None if grant_scope == "system" else project_id)
     assert evidence.events[0].resource_type == "project"
     assert evidence.events[0].resource_id == str(project_id)
     assert evidence.events[0].after_facts == {
@@ -3705,16 +3717,115 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action_id,resource_type,policy_field",
+    [
+        (
+            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+            ProjectReviewPolicyMutationResourceContext,
+            "review_policy_id",
+        ),
+        (
+            ActionId.PROJECT_REVISION_POLICY_UPDATE,
+            ProjectRevisionPolicyMutationResourceContext,
+            "revision_policy_id",
+        ),
+    ],
+)
+async def test_policy_mutation_authority_binds_full_lineage_and_evidence(
+    action_id,
+    resource_type,
+    policy_field,
+) -> None:
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    project_id, guide_id, policy_id, predecessor_id, grant_id = (uuid4() for _ in range(5))
+    facts = _GuideMutationAuthorityFacts(
+        context,
+        grant=SimpleNamespace(id=grant_id, status="active", scope_project_id=project_id),
+        permission_id=PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
+    )
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
+    prepared = PreparedAuthorizationService(
+        session,
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    operation_id = uuid4()
+    caller = PreparedAuthorizationInput(
+        idempotency_key=uuid4(),
+        request_value={
+            "project_id": str(project_id),
+            "guide_id": str(guide_id),
+            "policy_id": str(policy_id),
+            "operation_id": str(operation_id),
+            "request_digest": DIGEST,
+            "policy_digest": "sha256:" + "b" * 64,
+            "policy_generation": 2,
+            "predecessor_policy_id": str(predecessor_id),
+            "predecessor_policy_generation": 1,
+            "predecessor_policy_digest": "sha256:" + "c" * 64,
+            "guide_status": "draft",
+        },
+    )
+    handle = await prepared.prepare(
+        action_id,
+        caller,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
+        ),
+    )
+    resource = resource_type(
+        resource_type=(
+            "project_review_policy_mutation"
+            if action_id is ActionId.PROJECT_REVIEW_POLICY_UPDATE
+            else "project_revision_policy_mutation"
+        ),
+        resource_id=policy_id,
+        operation_id=operation_id,
+        request_digest=DIGEST,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        guide_status="draft",
+        **{policy_field: policy_id},
+        policy_generation=2,
+        policy_digest="sha256:" + "b" * 64,
+        predecessor_policy_id=predecessor_id,
+        predecessor_policy_generation=1,
+        current_policy_digest="sha256:" + "c" * 64,
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            action_id,
+            caller,
+            resource.model_copy(update={"policy_generation": 3}),
+        )
+    decision = await prepared.consume(handle, action_id, caller, resource)
+    assert decision.allowed is True
+    assert decision.matched_grant_id == grant_id
+    assert evidence.events[0].resource_type == "project"
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
+
+
+@pytest.mark.asyncio
 async def test_guide_metadata_preparation_denies_wrong_scope_missing_grant_and_service() -> None:
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
     facts = _GuideMutationAuthorityFacts(context)
-    authorization, evidence = _runtime_service(
-        context, session=session, admin_repository=facts
-    )
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
     prepared = PreparedAuthorizationService(
-        session, context, authorization, facts  # type: ignore[arg-type]
+        session,
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
     )
     project_id = uuid4()
     guide_id = uuid4()
@@ -3775,11 +3886,12 @@ async def test_project_create_prepared_authority_is_system_scoped_and_evidenced(
     facts = _ProjectCreateAuthorityFacts(
         context, grant=SimpleNamespace(id=grant_id, status="active")
     )
-    authorization, evidence = _runtime_service(
-        context, session=session, admin_repository=facts
-    )
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
     prepared = PreparedAuthorizationService(
-        session, context, authorization, facts  # type: ignore[arg-type]
+        session,
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
     )
     operation_id, project_id, key = uuid4(), uuid4(), uuid4()
     caller_input = PreparedAuthorizationInput(
@@ -3845,11 +3957,12 @@ async def test_project_create_preparation_denies_wrong_scope_missing_grant_and_s
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
     facts = _ProjectCreateAuthorityFacts(context)
-    authorization, evidence = _runtime_service(
-        context, session=session, admin_repository=facts
-    )
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
     prepared = PreparedAuthorizationService(
-        session, context, authorization, facts  # type: ignore[arg-type]
+        session,
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
     )
     operation_id = uuid4()
     project_id = uuid4()
@@ -3873,9 +3986,7 @@ async def test_project_create_preparation_denies_wrong_scope_missing_grant_and_s
         await prepared.prepare(
             ActionId.PROJECT_CREATE,
             caller_input,
-            PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()
-            ),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()),
         )
     assert scoped.value.denial_code is AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
     assert evidence.events == []

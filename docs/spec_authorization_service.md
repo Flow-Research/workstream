@@ -999,14 +999,26 @@ mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,
 stale-lineage, revoked, wrong-action, wrong-resource, or wrong-transaction use
 fails closed with no product write.
 
+Review and revision policy configuration uses two separate guide-bound `PUT`
+routes. Each requires an exact covered-project Project Manager grant, a UUID
+`Idempotency-Key`, and an HTTP `If-Match` precondition: a quoted opaque selector
+binding the current policy ID, generation, and digest for replacement or the
+exact `"no-current-policy"` sentinel for initial
+attachment. The server normalizes the complete policy semantics, computes the
+canonical digest, consumes one transaction-bound PREP handle after locking the
+draft guide and predecessor, appends an immutable version with authorization
+provenance, and advances only that policy selector. Draft guides may attach the
+two policies in either order; activation still requires both. Active guide
+policy selection remains frozen.
+
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
 | `project.guide.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.guide.update` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.guide_source_snapshot.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
-| `project.review_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
-| `project.revision_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
+| `project.review_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
+| `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.guide_sufficiency_report.create` | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.run` | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.warnings.acknowledge` | `project.guide.manage` | `WS-AUTH-001-12E` |

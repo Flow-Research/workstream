@@ -24,7 +24,7 @@ from migration_contracts.service_identity_0023 import (
 )
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, async_sessionmaker, create_async_engine
 
 from app.adapters.auth.dev import actor_id_from_external_identity
 from app.core.hashing import canonical_json_hash
@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0048_guide_source_v2"
+HEAD_REVISION = "0049_guide_source_v2"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -93,7 +93,7 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12B2,
     ActionOwner.AUTH_12C,
     ActionOwner.AUTH_12D,
-    ActionOwner.AUTH_12D2,
+    ActionOwner.XINT_003_02B,
     ActionOwner.AUTH_12E,
     ActionOwner.AUTH_12F,
     ActionOwner.AUTH_12G,
@@ -11882,6 +11882,191 @@ def test_xint003_02a_policy_lineage_backfill_immutability_and_roundtrip(
         "revision_truncate",
     }
     assert refused_state == state
+
+
+def test_xint003_02b_policy_authority_schema_and_roundtrip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0048 installs only the closed policy mutation custody boundary."""
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "0047_policy_identity_lineage")
+            command.upgrade(config, "0048_policy_authority")
+            shape = asyncio.run(_xint003_02b_authority_shape(isolated_database_env))
+            command.downgrade(config, "0047_policy_identity_lineage")
+            absent = asyncio.run(_xint003_02b_authority_shape(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert shape == {
+        "ledger": True,
+        "review_provenance": 8,
+        "revision_provenance": 8,
+        "custody_triggers": 3,
+        "selector_constraint": True,
+        "review_only_selector": True,
+        "revision_only_selector": True,
+        "partial_review_selector": False,
+        "partial_revision_selector": False,
+        "selector_custody": True,
+        "predecessor_custody": True,
+    }
+    assert absent == {
+        "ledger": False,
+        "review_provenance": 0,
+        "revision_provenance": 0,
+        "custody_triggers": 0,
+        "selector_constraint": True,
+        "review_only_selector": False,
+        "revision_only_selector": False,
+        "partial_review_selector": False,
+        "partial_revision_selector": False,
+        "selector_custody": False,
+        "predecessor_custody": False,
+    }
+
+
+async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | bool]:
+    engine = create_async_engine(database_url)
+    provenance = {
+        "predecessor_policy_hash",
+        "created_by_actor_profile_id",
+        "created_via_identity_link_id",
+        "created_by_admin_role_grant_id",
+        "creation_scope_type",
+        "creation_scope_project_id",
+        "creation_action_id",
+        "authorization_decision_event_id",
+    }
+    try:
+        async with engine.connect() as connection:
+            tables = set(
+                (
+                    await connection.execute(
+                        text(
+                            "select table_name from information_schema.tables "
+                            "where table_schema='public'"
+                        )
+                    )
+                ).scalars()
+            )
+            columns = {}
+            for table in ("review_policies", "revision_policies"):
+                columns[table] = set(
+                    (
+                        await connection.execute(
+                            text(
+                                "select column_name from information_schema.columns "
+                                "where table_schema='public' and table_name=:table"
+                            ),
+                            {"table": table},
+                        )
+                    ).scalars()
+                )
+            triggers = int(
+                await connection.scalar(
+                    text(
+                        "select count(*) from pg_trigger where not tgisinternal and tgname in "
+                        "('review_policy_mutation_custody',"
+                        "'revision_policy_mutation_custody',"
+                        "'policy_mutation_replay_custody')"
+                    )
+                )
+                or 0
+            )
+            selector = bool(
+                await connection.scalar(
+                    text(
+                        "select exists(select 1 from pg_constraint where "
+                        "conname='ck_project_guides_policy_selection_shape')"
+                    )
+                )
+            )
+            selector_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint "
+                        "where conname='ck_project_guides_policy_selection_shape'"
+                    )
+                )
+                or ""
+            )
+            selector_behavior = await _policy_selector_constraint_behavior(
+                connection, selector_definition
+            )
+            custody_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_functiondef(p.oid) from pg_proc p "
+                        "where p.proname='validate_policy_mutation_custody'"
+                    )
+                )
+                or ""
+            )
+            return {
+                "ledger": "policy_mutation_idempotency_records" in tables,
+                "review_provenance": len(columns["review_policies"] & provenance),
+                "revision_provenance": len(columns["revision_policies"] & provenance),
+                "custody_triggers": triggers,
+                "selector_constraint": selector,
+                **selector_behavior,
+                "selector_custody": "selected_review_policy_id" in custody_definition
+                and "selected_revision_policy_id" in custody_definition,
+                "predecessor_custody": "prior.policy_generation=product_generation-1"
+                in custody_definition,
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _policy_selector_constraint_behavior(
+    connection: AsyncConnection, definition: str
+) -> dict[str, bool]:
+    """Exercise the installed selector expression without product trigger noise."""
+    await connection.execute(
+        text(
+            "create temporary table policy_selector_probe ("
+            "selected_review_policy_id text, selected_review_policy_generation integer, "
+            "selected_review_policy_hash text, selected_revision_policy_id text, "
+            "selected_revision_policy_generation integer, "
+            "selected_revision_policy_hash text, constraint selector_probe "
+            f"{definition}) on commit drop"
+        )
+    )
+    cases = {
+        "review_only_selector": ("review", 1, "sha256:" + "1" * 64, None, None, None),
+        "revision_only_selector": (None, None, None, "revision", 1, "sha256:" + "2" * 64),
+        "partial_review_selector": ("review", None, None, None, None, None),
+        "partial_revision_selector": (None, None, None, "revision", None, None),
+    }
+    accepted: dict[str, bool] = {}
+    for name, values in cases.items():
+        savepoint = await connection.begin_nested()
+        try:
+            await connection.execute(
+                text(
+                    "insert into policy_selector_probe values "
+                    "(:r_id,:r_generation,:r_hash,:v_id,:v_generation,:v_hash)"
+                ),
+                dict(
+                    zip(
+                        ("r_id", "r_generation", "r_hash", "v_id", "v_generation", "v_hash"),
+                        values,
+                        strict=True,
+                    )
+                ),
+            )
+            accepted[name] = True
+        except IntegrityError:
+            accepted[name] = False
+        finally:
+            await savepoint.rollback()
+    return accepted
 
 
 async def _seed_xint003_02a_legacy_policies(database_url: str, ids: dict[str, str]) -> None:

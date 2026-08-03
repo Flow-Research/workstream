@@ -51,6 +51,13 @@ Operators receive reason-bound operational recovery only. Neither receives a
 review decision or generic artifact capability without the independent exact
 grant/action required for that operation.
 
+The active guide-bound configuration actions
+`project.review_policy.update` and `project.revision_policy.update` both map to
+`project.review_policy.manage`. Only a system or exact-project Project Manager
+grant may use them, and only while the selected guide is a draft. Operator,
+Audit Authority, Reviewer, Submitter, and other roles do not inherit either
+mutation action.
+
 ## Contributor Grants
 
 | Grant | Scope | Purpose |

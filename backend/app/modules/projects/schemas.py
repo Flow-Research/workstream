@@ -37,7 +37,11 @@ class RevisionPolicyInput(BaseModel):
 
     max_revision_rounds: int = Field(ge=1)
     revision_deadline_hours: int = Field(ge=1)
-    allowed_resubmission_states: list[str] = Field(default_factory=lambda: ["needs_revision"])
+    allowed_resubmission_states: list[Literal["needs_revision"]] = Field(
+        default_factory=lambda: ["needs_revision"],
+        min_length=1,
+        max_length=1,
+    )
     reviewer_reassignment_rule: str | None = None
 
 

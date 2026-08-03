@@ -115,12 +115,12 @@ def test_xint003_02a_fixed_v01_review_guards_cannot_be_weakened() -> None:
         )
 
 
-def test_xint003_02a_policy_actions_remain_unavailable() -> None:
+def test_xint003_02b_policy_actions_are_narrowly_active() -> None:
     assert (
         ACTION_BY_ID[ActionId.PROJECT_REVIEW_POLICY_UPDATE].availability
-        is ActionAvailability.PLANNED
+        is ActionAvailability.ACTIVE
     )
     assert (
         ACTION_BY_ID[ActionId.PROJECT_REVISION_POLICY_UPDATE].availability
-        is ActionAvailability.PLANNED
+        is ActionAvailability.ACTIVE
     )
