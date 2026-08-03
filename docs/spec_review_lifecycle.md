@@ -587,14 +587,15 @@ memberships. AUTH-09B activates `actor.service.provision` for identities already
 in AUTH's closed registry. AUTH-09C activates `actor.profile.read` and
 `actor.identity_link.read`; AUTH-09D-A activates `actor.profile.suspend`,
 `actor.profile.reactivate`, and `actor.profile.deactivate`. These merges do not
-activate a review action or contain any of REV's six future service identities.
+activate a review action or provision any of REV's six registered service identities.
 
-Before WS-XINT-003-02C, the trusted-main review lifecycle baseline depends on 24
-unavailable actions:
+The pre-WS-XINT-003-02C review lifecycle baseline identified 24 unavailable
+actions:
 
 - registered planned `submission.create`;
 - 19 registered planned review actions; and
-- four approved but unregistered REV actions defined below.
+- four then-unregistered approved REV actions, now registered but unavailable,
+  defined below.
 
 The registered planned `artifact.review_evidence.binding.create ->
 artifact.binding.create` service action is separate, unavailable, and not one

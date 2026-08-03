@@ -17,6 +17,14 @@ class ServiceIdentity(StrEnum):
     ARTIFACT_MATERIALIZER = "workstream.artifact.materializer"
     ARTIFACT_CHECKER_OUTPUT = "workstream.artifact.checker_output"
     PROJECT_SETUP = "workstream.project.setup"
+    REVIEW_PREFERENCE_EXPIRY = "workstream.review.preference_expiry"
+    REVIEW_LEASE_EXPIRY = "workstream.review.lease_expiry"
+    REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION = (
+        "workstream.review.authority_invalidation_reconciliation"
+    )
+    REVIEW_RECONCILIATION = "workstream.review.reconciliation"
+    REVIEW_ARTIFACT_REFERENCE_RECONCILIATION = "workstream.review.artifact_reference_reconciliation"
+    REVIEW_PROJECTION = "workstream.review.projection"
 
 
 SERVICE_IDENTITIES = frozenset(ServiceIdentity)

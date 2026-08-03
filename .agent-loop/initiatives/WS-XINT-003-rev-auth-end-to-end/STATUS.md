@@ -28,9 +28,9 @@ REV-owned semantics with AUTH-owned mutation authorization.
 - Runtime owner XINT-002-07 has one approved v0.1 sub-wave: 07A packet
   materialization. Evidence binding remains planned/unavailable and 07B is
   reserved pending separate REV-owned intent.
-- Registered review/revision lifecycle actions remain planned; four
-  lifecycle/recovery actions remain missing until front-loaded 02C registers
-  them unavailable. The superseded 08R placeholder is never executable. The
+- All 23 registered review/revision lifecycle actions remain planned; 02C adds
+  the four recovery/lifecycle rows and six fixed-service identities without
+  provisioning or authority. The superseded 08R placeholder is never executable. The
   two policy mutation actions activated by 02B are setup authority, not
   lifecycle activation.
 
@@ -49,9 +49,9 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-Complete the reviewed AUTH-readiness amendment, then request implementation of
-WS-XINT-003-02C. 02C and 02D front-load the complete unavailable catalogue,
-fixed-service matrix, and fail-closed PREP contracts that REV needs before it
-begins its full lifecycle implementation. Do not infer review lifecycle
+Complete WS-XINT-003-02C evidence and review, then merge it before 02D. 02C and
+02D front-load the complete unavailable catalogue, fixed-service matrix, and
+fail-closed PREP contracts that REV needs before it begins its full lifecycle
+implementation. Do not infer review lifecycle
 activation from readiness: later action activation still requires exact merged
 REV behavior and integrated proof.
