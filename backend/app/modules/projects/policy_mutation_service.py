@@ -363,6 +363,8 @@ class ProjectPolicyMutationService:
             raise GuideNotFound("guide not found")
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can change policy")
+        if guide.version != guide_snapshot.version:
+            raise PolicyMutationConflict("policy_precondition_failed")
         current = (
             await self._projects.lock_review_policy(str(project_id), guide.version)
             if kind == "review"

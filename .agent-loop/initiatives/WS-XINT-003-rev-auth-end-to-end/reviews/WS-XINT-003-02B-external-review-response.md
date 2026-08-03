@@ -145,3 +145,34 @@ Remaining risks:
 
 - The replacement Backend run must pass the complete lane, E2E, and coverage
   sequence.
+
+## CodeRabbit round 2 and GitHub Actions rounds 5-6
+
+Comments addressed:
+
+- The locked guide version is revalidated against the pre-lock snapshot before
+  PREP consumption, so a concurrent guide-version advance fails without
+  consuming authority.
+- The migration suite now names revision `0048_policy_authority` as the exact
+  head and executes the naming-convention constraint in a temporary probe to
+  prove independent upgraded selectors, rejected partial triples, and the
+  downgraded coupled shape.
+
+Comments deferred:
+
+- None.
+
+Human decisions needed:
+
+- None.
+
+Commands rerun:
+
+- Policy mutation tests: 13 passed.
+- Isolated PostgreSQL 0048 round trip: passed.
+- Ruff and whitespace checks: passed.
+
+Remaining risks:
+
+- The replacement exact-head Backend run must pass the full hosted suite and
+  coverage sequence.

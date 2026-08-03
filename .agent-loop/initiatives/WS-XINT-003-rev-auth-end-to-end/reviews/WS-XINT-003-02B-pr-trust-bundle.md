@@ -88,6 +88,14 @@ The following hosted run reached the independent full-schema fingerprint and
 reported the expected 0048 drift; the constant now uses the exact hosted
 fingerprint for the complete new schema.
 
+CodeRabbit's second pass found that the pre-lock guide version was not compared
+again after locking. The service now rejects a changed version before PREP
+consumption. Later hosted migration runs exposed two stale exact-contract test
+assumptions: the head revision still named 0047, and the selector lookup ignored
+Alembic's constraint naming convention. Both are corrected; the installed
+constraint is behaviorally exercised across independent and partial selector
+cases, and the isolated 0048 PostgreSQL round trip passes.
+
 ## Remaining risks and follow-up
 
 The API may later expose the opaque replacement selector as a response ETag.

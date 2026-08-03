@@ -682,6 +682,31 @@ async def test_policy_service_denies_stale_guide_and_replay_mismatch() -> None:
         )
     assert not prepared.consumed
 
+    service, resolved, prepared, _replay, repository, project_id, guide_id = _subject()
+    snapshot = SimpleNamespace(**vars(repository.guide))
+
+    async def stale_snapshot(_guide_id):
+        return snapshot
+
+    async def advanced_guide(_guide_id):
+        repository.guide.version = "v2"
+        return repository.guide
+
+    repository.get_guide = stale_snapshot
+    repository.lock_project_guide = advanced_guide
+    with pytest.raises(PolicyMutationConflict, match="policy_precondition_failed"):
+        await service.replace_revision_policy(
+            resolved,
+            prepared,
+            uuid4(),
+            NO_CURRENT_POLICY_ETAG,
+            project_id,
+            guide_id,
+            _revision_payload(),
+        )
+    assert not prepared.consumed
+
+    replay = _replay
     key = uuid4()
     replay.records[(resolved.profile.id, ActionId.PROJECT_REVISION_POLICY_UPDATE.value, key)] = (
         SimpleNamespace(

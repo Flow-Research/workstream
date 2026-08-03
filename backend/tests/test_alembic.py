@@ -24,7 +24,7 @@ from migration_contracts.service_identity_0023 import (
 )
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, async_sessionmaker, create_async_engine
 
 from app.adapters.auth.dev import actor_id_from_external_identity
 from app.core.hashing import canonical_json_hash
@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0047_policy_identity_lineage"
+HEAD_REVISION = "0048_policy_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -11887,7 +11887,10 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
         "revision_provenance": 8,
         "custody_triggers": 3,
         "selector_constraint": True,
-        "independent_selector_shape": True,
+        "review_only_selector": True,
+        "revision_only_selector": True,
+        "partial_review_selector": False,
+        "partial_revision_selector": False,
         "selector_custody": True,
         "predecessor_custody": True,
     }
@@ -11897,7 +11900,10 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
         "revision_provenance": 0,
         "custody_triggers": 0,
         "selector_constraint": True,
-        "independent_selector_shape": False,
+        "review_only_selector": False,
+        "revision_only_selector": False,
+        "partial_review_selector": False,
+        "partial_revision_selector": False,
         "selector_custody": False,
         "predecessor_custody": False,
     }
@@ -11955,7 +11961,7 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
                 await connection.scalar(
                     text(
                         "select exists(select 1 from pg_constraint where "
-                        "conname='policy_selection_shape')"
+                        "conname='ck_project_guides_policy_selection_shape')"
                     )
                 )
             )
@@ -11963,12 +11969,14 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
                 await connection.scalar(
                     text(
                         "select pg_get_constraintdef(oid) from pg_constraint "
-                        "where conname='policy_selection_shape'"
+                        "where conname='ck_project_guides_policy_selection_shape'"
                     )
                 )
                 or ""
             )
-            normalized_selector = " ".join(selector_definition.lower().split())
+            selector_behavior = await _policy_selector_constraint_behavior(
+                connection, selector_definition
+            )
             custody_definition = str(
                 await connection.scalar(
                     text(
@@ -11984,10 +11992,7 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
                 "revision_provenance": len(columns["revision_policies"] & provenance),
                 "custody_triggers": triggers,
                 "selector_constraint": selector,
-                "independent_selector_shape": (
-                    "selected_review_policy_hash is not null)) and "
-                    "((selected_revision_policy_id is null" in normalized_selector
-                ),
+                **selector_behavior,
                 "selector_custody": "selected_review_policy_id" in custody_definition
                 and "selected_revision_policy_id" in custody_definition,
                 "predecessor_custody": "prior.policy_generation=product_generation-1"
@@ -11995,6 +12000,51 @@ async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | boo
             }
     finally:
         await engine.dispose()
+
+
+async def _policy_selector_constraint_behavior(
+    connection: AsyncConnection, definition: str
+) -> dict[str, bool]:
+    """Exercise the installed selector expression without product trigger noise."""
+    await connection.execute(
+        text(
+            "create temporary table policy_selector_probe ("
+            "selected_review_policy_id text, selected_review_policy_generation integer, "
+            "selected_review_policy_hash text, selected_revision_policy_id text, "
+            "selected_revision_policy_generation integer, "
+            "selected_revision_policy_hash text, constraint selector_probe "
+            f"{definition}) on commit drop"
+        )
+    )
+    cases = {
+        "review_only_selector": ("review", 1, "sha256:" + "1" * 64, None, None, None),
+        "revision_only_selector": (None, None, None, "revision", 1, "sha256:" + "2" * 64),
+        "partial_review_selector": ("review", None, None, None, None, None),
+        "partial_revision_selector": (None, None, None, "revision", None, None),
+    }
+    accepted: dict[str, bool] = {}
+    for name, values in cases.items():
+        savepoint = await connection.begin_nested()
+        try:
+            await connection.execute(
+                text(
+                    "insert into policy_selector_probe values "
+                    "(:r_id,:r_generation,:r_hash,:v_id,:v_generation,:v_hash)"
+                ),
+                dict(
+                    zip(
+                        ("r_id", "r_generation", "r_hash", "v_id", "v_generation", "v_hash"),
+                        values,
+                        strict=True,
+                    )
+                ),
+            )
+            accepted[name] = True
+        except IntegrityError:
+            accepted[name] = False
+        finally:
+            await savepoint.rollback()
+    return accepted
 
 
 async def _seed_xint003_02a_legacy_policies(database_url: str, ids: dict[str, str]) -> None:

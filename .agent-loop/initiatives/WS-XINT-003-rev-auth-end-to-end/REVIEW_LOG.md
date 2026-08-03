@@ -103,3 +103,10 @@ locking, historical trigger allow-list, fixture-copy, and replacement-selector
 documentation issues. Its related indexing, typing, exact-exception,
 constraint-shape, and reservation-branch notes were also valid. All were fixed;
 none was deferred.
+
+CodeRabbit's second pass found a valid post-lock guide-version revalidation gap;
+it now denies before PREP consumption. Hosted migration evidence then exposed a
+stale 0047 head constant and an incorrect unprefixed constraint lookup. The
+0048 head is now exact, the installed constraint is behaviorally exercised for
+independent and partial selector cases, and the focused isolated PostgreSQL
+round trip passes.
