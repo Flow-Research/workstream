@@ -68,8 +68,8 @@ remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`; the live catalogue has
-71 PermissionIds, 96 ActionIds, 43 active actions, and 53 planned actions, with
-eight fixed-service identities and sixteen matrix memberships.
+71 PermissionIds, 100 ActionIds, 45 active actions, and 55 planned actions, with
+fourteen fixed-service identities and twenty-two matrix memberships.
 
 ## REV custody transfer
 
@@ -88,13 +88,15 @@ unchanged until each exact XINT-003 activation wave.
 | `WS-AUTH-001-REV-09A` | `review.finding_response_evidence.ingest` |
 | `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
 | `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+| `WS-XINT-003-08A` | `review.revision_context.repair`, `review.revision_obligation.close`, `review.revision_context.legacy_close` |
+| `WS-XINT-003-08B` | `review.lifecycle.activation.manage` |
 
 `WS-AUTH-001-REV-CUSTODY` atomically transfers these 19 rows with exact owner
 cardinalities `2/5/3/1/1/5/2` in the table order above and removes the seven
 historical REV owner enum values. It changes no mapping or availability and
 adds no migration. All 19 actions remain planned and unavailable; these AUTH
 custodian labels grant no reviewer, Operator, or service authority. The four
-proposed lifecycle actions remain unregistered, and PREP remains separately
+approved lifecycle actions remain planned and unavailable, and PREP remains separately
 human-gated.
 
 The front-loaded readiness waves are:
@@ -124,8 +126,8 @@ actions are excluded.
 
 ## Front-loaded additive registration
 
-The following values are approved boundary proposals, not registered runtime
-actions on trusted `main`:
+The following values are registered planned runtime actions, not active
+authority:
 
 | Registration chunk | Future activation chunk | Proposed ActionId -> PermissionId |
 |---|---|---|

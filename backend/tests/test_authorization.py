@@ -102,6 +102,7 @@ from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     ACTION_DEFINITIONS,
     ACTION_IDS,
+    FUTURE_INTENT_REQUIRED_ACTIONS,
     HISTORICAL_PERMISSION_IDS,
     NEW_PERMISSION_IDS,
     PERMISSION_IDS,
@@ -1755,6 +1756,26 @@ REV_CUSTODY_EXPECTATIONS = {
         "WS-AUTH-001-REV-12",
         "planned",
     ),
+    "review.revision_context.repair": (
+        "project.task.manage",
+        "WS-XINT-003-08A",
+        "planned",
+    ),
+    "review.revision_obligation.close": (
+        "project.task.manage",
+        "WS-XINT-003-08A",
+        "planned",
+    ),
+    "review.revision_context.legacy_close": (
+        "operations.reconcile.run",
+        "WS-XINT-003-08A",
+        "planned",
+    ),
+    "review.lifecycle.activation.manage": (
+        "operations.reconcile.run",
+        "WS-XINT-003-08B",
+        "planned",
+    ),
 }
 
 
@@ -1951,7 +1972,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 96
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 100
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -2065,6 +2086,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             ActionOwner.AUTH_REV_09A,
             ActionOwner.AUTH_REV_11,
             ActionOwner.AUTH_REV_12,
+            ActionOwner.XINT_003_08A,
+            ActionOwner.XINT_003_08B,
         }
     } == {
         ActionOwner.AUTH_REV_05: 2,
@@ -2074,14 +2097,10 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionOwner.AUTH_REV_09A: 1,
         ActionOwner.AUTH_REV_11: 5,
         ActionOwner.AUTH_REV_12: 2,
+        ActionOwner.XINT_003_08A: 3,
+        ActionOwner.XINT_003_08B: 1,
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
-    assert {
-        "review.revision_context.repair",
-        "review.revision_context.legacy_close",
-        "review.revision_obligation.close",
-        "review.lifecycle.activation.manage",
-    }.isdisjoint(action.value for action in ACTION_IDS)
     assert (
         sum(
             definition.availability is ActionAvailability.ACTIVE
@@ -2094,7 +2113,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 51
+        == 55
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2526,13 +2545,32 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
             "project.post_submit_checker_policy.derive",
             "project.setup_run.update",
         },
+        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY: {"review.preference_expiry.run"},
+        ServiceIdentity.REVIEW_LEASE_EXPIRY: {"review.lease_expiry.run"},
+        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION: {"review.reconcile.run"},
+        ServiceIdentity.REVIEW_RECONCILIATION: {"review.reconcile.run"},
+        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION: {
+            "review.artifact_reference.reconcile"
+        },
+        ServiceIdentity.REVIEW_PROJECTION: {"review.projection.rebuild"},
     }
     assert set(SERVICE_ACTIONS_BY_IDENTITY) == SERVICE_IDENTITIES
     assert {
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 16
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 22
+    assert FUTURE_INTENT_REQUIRED_ACTIONS == {
+        ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
+        ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
+    }
+    assert all(
+        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+        for action in FUTURE_INTENT_REQUIRED_ACTIONS
+    )
+    assert FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
+        set().union(*SERVICE_ACTIONS_BY_IDENTITY.values())
+    )
     project_setup_actions = SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.PROJECT_SETUP]
     assert {
         action: (
@@ -2667,12 +2705,12 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
         encoding="utf-8"
     )
     assert "all 22 ART rows to ten exact activation custodians" in operations
-    assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
+    assert "the original 19 REV\nrows to seven exact AUTH custodians" in operations
     assert "transfer adds no migration; the later WS-XINT-002-01" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 96 ActionIds, 43 active actions, and\n53 planned actions" in operations
+        "71 PermissionIds, 100 ActionIds, 45 active actions, and\n55 planned actions" in operations
     )
 
 
@@ -2696,6 +2734,8 @@ def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -
         "WS-AUTH-001-REV-09A": 1,
         "WS-AUTH-001-REV-11": 5,
         "WS-AUTH-001-REV-12": 2,
+        "WS-XINT-003-08A": 3,
+        "WS-XINT-003-08B": 1,
     }
     for document in custody_documents:
         parsed = _parse_custody_table(document, set(expected_custody))
@@ -2727,10 +2767,9 @@ def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -
     operations = (repository_root / "docs/operations_authorization_service.md").read_text(
         encoding="utf-8"
     )
-    assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
-    assert "all 19 REV actions remain planned and unavailable" in operations
-    assert "The REV transfer\nadds no migration" in operations
-    assert "four proposed REV lifecycle actions remain\nunregistered" in operations
+    assert "the original 19 REV\nrows to seven exact AUTH custodians" in operations
+    assert "all 23 REV actions remain planned and unavailable" in operations
+    assert "registers the four additional actions" in operations
 
 
 @pytest.mark.parametrize(

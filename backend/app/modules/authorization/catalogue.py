@@ -170,6 +170,10 @@ class ActionId(StrEnum):
     REVIEW_RECONCILE_RUN = "review.reconcile.run"
     REVIEW_ARTIFACT_REFERENCE_RECONCILE = "review.artifact_reference.reconcile"
     REVIEW_PROJECTION_REBUILD = "review.projection.rebuild"
+    REVIEW_REVISION_CONTEXT_REPAIR = "review.revision_context.repair"
+    REVIEW_REVISION_OBLIGATION_CLOSE = "review.revision_obligation.close"
+    REVIEW_REVISION_CONTEXT_LEGACY_CLOSE = "review.revision_context.legacy_close"
+    REVIEW_LIFECYCLE_ACTIVATION_MANAGE = "review.lifecycle.activation.manage"
     ARTIFACT_BINDING_READ = "artifact.binding.read"
     ARTIFACT_REPLICA_READ = "artifact.replica.read"
     ARTIFACT_RECEIPT_READ = "artifact.receipt.read"
@@ -238,6 +242,8 @@ class ActionOwner(StrEnum):
     XINT_002_04B = "WS-XINT-002-04B"
     XINT_002_05A = "WS-XINT-002-05A"
     XINT_002_07 = "WS-XINT-002-07"
+    XINT_003_08A = "WS-XINT-003-08A"
+    XINT_003_08B = "WS-XINT-003-08B"
 
 
 @unique
@@ -612,6 +618,26 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_REV_12,
     ),
     _planned(
+        ActionId.REVIEW_REVISION_CONTEXT_REPAIR,
+        PermissionId.PROJECT_TASK_MANAGE,
+        ActionOwner.XINT_003_08A,
+    ),
+    _planned(
+        ActionId.REVIEW_REVISION_OBLIGATION_CLOSE,
+        PermissionId.PROJECT_TASK_MANAGE,
+        ActionOwner.XINT_003_08A,
+    ),
+    _planned(
+        ActionId.REVIEW_REVISION_CONTEXT_LEGACY_CLOSE,
+        PermissionId.OPERATIONS_RECONCILE_RUN,
+        ActionOwner.XINT_003_08A,
+    ),
+    _planned(
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
+        PermissionId.OPERATIONS_RECONCILE_RUN,
+        ActionOwner.XINT_003_08B,
+    ),
+    _planned(
         ActionId.ARTIFACT_BINDING_READ,
         PermissionId.ARTIFACT_BINDING_READ,
         ActionOwner.AUTH_ART_02D_OPERATOR,
@@ -725,6 +751,12 @@ ACTION_DEFINITIONS = (
 
 PERMISSION_IDS = frozenset(PermissionId)
 ACTION_IDS = frozenset(ActionId)
+FUTURE_INTENT_REQUIRED_ACTIONS = frozenset(
+    {
+        ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
+        ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
+    }
+)
 NEW_PERMISSION_IDS = frozenset(
     {
         PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
@@ -767,7 +799,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 96:
+    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 100:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
@@ -828,6 +860,11 @@ def _index_actions(
         raise RuntimeError("authorization active action boundary mismatch")
     if set(definitions) != set(ACTION_DEFINITIONS):
         raise RuntimeError("authorization action metadata mismatch")
+    if any(
+        indexed[action].availability is not ActionAvailability.PLANNED
+        for action in FUTURE_INTENT_REQUIRED_ACTIONS
+    ):
+        raise RuntimeError("future-intent action availability mismatch")
     if {definition.owner for definition in definitions} != set(ActionOwner):
         raise RuntimeError("authorization action owner catalogue is incomplete")
     return MappingProxyType(indexed)
@@ -865,6 +902,16 @@ _SERVICE_ACTIONS = {
             ActionId.PROJECT_SETUP_RUN_UPDATE,
         }
     ),
+    ServiceIdentity.REVIEW_PREFERENCE_EXPIRY: frozenset({ActionId.REVIEW_PREFERENCE_EXPIRY_RUN}),
+    ServiceIdentity.REVIEW_LEASE_EXPIRY: frozenset({ActionId.REVIEW_LEASE_EXPIRY_RUN}),
+    ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION: frozenset(
+        {ActionId.REVIEW_RECONCILE_RUN}
+    ),
+    ServiceIdentity.REVIEW_RECONCILIATION: frozenset({ActionId.REVIEW_RECONCILE_RUN}),
+    ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION: frozenset(
+        {ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE}
+    ),
+    ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
 }
 
 
@@ -903,6 +950,18 @@ def _index_service_actions(
                 ActionId.PROJECT_SETUP_RUN_UPDATE,
             }
         ),
+        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY: frozenset(
+            {ActionId.REVIEW_PREFERENCE_EXPIRY_RUN}
+        ),
+        ServiceIdentity.REVIEW_LEASE_EXPIRY: frozenset({ActionId.REVIEW_LEASE_EXPIRY_RUN}),
+        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION: frozenset(
+            {ActionId.REVIEW_RECONCILE_RUN}
+        ),
+        ServiceIdentity.REVIEW_RECONCILIATION: frozenset({ActionId.REVIEW_RECONCILE_RUN}),
+        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION: frozenset(
+            {ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE}
+        ),
+        ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
     }
     expected_metadata = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
@@ -969,11 +1028,35 @@ def _index_service_actions(
             PermissionId.PROJECT_GUIDE_MANAGE,
             ActionOwner.AUTH_12B2,
         ),
+        ActionId.REVIEW_PREFERENCE_EXPIRY_RUN: (
+            PermissionId.OPERATIONS_TIMER_RUN,
+            ActionOwner.AUTH_REV_06,
+        ),
+        ActionId.REVIEW_LEASE_EXPIRY_RUN: (
+            PermissionId.OPERATIONS_TIMER_RUN,
+            ActionOwner.AUTH_REV_06,
+        ),
+        ActionId.REVIEW_RECONCILE_RUN: (
+            PermissionId.OPERATIONS_RECONCILE_RUN,
+            ActionOwner.AUTH_REV_11,
+        ),
+        ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE: (
+            PermissionId.OPERATIONS_RECONCILE_RUN,
+            ActionOwner.AUTH_REV_12,
+        ),
+        ActionId.REVIEW_PROJECTION_REBUILD: (
+            PermissionId.OPERATIONS_PROJECTION_REBUILD,
+            ActionOwner.AUTH_REV_12,
+        ),
     }
     if set(rows) != SERVICE_IDENTITIES:
         raise RuntimeError("service action matrix identity mismatch")
     if rows != expected_rows:
         raise RuntimeError("service action matrix row mismatch")
+    if not FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
+        action for actions in rows.values() for action in actions
+    ):
+        raise RuntimeError("future-intent action cannot enter the service matrix")
     for action, (permission, owner) in expected_metadata.items():
         definition = ACTION_BY_ID[action]
         expected_availability = (
