@@ -43,3 +43,20 @@
 17. XINT-002-07A activates reviewer packet materialization only. Review-evidence
     binding remains planned/unavailable; 07B is reserved pending separate
     REV-owned intent.
+18. AUTH readiness precedes REV lifecycle implementation. 02C installs the
+    complete unavailable catalogue and fixed-principal matrix; 02D publishes
+    closed PREP contracts. REV implementation is a prerequisite to later
+    availability, not to AUTH readiness.
+19. REV exclusively owns queue/lease persistence, reviewer selection,
+    claim/release/preference semantics, packet-manifest semantics, Review,
+    ReviewFinding, FindingResolution, FinalAcceptance, decision orchestration,
+    human-revision replay, recovery/reconciliation/projection behavior,
+    lifecycle fences, and product-router release.
+20. `review.queue.read`, `review.claim`, release/decline, and timer actions use
+    separate activation gates aligned to REV-05B, REV-06A, REV-06B, and REV-06C.
+    `review.decision` waits for REV-10; REV-08 alone cannot activate it.
+21. AUTH activation supports hidden integrated proof only. REV-13C is the sole
+    product-router release and no earlier AUTH wave exposes a lifecycle route.
+22. Evidence-upload actions carry a distinct future-intent-required,
+    unavailable classification and cannot be swept into ordinary v0.1
+    activation.

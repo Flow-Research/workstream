@@ -2,8 +2,16 @@
 
 ## Summary
 
-Workstream is organized around projects, tasks, submissions, checks, reviews,
-revisions, contributions, compensation, and reputation.
+Workstream is the governed lifecycle core between systems that request work and
+systems that consume its outcome. It coordinates projects, tasks, immutable
+submissions, deterministic checks, authorized Reviews, revisions, and immutable
+`ContributionRecord` facts. Compensation and future reputation consume those
+facts without controlling lifecycle truth.
+
+The product contract is source-agnostic. Flow Identity is the current v0.1
+external authentication adapter; manual, Markdown, and CSV intake are the
+current source boundary. Neither choice defines Workstream's long-term product
+ownership or limits its supported work domains.
 
 The review/revision component described below is a planned target contract. Its
 routes remain unavailable until hidden REV behavior, exact AUTH activation, and

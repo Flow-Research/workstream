@@ -729,10 +729,11 @@ admits only covered Project Manager/Audit Authority or system Operator grants;
 Finance, Access Administrator, contributors, and services receive concealed
 denial. Its active-guide projection excludes retired compensation configuration.
 Four later REV registrations add exactly four planned and zero active actions.
-Review-evidence binding is already registered planned and unavailable. Only
-`WS-XINT-002-07A` may activate it, initially for reviewer-finding slots while
-response slots hard deny. `WS-XINT-002-07B` may later extend the evaluator for
-exact human-revision response slots but changes no ActionId availability.
+Review-evidence binding is registered planned and unavailable.
+`WS-XINT-002-07A` activates packet materialization only; it does not activate
+review-evidence binding. v0.1 reviewer findings/notes and contributor responses
+are REV-owned records with no artifact upload. Any future uploaded evidence
+requires separate approved REV-owned intent plus exact ART and AUTH owner work.
 
 Migration `0021` preserves historical audit rows with null `action_id`. Inspect
 non-null action evidence only by bounded ActionId, request/correlation IDs, and

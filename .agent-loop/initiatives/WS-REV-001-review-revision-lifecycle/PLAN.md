@@ -257,14 +257,15 @@ provider adapters/references, scratch paths, or raw repository access.
 - Context content reads require an active exact lease for the exact Submission.
   History is metadata-only; prior, sibling, later, expired, and consumed leases
   grant no byte access.
-- Reviewer finding evidence uses an ART-owned candidate/finalize port and an
-  exact binding service action. Revision response evidence is owned only by the
-  human Review revision chunk.
+- v0.1 reviewer findings/notes and contributor responses are REV-owned records;
+  they use no ART candidate/finalize port and no evidence-upload ActionId. Any
+  future uploaded evidence requires separate approved REV-owned intent and
+  exact ART/AUTH owner work.
 - Core Review/CON transactions copy stabilized digest lineage and make no ART
   call.
 
-ART currently has no scheduled owner chunks for packet read, review evidence,
-or server-derived Submission artifact digest. Those are hard blockers. REV may
+ART currently has no scheduled owner chunks for packet read or server-derived
+Submission artifact digest. Those are hard blockers. REV may
 record required capability shapes but must not invent ART chunk IDs or start ART
 work.
 
@@ -288,11 +289,22 @@ Reads use request-scoped AUTH `require`; protected mutations use AUTH's exact
 merged prepared protocol. REV does not query grants, register actions, provision
 service identities, integrate evaluators, or change availability.
 
+Before REV begins full lifecycle implementation, WS-XINT-003-02C installs the
+complete unavailable REV catalogue and fixed-service matrix, and
+WS-XINT-003-02D publishes the closed PREP/read integration contracts. REV hidden
+chunks depend on that readiness, not on active actions. REV owns canonical
+loaders/composers and proves behavior while the real AUTH kernel continues to
+deny unavailable actions; matching XINT activation follows exact hidden proof.
+
 Every external AUTH edge must name the owner chunk and prove merged PR/SHA,
 typed actor/action/resource contracts, static service rows where applicable,
 and denial/race tests. Placeholder names remain fail-closed planning labels,
 not executable dependencies. All actions remain unavailable until AUTH merges
 the matching feature-gated activation after hidden behavior.
+
+AUTH activation does not release a product route. `WS-REV-001-13C` remains the
+sole product-router registration and final HTTP proof after complete integrated
+conformance.
 
 ## Persistence and immutability
 
@@ -330,12 +342,12 @@ are:
 - 05A online checker admission; 05B server-selected reviewer/admin reads.
   Historical admission classification/scan belongs to 11C reconciliation.
 - 06A claim/freeze; 06B release/decline/preferences; 06C expiry/lazy recovery.
-- 07A lease-bounded context and packet; 07B reviewer decision note/findings,
-  with no reviewer artifact upload.
+- 07A lease-bounded context and packet; 07B reviewer finding/note records with
+  no reviewer artifact upload or evidence action.
 - 08 pure decision schemas, validation, and typed participant inputs only.
 - 09A1 Review-rooted preparation schema; 09A2 preparation resolver and Task
-  Context; 09A3 revision-obligation response metadata only (no separate
-  artifact upload); 09A4 internal prepared human N+1 plus
+  Context; 09A3 revision-obligation response records only (no separate
+  artifact upload or evidence action); 09A4 internal prepared human N+1 plus
   the exact source XOR that consumes the owner's immutable checker-remediation
   `remediation_source_checker_run_id`;
   09A5 replacement-assignment transfer; 09B replay/resolution/return routing.

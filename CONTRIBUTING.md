@@ -5,6 +5,11 @@ governed by GitHub permissions and branch protection. The engineering loop
 exists to make work understandable and reviewable; it is not a separate
 authorization system.
 
+Workstream itself is source-agnostic governed contribution infrastructure. Flow
+Identity is its current v0.1 external authentication provider, not its product
+owner or repository contribution authority. Read the complete product boundary
+in [README.md](README.md) before changing product terminology or architecture.
+
 ## Simple Engineering Loop
 
 ```text

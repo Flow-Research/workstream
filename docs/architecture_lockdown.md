@@ -4,10 +4,18 @@ Last updated: 2026-07-14
 
 ## Purpose
 
-This note locks the Workstream v0.1 architecture around source-agnostic intake,
-project guide discipline, task contracts, human accountability for agent-assisted
-work, contribution records, conditional compensation awards and fulfillment,
-and reputation consequences.
+This note locks the Workstream v0.1 architecture around a source-agnostic,
+governed contribution core: project guide discipline, task contracts, human
+accountability for agent-assisted work, immutable artifact custody,
+deterministic checks, authorized review, contribution records, conditional
+compensation awards and fulfillment, and future reputation consequences.
+
+Workstream's durable product output is trusted contribution lineage. External
+sources may request work and downstream systems may apply payment, points,
+reputation, reporting, dataset, or other consequences, but neither side creates
+or revises Workstream identity, authority, submission, Review, or
+`ContributionRecord` truth. Flow Identity remains the current v0.1 external
+authentication adapter, not the product boundary.
 
 The ADR files under `docs/decision_*.md` are the decision record for this lockdown. When a locked rule changes, update or add an ADR before changing implementation specs.
 

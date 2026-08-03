@@ -2,10 +2,13 @@
 
 ## Problem being solved
 
-Review and revision authority is currently described across `WS-REV-001`,
-`WS-AUTH-001`, and `WS-XINT-002`. The individual declarations do not yet form
-one reviewed, executable chain from review-policy configuration through queue
-admission, lease-scoped judgment, revision submission, recovery, and release.
+Review and revision authority is described across `WS-REV-001`, `WS-AUTH-001`,
+and `WS-XINT-002`, but the delivery order still makes each side wait for the
+other: REV needs stable AUTH contracts before it can implement the lifecycle,
+while the existing activation skeletons require merged REV behavior before AUTH
+publishes those contracts. The declarations must form one reviewed interface
+from review-policy configuration through queue admission, lease-scoped
+judgment, revision submission, recovery, and release.
 
 ## Why this work matters
 
@@ -17,8 +20,9 @@ erase a revision obligation, or attribute judgment to the wrong actor.
 ## Current behavior
 
 - Project review and revision policy tables already exist.
-- AUTH has planned action and permission rows for most REV operations; none of
-  the review lifecycle actions is a complete active product surface.
+- AUTH has planned action and permission rows for most REV operations, but four
+  approved recovery/lifecycle ActionIds, the fixed-service admission set, and
+  the reusable REV PREP integration surface are not complete.
 - REV planning defines queue, lease, immutable Review/finding/resolution,
   revision preparation, FinalAcceptance, recovery, and release behavior.
 - XINT-002 separately owns artifact review-packet materialization, evidence
@@ -39,9 +43,11 @@ authorization path exists.
 ## Design chosen
 
 Create one cross-initiative contract that inventories the complete surface,
-settles ownership, and sequences narrow activation waves behind merged hidden
-REV, ART, Task/Submission/Checker, and CON behavior. Registration remains
-separate from activation and product route release.
+settles ownership, front-loads the complete unavailable AUTH catalogue,
+principal matrix, and fail-closed PREP integration contracts, and then sequences
+narrow activation waves behind merged REV, ART, Task/Submission/Checker, and
+CON behavior. Registration and integration readiness remain separate from
+action availability and product route release.
 
 ## Alternatives considered
 
@@ -57,6 +63,9 @@ separate from activation and product route release.
 - REV owns review/revision product semantics and canonical lifecycle rows.
 - AUTH owns identity, permissions, candidates, evaluation, PREP custody, and
   authorization evidence.
+- AUTH publishes identifier/digest-based integration contracts without loading,
+  constructing, or interpreting REV lifecycle rows. REV composes those contracts
+  from its canonical locked state.
 - ART owns verified bytes and review packet materialization. Review-evidence
   binding is future/planned and unavailable absent separate REV-owned intent.
 - Task/Submission/Checker owners supply exact upstream and resubmission facts.

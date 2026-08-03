@@ -84,7 +84,7 @@ feature manifest exists, then requires a separate explicit start.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| Historical alias `WS-AUTH-001-REV-REG` | Superseded by `WS-XINT-003-08R` registration | L1 | Not executable; use canonical XINT-003 custody |
+| Historical alias `WS-AUTH-001-REV-REG` | Superseded by `WS-XINT-003-02C` unavailable registration | L1 | Not executable; use canonical XINT-003 custody |
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |

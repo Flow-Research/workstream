@@ -6,7 +6,10 @@ Accepted for v0.1.
 
 ## Decision
 
-Workstream will first build Flow's task evaluation and contribution infrastructure, not the marketplace, not the agent workspace, and not blockchain settlement.
+Workstream will first build the governed contribution core: project-defined
+work, immutable submissions, deterministic checks, authorized review, revision,
+and trusted contribution records. It will not begin with marketplace discovery,
+an execution workspace, external source adapters, or blockchain settlement.
 
 ## Context
 
@@ -26,7 +29,10 @@ Project Guide
 Reputation is a separately approved future consumer of immutable review and
 contribution lineage. It is not a v0.1 review-transaction side effect.
 
-The same evaluation and contribution infrastructure can support many project domains if project-specific rules are configurable.
+The same governed contribution infrastructure can support many project domains
+and source applications when project-specific rules are configurable. Flow
+Identity is the current external authentication provider, not the product or
+scope boundary.
 
 ## Consequences
 

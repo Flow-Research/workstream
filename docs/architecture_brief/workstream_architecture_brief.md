@@ -4,13 +4,12 @@
 
 <div class="line"></div>
 
-<p class="subtitle">Flow task evaluation and contribution infrastructure</p>
+<p class="subtitle">Governed contribution infrastructure for human and AI work</p>
 
-Workstream manages project guides, task queues, submission packets, automated
-checks, reviewer routing, evaluation sprints, revision loops, contribution
-records, compensation award and fulfillment state, and reputation signals.
-
-Workstream is how Flow measures, certifies, and coordinates useful human-agent work.
+Workstream turns project-defined tasks, immutable submissions, deterministic
+checks, and authorized review into trusted `ContributionRecord` facts. It
+records who completed what, under which locked rules, using which exact
+artifact, and with what verified outcome.
 
 <p class="meta">Scope: bounded v0.1 delivery, with future adapter context for identity, task contracts, settlement, and reputation.</p>
 
@@ -20,11 +19,13 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 
 ## Executive Summary
 
-Workstream does not try to own every execution environment. It gives every
-project a guide, every task a locked policy context, every Submission an
-evidence packet, every valid human decision an immutable Review and reviewer
-contribution, and every accepted task an immutable FinalAcceptance before the
-submitter contribution and conditional compensation.
+Workstream is the governed lifecycle core between systems that request work and
+systems that consume its outcome. It does not need to own the source
+application, execution environment, identity provider, or downstream economic
+system. It gives every project versioned rules, every task a locked policy
+context, every Submission immutable artifact lineage, every valid human
+decision an attributable Review and reviewer contribution, and every accepted
+task an immutable FinalAcceptance before the submitter contribution.
 
 v0.1 is focused on proving the internal lifecycle:
 
@@ -43,7 +44,8 @@ Current v0.1 is backend-first and internal-loop-first. External source adapters,
 | Principle | Meaning |
 | --- | --- |
 | Source-agnostic, manual-first | v0.1 accepts manual, markdown, or CSV-controlled intake. Future origins normalize into the same task contract. |
-| Flow auth boundary | Workstream verifies Flow-issued tokens. It does not own login, signup, password reset, password storage, or primary sessions. |
+| Identity is not authority | Flow Identity is the current v0.1 authentication provider. Local grants and lifecycle guards decide Workstream authority. |
+| Trusted contribution facts | Exact artifact, locked policy, checker, Review, and actor lineage produce immutable `ContributionRecord` facts for downstream consumers. |
 | Modular monolith | FastAPI remains one deployable backend while keeping routers, services, repositories, ports, and adapters separate. |
 | Postgres record database | Local, CI, and production-like development use Postgres as the record database. |
 | Object-storage abstraction | Local filesystem storage is allowed only behind the provider-neutral `ArtifactStore`; AWS S3 is the v0.1 hosted provider and MinIO is the local/CI protocol proof. |
@@ -54,7 +56,10 @@ Current v0.1 is backend-first and internal-loop-first. External source adapters,
 
 ## C1: System Context
 
-The context diagram shows Workstream as one system inside the broader Flow ecosystem. Workstream owns evaluation and records. It does not own human identity, future agent identity standards, task escrow, settlement rails, or external task origins.
+The context diagram shows Workstream between source systems and consequence
+consumers. Workstream owns governed lifecycle truth. It does not own primary
+identity, work execution, external task origins, settlement rails, reputation
+systems, or other uses of the resulting contribution facts.
 
 <div class="diagram">
   <img src="images/workstream_context.png" alt="Workstream system context diagram" />
@@ -66,10 +71,13 @@ The context diagram shows Workstream as one system inside the broader Flow ecosy
   Authorities, Access Administrators, and Audit Authorities interact with
   Workstream through their independent grants.
 - Adjudicator grants are independent but authorize no v0.1 lifecycle or action.
-- Flow identity remains the human identity and auth source.
+- Flow Identity is the current v0.1 human identity and authentication source,
+  not the definition or ownership boundary of Workstream.
 - Postgres is the record database.
 - Storage sits behind an object-storage abstraction.
-- Future origins and protocol rails connect through adapters, not by becoming core Workstream logic.
+- Source applications and future protocol rails connect through adapters.
+- Payment, points, reputation, reporting, datasets, and model-training systems
+  consume Workstream facts without creating or rewriting them.
 
 <div class="page-break"></div>
 
@@ -161,17 +169,20 @@ This view explains the broader architecture direction without moving it into v0.
 
 | Concern | Owner |
 | --- | --- |
-| Human identity and auth | Flow identity layer |
+| Current v0.1 human identity and auth | Flow Identity adapter |
 | Agent identity | ERC-8004 |
 | Agent reputation read/write | ERC-8004 through a future Workstream adapter |
 | Task contract and escrow reference | ERC-8183 |
-| Evaluation lifecycle | Workstream |
-| Accepted-work certification | Workstream contribution record |
+| Governed task, artifact, check, review, and revision lifecycle | Workstream |
+| Reviewer and accepted-submitter contribution facts | Workstream `ContributionRecord` |
 | Contribution policy, immutable award, and fulfillment status | Workstream compensation records |
 | Payment request and settlement execution | x402, OmniClaw, and USDC settlement rails |
 
 <div class="boundary">
-Future ERC-8004, ERC-8183, x402, OmniClaw, and USDC integrations do not replace Workstream. They use Workstream records. Workstream remains the evaluation, acceptance, contribution, compensation-award/fulfillment, and reputation-signal system.
+Future ERC-8004, ERC-8183, x402, OmniClaw, and USDC integrations do not replace
+Workstream. They use Workstream records. Source and consequence systems cannot
+create or revise Workstream identity, authority, submission, Review, or
+contribution truth.
 </div>
 
 <div class="page-break"></div>
@@ -188,7 +199,7 @@ Future ERC-8004, ERC-8183, x402, OmniClaw, and USDC integrations do not replace 
 - human review and revision replay
 - contribution records
 - compensation award, receipt, and fulfillment projection records
-- reputation events (later, separately approved)
+- contribution evidence for a future reputation projection
 - audit events
 
 ### Later Adapter Boundaries
@@ -213,3 +224,7 @@ and fulfillment status. The active review contract is
 `docs/spec_review_lifecycle.md`; its surfaces remain unavailable until REV-13.
 
 The system should expand only after that loop is proven.
+
+The complete product remains source-agnostic: once the governed core is proven,
+centralized, sovereign, federated, and permissionless applications can consume
+the same trusted contribution facts through explicit adapters.
