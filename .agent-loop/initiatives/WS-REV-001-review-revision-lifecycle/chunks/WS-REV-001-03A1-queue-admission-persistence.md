@@ -26,19 +26,22 @@ No expedited SLA.
 
 ## Allowed files
 
-Freeze exact migration name from then-current main; expected scope:
+Current main has the single head `0049_rev_auth_readiness`. This chunk owns the
+exact successor `0050_review_queue_foundation.py` and the following scope:
 
 ```text
 backend/app/modules/reviews/__init__.py
 backend/app/modules/reviews/models.py
 backend/app/modules/reviews/repository.py
 backend/app/modules/reviews/schemas.py
-backend/alembic/versions/<next>_review_queue_foundation.py
+backend/app/db/models.py (metadata registration only)
+backend/alembic/versions/0050_review_queue_foundation.py
 backend/tests/test_alembic.py
 backend/tests/test_review_queue_persistence.py
 backend/tests/conftest.py (schema fingerprint/fixture registration only)
 docs/architecture_data_model.md
 .agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/**
+.agent-loop/merge-intents/WS-REV-001-03A1.json
 ```
 
 The preimplementation refresh must replace `<next>` and confirm exact metadata
@@ -64,6 +67,11 @@ registration conventions before code.
   attempt without authorizing it or mutating upstream rows.
 - Database constraints permit at most one queue identity per Submission and
   reject cross-project/task/Submission lineage.
+- A REV-owned PostgreSQL write-time guard rejects any mismatch among stored
+  project, task, Submission/version, and admitting CheckerRun identities. A
+  pending queue or committed admission requires that exact CheckerRun to be
+  completed, current for the Submission, and `allow_review`; no checker hook or
+  automatic admission is added.
 - No migration backfills historical submissions or fabricates CheckerRun/ART
   facts. Required foreign facts may remain unpopulated only in explicitly
   non-admitted setup shapes that cannot become pending.
@@ -71,6 +79,11 @@ registration conventions before code.
 - Models contain no AUTH handle, token, grant query, ART locator/bytes, or CON
   state.
 - No router is registered and every REV lifecycle action remains unavailable.
+- 03A1 cannot persist `leased` or an active-lease reference. Those shapes enter
+  only with the real REV-owned ReviewLease FK in 03A2.
+- Admission idempotency enforces exact SHA-256 request digests, one replay
+  namespace/operation identity, pending-without-queue and committed-with-queue
+  shapes, and rejects conflicting reuse at the database boundary.
 
 ## Verification commands
 
@@ -78,16 +91,20 @@ Freeze exact node IDs at start. Minimum proof:
 
 ```text
 cd backend && .venv/bin/alembic heads
-cd backend && .venv/bin/pytest -q tests/test_alembic.py -k review_queue
+cd backend && .venv/bin/pytest -q tests/test_alembic.py -k review_queue_foundation
 cd backend && .venv/bin/pytest -q tests/test_review_queue_persistence.py
 cd backend && .venv/bin/ruff check app/modules/reviews tests/test_review_queue_persistence.py tests/test_alembic.py
-cd backend && .venv/bin/pytest --cov=app.modules.reviews.models --cov=app.modules.reviews.repository --cov-branch --cov-report=term-missing --cov-fail-under=90 -q tests/test_review_queue_persistence.py
+cd backend && .venv/bin/pytest --cov=app.modules.reviews --cov-branch --cov-report=term-missing --cov-fail-under=90 -q tests/test_review_queue_persistence.py
 python3 scripts/check_stale_review_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
 GitHub Actions runs the full sharded suite and repository coverage floor.
+Focused PostgreSQL proof must include mismatched task/project/Submission/checker
+refusal, non-final/non-current/non-`allow_review` refusal, immutable lineage and
+first-queued time, replay conflicts, no historical backfill, and populated
+downgrade refusal followed by an empty safe round trip.
 
 ## Required reviewers
 

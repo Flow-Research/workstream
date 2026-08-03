@@ -1519,17 +1519,29 @@ For v0.1, the current `CheckerRun` is the readiness proof. If any submitted arti
 
 ## ReviewQueueEntry And ReviewLease
 
-`ReviewQueueEntry` immutably anchors one exact finalized Submission and its
-current successful admitting CheckerRun. Mutable routing state carries
-preferred/open/closed lifecycle, original queue age, and current preference.
-The reviewer current-work API returns an active lease, one server-selected
+`ReviewQueueEntry` immutably anchors one exact finalized Submission/version,
+Task, project, and its current successful `allow_review` CheckerRun. The 03A1
+foundation persists only `pending` and `closed` queue state plus open/preferred
+routing metadata; it exposes no route, selection behavior, or lease shape.
+PostgreSQL validates the cross-owner lineage and checker admissibility when the
+queue identity is written. The immutable queue row preserves that admission
+fact if an upstream current-checker pointer changes later; it does not constrain
+later mutations of upstream-owned rows.
+
+`ReviewAdmissionIdempotencyRecord` reserves one exact admission operation and
+SHA-256 request digest. It may begin pending without a queue, but can become
+committed only when it references the matching queue identity and the same
+completed, current `allow_review` CheckerRun. This is replay persistence, not an
+automatic checker hook or authorization decision.
+
+The later reviewer current-work API returns an active lease, one server-selected
 offer, or none; it never exposes the full backlog.
 
 `ReviewLease` is the permanent identity of one claim attempt. It stores the
 canonical human reviewer ActorProfile ID, queue/Submission lineage, database
 lease times, disposition, and the independently frozen reviewer
 ContributionPolicyVersion. PostgreSQL enforces one active lease per reviewer and
-queue entry.
+queue entry. `ReviewLease` is not part of the 03A1 foundation.
 
 `ReviewPacketManifest` is an immutable REV semantic projection over the exact
 lease, Submission, admitting CheckerRun/results, stamped context, response
