@@ -122,6 +122,9 @@ test expectations; those tests now use the exact revision schema and the
 outermost populated-lineage downgrade guard, while direct tests retain coverage
 of the superseded `0039`, `0040`, and `0042` guards. The repairs are recorded in the
 external-review response and require a fresh hosted rerun.
+The first distributed-lane run then passed four of five semantic lanes and
+isolated one `0045` migration-scope test that incorrectly crossed the later
+`0049` clean-cut boundary; that test now targets the exact revision it proves.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental fixture-architecture finding is resolved through one shared
 verified-lineage fixture. A full comment audit also closed the remaining valid
