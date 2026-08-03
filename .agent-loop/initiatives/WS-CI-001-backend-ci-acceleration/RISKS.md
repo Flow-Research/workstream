@@ -20,3 +20,7 @@
 | R16 | Fast reset leaves a guarded trigger disabled | Critical | Use one canonical seven-table guard inventory and prove every trigger is enabled after success and rollback |
 | R17 | Mechanical test edits weaken behavioral contracts | Critical | Restore strict Boolean identity assertions and require test-delta review against current main |
 | R18 | Contributor implementation is retroactively authorized | Critical | Preserve PR #180 as discovery evidence; merge planning 02 first, then signed-start prospective 02A before adoption |
+| R19 | Four semantic processes contend on one hosted runner | High | Run one declared semantic lane per independent GitHub matrix job |
+| R20 | Review events duplicate an unchanged-head Backend run | High | Remove `pull_request_review`; PR synchronization already runs the tested SHA |
+| R21 | Distributed lane artifacts are mixed or incomplete | Critical | Fixed lane set, identical manifest/head, byte digests, independent final collection, and explicit upstream-success check |
+| R22 | One Alembic module dominates the hosted critical path | High | Deterministically partition every exact Alembic node ID across two independent schema lanes and reconcile all five lanes fail-closed |

@@ -3,9 +3,12 @@ name: Agent Gates
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+  pull_request_review:
+    types: [submitted, dismissed]
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   agent-gates:
@@ -32,6 +35,17 @@ jobs:
 
       - name: Stale artifact contract check
         run: python3 scripts/check_stale_artifact_contracts.py
+
+      - name: Guide extractor dependency approval
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKSTREAM_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          WORKSTREAM_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          WORKSTREAM_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKSTREAM_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >-
+          python3 backend/scripts/check_guide_extractor_dependencies.py
+          --require-pr-approval
 
       - name: Lightweight gate regression tests
         run: python3 -m unittest -v scripts.test_lightweight_agent_gates

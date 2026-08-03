@@ -60,6 +60,25 @@ class LightweightAgentGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             phase_index("unknown")
 
+    def test_backend_uses_distributed_semantic_lanes_and_stable_fan_in(self) -> None:
+        workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
+        agent_gates = Path(".github/workflows/agent-gates.yml").read_text(encoding="utf-8")
+
+        self.assertNotIn("pull_request_review:", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertIn("matrix:\n        lane:", workflow)
+        self.assertEqual(workflow.count("          - shared_foundations"), 1)
+        self.assertEqual(workflow.count("          - schema_contracts_a"), 1)
+        self.assertEqual(workflow.count("          - schema_contracts_b"), 1)
+        self.assertIn("  test:\n    if: ${{ always() }}\n    needs: lanes", workflow)
+        self.assertIn("Require every semantic lane", workflow)
+        self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
+        self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
+        self.assertIn("include-hidden-files: true", workflow)
+        self.assertIn("coverage report --precision=2 --fail-under=78", workflow)
+        self.assertGreaterEqual(workflow.count("--fail-under=90"), 10)
+        self.assertIn("pull_request_review:", agent_gates)
+        self.assertIn("--require-pr-approval", agent_gates)
 
 if __name__ == "__main__":
     unittest.main()

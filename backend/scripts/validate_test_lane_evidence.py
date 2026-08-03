@@ -20,7 +20,7 @@ import uuid
 
 
 SCHEMA_VERSION = 1
-LANE_COUNT = 4
+LANE_COUNT = 5
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LANE_RE = re.compile(r"^[a-z][a-z0-9_]*$")

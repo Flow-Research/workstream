@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from collections import Counter
 import hashlib
 import json
 import os
@@ -22,17 +23,21 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 4
+    assert len(LANES) == 5
     assert all(lane.requires_postgres for lane in LANES)
-    assert len(assigned) == len(set(assigned))
+    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 2
+    assert all(
+        count == (2 if module == runner.PARTITIONED_SCHEMA_MODULE else 1)
+        for module, count in Counter(assigned).items()
+    )
     assert set(assigned) == set(discovered)
     assert runner.ADMIN_RUNNER_MODULE in next(
-        lane.modules for lane in LANES if lane.name == "schema_contracts"
+        lane.modules for lane in LANES if lane.name == "schema_contracts_a"
     )
 
 
 def test_measured_hotspots_have_explicit_semantic_owners() -> None:
-    """Keep the four-lane balance tied to subsystem ownership, not test counts."""
+    """Keep lane balance tied to subsystem ownership and measured schema cost."""
     modules_by_lane = {lane.name: set(lane.modules) for lane in LANES}
 
     assert modules_by_lane["project_lifecycle"] == {"tests/test_projects.py"}
@@ -44,7 +49,8 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/test_alembic.py",
         "tests/test_database_reset.py",
         runner.ADMIN_RUNNER_MODULE,
-    } == modules_by_lane["schema_contracts"]
+    } == modules_by_lane["schema_contracts_a"]
+    assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_b"]
     assert {
         "tests/test_actors.py",
         "tests/test_artifact_admission.py",
@@ -130,7 +136,25 @@ def test_manifest_classifies_only_runner_self_tests_as_admin_kind() -> None:
         admin: runner.ADMIN_KIND,
         ordinary: runner.ORDINARY_KIND,
     }
-    assert next(row for row in rows if row["nodeid"] == admin)["lane"] == "schema_contracts"
+    assert next(row for row in rows if row["nodeid"] == admin)["lane"] == "schema_contracts_a"
+
+
+def test_alembic_nodes_partition_deterministically_across_schema_lanes() -> None:
+    nodes = [
+        f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration_{index}"
+        for index in range(100)
+    ]
+
+    first = runner.build_manifest("a" * 40, nodes)
+    second = runner.build_manifest("a" * 40, list(reversed(nodes)))
+    first_by_node = {row["nodeid"]: row["lane"] for row in first["nodes"]}
+    second_by_node = {row["nodeid"]: row["lane"] for row in second["nodes"]}
+
+    assert first_by_node == second_by_node
+    assert set(first_by_node.values()) == set(runner.PARTITIONED_SCHEMA_LANES)
+    assert all(
+        lane in runner.PARTITIONED_SCHEMA_LANES for lane in first_by_node.values()
+    )
 
 
 def test_manifest_has_no_exclusion_escape_hatch() -> None:
@@ -140,7 +164,7 @@ def test_manifest_has_no_exclusion_escape_hatch() -> None:
     assert "excluded_modules" not in manifest
     assert manifest["nodes"] == [{
         "execution_kind": runner.ADMIN_KIND,
-        "lane": "schema_contracts",
+        "lane": "schema_contracts_a",
         "module": runner.ADMIN_RUNNER_MODULE,
         "nodeid": admin,
     }]
@@ -248,7 +272,7 @@ def test_admin_runner_environment_retains_only_admin_database_url(
     monkeypatch.setenv(runner.ADMIN_ENV, "postgresql+asyncpg://admin:secret@localhost/postgres")
     monkeypatch.setenv("WORKSTREAM_DATABASE_URL", "postgresql+asyncpg://app:secret@localhost/app")
     monkeypatch.setenv("WORKSTREAM_TEST_DATABASE_URL", "postgresql+asyncpg://test:secret@localhost/test")
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
 
     env = runner.admin_runner_environment(lane, tmp_path, tmp_path / ".coverage", "admin")
 
@@ -285,7 +309,7 @@ def test_admin_wrapper_redacts_admin_url_before_persisted_output() -> None:
 def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverage(
     tmp_path: Path,
 ) -> None:
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
     isolation = tmp_path / f"{lane.name}.database.json"
     isolation.write_text("{}\n", encoding="utf-8")
     ordinary_coverage = tmp_path / ".coverage.unit.schema_contracts"
@@ -376,7 +400,7 @@ def test_run_lanes_reports_collection_failure_before_manifest_validation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A failed pytest collection keeps its stable top-level error."""
-    modules = tuple(module for lane in LANES for module in lane.modules)
+    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
     monkeypatch.setattr(runner, "discover_test_modules", lambda: modules)
     monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
     monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (2, [], []))
@@ -388,7 +412,7 @@ def test_run_lanes_reports_collection_failure_before_manifest_validation(
 def test_collect_only_writes_raw_digest_bound_validator_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    modules = tuple(module for lane in LANES for module in lane.modules)
+    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
     nodes = sorted(f"{module}::test_one" for module in modules)
     monkeypatch.setattr(runner, "discover_test_modules", lambda: tuple(sorted(modules)))
     monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
@@ -407,7 +431,7 @@ def test_collect_only_writes_raw_digest_bound_validator_schema(
     assert summary["mode"] == "collect"
     assert summary["canonical_node_count"] == len(nodes)
     assert summary["manifest_sha256"] == hashlib.sha256(manifest_bytes).hexdigest()
-    assert len(summary["lanes"]) == 4
+    assert len(summary["lanes"]) == len(LANES)
     assert summary["slowest_lane_seconds"] == max(
         lane["elapsed_seconds"] for lane in summary["lanes"]
     )
@@ -419,6 +443,25 @@ def test_collect_only_writes_raw_digest_bound_validator_schema(
         assert lane["execution_exit_code"] is None
         evidence = metadata / lane["evidence_file"]
         assert lane["evidence_sha256"] == hashlib.sha256(evidence.read_bytes()).hexdigest()
+
+
+def test_collect_only_rejects_selected_lane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
+    nodes = sorted(f"{module}::test_one" for module in modules)
+    monkeypatch.setattr(runner, "discover_test_modules", lambda: tuple(sorted(modules)))
+    monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
+    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (0, nodes, []))
+
+    with pytest.raises(LaneError, match="collect_with_selected_lane"):
+        runner.run_lanes(
+            tmp_path / "metadata",
+            tmp_path / "summary.json",
+            10,
+            collect_only=True,
+            selected_lane=LANES[0].name,
+        )
 
 
 def test_collection_rejects_duplicate_or_foreign_nodes(
@@ -440,17 +483,17 @@ def test_collection_rejects_duplicate_or_foreign_nodes(
         runner.collect_nodes((module,), tmp_path / "metadata", "a" * 40)
 
 
-def test_timing_summary_is_derived_from_exact_four_lanes() -> None:
-    lanes = [{"elapsed_seconds": value} for value in (1.125, 2.25, 0.5, 3.75)]
+def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
+    lanes = [{"elapsed_seconds": value} for value in (1.125, 2.25, 0.5, 3.75, 1.0)]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 7.625,
+        "aggregate_runner_seconds": 8.625,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):
-        runner._timing_summary(lanes[:3])
+        runner._timing_summary(lanes[:-1])
     with pytest.raises(LaneError, match="invalid_lane_timing"):
-        runner._timing_summary([*lanes[:3], {"elapsed_seconds": -1.0}])
+        runner._timing_summary([*lanes[:-1], {"elapsed_seconds": -1.0}])
 
 
 def test_exit_aggregation_cannot_hide_signal_failure() -> None:
@@ -461,7 +504,7 @@ def test_exit_aggregation_cannot_hide_signal_failure() -> None:
         runner._aggregate_exit_codes([])
 
 
-def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path) -> None:
+def test_finalized_lanes_leave_one_public_coverage_file_per_lane(tmp_path: Path) -> None:
     rows = []
     for index, lane in enumerate(LANES):
         source = tmp_path / f".coverage.unit.{lane.name}"

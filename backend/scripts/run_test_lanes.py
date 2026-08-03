@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect and run four exact-custody backend test lanes."""
+"""Collect and run exact-custody backend test lanes."""
 
 from __future__ import annotations
 
@@ -39,6 +39,8 @@ DESELECTED_ENV = "WORKSTREAM_LANE_DESELECTED_NODES"
 HEAD_ENV = "WORKSTREAM_LANE_HEAD_SHA"
 SCHEMA_VERSION = 1
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
+PARTITIONED_SCHEMA_MODULE = "tests/test_alembic.py"
+PARTITIONED_SCHEMA_LANES = ("schema_contracts_a", "schema_contracts_b")
 ORDINARY_KIND = "ordinary_isolated"
 ADMIN_KIND = "admin_runner_self_test"
 ADMIN_REDACTING_WRAPPER = """
@@ -114,6 +116,7 @@ LANES = (
             "tests/test_guide_pdf.py",
             "tests/test_guide_pptx.py",
             "tests/test_local_artifact_store.py",
+            "tests/test_merge_test_lane_evidence.py",
             "tests/test_s3_artifact_store.py",
             "tests/test_test_lane_evidence.py",
             "tests/test_actors.py",
@@ -131,13 +134,14 @@ LANES = (
         ),
     ),
     TestLane(
-        "schema_contracts",
+        "schema_contracts_a",
         (
-            "tests/test_alembic.py",
+            PARTITIONED_SCHEMA_MODULE,
             "tests/test_database_reset.py",
             ADMIN_RUNNER_MODULE,
         ),
     ),
+    TestLane("schema_contracts_b", (PARTITIONED_SCHEMA_MODULE,)),
     TestLane(
         "project_lifecycle",
         (
@@ -351,13 +355,24 @@ def validate_lane_inventory(
 ) -> None:
     lanes = LANES if lanes is None else lanes
     names = [lane.name for lane in lanes]
-    if len(lanes) != 4 or len(set(names)) != 4 or any(LANE_RE.fullmatch(x) is None for x in names):
+    if (
+        len(lanes) != len(LANES)
+        or len(set(names)) != len(LANES)
+        or any(LANE_RE.fullmatch(x) is None for x in names)
+    ):
         raise LaneError("invalid_lane_names")
     declared = [module for lane in lanes for module in lane.modules]
     if any(not _safe_module_path(module) for module in declared):
         raise LaneError("invalid_lane_module")
-    duplicates = sorted(module for module, count in Counter(declared).items() if count != 1)
-    if duplicates:
+    duplicates = {
+        module: count for module, count in Counter(declared).items() if count != 1
+    }
+    expected_duplicates = (
+        {PARTITIONED_SCHEMA_MODULE: len(PARTITIONED_SCHEMA_LANES)}
+        if PARTITIONED_SCHEMA_MODULE in discovered
+        else {}
+    )
+    if duplicates != expected_duplicates:
         raise LaneError(f"duplicate_lane_modules:{','.join(duplicates)}")
     missing = sorted(set(discovered) - set(declared))
     foreign = sorted(set(declared) - set(discovered))
@@ -437,7 +452,23 @@ def build_manifest(tree_sha: str, nodes: list[str]) -> dict[str, Any]:
     if not nodes or len(nodes) != len(set(nodes)):
         raise LaneError("invalid_collected_nodes")
     nodes = sorted(nodes)
-    lane_by_module = {module: lane.name for lane in LANES for module in lane.modules}
+    lanes_by_module: dict[str, list[str]] = {}
+    for lane in LANES:
+        for module in lane.modules:
+            lanes_by_module.setdefault(module, []).append(lane.name)
+
+    def lane_for_node(node: str) -> str:
+        module = _module_from_node(node)
+        candidates = lanes_by_module[module]
+        if module == PARTITIONED_SCHEMA_MODULE:
+            if tuple(candidates) != PARTITIONED_SCHEMA_LANES:
+                raise LaneError("invalid_schema_partition_lanes")
+            digest = hashlib.sha256(node.encode("utf-8")).digest()
+            return candidates[digest[0] % len(candidates)]
+        if len(candidates) != 1:
+            raise LaneError("ambiguous_lane_module")
+        return candidates[0]
+
     return {
         "head_sha": tree_sha,
         "nodes": [
@@ -445,7 +476,7 @@ def build_manifest(tree_sha: str, nodes: list[str]) -> dict[str, Any]:
                 "execution_kind": ADMIN_KIND
                 if _module_from_node(node) == ADMIN_RUNNER_MODULE
                 else ORDINARY_KIND,
-                "lane": lane_by_module[_module_from_node(node)],
+                "lane": lane_for_node(node),
                 "module": _module_from_node(node),
                 "nodeid": node,
             }
@@ -662,8 +693,8 @@ def _aggregate_exit_codes(codes: list[int]) -> int:
 
 
 def _timing_summary(lanes: list[dict[str, Any]]) -> dict[str, float]:
-    """Derive aggregate timing only from the exact four emitted lane rows."""
-    if len(lanes) != 4:
+    """Derive aggregate timing only from the exact declared lane rows."""
+    if len(lanes) != len(LANES):
         raise LaneError("invalid_lane_timing_inventory")
     elapsed = [row["elapsed_seconds"] for row in lanes]
     if any(
@@ -679,8 +710,15 @@ def _timing_summary(lanes: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *, collect_only: bool = False) -> int:
-    """Collect canonical nodes and optionally execute all lanes concurrently."""
+def run_lanes(
+    metadata_dir: Path,
+    summary_json: Path,
+    timeout_seconds: float,
+    *,
+    collect_only: bool = False,
+    selected_lane: str | None = None,
+) -> int:
+    """Collect canonical nodes and optionally execute all or one exact lane."""
     global INTERRUPTED
     INTERRUPTED = False
     if timeout_seconds <= 0:
@@ -697,6 +735,8 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     manifest_path.write_bytes(_json_bytes(manifest))
     manifest_digest = _sha256(manifest_path.read_bytes())
     if collect_only:
+        if selected_lane is not None:
+            raise LaneError("collect_with_selected_lane")
         lane_rows = []
         for lane in LANES:
             lane_nodes = [row["nodeid"] for row in manifest["nodes"] if row["lane"] == lane.name]
@@ -718,18 +758,27 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                    **_timing_summary(lane_rows)}
         summary_json.write_bytes(_json_bytes(summary))
         return 0
-    if any(lane.requires_postgres for lane in LANES) and not os.environ.get(ADMIN_ENV):
+    execution_lanes = (
+        LANES
+        if selected_lane is None
+        else tuple(lane for lane in LANES if lane.name == selected_lane)
+    )
+    if not execution_lanes:
+        raise LaneError("unknown_selected_lane")
+    if any(lane.requires_postgres for lane in execution_lanes) and not os.environ.get(ADMIN_ENV):
         raise LaneError("missing_admin_database_url")
 
     active: dict[str, ActiveLane] = {}
-    unit_results: dict[str, list[dict[str, Any]]] = {lane.name: [] for lane in LANES}
+    unit_results: dict[str, list[dict[str, Any]]] = {
+        lane.name: [] for lane in execution_lanes
+    }
     started = time.monotonic()
     stopping = False
     run_error: BaseException | None = None
     old_int = signal.signal(signal.SIGINT, _handle_interrupt)
     old_term = signal.signal(signal.SIGTERM, _handle_interrupt)
     try:
-        for lane in LANES:
+        for lane in execution_lanes:
             lane_rows = [row for row in manifest["nodes"] if row["lane"] == lane.name]
             kinds = [ORDINARY_KIND]
             if any(row["execution_kind"] == ADMIN_KIND for row in lane_rows):
@@ -805,7 +854,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
         signal.signal(signal.SIGINT, old_int)
         signal.signal(signal.SIGTERM, old_term)
     if run_error is not None:
-        for lane in LANES:
+        for lane in execution_lanes:
             if unit_results[lane.name]:
                 continue
             unit_results[lane.name].append({
@@ -822,20 +871,29 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
             })
     results = {
         lane.name: _finalize_lane(lane, unit_results[lane.name], metadata_dir)
-        for lane in LANES
+        for lane in execution_lanes
         if unit_results[lane.name]
     }
     summary = {
         "canonical_node_count": len(nodes), "elapsed_seconds": round(time.monotonic() - started, 3),
-        "head_sha": tree_sha, "lanes": [results[lane.name] for lane in LANES if lane.name in results],
+        "head_sha": tree_sha,
+        "lanes": [results[lane.name] for lane in execution_lanes if lane.name in results],
         "manifest_file": manifest_path.name, "manifest_sha256": manifest_digest,
-        "mode": "run", "schema_version": SCHEMA_VERSION,
+        "mode": "run" if selected_lane is None else "lane",
+        "schema_version": SCHEMA_VERSION,
     }
-    summary.update(_timing_summary(summary["lanes"]))
+    if selected_lane is None:
+        summary.update(_timing_summary(summary["lanes"]))
+    else:
+        elapsed = summary["lanes"][0]["elapsed_seconds"]
+        summary.update(
+            aggregate_runner_seconds=elapsed,
+            slowest_lane_seconds=elapsed,
+        )
     summary_json.write_bytes(_json_bytes(summary))
     return 0 if (
         run_error is None
-        and len(results) == 4
+        and len(results) == len(execution_lanes)
         and all(row["execution_exit_code"] == 0 for row in results.values())
     ) else 1
 
@@ -846,9 +904,16 @@ def main() -> int:
     parser.add_argument("--summary-json", required=True, type=Path)
     parser.add_argument("--timeout-seconds", default=1200.0, type=float)
     parser.add_argument("--collect-only", action="store_true")
+    parser.add_argument("--lane", choices=[lane.name for lane in LANES])
     args = parser.parse_args()
     try:
-        return run_lanes(args.metadata_dir, args.summary_json, args.timeout_seconds, collect_only=args.collect_only)
+        return run_lanes(
+            args.metadata_dir,
+            args.summary_json,
+            args.timeout_seconds,
+            collect_only=args.collect_only,
+            selected_lane=args.lane,
+        )
     except (LaneError, OSError, subprocess.SubprocessError) as exc:
         code = exc.args[0] if isinstance(exc, LaneError) else "lane_operation_failed"
         print(f"test lane runner failed: {code}", file=sys.stderr)
