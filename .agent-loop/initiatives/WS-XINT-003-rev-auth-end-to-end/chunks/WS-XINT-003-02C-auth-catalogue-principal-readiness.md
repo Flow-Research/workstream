@@ -2,8 +2,8 @@
 
 ## Status
 
-Current-main implementation contract refreshed from `ac52da6b`. Proposed for
-L1 plan review before implementation.
+Current-main implementation contract refreshed from `ac52da6b`. Implementation
+and internal review are complete; hosted exact-head evidence is pending.
 
 ## Parent initiative
 

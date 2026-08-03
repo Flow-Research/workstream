@@ -92,8 +92,9 @@ unchanged until each exact XINT-003 activation wave.
 | `WS-XINT-003-08B` | `review.lifecycle.activation.manage` |
 
 `WS-AUTH-001-REV-CUSTODY` atomically transfers these 19 rows with exact owner
-cardinalities `2/5/3/1/1/5/2` in the table order above and removes the seven
-historical REV owner enum values. It changes no mapping or availability and
+cardinalities `2/5/3/1/1/5/2` in the table order above. The seven historical
+REV runtime owner values remain registered for those actions until their exact
+activation waves replace them. It changes no mapping or availability and
 adds no migration. All 19 actions remain planned and unavailable; these AUTH
 custodian labels grant no reviewer, Operator, or service authority. The four
 approved lifecycle actions remain planned and unavailable, and PREP remains separately
