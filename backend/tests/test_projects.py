@@ -3098,6 +3098,19 @@ async def test_guide_mutation_router_finishes_commit_and_replay_without_early_di
     assert session.rollback_count == 1
     assert session.commit_count == 1
 
+    with pytest.raises(RuntimeError, match="committed project setup generation is unavailable"):
+        await guide_mutation_router_module._finish(
+            session,
+            SimpleNamespace(
+                replayed=False,
+                setup_run_id="setup-without-generation",
+                setup_generation=None,
+                response=response,
+            ),
+        )
+    assert session.rollback_count == 1
+    assert session.commit_count == 1
+
 
 async def test_guide_mutation_service_executes_all_three_authorized_happy_paths(
     monkeypatch: pytest.MonkeyPatch,
