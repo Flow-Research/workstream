@@ -35,6 +35,11 @@
   policy-context test created setup generation 2 while all verified ART lineage
   remained generation 1. The test now reuses the exact source setup generation
   and varies only the effective-policy context it is intended to isolate.
+- Hosted run `30786751487` passed the complete project lifecycle and exposed
+  four task corruption tests whose shared helper deleted an immutable,
+  ART-bound setup run. The helper now clears only its mutable post-submit
+  output pointer before removing the generated policy and preserves all
+  verified guide-binding lineage.
 
 ## Comments deferred
 

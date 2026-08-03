@@ -858,7 +858,8 @@ async def delete_generated_post_submit_output_for_pre_submit(
         )
     ).all()
     for setup_run in setup_runs:
-        await session.delete(setup_run)
+        setup_run.output_post_submit_checker_policy_id = None
+        setup_run.post_submit_derivation_summary = None
     await session.flush()
     await session.delete(post_submit_policy)
     await session.flush()

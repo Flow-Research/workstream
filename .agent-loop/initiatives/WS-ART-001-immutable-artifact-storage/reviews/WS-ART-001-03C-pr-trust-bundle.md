@@ -113,7 +113,9 @@ Agent Gates pass after one stale-vocabulary correction. Three Backend runs
 progressively exposed stale setup-run, verified-report, warning-acknowledgement,
 and direct-service fixture assumptions. A fourth run established the exact
 combined AUTH+ART schema fingerprint after migration reconciliation. A fifth
-run left one synthetic generation mismatch, now reconciled; the repairs
+run left one synthetic generation mismatch, now reconciled. A sixth run passed
+the project lifecycle and identified one task-fixture helper that deleted an
+immutable ART-bound setup run; it now preserves that lineage. The repairs
 are recorded in the external-review response and require a fresh hosted rerun.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental review produced no new actionable findings.
