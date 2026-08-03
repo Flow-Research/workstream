@@ -129,3 +129,26 @@ round trip passes.
 PR #248 merged the completed chunk as `25fc27c4` on 2026-08-03. Backend, Agent
 Gates, and CodeRabbit passed on the final PR head. No review/revision lifecycle
 action was activated, and no successor chunk starts automatically.
+
+## WS-XINT-003-02C AUTH catalogue and principal readiness
+
+Architecture, security/auth, product/operations, QA, senior engineering, CI
+integrity, reuse/dedup, test-delta, and docs reviewers examined the bounded 02C
+implementation. Valid findings corrected the focused async-test selector,
+canonical catalogue counts and fixed-service documentation, exact PostgreSQL
+constraint-closure proof, no-grant provisioning proof, and operator-facing
+0049 downgrade guidance. The four new actions remain planned/unavailable; the
+six REV identities are registry and matrix values only, with no seeded
+principal or lifecycle behavior.
+
+Focused catalogue/service/custody tests pass (33 tests). Changed-module
+coverage is 100.00 percent for `service_identities.py` and 97.89 percent for
+`catalogue.py`. Ruff, mypy, collection, stale authorization/review scans, and
+Markdown links pass. Local PostgreSQL execution is unavailable because this
+worktree has no `WORKSTREAM_TEST_DATABASE_URL`; the exact 16 database-backed
+tests collect cleanly and remain assigned to hosted schema and semantic lanes.
+
+The first hosted semantic lanes exposed the expected post-0049 public-schema
+fingerprint change before running product tests. The chunk contract now permits
+only that exact `tests/conftest.py` fingerprint update; no reset allow-list or
+schema-integrity behavior changed.

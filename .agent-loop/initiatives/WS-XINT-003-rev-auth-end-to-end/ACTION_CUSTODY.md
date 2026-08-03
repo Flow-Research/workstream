@@ -24,10 +24,10 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 | `review.queue.routing.override` | `review.queue.override` | Operator; canonical reason required | exact queue entry/routing state | REV | registered planned | `WS-XINT-003-08A` |
 | `review.queue.routing.correct` | `review.queue.override` | Operator; canonical reason required | exact invalid routing state | REV | registered planned | `WS-XINT-003-08A` |
 | `review.queue.close` | `review.queue.override` | Operator; canonical reason required | exact stale queue entry | REV | registered planned | `WS-XINT-003-08A` |
-| `review.revision_context.repair` | `project.task.manage` | Project Manager grant for exact project | invalid revision context | REV | install unavailable in 02C | `WS-XINT-003-08A` |
-| `review.revision_obligation.close` | `project.task.manage` | Project Manager grant for exact project | exact unfulfillable obligation | REV | install unavailable in 02C | `WS-XINT-003-08A` |
-| `review.revision_context.legacy_close` | `operations.reconcile.run` | Operator; canonical reason required | exact legacy revision context | REV | install unavailable in 02C | `WS-XINT-003-08A` |
-| `review.lifecycle.activation.manage` | `operations.reconcile.run` | Operator; exact phase and reason | lifecycle release controller | REV | install unavailable in 02C | `WS-XINT-003-08B` |
+| `review.revision_context.repair` | `project.task.manage` | Project Manager grant for exact project | invalid revision context | REV | registered planned/unavailable | `WS-XINT-003-08A` |
+| `review.revision_obligation.close` | `project.task.manage` | Project Manager grant for exact project | exact unfulfillable obligation | REV | registered planned/unavailable | `WS-XINT-003-08A` |
+| `review.revision_context.legacy_close` | `operations.reconcile.run` | Operator; canonical reason required | exact legacy revision context | REV | registered planned/unavailable | `WS-XINT-003-08A` |
+| `review.lifecycle.activation.manage` | `operations.reconcile.run` | Operator; exact phase and reason | lifecycle release controller | REV | registered planned/unavailable | `WS-XINT-003-08B` |
 | `review.reconcile.run` | `operations.reconcile.run` | one of two fixed reconciler identities | invalidation or general reconciliation batch | REV | registered planned | `WS-XINT-003-08B` |
 | `review.artifact_reference.reconcile` | `operations.reconcile.run` | fixed artifact-reference reconciler only | bounded review artifact reference batch | REV | registered planned | `WS-XINT-003-08B` |
 | `review.projection.rebuild` | `operations.projection.rebuild` | fixed projection rebuilder only | derived review projection batch | REV | registered planned | `WS-XINT-003-08B` |

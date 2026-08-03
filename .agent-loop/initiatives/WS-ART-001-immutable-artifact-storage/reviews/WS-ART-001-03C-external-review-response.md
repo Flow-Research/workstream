@@ -39,7 +39,7 @@
   repository layout is conventional; and the unused source-label threat
   categories were removed from the parametrized test.
 - After AUTH PR #248 merged, ART was rebased as the single successor migration
-  `0049_guide_source_v2`. Hosted run `30784652926` proved the exact combined
+  `0050_guide_source_v2`. Hosted run `30784652926` proved the exact combined
   AUTH+ART public-schema fingerprint; the fail-closed test constant now records
   that observed value.
 - Hosted run `30786024204` reduced the suite to one stale synthetic fixture: a

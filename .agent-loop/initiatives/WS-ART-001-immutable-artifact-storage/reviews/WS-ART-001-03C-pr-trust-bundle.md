@@ -22,7 +22,7 @@ retention worker, manual resume action, or submission work belongs here.
 
 - Added guide-source snapshot v2 with server-owned item identity/order and
   sanitized non-authoritative labels; removed hash/CID/ref/excerpt authority.
-- Added migration `0049_guide_source_v2` with a fail-closed
+- Added migration `0050_guide_source_v2` with a fail-closed
   populated-namespace refusal.
 - Removed the legacy sufficiency-agent route and separated diagnostic and
   verified report uniqueness.

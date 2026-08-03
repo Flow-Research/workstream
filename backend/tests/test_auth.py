@@ -3543,6 +3543,83 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                 pause_kind = None
 
 
+async def test_xint003_02c_provisions_all_six_review_service_identities(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+) -> None:
+    """The existing controlled endpoint provisions every exact REV principal."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env)
+    app = create_app(settings)
+    app.state.auth_verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    admin_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "xint003-02c-admin", "jti": "xint003-02c-admin-token"},
+    )
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    identities = (
+        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY,
+        ServiceIdentity.REVIEW_LEASE_EXPIRY,
+        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION,
+        ServiceIdentity.REVIEW_RECONCILIATION,
+        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION,
+        ServiceIdentity.REVIEW_PROJECTION,
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        profile = await client.get("/api/v1/actors/me", headers=headers)
+        assert profile.status_code == 200
+        assert (await run_admin_bootstrap(UUID(profile.json()["actor_profile_id"]), execute=True))[
+            0
+        ] == 0
+        for identity in identities:
+            response = await client.post(
+                "/api/v1/service-actors",
+                headers={**headers, "Idempotency-Key": str(uuid4())},
+                json={
+                    "service_identity": identity.value,
+                    "subject": f"xint003-02c:{identity.value}",
+                    "reason": "Provision the exact fixed REV service principal",
+                },
+            )
+            assert response.status_code == 201, response.text
+            assert response.json()["service_identity"] == identity.value
+
+    async with db_session.get_session_factory()() as session:
+        rows = tuple(
+            (
+                await session.execute(
+                    select(ActorProfile.id, ActorProfile.service_identity).where(
+                        ActorProfile.service_identity.in_(
+                            tuple(identity.value for identity in identities)
+                        )
+                    )
+                )
+            ).all()
+        )
+        actor_ids = tuple(row.id for row in rows)
+        admin_grants = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(AdminRoleGrant)
+                .where(AdminRoleGrant.target_actor_profile_id.in_(actor_ids))
+            )
+            or 0
+        )
+        project_grants = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectRoleGrant)
+                .where(ProjectRoleGrant.actor_profile_id.in_(actor_ids))
+            )
+            or 0
+        )
+    assert {row.service_identity for row in rows} == {identity.value for identity in identities}
+    assert admin_grants == project_grants == 0
+
+
 async def test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],

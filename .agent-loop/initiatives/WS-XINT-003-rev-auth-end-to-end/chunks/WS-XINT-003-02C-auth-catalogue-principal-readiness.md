@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed planning contract. Refresh exact migration head and verification
-commands from current `main` before implementation.
+Current-main implementation contract refreshed from `ac52da6b`. Implementation
+and internal review are complete; hosted exact-head evidence is pending.
 
 ## Parent initiative
 
@@ -30,18 +30,26 @@ review SLA.
 
 ## Allowed files
 
-Refresh to exact current-main paths within:
-
 ```text
+backend/app/modules/actors/service_identities.py
 backend/app/modules/authorization/catalogue.py
-backend/app/modules/authorization/runtime.py
-backend/app/modules/authorization/<bounded service identity modules>
-backend/alembic/versions/<one new AUTH-owned migration>.py
-backend/tests/<bounded authorization and migration tests>
+backend/alembic/versions/0049_rev_auth_readiness.py
+backend/tests/test_authorization.py
+backend/tests/test_alembic.py
+backend/tests/test_auth.py
+backend/tests/conftest.py (exact post-0049 public-schema fingerprint only)
 docs/spec_authorization_service.md
+docs/spec_review_lifecycle.md
 docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
-.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/**
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/CHUNK_MAP.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/DECISIONS.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/DISCOVERY.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/REVIEW_LOG.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/STATUS.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02C-*.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/chunks/WS-XINT-003-02C-auth-catalogue-principal-readiness.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 ```
 
@@ -77,15 +85,78 @@ docs/operations_roles_permissions.md
   existing ART/AUTH or project authorization row.
 - `review.finding_evidence.ingest` and
   `review.finding_response_evidence.ingest` receive an explicit
-  future-intent-required unavailable classification (or an equivalently closed
-  catalogue invariant) that ordinary v0.1 activation cannot select.
+  `FUTURE_INTENT_REQUIRED_ACTIONS` catalogue invariant, remain planned, appear
+  in no fixed-service matrix row, and cannot be selected by ordinary v0.1
+  activation.
+- The exact post-02C code catalogue is 71 PermissionIds, 100 ActionIds, 45
+  active actions, and 55 planned actions. No existing active action changes.
+- The new runtime activation custodians are exact: XINT-003-08A owns
+  `review.revision_context.repair`, `review.revision_obligation.close`, and
+  `review.revision_context.legacy_close`; XINT-003-08B owns
+  `review.lifecycle.activation.manage`. Their new owner cardinalities are 3 and
+  1. Existing 19 REV action owner rows/cardinalities remain unchanged until
+  their individual activation waves.
+- The exact fixed-service registry is 14 identities and the matrix is 14 rows
+  with 22 memberships. The two reconciliation identities are separate rows
+  sharing only `review.reconcile.run`.
+- `0049_rev_auth_readiness` follows `0048_policy_authority`, adds only the four
+  action/permission evidence pairs and six service-identity constraint values,
+  and seeds no ActorProfile, ActorIdentityLink, grant, authority, route, or job.
+- Downgrade locks evidence and actor tables first, refuses every direct or
+  idempotency-linked use of the four actions, refuses use of every new service
+  identity, and otherwise restores the exact 0048 constraints.
+- Tests named `test_xint003_02c_rev_auth_readiness_schema_and_roundtrip`,
+  `test_xint003_02c_rev_auth_readiness_guarded_action_evidence_downgrade`, and
+  `test_xint003_02c_rev_auth_readiness_guarded_identity_downgrade` prove the
+  empty round trip and every action/evidence-shape/identity refusal.
+- `test_xint003_02c_provisions_all_six_review_service_identities` exercises the
+  canonical service-actor API for every new identity without granting usable
+  lifecycle authority.
 
 ## Verification commands
 
-Refresh exact paths at implementation start, then include Ruff, focused unit
-and PostgreSQL catalogue/migration/service-matrix tests, changed-subsystem
-coverage at or above 90 percent, and hosted Backend coverage preserving the
-repository-wide 78 percent floor.
+```bash
+(cd backend && .venv/bin/ruff check \
+  app/modules/actors/service_identities.py \
+  app/modules/authorization/catalogue.py \
+  alembic/versions/0049_rev_auth_readiness.py \
+  tests/test_authorization.py tests/test_alembic.py tests/test_auth.py)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest \
+  -p pytest_asyncio.plugin -q \
+  tests/test_authorization.py \
+  -k 'closed_permission_and_action_catalogue or fixed_service or rev_custody')
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest \
+  -p pytest_asyncio.plugin -q \
+  tests/test_auth.py -k 'service_actor or xint003_02c')
+(cd backend && .venv/bin/coverage erase && \
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/coverage run -m pytest \
+  -p pytest_asyncio.plugin -q \
+  tests/test_authorization.py tests/test_auth.py \
+  -k 'closed_permission_and_action_catalogue or fixed_service or rev_custody or service_actor or xint003_02c' && \
+  .venv/bin/coverage report \
+  --include='app/modules/actors/service_identities.py' \
+  --precision=2 --fail-under=90 && \
+  .venv/bin/coverage report \
+  --include='app/modules/authorization/catalogue.py' \
+  --precision=2 --fail-under=90)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres \
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_test_lanes.py \
+  --lane schema_contracts_a --metadata-dir .ci/xint-003-02c/schema-a \
+  --summary-json .ci/xint-003-02c/schema-a.json --timeout-seconds 1200)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres \
+  PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_test_lanes.py \
+  --lane schema_contracts_b --metadata-dir .ci/xint-003-02c/schema-b \
+  --summary-json .ci/xint-003-02c/schema-b.json --timeout-seconds 1200)
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_review_contracts.py
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+git diff --check
+```
+
+GitHub's Backend workflow runs the complete sharded suite and combined coverage
+report, preserving the repository-wide 78 percent floor. Changed authorization
+and actor modules must remain at or above 90 percent coverage.
 
 ## Required reviewers
 

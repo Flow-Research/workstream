@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0049_guide_source_v2"
+HEAD_REVISION = "0050_guide_source_v2"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -133,6 +133,12 @@ def test_service_identity_migration_contract_is_frozen_from_application_modules(
     assert tuple(identity.value for identity in ServiceIdentity) == (
         *FROZEN_SERVICE_IDENTITY_VALUES,
         "workstream.project.setup",
+        "workstream.review.preference_expiry",
+        "workstream.review.lease_expiry",
+        "workstream.review.authority_invalidation_reconciliation",
+        "workstream.review.reconciliation",
+        "workstream.review.artifact_reference_reconciliation",
+        "workstream.review.projection",
     )
 
 
@@ -2557,7 +2563,7 @@ def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migrat
                 RuntimeError,
                 match="guide source v2 requires an empty guide-source namespace",
             ):
-                command.upgrade(config, "0049_guide_source_v2")
+                command.upgrade(config, "0050_guide_source_v2")
         finally:
             asyncio.run(reset_schema())
 
@@ -4003,6 +4009,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
+                            ActionOwner.XINT_003_08A,
+                            ActionOwner.XINT_003_08B,
                         }
                     ),
                 )
@@ -4163,6 +4171,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
+                            ActionOwner.XINT_003_08A,
+                            ActionOwner.XINT_003_08B,
                         }
                     ),
                 )
@@ -11934,6 +11944,218 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
         "selector_custody": False,
         "predecessor_custody": False,
     }
+
+
+_XINT003_02C_ACTIONS = (
+    ("review.revision_context.repair", "project.task.manage"),
+    ("review.revision_obligation.close", "project.task.manage"),
+    ("review.revision_context.legacy_close", "operations.reconcile.run"),
+    ("review.lifecycle.activation.manage", "operations.reconcile.run"),
+)
+_XINT003_02C_IDENTITIES = tuple(
+    identity.value
+    for identity in (
+        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY,
+        ServiceIdentity.REVIEW_LEASE_EXPIRY,
+        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION,
+        ServiceIdentity.REVIEW_RECONCILIATION,
+        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION,
+        ServiceIdentity.REVIEW_PROJECTION,
+    )
+)
+
+
+def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0049 admits exact planned evidence and principals without seeding authority."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0048_policy_authority")
+            prior = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
+            command.upgrade(config, "head")
+            upgraded = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
+            command.downgrade(config, "0048_policy_authority")
+            restored = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
+            command.upgrade(config, "head")
+            repeated = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    additions = " OR " + " OR ".join(
+        _xint003_02c_pair_token(action, permission) for action, permission in _XINT003_02C_ACTIONS
+    )
+    assert prior["profiles"] == upgraded["profiles"] == 0
+    assert upgraded["action_definition"].count(additions) == 2
+    assert upgraded["action_definition"].replace(additions, "") == prior["action_definition"]
+    historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
+    assert prior["identity_values"] == historical_identities
+    assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)
+    assert restored == prior
+    assert repeated == upgraded
+
+
+@pytest.mark.parametrize(("action_id", "permission_id"), _XINT003_02C_ACTIONS)
+@pytest.mark.parametrize("evidence_shape", ("direct", "idempotency_linked"))
+def test_xint003_02c_rev_auth_readiness_guarded_action_evidence_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+    action_id: str,
+    permission_id: str,
+    evidence_shape: str,
+) -> None:
+    """Every newly admitted action pair blocks vocabulary removal once used."""
+    config = _alembic_config()
+    event_id = ""
+    record_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.upgrade(config, "head")
+            if evidence_shape == "direct":
+                event_id = asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env, action_id, permission_id
+                    )
+                )
+            else:
+                actor_id, target_id = str(uuid4()), str(uuid4())
+                asyncio.run(
+                    _insert_committed_authority_idempotency(
+                        isolated_database_env, record_id, actor_id, target_id
+                    )
+                )
+                event_id = asyncio.run(
+                    _insert_linked_authorization_action_event(
+                        isolated_database_env,
+                        record_id=record_id,
+                        actor_id=actor_id,
+                        action_id=action_id,
+                        permission_id=permission_id,
+                    )
+                )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade non-empty REV authorization action evidence",
+            ):
+                command.downgrade(config, "0048_policy_authority")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
+            if evidence_shape == "idempotency_linked":
+                asyncio.run(
+                    _remove_authority_idempotency_fixture(
+                        isolated_database_env, record_id, orphan_event=None
+                    )
+                )
+            command.upgrade(config, "head")
+
+
+@pytest.mark.parametrize("service_identity", _XINT003_02C_IDENTITIES)
+def test_xint003_02c_rev_auth_readiness_guarded_identity_downgrade(
+    isolated_database_env: str, migration_lock, service_identity: str
+) -> None:
+    """Every newly admitted fixed principal blocks removal while in use."""
+    config = _alembic_config()
+    actor_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.upgrade(config, "head")
+            asyncio.run(
+                _insert_rev_service_actor(
+                    isolated_database_env,
+                    actor_id=actor_id,
+                    service_identity=service_identity,
+                )
+            )
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade in-use REV service identities"
+            ):
+                command.downgrade(config, "0048_policy_authority")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            asyncio.run(_remove_fixed_service_actor(isolated_database_env, actor_id))
+            command.upgrade(config, "head")
+
+
+async def _xint003_02c_readiness_state(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            action_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint where "
+                        "conname='ck_audit_events_authorization_action_evidence'"
+                    )
+                )
+            )
+            identity_definition = str(
+                await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint where "
+                        "conname='ck_actor_profiles_kind_service_identity'"
+                    )
+                )
+            )
+            profiles = int(
+                await connection.scalar(
+                    text(
+                        "select count(*) from actor_profiles where "
+                        "service_identity=any(:identities)"
+                    ),
+                    {"identities": list(_XINT003_02C_IDENTITIES)},
+                )
+                or 0
+            )
+            return {
+                "action_definition": action_definition,
+                "identity_values": tuple(
+                    re.findall(r"'([^']+)'::character varying", identity_definition)
+                ),
+                "profiles": profiles,
+            }
+    finally:
+        await engine.dispose()
+
+
+def _xint003_02c_pair_token(action: str, permission: str) -> str:
+    return (
+        f"(((action_id)::text = '{action}'::text) AND "
+        f"((permission_id)::text = '{permission}'::text))"
+    )
+
+
+async def _insert_rev_service_actor(
+    database_url: str, *, actor_id: str, service_identity: str
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "insert into actor_profiles "
+                    "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+                    "values (:id,'service','active','manual_service_provisioning',"
+                    ":identity,:id)"
+                ),
+                {"id": actor_id, "identity": service_identity},
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) "
+                    "values (:id,:actor,'https://identity.test',:subject,'service',"
+                    "'active',:actor)"
+                ),
+                {
+                    "id": str(uuid4()),
+                    "actor": actor_id,
+                    "subject": service_identity,
+                },
+            )
+    finally:
+        await engine.dispose()
 
 
 async def _xint003_02b_authority_shape(database_url: str) -> dict[str, int | bool]:

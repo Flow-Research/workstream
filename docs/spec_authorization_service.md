@@ -240,8 +240,9 @@ their matching typed/SQL audit parity without making them executable.
 The closed action registry contained 78 rows after AUTH-11C2: 37 active actions
 and 41 planned rows before AUTH-12A. AUTH-12A added eighteen planned
 project-mutation rows, producing the historical 96-row state of 37 active and
-59 planned. Later project-mutation and ART activation chunks advance the current
-state to 43 active and 53 planned without adding identifiers.
+59 planned. Later project-mutation and ART activation chunks advanced the
+pre-02C state to 45 active and 51 planned. WS-XINT-003-02C adds four planned
+REV rows, producing the current 100-row state of 45 active and 55 planned.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -261,17 +262,17 @@ other registry rows cover three planned Operator recovery actions and the ART
 catalogue: 16 planned, three active foundation-service actions, active
 `artifact.guide_source.ingest`, and active fixed-service guide binding/read;
 the remaining rows cover canonical
-`submission.create`, and 19 review actions. An action becomes active only when
+`submission.create`, and 23 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
 required, and its dedicated AUTH activation custodian has integrated the exact
 evaluator and changed availability. Both halves are mandatory; registry or
 feature presence alone never grants authority.
 
-The four proposed REV lifecycle actions are not part of the current runtime
-registry. `artifact.review_evidence.binding.create` is registered but planned
-and unavailable. Any later REV registration adds exactly four planned and zero
-active actions while retaining 71 PermissionIds; it stays blocked until
+WS-XINT-003-02C registers the four approved REV recovery/lifecycle actions as
+planned and unavailable. `artifact.review_evidence.binding.create` is also
+registered but planned and unavailable. Registration adds no evaluator, route,
+job, principal row, or lifecycle authority; activation remains blocked until
 complete feature-owned typed and transaction manifests exist.
 
 AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.
@@ -323,10 +324,12 @@ Chunk 01 changes no runtime owner or availability.
 | `WS-AUTH-001-REV-09A` | `review.finding_response_evidence.ingest` |
 | `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
 | `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+| `WS-XINT-003-08A` | `review.revision_context.repair`, `review.revision_obligation.close`, `review.revision_context.legacy_close` |
+| `WS-XINT-003-08B` | `review.lifecycle.activation.manage` |
 
-This table is the trusted pre-WS-XINT-003-02C custody baseline. All 19 actions
-remain planned and unavailable on that baseline, and the four approved REV
-lifecycle actions remain unregistered there. The current delivery path is
+The first seven rows preserve the trusted pre-WS-XINT-003-02C custody baseline.
+Those 19 actions remain planned and unavailable, while 02C registers the four approved REV
+recovery/lifecycle actions under XINT-003-08A/08B custody. The delivery path is
 front-loaded `WS-XINT-003-02C` unavailable catalogue/principal/matrix readiness
 followed by `WS-XINT-003-02D` closed PREP/read contract readiness. Neither wave
 implements REV behavior or activates a lifecycle action; later XINT activation
@@ -354,6 +357,10 @@ uses the canonical custody map and exact merged REV proof.
 | `review.reconcile.run` | `operations.reconcile.run` | `WS-AUTH-001-REV-11` |
 | `review.artifact_reference.reconcile` | `operations.reconcile.run` | `WS-AUTH-001-REV-12` |
 | `review.projection.rebuild` | `operations.projection.rebuild` | `WS-AUTH-001-REV-12` |
+| `review.revision_context.repair` | `project.task.manage` | `WS-XINT-003-08A` |
+| `review.revision_obligation.close` | `project.task.manage` | `WS-XINT-003-08A` |
+| `review.revision_context.legacy_close` | `operations.reconcile.run` | `WS-XINT-003-08A` |
+| `review.lifecycle.activation.manage` | `operations.reconcile.run` | `WS-XINT-003-08B` |
 
 Initial and revision submission use the same `submission.create` action,
 permission, and route. Revision preparation is an internal participant and
@@ -505,9 +512,16 @@ closed:
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
 | `workstream.project.setup` | `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
+| `workstream.review.preference_expiry` | `review.preference_expiry.run` |
+| `workstream.review.lease_expiry` | `review.lease_expiry.run` |
+| `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` |
+| `workstream.review.reconciliation` | `review.reconcile.run` |
+| `workstream.review.artifact_reference_reconciliation` | `review.artifact_reference.reconcile` |
+| `workstream.review.projection` | `review.projection.rebuild` |
 
-`workstream.project.setup` is the eighth current fixed identity. All four of
-its actions remain planned and unavailable in AUTH-12B. Registration makes the
+`workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
+02C expands the current registry to fourteen identities. All four project-setup
+actions and all six REV rows remain planned and unavailable. Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
 itself; migration `0043_project_setup_service` only expands the closed database

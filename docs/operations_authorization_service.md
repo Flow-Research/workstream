@@ -685,18 +685,23 @@ Actions not named by a completed activation chunk remain planned and
 non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
-reconciliation assigns all 22 ART rows to ten exact activation custodians and all 19 REV
+reconciliation assigns all 22 ART rows to ten exact activation custodians and the original 19 REV
 rows to seven exact AUTH custodians without changing mappings or planned
 availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
 `WS-AUTH-001-REV-05`, `WS-AUTH-001-REV-06`, `WS-AUTH-001-REV-07`,
 `WS-AUTH-001-REV-08`, `WS-AUTH-001-REV-09A`, `WS-AUTH-001-REV-11`, and
 `WS-AUTH-001-REV-12`. Custodian labels grant no reviewer, Operator, or service
-authority; all 19 REV actions remain planned and unavailable. The REV transfer
-adds no migration, registration, evaluator, route, job, service identity, or
-lifecycle behavior, and the four proposed REV lifecycle actions remain
-unregistered.
+authority; all 23 REV actions remain planned and unavailable. WS-XINT-003-02C
+registers the four additional actions and six closed service identities but
+adds no evaluator, route, job, principal row, or lifecycle behavior.
+Migration `0049_rev_auth_readiness` takes protected locks on authority
+idempotency evidence, audit evidence, and actor profiles before replacing the
+closed constraints. It seeds no ActorProfile, identity link, grant, route, or
+job. Downgrade refuses after any new action has direct or idempotency-linked
+audit evidence, or while any new REV service identity is in use; otherwise it
+restores the exact `0048` constraints.
 Their owning feature must publish the approved principal/resource/guard/surface/
-transaction contract before registration or activation, but those foreign facts
+transaction contract before activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
 blocker, not a reason to relax catalogue checks.
 
@@ -709,8 +714,8 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 96 ActionIds, 43 active actions, and
-53 planned actions. AUTH-11C2 activates three current effective-policy and
+Catalogue totals are 71 PermissionIds, 100 ActionIds, 45 active actions, and
+55 planned actions. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
 route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
 activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
@@ -878,14 +883,14 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The first fixed-service set remains seven artifact identities and eleven matrix
-memberships from AUTH-09A. Missing provisioned rows deny without stopping the
-application. New REV/CON service identities require an exact owning-feature
-manifest followed by AUTH-owned enum/constraint/matrix, provisioning, admission,
-and cross-service denial proof. Do not create a shared review service or a
-database service-grant table.
+The closed registry now has fourteen fixed-service identities and twenty-two
+matrix memberships: seven ART identities, project setup, and six exact REV
+identities. Missing provisioned rows deny without stopping the application.
+The REV actions remain unavailable, so registry membership alone grants no
+authority. Do not create a shared review service or a database service-grant
+table.
 
-AUTH-12B extends the current live registry to an eighth identity,
+Historically, AUTH-12B extended the registry to an eighth identity,
 `workstream.project.setup`, with exactly four static memberships:
 `project.guide_sufficiency.run`,
 `project.submission_artifact_policy.derive`,
