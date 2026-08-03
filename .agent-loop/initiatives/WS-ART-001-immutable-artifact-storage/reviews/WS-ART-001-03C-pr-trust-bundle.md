@@ -115,8 +115,13 @@ and direct-service fixture assumptions. A fourth run established the exact
 combined AUTH+ART schema fingerprint after migration reconciliation. A fifth
 run left one synthetic generation mismatch, now reconciled. A sixth run passed
 the project lifecycle and identified one task-fixture helper that deleted an
-immutable ART-bound setup run; it now preserves that lineage. The repairs
-are recorded in the external-review response and require a fresh hosted rerun.
+immutable ART-bound setup run; it now preserves that lineage. A seventh run
+passed both project and task lifecycle lanes and isolated the remaining
+shared-foundations failures to merged OpenAPI inventory and migration-revision
+test expectations; those tests now use the exact revision schema and the
+outermost populated-lineage downgrade guard, while direct tests retain coverage
+of the superseded `0039`, `0040`, and `0042` guards. The repairs are recorded in the
+external-review response and require a fresh hosted rerun.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental review produced no new actionable findings.
 

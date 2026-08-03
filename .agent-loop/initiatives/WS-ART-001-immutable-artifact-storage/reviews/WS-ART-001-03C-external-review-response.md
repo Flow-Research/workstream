@@ -40,6 +40,14 @@
   ART-bound setup run. The helper now clears only its mutable post-submit
   output pointer before removing the generated policy and preserves all
   verified guide-binding lineage.
+- Hosted run `30787408677` passed both project and task lifecycle lanes. The
+  remaining shared-foundations failures were reconciliation-only: the OpenAPI
+  inventory now records the exact merged AUTH surface, the ART-admission
+  migration fixture uses the columns that existed at revision `0028`, and
+  downgrade tests expect the outer `0049` clean-cut guard that necessarily
+  protects populated guide-source lineage before older migration guards can
+  run. Direct migration-function tests continue proving the superseded `0039`,
+  `0040`, and `0042` populated-evidence guards independently.
 
 ## Comments deferred
 
@@ -62,7 +70,8 @@
 
 ## Remaining risks
 
-- The database-backed fixture repairs require the next hosted Backend semantic
-  lane run because no local test database URL is configured.
+- The database-backed migration-fixture repairs require the next hosted Backend
+  semantic lane run because no local test database URL is configured. The
+  focused OpenAPI contract test passes locally.
 - CodeRabbit's latest incremental review reported no new actionable findings;
   all earlier inline findings were checked against the final diff.

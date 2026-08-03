@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import UTC, datetime
 import hashlib
+import importlib.util
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -108,6 +109,42 @@ from app.modules.projects.service import (
 )
 from app.schemas.auth import ActorContext
 from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
+
+
+@pytest.mark.parametrize(
+    ("revision_file", "expected_guard"),
+    [
+        (
+            "0039_guide_source_bindings.py",
+            "cannot downgrade populated guide source artifact bindings",
+        ),
+        (
+            "0040_guide_materialization.py",
+            "cannot downgrade populated guide materialization evidence",
+        ),
+        (
+            "0042_guide_extraction.py",
+            "cannot downgrade populated guide extraction evidence",
+        ),
+    ],
+)
+def test_superseded_guide_migration_populated_guards_remain_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+    revision_file: str,
+    expected_guard: str,
+) -> None:
+    """Keep each older guard covered even though 0049 now refuses first."""
+    revision_path = Path(__file__).resolve().parents[1] / "alembic/versions" / revision_file
+    spec = importlib.util.spec_from_file_location(f"guard_{revision_file}", revision_path)
+    assert spec is not None and spec.loader is not None
+    revision = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(revision)
+    populated_result = SimpleNamespace(scalar_one=lambda: True)
+    bind = SimpleNamespace(execute=lambda _statement: populated_result)
+    monkeypatch.setattr(revision.op, "get_bind", lambda: bind)
+
+    with pytest.raises(RuntimeError, match=expected_guard):
+        revision.downgrade()
 
 
 def test_sufficiency_material_limit_accepts_exact_boundary_and_rejects_one_over() -> None:
@@ -1266,7 +1303,10 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
         with (
             migration_lock(),
             pytest.raises(
-                RuntimeError, match="cannot downgrade populated guide extraction evidence"
+                RuntimeError,
+                # The v2 clean-cut is the first downgrade boundary and must
+                # refuse this populated lineage before older evidence guards.
+                match="guide source v2 downgrade requires empty guide-source tables",
             ),
         ):
             await asyncio.to_thread(
@@ -2400,7 +2440,9 @@ def test_0039_refuses_populated_binding_downgrade(
         migration_lock(),
         pytest.raises(
             RuntimeError,
-            match="cannot downgrade populated guide source artifact bindings",
+            # The v2 clean-cut supersedes the older binding guard whenever
+            # authoritative guide-source lineage exists.
+            match="guide source v2 downgrade requires empty guide-source tables",
         ),
     ):
         command.downgrade(config, "0038_guide_source_ingest")
@@ -2436,7 +2478,9 @@ def test_0040_refuses_populated_classification_downgrade(
         migration_lock(),
         pytest.raises(
             RuntimeError,
-            match="cannot downgrade populated guide materialization evidence",
+            # Classification evidence is anchored to populated v2 source
+            # lineage, so the outer clean-cut guard must fire first.
+            match="guide source v2 downgrade requires empty guide-source tables",
         ),
     ):
         command.downgrade(config, "0039_guide_source_bindings")
@@ -2486,7 +2530,9 @@ def test_0040_refuses_incident_only_downgrade(
         migration_lock(),
         pytest.raises(
             RuntimeError,
-            match="cannot downgrade populated guide materialization evidence",
+            # Incident evidence is anchored to populated v2 source lineage,
+            # so the outer clean-cut guard must fire first.
+            match="guide source v2 downgrade requires empty guide-source tables",
         ),
     ):
         command.downgrade(config, "0039_guide_source_bindings")
