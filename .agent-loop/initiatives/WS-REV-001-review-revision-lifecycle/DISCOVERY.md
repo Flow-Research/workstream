@@ -113,14 +113,17 @@ revision coverage.
 ## Dependencies and integration gates
 
 - Queue/admission-idempotency persistence: AUTH 02D merged; safe to begin.
-- Lease persistence requires merged CON-03B canonical
-  ContributionPolicyVersion target; it is not yet evidenced merged.
+- REV owns all lease persistence and lifecycle. Its migration requires the
+  merged CON-03B canonical ContributionPolicyVersion table solely as the
+  non-null FK target; that target is not yet evidenced merged.
 - Packet-manifest persistence requires a published ART contract-only membership
   identifier/port without an ART-07A runtime dependency; it is currently an
   owner gap.
-- Automatic queue admission: exact final TASK/CHECKER/ART handoff merged.
-- Claim packet creation: queue/lease persistence, CON reviewer-policy freeze,
-  and exact ART packet membership/materialization contracts.
+- Automatic queue admission requires the exact final TASK/CHECKER/ART handoff
+  to merge before 05A; it is not currently evidenced merged.
+- Claim packet creation: queue/lease persistence, CON-06's claim-time policy
+  lookup result used by REV for its lease freeze, and exact ART packet
+  membership/materialization contracts.
 - Decision commit: Review/FinalAcceptance persistence, TASK participant, CON
   contribution participant, audit, and outbox.
 - Product reads/routes: matching AUTH activation plus lifecycle release gate.
@@ -140,7 +143,8 @@ revision coverage.
 - Final typed ART/CHECKER-to-REV admission manifest.
 - ART contract-only reviewer packet membership input and later ART-07A
   materialization input/output types.
-- Final CON reviewer-policy freeze and two-operation decision participant.
+- Final CON claim-time reviewer-policy lookup and two-operation decision
+  participant.
 - Exact TASK decision and human-revision participant interfaces.
 
 These unknowns do not block 03A1. They do block their named later consumers.

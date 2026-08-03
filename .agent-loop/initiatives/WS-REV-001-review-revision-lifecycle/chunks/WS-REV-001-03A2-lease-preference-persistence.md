@@ -15,6 +15,10 @@ Persist ReviewLease attempts and preferred-routing state with database-enforced
 active-capacity invariants, without implementing claim, release, decline, or
 timer behavior.
 
+REV owns this model, migration, repository, constraints, and every later lease
+transition. CON neither persists nor manages leases. CON-03B is ordered first
+only because this REV migration references its canonical policy-version table.
+
 ## Why this chunk exists
 
 Lease uniqueness and preference chronology form a separate high-risk

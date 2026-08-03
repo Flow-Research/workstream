@@ -26,8 +26,9 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
   children wait for their named schema/port gates.
 - ART gates only manifest/admission/packet consumers that need its final typed
   facts; REV does not wait for ART-07A runtime to define packet semantics.
-- CON-03B gates 03A2's mandatory policy-version FK; CON-06 gates claim-time
-  freeze; CON-07 gates canonical decision composition.
+- REV owns 03A2 completely; CON-03B must merely exist first as its mandatory
+  policy-version FK target. CON-06 later supplies claim-time policy lookup;
+  CON-07 later supplies canonical decision contribution composition.
 - ART must publish a contract-only packet-membership port before REV-03B. ART-
   07A then consumes the merged REV lease/manifest; this removes the former
   circular gate.

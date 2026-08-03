@@ -206,8 +206,9 @@ adverse review outcome.
 
 REV may land decision schemas, pure validation, and transaction input types
 behind an unexposed boundary, but no service may commit a canonical Review until
-the merged CON flush-only participant and ReviewLease/TaskAssignment
-`ContributionPolicyVersion` freezes are mandatory. CON failure rolls back the
+the merged CON flush-only participant and REV-owned ReviewLease plus task-owned
+TaskAssignment `ContributionPolicyVersion` freezes are mandatory. CON lookup or
+participant failure rolls back the
 entire decision. No production or test-only no-op participant exists. AUTH may
 activate `review.decision` only after the complete hidden REV+CON composition
 merges.
@@ -619,11 +620,12 @@ implement that behavior.
 
 ART and CON do not block queue persistence or other REV-owned persistence that
 contains no unresolved foreign invariant. They do gate the exact consumer
-schema or behavior: CON-03B gates ReviewLease because its canonical reviewer
-ContributionPolicyVersion FK is mandatory; ART's membership identifier contract
-gates ReviewPacketManifest; later CON and ART operations gate claim, packet read,
-and decision composition. REV never guesses the missing interface, creates a
-placeholder foreign model, or imports the foreign repository.
+schema or behavior: REV owns ReviewLease completely, but its migration follows
+CON-03B because the canonical reviewer ContributionPolicyVersion table must
+already exist as a mandatory FK target. ART's membership identifier contract
+precedes ReviewPacketManifest; later CON and ART operations precede claim,
+packet read, and decision composition. REV never guesses the missing interface,
+creates a placeholder foreign model, or imports the foreign repository.
 
 ### D31 - Queue And Lease Persistence Are Separate L1 Children
 

@@ -9,13 +9,13 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 |---|---|---|---|
 | `WS-REV-001-PLAN4` | Current-main full lifecycle replan | AUTH 02D merged PR #257 | Proposed planning PR |
 | `WS-REV-001-03A1` | Queue and admission-idempotency persistence | PLAN4 approved | First proposed runtime child |
-| `WS-REV-001-03A2` | Lease and preference persistence | 03A1 + CON-03B canonical ContributionPolicyVersion target | Skeleton |
+| `WS-REV-001-03A2` | REV-owned lease and preference persistence | 03A1 + existing CON-03B ContributionPolicyVersion table solely as the required FK target | Skeleton |
 | `WS-REV-001-03B` | Normalized packet-manifest persistence | 03A2 + ART-owned contract-only packet membership port published before ART-07A runtime | Skeleton |
 | `WS-REV-001-04A` | Immutable Review/finding/resolution/decision-request persistence | 03B | Skeleton |
 | `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + CON-02A outbox persistence + CON-02C audit participant | Skeleton; enables CON-03C schema work |
 | `WS-REV-001-05A` | Atomic final `allow_review` admission | 04B + exact TASK/CHECKER/ART admission manifest after ART checker routing/XINT activation | Skeleton |
 | `WS-REV-001-05B` | Concealed active-lease/one-offer/none query | 05A | Skeleton |
-| `WS-REV-001-06A` | Atomic claim, policy freeze, packet freeze | 05B + 03B + CON-06 freeze + exact ART packet proof | Skeleton |
+| `WS-REV-001-06A` | Atomic claim and REV-owned lease/packet freezes | 05B + 03B + CON-06 policy lookup result + exact ART packet proof | Skeleton |
 | `WS-REV-001-06B` | Owned release and preferred decline | 06A | Skeleton |
 | `WS-REV-001-06C` | Preference/lease expiry and lazy recovery | 06B + fixed service admission | Skeleton |
 | `WS-REV-001-07A` | Lease-bounded packet/context/chain reads | 06C + ART 07A | Skeleton |
@@ -47,7 +47,7 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 
 ```text
 AUTH 02D -> PLAN4 -> 03A1
-CON-03B + 03A1 -> 03A2
+CON-03B publishes FK target + REV-03A1 -> REV-03A2 owns lease persistence
 ART contract-only membership port + 03A2 -> 03B -> 04A
 CON-02A + CON-02C + 04A -> 04B -> CON-03C
 TASK/CHECKER/ART admission manifest -> 05A -> 05B

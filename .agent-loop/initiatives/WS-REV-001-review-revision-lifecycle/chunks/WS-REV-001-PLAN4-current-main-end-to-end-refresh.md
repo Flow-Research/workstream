@@ -46,8 +46,8 @@ docs/spec_review_lifecycle.md (only if a normative contradiction is found)
   as active.
 - Queue persistence can proceed independently; any REV schema or behavior with
   a foreign invariant remains gated on the exact merged owner contract (for
-  example CON-03B before ReviewLease and ART membership identifiers before the
-  packet manifest).
+  example the CON-03B table before the REV-owned ReviewLease migration can add
+  its required FK, and ART membership identifiers before the packet manifest).
 - Existing Submission is preserved; no uploaded review evidence or adjudication
   enters v0.1.
 - Every Review creates a reviewer contribution through CON; accept alone creates
