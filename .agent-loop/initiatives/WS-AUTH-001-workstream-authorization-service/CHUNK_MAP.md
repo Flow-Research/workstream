@@ -62,12 +62,12 @@ stopped.
 | `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Merged in PR #221 as `3fc323d7` |
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
 | `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
-| `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Internal review complete; hosted checks pending; identity/matrix registration only, zero activation |
+| `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Merged through PR #227; identity/matrix registration only, zero activation |
 | `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F, and 12G |
-| `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Proposed after 12B |
-| `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Proposed after 12C |
-| `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Proposed after 12D; economic policy remains CON-owned |
-| `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Proposed after 12D2 |
+| `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Merged through PR #229 |
+| `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Merged through PR #232 |
+| `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |
+| `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Active contract refresh after merged 12D and XINT-003-02A/02B |
 | `WS-AUTH-001-12F` | Submission Artifact Policy Mutation Cutover | L1 | Proposed after 12E |
 | `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F |
 | `WS-AUTH-001-12H` | Guide Activation Cutover | L1 | Proposed after 12B2 and the owning CON clean cut |
@@ -145,7 +145,7 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-12B
 -> WS-AUTH-001-12C
 -> WS-AUTH-001-12D
--> WS-AUTH-001-12D2
+-> XINT-003-02A/02B (supersedes WS-AUTH-001-12D2)
 -> WS-AUTH-001-12E
 -> WS-AUTH-001-12F
 -> WS-AUTH-001-12G
