@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -116,7 +116,10 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
     item = _VerifiedItem(ids[4], ids[5], uuid4(), "c" * 64, 19)
     binding_id = uuid4()
     classification_id = uuid4()
-    authority = SimpleNamespace(prepare=AsyncMock(return_value=object()))
+    prepared_handle = object()
+    authority = SimpleNamespace(prepare=AsyncMock(return_value=prepared_handle))
+    authority_facts = object()
+    facts_factory = Mock(return_value=authority_facts)
     binding_service = SimpleNamespace(
         bind_guide_source=AsyncMock(return_value=SimpleNamespace(binding_id=binding_id))
     )
@@ -127,6 +130,10 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
     monkeypatch.setattr(
         "app.modules.artifacts.guide_setup.GuideSourceBindingService",
         lambda *_args, **_kwargs: binding_service,
+    )
+    monkeypatch.setattr(
+        "app.modules.artifacts.guide_setup.guide_source_binding_authority_facts",
+        facts_factory,
     )
     service = object.__new__(GuideSetupPreparationService)
     service._session_factory = _factory(_Session())
@@ -142,7 +149,33 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
         setup_run_id=ids[3], setup_generation=3,
     )
 
-    authority.prepare.assert_awaited_once()
-    binding_service.bind_guide_source.assert_awaited_once()
-    service._materialization.materialize_guide_source.assert_awaited_once()
-    service._extraction.extract.assert_awaited_once()
+    facts_factory.assert_called_once_with(
+        project_id=ids[0], guide_id=ids[1], source_snapshot_id=ids[2],
+        source_item_id=item.item_id, setup_run_id=ids[3], setup_generation=3,
+        content_id=item.content_id, replica_id=item.replica_id,
+        sha256=item.sha256, byte_count=item.byte_count,
+    )
+    assert authority.prepare.await_args.kwargs["facts"] is authority_facts
+    binding_request = binding_service.bind_guide_source.await_args.args[0]
+    assert binding_request.prepared_authorization is prepared_handle
+    assert binding_request.project_id == ids[0]
+    assert binding_request.guide_id == ids[1]
+    assert binding_request.guide_source_snapshot_id == ids[2]
+    assert binding_request.source_item_id == item.item_id
+    assert binding_request.project_setup_run_id == ids[3]
+    assert binding_request.setup_generation == 3
+    assert binding_request.logical_role == "guide_source_original"
+    assert binding_request.verified_content_id == item.content_id
+    materialization_request = service._materialization.materialize_guide_source.await_args.args[0]
+    assert materialization_request.binding_id == binding_id
+    assert materialization_request.source_item_id == item.item_id
+    assert materialization_request.setup_generation == 3
+    extraction_request = service._extraction.extract.await_args.args[0]
+    assert extraction_request.binding_id == binding_id
+    assert extraction_request.classification_id == classification_id
+    assert extraction_request.project_id == ids[0]
+    assert extraction_request.guide_id == ids[1]
+    assert extraction_request.source_snapshot_id == ids[2]
+    assert extraction_request.source_item_id == item.item_id
+    assert extraction_request.project_setup_run_id == ids[3]
+    assert extraction_request.setup_generation == 3
