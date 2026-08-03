@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from celery.utils.log import get_task_logger
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -20,6 +21,10 @@ from app.modules.projects.service import (
     StaleProjectSetupContinuation,
     safe_project_setup_error_summary,
 )
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.authorization.prepared import fixed_service_prepared_authorization
+from app.modules.projects.sufficiency_mutation_service import GuideSufficiencyMutationService
+from app.modules.projects.setup_queue import pre_submit_setup_task_id
 from app.schemas.auth import ActorContext
 from app.workers.async_runner import run_async_task
 from app.workers.celery_app import celery_app
@@ -31,6 +36,52 @@ PROJECT_SETUP_POST_SUBMIT_CONTINUATION_TASK = (
 )
 
 logger = get_task_logger(__name__)
+
+
+async def _run_authorized_setup_sufficiency(
+    session,
+    *,
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    setup_run_id: str,
+    setup_generation: int,
+):
+    """Compose the exact fixed-service command for one verified sufficiency run."""
+    mutation = GuideSufficiencyMutationService(
+        session,
+        material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+    )
+    execution_name = pre_submit_setup_task_id(setup_run_id, setup_generation)
+    task_id = UUID(execution_name)
+    correlation_id = uuid5(NAMESPACE_URL, f"{execution_name}:correlation")
+    custody = await mutation.resolve_setup_service_custody(
+        project_id=UUID(project_id),
+        guide_id=UUID(guide_id),
+        source_snapshot_id=UUID(source_snapshot_id),
+        setup_run_id=UUID(setup_run_id),
+        setup_generation=setup_generation,
+        task_id=task_id,
+        correlation_id=correlation_id,
+    )
+    async with fixed_service_prepared_authorization(
+        session,
+        service_identity=ServiceIdentity.PROJECT_SETUP,
+        request_id=task_id,
+        correlation_id=correlation_id,
+    ) as authority:
+        execution = mutation.run_setup_service(
+            actor_profile_id=authority.actor_profile_id,
+            identity_link_id=authority.identity_link_id,
+            prepared=authority.service,
+            project_id=UUID(project_id),
+            guide_id=UUID(guide_id),
+            source_snapshot_id=UUID(source_snapshot_id),
+            custody=custody,
+        )
+        async with execution as outcome:
+            await (session.rollback() if outcome.replayed else session.commit())
+    return outcome
 
 
 def project_setup_pipeline_actor() -> ActorContext:
@@ -126,6 +177,7 @@ async def _run_pre_submit_setup_pipeline(
     try:
         async with session_factory() as session:
             service = ProjectService(session)
+            expected_task_id = pre_submit_setup_task_id(setup_run_id, setup_generation)
             try:
                 await service.validate_project_setup_run_context(
                     setup_run_id,
@@ -133,18 +185,42 @@ async def _run_pre_submit_setup_pipeline(
                     guide_id=guide_id,
                     source_snapshot_id=source_snapshot_id,
                     setup_generation=setup_generation,
+                    celery_task_id=expected_task_id,
                 )
+            except ProjectServiceError:
+                await session.rollback()
+                logger.warning(
+                    "stale project setup delivery rejected",
+                    exc_info=True,
+                    extra={
+                        "project_id": project_id,
+                        "guide_id": guide_id,
+                        "source_snapshot_id": source_snapshot_id,
+                        "setup_run_id": setup_run_id,
+                        "error_code": "project_setup_run_context_mismatch",
+                        "error_summary": "project setup delivery rejected",
+                    },
+                )
+                return {
+                    "status": "stale_delivery_rejected",
+                    "guide_sufficiency_report_id": None,
+                    "submission_artifact_policy_id": None,
+                }
+            try:
                 await service.update_project_setup_run_status(
                     setup_run_id,
                     status="running_sufficiency_agent",
                     current_step="guide_sufficiency",
                 )
-                sufficiency_report, _ = await service.run_guide_sufficiency_agent(
-                    actor,
-                    project_id,
-                    guide_id,
-                    source_snapshot_id,
+                sufficiency_outcome = await _run_authorized_setup_sufficiency(
+                    session,
+                    project_id=project_id,
+                    guide_id=guide_id,
+                    source_snapshot_id=source_snapshot_id,
+                    setup_run_id=setup_run_id,
+                    setup_generation=setup_generation,
                 )
+                sufficiency_report = sufficiency_outcome.response
                 if sufficiency_report.status == "blocked":
                     await service.update_project_setup_run_status(
                         setup_run_id,
@@ -181,10 +257,29 @@ async def _run_pre_submit_setup_pipeline(
                     "guide_sufficiency_report_id": sufficiency_report.id,
                     "submission_artifact_policy_id": policy.id,
                 }
+            except GuideSufficiencyMaterialUnavailable as exc:
+                await session.rollback()
+                public_error = "project setup failed; inspect server logs with the setup run id"
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code=exc.code,
+                    error_artifact_incident_id=(
+                        str(exc.incident_id) if exc.incident_id is not None else None
+                    ),
+                    error_summary=public_error,
+                )
+                return {
+                    "status": "setup_blocked",
+                    "error_code": exc.code,
+                    "guide_sufficiency_report_id": None,
+                }
             except ProjectServiceError as exc:
                 public_error = safe_project_setup_error_summary(str(exc))
                 logger.warning(
                     "project setup pipeline stopped",
+                    exc_info=True,
                     extra={
                         "project_id": project_id,
                         "guide_id": guide_id,
@@ -211,6 +306,7 @@ async def _run_pre_submit_setup_pipeline(
                 public_error = "unexpected project setup pipeline failure"
                 logger.error(
                     "project setup pipeline failed",
+                    exc_info=True,
                     extra={
                         "project_id": project_id,
                         "guide_id": guide_id,
@@ -245,24 +341,21 @@ async def _run_verified_pre_submit_sufficiency_continuation(
     setup_generation: int,
 ) -> dict[str, Any]:
     """Exercise the hidden ART-backed continuation before AUTH-04B activation."""
-    actor = project_setup_pipeline_actor()
     engine = create_async_engine(get_database_url(), pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with session_factory() as session:
-            service = ProjectService(
-                session,
-                guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
-            )
+            service = ProjectService(session)
             try:
-                report, created = await service.run_verified_guide_sufficiency_agent(
-                    actor,
-                    project_id,
-                    guide_id,
-                    source_snapshot_id,
-                    setup_run_id,
-                    setup_generation,
+                outcome = await _run_authorized_setup_sufficiency(
+                    session,
+                    project_id=project_id,
+                    guide_id=guide_id,
+                    source_snapshot_id=source_snapshot_id,
+                    setup_run_id=setup_run_id,
+                    setup_generation=setup_generation,
                 )
+                report, created = outcome.response, outcome.created
                 if report.status == "blocked":
                     await service.update_project_setup_run_status(
                         setup_run_id,

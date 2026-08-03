@@ -87,6 +87,24 @@ grants are non-authoritative for these reads:
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup`
 
+Guide-sufficiency mutations are separate Project Manager operations and require
+a UUID `Idempotency-Key` on every request:
+
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
+  records an explicitly human-authored report.
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
+  performs authorization preflight before ART material access, then consumes
+  fresh transaction-bound authority before persisting agent output.
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
+  records the Project Manager and exact authorization provenance.
+
+Issuer role claims, contributor grants, and service tokens cannot invoke these
+public routes. A manual report is not an agent-run replay: attempting an agent
+run for an occupied manual snapshot conflicts before material or agent access.
+The fixed `workstream.project.setup` service may use only the run action through
+internal command resolution with fresh setup custody; it cannot call the HTTP
+route or create manual reports or acknowledgements.
+
 AUTH-11C2 separately exposes current active-guide configuration through the
 following endpoints:
 

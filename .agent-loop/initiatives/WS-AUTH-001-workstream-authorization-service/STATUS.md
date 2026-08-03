@@ -128,8 +128,9 @@ setup-run binding findings were repaired.
 authorization cutover after PR #257 merged REV-AUTH readiness. AUTH-12B, 12C,
 and 12D are merged. XINT-003-02A/02B supplied the immutable policy lineage and
 authorized mutation path that supersede the old 12D2 dependency. The 12E
-contract is being refreshed and reviewed before runtime implementation; its
-three actions remain planned until that bounded implementation passes proof.
+contract and preimplementation review are complete. Runtime implementation is
+under deterministic proof; its three actions become active only with this
+bounded merge.
 
 ## Current review branch
 
@@ -181,7 +182,7 @@ three actions remain planned until that bounded implementation passes proof.
 | `WS-AUTH-001-12C` | Merged | `codex/ws-auth-001-12c-project-create` | #229 | System-scoped project creation cutover merged as `67f2c14b`. |
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
-| `WS-AUTH-001-12E` | Contract refresh and plan review | `codex/ws-auth-001-12e-guide-sufficiency` | - | Next independent AUTH chunk; three guide-sufficiency actions remain planned. |
+| `WS-AUTH-001-12E` | Implementation and proof | `codex/ws-auth-001-12e-guide-sufficiency` | - | Three guide-sufficiency actions plus fixed setup-service run PREP are under review. |
 | `WS-AUTH-001-12F` | Proposed | - | - | Submission artifact policy mutation/provenance cutover. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover. |
 | `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |

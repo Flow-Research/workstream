@@ -38,13 +38,17 @@ backend/app/modules/projects/repository.py
 backend/app/modules/projects/router.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
+backend/app/modules/projects/setup_queue.py
 backend/app/modules/projects/sufficiency_mutation_service.py
 backend/app/modules/projects/sufficiency_mutation_repository.py
+backend/app/modules/projects/guide_mutation_router.py
+backend/app/modules/artifacts/authorization.py
 backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
+backend/app/**/project_setup.py
 backend/alembic/versions/0050_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
@@ -52,6 +56,7 @@ backend/tests/test_alembic.py
 backend/tests/conftest.py
 backend/scripts/run_test_lanes.py
 backend/scripts/api_contract_e2e.py
+.github/workflows/backend.yml
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 docs/operations_project_operating_manual.md
@@ -62,9 +67,10 @@ docs/roadmap_status.md
 ## Not allowed changes
 
 ART extraction/materialization/source-usage semantics, agent prompt semantics,
-policy approval, guide activation, Celery call-graph cutover, checker or REV
-execution, or token-role fallback. Do not edit migration 0046 or introduce a
-second prepared-authorization protocol.
+policy approval, guide activation, setup stages after sufficiency, checker or
+REV execution, or token-role fallback. The existing verified-sufficiency Celery
+entry may be cut over only to the 12E internal command boundary. Do not edit
+migration 0046 or introduce a second prepared-authorization protocol.
 
 ## Acceptance criteria
 
@@ -171,15 +177,15 @@ second prepared-authorization protocol.
 
 ```bash
 cd backend
-ruff check app tests scripts
-mypy app/api/deps/authorization.py app/modules/authorization app/modules/projects
+.venv/bin/ruff check app tests scripts
 .venv/bin/pytest -q tests/test_authorization.py -k 'sufficiency and (prepared or service or unavailable or catalogue)'
-.venv/bin/pytest -q tests/test_projects.py -k 'sufficiency and (authorization or idempotency or revocation or stale or rollback or concurrent)'
+.venv/bin/pytest -q tests/test_projects.py -k 'sufficiency'
 .venv/bin/pytest -q tests/test_alembic.py -k '0050 or guide_sufficiency_authority'
 .venv/bin/pytest -q tests/test_ci_test_lanes.py
 .venv/bin/coverage erase
-.venv/bin/coverage run -m pytest -q tests/test_authorization.py tests/test_projects.py -k 'guide_sufficiency'
-.venv/bin/coverage report --include='app/modules/authorization/catalogue.py,app/modules/authorization/prepared.py,app/modules/authorization/runtime.py,app/modules/projects/sufficiency_mutation_*.py' --precision=2 --fail-under=90
+.venv/bin/coverage run --concurrency=greenlet -m pytest -q tests/test_authorization.py -k 'prepared or catalogue or sufficiency or service'
+.venv/bin/coverage run --concurrency=greenlet --append -m pytest -q tests/test_projects.py -k 'sufficiency'
+.venv/bin/coverage report --include='app/modules/projects/sufficiency_mutation_*.py' --precision=2 --fail-under=90
 .venv/bin/python scripts/run_test_lanes.py --collect-only --metadata-dir /tmp/ws-auth-12e-lanes --summary-json /tmp/ws-auth-12e-lanes.json
 .venv/bin/python scripts/api_contract_e2e.py
 cd ..
@@ -189,7 +195,8 @@ git diff --check
 ```
 
 The exact pushed head must pass Agent Gates and GitHub Backend: all five hosted
-PostgreSQL semantic lanes plus aggregate repository coverage at or above 78
+PostgreSQL semantic lanes, the existing authorization-subsystem coverage gate
+at or above 90 percent, and aggregate repository coverage at or above 78
 percent. No local full-suite run is required.
 Any new test module must be assigned to exactly one canonical semantic lane and
 `tests/test_ci_test_lanes.py` must prove the inventory remains complete.

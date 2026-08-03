@@ -66,6 +66,7 @@ from app.modules.authorization.runtime import (
     ProjectContributorCandidateCollectionResourceContext,
     ProjectCreateResourceContext,
     ProjectGuideMutationPrepareDenialResourceContext,
+    ProjectGuideSufficiencyMutationResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
@@ -100,6 +101,9 @@ _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS = frozenset(
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
     }
 )
 
@@ -390,7 +394,12 @@ class AuthorizationService:
             if action.availability is not ActionAvailability.ACTIVE:
                 raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
             expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
-            if (
+            project_setup_sufficiency = (
+                action_id is ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN
+                and scope.kind is PreparedAuthorityScopeKind.PROJECT
+                and scope.project_id is not None
+            )
+            if not project_setup_sufficiency and (
                 expected_resource is None
                 or scope.kind is not PreparedAuthorityScopeKind.ARTIFACT_INTERNAL
                 or scope.artifact_resource_type != expected_resource[0]
@@ -411,7 +420,7 @@ class AuthorizationService:
                 transaction=transaction,
                 context=context,
                 action_id=action_id,
-                scope_project_id=None,
+                scope_project_id=(scope.project_id if project_setup_sufficiency else None),
                 matched_grant_id=None,
                 matched_grant_scope_project_id=None,
                 matched_grant_status=None,
@@ -643,7 +652,13 @@ class AuthorizationService:
             )
             or (
                 action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS
-                and isinstance(resource_context, ProjectGuideMutationPrepareDenialResourceContext)
+                and isinstance(
+                    resource_context,
+                    (
+                        ProjectGuideMutationPrepareDenialResourceContext,
+                        ProjectGuideSufficiencyMutationResourceContext,
+                    ),
+                )
             )
             or (
                 action_id
@@ -942,7 +957,16 @@ class AuthorizationService:
                 and action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]
             ):
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            if denial is None and (
+            if action_id is ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN:
+                if denial is None and (
+                    not isinstance(
+                        resource_context, ProjectGuideSufficiencyMutationResourceContext
+                    )
+                    or resource_context.execution_kind != "setup_service"
+                    or resource_context.scope_project_id != authority.scope_project_id
+                ):
+                    denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            elif denial is None and (
                 expected_resource is None
                 or not isinstance(resource_context, expected_resource[1])
                 or resource_context.resource_type != authority.artifact_resource_type
@@ -988,6 +1012,13 @@ class AuthorizationService:
                 denial is None
                 and guide_kind is not None
                 and (resource_context.target_kind != guide_kind)
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            sufficiency_kind = PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION.get(action_id)
+            if (
+                denial is None
+                and sufficiency_kind is not None
+                and resource_context.target_kind != sufficiency_kind
             ):
                 denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if denial is None and (

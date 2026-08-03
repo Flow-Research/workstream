@@ -808,7 +808,7 @@ async def create_policy_bundle_for_guide(
         client,
         "POST",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
-        manager_token,
+        diagnostic_reader_token,
         {
             "source_snapshot_id": snapshot["id"],
             "status": "passed",
@@ -816,6 +816,7 @@ async def create_policy_bundle_for_guide(
             "summary": "Guide is sufficient for the API contract real API drill.",
         },
         201,
+        idempotency_key=str(uuid4()),
     )
     reports = await request_json(
         client,
@@ -1117,6 +1118,27 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             ),
             "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy": (
                 "project.pre_submit_checker_policy.read"
+            ),
+        }
+        sufficiency_actions = {
+            path: openapi["paths"][path]["post"]["x-workstream-action-id"]
+            for path in {
+                "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+                "/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
+                "{source_snapshot_id}/run-sufficiency-agent",
+                "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/"
+                "{report_id}/acknowledge-warnings",
+            }
+        }
+        assert sufficiency_actions == {
+            "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports": (
+                "project.guide_sufficiency_report.create"
+            ),
+            "/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
+            "{source_snapshot_id}/run-sufficiency-agent": "project.guide_sufficiency.run",
+            "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/"
+            "{report_id}/acknowledge-warnings": (
+                "project.guide_sufficiency.warnings.acknowledge"
             ),
         }
         assert (

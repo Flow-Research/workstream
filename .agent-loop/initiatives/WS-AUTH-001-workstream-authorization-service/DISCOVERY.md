@@ -464,14 +464,14 @@ need an independently reviewable contract and production-code budget.
   bindings; project scope plus a request digest is insufficient.
 - Public sufficiency mutations in `projects/router.py` still resolve the legacy
   `ActorContext`; `ProjectService` still authorizes them with
-  `require_any_role`, owns commits, and records no canonical AUTH decision
+  the former role-claim helper, owns commits, and records no canonical AUTH decision
   provenance.
 - ART-03B4 already merged the verified guide-material pipeline and migration
   `0046_guide_sufficiency`. It owns extraction/source-usage provenance. AUTH-12E
   must reuse that behavior and must not create another materialization or
   extraction path.
-- Current Alembic head is `0049_rev_auth_readiness`; 12E therefore allocates
-  the next migration from current main rather than reusing or editing 0046.
+- The discovery head was `0049_rev_auth_readiness`; 12E allocates migration
+  `0050_guide_sufficiency_authority` rather than reusing or editing 0046.
 
 ## Exact 12E implementation gap
 

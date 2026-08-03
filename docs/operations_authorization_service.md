@@ -714,8 +714,8 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 100 ActionIds, 45 active actions, and
-55 planned actions. AUTH-11C2 activates three current effective-policy and
+Catalogue totals are 71 PermissionIds, 100 ActionIds, 48 active actions, and
+52 planned actions. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
 route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
 activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
@@ -895,14 +895,19 @@ Historically, AUTH-12B extended the registry to an eighth identity,
 `project.guide_sufficiency.run`,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
-All four remain planned and unavailable. Migration
+AUTH-12E activates only `project.guide_sufficiency.run`; the other three
+memberships remain planned and unavailable. The active action can be resolved
+for this fixed service only by an internal command carrying exact setup-run,
+expected-step, task/correlation, project, guide, snapshot, generation, stale
+output, and material custody. It is not admitted through the public HTTP route,
+and it never receives a fabricated human grant. Migration
 `0043_project_setup_service` seeds no profile, link, AdminRoleGrant, or
 ProjectRoleGrant. It takes an `ACCESS EXCLUSIVE` lock on `actor_profiles` while
 replacing the closed service-identity constraint, and downgrade refuses once a
 `workstream.project.setup` ActorProfile exists. An Access Administrator may use the existing controlled
 service-actor provisioning route only when the deployment supplies the exact
 issuer and opaque subject; that actor still has no executable setup action
-until the owning later activation chunks merge.
+until each owning activation chunk merges.
 
 Fixed-service admission is request-local. Resolve only the verified issuer and
 opaque subject through the exact stored link and active service profile; never
@@ -1333,6 +1338,13 @@ does not invent or backfill historical custody. Every new covered mutation must
 commit its complete replay, decision, and row provenance atomically. Once any
 12D custody or attributed mutation exists, downgrade is intentionally refused;
 operators must not delete authority evidence merely to force rollback.
+
+Migration `0050_guide_sufficiency_authority` leaves historical sufficiency
+reports readable with null authorization provenance. New 12E mutations record
+complete creation or acknowledgement provenance and use the append-only
+`guide_sufficiency_mutation_idempotency_records` replay ledger. Downgrade is
+refused after any 12E replay or attributed sufficiency provenance exists; do
+not delete replay, product, or authority evidence to force rollback.
 
 ## Draft review and revision policy authorization
 

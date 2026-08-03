@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import NAMESPACE_URL, uuid5
 
 from celery.exceptions import CeleryError
 from kombu.exceptions import KombuError
@@ -17,6 +18,16 @@ logger = logging.getLogger(__name__)
 
 class ProjectSetupQueueError(RuntimeError):
     """Raised when Workstream cannot enqueue project setup automation."""
+
+
+def pre_submit_setup_task_id(setup_run_id: str, setup_generation: int) -> str:
+    """Return the stable broker/execution id for one setup generation."""
+    return str(
+        uuid5(
+            NAMESPACE_URL,
+            f"workstream.project_setup.guide_sufficiency:{setup_run_id}:{setup_generation}",
+        )
+    )
 
 
 def enqueue_pre_submit_setup_pipeline(
@@ -47,7 +58,8 @@ def enqueue_pre_submit_setup_pipeline(
 
         sync_task_settings(run_pre_submit_setup_pipeline)
         result = run_pre_submit_setup_pipeline.apply_async(
-            args=(project_id, guide_id, source_snapshot_id, setup_run_id, setup_generation)
+            args=(project_id, guide_id, source_snapshot_id, setup_run_id, setup_generation),
+            task_id=pre_submit_setup_task_id(setup_run_id, setup_generation),
         )
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
         raise ProjectSetupQueueError("project setup pipeline could not be enqueued") from exc
@@ -67,6 +79,11 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     from app.modules.projects.repository import ProjectRepository
 
     repository = ProjectRepository(session)
+    expected_task_id = pre_submit_setup_task_id(setup_run_id, setup_generation)
+    setup_run = await repository.get_project_setup_run(setup_run_id)
+    if setup_run is not None:
+        setup_run.celery_task_id = expected_task_id
+        await session.commit()
     try:
         task_id = await asyncio.to_thread(
             enqueue_pre_submit_setup_pipeline,
@@ -76,6 +93,10 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run_id=setup_run_id,
             setup_generation=setup_generation,
         )
+        if task_id != expected_task_id:
+            raise ProjectSetupQueueError(
+                "project setup queue returned the wrong task identity"
+            )
     except ProjectSetupQueueError as exc:
         logger.warning(
             "project setup pipeline enqueue failed after commit",
@@ -96,10 +117,6 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run.error_summary = "project setup failed"
             await session.commit()
         return None
-    setup_run = await repository.get_project_setup_run(setup_run_id)
-    if setup_run is not None:
-        setup_run.celery_task_id = task_id
-        await session.commit()
     return task_id
 
 

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from copy import Error as CopyError
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from collections.abc import AsyncIterator
 from typing import NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
+from app.modules.actors.repository import ActorRepository
+from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.audit.schemas import ActorReferenceKind
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import (
@@ -20,6 +24,8 @@ from app.modules.authorization.kernel import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
+    ActorKind,
+    ActorStatus,
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
@@ -27,8 +33,10 @@ from app.modules.authorization.runtime import (
     GuideSourceReadResourceContext,
     GuideSourceIngestResourceContext,
     AuthorizationContext,
+    AuthorizationDenialCode,
     AuthorizationDecision,
     AuthorizationResourceContext,
+    IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
     PreparedAuthorizationUnsupported,
@@ -37,12 +45,24 @@ from app.modules.authorization.runtime import (
     PROJECT_MUTATION_RESOURCE_BY_ACTION,
     ProjectCreateResourceContext,
     ProjectGuideMutationResourceContext,
+    ProjectGuideSufficiencyMutationResourceContext,
     ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSourceSnapshotMutationResourceContext,
+    ProjectSetupServiceCustodyContext,
     ProjectPolicyMutationPrepareDenialResourceContext,
     ProjectReviewPolicyMutationResourceContext,
     ProjectRevisionPolicyMutationResourceContext,
+    ServiceAuthorizationContext,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class FixedServicePreparedAuthorization:
+    """One AUTH-owned fixed-service principal and its request-local PREP service."""
+
+    actor_profile_id: UUID
+    identity_link_id: UUID
+    service: PreparedAuthorizationService
 
 
 class PreparedAuthorizationHandle:
@@ -108,6 +128,20 @@ class _PreparedAuthorizationBinding:
     policy_mutation_predecessor_generation: int | None = None
     policy_mutation_predecessor_digest: str | None = None
     policy_mutation_guide_status: str | None = None
+    sufficiency_project_id: UUID | None = None
+    sufficiency_guide_id: UUID | None = None
+    sufficiency_guide_version: str | None = None
+    sufficiency_snapshot_id: UUID | None = None
+    sufficiency_snapshot_hash: str | None = None
+    sufficiency_report_id: UUID | None = None
+    sufficiency_operation_id: UUID | None = None
+    sufficiency_request_digest: str | None = None
+    sufficiency_target_kind: str | None = None
+    sufficiency_execution_kind: str | None = None
+    sufficiency_setup_generation: int | None = None
+    sufficiency_stale_output_digest: str | None = None
+    sufficiency_material_digest: str | None = None
+    sufficiency_setup_service_custody: dict | None = None
 
 
 @dataclass(slots=True)
@@ -185,6 +219,34 @@ def _policy_mutation_denial_binding_matches(
         and binding.policy_mutation_project_id == resource.scope_project_id
         and binding.policy_mutation_guide_id == resource.requested_guide_id
         and binding.policy_mutation_request_digest == resource.request_digest
+    )
+
+
+def _sufficiency_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectGuideSufficiencyMutationResourceContext,
+) -> bool:
+    """Return whether final sufficiency lineage matches every prepared fact."""
+    custody = (
+        resource.setup_service_custody.model_dump(mode="json")
+        if resource.setup_service_custody is not None
+        else None
+    )
+    return (
+        binding.sufficiency_project_id == resource.scope_project_id
+        and binding.sufficiency_guide_id == resource.guide_id
+        and binding.sufficiency_guide_version == resource.guide_version
+        and binding.sufficiency_snapshot_id == resource.source_snapshot_id
+        and binding.sufficiency_snapshot_hash == resource.source_snapshot_hash
+        and binding.sufficiency_report_id == resource.sufficiency_report_id
+        and binding.sufficiency_operation_id == resource.operation_id
+        and binding.sufficiency_request_digest == resource.request_digest
+        and binding.sufficiency_target_kind == resource.target_kind
+        and binding.sufficiency_execution_kind == resource.execution_kind
+        and binding.sufficiency_setup_generation == resource.setup_generation
+        and binding.sufficiency_stale_output_digest == resource.stale_output_digest
+        and binding.sufficiency_material_digest == resource.material_digest
+        and binding.sufficiency_setup_service_custody == custody
     )
 
 
@@ -278,6 +340,10 @@ class PreparedAuthorizationService:
             ),
         ) and not _policy_mutation_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context, ProjectGuideSufficiencyMutationResourceContext
+        ) and not _sufficiency_binding_matches(issuance.binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
             self._consumer_token,
@@ -307,6 +373,10 @@ class PreparedAuthorizationService:
         if isinstance(
             final_resource_context, ProjectPolicyMutationPrepareDenialResourceContext
         ) and not _policy_mutation_denial_binding_matches(binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context, ProjectGuideSufficiencyMutationResourceContext
+        ) and not _sufficiency_binding_matches(binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         await self._authorization._complete_prepared_denial(
             self._consumer_token,
@@ -360,6 +430,7 @@ class PreparedAuthorizationService:
         policy_mutation_generation = policy_mutation_predecessor_generation = None
         policy_mutation_predecessor_id = None
         policy_mutation_guide_status = None
+        sufficiency: dict[str, object] = {}
         if action_id is ActionId.PROJECT_CREATE:
             try:
                 operation_id = UUID(str(caller_input.request_value["operation_id"]))
@@ -408,6 +479,65 @@ class PreparedAuthorizationService:
                 )
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if action_id in {
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        }:
+            try:
+                raw_report_id = caller_input.request_value["report_id"]
+                raw_custody = caller_input.request_value["setup_service_custody"]
+                custody = None
+                if raw_custody:
+                    custody_value = dict(raw_custody)
+                    for field in (
+                        "setup_run_id",
+                        "scope_project_id",
+                        "guide_id",
+                        "source_snapshot_id",
+                        "task_id",
+                        "correlation_id",
+                    ):
+                        custody_value[field] = UUID(str(custody_value[field]))
+                    custody = ProjectSetupServiceCustodyContext.model_validate(custody_value)
+                sufficiency = {
+                    "project_id": UUID(str(caller_input.request_value["project_id"])),
+                    "guide_id": UUID(str(caller_input.request_value["guide_id"])),
+                    "guide_version": str(caller_input.request_value["guide_version"]),
+                    "snapshot_id": UUID(str(caller_input.request_value["source_snapshot_id"])),
+                    "snapshot_hash": str(caller_input.request_value["source_snapshot_hash"]),
+                    "report_id": UUID(str(raw_report_id)) if raw_report_id else None,
+                    "operation_id": UUID(str(caller_input.request_value["operation_id"])),
+                    "request_digest": str(caller_input.request_value["request_digest"]),
+                    "target_kind": str(caller_input.request_value["target_kind"]),
+                    "execution_kind": str(caller_input.request_value["execution_kind"]),
+                    "setup_generation": int(caller_input.request_value["setup_generation"]),
+                    "stale_output_digest": caller_input.request_value["stale_output_digest"],
+                    "material_digest": caller_input.request_value["material_digest"],
+                    "setup_service_custody": custody,
+                }
+                ProjectGuideSufficiencyMutationResourceContext(
+                    resource_type="project_guide_sufficiency_mutation",
+                    resource_id=sufficiency["report_id"] or sufficiency["snapshot_id"],
+                    scope_project_id=sufficiency["project_id"],
+                    guide_id=sufficiency["guide_id"],
+                    guide_version=sufficiency["guide_version"],
+                    source_snapshot_id=sufficiency["snapshot_id"],
+                    source_snapshot_hash=sufficiency["snapshot_hash"],
+                    sufficiency_report_id=sufficiency["report_id"],
+                    operation_id=sufficiency["operation_id"],
+                    request_digest=sufficiency["request_digest"],
+                    target_kind=sufficiency["target_kind"],
+                    execution_kind=sufficiency["execution_kind"],
+                    setup_generation=sufficiency["setup_generation"],
+                    stale_output_digest=sufficiency["stale_output_digest"],
+                    material_digest=sufficiency["material_digest"],
+                    setup_service_custody=sufficiency["setup_service_custody"],
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PreparedAuthorizationHandleInvalid(
+                    "invalid prepared authorization handle"
+                ) from exc
         if action_id in {
             ActionId.PROJECT_REVIEW_POLICY_UPDATE,
             ActionId.PROJECT_REVISION_POLICY_UPDATE,
@@ -471,6 +601,24 @@ class PreparedAuthorizationService:
             policy_mutation_predecessor_generation=(policy_mutation_predecessor_generation),
             policy_mutation_predecessor_digest=policy_mutation_predecessor_digest,
             policy_mutation_guide_status=policy_mutation_guide_status,
+            sufficiency_project_id=sufficiency.get("project_id"),
+            sufficiency_guide_id=sufficiency.get("guide_id"),
+            sufficiency_guide_version=sufficiency.get("guide_version"),
+            sufficiency_snapshot_id=sufficiency.get("snapshot_id"),
+            sufficiency_snapshot_hash=sufficiency.get("snapshot_hash"),
+            sufficiency_report_id=sufficiency.get("report_id"),
+            sufficiency_operation_id=sufficiency.get("operation_id"),
+            sufficiency_request_digest=sufficiency.get("request_digest"),
+            sufficiency_target_kind=sufficiency.get("target_kind"),
+            sufficiency_execution_kind=sufficiency.get("execution_kind"),
+            sufficiency_setup_generation=sufficiency.get("setup_generation"),
+            sufficiency_stale_output_digest=sufficiency.get("stale_output_digest"),
+            sufficiency_material_digest=sufficiency.get("material_digest"),
+            sufficiency_setup_service_custody=(
+                sufficiency["setup_service_custody"].model_dump(mode="json")
+                if sufficiency.get("setup_service_custody") is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -561,3 +709,104 @@ class PreparedAuthorizationService:
                 project_id=resource.scope_project_id,
             )
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+
+
+async def fixed_service_authorization_context(
+    session: AsyncSession,
+    service_identity: ServiceIdentity,
+    request_id: UUID,
+    correlation_id: UUID,
+) -> ServiceAuthorizationContext:
+    """Resolve one provisioned fixed service without synthesizing role claims."""
+    actors = ActorRepository(session)
+    profile = await actors.get_service_actor(service_identity.value)
+    if profile is None or profile.service_identity != service_identity.value:
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTOR_NOT_FOUND)
+    link = await actors.get_identity_link_for_actor(profile.id)
+    if (
+        link is None
+        or link.actor_profile_id != profile.id
+        or link.subject_kind != ActorKind.SERVICE.value
+    ):
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.IDENTITY_LINK_REVOKED)
+    try:
+        return ServiceAuthorizationContext(
+            actor_profile_id=UUID(profile.id),
+            actor_kind=ActorKind.SERVICE,
+            actor_status=ActorStatus(profile.status),
+            identity_link_id=UUID(link.id),
+            identity_link_status=IdentityLinkStatus(link.status),
+            service_identity=service_identity,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTOR_NOT_FOUND) from exc
+
+
+def fixed_service_context_revalidator(
+    repository: AdminAuthorizationRepository,
+    expected_identity: ServiceIdentity,
+):
+    """Build AUTH's canonical fixed-service lifecycle revalidator."""
+
+    async def revalidate(
+        original: ServiceAuthorizationContext,
+        _requested_action: ActionId,
+    ) -> ServiceAuthorizationContext | None:
+        locked = await repository.lock_request_actor(
+            original.identity_link_id, original.actor_profile_id
+        )
+        if locked is None:
+            return None
+        link, profile = locked
+        if (
+            profile.actor_kind != ActorKind.SERVICE.value
+            or profile.service_identity != expected_identity.value
+        ):
+            return None
+        try:
+            return ServiceAuthorizationContext(
+                actor_profile_id=UUID(profile.id),
+                actor_kind=ActorKind.SERVICE,
+                actor_status=ActorStatus(profile.status),
+                identity_link_id=UUID(link.id),
+                identity_link_status=IdentityLinkStatus(link.status),
+                service_identity=expected_identity,
+                request_id=original.request_id,
+                correlation_id=original.correlation_id,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    return revalidate
+
+
+@asynccontextmanager
+async def fixed_service_prepared_authorization(
+    session: AsyncSession,
+    *,
+    service_identity: ServiceIdentity,
+    request_id: UUID,
+    correlation_id: UUID,
+) -> AsyncIterator[FixedServicePreparedAuthorization]:
+    """Compose one exact fixed service through the shared PREP kernel."""
+    context = await fixed_service_authorization_context(
+        session, service_identity, request_id, correlation_id
+    )
+    repository = AdminAuthorizationRepository(session)
+    authorization = AuthorizationService(
+        session,
+        context,
+        revalidate_service=fixed_service_context_revalidator(repository, service_identity),
+        admin_repository=repository,
+    )
+    prepared = PreparedAuthorizationService(session, context, authorization, repository)
+    try:
+        yield FixedServicePreparedAuthorization(
+            actor_profile_id=context.actor_profile_id,
+            identity_link_id=context.identity_link_id,
+            service=prepared,
+        )
+    finally:
+        prepared.close()

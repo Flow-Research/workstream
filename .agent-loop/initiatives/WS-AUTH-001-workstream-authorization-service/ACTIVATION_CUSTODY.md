@@ -68,7 +68,7 @@ remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`; the live catalogue has
-71 PermissionIds, 100 ActionIds, 45 active actions, and 55 planned actions, with
+71 PermissionIds, 100 ActionIds, 48 active actions, and 52 planned actions, with
 fourteen fixed-service identities and twenty-two matrix memberships.
 
 ## REV custody transfer

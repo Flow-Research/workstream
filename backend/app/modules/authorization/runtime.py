@@ -725,6 +725,8 @@ class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
 
     resource_type: Literal["project_guide_sufficiency_mutation"]
     resource_id: UUID
+    operation_id: UUID
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     scope_project_id: UUID
     guide_id: UUID
     guide_version: str
@@ -734,6 +736,7 @@ class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
     execution_kind: Literal["human", "setup_service"]
     sufficiency_report_id: UUID | None = None
     setup_generation: int = Field(ge=1)
+    material_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     stale_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     setup_service_custody: ProjectSetupServiceCustodyContext | None = None
 
@@ -1460,6 +1463,7 @@ class AuthorizationDecision(BaseModel):
         "project_review_policy_mutation",
         "project_revision_policy_mutation",
         "project_policy_mutation_request",
+        "project_guide_sufficiency_mutation",
         "actor_identity_link",
         "system",
         "permission_catalogue",
@@ -1547,12 +1551,15 @@ class AuthorizationDenied(Exception):
     @property
     def public_code(self) -> str:
         """Map internal catalogue outcomes to the stable public denial."""
-        if self.decision.denial_code in {
+        denial_code = self.decision.denial_code
+        if denial_code is None:
+            raise RuntimeError("authorization denial lost its denial code")
+        if denial_code in {
             AuthorizationDenialCode.UNKNOWN_ACTION,
             AuthorizationDenialCode.ACTION_UNAVAILABLE,
         }:
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED.value
-        return self.decision.denial_code.value
+        return denial_code.value
 
 
 class AuthorizationEvidenceUnavailable(RuntimeError):

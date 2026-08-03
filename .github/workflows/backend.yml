@@ -412,6 +412,18 @@ jobs:
             coverage report --include="${source}" --precision=2 --fail-under=90
           done
 
+      - name: Guide sufficiency mutation per-file coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in \
+            app/modules/projects/sufficiency_mutation_repository.py \
+            app/modules/projects/sufficiency_mutation_service.py
+          do
+            coverage report --include="${source}" --precision=2 --fail-under=90
+          done
+
       - name: API controls coverage
         working-directory: backend
         run: >-

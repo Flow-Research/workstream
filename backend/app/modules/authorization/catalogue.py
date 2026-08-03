@@ -466,17 +466,17 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
         ActionOwner.XINT_003_02B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12E,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12E,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12E,
@@ -834,6 +834,9 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
@@ -1068,6 +1071,7 @@ def _index_service_actions(
                 ActionId.ARTIFACT_PENDING_WORK_SCAN,
                 ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
                 ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
             }
             else ActionAvailability.PLANNED
         )

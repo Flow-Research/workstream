@@ -22,6 +22,9 @@ from app.interfaces.artifact_operations import (
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.projects.schemas import (
     ActiveGuideReadResponse,
@@ -43,6 +46,16 @@ from app.modules.projects.schemas import (
     SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.modules.projects.guide_mutation_router import (
+    mutation_conflict_error,
+    sufficiency_authorization,
+)
+from app.modules.projects.sufficiency_mutation_service import (
+    GuideSufficiencyMutationConflict,
+    GuideSufficiencyMutationService,
+)
+from app.modules.actors.service import ResolvedActor
+from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.projects.authorization_reads import (
     authorize_project_active_guide_read,
     authorize_project_diagnostic_read,
@@ -259,25 +272,33 @@ async def get_guide_sufficiency_report(
     "/{project_id}/guides/{guide_id}/sufficiency-reports",
     response_model=GuideSufficiencyReportResponse,
     status_code=201,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE.value
+    },
 )
 async def create_guide_sufficiency_report(
-    project_id: str,
-    guide_id: str,
+    project_id: UUID,
+    guide_id: UUID,
     payload: GuideSufficiencyReportCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(sufficiency_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GuideSufficiencyReportResponse:
     """Record Workstream's sufficiency assessment for a guide snapshot."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).create_guide_sufficiency_report(
-            actor,
-            project_id,
-            guide_id,
-            payload,
+        outcome = await GuideSufficiencyMutationService(session).create_report(
+            resolved, prepared, key, project_id, guide_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except GuideSufficiencyMutationConflict as exc:
+        await session.rollback()
+        raise mutation_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 
@@ -347,55 +368,69 @@ async def get_submission_artifact_policy(
             "description": "Existing guide sufficiency report reused.",
         }
     },
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value},
 )
 async def run_guide_sufficiency_agent(
-    project_id: str,
-    guide_id: str,
-    source_snapshot_id: str,
+    project_id: UUID,
+    guide_id: UUID,
+    source_snapshot_id: UUID,
     response: Response,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(sufficiency_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GuideSufficiencyReportResponse:
     """Run Workstream's guide sufficiency agent for a source snapshot."""
+    key, resolved, prepared = authorization
     try:
-        result, created = await ProjectService(session).run_guide_sufficiency_agent(
-            actor,
-            project_id,
-            guide_id,
-            source_snapshot_id,
-        )
-        response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return result
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        execution = GuideSufficiencyMutationService(
+            session,
+            material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+        ).run_agent(resolved, prepared, key, project_id, guide_id, source_snapshot_id)
+        async with execution as outcome:
+            await (session.rollback() if outcome.replayed else session.commit())
+        response.status_code = status.HTTP_200_OK if outcome.replayed else status.HTTP_201_CREATED
+        return outcome.response
+    except GuideSufficiencyMutationConflict as exc:
+        await session.rollback()
+        raise mutation_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 
 @router.post(
     "/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings",
     response_model=GuideSufficiencyReportResponse,
+    openapi_extra={
+        "x-workstream-action-id": (ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE.value)
+    },
 )
 async def acknowledge_guide_sufficiency_warnings(
-    project_id: str,
-    guide_id: str,
-    report_id: str,
+    project_id: UUID,
+    guide_id: UUID,
+    report_id: UUID,
     payload: GuideSufficiencyAcknowledgement,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(sufficiency_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GuideSufficiencyReportResponse:
     """Acknowledge non-blocking guide sufficiency warnings."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).acknowledge_guide_sufficiency_warnings(
-            actor,
-            project_id,
-            guide_id,
-            report_id,
-            payload,
+        outcome = await GuideSufficiencyMutationService(session).acknowledge_warnings(
+            resolved, prepared, key, project_id, guide_id, report_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except GuideSufficiencyMutationConflict as exc:
+        await session.rollback()
+        raise mutation_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 
@@ -520,9 +555,7 @@ async def approve_submission_artifact_policy(
     "/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
     response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
     openapi_extra={
-        "x-workstream-action-id": (
-            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ.value
-        )
+        "x-workstream-action-id": (ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ.value)
     },
     dependencies=[Depends(enforce_human_authorization_read)],
 )
@@ -548,9 +581,7 @@ async def get_current_effective_submission_artifact_policy(
 @router.get(
     "/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
     response_model=PreSubmitCheckerPolicySummaryResponse,
-    openapi_extra={
-        "x-workstream-action-id": ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ.value
-    },
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ.value},
     dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_current_pre_submit_checker_policy(
