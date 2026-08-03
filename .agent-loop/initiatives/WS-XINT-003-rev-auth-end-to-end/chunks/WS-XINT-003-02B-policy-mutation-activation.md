@@ -2,9 +2,10 @@
 
 ## Status
 
-In progress after PR #242 merged 02A and the user explicitly started 02B on
-2026-08-02. Refreshed from `origin/main` at merge `6babf81b` before application
-code changes and rebased onto `2c24c91d` before external review.
+Complete. PR #248 merged as `25fc27c4` on 2026-08-03 after Backend, Agent Gates,
+and CodeRabbit passed on the final PR head. The chunk activated only the two
+policy mutation actions named below; it did not activate review/revision
+lifecycle behavior.
 
 ## Goal
 
