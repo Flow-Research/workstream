@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -31,6 +32,7 @@ from app.modules.artifacts.models import (
     GuideSourceExtractionAttempt,
     GuideSourceFormatClassification,
 )
+from app.workers import project_setup as project_setup_worker
 
 _INCIDENT_ID = uuid4()
 
@@ -80,6 +82,29 @@ def test_guide_setup_service_composes_canonical_materialization_and_extraction()
         service._extraction._materializer, AuthorizedGuideExtractionMaterializer
     )
     assert service._extraction._materializer._materialization is service._materialization
+
+
+def test_project_setup_tasks_dispatch_exact_canonical_arguments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pre_submit = AsyncMock(return_value={"status": "policy_draft_ready"})
+    post_submit = AsyncMock(return_value={"status": "completed"})
+    monkeypatch.setattr(project_setup_worker, "_run_pre_submit_setup_pipeline", pre_submit)
+    monkeypatch.setattr(project_setup_worker, "_run_post_submit_setup_continuation", post_submit)
+    monkeypatch.setattr(
+        project_setup_worker, "run_async_task", lambda factory: asyncio.run(factory())
+    )
+
+    assert project_setup_worker.run_pre_submit_setup_pipeline.run(
+        "project", "guide", "snapshot", "run", 3
+    ) == {"status": "policy_draft_ready"}
+    pre_submit.assert_awaited_once_with("project", "guide", "snapshot", "run", 3)
+    assert project_setup_worker.run_post_submit_setup_continuation.run(
+        "project", "guide", "snapshot", "run", "effective", "checker"
+    ) == {"status": "completed"}
+    post_submit.assert_awaited_once_with(
+        "project", "guide", "snapshot", "run", "effective", "checker"
+    )
 
 
 @pytest.mark.asyncio
