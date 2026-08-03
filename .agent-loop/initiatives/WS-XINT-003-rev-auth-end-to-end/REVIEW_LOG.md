@@ -147,3 +147,8 @@ coverage is 100.00 percent for `service_identities.py` and 97.89 percent for
 Markdown links pass. Local PostgreSQL execution is unavailable because this
 worktree has no `WORKSTREAM_TEST_DATABASE_URL`; the exact 16 database-backed
 tests collect cleanly and remain assigned to hosted schema and semantic lanes.
+
+The first hosted semantic lanes exposed the expected post-0049 public-schema
+fingerprint change before running product tests. The chunk contract now permits
+only that exact `tests/conftest.py` fingerprint update; no reset allow-list or
+schema-integrity behavior changed.

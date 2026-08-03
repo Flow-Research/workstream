@@ -37,6 +37,7 @@ backend/alembic/versions/0049_rev_auth_readiness.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
 backend/tests/test_auth.py
+backend/tests/conftest.py (exact post-0049 public-schema fingerprint only)
 docs/spec_authorization_service.md
 docs/spec_review_lifecycle.md
 docs/operations_authorization_service.md
