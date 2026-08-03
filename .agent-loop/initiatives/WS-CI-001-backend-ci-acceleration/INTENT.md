@@ -2,6 +2,11 @@
 
 ## Problem being solved
 
+After 02B, the complete suite is divided into four semantic processes but all
+four run inside one GitHub-hosted job. A successful August 3 run took 17m20s,
+including 15m31s for those competing processes. Review submission or dismissal
+also starts the complete Backend workflow again for an unchanged commit.
+
 The required Backend GitHub Actions job runs the complete backend test suite in
 one sequential process. PR #161 spent 25 minutes 31 seconds in that single step
 and about 27 minutes overall even though it changed no backend product code.

@@ -6,7 +6,22 @@ Reduce Backend workflow wall-clock time while preserving complete test execution
 real service integration, exact-head provenance, and every current coverage and
 branch-protection gate.
 
-## Proposed approach
+## 03 amendment — distributed semantic lanes
+
+Retain 02B's dependency-oriented semantic ownership, migrate-once isolation,
+exact node completion evidence, and coverage custody. Execute one lane per
+GitHub matrix runner, with the measured `test_alembic.py` long tail partitioned
+by deterministic exact node ID across two schema runners. Each runner emits one
+digest-bound bundle; the stable final `test` job accepts exactly five bundles with identical manifests and head
+SHA, independently recollects the current suite, validates complete execution,
+combines coverage once, and runs every existing blocking report. Remove
+`pull_request_review` and cancel superseded same-PR runs. Do not introduce path
+routing, sampling, or changed-test selection.
+
+## Historical 01 approach
+
+The shard-planner design below records the completed 01 topology. The current
+03 implementation is governed by the distributed semantic-lane amendment above.
 
 ### 1. Deterministic inventory and partitioning
 

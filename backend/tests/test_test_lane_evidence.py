@@ -22,7 +22,8 @@ REAL_COLLECT_CURRENT_NODES = validator._collect_current_nodes
 HEAD = "a" * 40
 LANES = (
     "shared_foundations",
-    "schema_contracts",
+    "schema_contracts_a",
+    "schema_contracts_b",
     "project_lifecycle",
     "task_lifecycle",
 )
@@ -49,7 +50,7 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
     nodes.append(
         {
             "execution_kind": "admin_runner_self_test",
-            "lane": "schema_contracts",
+            "lane": "schema_contracts_a",
             "module": "tests/test_isolated_database_runner.py",
             "nodeid": "tests/test_isolated_database_runner.py::test_admin_custody",
         }
@@ -117,8 +118,8 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
             }
         )
     summary = {
-        "aggregate_runner_seconds": 4.0,
-        "canonical_node_count": 5,
+        "aggregate_runner_seconds": 5.0,
+        "canonical_node_count": 6,
         "elapsed_seconds": 2.0,
         "head_sha": HEAD,
         "lanes": lane_rows,
@@ -141,7 +142,7 @@ def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
         "_collect_current_nodes",
         lambda _root, _head: sorted(
             [
-                *(f"tests/test_{index}.py::test_ok" for index in range(4)),
+                *(f"tests/test_{index}.py::test_ok" for index in range(5)),
                 "tests/test_isolated_database_runner.py::test_admin_custody",
             ]
         ),

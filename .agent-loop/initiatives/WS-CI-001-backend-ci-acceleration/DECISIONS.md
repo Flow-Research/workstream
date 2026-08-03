@@ -1,5 +1,14 @@
 # DECISIONS: WS-CI-001 - Backend CI Acceleration
 
+## 2026-08-03 - Partition the measured Alembic long tail
+
+Hosted Backend run `30786185424` (schema job `91600051005`) proved that the
+semantic matrix runs in parallel, but `tests/test_alembic.py` alone took 707.60
+seconds and dominated a 13m09s schema job. Partition its exact collected
+node IDs deterministically across two schema runners. Keep reset and isolated
+runner contracts in schema A, and reconcile all five lane manifests at fan-in
+so no test can be skipped or counted twice.
+
 ## 2026-07-20 - Prioritize CI acceleration before explicit-start automation
 
 The user selected backend CI efficiency as the next initiative after successful
@@ -58,3 +67,11 @@ that cause. Chunk 02 therefore makes a reviewed no-implementation decision for
 those original options. They may be reassessed only in future planning chunk
 `WS-CI-001-03`, after 02B exact-head evidence exists; 03 is not a successor of
 this PR and has no start authority.
+
+## 2026-08-03 - Restore real hosted parallelism
+
+Exact GitHub evidence shows migrate-once semantic lanes remain correct but take
+15m31s when four subprocesses compete on one hosted runner. Keep semantic lane
+ownership and exact custody, but execute each lane in an independent matrix job
+and combine only authenticated evidence in the stable final `test` job. Remove
+review-event reruns because review state does not change the tested commit.
