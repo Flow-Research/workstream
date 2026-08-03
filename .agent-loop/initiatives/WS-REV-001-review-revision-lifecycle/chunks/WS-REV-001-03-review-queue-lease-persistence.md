@@ -7,8 +7,10 @@ parent.
 
 ## Children
 
-- `WS-REV-001-03A` owns queue/lease base persistence and the exact merged
-  `WS-CON-001-03B` ContributionPolicyVersion FK.
+- `WS-REV-001-03A` is a non-executable split record. `03A1` owns queue and
+  admission-idempotency persistence; `03A2` owns lease and preference
+  persistence. CON policy freeze is a later claim-time typed handoff and is not
+  a prerequisite for either base child.
 - `WS-REV-001-03B` is the sole owner of the normalized immutable
   ReviewPacketManifest/item models, schema, migration, repository contract, and
   persistence tests. It starts only after ART merges an exact packet-membership
