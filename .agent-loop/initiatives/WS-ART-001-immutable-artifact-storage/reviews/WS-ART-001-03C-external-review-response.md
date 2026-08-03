@@ -59,6 +59,12 @@
   protects populated guide-source lineage before older migration guards can
   run. Direct migration-function tests continue proving the superseded `0039`,
   `0040`, and `0042` populated-evidence guards independently.
+- Distributed Backend run `30790674519` passed project lifecycle, task
+  lifecycle, shared foundations, and schema contracts B. Schema contracts A
+  exposed one migration-scope test that seeded pre-0045 rows and then upgraded
+  through the intentional `0049` clean-cut refusal. The historical-preservation
+  test now stops at revision `0045`, which is the migration it proves; separate
+  tests continue proving the current-head `0049` refusal.
 
 ## Comments deferred
 

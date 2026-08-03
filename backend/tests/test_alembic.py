@@ -2449,7 +2449,7 @@ def test_0045_guide_source_metadata_authority_round_trip(
 
 
 def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migration_lock) -> None:
-    """Pre-0045 guide rows remain readable with explicitly null custody."""
+    """0045 preserves historical rows while the later v2 clean cut refuses them."""
     config = _alembic_config()
     project_id, guide_id, snapshot_id, setup_run_id = (str(uuid4()) for _ in range(4))
     snapshot_hash = "sha256:" + "0" * 64
@@ -2548,11 +2548,16 @@ def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migrat
             command.downgrade(config, "base")
             command.upgrade(config, "0044_project_create_authority")
             asyncio.run(seed_and_read(seed=True))
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
             command.downgrade(config, "0044_project_create_authority")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
+            with pytest.raises(
+                RuntimeError,
+                match="guide source v2 requires an empty guide-source namespace",
+            ):
+                command.upgrade(config, "0049_guide_source_v2")
         finally:
             asyncio.run(reset_schema())
 
