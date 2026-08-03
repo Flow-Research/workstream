@@ -87,3 +87,17 @@ def test_api_contract_uses_runner_owned_minio_namespace(
     settings = Settings(_env_file=None, environment=env["WORKSTREAM_ENVIRONMENT"])
     assert settings.artifact_store_backend == "s3_compatible"
     assert settings.artifact_s3_bucket == "workstream-ci-isolated-012345abcdef"
+
+
+def test_real_api_drill_provisions_exact_guide_artifact_pipeline_services() -> None:
+    """The fan-in owns every fixed principal required before guide setup can run."""
+    api_contract = MODULES[0]
+
+    assert api_contract.GUIDE_ARTIFACT_PIPELINE_SERVICE_IDENTITIES == (
+        "workstream.artifact.put_resolver",
+        "workstream.artifact.verifier",
+        "workstream.artifact.scheduler",
+        "workstream.artifact.binding",
+        "workstream.artifact.guide_reader",
+        "workstream.project.setup",
+    )

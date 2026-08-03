@@ -56,6 +56,15 @@ EXPECTED_DURABLE_CHECKERS = {
     "check_low_quality_generated_artifacts",
 }
 
+GUIDE_ARTIFACT_PIPELINE_SERVICE_IDENTITIES = (
+    "workstream.artifact.put_resolver",
+    "workstream.artifact.verifier",
+    "workstream.artifact.scheduler",
+    "workstream.artifact.binding",
+    "workstream.artifact.guide_reader",
+    "workstream.project.setup",
+)
+
 
 async def seed_active_guide_for_pre_12h_e2e(
     project_id: str,
@@ -503,6 +512,33 @@ async def request_json(
             raise AssertionError(f"{method} {path} returned invalid error context")
     print(f"PASS {method} {path} -> {response.status_code}")
     return body
+
+
+async def provision_guide_artifact_pipeline_services(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    run_id: str,
+) -> None:
+    """Provision the exact fixed principals used by the real guide pipeline."""
+    for service_identity in GUIDE_ARTIFACT_PIPELINE_SERVICE_IDENTITIES:
+        response = await client.post(
+            "/api/v1/service-actors",
+            headers=auth_headers(manager_token)
+            | {
+                "Idempotency-Key": str(uuid4()),
+                "X-Request-ID": str(uuid4()),
+                "X-Correlation-ID": str(uuid4()),
+            },
+            json={
+                "service_identity": service_identity,
+                "subject": f"real-api-{service_identity.removeprefix('workstream.')}-{run_id}",
+                "reason": "Real API guide artifact pipeline authority proof",
+            },
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["service_identity"] == service_identity
+        assert body["actor_status"] == "active"
 
 
 async def wait_for_submission_checker_run(
@@ -1229,8 +1265,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert creator_system_grant.status_code == 201, creator_system_grant.text
         service_payload = {
-            "service_identity": "workstream.artifact.verifier",
-            "subject": f"real-api-artifact-verifier-{run_id}",
+            "service_identity": "workstream.review.projection",
+            "subject": f"real-api-review-projection-{run_id}",
             "reason": "Real HTTP controlled service provisioning proof",
         }
         fixed_service_token = issue_flow_token(
@@ -1410,6 +1446,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert terminal_service.status_code == 409, terminal_service.text
         assert terminal_service.json()["error"]["code"] == "actor_deactivated_terminal"
+
+        await provision_guide_artifact_pipeline_services(client, manager_token, run_id)
 
         project_response = await client.post(
             "/api/v1/projects",
