@@ -21,7 +21,7 @@ runtime locks.
 Before implementation, update from current `main` and read:
 
 1. [README.md](README.md) for the product boundary and current v0.1 summary.
-2. [Current v0.1 Status](docs/roadmap_status.md) for implemented, active, and
+2. [Current v0.1 Status](docs/roadmap_status.md) for implemented, in-progress, and
    remaining capabilities.
 3. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
    the canonical specification for the subsystem being changed.
@@ -38,9 +38,8 @@ not introduce delivery promises such as day plans, numbered weeks, or rolling
 time windows as repository authority.
 
 Contributors with GitHub write access may create a branch, implement a bounded
-change, and open a pull request without a signed start event, administrator
-dispatch, active-chunk lease, or loop-memory approval. Contributors without
-write access may use a fork and open a normal pull request.
+change, and open a pull request. Contributors without write access may use a
+fork and open a normal pull request.
 
 ## Before Opening A Pull Request
 
@@ -58,10 +57,9 @@ to contribute.
 
 ## Review And Merge
 
-GitHub CI validates repository quality. It does not consult signed loop memory
-or require a merge-intent file. CodeRabbit and internal agents supplement human
-review. A maintainer must explicitly approve the final pull request before it
-is merged.
+GitHub CI validates repository quality. CodeRabbit and internal agents
+supplement human review. A maintainer must explicitly approve the final pull
+request before it is merged.
 
 Different initiatives may proceed concurrently in separate branches or
 worktrees. If another pull request changes the base, inspect the new delta and
@@ -70,10 +68,5 @@ rerun affected checks; unchanged evidence does not need ceremonial repetition.
 ## Durable Records
 
 Keep useful plans, contracts, review notes, and historical `.agent-loop/`
-artifacts. They explain decisions but do not activate work or block pull
-requests. Git and GitHub are the source of truth for commits, reviews, checks,
-and merges.
-
-The former signed-start, explicit-event, recovery-certificate, and generated
-loop-memory runtimes were removed because derived process state must never
-deadlock contribution or require self-authorizing recovery.
+artifacts. They explain decisions and preserve evidence. Git and GitHub are the
+source of truth for commits, reviews, checks, and merges.

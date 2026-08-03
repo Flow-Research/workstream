@@ -21,12 +21,9 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
 - `CONTRIBUTING.md` is the canonical human and agent entry path. GitHub
   permissions and branch protection govern contribution authority. Planning
-  artifacts explain work; they do not activate, lease, or lock it.
-- Do not require signed starts, explicit-event dispatches, active-chunk state,
-  merge intents, recovery certificates, or generated loop memory to implement
-  work or open a pull request.
+  artifacts explain work; they do not authorize or block it.
 - Distinct initiatives may proceed concurrently in separate branches or
-  worktrees. Derived process state must never block product development.
+  worktrees.
 - Do not add Claude-specific files unless the user explicitly asks for cross-tool support.
 - Do not use old names such as "task-production control plane" or "Garden roadmap".
 - Spreadsheet exports live locally under ignored `sheets/`; do not commit them.
@@ -42,7 +39,10 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
   specifications remain normative. Do not use dates, weeks, or delivery
   windows as implementation authority.
 - For workflow states, persisted tokens, API enum values, roles, and lifecycle names, prefer subsystem- or actor-specific names over vague labels. If the naming has product or security impact and the user is unavailable, run the required internal reviewer tracks before locking it.
-- Keep v0.1 focused on project guide -> task -> submission -> checks -> review -> revision -> contribution records -> conditional compensation awards/fulfillment -> reputation signals.
+- Keep v0.1 focused on project guide -> task -> submission -> checks -> review
+  -> revision -> contribution records -> conditional compensation
+  awards/fulfillment -> contribution evidence for a future reputation
+  projection. Runtime reputation projection remains deferred.
 - Review decision stored values are only accept, needs_revision, or reject.
 - Frontend is locked as React + Vite + TypeScript.
 - Backend API is locked as Python with FastAPI.

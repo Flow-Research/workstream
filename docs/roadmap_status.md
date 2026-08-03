@@ -49,8 +49,8 @@ remain outside v0.1.
   administrator grants, fixed-service identities, and runtime admission.
 - Project-role grants, administrative APIs, authority evidence, idempotency,
   and PostgreSQL-backed rate controls.
-- Project setup and project mutation/read authorization foundations used by the
-  current guide integration work.
+- Project setup plus project create, guide mutation, binding, and read
+  authorization foundations.
 
 ### Project, task, submission, and checker foundations
 
@@ -71,15 +71,14 @@ remain outside v0.1.
   controls.
 - Image metadata handling and persisted guide-sufficiency evidence.
 - Guide materialization from persisted artifact-processing evidence.
+- Fixed-service guide-source reads and binding creation with authorization,
+  custody, lineage, rate-control, and stale-generation enforcement.
 
 ## Integration In Progress
 
 The following areas have merged planning, contracts, or partial foundations,
 but are not all complete as one production path:
 
-- authoritative project-guide binding and read activation across ART and AUTH;
-- reviewed cross-initiative contracts connecting artifact custody with
-  authorization-owned project guide reads;
 - review-policy persistence and activation across REV and AUTH;
 - review queue, reviewer assignment/claim, immutable decisions, and revision
   replay on the canonical authorization boundary;
@@ -90,8 +89,9 @@ review. Their presence does not change the implemented-on-`main` list above.
 
 ## Remaining v0.1 Capability Milestones
 
-1. Complete the production guide binding/read path and prove its authorization,
-   custody, lineage, and stale-generation behavior.
+1. Complete the remaining artifact custody chain: contributor intake cleanup,
+   archive safety, semantic change gating, durable admission, submission
+   binding, checker/review materialization, recovery, and provider proof.
 2. Complete review and revision persistence, queueing, access, decisions,
    findings, replay, and operational recovery.
 3. Create immutable contributor and reviewer contribution records from the
