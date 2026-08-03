@@ -336,8 +336,7 @@ jobs:
           test -f "${semantic_coverage}"
           test ! -L "${semantic_coverage}"
           test ! -e .coverage
-          mv -- "${semantic_coverage}" .coverage
-          coverage combine --append "${coverage_files[0]}"
+          coverage combine "${semantic_coverage}" "${coverage_files[0]}"
 
       - name: Backend full-suite coverage
         working-directory: backend
