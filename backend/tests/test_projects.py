@@ -4285,6 +4285,7 @@ def test_project_setup_run_status_constraint_metadata() -> None:
     for status in (
         "queued",
         "enqueue_failed",
+        "enqueue_identity_mismatch",
         "running_sufficiency_agent",
         "sufficiency_blocked",
         "running_policy_derivation_agent",
@@ -8585,7 +8586,7 @@ async def test_agent_route_sanitizes_runtime_exception_chain(
     )
 
     assert response.status_code == 503, response.text
-    assert response.json()["detail"] == "project guide sufficiency agent is unavailable"
+    assert response.json()["detail"] == "project guide agent runtime is unavailable"
     assert "raw-openai-secret-token" not in response.text
     assert "provider-prompt-body" not in response.text
 

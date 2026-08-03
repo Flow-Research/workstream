@@ -38,6 +38,18 @@ _ACK_COLUMNS = (
 
 def upgrade() -> None:
     """Install replay and complete authorization provenance shapes."""
+    op.drop_constraint(
+        "ck_project_setup_runs_status", "project_setup_runs", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_project_setup_runs_status",
+        "project_setup_runs",
+        "status in ('queued','enqueue_failed','enqueue_identity_mismatch',"
+        "'running_sufficiency_agent','sufficiency_blocked',"
+        "'running_policy_derivation_agent','policy_draft_ready',"
+        "'running_post_submit_derivation_agent','post_submit_setup_blocked',"
+        "'post_submit_policy_compiled','setup_blocked','failed')",
+    )
     for name, column_type in (*_CREATION_COLUMNS, *_ACK_COLUMNS):
         op.add_column("guide_sufficiency_reports", sa.Column(name, column_type))
     for constraint, name, remote_table, remote_column in (
@@ -238,8 +250,25 @@ def downgrade() -> None:
             "warnings_acknowledged_by_actor_profile_id is not null"
         )
     ).scalar_one()
-    if replay_count or provenance_count:
+    identity_mismatch_count = connection.execute(
+        sa.text(
+            "select count(*) from project_setup_runs "
+            "where status = 'enqueue_identity_mismatch'"
+        )
+    ).scalar_one()
+    if replay_count or provenance_count or identity_mismatch_count:
         raise RuntimeError("cannot downgrade guide sufficiency authority with evidence")
+    op.drop_constraint(
+        "ck_project_setup_runs_status", "project_setup_runs", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_project_setup_runs_status",
+        "project_setup_runs",
+        "status in ('queued','enqueue_failed','running_sufficiency_agent',"
+        "'sufficiency_blocked','running_policy_derivation_agent','policy_draft_ready',"
+        "'running_post_submit_derivation_agent','post_submit_setup_blocked',"
+        "'post_submit_policy_compiled','setup_blocked','failed')",
+    )
     op.execute(
         "drop trigger trg_sufficiency_replay_no_truncate "
         "on guide_sufficiency_mutation_idempotency_records"

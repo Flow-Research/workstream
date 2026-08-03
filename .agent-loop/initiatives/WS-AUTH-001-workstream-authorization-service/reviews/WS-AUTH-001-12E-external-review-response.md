@@ -32,6 +32,10 @@
   check constraints. The same artifact review exposed that the new
   provenance-only downgrade fixture used an invalid audit-domain row; it now
   reuses the canonical constraint-valid authority-audit fixture.
+- Repaired the final project-lifecycle findings by aligning the remaining
+  sanitized runtime-message assertion and extending migration/model status
+  parity for the distinct post-acceptance `enqueue_identity_mismatch` state,
+  including safe downgrade refusal and the refreshed schema fingerprint.
 
 ## Comments deferred
 

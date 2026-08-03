@@ -833,6 +833,7 @@ class ProjectSetupRun(Base):
             "status in ("
             "'queued', "
             "'enqueue_failed', "
+            "'enqueue_identity_mismatch', "
             "'running_sufficiency_agent', "
             "'sufficiency_blocked', "
             "'running_policy_derivation_agent', "
