@@ -272,19 +272,11 @@ def test_0050_replay_is_append_only_and_blocks_populated_downgrade(
             await engine.dispose()
 
     async def install_provenance_only() -> None:
-        engine = create_async_engine(isolated_database_env)
         decision_id = str(uuid4())
+        await _insert_authority_audit_fixture(isolated_database_env, decision_id)
+        engine = create_async_engine(isolated_database_env)
         try:
             async with engine.begin() as connection:
-                await connection.execute(
-                    text(
-                        "insert into audit_events(id,entity_type,entity_id,event_type,actor_id,"
-                        "actor_roles,claim_snapshot,auth_source,is_dev_auth,event_payload) values("
-                        ":decision,'project_guide',:guide,'MigrationTestDecision',"
-                        ":profile,'[]','{}','workstream_internal',false,'{}')"
-                    ),
-                    {"decision": decision_id, **ids},
-                )
                 await connection.execute(
                     text(
                         "update guide_sufficiency_reports set "

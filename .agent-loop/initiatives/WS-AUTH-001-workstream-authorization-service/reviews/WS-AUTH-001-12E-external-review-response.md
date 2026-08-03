@@ -29,7 +29,9 @@
   ambiguous latest-snapshot translation.
 - Repaired the second hosted run's task-lifecycle downgrade failure by applying
   Alembic's naming-convention expansion symmetrically when dropping both new
-  check constraints.
+  check constraints. The same artifact review exposed that the new
+  provenance-only downgrade fixture used an invalid audit-domain row; it now
+  reuses the canonical constraint-valid authority-audit fixture.
 
 ## Comments deferred
 
