@@ -29,8 +29,10 @@ REV-owned semantics with AUTH-owned mutation authorization.
   materialization. Evidence binding remains planned/unavailable and 07B is
   reserved pending separate REV-owned intent.
 - Registered review/revision lifecycle actions remain planned; four
-  lifecycle/recovery actions remain missing until 08R. The two policy mutation
-  actions activated by 02B are setup authority, not lifecycle activation.
+  lifecycle/recovery actions remain missing until front-loaded 02C registers
+  them unavailable. The superseded 08R placeholder is never executable. The
+  two policy mutation actions activated by 02B are setup authority, not
+  lifecycle activation.
 
 ## WS-XINT-003-02A implementation
 
@@ -47,6 +49,9 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-Discuss and authorize the next bounded REV-AUTH chunk. Do not infer review
-lifecycle activation from the 02B merge and do not start a successor
-automatically.
+Complete the reviewed AUTH-readiness amendment, then request implementation of
+WS-XINT-003-02C. 02C and 02D front-load the complete unavailable catalogue,
+fixed-service matrix, and fail-closed PREP contracts that REV needs before it
+begins its full lifecycle implementation. Do not infer review lifecycle
+activation from readiness: later action activation still requires exact merged
+REV behavior and integrated proof.

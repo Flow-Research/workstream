@@ -53,9 +53,9 @@ it for its later exact first use. Stale/already-consumed and concurrent duplicat
 attempts remain invalid and stage no new state. Authority loss follows the
 evaluated-denial path. REV never registers or activates actions.
 
-REV receives ART v2 typed packet-read and evidence candidate/finalize ports, not
-ArtifactStore, v1 verify/retain/release, ART repositories, provider references,
-or scratch paths.
+For v0.1, REV receives only the typed ART packet-read port, not ArtifactStore,
+v1 verify/retain/release, ART repositories, provider references, or scratch
+paths. Evidence candidate/finalize ports remain future-intent-required.
 
 ### D4 - Review Offer Is Server Selected
 
@@ -262,7 +262,7 @@ and bounded audit facts. Artifact content is narrower: an active ReviewLease
 authorizes only the immutable `ReviewPacketManifest` anchored to its single
 Submission version. That packet contains the Submission bindings, the durable
 checker-run bindings from the exact immutable CheckerRun ID stored on its queue
-admission, its finding-response evidence bindings,
+admission, its bounded finding/response record references,
 and required locked-context/source-snapshot bindings. Membership is derived
 from canonical relations, never caller-supplied IDs. It does not authorize
 artifact bytes from a prior, later, sibling, cross-task, or cross-project
@@ -271,7 +271,8 @@ authority.
 
 The manifest is a REV-owned semantic record containing only the exact queue/
 lease, versioned Submission, admitting CheckerRun/results, locked guide/revision
-context, response-evidence relations, and ART binding IDs. It contains no bytes,
+context, finding/response record relations, and ART binding IDs for the
+Submission/checker packet members. It contains no bytes,
 digest, provider data, receipt, scratch path, or AUTH matrix facts.
 
 Historical artifact projection is deliberately bounded to ArtifactBinding ID,
@@ -288,23 +289,14 @@ Project Manager/Operator. It does not permit an arbitrary same-project reviewer.
 Prior participation grants metadata history only; artifact content still
 requires the current active lease for the exact Submission packet.
 
-Reviewer finding evidence enters through typed ART intake under the active
-lease and creates an immutable REV-owned `ReviewEvidenceArtifact` relation to
-one ArtifactBinding ID. Its pre-decision slot is lease/operation scoped and is
-later linked to the exact finding without changing binding identity. Submitter response
-evidence uses the same ART boundary under the assigned submitter's
-`submission.create` scope. Human bearer tokens and raw provider locations never
-cross into storage calls.
-
-Evidence upload uses an ART-owned two-phase candidate/finalize capability.
-Provider I/O completes before finalization. AUTH then locks human authority,
-REV locks lineage, ART's database-local participant locks candidate/admission/
-binding state, REV recomposes final facts, AUTH evaluates once, and binding plus
-`ReviewEvidenceArtifact` flush together.
-Expiry, revocation, assignment loss, or preparation supersession during upload
-may leave only an ART-owned unbound candidate governed by ART retention; it
-creates no canonical binding/relation or lifecycle effect. Decision and
-resubmission revalidate the relation again.
+For v0.1, reviewer findings/notes and contributor finding responses are
+REV-owned text/metadata records. They create no `ReviewEvidenceArtifact`, use
+no ART candidate/finalize port, and consume neither
+`review.finding_evidence.ingest` nor
+`review.finding_response_evidence.ingest`. Those actions and ART evidence
+binding remain future-intent-required and unavailable. Any future uploaded
+evidence requires a separate approved REV-owned intent plus exact ART and AUTH
+owner work; it must not be inferred from the v0.1 record model.
 
 ### D15 - FinalAcceptance Is The Sole Submitter-Acceptance Source
 
@@ -450,8 +442,9 @@ mutation fencing, typed internal fence ports, bounded drain observations, and
 crash-resumable phase history. Every canonical phase change is a fresh
 Operator-authorized adjacent transition; no background job replays the initiating human
 or advances phase. It lands with no production lifecycle route and no action
-availability change. `WS-AUTH-001-REV-LIFECYCLE` activates that exact action only
-after 12A1 through 12A4 and all other additive hidden manifests merge.
+availability change. The current `WS-XINT-003-08B` lifecycle-control child
+activates that exact action only after REV-12A4 and all other required hidden
+manifests merge; historical `WS-AUTH-001-REV-LIFECYCLE` is superseded.
 
 Review, every task submission, review-queue admission, authority-loss
 replacement, every CON fulfillment-obligation root creation, requeue, successor,
@@ -479,16 +472,18 @@ adjudicator, or administrative authority. Adjudication actions and lifecycle
 remain unavailable and outside this initiative.
 
 AUTH is the sole registration, evaluator, activation-custody, and availability
-owner. `WS-AUTH-001-REV-CUSTODY` transfers the 19 registered review rows to seven
-exact AUTH custodians without changing availability. REV feature chunks build
-hidden behavior and feature-manifest deltas; the exact
-`WS-AUTH-001-REV-05/06/07/08/09A/11/12` gates later activate their action groups.
-`WS-AUTH-001-REV-REG` registers the four approved additions and
-`WS-AUTH-001-REV-LIFECYCLE` activates them only after all hidden manifests merge.
-REV-13C performs the separate product-surface release. The 24 REV dependencies
-are one registered planned submission action, 19 registered planned review
-actions, and four approved but unregistered additions; none is active. The
-separate ART review-evidence binding proposal is not one of the 24, so future
+owner. Historical `WS-AUTH-001-REV-CUSTODY` transferred the 19 registered review
+rows without changing availability. Canonical `WS-XINT-003-02C` now owns
+front-loaded unavailable registration of the four approved additions plus exact
+fixed principals/matrices; `WS-XINT-003-02D` publishes the fail-closed PREP/read
+contracts. REV then builds hidden behavior and canonical composers before exact
+XINT waves activate only the matching actions. Historical aliases
+`WS-AUTH-001-REV-REG`, `WS-AUTH-001-REV-05/06/07/08/09A/11/12`, and
+`WS-AUTH-001-REV-LIFECYCLE` are superseded as current delivery authority.
+REV-13C performs the separate product-surface release. The pre-02C trusted-main
+baseline is one registered planned submission action, 19 registered planned
+review actions, and four approved but unregistered additions; none is active.
+The separate ART review-evidence binding proposal is not part of v0.1, so future
 counts remain current-main-derived rather than a promised fixed total.
 
 ### D21 - Parent REV-02 Is Split And AUTH Contributor Ownership Remains Prior

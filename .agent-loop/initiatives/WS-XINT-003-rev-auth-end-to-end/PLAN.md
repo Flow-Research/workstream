@@ -2,8 +2,8 @@
 
 ## Approach
 
-Deliver one reconciliation foundation followed by narrow feature-backed
-activation waves:
+Deliver the dependency using the same model proven by WS-XINT-002: complete
+AUTH readiness up front, then use narrow feature-backed activation waves:
 
 1. Reconcile policy ownership, the complete catalogue, permissions, principal
    classes, fixed-service matrix, surface manifests, and planned availability.
@@ -11,23 +11,48 @@ activation waves:
    identity in 02A without runtime activation. Then cut over review/revision
    policy configuration through one persistence path in 02B: REV owns
    semantics; AUTH-12D2 owns authorization and PREP consumption.
-3. Activate concealed reviewer current-work, claim/release/preference, and timer
+3. Before REV begins its full lifecycle implementation, complete the AUTH side
+   once: register all approved v0.1 REV actions as unavailable, provision the
+   exact fixed-service principals and static matrix, and publish closed typed
+   PREP request/resource contracts for every approved human, Project Manager,
+   Operator, and service action. This foundation must activate nothing and must
+   contain no REV lifecycle loaders or rules.
+4. REV then implements its complete lifecycle against those stable fail-closed
+   contracts. Each later XINT activation connects an exact merged REV composer
+   to AUTH and changes availability only after crossed-state proof; it may not
+   discover or add another action, permission, principal, or protocol.
+5. Activate concealed reviewer current-work, claim/release/preference, and timer
    services only after REV queue/lease behavior exists.
-4. Let XINT-002-07A activate packet materialization only after lease readiness.
+6. Let XINT-002-07A activate packet materialization only after lease readiness.
    Keep ART review-evidence binding planned and unavailable; the approved v0.1
    reviewer flow stores a decision plus note/findings, not an uploaded reviewer
    artifact. XINT-003 never takes custody of ART actions.
-5. Activate bounded `review.chain.read` after the packet/context owner wave.
-6. Activate `review.decision` only after the complete hidden atomic
+7. Activate bounded `review.context.read` and `review.chain.read` together after
+   the packet/context owner wave.
+8. Activate `review.decision` only after the complete hidden atomic
    Review/FinalAcceptance/CON composition exists.
-7. Let XINT-002-05D activate shared human-review revision preparation/Submission
+9. Let XINT-002-05D activate shared human-review revision preparation/Submission
    actions after hidden REV obligation/preparation behavior exists. Any future
    response-artifact upload requires separate approved REV intent.
-8. Record the four missing privileged lifecycle/recovery actions as future 08R
-   work. Keep their ActionIds unregistered until 08R, then activate
-   Project Manager/Operator recovery and fixed service jobs with
-   reason-bound least privilege and crossed-race proof.
-9. Run complete conformance, then permit REV's single product-route release.
+10. Activate Project Manager/Operator recovery and fixed service jobs with
+    reason-bound least privilege and crossed-race proof. Their ActionIds and
+    principals were already installed unavailable by the AUTH foundation.
+11. Run complete conformance, then permit REV's single product-route release.
+
+## Dependency rule
+
+AUTH readiness is an input to REV implementation; REV implementation is an
+input only to action activation. No future REV chunk may stop to request a new
+AUTH catalogue value, permission mapping, fixed identity, static matrix row, or
+authorization protocol already covered by this initiative. If such a need is
+discovered, return to this plan rather than adding it inside a REV chunk.
+
+The front-loaded AUTH contracts carry stable identifiers, enums, digests,
+bounded facts, and opaque PREP handles. They do not query REV tables, create a
+Review or ReviewLease, route work, decide lifecycle meaning, or expose a route.
+REV owns canonical loaders/composers and all product behavior. Availability
+remains planned until the exact AUTH adapter and REV composer pass integrated
+denial, concurrency, and atomicity proof.
 
 ## Universal mutation protocol
 

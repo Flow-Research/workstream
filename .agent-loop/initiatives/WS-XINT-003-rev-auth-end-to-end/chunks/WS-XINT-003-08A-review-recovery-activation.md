@@ -2,9 +2,9 @@
 
 ## Status and risk
 
-Non-implementable planning skeleton after 08R. Refresh exact files and commands
-on current main before an explicit user request. REV recovery behavior must
-remain hidden. L1 privileged lifecycle recovery.
+Non-implementable parent skeleton after 02C/02D registration/readiness. Split
+into current-main children aligned one-for-one with exact REV-11A-D behavior;
+never implement this combined parent. L1 privileged lifecycle recovery.
 
 ## Goal
 
@@ -13,11 +13,12 @@ queue close, revision-context repair/legacy close, and revision-obligation close
 
 ## Allowed files
 
-Enumerate exact REV recovery commands, AUTH contexts/candidates, routes, audit,
-tests, docs, migration parity, and evidence at current-main start.
+Each child enumerates only exact AUTH evaluator/availability parity and
+integrated tests/docs/evidence. REV implementation is a read-only dependency.
 
 ## Not allowed
 
+New contexts/protocols/principals, REV recovery behavior, product routes,
 Operator review decisions, generic project or artifact authority, fabricated
 Review/reject, history rewrite, silent repair, or broad recovery permission.
 
@@ -32,8 +33,10 @@ Review/reject, history rewrite, silent repair, or broad recovery permission.
   commands win or conflict deterministically without dual effects.
 - Reads conceal/redact before counts; mutations preserve immutable history and
   never create synthetic judgment or contribution.
-- No route or command exists until 08R's exact planned catalogue rows,
-  permission mappings, migration parity, and denial tests have merged.
+- No route or command is released; 02C/02D catalogue, principal, contract, and
+  denial proof must already be merged.
+- Each child adds no ActionId, PermissionId, principal, context class, protocol,
+  REV lifecycle behavior, or product route.
 
 ## Verification and reviewers
 

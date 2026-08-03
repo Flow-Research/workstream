@@ -1,36 +1,35 @@
-# Chunk Contract: WS-XINT-003-03B — Lease Timer Services
+# Chunk Contract: WS-XINT-003-03B — Reviewer Claim Activation
 
 ## Status and risk
 
 Non-implementable planning skeleton after 03A. Refresh exact files and commands
-on current main before an explicit user request. L1 fixed-service authority.
+on current main before an explicit user request. L1 reviewer mutation authority.
 
 ## Goal
 
-Activate only `review.preference_expiry.run` and `review.lease_expiry.run`.
-Both `review.reconcile.run` identities remain planned until 08B.
+Activate only `review.claim` against merged REV-03B/06A, CON-06, and exact ART
+packet proof. Release, decline, timers, context, and decision remain unavailable.
 
 ## Allowed files
 
-Enumerate exact REV timer commands, Celery command registration, AUTH
-service identity/matrix/context parity, migration, tests, docs, and evidence at
-current-main start.
+Enumerate exact AUTH evaluator/availability/parity and integrated
+claim/lease/packet tests, docs, and evidence at current-main start. REV, CON,
+and ART implementation files are read-only dependencies.
 
 ## Not allowed
 
-Generic scheduler identity, serialized prepared handles, human authority in job
-payloads, decision/revision behavior, or manual Operator execution of fixed services.
+New contexts/protocols/principals, REV/CON/ART lifecycle implementation,
+release/decline/timers, decision/revision behavior, or product route release.
 
 ## Acceptance criteria
 
-- Each command runs only as its separately admitted fixed service identity with
-  exact action membership and canonical row scope.
-- Payloads contain identifiers/provenance only; fixed services prepare fresh authority
-  and re-read current state inside a new transaction.
-- Expiry versus claim/release/decision races have deterministic
-  lock order and exactly one valid terminal effect.
-- Retry is idempotent and cross-service/action/lease/project requests deny.
-- All-pairs identity denial and Celery registration/payload scans pass.
+- Exact reviewer grant, self-review denial, global reviewer lease limit, policy
+  freeze, and packet-manifest binding are recomposed after final locks.
+- Crossed claims produce one winner and no partial lease/packet/policy state.
+- Revocation, stale admission, copied/replayed/wrong-session handles, and
+  cross-project/task/submission requests deny atomically.
+- The chunk adds no ActionId, PermissionId, principal, context class, protocol,
+  REV lifecycle behavior, or product route.
 
 ## Verification and reviewers
 
@@ -39,4 +38,4 @@ architecture, security, product/ops, QA, senior, CI, reuse, docs, test-delta.
 
 ## Stop
 
-Merge and stop before packet/context reads.
+Merge and stop before release/decline activation.

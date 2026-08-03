@@ -2,24 +2,28 @@
 
 ## Status and risk
 
-Non-implementable planning skeleton after 03B. Refresh exact files and commands
-on current main before an explicit user request. L1 confidential artifact access.
+Non-implementable planning skeleton after 03D, merged REV-06C/07A, and merged
+XINT-002-07A. Refresh exact files and commands on current main before an
+explicit user request. L1 confidential artifact access.
 
 ## Goal
 
-Activate human `review.context.read` against the exact lease/packet context and
-consume XINT-002-07A fixed `artifact.review_packet.materialize`. Reviewer
-note/findings require no artifact upload; evidence actions remain unavailable.
+Activate human `review.context.read` and `review.chain.read` against the exact
+REV-07A lease/packet/chain context and consume XINT-002-07A fixed
+`artifact.review_packet.materialize`. Reviewer note/findings require no artifact
+upload; evidence actions remain future-intent-required and unavailable.
 
 ## Allowed files
 
-Enumerate exact REV context service, AUTH composers/activation parity,
-merged XINT-002-07A ART-only manifest, routes, tests, canonical specs, docs, and
-evidence files at current-main start.
+Enumerate exact AUTH evaluator/availability parity, merged REV-07A and
+XINT-002-07A read-only manifests, integrated tests, canonical specs, docs, and
+evidence files at current-main start. No lifecycle implementation file is
+writable.
 
 ## Not allowed
 
-Contributor response authority, decision/revision implementation, XINT-003
+New contexts/protocols/principals, REV lifecycle behavior, contributor response
+authority, decision/revision implementation, XINT-003
 ownership of ART actions, XINT-002 ownership of human REV actions, or generic
 artifact authority.
 
@@ -33,6 +37,8 @@ artifact authority.
   authority. Review-evidence binding remains planned/unavailable.
 - Human-review revision uses XINT-002-05D and the normal contributor ZIP path;
   07B is reserved and CheckerRun remediation remains a distinct context.
+- The chunk adds no ActionId, PermissionId, principal, context class, protocol,
+  REV lifecycle behavior, or product route.
 
 ## Verification and reviewers
 
@@ -41,4 +47,4 @@ hosted gates, and full L1 reviewers.
 
 ## Stop
 
-Merge and stop before chain-read activation.
+Merge and stop before decision activation.

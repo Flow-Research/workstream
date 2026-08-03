@@ -97,39 +97,51 @@ custodian labels grant no reviewer, Operator, or service authority. The four
 proposed lifecycle actions remain unregistered, and PREP remains separately
 human-gated.
 
-The exact planning-wave replacement is:
+The front-loaded readiness waves are:
+
+| XINT-003 wave | AUTH-only result |
+|---|---|
+| `WS-XINT-003-02C` | Complete unavailable REV catalogue, four additive actions, six exact fixed-service identities, static matrix, and database parity |
+| `WS-XINT-003-02D` | Complete typed fail-closed REV PREP/read integration contracts; no lifecycle behavior or availability change |
+
+The exact activation-wave replacement is:
 
 | XINT-003 wave | Registered planned REV ActionIds |
 |---|---|
-| `WS-XINT-003-03A` | `review.queue.read`, `review.claim`, `review.release`, `review.decline_preference` |
-| `WS-XINT-003-03B` | `review.preference_expiry.run`, `review.lease_expiry.run` |
-| `WS-XINT-003-04` | `review.context.read`, `review.finding_evidence.ingest` |
-| `WS-XINT-003-05` | `review.chain.read` |
+| `WS-XINT-003-03A` | `review.queue.read` |
+| `WS-XINT-003-03B` | `review.claim` |
+| `WS-XINT-003-03C` | `review.release`, `review.decline_preference` |
+| `WS-XINT-003-03D` | `review.preference_expiry.run`, `review.lease_expiry.run` |
+| `WS-XINT-003-04` | `review.context.read`, `review.chain.read` |
 | `WS-XINT-003-06` | `review.decision` |
-| `WS-XINT-003-07` | `review.finding_response_evidence.ingest` |
-| `WS-XINT-003-08A` | `review.queue.inspect`, `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close` |
-| `WS-XINT-003-08B` | `review.reconcile.run`, `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+| `WS-XINT-003-07` | No availability change; extend the already XINT-002-owned preparation/Submission evaluators with the closed human-review revision context |
+| `WS-XINT-003-08A` | `review.queue.inspect`, `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.revision_context.repair`, `review.revision_obligation.close`, `review.revision_context.legacy_close` |
+| `WS-XINT-003-08B` | `review.reconcile.run`, `review.artifact_reference.reconcile`, `review.projection.rebuild`, `review.lifecycle.activation.manage` |
 
-This is 19 rows with cardinalities `4/2/2/1/1/1/5/3`. XINT-002-owned ART
-actions and shared submission actions are excluded.
+Evidence-upload actions remain future-intent-required and unavailable; they are
+not activated by 04 or 07. XINT-002-owned ART actions and shared submission
+actions are excluded.
 
-## Additive registration gates
+## Front-loaded additive registration
 
 The following values are approved boundary proposals, not registered runtime
 actions on trusted `main`:
 
 | Registration chunk | Future activation chunk | Proposed ActionId -> PermissionId |
 |---|---|---|
-| `WS-XINT-003-08R` | `WS-XINT-003-08A` / `WS-XINT-003-08B` | `review.revision_context.repair` -> `project.task.manage`; `review.revision_context.legacy_close` -> `operations.reconcile.run`; `review.revision_obligation.close` -> `project.task.manage`; `review.lifecycle.activation.manage` -> `operations.reconcile.run` |
+| `WS-XINT-003-02C` | `WS-XINT-003-08A` / `WS-XINT-003-08B` | `review.revision_context.repair` -> `project.task.manage`; `review.revision_context.legacy_close` -> `operations.reconcile.run`; `review.revision_obligation.close` -> `project.task.manage`; `review.lifecycle.activation.manage` -> `operations.reconcile.run` |
 
-These are declared future registration gates, not executable chunk contracts.
-Neither may receive a full contract or start until the owning feature publishes exact
-principal class, typed resource context, canonical facts, guards, surfaces,
-transaction revalidation, and hidden behavior dependencies. AUTH must not invent
-those contracts. Registration is availability-neutral and requires typed plus
-PostgreSQL audit mapping parity. Migration numbers are allocated from trusted
-`main` when each registration contract becomes executable; they are not
-reserved ahead of an incomplete feature contract. Each registration migration
+`WS-XINT-003-02C` is the executable availability-neutral AUTH readiness chunk:
+it registers these four actions and the exact fixed-service identities/matrix
+before REV lifecycle implementation. `WS-XINT-003-02D` then publishes the
+closed identifier/digest-based PREP/read contracts. Neither chunk loads or
+implements REV lifecycle state, and the real kernel continues to deny every
+unavailable action. REV later supplies canonical facts, guards, loaders,
+composers, transaction revalidation, and hidden behavior; matching XINT waves
+activate only after that integrated proof.
+
+Registration requires typed plus PostgreSQL audit mapping parity. The migration
+number is allocated from trusted `main` when 02C starts. The registration migration
 takes a writer-blocking downgrade lock and refuses without mutation when any
 decision, audit, idempotency, or linked evidence references an added ActionId.
 Its proof includes populated refusal, empty safe downgrade, re-upgrade, and
@@ -184,12 +196,12 @@ behavior. Within `WS-AUTH-001-ART-02D-OPERATOR`,
 tests, and explicit availability assertion; passing the seven read/status cases
 does not authorize retry.
 
-Service actions additionally require a previously reviewed exact fixed-service
-identity and matrix extension plus controlled provisioning and AUTH-09E
-admission. REV must publish exact timer, expiry, reconciliation, projection,
-artifact-reference, and release-control service manifests before AUTH creates
-those identity-specific extension contracts. No catch-all review service is
-pre-created.
+Service actions use the exact fixed-service identities and closed matrix
+installed unavailable by 02C plus controlled canonical admission. REV does not
+need to publish hidden job behavior before those fail-closed identity contracts
+exist. REV later publishes exact timer, expiry, reconciliation, projection,
+artifact-reference, and release-control manifests before the matching action
+can become active. No catch-all review service exists.
 
 `review.decision` additionally requires the merged flush-only CON participant
 and one rollback-safe REV+CON transaction. Review-evidence binding additionally

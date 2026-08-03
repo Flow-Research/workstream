@@ -3,6 +3,12 @@
 REV-03P is reconciled into WS-XINT-003-02 and is not an independent policy
 writer. AUTH activation follows the exact XINT-003 waves.
 
+REV owns every review/revision lifecycle row, rule, command, service job, projection,
+fence, and route. AUTH owns catalogue, principals, PREP/evaluation/evidence and
+availability. REV runtime work begins after XINT-003-02C/02D fail-closed
+readiness and does not wait for action activation; XINT activation then waits
+for the exact merged REV child. Only REV-13C releases product routes.
+
 ## Rule
 
 One executable chunk maps to one PR. Merged parent IDs remain non-executable
@@ -29,7 +35,7 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-PLAN3` | Allow-Review Boundary Reset | L1 | Historical | Merged boundary correction |
 | `WS-REV-001-03P` | Review And Revision Policy Persistence | L1 | Reconciled into `WS-XINT-003-02` | Planning input only; never executable independently |
 | `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | PLAN3 | Non-executable split record |
-| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | merged `WS-XINT-003-02`; exact `allow_review`, Submission/artifact, and actor handoffs | Proposed contract; requires current-main refresh and explicit user request |
+| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | merged `WS-XINT-003-02C/02D`; exact `allow_review`, Submission/artifact, and actor handoffs | Proposed contract; requires current-main refresh and explicit user request |
 | `WS-REV-001-03B` | Normalized Review Packet Manifest Persistence | L1 | 03A; exact ART packet-membership owner chunk merged | Proposed; owner chunk unscheduled |
 | `WS-REV-001-04` | Review Chain Persistence | L1 | 03B | Non-executable split record |
 | `WS-REV-001-04A` | Immutable Review Chain And Decision Request Persistence | L1 | 03B; current actor constraints | Proposed; no contract yet |
@@ -43,12 +49,12 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-06C` | Preference And Lease Expiry With Lazy Recovery | L1 | 06B; provisioned/admitted exact service identities | Proposed; no contract yet |
 | `WS-REV-001-07` | Review Context And Finding Evidence | L1 | 06C | Non-executable split record |
 | `WS-REV-001-07A` | Lease-Bounded Packet And Review Chain Context | L1 | 06C; exact ART packet-read owner chunk | Proposed; owner chunk unscheduled |
-| `WS-REV-001-07B` | Reviewer Finding Evidence Candidate And Finalize | L1 | 07A; exact ART review-evidence owner chunk and AUTH binding contracts | Proposed; owner chunk unscheduled |
-| `WS-REV-001-08` | Pure Decision, Final Acceptance, And Task-Effect Contract | L1 | 07B; typed participant contracts | Proposed; executable contract after repair, no canonical write |
+| `WS-REV-001-07B` | Reviewer Finding And Note Records | L1 | 07A; no artifact candidate/finalize port and no evidence-upload action | Proposed; v0.1 records only |
+| `WS-REV-001-08` | Pure Decision, Final Acceptance, And Task-Effect Contract | L1 | 07B; typed participant contracts; v0.1 findings are records/notes, not uploaded evidence | Proposed; executable contract after repair, no canonical write |
 | `WS-REV-001-09A` | Revision Context Preparation And Resubmission | L1 | 08 | Non-executable split record |
 | `WS-REV-001-09A1` | Review-Rooted Revision Preparation Persistence | L1 | 08; exact owner-supplied guide/task facts; approved human round/deadline semantics; migration/head refresh | Proposed; no contract yet |
 | `WS-REV-001-09A2` | Revision Preparation Participant, Resolver, And Task Context | L1 | 09A1 | Proposed; task-owned flush-only participant, no transaction composition |
-| `WS-REV-001-09A3` | Human Revision Response Evidence Finalize | L1 | 09A2; ART evidence port and exact AUTH action | Proposed; owner chunk unscheduled |
+| `WS-REV-001-09A3` | Human Revision Finding Response Records | L1 | 09A2; no artifact candidate/finalize port and no response-evidence action | Proposed; v0.1 text/metadata records only |
 | `WS-REV-001-09A4` | Hidden Human Prepared N+1 And Checker Source Compatibility | L1 | 09A3; merged AUTH-14 contract amendment only; ART digest contract | Proposed; adds preparation binding/source XOR while consuming owner-supplied checker source; AUTH-14 owns public request acknowledgement, authorization cutover, and activation |
 | `WS-REV-001-09A5` | Hidden Replacement Assignment Preparation Transfer | L1 | 09A4; merged AUTH-13 contract amendment only | Proposed; AUTH-13 later owns public command/cutover/activation |
 | `WS-REV-001-09B` | Finding Replay, Resolution, And Preferred Return Routing | L1 | 09A5 | Proposed |
@@ -93,6 +99,11 @@ PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(historical, superseded)
 
 Non-executable parents do not consume a PR after this planning refresh. Their
 first child is the successor of the preceding executable chunk.
+
+REV-07B and REV-09A3 are v0.1 note/finding/response record chunks, not artifact
+evidence-upload chunks. They use no evidence-upload ActionId or ART
+candidate/finalize port. Any future uploaded evidence requires a separate
+approved REV-owned intent plus exact ART and AUTH owner work.
 
 ## Owner-gate rule
 

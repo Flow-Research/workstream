@@ -589,7 +589,8 @@ in AUTH's closed registry. AUTH-09C activates `actor.profile.read` and
 `actor.profile.reactivate`, and `actor.profile.deactivate`. These merges do not
 activate a review action or contain any of REV's six future service identities.
 
-The review lifecycle currently depends on 24 unavailable actions:
+Before WS-XINT-003-02C, the trusted-main review lifecycle baseline depends on 24
+unavailable actions:
 
 - registered planned `submission.create`;
 - 19 registered planned review actions; and
@@ -600,23 +601,24 @@ artifact.binding.create` service action is separate, unavailable, and not one
 of the 24. It has no approved v0.1 activation. Future counts must be derived
 from trusted main at each AUTH gate.
 
-The exact delivery order is:
+The current exact delivery order is:
 
 ```text
-AUTH planned registration and activation custody
--> required ART/CON capability plus REV hidden behavior and canonical facts
--> AUTH evaluator integration and exact action activation
+WS-XINT-003-02C complete unavailable catalogue/principal/matrix readiness
+-> WS-XINT-003-02D complete fail-closed PREP/read contract readiness
+-> REV hidden behavior and canonical composers plus required ART/CON capability
+-> exact XINT evaluator integration and action-by-action activation
 -> REV-13C joint product-surface release
 ```
 
-`WS-AUTH-001-REV-CUSTODY` transfers the 19 registered planned review rows to
-seven exact AUTH activation groups without changing mappings, counts, or
-availability. `WS-AUTH-001-PREP` supplies the prepared mutation protocol.
-`WS-AUTH-001-REV-REG` registers the four additions below as planned.
-`WS-AUTH-001-REV-05/06/07/08/09A/11/12` integrate and activate only their exact
-merged hidden features. `WS-AUTH-001-REV-LIFECYCLE` activates the four additions
-only after the REV-11A-D and REV-12A1-A4 hidden manifests are complete. REV-13C alone
-exposes the already-active coherent product surface.
+Historical `WS-AUTH-001-REV-CUSTODY` transferred the 19 registered planned
+review rows without changing availability, and `WS-AUTH-001-PREP` supplied the
+prepared mutation protocol. Historical aliases `WS-AUTH-001-REV-REG`,
+`WS-AUTH-001-REV-05/06/07/08/09A/11/12`, and
+`WS-AUTH-001-REV-LIFECYCLE` are superseded as delivery authority by canonical
+WS-XINT-003 custody. 02C registers the four additions unavailable; 02D publishes
+their fail-closed contracts; later exact XINT waves activate only merged hidden
+behavior. REV-13C alone exposes the coherent product surface.
 
 ## Four-Action Registration Manifest
 
@@ -694,21 +696,20 @@ revalidation.
 ## Fixed Service Identity Manifests
 
 Each identity is a distinct fixed service ActorProfile with its own exact static
-ActionId membership. None exists through AUTH-09B. Each requires a separately
-reviewed AUTH enum/database-constraint/static-matrix extension, controlled
-provisioning through the merged AUTH-09B capability, AUTH-09E admission,
-cross-service and human denial proof, and later exact action activation. An
-extension or admission activates nothing by itself and no catch-all review
-service exists.
+ActionId membership. None exists on the trusted pre-02C baseline.
+WS-XINT-003-02C installs the reviewed enum/database-constraint/static-matrix
+extensions and controlled admission while every action remains unavailable;
+02D publishes the fail-closed contracts. Cross-service/human denial and later
+exact action activation remain mandatory. No catch-all review service exists.
 
 | Fixed service identity | Exact ActionId | PermissionId | Hidden consumer | Activation gate |
 |---|---|---|---|---|
-| `workstream.review.preference_expiry` | `review.preference_expiry.run` | `operations.timer.run` | REV-06 | `WS-AUTH-001-REV-06` |
-| `workstream.review.lease_expiry` | `review.lease_expiry.run` | `operations.timer.run` | REV-06 | `WS-AUTH-001-REV-06` |
-| `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` | `operations.reconcile.run` | REV-11 | `WS-AUTH-001-REV-11` |
-| `workstream.review.reconciliation` | `review.reconcile.run` | `operations.reconcile.run` | REV-11 | `WS-AUTH-001-REV-11` |
-| `workstream.review.artifact_reference_reconciliation` | `review.artifact_reference.reconcile` | `operations.reconcile.run` | REV-12 | `WS-AUTH-001-REV-12` |
-| `workstream.review.projection` | `review.projection.rebuild` | `operations.projection.rebuild` | REV-12 | `WS-AUTH-001-REV-12` |
+| `workstream.review.preference_expiry` | `review.preference_expiry.run` | `operations.timer.run` | REV-06C | `WS-XINT-003-03D` |
+| `workstream.review.lease_expiry` | `review.lease_expiry.run` | `operations.timer.run` | REV-06C | `WS-XINT-003-03D` |
+| `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` | `operations.reconcile.run` | REV-11C | `WS-XINT-003-08B` child |
+| `workstream.review.reconciliation` | `review.reconcile.run` | `operations.reconcile.run` | REV-11C | `WS-XINT-003-08B` child |
+| `workstream.review.artifact_reference_reconciliation` | `review.artifact_reference.reconcile` | `operations.reconcile.run` | REV-12P2 | `WS-XINT-003-08B` child |
+| `workstream.review.projection` | `review.projection.rebuild` | `operations.projection.rebuild` | REV-12P2 | `WS-XINT-003-08B` child |
 
 The two reconciliation identities intentionally have separate memberships for
 the same ActionId. Execution mode and scope are server-derived, never selected
