@@ -1,8 +1,11 @@
 # Product Principles
 
-## 1. Workstream Is The Control Plane
+## 1. Workstream Governs Contribution Truth
 
-Workstream does not need to own the execution workspace. Humans and agents can work in terminals, editors, notebooks, external platforms, or local repositories.
+Workstream does not need to own the source application or execution workspace.
+Humans and agents can work in terminals, editors, notebooks, external
+platforms, or local repositories. Workstream governs the rules, artifact
+lineage, verification, review, and durable contribution outcome.
 
 Workstream owns:
 
@@ -12,10 +15,15 @@ Workstream owns:
 - checker output
 - review decision
 - revision history
+- immutable contribution records
 - compensation awards and fulfillment state
 - reputation projection when separately implemented
 
-Workstream is source-agnostic, but v0.1 stays manual-first. External origin adapters and automated routing stay out until the internal loop works.
+Source applications and downstream consequence systems integrate around this
+truth; they do not create or rewrite it. Workstream is source-agnostic, but
+v0.1 stays manual-first. External origin adapters and automated routing stay
+out until the internal loop works. Flow Identity remains the current external
+authentication adapter rather than the product boundary.
 
 ## 2. Project Rules Are First-Class
 
@@ -111,6 +119,10 @@ FinalAcceptance, and only that fact creates a submitter contribution. Frozen con
 awards only for payable contributions; explicit unpaid rules create no award.
 Fulfillment receipts and status projections track delivery separately.
 
-## 10. Build Internal First
+## 10. Prove The Governed Core First
 
-The first version is internal task evaluation and contribution infrastructure. The marketplace, source adapters, external clients, blockchain settlement, and public reputation network come after the core loop works.
+The first version proves governed contribution infrastructure through one
+internal lifecycle. Marketplace experiences, source adapters, external client
+surfaces, blockchain settlement, and a public reputation network come after the
+core loop works. They remain consumers or adapters, not alternate sources of
+Workstream lifecycle truth.

@@ -1,44 +1,111 @@
 # Workstream
 
-Workstream is Flow's task evaluation and contribution infrastructure.
+Workstream is governed contribution infrastructure for coordinating, verifying,
+and recording work performed by humans, AI agents, or both. It transforms
+project-defined tasks, immutable submissions, deterministic checks, and
+authorized review into trusted `ContributionRecord` facts that applications,
+organizations, and economic systems can consume.
 
-Workstream manages project guides, task queues, submission packets, automated
-checks, reviewer routing, evaluation sprints, revision loops, contribution
-records, compensation award and fulfillment state, and reputation signals.
+Workstream governs the work lifecycle; it does not need to own the system that
+requested the work, the tools used to complete it, the identity provider, or
+the consequence applied afterward. A project defines the rules, an authorized
+contributor performs the work, Workstream binds the exact submitted artifact to
+those rules and its verification evidence, and an authorized reviewer records
+the outcome. The resulting immutable contribution lineage establishes who did
+what, under which rules, using which artifact, and with what verified result.
 
-Workstream is how Flow measures, certifies, and coordinates useful human-agent work.
+## End-To-End Lifecycle
 
-It is not a workspace and it is not blockchain-first. Operators can work with
-any local tools, human-agent workflow, or external execution environment.
-Workstream owns the project guide, task queue, submission packet, automated
-checks, human review, revision loop, contribution record, conditional
-compensation award and fulfillment state, and reputation signals.
-
-Workstream is source-agnostic, but v0.1 is manual-first. External origin onboarding, source adapters, automated routing, owner-agent execution workspaces, and on-chain settlement remain later adapters until the internal evaluation loop is proven.
-
-Workstream v0.1 is focused on building serious internal infrastructure that can
-run real projects end to end:
+The complete Workstream model is:
 
 ```text
 Project Guide
--> Submission Artifact Policy
--> Pre-Submit Checker Policy
--> Task Queue
--> Task Record
--> Submission Packet
--> Platform Checkers
--> Human Review
--> Needs Revision / Accepted / Rejected
--> FinalAcceptance on Accepted
--> Contribution Record
--> Compensation Award / Fulfillment when payable
--> Reputation projection when separately implemented
--> Lessons Learned
+-> Versioned Policies
+-> Task Assignment Or Claim
+-> Immutable Submission Artifact
+-> Deterministic Checks
+-> Authorized Review
+-> Accept / Needs Revision / Reject
+-> Revision And Resubmission When Required
+-> Immutable ContributionRecords
+-> Optional Project-Specific Consequences
 ```
+
+The current submission contract normally receives one outer ZIP containing the
+complete work. Workstream computes canonical content identity, stores the bytes
+through its artifact boundary, verifies stored content before trusted use, and
+runs configured checks against the submitted package and its bounded recursive
+contents. Contributors, checkers, reviewers, and downstream projections are
+therefore tied to the same immutable submission lineage.
+
+Every valid Review creates a reviewer `completed_review`
+`ContributionRecord`. An `accept` decision also creates `FinalAcceptance` and a
+submitter `accepted_submission` `ContributionRecord`. These records cannot be
+created or edited directly by a person or downstream adapter. Together they are
+the central durable outcome of Workstream.
+
+## How Workstream Establishes Trust
+
+- **Identity is separate from authority.** External identity verification does
+  not grant product access. Explicit administrative or project-scoped grants,
+  resource ownership, lifecycle guards, and revocation determine authority.
+- **Project rules are versioned and locked.** Assignments, submissions,
+  Reviews, and contributions retain the guide and policy context that governed
+  them instead of silently adopting later rules.
+- **Artifacts are immutable and content-addressed.** Workstream derives identity
+  from server-computed SHA-256 and byte count, independently verifies stored
+  bytes, and binds trusted content facts to that identity.
+- **Checks are attributable and reproducible.** Configured pre-submit and
+  post-submit checkers record results against the exact submission and policy
+  context.
+- **Review is authorized and attributable.** A Review records the authorized
+  reviewer, exact artifact lineage, locked rules, findings, and one canonical
+  decision: `accept`, `needs_revision`, or `reject`.
+- **Separation of duties limits self-dealing.** Submitter and reviewer authority
+  are independent, self-review is prohibited, and narrower project conflict
+  rules may be enforced.
+- **History is preserved.** Submissions, findings, responses, resolutions,
+  Reviews, contribution records, awards, receipts, and audit evidence remain
+  linked rather than being overwritten.
+
+## Source-Agnostic Core, Bounded v0.1 Intake
+
+Workstream does not require tasks to originate from one marketplace,
+application, organization, or industry. AI evaluation programs, government
+workforce initiatives, research programs, open-source projects, contractor
+pipelines, academic review, data-labeling operations, and legal, medical,
+engineering, creative, human-to-agent, or agent-to-agent workflows can use the
+same governed lifecycle while retaining their own user experience and operating
+model.
+
+Source-agnostic does not mean every source adapter is already implemented.
+v0.1 remains manual-first with controlled manual, Markdown, and CSV intake.
+External origin onboarding, automated routing, and execution workspaces remain
+later adapters. Revision and reassignment belong to the governed lifecycle;
+adjudication remains a separately approved future capability rather than a
+claim about current v0.1 behavior.
+
+## Product Boundary
+
+Workstream determines what governed work occurred and whether the resulting
+contribution fact can be trusted. Payments, points, tokens, staking, slashing,
+reputation, eligibility, reporting, datasets, and model-training systems may
+consume that fact and apply project-specific consequences. They do not create,
+revise, or control Workstream identity, authorization, submission, review, or
+contribution truth.
+
+That boundary allows one Workstream core to support centralized, sovereign,
+federated, and permissionless applications without coupling lifecycle truth to
+any one application's business or economic model.
+
+Flow Identity is the current v0.1 external authentication provider. It is an
+adapter boundary, not the definition or ownership boundary of Workstream.
+Workstream is not an execution workspace and is not blockchain-first.
 
 ## Core Thesis
 
-Different projects speak different domain languages, but serious task evaluation and contribution systems share the same lifecycle:
+Different projects speak different domain languages, but governed work and
+contribution systems share the same lifecycle:
 
 - every project has a guide
 - every project has an approved submission artifact policy

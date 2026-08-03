@@ -2,10 +2,14 @@
 
 ## Workstream
 
-Flow's task evaluation and contribution infrastructure: the system for project
-guides, task queues, submission packets, automated checks, reviewer routing,
-evaluation sprints, revision loops, contribution records, compensation award
-and fulfillment state, and reputation signals.
+Source-agnostic governed contribution infrastructure for coordinating,
+verifying, and recording work performed by humans, AI agents, or both.
+Workstream binds project-defined tasks, locked rules, immutable submission
+artifacts, deterministic checks, and authorized Reviews into trusted
+`ContributionRecord` facts. Source applications and downstream economic or
+reporting systems may consume those facts but do not control Workstream's
+identity, authorization, submission, review, or contribution truth. Flow
+Identity is the current v0.1 external authentication provider.
 
 ## Repository-Native Human-Agent SDLC
 

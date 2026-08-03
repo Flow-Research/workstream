@@ -6,10 +6,26 @@ Workstream
 
 ## One-Sentence Description
 
-Workstream is Flow's task evaluation and contribution infrastructure. It helps
-teams run project-specific task queues through automated checks, reviewer
-routing, evaluation sprints, human review, revision, contribution records,
-compensation fulfillment tracking, and reputation.
+Workstream is governed contribution infrastructure for coordinating,
+verifying, and recording work performed by humans, AI agents, or both. It turns
+project-defined tasks, immutable submissions, deterministic checks, and
+authorized review into trusted `ContributionRecord` facts that applications,
+organizations, and economic systems can consume.
+
+## Durable Outcome
+
+Workstream establishes an attributable statement about governed work:
+
+> This authorized actor completed this task under this locked version of the
+> project rules, submitted this exact artifact, passed these checks, received
+> this authorized review, and achieved this recorded outcome.
+
+Every valid Review creates the reviewer's immutable `completed_review`
+`ContributionRecord`. An `accept` decision additionally creates
+`FinalAcceptance` and the submitter's immutable `accepted_submission`
+`ContributionRecord`. Compensation, points, reputation, reporting, datasets,
+model training, and other systems consume these records; they cannot create or
+rewrite them.
 
 ## Problem
 
@@ -35,7 +51,11 @@ Guide -> Task -> Submission -> Checker -> Review -> Revision/Decision
 
 Workstream makes that lifecycle explicit and configurable.
 
-The system is source-agnostic without becoming source-adapter-first. A task created manually, imported from markdown, imported from CSV, or later received from an external origin normalizes into the same Workstream task contract.
+The system is source-agnostic without becoming source-adapter-first. A task
+created manually, imported from Markdown or CSV, or later received from an
+external origin normalizes into the same Workstream task contract. The source
+retains its own experience and operating model; Workstream governs task,
+artifact, check, review, and contribution truth underneath.
 
 ## Target Users
 
@@ -90,7 +110,7 @@ The first version includes:
 - revision replay
 - contribution records
 - compensation awards, fulfillment receipts, and status projections
-- reputation basics
+- contribution evidence for a future reputation projection
 - status dashboard
 
 ## First Operator Value
@@ -131,7 +151,14 @@ The first version excludes:
 
 ## Product Promise
 
-Workstream helps Flow measure, certify, and coordinate useful human-agent work by turning project rules into a repeatable evaluation and contribution system.
+Workstream makes governed work independently verifiable and reusable. It tells
+source applications and downstream systems what work occurred, which exact
+artifact and rules governed it, who was authorized to submit and review it, and
+which immutable contribution facts resulted.
+
+Flow Identity is the current v0.1 authentication provider. It verifies external
+identity; local Workstream grants and lifecycle guards determine authority.
+That implementation choice does not make Workstream Flow-specific.
 
 ## First Market Wedge
 

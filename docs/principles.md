@@ -2,7 +2,8 @@
 
 ## 1. Workstream Owns The Lifecycle
 
-Operators and agents may do the actual work outside Workstream. Workstream owns the source of truth:
+Source applications may request work and operators or agents may perform it
+outside Workstream. Workstream owns the governed source of truth:
 
 - project rules
 - task status
@@ -14,7 +15,10 @@ Operators and agents may do the actual work outside Workstream. Workstream owns 
 - compensation awards, fulfillment receipts, and projections
 - reputation projections when separately implemented
 
-The first product is task evaluation and contribution infrastructure, not an execution IDE.
+The first product is governed contribution infrastructure, not an execution
+IDE. Its central outputs are immutable `ContributionRecord` facts that
+downstream payment, points, reputation, reporting, dataset, or other systems may
+consume without rewriting.
 
 ## 2. Project Guides And Policies Are Law
 
@@ -131,3 +135,7 @@ The product is built from our own schemas, rules, examples, and pilot tasks.
 Workstream accepts work from different sources over time, but v0.1 supports only manual, markdown, and CSV intake.
 
 External origins, webhook drop notifications, automated routing, agent identity, and on-chain settlement are later adapters.
+
+Flow Identity is likewise the current external authentication adapter. It does
+not define or own Workstream, and verified identity alone never grants
+Workstream product authority.
