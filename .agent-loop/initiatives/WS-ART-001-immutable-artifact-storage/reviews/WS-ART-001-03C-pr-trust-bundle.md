@@ -128,6 +128,12 @@ external-review response and require a fresh hosted rerun.
 The first distributed-lane run then passed four of five semantic lanes and
 isolated one `0045` migration-scope test that incorrectly crossed the later
 `0049` clean-cut boundary; that test now targets the exact revision it proves.
+The reconciled run `30800292363` passed all five semantic lanes. Its final API
+fan-in exposed an E2E-only authority mismatch: snapshot creation used the token
+with the canonical local Project Manager grant while hidden artifact upload
+used a token carrying only a legacy Flow role claim. The helper now uses the
+same locally authorized token for both operations; production authorization
+continues to fail closed.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental fixture-architecture finding is resolved through one shared
 verified-lineage fixture. A full comment audit also closed the remaining valid

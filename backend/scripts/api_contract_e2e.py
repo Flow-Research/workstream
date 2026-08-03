@@ -813,7 +813,7 @@ async def create_policy_bundle_for_guide(
             f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
             f"{snapshot['id']}/items/{item['id']}/artifact",
             headers={
-                "Authorization": f"Bearer {manager_token}",
+                "Authorization": f"Bearer {diagnostic_reader_token}",
                 "Idempotency-Key": str(uuid4()),
                 "Content-Type": item["media_type"] or "application/octet-stream",
             },

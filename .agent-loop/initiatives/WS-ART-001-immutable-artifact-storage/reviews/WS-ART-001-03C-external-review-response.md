@@ -65,6 +65,13 @@
   through the intentional `0049` clean-cut refusal. The historical-preservation
   test now stops at revision `0045`, which is the migration it proves; separate
   tests continue proving the current-head `0049` refusal.
+- Distributed Backend run `30800292363` passed all five semantic lanes and
+  exposed one real-API helper authority mismatch in the final fan-in job. The
+  helper created the guide-source snapshot with the token carrying the local
+  Project Manager grant, but attempted the hidden artifact upload with a token
+  carrying only a legacy Flow role claim. The API correctly returned the
+  resource-hiding 404. The upload now uses the same locally authorized token as
+  snapshot creation; no production authorization behavior changed.
 
 ## Comments deferred
 
@@ -91,12 +98,11 @@
 
 ## Required next evidence
 
-- Hosted Backend and Agent Gates rerun after this repair is pushed.
+- Hosted Backend and Agent Gates rerun on the exact E2E repair head.
 
 ## Remaining risks
 
-- The database-backed migration-fixture repairs require the next hosted Backend
-  semantic lane run because no local test database URL is configured. The
-  focused OpenAPI contract test passes locally.
+- All five distributed semantic lanes passed on run `30800292363`; the final
+  real-API fan-in proof remains pending on the repaired helper.
 - CodeRabbit's latest incremental review reported no new actionable findings;
   all earlier inline findings were checked against the final diff.
