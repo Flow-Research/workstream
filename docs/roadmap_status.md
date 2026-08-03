@@ -57,6 +57,10 @@ remain outside v0.1.
   and PostgreSQL-backed rate controls.
 - Project setup plus project create, guide mutation, binding, and read
   authorization foundations.
+- Immutable review/revision policy identities, AUTH-owned policy mutation,
+  complete planned REV action and fixed-service catalogues, and the typed
+  fail-closed PREP/read handoff required for hidden REV implementation. These
+  readiness contracts do not make the review lifecycle available.
 
 ### Project, task, submission, and checker foundations
 
@@ -85,8 +89,9 @@ remain outside v0.1.
 The following areas have merged planning, contracts, or partial foundations,
 but are not all complete as one production path:
 
-- review-policy persistence and activation across REV and AUTH;
-- review queue, reviewer assignment/claim, immutable decisions, and revision
+- integration of the merged review/revision policy and authorization readiness
+  contracts into hidden REV lifecycle behavior;
+- hidden review queue, reviewer assignment/claim, immutable decisions, and revision
   replay on the canonical authorization boundary;
 - atomic review-to-contribution and conditional compensation integration.
 

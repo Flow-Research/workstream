@@ -557,8 +557,8 @@
 
             <article class="step">
               <span class="num">10</span>
-              <h3>Current system routes result</h3>
-              <p>The checker gate sends passing work to review queue, contributor-fixable failures to revision, and setup defects to internal repair.</p>
+              <h3>Current checker outcome</h3>
+              <p>The checker gate marks passing work <code>review_pending</code>, contributor-fixable failures <code>needs_revision</code>, and setup defects <code>task_setup_blocked</code>. A live review queue is not implied.</p>
               <div class="data">
                 <code>review_pending</code>
                 <code>needs_revision</code>
@@ -573,7 +573,7 @@
           <div class="outcomes">
             <div class="outcome good">
               <strong>review_pending</strong>
-              <p>All blocking post-submit checker policy requirements pass. The task is ready for the Week 3 human review engine.</p>
+              <p>All blocking post-submit checker policy requirements pass. The task reaches the review-pending boundary; the authorized human-review lifecycle consumes it when that lifecycle is available.</p>
             </div>
             <div class="outcome revise">
               <strong>needs_revision</strong>

@@ -27,5 +27,23 @@ and tests on `main`, accepted ADRs, and the canonical subsystem specifications.
 - [Checker Trial](spec_chunk_10_checker_trial.md)
 - [Checker Trial Failure Catalog](checker_trial_failure_catalog.md)
 
+## Early Strategy And Review Records
+
+These documents preserve design criticism, closure decisions, and adversarial
+review from the original calendar-planning period. Their recommendations are
+historical input, not current delivery commitments or implementation status.
+
+- [Initial Review Closure](review_closure.md)
+- [Architecture Review](review_architecture_review.md)
+- [Systems Architecture Review](review_systems_architecture_review.md)
+- [Final Architecture Review](review_final_architecture_review.md)
+- [Operations Review](review_operations_review.md)
+- [Product Strategy Review](review_product_strategy_review.md)
+- [Final Product Strategy Review](review_final_product_strategy_review.md)
+- [Adversarial Quality Review](review_adversarial_quality_review.md)
+- [Final Adversarial Review](review_final_adversarial_review.md)
+- [Process Baseline Operations Review](review_process_baseline_operations_review.md)
+- [Process Pattern Baseline Review](review_process_pattern_baseline_review.md)
+
 Later canonical specifications and initiative records supersede these files
 where they describe the same behavior.
