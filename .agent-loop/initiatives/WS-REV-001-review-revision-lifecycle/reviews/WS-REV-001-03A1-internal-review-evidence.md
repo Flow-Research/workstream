@@ -3,6 +3,7 @@
 ## Candidate
 
 - Trusted base: `10720382cd9639f00f09578f772b97ab3afc358b`
+- Reviewed implementation commit: `a5a778b4c1be2602d406fdf23c05bd8320f1c8cb`
 - Scope: hidden REV queue/admission persistence, migration 0050, focused tests,
   data-model documentation, initiative status, and one merge intent
 - Runtime exposure: none; no route, checker hook, lease, Review, revision,
