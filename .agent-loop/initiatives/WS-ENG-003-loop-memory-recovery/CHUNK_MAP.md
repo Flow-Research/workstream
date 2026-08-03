@@ -1,7 +1,7 @@
-# CHUNK MAP: WS-ENG-003
+# Chunk Map: WS-ENG-003 — Historical
 
-| Chunk | Purpose | Status |
+| Chunk | Purpose | Final state |
 |---|---|---|
-| `WS-ENG-003-01` | Exact one-use recovery for PR #166 and its own recovery merge | Active by user instruction |
+| `WS-ENG-003-01` | Exact one-use loop-memory recovery | Merged through PR #167; runtime retired by PR #207 |
 
-No successor is declared.
+There is no successor.

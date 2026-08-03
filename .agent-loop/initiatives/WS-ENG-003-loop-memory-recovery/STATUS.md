@@ -1,7 +1,7 @@
-# STATUS: WS-ENG-003
+# Status: WS-ENG-003 — Historical And Closed
 
-- Initiative: implementation complete; awaiting PR human checkpoint
-- Active chunk: none
-- Completed implementation: `WS-ENG-003-01`
-- Trigger: failed post-merge Loop Memory run `29811288198`
-- Next chunk: none
+`WS-ENG-003-01` merged through PR #167 and completed its exact historical
+recovery. The initiative has no active chunk or successor.
+
+The recovery-certificate and signed loop-memory runtime was retired by PR #207.
+Do not use this initiative as a current recovery runbook.

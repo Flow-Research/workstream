@@ -1,9 +1,8 @@
-# Chunk Map: WS-ENG-006 - Contributor Engineering Onboarding
+# Chunk Map: WS-ENG-006 — Historical
 
-| Order | Chunk | Purpose | Risk | State |
-|---:|---|---|---:|---|
-| 1 | `WS-ENG-006-00` | Add a closed first-new-initiative planning intake and exact self-bootstrap migration | L1 | Proposed |
-| 2 | `WS-ENG-006-01` | Add canonical contribution onboarding, reconcile policy docs, expose provenance, and enforce semantic consistency | L1 | Blocked on 00 merge and signed start |
+| Chunk | Purpose | Final state |
+|---|---|---|
+| `WS-ENG-006-00` | First-new-initiative planning intake and bootstrap | Merged through PR #179; signed intake retired by PR #207 |
+| `WS-ENG-006-01` | Contributor engineering entry and onboarding | Merged through PR #193; simplified entry retained in `CONTRIBUTING.md` |
 
-The initiative stops after `WS-ENG-006-01`. Planning intake cannot carry product
-or repository implementation.
+There is no successor.
