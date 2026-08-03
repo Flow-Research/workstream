@@ -17,6 +17,13 @@ from app.modules.artifacts.guide_setup import GuideSetupPreparationService, _Ver
 from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
+from app.modules.artifacts.models import (
+    GuideSourceArtifactIncident,
+    GuideSourceExtractionAttempt,
+    GuideSourceFormatClassification,
+)
+
+_INCIDENT_ID = uuid4()
 
 
 class _ScalarResult:
@@ -194,16 +201,47 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("observed", "expected_code", "has_incident_id"),
+    ("observed", "expected_code", "expected_incident_id", "queried_tables"),
     [
-        ((SimpleNamespace(id=str(uuid4())),), "guide_artifact_incident", True),
-        ((None, SimpleNamespace(status="unsupported")), "guide_source_format_unsupported", False),
-        ((None, None, SimpleNamespace(status="ambiguous")), "guide_source_format_ambiguous", False),
-        ((None, None, None), "guide_source_extraction_failed", False),
+        (
+            (SimpleNamespace(id=str(_INCIDENT_ID)),),
+            "guide_artifact_incident",
+            _INCIDENT_ID,
+            (GuideSourceArtifactIncident.__tablename__,),
+        ),
+        (
+            (None, SimpleNamespace(status="unsupported")),
+            "guide_source_format_unsupported",
+            None,
+            (GuideSourceArtifactIncident.__tablename__, GuideSourceExtractionAttempt.__tablename__),
+        ),
+        (
+            (None, None, SimpleNamespace(status="ambiguous")),
+            "guide_source_format_ambiguous",
+            None,
+            (
+                GuideSourceArtifactIncident.__tablename__,
+                GuideSourceExtractionAttempt.__tablename__,
+                GuideSourceFormatClassification.__tablename__,
+            ),
+        ),
+        (
+            (None, None, None),
+            "guide_source_extraction_failed",
+            None,
+            (
+                GuideSourceArtifactIncident.__tablename__,
+                GuideSourceExtractionAttempt.__tablename__,
+                GuideSourceFormatClassification.__tablename__,
+            ),
+        ),
     ],
 )
 async def test_sufficiency_failure_maps_exact_persisted_state(
-    observed: tuple[object | None, ...], expected_code: str, has_incident_id: bool
+    observed: tuple[object | None, ...],
+    expected_code: str,
+    expected_incident_id: object | None,
+    queried_tables: tuple[str, ...],
 ) -> None:
     session = SimpleNamespace(scalar=AsyncMock(side_effect=observed))
     adapter = SqlAlchemyGuideSufficiencyMaterialAdapter(session)
@@ -220,4 +258,8 @@ async def test_sufficiency_failure_maps_exact_persisted_state(
 
     assert isinstance(failure, GuideSufficiencyMaterialUnavailable)
     assert failure.code == expected_code
-    assert (failure.incident_id is not None) is has_incident_id
+    assert failure.incident_id == expected_incident_id
+    statements = tuple(str(call.args[0]) for call in session.scalar.await_args_list)
+    assert len(statements) == len(queried_tables)
+    for statement, table in zip(statements, queried_tables, strict=True):
+        assert table in statement
