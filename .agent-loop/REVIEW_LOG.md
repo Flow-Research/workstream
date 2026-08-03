@@ -1,5 +1,12 @@
 # Review Log
 
+> Historical record: entries below preserve the review context that existed
+> when each change was evaluated. References to signed starts, loop memory,
+> recovery certificates, machine scope, pending PRs, or future successors are
+> not current status. PR #207 retired that repository-control runtime. Use
+> `CONTRIBUTING.md` for the current engineering loop and the initiative
+> `STATUS.md` files for final ENG dispositions.
+
 ## 2026-07-21 - WS-AUTH-001-10B Internal Plan Review
 
 The inherited AUTH-10B contract failed required L1 review before runtime edits:

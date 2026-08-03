@@ -1,7 +1,8 @@
-# STATUS: WS-ENG-002
+# Status: WS-ENG-002 — Historical And Closed
 
-- Initiative: implementation complete; awaiting PR human checkpoint
-- Active chunk: none
-- Completed implementation: `WS-ENG-002-01`
-- Human authorization: user instructed the orchestrator to fix the duplicate gate now on 2026-07-21
-- Next chunk: none
+`WS-ENG-002-01` merged through PR #166. The initiative is complete and has no
+successor.
+
+Its single-checkpoint signed-start mechanism was later retired with the rest of
+the signed loop-memory runtime by PR #207. This directory is historical
+evidence, not current contribution authority.

@@ -1,18 +1,11 @@
-# CHUNK MAP: WS-ENG-001
+# Chunk Map: WS-ENG-001 — Historical
 
-## Chunks
+| Chunk | Purpose | Final state |
+|---|---|---|
+| `WS-ENG-001-01` | Codex-native zero-trust loop bootstrap | Merged through PR #23 |
+| `WS-ENG-001-02` | Automated post-merge memory | Merged through PR #122 |
+| `WS-ENG-001-03` | Initiative-local loop gates | Merged through PR #125 |
+| `WS-ENG-001-04A` | Complete loop-memory projections | Merged through PR #161 |
+| `WS-ENG-001-04B` | Signed explicit-start events | Merged through PR #165 |
 
-| Chunk | Title | Risk | Status |
-|---|---|---:|---|
-| `WS-ENG-001-01` | Codex-native zero-trust loop bootstrap | L1 | Merged through PR #23 as `b9fe19b` |
-| `WS-ENG-001-02` | Automated Post-Merge Memory | L1 | Merged through PR #122 as `fc89fb6` |
-| `WS-ENG-001-03` | Initiative-Local Loop Gates | L1 | Corrective schema-v2 clean cut; completion recorded by signed automation |
-| `WS-ENG-001-04A` | Complete Loop Memory Projections | L1 | Merged through PR #161; replay and signed projections passed |
-| `WS-ENG-001-04B` | Signed Explicit Start Events | L1 | Implementation and deterministic evidence in progress |
-
-## Future Work
-
-Future product chunks must be planned separately. This initiative does not start
-SubmissionArtifactPolicy implementation or any other Workstream runtime work.
-`04A` and `04B` repair engineering-loop state only and remain separate PR-sized
-chunks.
+The signed-loop runtime was retired by PR #207. No successor remains active.

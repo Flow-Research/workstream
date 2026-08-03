@@ -2,8 +2,7 @@
 
 ## Status
 
-Proposed planning contract after 02C. Refresh exact files and verification
-commands from current `main` before implementation.
+Implementation-ready contract refreshed from merged 02C at `745d9c3f`.
 
 ## Parent initiative
 
@@ -29,17 +28,21 @@ SLA.
 
 ## Allowed files
 
-Refresh to exact current-main paths within:
+Only these exact paths may change:
 
 ```text
-backend/app/modules/authorization/runtime.py
-backend/app/modules/authorization/prepared.py
-backend/app/modules/authorization/kernel.py
-backend/app/modules/authorization/<bounded REV integration contract modules>
-backend/tests/<bounded authorization and PREP tests>
+backend/app/modules/authorization/review_contracts.py
+backend/scripts/run_test_lanes.py
+backend/tests/test_review_authorization_contracts.py
 docs/spec_authorization_service.md
 docs/spec_review_lifecycle.md
-.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/**
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/STATUS.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/REVIEW_LOG.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/chunks/WS-XINT-003-02D-auth-prep-integration-readiness.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02D-internal-review.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02D-pr-trust-bundle.md
+.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/reviews/WS-XINT-003-02D-external-review-response.md
 ```
 
 ## Not allowed changes
@@ -51,6 +54,68 @@ docs/spec_review_lifecycle.md
   serialized prepared handle.
 - No omnibus nullable resource context, generic dictionary/service locator,
   local REV policy engine, fallback authority, or role-only shortcut.
+- No edit to `runtime.py`, `prepared.py`, `kernel.py`, `catalogue.py`, service
+  identity registration, migrations, routes, background execution code, or REV
+  product code.
+- No XINT-002 contract implementation. Shared ART/submission rows are manifest
+  references only and retain their existing owners, types, and activation gates.
+
+## Closed contract families
+
+`review_contracts.py` publishes strict frozen Pydantic models containing only
+scalar identifiers, closed enums, digests, bounded reasons/timestamps and
+server-composed booleans/counts. It defines no repository, loader, evaluator,
+callback, ORM value, byte-bearing field, or authorization handle. The manifest
+maps every XINT-003 action below to exactly one family and execution mode.
+
+| Contract family | Exact XINT-003 actions | Required final facts |
+|---|---|---|
+| concealed queue | `review.queue.read` | a minimal `none` shape contains project, reviewer/grant, policy, phase and queue-state digest only; offer/active-lease shapes additionally bind queue entry/lease when present, task, assignment, Submission, CheckerRun admission, no-self-review actors and exact lineage |
+| claim | `review.claim` | concealed-queue facts plus claim operation, idempotency, queue generation, reviewer global active-lease count, reviewer contribution-policy identity/generation/digest, packet-manifest digest |
+| lease mutation | `review.release`, `review.lease_expiry.run`, `review.lease.force_release` | project, queue entry, lease/generation, reviewer, task, Submission, lease status/expiry, lifecycle phase, reason or due boundary, lease-state digest |
+| preference mutation | `review.decline_preference`, `review.preference_expiry.run` | project, queue entry, preference/generation, preferred reviewer, source Review, source Submission, status/expiry, reason or due boundary, preference-state digest |
+| reviewer reads | `review.context.read`, `review.chain.read` | project, task, assignment, exact active lease/reviewer, packet manifest, current Submission and binding, chain boundary/digest, lifecycle phase; chain read also binds requested subject actor and bounded cursor |
+| decision | `review.decision` | mutually exclusive `initial` and `revision` shapes both bind project, task, assignment, current Submission, CheckerRun admission, queue entry, active lease/reviewer, packet manifest, Review operation, decision, findings/resolution digest, ReviewPolicy and reviewer ContributionPolicy freezes, artifact hash and lifecycle digest; the revision shape additionally requires a distinct predecessor Review/Submission, revision episode, exact preparation head generation/digest, and finding-response lineage/count |
+| operator queue read | `review.queue.inspect` | bounded project/shard, filter digest, bounded cursor, redaction state, lifecycle phase/digest |
+| operator queue mutation | `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close` | project, queue entry/generation, task, Submission, current routing/lease facts, requested mode, canonical reason, lifecycle phase/digest |
+| reconciliation | `review.reconcile.run` | fixed execution mode, project/shard, trigger, bounded cursor, finding IDs digest, observed watermark/time, lifecycle phase/digest |
+| artifact-reference reconciliation | `review.artifact_reference.reconcile` | project/shard, exact review/reference set digest, bounded cursor, reason, observed watermark, lifecycle phase/digest |
+| projection rebuild | `review.projection.rebuild` | named projection, project/shard, source watermark, bounded cursor, source-event digest, lifecycle phase/digest |
+| revision repair | `review.revision_context.repair` | project, task, source/current assignment, prior Submission, originating needs-revision Review, episode, exact head ID/digest/generation, canonical `kept`/`rebased`/`blocked` outcome and forward/backward direction, server-proven repairability, current guide ID/activation sequence and ReviewPolicy/RevisionPolicy identity triples, replacement assignment when any, canonical reason, lifecycle digest |
+| revision obligation close | `review.revision_obligation.close` | project, task, assignment, originating needs-revision Review, episode/head, frozen revision-policy identity/generation/digest, approved limit/deadline facts, exact reached cause, lifecycle digest |
+| legacy close | `review.revision_context.legacy_close` | reconciliation finding, project, task, assignment, optional queue, absence-of-recoverable-root proof digest, CheckerRun-remediation exclusion, canonical reason, lifecycle digest |
+| lifecycle activation | `review.lifecycle.activation.manage` | singleton, operation, expected generation/current phase, adjacent target phase, reviewed manifest digest, drain observations digest, bounded batch/deadline, canonical reason |
+
+The two future evidence-upload actions are manifest entries with execution mode
+`unsupported_future_intent`, no resource model, and no prepare/consume support:
+`review.finding_evidence.ingest` and
+`review.finding_response_evidence.ingest`.
+
+Every shared contract family carries its exact closed `action_id`; family-local
+mode/reason fields are action-specific and validated so sibling actions cannot
+substitute for one another. Every fixed-service model also carries the exact
+`service_identity` and a closed server-derived `execution_mode`. In particular,
+the two identities admitted for `review.reconcile.run` have disjoint modes and
+tests must reject either identity using the other's mode.
+
+Externally owned `artifact.review_packet.materialize`,
+`artifact.review_evidence.binding.create`, `artifact.submission_bundle.prepare`,
+and `submission.create` appear only in a closed external-handoff reference map.
+02D must not define replacement contexts or adapters for them.
+
+The already-active `project.review_policy.update` and
+`project.revision_policy.update` rows are closed references to their existing
+`ProjectReviewPolicyMutationResourceContext` and
+`ProjectRevisionPolicyMutationResourceContext`; 02D neither replaces nor
+changes those proven 02B contracts.
+
+Every mutation/service contract includes exact operation/idempotency/request
+binding through the existing `PreparedAuthorizationInput` and opaque
+`PreparedAuthorizationHandle`; those protocol values are deliberately not
+fields of the resource models. Read contracts use request-scoped evaluation,
+not PREP consumption. Later activation adapters must revalidate actor and exact
+identity link plus matched grant, or the exact fixed-service identity, before
+evaluating these final server-composed facts.
 
 ## Acceptance criteria
 
@@ -71,9 +136,11 @@ docs/spec_review_lifecycle.md
   single-use.
 - Unavailable actions fail closed at prepare and consume. Publishing a contract
   does not grant runtime authority.
-- Contract tests prove copied, reconstructed, serialized, replayed,
-  wrong-session, wrong-transaction, wrong-action, wrong-principal,
-  cross-project/resource, stale-digest, revoked, and unavailable denial.
+- Existing PREP regression tests continue to prove copied, reconstructed,
+  serialized, replayed, wrong-session, wrong-transaction, wrong-action,
+  wrong-principal, revoked, and unavailable denial. New contract tests prove
+  strict construction, action/mode/identity parity, cross-resource and stale-
+  digest distinction, handle exclusion, and serialization-safe scalar shapes.
 - Static scans prove Celery payloads cannot carry handles and AUTH does not
   import REV product repositories or implement lifecycle rules.
 - The interface includes enough exact fields for REV to implement every later
@@ -82,10 +149,23 @@ docs/spec_review_lifecycle.md
 
 ## Verification commands
 
-Refresh exact paths at implementation start, then include Ruff, focused PREP,
-kernel, serialization, parity and denial tests, changed-subsystem coverage at
-or above 90 percent, and hosted Backend coverage preserving the repository-wide
-78 percent floor.
+```bash
+cd backend
+ruff check app/modules/authorization/review_contracts.py tests/test_review_authorization_contracts.py
+mypy app/modules/authorization/review_contracts.py
+.venv/bin/pytest -q tests/test_review_authorization_contracts.py
+.venv/bin/coverage erase
+.venv/bin/coverage run -m pytest -q tests/test_review_authorization_contracts.py
+.venv/bin/coverage report --include='app/modules/authorization/review_contracts.py' --precision=2 --fail-under=90
+cd ..
+git diff --check
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_review_contracts.py
+```
+
+The PR exact head must also pass GitHub `Backend` including all five PostgreSQL
+lanes and the aggregate repository-wide `coverage --fail-under=78`, plus Agent
+Gates. No local full-suite execution is required on the user machine.
 
 ## Required reviewers
 
