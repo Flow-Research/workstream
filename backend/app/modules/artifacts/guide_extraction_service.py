@@ -519,9 +519,9 @@ class GuideExtractionCoordinator:
         for attempt_index in range(2):
             prepared = await self._materializer.materialize_with_fresh_authority(request)
             try:
-                exhausted = await self._service.claim_materialization_slot(request)
-                if exhausted is not None:
-                    return exhausted
+                slot_result = await self._service.claim_materialization_slot(request)
+                if slot_result is not None:
+                    return slot_result
                 result = await self._service.extract_prepared(request, prepared)
             finally:
                 await prepared.close()

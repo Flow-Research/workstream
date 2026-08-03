@@ -235,6 +235,14 @@ LIVE_RULE_PATHS = {
         "backend/app/interfaces/project_agents.py",
         "backend/app/modules/projects/",
     ),
+    "LEGACY_GUIDE_DURABLE_REF": (
+        "backend/app/interfaces/project_agents.py",
+        "backend/app/modules/projects/",
+    ),
+    "LEGACY_GUIDE_CONTENT_HASH": (
+        "backend/app/interfaces/project_agents.py",
+        "backend/app/modules/projects/",
+    ),
     "LEGACY_SUBMISSION_TRANSPORT": (
         "backend/app/modules/tasks/",
         "backend/app/modules/checkers/",
@@ -358,6 +366,16 @@ RULES = (
         "LEGACY_GUIDE_CONTENT_CID",
         "guide_source_cutover",
         re.compile(r"\bcontent_cid\b"),
+    ),
+    Rule(
+        "LEGACY_GUIDE_DURABLE_REF",
+        "guide_source_cutover",
+        re.compile(r"\bdurable_ref\b"),
+    ),
+    Rule(
+        "LEGACY_GUIDE_CONTENT_HASH",
+        "guide_source_cutover",
+        re.compile(r"\bcontent_hash\b"),
     ),
     Rule(
         "LEGACY_SUBMISSION_TRANSPORT",

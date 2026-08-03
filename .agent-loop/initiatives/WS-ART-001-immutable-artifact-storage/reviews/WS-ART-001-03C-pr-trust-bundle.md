@@ -123,7 +123,10 @@ outermost populated-lineage downgrade guard, while direct tests retain coverage
 of the superseded `0039`, `0040`, and `0042` guards. The repairs are recorded in the
 external-review response and require a fresh hosted rerun.
 All earlier CodeRabbit inline findings were resolved, and its latest
-incremental review produced no new actionable findings.
+incremental fixture-architecture finding is resolved through one shared
+verified-lineage fixture. A full comment audit also closed the remaining valid
+stale-contract and maintainability items; intentional transaction-held reads
+and v0.1 operational settings are documented in the external-review response.
 
 ## Remaining risks
 

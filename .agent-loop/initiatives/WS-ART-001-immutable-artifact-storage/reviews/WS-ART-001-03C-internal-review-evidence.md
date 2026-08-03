@@ -7,12 +7,22 @@ same-generation setup continuation.
 
 ## Final reviewer results
 
+Reviewers evaluated the implementation through `312e57c5` and the focused
+shared-foundations reconciliation at `de2ae8b8`; subsequent merge commits only
+incorporate already-reviewed `main` changes. The review tracks used the changed
+ART/project/task tests, Ruff, Python compilation, `git diff --check`, stale ART
+contracts, Markdown links, and the lightweight agent gates identified below.
+
 - Architecture: pass; project continuation retains a closed ART capability.
 - Security/auth: pass; exact authorization facts and provider reads remain in
   the same transaction-held lock window and candidate changes fail closed.
 - Product/ops: pass; continuation evidence is operator-visible.
 - Senior engineering: pass with low risk after durable stale-dispatch claiming.
-- CI integrity: pass; the 78% global floor remains and focused 90% gates were added.
+- CI integrity: internal pass; the 78% global floor remains and focused 90%
+  gates were added. Hosted Backend run `30767889658` completed with failure and
+  initiated the fixture-reconciliation sequence recorded in the external review
+  response. Agent Gates pass; final hosted Backend proof remains pending after
+  reconciliation with the distributed lanes merged from `main`.
 - Docs: pass after guide-source v2 and diagnostic/verified report corrections.
 - Reuse/dedup: pass with low risk after candidate, AUTH-fact, and read-path reuse.
 - Test delta: pass with low risk after verified route, visibility, and dispatch
@@ -36,7 +46,8 @@ same-generation setup continuation.
 - Ruff and Python compilation: passed for changed backend code/tests.
 - `git diff --check`: passed.
 - Stale artifact contract scan: passed at `guide_source_cutover`.
-- Lightweight agent gates: 7 passed.
+- Lightweight agent gates: 8 passed after the distributed-lane CI merge.
+- Distributed lane evidence/merge validators: 44 passed.
 - Markdown link check: passed for changed Markdown files.
 - Non-database focused project tests: 4 passed.
 - Database-backed focused tests were not run locally because

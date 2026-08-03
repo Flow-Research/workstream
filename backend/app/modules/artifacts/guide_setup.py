@@ -130,7 +130,7 @@ class GuideSetupPreparationService:
     async def _verified_item(self, item_id: UUID) -> _VerifiedItem | None:
         async with self._session_factory() as session:
             candidate = await ArtifactRepository(session).get_verified_guide_content_candidate(
-                str(item_id)
+                str(item_id), lock_replica=False
             )
         if candidate is None:
             return None

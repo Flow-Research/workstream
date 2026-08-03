@@ -72,7 +72,7 @@ from project_create_fixtures import (
     activate_guide_for_downstream_test,
     grant_system_project_manager,
 )
-from test_projects import create_verified_report_fixture
+from verified_guide_fixtures import create_verified_report_fixture
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (

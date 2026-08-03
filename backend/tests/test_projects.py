@@ -48,19 +48,11 @@ from app.interfaces.project_agents import (
     canonical_guide_source_material_bytes,
 )
 from app.interfaces.artifact_operations import GuideSufficiencyMaterialUnavailable
-from app.modules.artifacts.guide_extraction import EXTRACTION_POLICY_VERSION
 from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
 from app.modules.artifacts.models import (
-    ArtifactContent,
-    ArtifactReplica,
-    ArtifactStorageNamespace,
-    GuideSourceArtifactBinding,
-    GuideSourceExtractedContent,
-    GuideSourceExtractionAttempt,
     GuideSourceExtractionUsage,
-    GuideSourceFormatClassification,
 )
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
@@ -128,8 +120,6 @@ from app.modules.authorization.runtime import (
 )
 from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
-    PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-    PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
     POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_NAME,
     POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_VERSION,
     GuideActivationBlocked,
@@ -145,6 +135,7 @@ from project_create_fixtures import (
     activate_guide_for_downstream_test,
     seed_historical_project,
 )
+from verified_guide_fixtures import create_verified_report_fixture
 
 
 from app.modules.projects.post_submit_policy import (
@@ -4014,221 +4005,6 @@ async def create_approved_policy_bundle(
     }
 
 
-async def create_verified_report_fixture(
-    report_id: str,
-    source_snapshot_id: str,
-) -> str:
-    """Give broad policy tests exact verified provenance without replaying ART e2e.
-
-    ART binding and extraction integrity is exercised in ``test_guide_bindings``.
-    These project-policy fixtures need only a complete, server-owned usage set.
-    """
-    async with db_session.get_session_factory()() as session:
-        diagnostic_report = await session.get(GuideSufficiencyReport, report_id)
-        setup_run = await session.scalar(
-            select(ProjectSetupRun)
-            .where(ProjectSetupRun.source_snapshot_id == source_snapshot_id)
-            .order_by(ProjectSetupRun.setup_generation.desc())
-            .limit(1)
-        )
-        items = list(
-            (
-                await session.scalars(
-                    select(GuideSourceSnapshotItem)
-                    .where(GuideSourceSnapshotItem.source_snapshot_id == source_snapshot_id)
-                    .order_by(GuideSourceSnapshotItem.item_order)
-                )
-            ).all()
-        )
-        assert diagnostic_report is not None
-        assert items
-        if setup_run is None:
-            snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
-            assert snapshot is not None
-            setup_run = ProjectSetupRun(
-                id=str(uuid4()),
-                project_id=diagnostic_report.project_id,
-                guide_id=diagnostic_report.guide_id,
-                guide_version=diagnostic_report.guide_version,
-                source_snapshot_id=source_snapshot_id,
-                source_snapshot_hash=diagnostic_report.source_snapshot_hash,
-                setup_generation=snapshot.creation_generation,
-                status="queued",
-                current_step="queued",
-                created_by="project-manager-subject",
-            )
-            session.add(setup_run)
-            await session.flush()
-        report = GuideSufficiencyReport(
-            id=str(uuid4()),
-            project_id=diagnostic_report.project_id,
-            guide_id=diagnostic_report.guide_id,
-            guide_version=diagnostic_report.guide_version,
-            source_snapshot_id=diagnostic_report.source_snapshot_id,
-            source_snapshot_hash=diagnostic_report.source_snapshot_hash,
-            status=diagnostic_report.status,
-            findings=diagnostic_report.findings,
-            summary=diagnostic_report.summary,
-            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
-            project_setup_run_id=setup_run.id,
-            setup_generation=setup_run.setup_generation,
-            agent_material_sha256=f"sha256:{'a' * 64}",
-            agent_material_byte_count=1,
-            created_by="workstream-system:project-policy-fixture",
-        )
-        session.add(report)
-        await session.flush()
-
-        namespace = await session.get(ArtifactStorageNamespace, "primary")
-        if namespace is None:
-            namespace = ArtifactStorageNamespace(
-                id="primary",
-                backend="local",
-                adapter="local",
-                provider_profile="test",
-                namespace_descriptor={"root": "project-policy-fixture"},
-                namespace_fingerprint=f"sha256:{'c' * 64}",
-            )
-            session.add(namespace)
-            await session.flush()
-        for item in items:
-            canonical_output = f"verified guide source item {item.item_order}"
-            source_digest = sha256_hash(f"source:{item.id}")
-            output_digest = sha256_hash(canonical_output)
-            content_id = str(uuid4())
-            replica_id = str(uuid4())
-            binding_id = str(uuid4())
-            classification_id = str(uuid4())
-            attempt_id = str(uuid4())
-            extracted_content_id = str(uuid4())
-            extraction_usage_id = str(uuid4())
-            session.add(
-                ArtifactContent(
-                    id=content_id,
-                    sha256=source_digest,
-                    byte_count=len(canonical_output.encode()),
-                    media_type="text/plain",
-                    normalized_display_name=item.source_label,
-                )
-            )
-            await session.flush()
-            session.add(
-                ArtifactReplica(
-                    id=replica_id,
-                    content_id=content_id,
-                    storage_namespace_id=namespace.id,
-                    namespace_fingerprint=namespace.namespace_fingerprint,
-                    adapter=namespace.adapter,
-                    provider_profile=namespace.provider_profile,
-                    provider_object_ref=f"fixtures/{content_id}",
-                    verification_state="verified",
-                    availability_state="available",
-                    integrity_state="valid",
-                )
-            )
-            await session.flush()
-            session.add(
-                GuideSourceArtifactBinding(
-                    id=binding_id,
-                    project_id=report.project_id,
-                    guide_id=report.guide_id,
-                    source_snapshot_id=source_snapshot_id,
-                    source_item_id=item.id,
-                    project_setup_run_id=setup_run.id,
-                    setup_generation=setup_run.setup_generation,
-                    content_id=content_id,
-                    verified_replica_id=replica_id,
-                    logical_role="guide_source_original",
-                    created_by_service="test.project_policy_fixture",
-                )
-            )
-            await session.flush()
-            session.add(
-                GuideSourceFormatClassification(
-                    id=classification_id,
-                    binding_id=binding_id,
-                    content_id=content_id,
-                    verified_replica_id=replica_id,
-                    setup_generation=setup_run.setup_generation,
-                    sha256=source_digest,
-                    byte_count=len(canonical_output.encode()),
-                    media_type="text/plain",
-                    detected_format="plain_text",
-                    status="classified",
-                    detector_name="workstream.guide_format",
-                    detector_version="1",
-                    classification_facts={},
-                )
-            )
-            await session.flush()
-            session.add_all(
-                [
-                    GuideSourceExtractionAttempt(
-                        id=attempt_id,
-                        binding_id=binding_id,
-                        content_id=content_id,
-                        classification_id=classification_id,
-                        setup_generation=setup_run.setup_generation,
-                        detected_format="plain_text",
-                        extractor_name="workstream.plain_text",
-                        extractor_version="1",
-                        policy_version=EXTRACTION_POLICY_VERSION,
-                        attempt_number=1,
-                        status="extracted",
-                        error_code=None,
-                        bounded_facts={},
-                    ),
-                    GuideSourceExtractedContent(
-                        id=extracted_content_id,
-                        content_id=content_id,
-                        detected_format="plain_text",
-                        extractor_name="workstream.plain_text",
-                        extractor_version="1",
-                        policy_version=EXTRACTION_POLICY_VERSION,
-                        source_sha256=source_digest,
-                        source_byte_count=len(canonical_output.encode()),
-                        status="extracted",
-                        output_sha256=output_digest,
-                        canonical_output=canonical_output,
-                        omission_facts={},
-                    ),
-                ]
-            )
-            await session.flush()
-            session.add(
-                GuideSourceExtractionUsage(
-                    id=extraction_usage_id,
-                    extracted_content_id=extracted_content_id,
-                    extraction_attempt_id=attempt_id,
-                    attempt_status="extracted",
-                    binding_id=binding_id,
-                    content_id=content_id,
-                    source_item_id=item.id,
-                    project_setup_run_id=setup_run.id,
-                    setup_generation=setup_run.setup_generation,
-                )
-            )
-            await session.flush()
-            session.add(
-                GuideSufficiencyReportSourceUsage(
-                    id=str(uuid4()),
-                    report_id=report.id,
-                    item_order=item.item_order,
-                    source_item_id=item.id,
-                    binding_id=binding_id,
-                    content_id=content_id,
-                    extraction_usage_id=extraction_usage_id,
-                    extraction_attempt_id=attempt_id,
-                    extracted_content_id=extracted_content_id,
-                    project_setup_run_id=setup_run.id,
-                    setup_generation=setup_run.setup_generation,
-                    canonical_output_sha256=output_digest,
-                )
-            )
-        setup_run.output_sufficiency_report_id = report.id
-        await session.commit()
-        return report.id
 
 
 async def create_generated_post_submit_setup_output(
@@ -6410,59 +6186,58 @@ async def test_source_snapshot_allows_non_secret_keyword_prefixes(
 
 
 @pytest.mark.parametrize(
-    ("source_label", "expected_detail"),
+    "source_label",
     [
-        ("https://user:pass@docs.flow.test/guide.md", "credentials"),
-        ("s3://workstream-guides/token/guide.md", "credential material"),
-        ("file:///home/abiorh/guide.md", "scheme"),
-        ("inline:/../guide.md", "path traversal"),
-        ("inline:C:/Users/alice/guide.md", "local filesystem paths"),
-        ("inline:C:\\Users\\alice\\guide.md", "local path separators"),
-        ("import:\\\\server\\share\\guide.md", "local path separators"),
-        ("import://server/share/guide.md", "network share authority"),
-        ("inline://server/share/guide.md", "network share authority"),
-        ("repo://server/share/guide.md", "network share authority"),
-        ("import:////server/share/guide.md", "network share authority"),
-        ("inline:////server/share/guide.md", "network share authority"),
-        ("repo:////server/share/guide.md", "network share authority"),
-        ("inline:~/guide.md", "local filesystem paths"),
-        ("repo:~/guide.md", "local filesystem paths"),
-        ("import:~/guide.md", "local filesystem paths"),
-        ("s3://workstream-guides/%74oken/guide.md", "credential material"),
-        ("s3://workstream-guides/%63redential/guide.md", "credential material"),
-        ("s3://workstream-guides/%70assword/guide.md", "credential material"),
-        ("s3://workstream-guides/%2574oken/guide.md", "credential material"),
-        ("https://docs.flow.test/.env", "credential material"),
-        ("https://docs.flow.test/%252Eenv", "credential material"),
-        ("https://docs.flow.test/config.env", "credential material"),
-        ("https://docs.flow.test/outputs/prod.env", "credential material"),
-        ("https://docs.flow.test/keys/id_rsa", "credential material"),
-        ("https://docs.flow.test/keys/deploy.pem", "credential material"),
-        ("https://docs.flow.test/.npmrc.bak", "credential material"),
-        ("https://docs.flow.test/.pypirc.old", "credential material"),
-        ("s3://bucket/private/key.pem", "credential material"),
-        ("s3://bucket/access/key/guide.md", "credential material"),
-        ("s3://bucket/api/key/guide.md", "credential material"),
-        ("s3://bucket/private/key/guide.md", "credential material"),
-        ("https://docs.flow.test/guide.md%253Ftoken%253Dsecret", "query"),
-        ("inline:%2Fhome%2Fabiorh%2Fguide.md", "local filesystem paths"),
-        ("repo:%2Ftmp%2Fguide.md", "local filesystem paths"),
-        ("import:%2E%2E/guide.md", "path traversal"),
-        ("inline:%5CUsers%5Calice%5Cguide.md", "local path separators"),
-        ("https://docs.flow.test/guide.md;v=2", "path parameters"),
-        ("https://docs.flow.test/a;b/guide.md", "path parameters"),
-        ("https://docs.flow.test/a%3Bb/guide.md", "path parameters"),
-        ("https://docs.flow.test/a%253Bb/guide.md", "path parameters"),
-        ("inline:/workspace/guide.md", "virtual namespace"),
-        ("repo:/srv/repos/private/guide.md", "virtual namespace"),
-        ("import:/opt/workstream/guide.md", "virtual namespace"),
-        ("inline:/mnt/material/guide.md", "virtual namespace"),
+        "https://user:pass@docs.flow.test/guide.md",
+        "s3://workstream-guides/token/guide.md",
+        "file:///home/abiorh/guide.md",
+        "inline:/../guide.md",
+        "inline:C:/Users/alice/guide.md",
+        "inline:C:\\Users\\alice\\guide.md",
+        "import:\\\\server\\share\\guide.md",
+        "import://server/share/guide.md",
+        "inline://server/share/guide.md",
+        "repo://server/share/guide.md",
+        "import:////server/share/guide.md",
+        "inline:////server/share/guide.md",
+        "repo:////server/share/guide.md",
+        "inline:~/guide.md",
+        "repo:~/guide.md",
+        "import:~/guide.md",
+        "s3://workstream-guides/%74oken/guide.md",
+        "s3://workstream-guides/%63redential/guide.md",
+        "s3://workstream-guides/%70assword/guide.md",
+        "s3://workstream-guides/%2574oken/guide.md",
+        "https://docs.flow.test/.env",
+        "https://docs.flow.test/%252Eenv",
+        "https://docs.flow.test/config.env",
+        "https://docs.flow.test/outputs/prod.env",
+        "https://docs.flow.test/keys/id_rsa",
+        "https://docs.flow.test/keys/deploy.pem",
+        "https://docs.flow.test/.npmrc.bak",
+        "https://docs.flow.test/.pypirc.old",
+        "s3://bucket/private/key.pem",
+        "s3://bucket/access/key/guide.md",
+        "s3://bucket/api/key/guide.md",
+        "s3://bucket/private/key/guide.md",
+        "https://docs.flow.test/guide.md%253Ftoken%253Dsecret",
+        "inline:%2Fhome%2Fabiorh%2Fguide.md",
+        "repo:%2Ftmp%2Fguide.md",
+        "import:%2E%2E/guide.md",
+        "inline:%5CUsers%5Calice%5Cguide.md",
+        "https://docs.flow.test/guide.md;v=2",
+        "https://docs.flow.test/a;b/guide.md",
+        "https://docs.flow.test/a%3Bb/guide.md",
+        "https://docs.flow.test/a%253Bb/guide.md",
+        "inline:/workspace/guide.md",
+        "repo:/srv/repos/private/guide.md",
+        "import:/opt/workstream/guide.md",
+        "inline:/mnt/material/guide.md",
     ],
 )
 async def test_source_snapshot_rejects_credential_and_local_refs(
     project_client: AsyncClient,
     source_label: str,
-    expected_detail: str,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -6474,7 +6249,6 @@ async def test_source_snapshot_rejects_credential_and_local_refs(
     )
 
     assert response.status_code == 422
-    del expected_detail
     assert "locator or credential material" in response.json()["detail"]
 
 

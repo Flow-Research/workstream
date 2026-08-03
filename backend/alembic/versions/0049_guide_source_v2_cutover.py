@@ -142,6 +142,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Refuse to fabricate legacy byte identity from v2 declarations."""
+    # This must precede restoration of the NOT NULL legacy byte-identity columns.
     _refuse_populated(
         "guide source v2 downgrade requires empty guide-source tables; "
         "legacy caller byte identity cannot be reconstructed"

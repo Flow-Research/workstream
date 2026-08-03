@@ -698,33 +698,6 @@ class ProjectService:
         source_snapshot_hash = snapshot.bundle_hash
         first = await self._guide_sufficiency_material.load(request)
 
-        def agent_item(item) -> GuideSourceItemMaterial:
-            return GuideSourceItemMaterial(
-                source_kind=item.source_kind,
-                ingestion_adapter=item.ingestion_adapter,
-                media_type=item.media_type,
-                source_item_id=str(item.source_item_id),
-                item_order=item.item_order,
-                binding_id=str(item.binding_id),
-                artifact_content_id=str(item.content_id),
-                artifact_sha256=item.artifact_sha256,
-                artifact_byte_count=item.artifact_byte_count,
-                classification_id=str(item.classification_id),
-                detected_format=item.detected_format,
-                extraction_attempt_id=str(item.extraction_attempt_id),
-                extraction_usage_id=str(item.extraction_usage_id),
-                extracted_content_id=str(item.extracted_content_id),
-                extractor_name=item.extractor_name,
-                extractor_version=item.extractor_version,
-                extraction_policy_version=item.extraction_policy_version,
-                canonical_output_sha256=item.canonical_output_sha256,
-                omission_facts=item.omission_facts,
-                canonical_content=item.canonical_content,
-                structural_metadata=item.structural_metadata,
-                untrusted_data=True,
-                untrusted_data_label="UNTRUSTED_GUIDE_SOURCE_DATA",
-            )
-
         material = GuideSourceMaterial(
             project_id=guide.project_id,
             guide_id=guide.id,
@@ -735,7 +708,7 @@ class ProjectService:
                 field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
             },
             verified_artifact_material=True,
-            source_items=[agent_item(item) for item in first.source_items],
+            source_items=[self._verified_agent_item(item) for item in first.source_items],
             # Authoritative items already retain source_kind; do not duplicate
             # canonical bytes in the legacy representative projection.
             representative_task_material=RepresentativeTaskMaterialContext(items=[]),
@@ -770,7 +743,9 @@ class ProjectService:
         self._validate_sufficiency_report_payload(payload)
         second = await self._guide_sufficiency_material.load(request)
         second_material = material.model_copy(
-            update={"source_items": [agent_item(item) for item in second.source_items]}
+            update={
+                "source_items": [self._verified_agent_item(item) for item in second.source_items]
+            }
         )
         second_prompt = bounded_canonical_guide_material(second_material)
         second_prompt_sha256 = f"sha256:{hashlib.sha256(second_prompt).hexdigest()}"

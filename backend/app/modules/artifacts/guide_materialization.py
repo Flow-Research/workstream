@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -38,6 +38,9 @@ from app.modules.artifacts.models import (
     GuideSourceArtifactIncident,
     GuideSourceFormatClassification,
 )
+
+if TYPE_CHECKING:
+    from app.modules.artifacts.guide_extraction_service import GuideExtractionRequest
 from app.modules.artifacts.preparation import (
     ArtifactPreparationDeadlineError,
     ArtifactPreparationService,
@@ -556,7 +559,9 @@ class AuthorizedGuideExtractionMaterializer:
     def __init__(self, materialization: ArtifactMaterializationService) -> None:
         self._materialization = materialization
 
-    async def materialize_with_fresh_authority(self, request) -> PreparedArtifact:
+    async def materialize_with_fresh_authority(
+        self, request: GuideExtractionRequest
+    ) -> PreparedArtifact:
         """Obtain a new AUTH-04B decision and independently read exact bytes."""
         return await self._materialization.prepare_authorized_guide_source(
             GuideSourceMaterializationRequest(

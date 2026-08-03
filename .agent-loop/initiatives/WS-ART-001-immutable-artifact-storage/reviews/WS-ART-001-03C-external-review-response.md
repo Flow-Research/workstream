@@ -27,6 +27,17 @@
   operations use the physical PostgreSQL name in both directions, guide
   continuation recovery publishes the continuation directly with an
   independent bound, and the two documentation claims now match implementation.
+- CodeRabbit's latest incremental fixture-architecture comment was valid: the
+  complete verified-guide lineage helper now lives in a shared test utility,
+  and project and task tests consume that single implementation without
+  importing one product test module from another.
+- The remaining valid review cleanups are also applied: stale contracts reject
+  all three removed v1 identity fields; verified agent-input projection is
+  shared; extraction slot naming and reader typing are explicit; the dispatch
+  predicate is typed and documented; the migration records its empty-table
+  downgrade dependency; the eligibility probe avoids a pointless row lock;
+  repository layout is conventional; and the unused source-label threat
+  categories were removed from the parametrized test.
 - After AUTH PR #248 merged, ART was rebased as the single successor migration
   `0049_guide_source_v2`. Hosted run `30784652926` proved the exact combined
   AUTH+ART public-schema fingerprint; the fail-closed test constant now records
@@ -51,7 +62,15 @@
 
 ## Comments deferred
 
-- None.
+- Holding guide/read row locks through the authorized provider read remains
+  intentional for this L1 boundary: splitting the transaction would violate
+  the reviewed transaction-bound AUTH/read contract.
+- Moving verified-report queries from `ProjectService` into the repository is
+  a non-functional ownership refactor outside this clean-cut chunk.
+- A dedicated continuation-scan interval is explicitly optional for v0.1; the
+  shared bounded scan interval remains the approved operational surface.
+- The pre-submit worker wrapper retains the stable Celery/test seam and is not
+  an independent execution path.
 
 ## Human decisions needed
 

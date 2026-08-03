@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.projects.models import ProjectSetupRun
@@ -17,7 +18,8 @@ from app.modules.projects.setup_queue import (
 PrepareGeneration = Callable[..., Awaitable[bool]]
 
 
-def _retryable_dispatch_predicate():
+def _retryable_dispatch_predicate() -> ColumnElement[bool]:
+    """Match stale pending or unclaimed queued work eligible for dispatch."""
     return or_(
         and_(
             ProjectSetupRun.status == "dispatch_pending",
