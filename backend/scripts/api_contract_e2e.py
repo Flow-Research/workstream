@@ -15,7 +15,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from alembic import command
@@ -884,13 +884,28 @@ async def create_policy_bundle_for_guide(
             content=payload,
         )
         ensure(upload.status_code == 202, f"guide source upload failed: {upload.text}")
-    # The hosted contract drill intentionally has no long-lived Celery worker.
-    # Drive the canonical scheduled task once; eager mode then executes the
-    # published verification and guide-continuation tasks through their real
-    # fixed-service boundaries.
-    from app.workers.artifacts import scan_pending_work
+    # The hosted contract drill intentionally has no broker-backed worker.
+    # Drive the canonical async worker adapters on this process's event loop so
+    # SQLAlchemy connections never cross loops. Each adapter still consumes
+    # its exact fixed-service authority and provider-neutral ART boundary.
+    from app.adapters.artifacts.internal_workers import (
+        continue_guide_setup_after_verification,
+        run_artifact_internal_operation,
+        scan_artifact_pending_work,
+    )
 
-    published_work = await asyncio.to_thread(scan_pending_work)
+    async def publish_put_attempt(attempt_id: str) -> None:
+        await run_artifact_internal_operation("put", UUID(attempt_id))
+
+    async def publish_verification_job(job_id: str) -> None:
+        identifier = UUID(job_id)
+        await run_artifact_internal_operation("verification", identifier)
+        await continue_guide_setup_after_verification(identifier)
+
+    published_work = await scan_artifact_pending_work(
+        publish_put_attempt,
+        publish_verification_job,
+    )
     ensure(published_work > 0, "guide artifact worker found no committed work")
     setup_run = None
     for _ in range(120):
