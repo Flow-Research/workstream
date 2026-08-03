@@ -32,8 +32,6 @@ from app.modules.artifacts.models import (
     GuideSourceExtractionAttempt,
     GuideSourceFormatClassification,
 )
-from app.workers import project_setup as project_setup_worker
-
 _INCIDENT_ID = uuid4()
 
 
@@ -87,6 +85,9 @@ def test_guide_setup_service_composes_canonical_materialization_and_extraction()
 def test_project_setup_tasks_dispatch_exact_canonical_arguments(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    from app.workers import project_setup as project_setup_worker
+
     pre_submit = AsyncMock(return_value={"status": "policy_draft_ready"})
     post_submit = AsyncMock(return_value={"status": "completed"})
     monkeypatch.setattr(project_setup_worker, "_run_pre_submit_setup_pipeline", pre_submit)
