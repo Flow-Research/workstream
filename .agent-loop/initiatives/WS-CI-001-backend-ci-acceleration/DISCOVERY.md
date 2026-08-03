@@ -17,6 +17,13 @@
 
 ## Measured evidence
 
+Current post-02B evidence adds a concrete regression measurement. Backend run
+`30782031524`, job `91588477886`, took 17m20s. Its four-lane execution step took
+15m31s on one `ubuntu-latest` runner; installation took 23 seconds and canonical
+collection plus validation took 19 seconds. The workflow's
+`pull_request_review` trigger also repeats the full Backend run for an unchanged
+head. The bottleneck is hosted execution topology, not dependency installation.
+
 PR #161 Backend run `29752233451`, job `88385435082`:
 
 | Step | Duration |

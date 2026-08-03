@@ -33,8 +33,8 @@ unset WORKSTREAM_TEST_ADMIN_DATABASE_URL
 ```
 
 Run both phases for the legacy sequential local diagnostic. Hosted CI instead
-uses four concurrent semantic lanes with a 20-minute lane limit inside a
-45-minute job, leaving a bounded validation and cleanup window.
+uses five independent matrix jobs, one per semantic lane, with a 20-minute lane
+limit and a separate fail-closed fan-in job.
 
 The runner removes the admin URL before child launch, overwrites both child database URLs,
 removes the nonlocal override, redacts complete URLs, and writes only credential-free metadata.
@@ -76,23 +76,25 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 
 ## Hosted semantic-lane full-suite proof
 
-The required GitHub check remains `Backend / test`. One job owns one
-digest-pinned PostgreSQL service container, one digest-pinned MinIO container
-started in-step and published on `127.0.0.1:9000`, and four concurrent
-dependency lanes. A step-level curl health loop admits MinIO before collection.
-This avoids arbitrary shard fan-out and artifact fan-in while retaining exact
-node and coverage custody.
+The required GitHub check remains `Backend / test`. Five matrix jobs each own a
+digest-pinned PostgreSQL service container, a digest-pinned MinIO container,
+and exactly one dependency lane. A step-level curl health loop admits MinIO
+before collection. This is semantic fan-out, not arbitrary test-count sharding:
+lane ownership remains repository-defined and exact.
 
 The lanes are balanced by measured dependency ownership: `project_lifecycle`
 owns project tests, `task_lifecycle` owns task and checker tests,
-`schema_contracts` owns migrations and reset contracts, and
+`schema_contracts_a` and `schema_contracts_b` deterministically partition exact
+node IDs from the measured 12-minute `test_alembic.py` hotspot;
+`schema_contracts_a` also owns reset and isolated-runner contracts, and
 `shared_foundations` owns the remaining authorization, artifact, API, and
-infrastructure tests. Every discovered module must belong to exactly one lane.
+infrastructure tests. Every non-partitioned module belongs to exactly one lane;
+every collected test node, including each Alembic node, belongs to exactly one
+lane.
 
-The job binds the checkout to `GITHUB_SHA`, installs and asserts exact Ruff
-`0.15.22`, runs lint and docstrings, starts MinIO, then collects every canonical
-pytest node. The independent evidence validator must
-accept the collection before execution begins. Each lane receives a distinct
+Each matrix job binds its checkout to `GITHUB_SHA`, installs and asserts exact
+Ruff `0.15.22`, runs lint and docstrings, starts MinIO, and validates the full
+canonical inventory before executing its one lane. Each lane receives a distinct
 runner-created database and role plus a distinct MinIO bucket/prefix custody
 record. `shared_foundations` owns the actual `workstream-artifacts` test bucket
 and a unique run prefix; other lanes create, probe, and remove distinct buckets.
@@ -102,23 +104,39 @@ nodes directly with the admin URL while stripping application database URLs;
 every ordinary node remains behind isolated-runner custody and never receives
 the admin credential.
 
-After execution, independent validation rejects missing, duplicated, foreign,
+Backend does not run on review-state events. The narrow guide-extractor
+dependency approval check runs in Agent Gates instead, so submitting or
+dismissing the exceptional exact-head dependency approval refreshes a fast gate
+without repeating the full backend suite.
+
+Each matrix job uploads a fixed-name artifact bound to GitHub's checked-out PR
+merge-tree SHA, containing its manifest, lane evidence, isolation record, and coverage data. The final `test`
+job runs with `if: always()`, downloads available diagnostic bundles, then
+rejects any failed, cancelled, or skipped matrix result before fan-in. Fan-in
+accepts exactly the five declared lane directories,
+requires byte-identical manifests and heads, verifies every bound digest, and
+rejects symlinks or surplus lanes.
+
+After fan-in, independent validation rejects missing, duplicated, foreign,
 deselected, unexpectedly skipped, interrupted, or partially completed nodes.
 It also binds the exact head, manifest, per-lane isolation metadata, evidence,
-and coverage-file SHA-256 digests. Only then are exactly four regular,
+and coverage-file SHA-256 digests. Only then are exactly five regular,
 non-symlink coverage files copied byte-for-byte for one literal
 `coverage combine`. The 78 percent global floor and every protected 90 percent
 subsystem floor remain blocking. The real API contract drill remains a separate
-isolated invocation inside the same required job.
+isolated invocation inside the final required job.
 
 ### Evidence bundle
 
-The workflow uploads the `.ci/test-lanes` tree even on failure. Its summary
-records the exact head, canonical node count, four lane results, elapsed time,
+Each lane uploads one seven-day bundle, and the final job uploads the reconciled
+`.ci/test-lanes` tree. Its summary
+records the exact head, canonical node count, five lane results, elapsed time,
 and raw-file digests. Per-lane evidence records collected, completed, skipped,
 and deselected exact node IDs plus the bound resource-isolation metadata and
 coverage digest. Resource metadata is mode `0600`, omits credentials, and proves
 database, role, bucket, prefix, probe, and cleanup custody.
+Redacted lane logs are uploaded for diagnosis but are not trusted fan-in or
+coverage evidence.
 If startup or provisioning fails before isolation metadata exists, the failed
 lane records null metadata fields, a nonzero exit, and interrupted custody; it
 cannot satisfy independent validation or be mistaken for successful proof.
@@ -131,7 +149,7 @@ coverage tampering before coverage combination.
 ### Failure diagnosis and reruns
 
 - Collection or collection-validation failure: inspect the canonical manifest,
-  lane assignment, and exact-head binding. No execution evidence is valid.
+  lane assignment, and exact checked-out-tree binding. No execution evidence is valid.
 - Lane failure: inspect the named private log and evidence result; confirm its
   database/role and MinIO namespace cleanup without exposing credentials.
 - Execution-validation failure: inspect node reconciliation, isolation metadata,
@@ -139,9 +157,14 @@ coverage tampering before coverage combination.
 - API contract or coverage failure: the required job remains failed; lane
   completion cannot compensate for either boundary.
 
-Rerun the complete job on the same exact head. Never edit or upload evidence
-manually. Every new commit requires a complete new run because its head and
-digests differ. Hosted evidence always records the exact wall time and whether
+Rerun the complete workflow on the same exact head. Never edit or upload
+evidence manually. Review submission or dismissal does not rerun Backend because
+it does not change the tested tree. A new PR commit starts a new run and cancels
+the superseded same-PR run. Every new commit requires complete evidence because
+its head and digests differ. Each lane bundle records its job-start epoch;
+missing or malformed timing fails the final evidence step. Hosted evidence
+records whole Backend wall time from the earliest lane start, lane
+aggregate/slowest execution timing, and whether
 the eight-minute target was met. When the repository owner explicitly accepts
 a measured target miss at the human merge checkpoint, that performance result
 does not override otherwise passing correctness, custody, service-contract,
