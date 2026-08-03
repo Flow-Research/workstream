@@ -3982,6 +3982,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
+                            ActionOwner.XINT_003_08A,
+                            ActionOwner.XINT_003_08B,
                         }
                     ),
                 )
@@ -4142,6 +4144,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
+                            ActionOwner.XINT_003_08A,
+                            ActionOwner.XINT_003_08B,
                         }
                     ),
                 )
@@ -12114,6 +12118,19 @@ async def _insert_rev_service_actor(
                     ":identity,:id)"
                 ),
                 {"id": actor_id, "identity": service_identity},
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) "
+                    "values (:id,:actor,'https://identity.test',:subject,'service',"
+                    "'active',:actor)"
+                ),
+                {
+                    "id": str(uuid4()),
+                    "actor": actor_id,
+                    "subject": service_identity,
+                },
             )
     finally:
         await engine.dispose()
