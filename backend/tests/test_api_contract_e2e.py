@@ -73,6 +73,7 @@ def test_api_contract_uses_runner_owned_minio_namespace(
 
     env = api_contract.api_environment()
 
+    assert env["WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART"] == "true"
     assert env["WORKSTREAM_ARTIFACT_STORE_BACKEND"] == "s3_compatible"
     assert env["WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE"] == "minio"
     assert env["WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL"] == "http://127.0.0.1:9000"

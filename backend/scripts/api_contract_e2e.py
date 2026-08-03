@@ -290,7 +290,7 @@ def api_environment() -> dict[str, str]:
     env["WORKSTREAM_FLOW_AUTH_ISSUER"] = flow_issuer
     env["WORKSTREAM_FLOW_AUTH_AUDIENCE"] = flow_audience
     env["WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET"] = flow_secret
-    env["WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART"] = "false"
+    env["WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART"] = "true"
     env["WORKSTREAM_CELERY_TASK_ALWAYS_EAGER"] = "true"
     env["WORKSTREAM_CELERY_BROKER_URL"] = "memory://"
     env["WORKSTREAM_CELERY_RESULT_BACKEND_URL"] = "cache+memory://"
