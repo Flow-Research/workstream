@@ -324,9 +324,13 @@ Chunk 01 changes no runtime owner or availability.
 | `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
 | `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
 
-All 19 actions remain planned and unavailable. The transfer adds no migration,
-registration, evaluator, route, job, grant, service identity, or lifecycle
-behavior. The four proposed REV lifecycle actions remain unregistered.
+This table is the trusted pre-WS-XINT-003-02C custody baseline. All 19 actions
+remain planned and unavailable on that baseline, and the four approved REV
+lifecycle actions remain unregistered there. The current delivery path is
+front-loaded `WS-XINT-003-02C` unavailable catalogue/principal/matrix readiness
+followed by `WS-XINT-003-02D` closed PREP/read contract readiness. Neither wave
+implements REV behavior or activates a lifecycle action; later XINT activation
+uses the canonical custody map and exact merged REV proof.
 
 | ActionId | PermissionId | AUTH activation custodian |
 |---|---|---|

@@ -1,5 +1,20 @@
 # Review Log: WS-XINT-003 REV-AUTH End-to-End Contract
 
+## AUTH-readiness sequencing amendment — 2026-08-03
+
+Post-02B review found a circular delivery dependency absent from the corrected
+ART-AUTH model: REV needed stable AUTH contracts to implement, but most AUTH
+contracts and principals were deferred until activation after REV merged. The
+amendment adds unavailable 02C catalogue/principal readiness and 02D PREP/read
+contract readiness, moves the four deferred actions forward, separates queue
+read/claim/release-and-decline/timers by exact REV evidence, waits for REV-10
+before decision activation, and reserves product-route release to REV-13C.
+
+Architecture, security, and product/ops reviewers initially returned FAIL and
+identified the circular dependency, deferred identities/actions, bundled
+activation gates, premature REV-08 decision gate, and missing release fence.
+Their required changes were incorporated before re-review.
+
 ## Initial review round
 
 Architecture, security, product/ops, QA, and senior engineering returned FAIL;

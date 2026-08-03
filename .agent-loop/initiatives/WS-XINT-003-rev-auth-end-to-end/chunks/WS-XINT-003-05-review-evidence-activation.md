@@ -1,41 +1,10 @@
-# Chunk Contract: WS-XINT-003-05 — Bounded Review Chain Read Activation
+# Chunk Contract: WS-XINT-003-05 — Superseded Separate Chain Activation
 
-## Status and risk
+## Status
 
-Non-implementable planning skeleton after 04 and merged XINT-002-07A. Refresh
-exact files and commands on current main before an explicit user request. L1
-confidential history access.
+Superseded by the corrected `WS-XINT-003-04` lease/context/chain activation.
+Never implement this chunk independently.
 
-## Goal
-
-Activate only `review.chain.read` for the exact active lease. Evidence and ART
-binding actions remain future/planned/unavailable; 07A supplies packet
-materialization only and 07B is reserved.
-
-## Allowed files
-
-Enumerate exact REV chain-read service/repository, AUTH context/activation
-parity, route, tests, docs, and evidence at current-main start.
-
-## Not allowed
-
-Generic artifact or historical-byte authority, evidence mutation, decision,
-Submission creation, recovery, or unbounded reviewer backlog/history.
-
-## Acceptance criteria
-
-- Chain reads require the exact active lease/reviewer and disclose only bounded
-  relationship metadata for the leased task/Submission chain.
-- Historical artifact bytes remain inaccessible unless independently present
-  in the current exact packet manifest.
-- Expired/released/reassigned leases, revocation, cross-project/task/submission,
-  stale packet/version, wrong action, and replayed disclosure deny or conceal.
-
-## Verification and reviewers
-
-PostgreSQL read/race tests, concealment/redaction matrix, immutability, coverage
-and hosted gates; full L1 reviewer set.
-
-## Stop
-
-Merge and stop before decision activation.
+The operative goal, scope, proof, and reviewer requirements are in
+`WS-XINT-003-04-review-context-activation.md`. The retained filename is
+historical evidence only.

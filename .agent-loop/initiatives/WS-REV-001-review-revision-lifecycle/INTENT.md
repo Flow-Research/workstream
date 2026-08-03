@@ -84,9 +84,10 @@ outcomes.
   Submission and do not maintain a separate review guide.
 - Consume `WS-AUTH-001` through its authorization kernel and decisions; do not
   query grant tables or reconstruct permissions in review code.
-- Consume only typed ART-owned packet-read and evidence candidate/finalize
-  capabilities backed by the canonical `ArtifactStore`; review services never
-  receive the raw store, provider adapters, provider references, or scratch paths.
+- Consume only the typed ART-owned packet-read capability backed by the
+  canonical `ArtifactStore`; review services never receive the raw store,
+  provider adapters, provider references, or scratch paths. Evidence
+  candidate/finalize capabilities remain future-intent-required.
 - Keep PostgreSQL canonical for review truth. Storage projection is derived,
   asynchronous, and retryable.
 - Keep review code free of contribution-policy, award, fulfillment, and

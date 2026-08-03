@@ -2,9 +2,9 @@
 
 ## Status and risk
 
-Non-implementable planning skeleton after 08A. Refresh exact files and commands
-on current main before an explicit user request. REV jobs/projection/control
-must remain hidden. L1 fixed-service and release-control authority.
+Non-implementable parent skeleton after 08A. Split into current-main children
+aligned to exact REV-11C, REV-12P2, and REV-12A4 behavior; never implement this
+combined parent. L1 fixed-service and release-control authority.
 
 ## Goal
 
@@ -15,12 +15,14 @@ reason-bound `review.lifecycle.activation.manage`.
 
 ## Allowed files
 
-Enumerate exact REV jobs/controller, Celery command registration, AUTH identity/matrix
-and Operator context, migrations, tests, docs, evidence at start.
+Each child enumerates only exact AUTH evaluator/availability parity and
+integrated tests/docs/evidence. REV jobs/controller and Celery implementation
+are read-only dependencies.
 
 ## Not allowed
 
-Catch-all service, human authority in payloads, prepared-handle serialization,
+New contexts/protocols/principals, REV job/controller behavior, catch-all
+service, human authority in payloads, prepared-handle serialization,
 canonical truth in projections, provider-specific access in REV, or route
 release before conformance.
 
@@ -35,8 +37,9 @@ release before conformance.
   cannot bypass dependency readiness or drain/fence state.
 - All-pairs denial, Celery payload/registration, crash/retry, and crossed
   controller/job tests pass.
-- No lifecycle-control command exists until 08R registers its exact planned
-  action with migration/catalogue parity.
+- 02C/02D registration, principal, contract, and denial proof is already merged.
+  Each child adds no ActionId, PermissionId, principal, context class, protocol,
+  REV lifecycle behavior, or product route.
 
 ## Verification and reviewers
 

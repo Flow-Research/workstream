@@ -2,9 +2,10 @@
 
 ## Status and risk
 
-Non-implementable planning skeleton after 05. Refresh exact files and commands
-on current main before an explicit user request. Requires merged hidden REV
-decision plus CON participant. L1
+Non-implementable planning skeleton after 04. Refresh exact files and commands
+on current main before an explicit user request. Requires merged REV-10 first
+canonical decision commit plus CON-03C/07, audit, and outbox proof. REV-08 pure
+validation is insufficient. L1
 canonical judgment, contribution, and conditional-compensation integrity.
 
 ## Goal
@@ -13,16 +14,16 @@ Activate `review.decision` for exactly `accept`, `needs_revision`, or `reject`.
 
 ## Allowed files
 
-Enumerate exact REV decision composition, AUTH final context/activation parity,
-CON typed participant wiring, route, tests, docs, and evidence at start. CON may
-only flush the typed facts prepared by REV/AUTH; it performs no authority
-evaluation, decision, or lifecycle work. REV retains decision and lifecycle
-ownership.
+Enumerate exact AUTH evaluator/availability parity and integrated tests, docs,
+and evidence at start. REV and CON implementation files are read-only
+dependencies. REV retains decision and lifecycle ownership; CON retains its
+flush-only contribution/award participant.
 
 ## Not allowed
 
-New decision values, adjudication, reputation, generic artifact access, optional
-CON participant, manual FinalAcceptance route, or post-commit canonical repair.
+New contexts/protocols/principals, REV/CON lifecycle implementation, new
+decision values, adjudication, reputation, generic artifact access, optional
+CON participant, route release, or post-commit canonical repair.
 
 ## Acceptance criteria
 
@@ -40,6 +41,8 @@ CON participant, manual FinalAcceptance route, or post-commit canonical repair.
   decide, advance lifecycle state, or commit independently.
 - Decision versus expiry/revocation/evidence drift/duplicate request races are
   deterministic and fail closed.
+- The chunk adds no ActionId, PermissionId, principal, context class, protocol,
+  REV/CON lifecycle behavior, or product route.
 
 ## Verification and reviewers
 

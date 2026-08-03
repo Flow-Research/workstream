@@ -8,19 +8,21 @@ authority and immutable predecessor lineage.
 
 ## Goal
 
-Activate the human-review revision context for normal contributor ZIP
-preparation/`submission.create` against the exact obligation through
-XINT-002-05D. No separate response/finding artifact upload is approved;
-XINT-002-07B remains reserved. XINT-002 owns no human REV action.
+Extend the already XINT-002-owned preparation/`submission.create` evaluators
+with the closed human-review revision context after REV-09A1 through 09B. This
+chunk does not take availability custody from XINT-002. No separate
+response/finding artifact upload is approved; XINT-002-07B remains reserved.
 
 ## Allowed files
 
-Enumerate exact REV preparation/obligation, Task/Submission participant, AUTH
-closed context, XINT-002 ART ports, routes, tests, docs, evidence at start.
+Enumerate exact AUTH evaluator integration and integrated tests/docs/evidence at
+start. REV, Task/Submission, and XINT-002 implementation files are read-only
+dependencies.
 
 ## Not allowed
 
-Checker-remediation conflation, guide/policy rebasing outside approved REV
+New contexts/protocols/principals/actions, REV/ART/Task/Submission lifecycle
+implementation, checker-remediation conflation, guide/policy rebasing outside approved REV
 rules, deadline/round bypass, mutable findings, synthetic Review, or a second
 submission authorization protocol.
 
@@ -41,6 +43,8 @@ submission authorization protocol.
 - Human and checker revision sources remain mutually exclusive.
 - XINT-002-07B remains reserved and unavailable. The new contributor ZIP is the
   revision artifact; no parallel response-artifact binding path exists.
+- The chunk adds no availability transition, ActionId, PermissionId, principal,
+  context class, authorization protocol, lifecycle behavior, or product route.
 
 ## Verification and reviewers
 

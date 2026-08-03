@@ -1,5 +1,24 @@
 # Discovery: WS-XINT-003 REV-AUTH End-to-End Contract
 
+## AUTH-readiness sequencing refresh — 2026-08-03
+
+- The merged plan had no availability-neutral AUTH readiness layer equivalent
+  to WS-XINT-002-01/02. It required merged REV behavior before publishing most
+  typed AUTH contexts and fixed identities, while REV requires those contracts
+  before implementing its lifecycle.
+- The four approved recovery/lifecycle actions and six fixed-service identities
+  were deferred until late activation waves. This would force REV recovery,
+  timer, reconciliation, projection, and release-control work to depend on
+  placeholder or locally invented authority.
+- Existing activation 03A bundled queue read, claim, release, and decline even
+  though REV delivers those behaviors in 05B, 06A, and 06B. Timer behavior is
+  separate in 06C. `review.decision` cannot activate against pure REV-08
+  validation; REV-10 is the first canonical Review/FinalAcceptance/CON commit.
+- The corrected ART-AUTH-style sequence is: complete unavailable catalogue and
+  principals in 02C; publish complete fail-closed PREP/read contracts in 02D;
+  let REV implement its hidden lifecycle; then activate each exact action only
+  after matching integrated proof. REV-13C alone releases product routes.
+
 ## WS-XINT-003-02B current-main refresh — 2026-08-02
 
 ### Observed merged baseline
@@ -75,7 +94,7 @@ This initiative begins read-only and changes no application behavior.
   queue, claim, release, preference, context, chain, evidence, decision,
   registered recovery/reconciliation/projection, and ART review actions. The
   four privileged lifecycle/recovery actions named below remain absent until
-  the availability-neutral 08R registration wave.
+  the front-loaded availability-neutral 02C registration wave.
 - Migrations `0018`, `0021`, `0022`, `0023`, `0036`, and `0041` contain
   historical permission/action evidence and planned service mappings. Current
   availability and exact migration parity must be derived, never copied from
@@ -109,7 +128,7 @@ an AdminRoleGrant alone, token roles, or queue visibility.
 
 Requires an active exact-project submitter grant, active/replacement assignment,
 the exact immutable human Review-rooted revision obligation and preparation
-head/digest, predecessor Submission, required finding responses/evidence,
+head/digest, predecessor Submission, required finding/response records,
 unexpired deadline, and remaining revision round. Checker remediation is a
 separate CheckerRun-rooted variant.
 
@@ -209,7 +228,9 @@ needs a closed typed context with only its valid shape.
 ## Dependencies
 
 - AUTH-12D2 and REV-03P must be reconciled before either policy writer is built.
-- REV hidden feature chunks must merge before matching AUTH action activation.
+- REV hidden feature chunks must merge before matching AUTH action activation,
+  but not before AUTH 02C/02D readiness. REV builds against those fail-closed
+  contracts while actions remain unavailable.
 - XINT-002 remains the sole activation owner for ART packet materialization and
   shared human-review submission actions. 07A is packet-only; 07B evidence
   binding is reserved pending separate approved REV intent.
