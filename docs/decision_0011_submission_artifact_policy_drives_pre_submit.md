@@ -46,8 +46,10 @@ usage provenance. The bundle hash is
 object keys and no insignificant whitespace. Caller hashes, content ids,
 excerpts, provider references, capture timestamps, and transient fetch locators
 are excluded. Non-finite numbers such as `NaN` or `Infinity` are rejected before
-hashing. Duplicate server-owned source item ids or item orders are rejected
-before hashing. Changing the declared source-item set or any verified bound
+hashing. The manifest builder rejects duplicate `(source_kind, source_label)`
+pairs before hashing and assigns server-owned item IDs and orders. Integrity
+validation and database constraints reject duplicate IDs or orders later.
+Changing the declared source-item set or any verified bound
 content creates a new setup generation. Changing any document, example, rubric,
 repository doc, representative task excerpt, task sample, or inline guide body
 creates a new snapshot and invalidates prior sufficiency reports, derived

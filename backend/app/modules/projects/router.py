@@ -20,6 +20,9 @@ from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
 )
 from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
@@ -412,7 +415,8 @@ async def run_submission_artifact_policy_derivation_agent(
     """Run Workstream's submission artifact policy derivation agent."""
     try:
         result, created = await ProjectService(
-            session
+            session,
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
         ).run_submission_artifact_policy_derivation_agent(
             actor,
             project_id,

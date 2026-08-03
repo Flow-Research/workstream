@@ -4186,6 +4186,7 @@ async def create_verified_report_fixture(
                     canonical_output_sha256=output_digest,
                 )
             )
+        setup_run.output_sufficiency_report_id = report.id
         await session.commit()
         return report.id
 
@@ -5016,7 +5017,10 @@ async def test_stale_in_flight_post_submit_derivation_cannot_insert_policy(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    diagnostic = await create_sufficiency_report(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    await create_verified_report_fixture(diagnostic["id"], snapshot["id"])
     first_policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -5649,7 +5653,12 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     )
     error_logs: list[dict[str, object]] = []
 
-    def capture_error(message: str, *, extra: dict[str, object]) -> None:
+    def capture_error(
+        message: str,
+        *,
+        extra: dict[str, object],
+        **_: object,
+    ) -> None:
         error_logs.append({"message": message, "extra": extra})
 
     monkeypatch.setattr(project_setup_worker_module.logger, "error", capture_error)
@@ -7406,7 +7415,10 @@ async def test_activation_revalidates_agent_derived_policy_provenance(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    diagnostic = await create_sufficiency_report(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    await create_verified_report_fixture(diagnostic["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -8154,6 +8166,10 @@ async def test_draft_policy_cannot_be_approved_after_guide_activation(
         guide["id"],
         snapshot["id"],
     )
+    report = {
+        **report,
+        "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
+    }
     first_policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -8697,6 +8713,10 @@ async def test_sufficiency_warnings_require_acknowledgement(
         snapshot["id"],
         status="passed_with_warnings",
     )
+    report = {
+        **report,
+        "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
+    }
 
     blocked = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -8801,6 +8821,10 @@ async def test_activation_revalidates_sufficiency_warning_acknowledgement_proven
         snapshot["id"],
         status="passed_with_warnings",
     )
+    report = {
+        **report,
+        "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
+    }
     acknowledgement = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
         f"{report['id']}/acknowledge-warnings",

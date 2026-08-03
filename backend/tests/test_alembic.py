@@ -181,7 +181,29 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
     with migration_lock():
         command.downgrade(config, "base")
         command.upgrade(config, "head")
+        constraint_names = asyncio.run(
+            _project_setup_run_check_constraint_names(isolated_database_env)
+        )
+        assert "ck_project_setup_runs_ck_project_setup_runs_status" in constraint_names
         command.downgrade(config, "base")
+
+
+async def _project_setup_run_check_constraint_names(database_url: str) -> set[str]:
+    """Return physical check-constraint names for the setup-run table."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.scalars(
+                text(
+                    "select constraint_name from information_schema.table_constraints "
+                    "where table_schema = current_schema() "
+                    "and table_name = 'project_setup_runs' "
+                    "and constraint_type = 'CHECK'"
+                )
+            )
+            return set(rows.all())
+    finally:
+        await engine.dispose()
 
 
 def test_0034_project_role_issue_evidence_exact_safe_round_trip(

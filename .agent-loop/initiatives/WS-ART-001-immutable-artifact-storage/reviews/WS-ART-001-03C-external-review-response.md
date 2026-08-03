@@ -12,6 +12,14 @@
   the verified report to that same run.
 - The queued-before-verified-material assertion now uses the persisted
   `current_step="queued"` contract.
+- Backend run `30781770775` then exposed eight remaining project-lifecycle
+  fixtures that still selected diagnostic reports or omitted verified-report
+  setup-run linkage. Those fixtures now use exact verified reports, and the
+  policy-derivation route composes the canonical verified-material adapter.
+- CodeRabbit inline findings were verified and resolved: migration constraint
+  operations use the physical PostgreSQL name in both directions, guide
+  continuation recovery publishes the continuation directly with an
+  independent bound, and the two documentation claims now match implementation.
 
 ## Comments deferred
 
@@ -36,4 +44,5 @@
 
 - The database-backed fixture repairs require the next hosted Backend semantic
   lane run because no local test database URL is configured.
-- CodeRabbit completed in a rate-limited state and produced no inline findings.
+- CodeRabbit's latest incremental review reported no new actionable findings;
+  all earlier inline findings were checked against the final diff.

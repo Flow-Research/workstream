@@ -856,6 +856,7 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_INTERVAL_SECONDS` | `300` | Celery Beat cadence for the named stale-scratch cleanup task; accepted range is 1 through 86400 seconds. |
 | `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_INTERVAL_SECONDS` | `60` | Celery Beat cadence for one authority-bound, database-cutoff pending-work page. |
 | `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_PAGE_SIZE` | `100` | Hard combined put-attempt and verification-job publication page bound. |
+| `WORKSTREAM_GUIDE_SETUP_CONTINUATION_SCAN_PAGE_SIZE` | `100` | Independent bound for publishing terminal verified guide-setup continuations. |
 | `WORKSTREAM_ARTIFACT_EXECUTION_LEASE_SECONDS` | `900` | PostgreSQL-clock executor lease with no heartbeat. |
 | `WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS` | `600` | Total deadline covering provider-open acquisition and the complete stream. |
 | `WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS` | `120` | Lease time reserved for the terminal fenced transaction. |
@@ -1548,11 +1549,6 @@ Implementation is a clean cut:
   execution-mode/observation fencing. Existing contributor receipt rows remain
   readable as contract v1. Downgrade refuses when verification evidence or a
   non-contributor receipt cannot be represented by the prior schema.
-- migration `0048_guide_source_v2` requires an empty guide-source snapshot
-  namespace, renames the non-authoritative declaration field to `source_label`,
-  removes caller-owned hash/content-id fields, installs the exact v2 manifest
-  trigger, and refuses downgrade when guide-source rows exist rather than
-  fabricating legacy byte identity.
 - migration `0039_guide_source_bindings` deterministically backfills positive,
   guide-local setup generations ordered by creation time and stable row ID,
   installs exact guide/snapshot/item/setup-run/content/replica lineage
@@ -1573,6 +1569,11 @@ Implementation is a clean cut:
   cross-binding/classification/content/generation usage and require usage to
   reference an `extracted` attempt. Downgrade locks the four tables and refuses
   while any extraction or retry-budget evidence exists.
+- migration `0048_guide_source_v2` requires an empty guide-source snapshot
+  namespace, renames the non-authoritative declaration field to `source_label`,
+  removes caller-owned hash/content-id fields, installs the exact v2 manifest
+  trigger, and refuses downgrade when guide-source rows exist rather than
+  fabricating legacy byte identity.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

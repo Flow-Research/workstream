@@ -220,9 +220,9 @@ async def scan_artifact_pending_work(
 
 
 async def scan_guide_setup_continuations(
-    publish_verification_job: Callable[[str], Awaitable[None]],
+    publish_continuation: Callable[[str], Awaitable[None]],
 ) -> int:
-    """Publish verified ART jobs only for project-owned retryable snapshots."""
+    """Publish continuations only for verified jobs on retryable snapshots."""
     from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationJob
     from app.modules.projects.guide_setup_continuation import (
         retryable_source_snapshot_ids,
@@ -232,7 +232,7 @@ async def scan_guide_setup_continuations(
     settings = get_settings()
     snapshot_ids = await retryable_source_snapshot_ids(
         get_session_factory(),
-        page_size=settings.artifact_pending_work_scan_page_size,
+        page_size=settings.guide_setup_continuation_scan_page_size,
     )
     if not snapshot_ids:
         return 0
@@ -260,10 +260,10 @@ async def scan_guide_setup_continuations(
                         ArtifactVerificationJob.terminal_at.asc(),
                         ArtifactVerificationJob.id.asc(),
                     )
-                    .limit(settings.artifact_pending_work_scan_page_size)
+                    .limit(settings.guide_setup_continuation_scan_page_size)
                 )
             ).all()
         )
     for job_id in job_ids:
-        await publish_verification_job(job_id)
+        await publish_continuation(job_id)
     return len(job_ids)

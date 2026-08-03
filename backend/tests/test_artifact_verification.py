@@ -64,6 +64,55 @@ async def test_production_authority_denies_prepare_and_consume() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_guide_continuation_scan_uses_its_own_bound_and_direct_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Guide continuation recovery is independent from pending ART work paging."""
+    from app.modules.projects import guide_setup_continuation
+
+    observed: dict[str, int] = {}
+
+    async def retryable_snapshots(_factory, *, page_size: int) -> list[UUID]:
+        observed["snapshot_page_size"] = page_size
+        return [uuid4(), uuid4()]
+
+    class ScalarRows:
+        def all(self) -> list[str]:
+            return ["job-1", "job-2"]
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def scalars(self, statement):
+            observed["job_limit"] = statement._limit_clause.value
+            return ScalarRows()
+
+    settings = SimpleNamespace(
+        artifact_pending_work_scan_page_size=1,
+        guide_setup_continuation_scan_page_size=2,
+    )
+    monkeypatch.setattr(
+        guide_setup_continuation, "retryable_source_snapshot_ids", retryable_snapshots
+    )
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", lambda: settings)
+    monkeypatch.setattr(internal_worker_adapter, "get_session_factory", lambda: Session)
+    published: list[str] = []
+
+    async def publish_continuation(job_id: str) -> None:
+        published.append(job_id)
+
+    count = await internal_worker_adapter.scan_guide_setup_continuations(publish_continuation)
+
+    assert count == 2
+    assert published == ["job-1", "job-2"]
+    assert observed == {"snapshot_page_size": 2, "job_limit": 2}
+
+
 def test_eager_internal_tasks_use_lazy_process_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

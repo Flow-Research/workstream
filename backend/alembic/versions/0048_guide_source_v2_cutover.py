@@ -93,12 +93,12 @@ def upgrade() -> None:
         ["continuation_verification_job_id"],
     )
     op.drop_constraint(
-        "ck_project_setup_runs_status",
+        op.f("ck_project_setup_runs_ck_project_setup_runs_status"),
         "project_setup_runs",
         type_="check",
     )
     op.create_check_constraint(
-        "ck_project_setup_runs_status",
+        op.f("ck_project_setup_runs_ck_project_setup_runs_status"),
         "project_setup_runs",
         "status in ('queued','dispatch_pending','enqueue_failed',"
         "'running_sufficiency_agent','sufficiency_blocked',"
@@ -147,12 +147,12 @@ def downgrade() -> None:
         "legacy caller byte identity cannot be reconstructed"
     )
     op.drop_constraint(
-        "ck_project_setup_runs_status",
+        op.f("ck_project_setup_runs_ck_project_setup_runs_status"),
         "project_setup_runs",
         type_="check",
     )
     op.create_check_constraint(
-        "ck_project_setup_runs_status",
+        op.f("ck_project_setup_runs_ck_project_setup_runs_status"),
         "project_setup_runs",
         "status in ('queued','enqueue_failed','running_sufficiency_agent',"
         "'sufficiency_blocked','running_policy_derivation_agent','policy_draft_ready',"
