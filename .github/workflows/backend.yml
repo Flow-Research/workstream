@@ -320,7 +320,9 @@ jobs:
           python scripts/run_isolated_tests.py
           --metadata-json "${RUNNER_TEMP}/api-database.json"
           --timeout-seconds 1500
-          -- coverage run --parallel-mode --source=app.modules.artifacts,app.workers scripts/api_contract_e2e.py
+          -- coverage run --parallel-mode
+          --source=app.adapters.artifacts,app.core.cancellation,app.core.file_locks,app.interfaces.artifact_operations,app.interfaces.artifacts,app.modules.artifacts,app.workers
+          scripts/api_contract_e2e.py
 
       - name: Preserve isolated real API coverage
         working-directory: backend
