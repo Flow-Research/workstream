@@ -72,6 +72,9 @@
   carrying only a legacy Flow role claim. The API correctly returned the
   resource-hiding 404. The upload now uses the same locally authorized token as
   snapshot creation; no production authorization behavior changed.
+- CodeRabbit's review of repair head `feb40f9a` found no code defect and one
+  trivial compound-modifier wording issue in the trust bundle; the wording is
+  now hyphenated without changing evidence meaning.
 
 ## Comments deferred
 

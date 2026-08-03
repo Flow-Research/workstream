@@ -87,7 +87,7 @@ insufficiency.
 - Stale artifact contracts: passed.
 - Lightweight agent gates: 10 passed.
 - Markdown links: passed.
-- Non-database focused project tests: 4 passed.
+- Non-database-focused project tests: 4 passed.
 - The focused migration test was attempted through the canonical isolated
   database runner after reconciliation. The local runner reached migration
   `0049` and then failed in its database-operation wrapper before executing the
