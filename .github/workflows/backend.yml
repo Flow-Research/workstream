@@ -322,7 +322,7 @@ jobs:
           --timeout-seconds 1500
           -- coverage run --parallel-mode --source=app.modules.artifacts,app.workers scripts/api_contract_e2e.py
 
-      - name: Append real API application coverage
+      - name: Preserve isolated real API coverage
         working-directory: backend
         shell: bash
         run: |
@@ -333,10 +333,13 @@ jobs:
           test -f "${coverage_files[0]}"
           test ! -L "${coverage_files[0]}"
           semantic_coverage="${RUNNER_TEMP}/semantic-lanes.coverage"
+          real_api_coverage="${RUNNER_TEMP}/real-api.coverage"
           test -f "${semantic_coverage}"
           test ! -L "${semantic_coverage}"
+          test ! -e "${real_api_coverage}"
           test ! -e .coverage
-          coverage combine "${semantic_coverage}" "${coverage_files[0]}"
+          mv -- "${coverage_files[0]}" "${real_api_coverage}"
+          mv -- "${semantic_coverage}" .coverage
 
       - name: Backend full-suite coverage
         working-directory: backend
@@ -345,7 +348,7 @@ jobs:
       - name: Artifact foundation coverage
         working-directory: backend
         run: >-
-          coverage report
+          COVERAGE_FILE="${RUNNER_TEMP}/real-api.coverage" coverage report
           --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*'
           --precision=2
           --fail-under=90
@@ -360,7 +363,7 @@ jobs:
 
       - name: Artifact worker wiring coverage
         working-directory: backend
-        run: coverage report --include='app/workers/*' --precision=2 --fail-under=90
+        run: COVERAGE_FILE="${RUNNER_TEMP}/real-api.coverage" coverage report --include='app/workers/*' --precision=2 --fail-under=90
 
       - name: FastAPI startup wiring coverage
         working-directory: backend
