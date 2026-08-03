@@ -30,6 +30,7 @@ availability changes.
 
 - Ruff: pass.
 - Mypy: pass.
+- Docstring coverage: 80.9 percent, unchanged gate.
 - Contract tests: 15 passed.
 - Existing PREP regression tests: 3 passed.
 - Changed-module coverage: 100.00 percent.

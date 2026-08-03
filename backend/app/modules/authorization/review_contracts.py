@@ -110,6 +110,8 @@ class RoutingMode(StrEnum):
 
 
 class _ReviewContract(BaseModel):
+    """Facts common to every inert REV authorization resource contract."""
+
     model_config = _STRICT_FROZEN
 
     action_id: ActionId
@@ -118,10 +120,14 @@ class _ReviewContract(BaseModel):
 
 
 class _ProjectContract(_ReviewContract):
+    """Common exact-project scope for REV authorization resource contracts."""
+
     project_id: UUID
 
 
 class _QueueLineage(_ProjectContract):
+    """Canonical queue, work, actor, grant, and policy lineage."""
+
     queue_entry_id: UUID
     queue_generation: int = Field(ge=1)
     task_id: UUID
@@ -192,6 +198,8 @@ class ReviewClaimContract(_QueueLineage):
 
 
 class _LeaseContract(_ProjectContract):
+    """Canonical final facts shared by exact lease transitions."""
+
     queue_entry_id: UUID
     review_lease_id: UUID
     lease_generation: int = Field(ge=1)
@@ -204,11 +212,15 @@ class _LeaseContract(_ProjectContract):
 
 
 class ReviewReleaseContract(_LeaseContract):
+    """Owning-reviewer release facts for one exact active lease."""
+
     action_id: Literal[ActionId.REVIEW_RELEASE]
     reason: str = Field(min_length=1, max_length=512)
 
 
 class ReviewLeaseExpiryContract(_LeaseContract):
+    """Fixed-service expiry facts for one exact due lease."""
+
     action_id: Literal[ActionId.REVIEW_LEASE_EXPIRY_RUN]
     service_identity: Literal[ServiceIdentity.REVIEW_LEASE_EXPIRY]
     execution_mode: Literal["due_lease"]
@@ -218,11 +230,15 @@ class ReviewLeaseExpiryContract(_LeaseContract):
 
 
 class ReviewLeaseForceReleaseContract(_LeaseContract):
+    """Reason-bound Operator force-release facts for one exact lease."""
+
     action_id: Literal[ActionId.REVIEW_LEASE_FORCE_RELEASE]
     reason: str = Field(min_length=1, max_length=512)
 
 
 class _PreferenceContract(_ProjectContract):
+    """Canonical final facts shared by exact reviewer preferences."""
+
     queue_entry_id: UUID
     preference_id: UUID
     preference_generation: int = Field(ge=1)
@@ -235,11 +251,15 @@ class _PreferenceContract(_ProjectContract):
 
 
 class ReviewDeclinePreferenceContract(_PreferenceContract):
+    """Offered-reviewer decline facts for one exact preference."""
+
     action_id: Literal[ActionId.REVIEW_DECLINE_PREFERENCE]
     reason: str = Field(min_length=1, max_length=512)
 
 
 class ReviewPreferenceExpiryContract(_PreferenceContract):
+    """Fixed-service expiry facts for one exact due preference."""
+
     action_id: Literal[ActionId.REVIEW_PREFERENCE_EXPIRY_RUN]
     service_identity: Literal[ServiceIdentity.REVIEW_PREFERENCE_EXPIRY]
     execution_mode: Literal["due_preference"]
@@ -249,6 +269,8 @@ class ReviewPreferenceExpiryContract(_PreferenceContract):
 
 
 class _ReviewerPacketContract(_ProjectContract):
+    """Exact active-lease and immutable packet lineage for reviewer reads."""
+
     task_id: UUID
     task_assignment_id: UUID
     submission_id: UUID
@@ -264,10 +286,14 @@ class _ReviewerPacketContract(_ProjectContract):
 
 
 class ReviewContextReadContract(_ReviewerPacketContract):
+    """Lease-bounded context-read facts for one immutable review packet."""
+
     action_id: Literal[ActionId.REVIEW_CONTEXT_READ]
 
 
 class ReviewChainReadContract(_ReviewerPacketContract):
+    """Metadata-only chain-read facts for one authorized subject and cursor."""
+
     action_id: Literal[ActionId.REVIEW_CHAIN_READ]
     requested_subject_actor_profile_id: UUID
     chain_head_submission_id: UUID
@@ -331,6 +357,8 @@ class ReviewRevisionDecisionContract(_ReviewDecisionContract):
 
 
 class ReviewQueueInspectContract(_ProjectContract):
+    """Bounded redacted Operator queue-inspection facts."""
+
     action_id: Literal[ActionId.REVIEW_QUEUE_INSPECT]
     shard: str = Field(min_length=1, max_length=128)
     filter_digest: str = Field(pattern=_DIGEST)
@@ -339,6 +367,8 @@ class ReviewQueueInspectContract(_ProjectContract):
 
 
 class _QueueOperatorContract(_ProjectContract):
+    """Canonical queue lineage shared by reason-bound Operator mutations."""
+
     queue_entry_id: UUID
     queue_generation: int = Field(ge=1)
     task_id: UUID
@@ -349,24 +379,32 @@ class _QueueOperatorContract(_ProjectContract):
 
 
 class ReviewQueueRoutingOverrideContract(_QueueOperatorContract):
+    """Operator override facts for one exact queue routing generation."""
+
     action_id: Literal[ActionId.REVIEW_QUEUE_ROUTING_OVERRIDE]
     routing_mode: Literal[RoutingMode.OVERRIDE]
     requested_reviewer_actor_profile_id: UUID
 
 
 class ReviewQueueRoutingCorrectContract(_QueueOperatorContract):
+    """Operator correction facts for one exact invalid routing state."""
+
     action_id: Literal[ActionId.REVIEW_QUEUE_ROUTING_CORRECT]
     routing_mode: Literal[RoutingMode.CORRECT]
     corrected_routing_digest: str = Field(pattern=_DIGEST)
 
 
 class ReviewQueueCloseContract(_QueueOperatorContract):
+    """Operator closure facts for one exact stale queue entry."""
+
     action_id: Literal[ActionId.REVIEW_QUEUE_CLOSE]
     routing_mode: Literal[RoutingMode.CLOSE]
     terminal_reason: str = Field(min_length=1, max_length=128)
 
 
 class _ReconcileContract(_ProjectContract):
+    """Bounded shard, trigger, finding, time, and cursor reconciliation facts."""
+
     action_id: Literal[ActionId.REVIEW_RECONCILE_RUN]
     shard: str = Field(min_length=1, max_length=128)
     trigger: str = Field(min_length=1, max_length=128)
@@ -377,17 +415,23 @@ class _ReconcileContract(_ProjectContract):
 
 
 class ReviewAuthorityInvalidationReconcileContract(_ReconcileContract):
+    """Authority-invalidation mode bound to its exact fixed service."""
+
     service_identity: Literal[ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION]
     execution_mode: Literal[ReconciliationMode.AUTHORITY_INVALIDATION]
 
 
 class ReviewGeneralReconcileContract(_ReconcileContract):
+    """General reconciliation mode bound to its exact fixed service."""
+
     service_identity: Literal[ServiceIdentity.REVIEW_RECONCILIATION]
     execution_mode: Literal[ReconciliationMode.GENERAL]
     reason: str = Field(min_length=1, max_length=512)
 
 
 class ReviewArtifactReferenceReconcileContract(_ProjectContract):
+    """Exact artifact-reference set facts for the fixed reconciler."""
+
     action_id: Literal[ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE]
     service_identity: Literal[ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION]
     execution_mode: Literal["artifact_reference"]
@@ -400,6 +444,8 @@ class ReviewArtifactReferenceReconcileContract(_ProjectContract):
 
 
 class ReviewProjectionRebuildContract(_ProjectContract):
+    """Bounded source-event and watermark facts for projection rebuild."""
+
     action_id: Literal[ActionId.REVIEW_PROJECTION_REBUILD]
     service_identity: Literal[ServiceIdentity.REVIEW_PROJECTION]
     execution_mode: Literal["projection_rebuild"]
@@ -411,6 +457,8 @@ class ReviewProjectionRebuildContract(_ProjectContract):
 
 
 class _RevisionEpisodeContract(_ProjectContract):
+    """Exact Review-rooted preparation episode and current-head lineage."""
+
     task_id: UUID
     task_assignment_id: UUID
     source_task_assignment_id: UUID
@@ -423,6 +471,8 @@ class _RevisionEpisodeContract(_ProjectContract):
 
 
 class ReviewRevisionContextRepairContract(_RevisionEpisodeContract):
+    """Covered-project repair facts for one exact repairable preparation head."""
+
     action_id: Literal[ActionId.REVIEW_REVISION_CONTEXT_REPAIR]
     preparation_head_outcome: RevisionPreparationOutcome
     preparation_head_direction: RevisionPreparationDirection | None = None
@@ -449,6 +499,8 @@ class ReviewRevisionContextRepairContract(_RevisionEpisodeContract):
 
 
 class ReviewRevisionObligationCloseContract(_RevisionEpisodeContract):
+    """Covered-project closure facts for one proven exhausted obligation."""
+
     action_id: Literal[ActionId.REVIEW_REVISION_OBLIGATION_CLOSE]
     revision_policy_id: UUID
     revision_policy_generation: int = Field(ge=1)
@@ -471,6 +523,8 @@ class ReviewRevisionObligationCloseContract(_RevisionEpisodeContract):
 
 
 class ReviewRevisionContextLegacyCloseContract(_ProjectContract):
+    """Evidence-linked Operator closure facts for unrecoverable legacy context."""
+
     action_id: Literal[ActionId.REVIEW_REVISION_CONTEXT_LEGACY_CLOSE]
     reconciliation_finding_id: UUID
     task_id: UUID
@@ -482,6 +536,8 @@ class ReviewRevisionContextLegacyCloseContract(_ProjectContract):
 
 
 class ReviewLifecycleActivationContract(_ReviewContract):
+    """Generation-bound adjacent lifecycle-control transition facts."""
+
     action_id: Literal[ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE]
     singleton_id: UUID
     operation_id: UUID

@@ -30,6 +30,8 @@ No blocking finding remains. All reviewer sessions completed.
 ## Deterministic evidence
 
 - Ruff and focused mypy pass.
+- Repository docstring coverage passes at 80.9 percent after every new contract
+  class was documented.
 - 15 focused contract tests pass.
 - Three existing PREP construction, forgery, copy, serialization, nested-root,
   and planned-action denial regression tests pass.
