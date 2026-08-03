@@ -33,6 +33,8 @@ No blocking finding remains. All reviewer sessions completed.
 - Repository docstring coverage passes at 80.9 percent after every new contract
   class was documented.
 - 15 focused contract tests pass.
+- The canonical semantic-lane collect-only runner passes; the new module is
+  assigned exactly once to `shared_foundations`.
 - Three existing PREP construction, forgery, copy, serialization, nested-root,
   and planned-action denial regression tests pass.
 - `review_contracts.py` coverage is 100.00 percent.

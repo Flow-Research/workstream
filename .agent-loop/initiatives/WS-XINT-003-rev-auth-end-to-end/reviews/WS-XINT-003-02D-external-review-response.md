@@ -16,3 +16,9 @@ that the new contract module documented only 26 of its 54 class/callable
 surfaces, reducing repository docstring coverage to 79.9 percent. Every missing
 new contract class now has a specific docstring. The unchanged local gate passes
 at 80.9 percent; no unrelated file, configuration, or threshold changed.
+
+The following run reached the canonical semantic-lane inventory and correctly
+rejected the new test module because it had not yet been assigned to a lane.
+`test_review_authorization_contracts.py` is now assigned exactly once to
+`shared_foundations`. The canonical collect-only runner and its focused CI
+contract tests pass locally; no lane validation or evidence rule was weakened.

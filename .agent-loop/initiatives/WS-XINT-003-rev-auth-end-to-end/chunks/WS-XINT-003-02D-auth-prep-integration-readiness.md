@@ -32,6 +32,7 @@ Only these exact paths may change:
 
 ```text
 backend/app/modules/authorization/review_contracts.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_review_authorization_contracts.py
 docs/spec_authorization_service.md
 docs/spec_review_lifecycle.md
