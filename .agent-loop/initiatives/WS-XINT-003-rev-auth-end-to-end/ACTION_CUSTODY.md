@@ -32,7 +32,7 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 | `review.artifact_reference.reconcile` | `operations.reconcile.run` | fixed artifact-reference reconciler only | bounded review artifact reference batch | REV | registered planned | `WS-XINT-003-08B` |
 | `review.projection.rebuild` | `operations.projection.rebuild` | fixed projection rebuilder only | derived review projection batch | REV | registered planned | `WS-XINT-003-08B` |
 
-The 19 registered `review.*` rows move from historical `AUTH_REV_*` planning labels to these exact XINT-003 waves only as planning custody. Their runtime `ActionOwner` values change with each later activation, never in 01.
+The 19 historically transferred `review.*` rows move from `AUTH_REV_*` planning labels to these exact XINT-003 waves only as planning custody. Their runtime `ActionOwner` values change with each later activation, never in 01.
 
 ## Fixed-service closure
 
@@ -77,6 +77,18 @@ for AUTH readiness.
 Activation chunks may not add ActionIds, PermissionIds, service identities,
 resource-context classes, adapter protocols, lifecycle rules, or product routes.
 Any such discovery returns to 02C/02D planning.
+
+`WS-XINT-003-02D` publishes the code-level closed manifest in
+`backend/app/modules/authorization/review_contracts.py`. Its strict frozen
+models are inert integration contracts: scalar canonical IDs, closed action and
+mode discriminators, digests, bounded reasons, and timezone-aware timestamps.
+They are not runtime evaluators and do not make a planned action executable.
+REV owns row locking and final-fact composition; later XINT activation adapters
+must consume these exact families without adding another context family. The
+two fixed identities sharing `review.reconcile.run` are bound to disjoint
+server-derived modes. The two future evidence-ingest actions have explicit
+unsupported manifest rows with no resource model. XINT-002 artifact/submission
+actions remain reference-only external handoffs.
 
 | ActionId | Exact prerequisite behavior/manifest |
 |---|---|

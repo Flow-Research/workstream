@@ -162,6 +162,16 @@ route or service command commits that evidence once. No REV, task, ART, CON,
 shared-audit, or shared-outbox effect survives. If restaging fails, nothing
 commits.
 
+Before REV lifecycle implementation begins, `WS-XINT-003-02D` publishes the
+closed typed action/resource manifest in
+`app.modules.authorization.review_contracts`. REV composers target those exact
+strict frozen scalar contracts after locking canonical rows. The manifest is
+not an evaluator and activates nothing; it contains neither REV repositories
+nor product rules. Later XINT waves connect the already-published family to the
+existing PREP/kernel path only after matching hidden REV behavior exists.
+Adding a new action, principal, protocol, or resource-context family requires a
+planning amendment rather than an ad hoc REV implementation change.
+
 ## Canonical Records
 
 The existing `Submission` is the versioned submission identity. Domain prose

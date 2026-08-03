@@ -2,9 +2,10 @@
 
 ## Current status
 
-WS-XINT-003-01, WS-XINT-003-02A, and WS-XINT-003-02B are merged. PR #248 merged
-02B as `25fc27c4` on 2026-08-03 after Backend, Agent Gates, and CodeRabbit passed
-on the final PR head. Exactly `project.review_policy.update` and
+WS-XINT-003-01, WS-XINT-003-02A, WS-XINT-003-02B, and WS-XINT-003-02C are
+merged. PR #255 merged 02C as `745d9c3f` on 2026-08-03 after Backend, Agent
+Gates, and CodeRabbit passed on the final PR head. Exactly
+`project.review_policy.update` and
 `project.revision_policy.update` are active; review/revision lifecycle actions
 remain planned or unavailable.
 
@@ -29,8 +30,9 @@ REV-owned semantics with AUTH-owned mutation authorization.
   materialization. Evidence binding remains planned/unavailable and 07B is
   reserved pending separate REV-owned intent.
 - All 23 registered review/revision lifecycle actions remain planned; 02C adds
-  the four recovery/lifecycle rows and six fixed-service identities without
-  provisioning or authority. The superseded 08R placeholder is never executable. The
+  the four recovery/lifecycle rows and provisions/admits six fixed-service
+  identities without execution authority because every associated lifecycle
+  action remains unavailable. The superseded 08R placeholder is never executable. The
   two policy mutation actions activated by 02B are setup authority, not
   lifecycle activation.
 
@@ -49,9 +51,10 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-Complete WS-XINT-003-02C evidence and review, then merge it before 02D. 02C and
-02D front-load the complete unavailable catalogue, fixed-service matrix, and
-fail-closed PREP contracts that REV needs before it begins its full lifecycle
-implementation. Do not infer review lifecycle
+WS-XINT-003-02D implements the complete typed, fail-closed PREP/read contract
+handoff on top of merged 02C. Its merge permits REV to begin hidden lifecycle
+implementation against that stable surface. AUTH then returns to its independent
+agenda; later XINT activation waves reconnect only to exact merged REV behavior.
+Do not infer review lifecycle
 activation from readiness: later action activation still requires exact merged
 REV behavior and integrated proof.
