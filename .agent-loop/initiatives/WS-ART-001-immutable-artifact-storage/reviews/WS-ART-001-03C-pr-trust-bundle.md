@@ -22,7 +22,8 @@ retention worker, manual resume action, or submission work belongs here.
 
 - Added guide-source snapshot v2 with server-owned item identity/order and
   sanitized non-authoritative labels; removed hash/CID/ref/excerpt authority.
-- Added migration 0048 with a fail-closed populated-namespace refusal.
+- Added migration `0049_guide_source_v2` with a fail-closed
+  populated-namespace refusal.
 - Removed the legacy sufficiency-agent route and separated diagnostic and
   verified report uniqueness.
 - Required complete exact extraction usage provenance for agent derivation and
@@ -84,11 +85,13 @@ insufficiency.
 
 - Ruff, compilation, and `git diff --check`: passed.
 - Stale artifact contracts: passed.
-- Lightweight agent gates: 7 passed.
+- Lightweight agent gates: 10 passed.
 - Markdown links: passed.
 - Non-database focused project tests: 4 passed.
-- Local database-backed suite: not run; the required database URL is absent and
-  the user requested hosted sharded CI rather than a full local suite.
+- The focused migration test was attempted through the canonical isolated
+  database runner after reconciliation. The local runner reached migration
+  `0049` and then failed in its database-operation wrapper before executing the
+  test assertion; hosted semantic lanes remain the required proof.
 
 ## Test delta
 
