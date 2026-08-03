@@ -14,6 +14,15 @@ from app.interfaces.artifact_operations import (
     GuideSufficiencyMaterialUnavailable,
 )
 from app.modules.artifacts.guide_setup import GuideSetupPreparationService, _VerifiedItem
+from app.modules.artifacts.guide_extraction import GuideExtractionRegistry
+from app.modules.artifacts.guide_extraction_service import (
+    GuideExtractionCoordinator,
+    GuideExtractionService,
+)
+from app.modules.artifacts.guide_materialization import (
+    ArtifactMaterializationService,
+    AuthorizedGuideExtractionMaterializer,
+)
 from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
@@ -61,8 +70,16 @@ def test_guide_setup_service_composes_canonical_materialization_and_extraction()
     )
 
     assert service._session_factory is session_factory
-    assert service._materialization is not None
-    assert service._extraction is not None
+    assert isinstance(service._materialization, ArtifactMaterializationService)
+    assert service._materialization._session_factory is session_factory
+    assert isinstance(service._extraction, GuideExtractionCoordinator)
+    assert isinstance(service._extraction._service, GuideExtractionService)
+    assert service._extraction._service._session_factory is session_factory
+    assert isinstance(service._extraction._service._registry, GuideExtractionRegistry)
+    assert isinstance(
+        service._extraction._materializer, AuthorizedGuideExtractionMaterializer
+    )
+    assert service._extraction._materializer._materialization is service._materialization
 
 
 @pytest.mark.asyncio
