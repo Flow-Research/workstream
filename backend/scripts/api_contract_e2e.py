@@ -908,6 +908,23 @@ async def create_policy_bundle_for_guide(
         publish_verification_job,
     )
     ensure(published_work > 0, "guide artifact worker found no committed work")
+    queued_setup = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        diagnostic_reader_token,
+    )
+    if queued_setup["status"] == "queued":
+        from app.workers.project_setup import run_pre_submit_setup_pipeline
+
+        await asyncio.to_thread(
+            run_pre_submit_setup_pipeline,
+            project_id,
+            guide_id,
+            snapshot["id"],
+            queued_setup["id"],
+            queued_setup["setup_generation"],
+        )
     setup_run = None
     for _ in range(120):
         setup_response = await client.get(
