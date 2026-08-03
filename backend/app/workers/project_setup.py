@@ -272,7 +272,10 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                 }
             except Exception:
                 await session.rollback()
-                logger.exception("verified guide sufficiency continuation failed")
+                logger.error(
+                    "verified guide sufficiency continuation failed",
+                    extra={"setup_run_id": setup_run_id},
+                )
                 error_code = "project_setup_failed"
                 await service.update_project_setup_run_status(
                     setup_run_id,

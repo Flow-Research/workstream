@@ -49,6 +49,9 @@ from app.interfaces.project_agents import (
 )
 from app.interfaces.artifact_operations import GuideSufficiencyMaterialUnavailable
 from app.modules.artifacts.guide_extraction import EXTRACTION_POLICY_VERSION
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 from app.modules.artifacts.models import (
     ArtifactContent,
     ArtifactReplica,
@@ -5074,7 +5077,11 @@ async def test_stale_in_flight_post_submit_derivation_cannot_insert_policy(
             return await super().derive_post_submit_checker_policy(material, context)
 
     async with db_session.get_session_factory()() as session:
-        service = ProjectService(session, agent_runtime=CorrectingRuntime())
+        service = ProjectService(
+            session,
+            agent_runtime=CorrectingRuntime(),
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+        )
         with pytest.raises(StaleProjectSetupContinuation):
             await service.run_post_submit_checker_policy_derivation_agent(
                 project_setup_pipeline_actor(),
@@ -5685,7 +5692,12 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     assert persisted.error_summary == (
         "project setup failed; inspect server logs with the setup run id"
     )
-    assert error_logs == []
+    assert error_logs == [
+        {
+            "message": "verified guide sufficiency continuation failed",
+            "extra": {"setup_run_id": setup_run_id},
+        }
+    ]
     logged_payload = json.dumps(error_logs, sort_keys=True)
     assert "raw-token" not in logged_payload
     assert "secret" not in logged_payload
@@ -8713,6 +8725,7 @@ async def test_sufficiency_warnings_require_acknowledgement(
         snapshot["id"],
         status="passed_with_warnings",
     )
+    diagnostic_report_id = report["id"]
     report = {
         **report,
         "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
@@ -8739,6 +8752,13 @@ async def test_sufficiency_warnings_require_acknowledgement(
     )
     assert acknowledgement.status_code == 200, acknowledgement.text
     assert acknowledgement.json()["warnings_acknowledged_by_role"] == "project_manager"
+    diagnostic_acknowledgement = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{diagnostic_report_id}/acknowledge-warnings",
+        headers=auth_headers(),
+        json={"acknowledgement_note": "Accepted with known thin examples."},
+    )
+    assert diagnostic_acknowledgement.status_code == 200, diagnostic_acknowledgement.text
 
     policy = await create_submission_artifact_policy(
         project_client,
@@ -8821,6 +8841,7 @@ async def test_activation_revalidates_sufficiency_warning_acknowledgement_proven
         snapshot["id"],
         status="passed_with_warnings",
     )
+    diagnostic_report_id = report["id"]
     report = {
         **report,
         "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
@@ -8832,6 +8853,13 @@ async def test_activation_revalidates_sufficiency_warning_acknowledgement_proven
         json={"acknowledgement_note": "Accepted with known thin examples."},
     )
     assert acknowledgement.status_code == 200, acknowledgement.text
+    diagnostic_acknowledgement = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{diagnostic_report_id}/acknowledge-warnings",
+        headers=auth_headers(),
+        json={"acknowledgement_note": "Accepted with known thin examples."},
+    )
+    assert diagnostic_acknowledgement.status_code == 200, diagnostic_acknowledgement.text
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -9193,6 +9221,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
         unchanged_service = ProjectService(
             session,
             agent_runtime=DeterministicTestProjectGuideAgentRuntime(),
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
         )
         with pytest.raises(PolicySetupBlocked, match="unchanged policy"):
             await unchanged_service.run_post_submit_checker_policy_derivation_agent(
@@ -9233,7 +9262,11 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
                     agent_version="deterministic-test-runtime-v0.1",
                 )
 
-        service = ProjectService(session, agent_runtime=CorrectionAwareRuntime())
+        service = ProjectService(
+            session,
+            agent_runtime=CorrectionAwareRuntime(),
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+        )
         replacement, created, _ = await service.run_post_submit_checker_policy_derivation_agent(
             project_setup_pipeline_actor(),
             project["id"],
@@ -9293,7 +9326,11 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
         )
         session.add(new_setup_run)
         await session.commit()
-        new_context_service = ProjectService(session, agent_runtime=NewContextRuntime())
+        new_context_service = ProjectService(
+            session,
+            agent_runtime=NewContextRuntime(),
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+        )
         (
             new_context_policy,
             created,

@@ -16,6 +16,13 @@
   fixtures that still selected diagnostic reports or omitted verified-report
   setup-run linkage. Those fixtures now use exact verified reports, and the
   policy-derivation route composes the canonical verified-material adapter.
+- Backend run `30783400382` reduced the remaining failures to five exact test
+  seams: warning tests now acknowledge the diagnostic record used by manual
+  policy creation and the verified record used by activation; direct service
+  tests compose the verified-material adapter. It also exposed that the worker
+  used traceback logging for an unexpected parser/runtime failure; production
+  now emits only a fixed message and setup-run ID, and the test proves raw
+  secrets and paths do not enter the log payload.
 - CodeRabbit inline findings were verified and resolved: migration constraint
   operations use the physical PostgreSQL name in both directions, guide
   continuation recovery publishes the continuation directly with an

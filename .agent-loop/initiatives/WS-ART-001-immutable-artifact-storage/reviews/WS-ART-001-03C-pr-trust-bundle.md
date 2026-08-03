@@ -109,8 +109,9 @@ reuse/dedup, test-delta, and QA passed after findings were resolved.
 
 ## External review
 
-Agent Gates pass after one stale-vocabulary correction. Two Backend runs
-exposed stale setup-run and verified-report fixture assumptions; the repairs
+Agent Gates pass after one stale-vocabulary correction. Three Backend runs
+progressively exposed stale setup-run, verified-report, warning-acknowledgement,
+and direct-service fixture assumptions; the repairs
 are recorded in the external-review response and require a fresh hosted rerun.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental review produced no new actionable findings.
