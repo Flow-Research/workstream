@@ -166,5 +166,7 @@ The manifest covers all 23 `review.*` actions while every row remains planned.
 The two future evidence-ingest actions remain unsupported, XINT-002 actions are
 reference-only, and no evaluator, route, background execution code, migration, or REV lifecycle
 behavior is added. Fifteen contract tests and three existing PREP regression
-tests pass; changed-module coverage is 100.00 percent. External exact-head CI
-and CodeRabbit evidence remain pending the PR.
+tests pass; changed-module coverage is 100.00 percent. CodeRabbit's four valid
+findings corrected operator-read documentation, guide-repair fact wording,
+the true-only no-self-review proof, fixed-service execution-mode closure, and
+annotation-based inertness proof. Corrective exact-head CI remains required.

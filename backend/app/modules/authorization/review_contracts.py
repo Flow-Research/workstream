@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId
@@ -52,11 +52,15 @@ class QueueSelectionMode(StrEnum):
     NONE = "none"
 
 
-class ReconciliationMode(StrEnum):
-    """Identity-coupled modes for the shared reconciliation ActionId."""
+class ServiceExecutionMode(StrEnum):
+    """Closed server-derived modes for fixed-service review contracts."""
 
     AUTHORITY_INVALIDATION = "authority_invalidation"
     GENERAL = "general"
+    DUE_LEASE = "due_lease"
+    DUE_PREFERENCE = "due_preference"
+    ARTIFACT_REFERENCE = "artifact_reference"
+    PROJECTION_REBUILD = "projection_rebuild"
 
 
 class ReviewLeaseStatus(StrEnum):
@@ -141,15 +145,20 @@ class _QueueLineage(_ProjectContract):
     review_policy_generation: int = Field(ge=1)
     review_policy_digest: str = Field(pattern=_DIGEST)
     queue_state_digest: str = Field(pattern=_DIGEST)
-    no_self_review: bool
+    no_self_review: Literal[True]
+
+    @field_validator("no_self_review", mode="before")
+    @classmethod
+    def require_no_self_review_proof(cls, value):
+        """Require REV's explicit server-owned no-self-review proof."""
+        if value is not True:
+            raise ValueError("no-self-review proof must be true")
+        return value
 
     @model_validator(mode="after")
     def require_distinct_reviewer(self):
         """Reject a self-review context even before a later evaluator exists."""
-        if (
-            not self.no_self_review
-            or self.reviewer_actor_profile_id == self.contributor_actor_profile_id
-        ):
+        if self.reviewer_actor_profile_id == self.contributor_actor_profile_id:
             raise ValueError("reviewer and contributor must be distinct")
         return self
 
@@ -223,7 +232,7 @@ class ReviewLeaseExpiryContract(_LeaseContract):
 
     action_id: Literal[ActionId.REVIEW_LEASE_EXPIRY_RUN]
     service_identity: Literal[ServiceIdentity.REVIEW_LEASE_EXPIRY]
-    execution_mode: Literal["due_lease"]
+    execution_mode: Literal[ServiceExecutionMode.DUE_LEASE]
     due_boundary: AwareDatetime
     claimed_ids_digest: str = Field(pattern=_DIGEST)
     cursor: str | None = Field(default=None, max_length=512)
@@ -262,7 +271,7 @@ class ReviewPreferenceExpiryContract(_PreferenceContract):
 
     action_id: Literal[ActionId.REVIEW_PREFERENCE_EXPIRY_RUN]
     service_identity: Literal[ServiceIdentity.REVIEW_PREFERENCE_EXPIRY]
-    execution_mode: Literal["due_preference"]
+    execution_mode: Literal[ServiceExecutionMode.DUE_PREFERENCE]
     due_boundary: AwareDatetime
     claimed_ids_digest: str = Field(pattern=_DIGEST)
     cursor: str | None = Field(default=None, max_length=512)
@@ -418,14 +427,14 @@ class ReviewAuthorityInvalidationReconcileContract(_ReconcileContract):
     """Authority-invalidation mode bound to its exact fixed service."""
 
     service_identity: Literal[ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION]
-    execution_mode: Literal[ReconciliationMode.AUTHORITY_INVALIDATION]
+    execution_mode: Literal[ServiceExecutionMode.AUTHORITY_INVALIDATION]
 
 
 class ReviewGeneralReconcileContract(_ReconcileContract):
     """General reconciliation mode bound to its exact fixed service."""
 
     service_identity: Literal[ServiceIdentity.REVIEW_RECONCILIATION]
-    execution_mode: Literal[ReconciliationMode.GENERAL]
+    execution_mode: Literal[ServiceExecutionMode.GENERAL]
     reason: str = Field(min_length=1, max_length=512)
 
 
@@ -434,7 +443,7 @@ class ReviewArtifactReferenceReconcileContract(_ProjectContract):
 
     action_id: Literal[ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE]
     service_identity: Literal[ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION]
-    execution_mode: Literal["artifact_reference"]
+    execution_mode: Literal[ServiceExecutionMode.ARTIFACT_REFERENCE]
     shard: str = Field(min_length=1, max_length=128)
     review_reference_set_digest: str = Field(pattern=_DIGEST)
     observed_at: AwareDatetime
@@ -448,7 +457,7 @@ class ReviewProjectionRebuildContract(_ProjectContract):
 
     action_id: Literal[ActionId.REVIEW_PROJECTION_REBUILD]
     service_identity: Literal[ServiceIdentity.REVIEW_PROJECTION]
-    execution_mode: Literal["projection_rebuild"]
+    execution_mode: Literal[ServiceExecutionMode.PROJECTION_REBUILD]
     projection_name: str = Field(min_length=1, max_length=128)
     shard: str = Field(min_length=1, max_length=128)
     source_watermark: str = Field(min_length=1, max_length=512)

@@ -17,7 +17,10 @@ resource-context family. Every lifecycle action remains planned/unavailable.
   bind a distinct predecessor Submission, predecessor Review, revision episode,
   exact preparation head, and response-lineage digest/count.
 - Fixed-service models bind exact service identity and server-derived mode; the
-  two reconciliation services cannot exchange modes.
+  two reconciliation services cannot exchange modes, and all fixed-service
+  modes share one closed importable enum.
+- Queue lineage requires a true-only server proof of no self-review and a
+  separately validated reviewer/contributor identity distinction.
 - Existing 02B policy contexts and XINT-002 actions are references only.
 
 ## Exclusions
@@ -37,6 +40,7 @@ availability changes.
 - Changed-module coverage: 100.00 percent.
 - Internal architecture, security, product, QA, senior, CI, reuse, test-delta,
   and docs review: pass; valid findings resolved.
+- CodeRabbit: four valid comments addressed; no finding deferred.
 - Markdown links, stale review contracts, and diff whitespace: pass.
 
 Hosted GitHub Actions must provide the five PostgreSQL/backend lanes, aggregate

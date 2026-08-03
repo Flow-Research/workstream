@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
-from typing import get_args
-from uuid import uuid4
+from types import NoneType, UnionType
+from typing import Literal, Union, get_args, get_origin
+from uuid import UUID, uuid4
 
 import pytest
-from pydantic import ValidationError
+from pydantic import AwareDatetime, ValidationError
 
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
@@ -19,7 +21,6 @@ from app.modules.authorization.review_contracts import (
     EXISTING_REVIEW_SETUP_CONTRACTS,
     REVIEW_AUTHORIZATION_CONTRACT_BY_ACTION,
     QueueSelectionMode,
-    ReconciliationMode,
     ReviewAuthorityInvalidationReconcileContract,
     ReviewAuthorizationResourceContract,
     ReviewContractExecution,
@@ -37,6 +38,7 @@ from app.modules.authorization.review_contracts import (
     ReviewRevisionContextRepairContract,
     ReviewRevisionDecisionContract,
     ReviewRevisionObligationCloseContract,
+    ServiceExecutionMode,
     RevisionPreparationDirection,
     RevisionPreparationOutcome,
     RevisionClosureCause,
@@ -180,22 +182,30 @@ def test_every_executable_manifest_model_has_one_exact_action_discriminator():
 
 
 def test_contract_models_exclude_handles_callbacks_bytes_and_unbounded_maps():
-    forbidden_names = {
-        "authorization_handle",
-        "prepared_authorization",
-        "bytes",
-        "content",
-        "provider_credentials",
-        "scratch_path",
-        "callback",
-    }
     for spec in REVIEW_AUTHORIZATION_CONTRACT_BY_ACTION.values():
         for model in spec.resource_models:
-            assert forbidden_names.isdisjoint(model.model_fields)
-            assert all(
-                field.annotation is not PreparedAuthorizationHandle
-                for field in model.model_fields.values()
-            )
+            _assert_inert_contract_model(model)
+
+
+def _assert_inert_contract_model(model):
+    """Allow only bounded scalar, enum, literal, and optional field annotations."""
+
+    def assert_allowed(annotation, field_name):
+        origin = get_origin(annotation)
+        if origin is Literal:
+            return
+        if origin in (Union, UnionType):
+            for member in get_args(annotation):
+                assert_allowed(member, field_name)
+            return
+        assert annotation is not PreparedAuthorizationHandle, field_name
+        assert annotation not in (bytes, bytearray), field_name
+        assert annotation in (str, int, bool, datetime, AwareDatetime, UUID, NoneType) or (
+            isinstance(annotation, type) and issubclass(annotation, Enum)
+        ), field_name
+
+    for name, field in model.model_fields.items():
+        assert_allowed(field.annotation, name)
 
 
 def test_external_handoffs_are_closed_references_not_review_contracts():
@@ -237,6 +247,8 @@ def test_queue_contract_rejects_self_review_wrong_action_extra_and_inconsistent_
         ReviewQueueReadContract.model_validate(
             values | {"contributor_actor_profile_id": values["reviewer_actor_profile_id"]}
         )
+    with pytest.raises(ValidationError, match="no-self-review proof must be true"):
+        ReviewQueueReadContract.model_validate(values | {"no_self_review": False})
     with pytest.raises(ValidationError):
         ReviewQueueReadContract.model_validate(
             values | {"selection_mode": QueueSelectionMode.ACTIVE_LEASE}
@@ -278,27 +290,27 @@ def test_reconciliation_identity_and_mode_cannot_be_swapped():
         values
         | {
             "service_identity": ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION,
-            "execution_mode": ReconciliationMode.AUTHORITY_INVALIDATION,
+            "execution_mode": ServiceExecutionMode.AUTHORITY_INVALIDATION,
         }
     )
-    assert authority.execution_mode is ReconciliationMode.AUTHORITY_INVALIDATION
+    assert authority.execution_mode is ServiceExecutionMode.AUTHORITY_INVALIDATION
 
     general = ReviewGeneralReconcileContract.model_validate(
         values
         | {
             "service_identity": ServiceIdentity.REVIEW_RECONCILIATION,
-            "execution_mode": ReconciliationMode.GENERAL,
+            "execution_mode": ServiceExecutionMode.GENERAL,
             "reason": "scheduled bounded reconciliation",
         }
     )
-    assert general.execution_mode is ReconciliationMode.GENERAL
+    assert general.execution_mode is ServiceExecutionMode.GENERAL
 
     with pytest.raises(ValidationError):
         ReviewAuthorityInvalidationReconcileContract.model_validate(
             values
             | {
                 "service_identity": ServiceIdentity.REVIEW_RECONCILIATION,
-                "execution_mode": ReconciliationMode.AUTHORITY_INVALIDATION,
+                "execution_mode": ServiceExecutionMode.AUTHORITY_INVALIDATION,
             }
         )
     with pytest.raises(ValidationError):
@@ -306,7 +318,7 @@ def test_reconciliation_identity_and_mode_cannot_be_swapped():
             values
             | {
                 "service_identity": ServiceIdentity.REVIEW_RECONCILIATION,
-                "execution_mode": ReconciliationMode.AUTHORITY_INVALIDATION,
+                "execution_mode": ServiceExecutionMode.AUTHORITY_INVALIDATION,
                 "reason": "wrong mode",
             }
         )
@@ -510,8 +522,8 @@ def test_lifecycle_activation_rejects_same_phase_and_stays_scalar_serializable()
         "deadline": NOW,
         "reason": "reviewed activation transition",
     }
-    contract = ReviewLifecycleActivationContract.model_validate(values)
-    assert "PreparedAuthorizationHandle" not in contract.model_dump_json()
+    ReviewLifecycleActivationContract.model_validate(values)
+    _assert_inert_contract_model(ReviewLifecycleActivationContract)
     with pytest.raises(ValidationError):
         ReviewLifecycleActivationContract.model_validate(
             values | {"target_phase": ReviewLifecyclePhase.SHADOW}
