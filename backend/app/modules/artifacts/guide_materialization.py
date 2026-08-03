@@ -424,7 +424,9 @@ class ArtifactMaterializationService:
                     ArtifactPutAttempt.namespace_fingerprint
                     == ArtifactReplica.namespace_fingerprint,
                     ArtifactPutAttempt.status == "object_confirmed",
-                    ArtifactPutAttempt.terminal_result_code == "object_confirmed",
+                    ArtifactPutAttempt.terminal_result_code.in_(
+                        ("acknowledged", "observed_confirmed")
+                    ),
                 )
                 .order_by(ArtifactVerificationReceipt.created_at.desc())
                 .limit(1)

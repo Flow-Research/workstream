@@ -844,6 +844,7 @@ async def _seed_binding_lineage(
     sha256: str | None = None,
     byte_count: int = 42,
     media_type: str = "application/pdf",
+    put_terminal_result_code: str = "acknowledged",
 ) -> dict[str, UUID]:
     ids = {
         name: uuid4()
@@ -1026,7 +1027,7 @@ async def _seed_binding_lineage(
             request_digest="sha256:" + "d" * 64,
             status="object_confirmed",
             replica_id=str(ids["replica"]),
-            terminal_result_code="object_confirmed",
+            terminal_result_code=put_terminal_result_code,
             terminal_at=datetime.now(UTC),
         )
     )
@@ -1731,8 +1732,14 @@ async def test_materialization_denies_before_provider_read(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "put_terminal_result_code",
+    ("acknowledged", "observed_confirmed"),
+)
 async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
-    isolated_database_env: str, tmp_path: Path
+    isolated_database_env: str,
+    tmp_path: Path,
+    put_terminal_result_code: str,
 ) -> None:
     payload = b"%PDF-1.7\nverified"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
@@ -1744,7 +1751,11 @@ async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
     try:
         async with factory() as session:
             ids = await _seed_binding_lineage(
-                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+                session,
+                sha256=digest,
+                byte_count=len(payload),
+                media_type="application/pdf",
+                put_terminal_result_code=put_terminal_result_code,
             )
         binding_id = await _create_binding(factory, ids)
         service = ArtifactMaterializationService(
