@@ -842,7 +842,9 @@ async def test_guide_runtime_closes_bootstrap_when_scratch_construction_fails(
 
 
 @pytest.mark.asyncio
-async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
+async def test_hidden_http_route_conceals_fail_closed_authority(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     body_read = False
 
     async def receive() -> dict[str, object]:
@@ -872,6 +874,8 @@ async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
         )
     assert denied.value.status_code == 404
     assert not body_read
+    assert "ArtifactAuthorityDeniedError" in caplog.text
+    assert "reason=unavailable" in caplog.text
 
 
 @pytest.mark.asyncio

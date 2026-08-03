@@ -2219,6 +2219,9 @@ async def main(env: dict[str, str]) -> None:
     try:
         await wait_for_health(base_url, process, log_path)
         await exercise_api_contract(base_url, env)
+    except BaseException:
+        print(log_path.read_text(encoding="utf-8"), file=sys.stderr)
+        raise
     finally:
         process.terminate()
         try:
