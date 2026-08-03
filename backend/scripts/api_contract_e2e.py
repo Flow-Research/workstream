@@ -884,6 +884,14 @@ async def create_policy_bundle_for_guide(
             content=payload,
         )
         ensure(upload.status_code == 202, f"guide source upload failed: {upload.text}")
+    # The hosted contract drill intentionally has no long-lived Celery worker.
+    # Drive the canonical scheduled task once; eager mode then executes the
+    # published verification and guide-continuation tasks through their real
+    # fixed-service boundaries.
+    from app.workers.artifacts import scan_pending_work
+
+    published_work = await asyncio.to_thread(scan_pending_work)
+    ensure(published_work > 0, "guide artifact worker found no committed work")
     setup_run = None
     for _ in range(120):
         setup_response = await client.get(
