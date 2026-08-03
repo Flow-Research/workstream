@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for 30-day build.
+Accepted for v0.1.
 
 ## Decision
 

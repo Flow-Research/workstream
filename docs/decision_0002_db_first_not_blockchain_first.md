@@ -23,7 +23,7 @@ fulfillment.
 
 Positive:
 
-- simpler 30-day build
+- simpler v0.1 delivery
 - easier manual reconciliation
 - faster pilot
 - avoids premature protocol coupling

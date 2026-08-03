@@ -70,12 +70,14 @@ Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
 submission packets, immutable artifact storage, automated checker execution,
 and the pre-review gate. Project-guide ingestion now has typed source handling,
-bounded extraction, security controls, and persisted sufficiency evidence.
+bounded extraction, security controls, persisted sufficiency evidence, and
+authorized fixed-service guide-source binding and reads.
 
 Active work is connecting those foundations into the remaining production
-lifecycle: authoritative guide binding and reads, review and revision,
-contribution records, conditional compensation awards and fulfillment, and
-reputation projections. Frontend product work follows stable and tested backend
+lifecycle: the remaining artifact custody chain, review and revision,
+contribution records, and conditional compensation awards and fulfillment.
+Contribution evidence remains the input for a separately implemented future
+reputation projection. Frontend product work follows stable and tested backend
 contracts for the surface it consumes.
 
 The release bar is a verified end-to-end v0.1 lifecycle, not the completion of
