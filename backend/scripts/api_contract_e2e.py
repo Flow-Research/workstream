@@ -921,10 +921,11 @@ async def create_policy_bundle_for_guide(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
         diagnostic_reader_token,
     )
+    setup_worker_result = None
     if queued_setup["status"] == "queued":
         from app.workers.project_setup import run_pre_submit_setup_pipeline
 
-        await asyncio.to_thread(
+        setup_worker_result = await asyncio.to_thread(
             run_pre_submit_setup_pipeline,
             project_id,
             guide_id,
@@ -952,7 +953,9 @@ async def create_policy_bundle_for_guide(
     ensure(setup_run is not None, "guide setup run was not observable")
     ensure(
         setup_run["status"] == "policy_draft_ready",
-        f"verified guide setup did not produce a draft policy: {setup_run['status']}",
+        "verified guide setup did not produce a draft policy: "
+        f"run={json.dumps(setup_run, sort_keys=True)} "
+        f"worker={json.dumps(setup_worker_result, sort_keys=True)}",
     )
     report = await request_json(
         client,
