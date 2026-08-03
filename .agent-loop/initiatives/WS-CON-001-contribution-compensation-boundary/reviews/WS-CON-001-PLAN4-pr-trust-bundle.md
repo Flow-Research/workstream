@@ -64,8 +64,9 @@ All checks pass. No tests or CI controls changed.
 
 ## External review, remaining risks, and follow-up
 
-External PR review and hosted checks are pending publication. ART #249 remains
-open, so migration numbering must be refreshed later. AUTH registrations,
+Hosted Backend and Agent Gates pass on PR #261. Four valid CodeRabbit findings
+were repaired and recorded in `WS-CON-001-PLAN4-external-review-response.md`;
+the refreshed external review is pending. ART #249 remains open, so migration numbering must be refreshed later. AUTH registrations,
 legacy-row classification, REV runtime targets, and provider/callback contracts
 remain future explicit gates.
 

@@ -2983,3 +2983,10 @@ is mechanical: the pre-existing user-owned reference-PDF deletion must remain
 excluded from any PLAN4 commit or PR. Deterministic diff, link, stale wording,
 stale authorization, and lightweight gate checks pass. No runtime chunk starts
 as part of PLAN4.
+
+PR #261 hosted Backend and Agent Gates passed. CodeRabbit raised four valid
+planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
+registration evidence, the receipt-risk exclusion list, and omitted dependency
+edges. The repair closes all four in the `03D` contract, conformance/risk
+records, canonical specification, and chunk map; refreshed external review is
+the remaining PR gate.

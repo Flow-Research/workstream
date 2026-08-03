@@ -12,5 +12,5 @@
 | Legacy economic rows are guessed | Corrupted award policy lineage | Require explicit deterministic classification or fail closed before 05A/05B. |
 | Dispatcher authority leaks to handlers | Cross-feature service privilege | Dispatcher owns mechanics only; every protected handler has independent identity/action/context. |
 | Optional evidence becomes core availability dependency | ART outage blocks contribution truth | Keep 09A/09B deferred and PostgreSQL reads authoritative. |
-| Provider receipt leaks secrets | Security/privacy incident | Persist only bounded non-secret receipt facts; never credentials or raw provider payloads. |
+| Provider receipt leaks secrets | Security/privacy incident | Persist only bounded non-sensitive receipt facts; explicitly deny provider bodies, secrets, tokens, signatures, URLs, PII, balances, ledgers, settlement data, and digests derived from any forbidden input. |
 | Review decision and contribution partially commit | Canonical truth divergence | REV owns one transaction and commit; CON participants flush only with fault-injection proof. |

@@ -28,6 +28,9 @@ legacy fallback, dependency or CI weakening
 
 ## Approved AUTH prerequisites and deferred activation gate
 
+- CON-03B policy persistence and CON-04A hidden adapter-binding service must be
+  merged first. Policy publication consumes the canonical binding lifecycle
+  guards; neither prerequisite is inferred from planning prose.
 - Before this chunk starts, AUTH must merge reviewed registration of the
   planned `contribution.policy.*` actions, stable permission mapping, typed
   contexts, ActionOwner custody, and PR #140 prepared-mutation ports. The

@@ -48,8 +48,11 @@ AUTH/ART edit, dependency or CI weakening
 - [ ] Callback-before-ack, duplicate exact receipt and changed receipt are
   representable without provider-attempt/balance/ledger data.
 - [ ] Receipt storage is a closed allowlist: bounded binding-scoped non-secret
-  event/reference identifiers, exact quantities, closed statuses/failure codes,
-  canonical digests, and timestamps only. Raw bodies, headers, signatures,
+  event/reference identifiers, the exact canonical award quantity and binding
+  unit, closed statuses/failure codes, platform-generated digests derived only
+  from approved stored receipt fields, and timestamps. Digests derived from
+  provider bodies, tokens, signatures, URLs, PII, balances, ledgers, settlement
+  data, or any other forbidden input are rejected. Raw bodies, headers, signatures,
   URLs/endpoints, tokens, unbounded strings, PII, balances, ledgers, settlement
   data, and opaque provider references are rejected rather than redacted into
   durable truth.
@@ -61,6 +64,7 @@ AUTH/ART edit, dependency or CI weakening
 ## Verification and reviewers
 
 Execute CON-03D in `../RUNTIME_VERIFICATION.md`; include rejection tests for
-every forbidden receipt field and read/export non-disclosure proof. Changed
+every forbidden receipt field, every forbidden digest input, quantity/unit
+mismatch, and read/export non-disclosure proof. Changed
 compensation code is at least 90 percent. Senior engineering, QA/test, security/auth, product/ops,
 architecture, docs, reuse/dedup and test-delta are required. Stop after schema.

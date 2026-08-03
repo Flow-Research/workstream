@@ -8,7 +8,8 @@ outcome. L1 economic/external-service/auth risk.
 
 ## Prerequisites
 
-- CON-07 and shared outbox merged;
+- CON-04A binding behavior, CON-04B policy behavior, CON-07, and shared outbox
+  dispatcher are merged;
 - exact outbound-delivery ServiceIdentity and ActionId/static row approved and
   registered as planned by AUTH, or an explicitly approved closed
   dual-principal design;

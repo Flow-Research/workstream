@@ -13,8 +13,8 @@ The active package is:
 - `DECISIONS.md`, `RISKS.md`, and `SOURCE_MANIFEST.md`;
 - `CONFORMANCE_MATRIX.md` and `RUNTIME_VERIFICATION.md`;
 - `AUTHORIZATION_HANDOFF.md` and `JOINT_RELEASE_HANDOFF.md`;
-- the PLAN4 contract and the reconciled `02B`, `02C`, `03A`, `03B`, and `03D`
-  contracts.
+- the PLAN4 contract and the reconciled `02B`, `02C`, `03A`, `03B`, `03C`,
+  `03D`, `04B`, and `08A` contracts.
 - `docs/spec_contribution_compensation.md` only to replace the obsolete linear
   dispatcher-first order with the reconciled partial order.
 

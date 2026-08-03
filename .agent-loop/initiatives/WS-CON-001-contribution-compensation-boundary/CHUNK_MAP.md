@@ -34,7 +34,7 @@ signed-loop records do not make behavior live.
 | `03D` | Delivery/receipt/status persistence | 03C | Proposed |
 | `07` | Atomic flush-only review contribution/award participant | 03C/03D + 05A + 06 + stable REV revision lineage | Proposed; consumed by REV-10 |
 | `02B` | Generic outbox dispatcher/recovery | AUTH dispatcher identity/action/matrix/context/PREP registration | Blocked on AUTH; required later, not before 03A/03B |
-| `08A` | Outbound compensation delivery | 07 + 02B + independent delivery authority | Proposed |
+| `08A` | Outbound compensation delivery | 07 + 02B + 04A/04B + independent delivery authority | Proposed |
 | `08R` | Bound callback rate control | 08A | Proposed |
 | `08B` | Inbound fulfillment callback | 08R + independent callback authority/fence | Proposed |
 | `10A` | Contribution/award product reads | 08B + exact AUTH read contracts | Proposed |
@@ -62,7 +62,7 @@ REV-04B + 03B -> 03C -> 03D
 REV revision lineage + 03C/03D + 05A + 06 -> 07 -> REV-10
 
 AUTH dispatcher registration -> 02B
-07 + 02B -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
+07 + 02B + 04A/04B -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
 ```
 
 ART-03C/remaining submission custody and REV-03A1 may progress concurrently in

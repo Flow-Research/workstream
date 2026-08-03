@@ -1,0 +1,48 @@
+# External Review Response: WS-CON-001-PLAN4
+
+## Comments addressed
+
+CodeRabbit raised four valid planning findings on PR #261:
+
+1. Receipt quantities/units and digest provenance were under-specified. The
+   `03D` contract now permits only the canonical award quantity/binding unit and
+   platform-generated digests derived exclusively from approved receipt fields,
+   with explicit negative tests for forbidden digest inputs.
+2. The authorization conformance row allowed a runtime-inspection exception.
+   It now records current CON AUTH artifacts as absent and requires exact
+   AUTH-owned registration and activation evidence for every future artifact.
+3. The provider-receipt risk mitigation used an incomplete exclusion list. It
+   now denies provider bodies, secrets, tokens, signatures, URLs, PII, balances,
+   ledgers, settlement data, and digests derived from forbidden inputs.
+4. Dependency summaries omitted `04A -> 04B`, `03B -> 03C`, and `04A/04B ->
+   08A` gates. The canonical specification, chunk map, and executable `04B`,
+   `03C`, and `08A` child contracts now include them.
+
+Internal repair review then found the canonical receipt section still allowed
+ambiguous request/payload digests. The specification now matches `03D`: only
+platform-generated digests over approved stored receipt fields are allowed,
+and digests over any forbidden provider/sensitive input are rejected.
+
+The PR description warning is also addressed by publishing the complete trust-
+bundle sections in the PR body.
+
+## Comments deferred
+
+None.
+
+## Human decisions needed
+
+No new decision. Human review and merge ownership remain unchanged.
+
+## Commands rerun
+
+- `git diff --check`
+- `python3 scripts/check_markdown_links.py`
+- `python3 scripts/check_stale_workstream_wording.py`
+- `python3 scripts/check_stale_authorization_docs.py`
+- `python3 -m unittest -v scripts.test_lightweight_agent_gates`
+
+## Remaining risks
+
+ART #249 remains open. Migration allocation and all future AUTH, REV, provider,
+callback, and legacy-row gates must be refreshed at their owning chunk.
