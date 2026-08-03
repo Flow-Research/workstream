@@ -1059,7 +1059,7 @@ async def create_policy_bundle_for_guide(
                 source_snapshot_hash=snapshot["bundle_hash"],
                 setup_generation=1,
                 status="queued",
-                current_step="sufficiency_agent",
+                current_step="queued",
                 created_by="project-manager-subject",
             )
         )

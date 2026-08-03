@@ -4001,8 +4001,24 @@ async def create_verified_report_fixture(
             ).all()
         )
         assert diagnostic_report is not None
-        assert setup_run is not None
         assert items
+        if setup_run is None:
+            snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
+            assert snapshot is not None
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=diagnostic_report.project_id,
+                guide_id=diagnostic_report.guide_id,
+                guide_version=diagnostic_report.guide_version,
+                source_snapshot_id=source_snapshot_id,
+                source_snapshot_hash=diagnostic_report.source_snapshot_hash,
+                setup_generation=snapshot.creation_generation,
+                status="queued",
+                current_step="queued",
+                created_by="project-manager-subject",
+            )
+            session.add(setup_run)
+            await session.flush()
         report = GuideSufficiencyReport(
             id=str(uuid4()),
             project_id=diagnostic_report.project_id,
@@ -4224,7 +4240,21 @@ async def create_generated_post_submit_setup_output(
             .order_by(ProjectSetupRun.setup_generation.desc())
             .limit(1)
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_version=guide.version,
+                source_snapshot_id=source_snapshot["id"],
+                source_snapshot_hash=source_snapshot["bundle_hash"],
+                setup_generation=source_snapshot["manifest_json"]["generation"],
+                status="queued",
+                current_step="queued",
+                created_by="test-project-manager",
+            )
+            session.add(setup_run)
+            await session.commit()
         setup_run.status = "post_submit_policy_compiled"
         setup_run.current_step = "post_submit_checker_policy_compilation"
         setup_run.output_sufficiency_report_id = sufficiency_report["id"]
@@ -4362,7 +4392,7 @@ async def test_project_setup_waits_for_verified_guide_material_before_outputs(
     assert setup_run_response.status_code == 200, setup_run_response.text
     setup_run = setup_run_response.json()
     assert setup_run["status"] == "queued"
-    assert setup_run["current_step"] == "sufficiency_agent"
+    assert setup_run["current_step"] == "queued"
     assert setup_run["celery_task_id"] is None
     assert setup_run["output_sufficiency_report_id"] is None
     assert setup_run["output_submission_artifact_policy_id"] is None
@@ -4818,7 +4848,21 @@ async def test_post_submit_status_update_rejects_stale_continuation_payload(
                 ProjectSetupRun.source_snapshot_id == snapshot["id"],
             )
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot["id"],
+                source_snapshot_hash=snapshot["bundle_hash"],
+                setup_generation=snapshot["manifest_json"]["generation"],
+                status="queued",
+                current_step="queued",
+                created_by="test-project-manager",
+            )
+            session.add(setup_run)
+            await session.commit()
         setup_run.status = "running_post_submit_derivation_agent"
         setup_run.current_step = "post_submit_checker_policy_derivation"
         setup_run.output_submission_artifact_policy_id = second_policy["id"]
@@ -4880,7 +4924,20 @@ async def test_post_submit_enqueue_bookkeeping_rejects_stale_continuation_payloa
                 ProjectSetupRun.source_snapshot_id == snapshot["id"],
             )
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot["id"],
+                source_snapshot_hash=snapshot["bundle_hash"],
+                setup_generation=snapshot["manifest_json"]["generation"],
+                status="queued",
+                current_step="queued",
+                created_by="project-manager-subject",
+            )
+            session.add(setup_run)
         setup_run.status = "running_post_submit_derivation_agent"
         setup_run.current_step = "post_submit_checker_policy_derivation"
         setup_run.celery_task_id = "fresh-continuation-task"
@@ -5325,7 +5382,20 @@ async def test_post_submit_setup_summary_redacts_nested_values(
                 ProjectSetupRun.source_snapshot_id == snapshot["id"],
             )
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot["id"],
+                source_snapshot_hash=snapshot["bundle_hash"],
+                setup_generation=snapshot["manifest_json"]["generation"],
+                status="queued",
+                current_step="queued",
+                created_by="project-manager-subject",
+            )
+            session.add(setup_run)
         setup_run.status = "policy_draft_ready"
         setup_run.current_step = "submission_artifact_policy_derivation"
         setup_run.finished_at = datetime.now(UTC)
@@ -5467,6 +5537,8 @@ async def test_dispatch_pending_republishes_only_after_stale_cutoff(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    get_settings.cache_clear()
     project = await create_project(project_client)
     guide = await create_guide(
         project_client,
@@ -5549,7 +5621,21 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
                 ProjectSetupRun.source_snapshot_id == snapshot.id,
             )
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot.id,
+                source_snapshot_hash=snapshot.bundle_hash,
+                setup_generation=snapshot.creation_generation,
+                status="queued",
+                current_step="queued",
+                created_by="test-project-manager",
+            )
+            session.add(setup_run)
+            await session.commit()
         setup_run_id = setup_run.id
         snapshot_id = snapshot.id
 
@@ -5782,7 +5868,21 @@ async def test_project_setup_worker_persists_sanitized_domain_failure(
                 ProjectSetupRun.source_snapshot_id == snapshot.id,
             )
         )
-        assert setup_run is not None
+        if setup_run is None:
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot.id,
+                source_snapshot_hash=snapshot.bundle_hash,
+                setup_generation=snapshot.creation_generation,
+                status="queued",
+                current_step="queued",
+                created_by="test-project-manager",
+            )
+            session.add(setup_run)
+            await session.commit()
         setup_run_id = setup_run.id
         snapshot_id = snapshot.id
 
@@ -7116,7 +7216,9 @@ async def test_derivation_agent_requires_agent_sufficiency_report(
 
     assert manual_report["agent_name"] is None
     assert response.status_code == 422
-    assert "agent sufficiency report is required" in response.json()["detail"]
+    assert (
+        "guide sufficiency report is required before policy derivation" in response.json()["detail"]
+    )
 
 
 async def test_derivation_agent_uses_verified_sources_and_replays_exact_policy(

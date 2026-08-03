@@ -109,7 +109,10 @@ reuse/dedup, test-delta, and QA passed after findings were resolved.
 
 ## External review
 
-GitHub Backend/Agent Gates and CodeRabbit remain required after the PR is pushed.
+Agent Gates pass after one stale-vocabulary correction. The first Backend run
+exposed stale setup-run fixture assumptions; the repair is recorded in the
+external-review response and requires a fresh hosted rerun. CodeRabbit was
+rate-limited and produced no inline findings.
 
 ## Remaining risks
 
