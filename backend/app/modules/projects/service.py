@@ -177,7 +177,9 @@ def build_verified_guide_sufficiency_material(
         source_refs=[],
         representative_task_material=RepresentativeTaskMaterialContext(
             items=[
-                item for item in verified_items if item.source_kind == "example"
+                item
+                for item in verified_items
+                if item.source_kind in REPRESENTATIVE_TASK_SOURCE_KINDS
             ]
         ),
     )

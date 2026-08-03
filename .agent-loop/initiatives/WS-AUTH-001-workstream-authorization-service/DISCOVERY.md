@@ -490,8 +490,9 @@ need an independently reviewable contract and production-code budget.
   provenance for report creation and warning acknowledgement. Historical rows
   remain nullable/readable; exact new writes are complete and constrained.
 - Replace the three public legacy role checks with resolved human actor plus
-  canonical PREP. Service execution is internal-only and is composed for the
-  later 12B2 call-graph cutover; 12E does not modify Celery workers.
+  canonical PREP. 12E changes only Celery worker admission and the authorized
+  command boundary for guide sufficiency; 12B2 owns the complete setup-service
+  call-graph cutover.
 - For agent execution, cheap authority must deny before material/provider/agent
   work. No prepared handle crosses rollback, agent execution, ART
   materialization, session, or transaction. Final persistence prepares and

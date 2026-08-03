@@ -49,6 +49,9 @@ internal run command with exact setup custody.
 - Stale authorization docs, stale Workstream wording, Markdown links, and seven
   lightweight agent-gate tests: passed.
 - Diff whitespace check: passed.
+- External-review correction selectors for OpenAPI/action parity,
+  authorization boundaries, ART fixed-service composition, and canonical
+  schema/reset custody: passed.
 
 The repository-wide suite and the authoritative per-file 90 percent coverage
 gate intentionally run in hosted GitHub Actions; the user's machine is not used
@@ -70,7 +73,10 @@ test-delta reviewers recorded only non-blocking future-maintenance risks.
 
 ## Remaining gate
 
-The exact pushed SHA must pass GitHub `Backend / test`, `Agent Gates`, the full
+The initial hosted run exposed stale cross-suite fixtures and one missing test
+reset guard; those failures and all actionable CodeRabbit findings have been
+corrected without weakening CI. The next exact pushed SHA must pass GitHub
+`Backend / test`, `Agent Gates`, the full
 78 percent repository baseline, AUTH subsystem coverage, the two new per-file
 90 percent coverage checks, and CodeRabbit. No merge is authorized by this
 bundle.

@@ -1141,6 +1141,15 @@ def project_database_env(
         get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_project_settings_cache_after_test() -> Iterator[None]:
+    """Prevent test-local environment overrides from surviving in Settings."""
+    try:
+        yield
+    finally:
+        get_settings.cache_clear()
+
+
 @pytest.fixture
 async def project_client(project_database_env: str) -> AsyncIterator[AsyncClient]:
     app = create_app()
@@ -2586,6 +2595,48 @@ async def test_create_source_snapshot_marks_setup_run_when_post_commit_enqueue_f
     assert setup_run.status == "enqueue_failed"
 
 
+async def test_create_source_snapshot_marks_wrong_broker_task_identity_distinctly(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Broker acceptance under another task id is not reported as an enqueue outage."""
+
+    def enqueue_with_wrong_identity(**_: object) -> str:
+        return str(uuid4())
+
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        project_setup_queue_module,
+        "enqueue_pre_submit_setup_pipeline",
+        enqueue_with_wrong_identity,
+    )
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        headers=auth_headers(),
+        json=source_snapshot_payload(),
+    )
+
+    assert response.status_code == 201, response.text
+    async with db_session.get_session_factory()() as session:
+        setup_run = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.source_snapshot_id == response.json()["id"]
+            )
+        )
+
+    assert setup_run is not None
+    assert setup_run.status == "enqueue_identity_mismatch"
+    assert setup_run.error_code == "ProjectSetupTaskIdentityMismatch"
+    assert setup_run.celery_task_id == project_setup_queue_module.pre_submit_setup_task_id(
+        setup_run.id, setup_run.setup_generation
+    )
+
+
 async def test_create_source_snapshot_autostart_runs_celery_pipeline_to_draft_policy(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -2622,7 +2673,8 @@ async def test_create_source_snapshot_autostart_runs_celery_pipeline_to_draft_po
     assert report is not None
     assert report.status == "passed"
     assert report.agent_name == PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
-    assert report.created_by == "workstream-system:project-setup-pipeline"
+    assert UUID(report.created_by)
+    assert report.created_by_service_identity == ServiceIdentity.PROJECT_SETUP.value
     assert policy is not None
     assert policy.lifecycle_status == "draft"
     assert policy.derivation_source == "agent_derivation"
@@ -2876,9 +2928,9 @@ async def prepare_verified_sufficiency_route(
 
         async def load(self, _request: object) -> GuideSufficiencyMaterialResult:
             type(self).calls += 1
-            return material_result or GuideSufficiencyMaterialResult(
-                source_items=(), provenance=()
-            )
+            if material_result is None:
+                return GuideSufficiencyMaterialResult(source_items=(), provenance=())
+            return material_result
 
     monkeypatch.setattr(
         project_router_module,
@@ -3845,7 +3897,9 @@ async def test_guide_source_metadata_snapshot_replay_does_not_redispatch(
 
     def capture_dispatch(**facts: str) -> str:
         dispatched.append(facts)
-        return "auth12d-one-task"
+        return project_setup_queue_module.pre_submit_setup_task_id(
+            facts["setup_run_id"], int(facts["setup_generation"])
+        )
 
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     get_settings.cache_clear()
@@ -3880,7 +3934,9 @@ async def test_guide_source_metadata_snapshot_replay_does_not_redispatch(
             )
         ).all()
         assert len(runs) == 1
-        assert runs[0].celery_task_id == "auth12d-one-task"
+        assert runs[0].celery_task_id == project_setup_queue_module.pre_submit_setup_task_id(
+            runs[0].id, runs[0].setup_generation
+        )
 
 
 async def test_guide_source_metadata_database_rejects_unattributed_and_mismatched_custody(
@@ -4549,6 +4605,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
 async def test_policy_approval_resumes_post_submit_setup_continuation(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     class CountingRuntime(DeterministicTestProjectGuideAgentRuntime):
         """Runtime that counts post-submit derivation calls."""
@@ -4651,6 +4708,7 @@ async def test_policy_approval_resumes_post_submit_setup_continuation(
 async def test_post_submit_continuation_is_idempotent_after_compile(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     from app.workers.project_setup import _run_post_submit_setup_continuation
 
@@ -4735,6 +4793,7 @@ async def test_post_submit_continuation_is_idempotent_after_compile(
 async def test_post_submit_continuation_running_worker_redelivery_resumes_setup(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     from app.workers.project_setup import _run_post_submit_setup_continuation
 
@@ -4818,6 +4877,7 @@ async def test_post_submit_continuation_running_worker_redelivery_resumes_setup(
 async def test_corrected_submission_artifact_policy_resumes_post_submit_setup(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     from app.workers.project_setup import _run_post_submit_setup_continuation
 
@@ -5220,6 +5280,7 @@ async def test_stale_in_flight_post_submit_derivation_cannot_insert_policy(
 async def test_post_submit_continuation_does_not_reuse_manual_payload_policy(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     class CountingRuntime(DeterministicTestProjectGuideAgentRuntime):
         """Runtime proving manual guide payload policy does not satisfy setup."""
@@ -5280,6 +5341,7 @@ async def test_post_submit_continuation_does_not_reuse_manual_payload_policy(
 async def test_post_submit_derivation_unsupported_checker_gap_blocks_setup(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     class UnsupportedCheckerRuntime(DeterministicTestProjectGuideAgentRuntime):
         """Runtime that reports a required checker Workstream has not registered."""
@@ -5418,6 +5480,7 @@ async def test_post_submit_derivation_unsupported_checker_gap_blocks_setup(
 async def test_post_submit_derivation_unknown_checker_blocks_with_visible_gap(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     class UnknownCheckerRuntime(DeterministicTestProjectGuideAgentRuntime):
         """Runtime that requests a checker outside the registered catalog."""
@@ -5553,6 +5616,7 @@ async def test_post_submit_setup_summary_redacts_nested_values(
 async def test_post_submit_derivation_treats_hostile_source_as_data(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     captured_material: dict[str, GuideSourceMaterial] = {}
 
@@ -6650,9 +6714,10 @@ async def test_duplicate_guide_version_returns_conflict(project_client: AsyncCli
     assert response.json()["detail"] == "guide version already exists for project"
 
 
-async def test_guide_creation_accepts_source_snapshot_items_for_agent_material(
+async def test_source_snapshot_metadata_cannot_bypass_verified_agent_material(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
     captured: dict[str, GuideSourceMaterial] = {}
 
@@ -6681,14 +6746,14 @@ async def test_guide_creation_accepts_source_snapshot_items_for_agent_material(
             raise AssertionError("derivation is not part of this test")
 
     monkeypatch.setattr(
-        project_service_module,
+        sufficiency_mutation_service_module,
         "get_project_guide_agent_runtime",
         lambda: CapturingRuntime(),
     )
     project = await create_project(project_client)
-    payload = complete_guide_payload()
-    payload["source_snapshot"] = source_snapshot_payload()
-    payload["source_snapshot"]["items"].append(
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot_payload = source_snapshot_payload()
+    snapshot_payload["items"].append(
         {
             "source_kind": "representative_task",
             "durable_ref": "inline:/examples/tasks/stem/sample-1",
@@ -6698,13 +6763,16 @@ async def test_guide_creation_accepts_source_snapshot_items_for_agent_material(
             "content_excerpt": "Representative task: solve a STEM prompt and submit evidence.",
         }
     )
-    guide = await create_guide(project_client, project["id"], payload)
-    async with db_session.get_session_factory()() as session:
-        snapshot = await session.scalar(
-            select(GuideSourceSnapshot).where(GuideSourceSnapshot.guide_id == guide["id"])
-        )
-    assert snapshot is not None
-    snapshot_id = snapshot.id
+    snapshot = await create_source_snapshot(
+        project_client, project["id"], guide["id"], snapshot_payload
+    )
+    await prepare_verified_sufficiency_route(
+        monkeypatch,
+        project_id=project["id"],
+        guide_id=guide["id"],
+        snapshot=snapshot,
+    )
+    snapshot_id = snapshot["id"]
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
@@ -6715,13 +6783,8 @@ async def test_guide_creation_accepts_source_snapshot_items_for_agent_material(
     assert response.status_code == 201, response.text
     material = captured["material"]
     assert material.source_snapshot_id == snapshot_id
-    assert len(material.representative_task_material.items) == 1
-    representative_task = material.representative_task_material.items[0]
-    assert representative_task.source_kind == "representative_task"
-    assert representative_task.durable_ref == "inline:/examples/tasks/stem/sample-1"
-    assert representative_task.content_excerpt == (
-        "Representative task: solve a STEM prompt and submit evidence."
-    )
+    assert material.verified_artifact_material is True
+    assert material.representative_task_material.items == []
 
 
 async def test_project_guide_rejects_unknown_non_contract_fields(

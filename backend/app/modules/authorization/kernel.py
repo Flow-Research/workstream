@@ -1018,7 +1018,10 @@ class AuthorizationService:
             if (
                 denial is None
                 and sufficiency_kind is not None
-                and resource_context.target_kind != sufficiency_kind
+                and (
+                    resource_context.target_kind != sufficiency_kind
+                    or resource_context.execution_kind != "human"
+                )
             ):
                 denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if denial is None and (

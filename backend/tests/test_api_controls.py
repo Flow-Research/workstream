@@ -522,6 +522,17 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots": (
             "project.guide_source_snapshot.create"
         ),
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports": (
+            "project.guide_sufficiency_report.create"
+        ),
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
+        "{source_snapshot_id}/run-sufficiency-agent": (
+            "project.guide_sufficiency.run"
+        ),
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/"
+        "{report_id}/acknowledge-warnings": (
+            "project.guide_sufficiency.warnings.acknowledge"
+        ),
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest": (
             "project.setup_run.read"
         ),

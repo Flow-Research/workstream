@@ -70,7 +70,7 @@ def upgrade() -> None:
             [remote_column],
         )
     op.create_check_constraint(
-        "ck_guide_sufficiency_creation_authority_shape",
+        op.f("ck_guide_sufficiency_creation_authority_shape"),
         "guide_sufficiency_reports",
         "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
         "and created_by_admin_role_grant_id is null and created_by_service_identity is null "
@@ -90,7 +90,7 @@ def upgrade() -> None:
         "and agent_material_sha256 is not null and agent_material_byte_count is not null)))",
     )
     op.create_check_constraint(
-        "ck_guide_sufficiency_ack_authority_shape",
+        op.f("ck_guide_sufficiency_ack_authority_shape"),
         "guide_sufficiency_reports",
         "(warnings_acknowledged_by_actor_profile_id is null "
         "and warnings_acknowledged_via_identity_link_id is null "
@@ -207,6 +207,22 @@ def upgrade() -> None:
         for each row execute function reject_sufficiency_replay_mutation()
         """
     )
+    op.execute(
+        """
+        create function reject_sufficiency_replay_truncate() returns trigger
+        language plpgsql as $$
+        begin
+          raise exception 'guide sufficiency replay rows are append-only';
+        end $$
+        """
+    )
+    op.execute(
+        """
+        create trigger trg_sufficiency_replay_no_truncate
+        before truncate on guide_sufficiency_mutation_idempotency_records
+        for each statement execute function reject_sufficiency_replay_truncate()
+        """
+    )
 
 
 def downgrade() -> None:
@@ -224,6 +240,11 @@ def downgrade() -> None:
     ).scalar_one()
     if replay_count or provenance_count:
         raise RuntimeError("cannot downgrade guide sufficiency authority with evidence")
+    op.execute(
+        "drop trigger trg_sufficiency_replay_no_truncate "
+        "on guide_sufficiency_mutation_idempotency_records"
+    )
+    op.execute("drop function reject_sufficiency_replay_truncate()")
     op.execute(
         "drop trigger trg_sufficiency_replay_immutable on guide_sufficiency_mutation_idempotency_records"
     )
@@ -249,12 +270,14 @@ def downgrade() -> None:
         "warning_acknowledgement_scope_project_id": "fk_suff_ack_project",
         "warning_acknowledgement_decision_event_id": "fk_suff_ack_decision",
     }
+    columns_without_foreign_keys = {
+        "created_by_service_identity",
+        "creation_scope_type",
+        "creation_action_id",
+        "warning_acknowledgement_scope_type",
+        "warning_acknowledgement_action_id",
+    }
     for name, _ in reversed((*_CREATION_COLUMNS, *_ACK_COLUMNS)):
-        if name != "created_by_service_identity" and name not in {
-            "creation_scope_type",
-            "creation_action_id",
-            "warning_acknowledgement_scope_type",
-            "warning_acknowledgement_action_id",
-        }:
+        if name not in columns_without_foreign_keys:
             op.drop_constraint(foreign_keys[name], "guide_sufficiency_reports", type_="foreignkey")
         op.drop_column("guide_sufficiency_reports", name)

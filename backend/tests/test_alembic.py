@@ -229,16 +229,82 @@ def test_0050_replay_is_append_only_and_blocks_populated_downgrade(
                             ),
                             {"id": replay_id, "response": json.dumps({"changed": True})},
                         )
+                with pytest.raises(DBAPIError, match="guide sufficiency replay rows are append-only"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text("truncate guide_sufficiency_mutation_idempotency_records")
+                        )
         finally:
             await engine.dispose()
 
-    async def clear_evidence() -> None:
+    async def clear_replay() -> None:
         engine = create_async_engine(isolated_database_env)
         try:
             async with engine.begin() as connection:
                 await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "disable trigger trg_sufficiency_replay_immutable"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "disable trigger trg_sufficiency_replay_no_truncate"
+                    )
+                )
+                await connection.execute(
                     text("truncate guide_sufficiency_mutation_idempotency_records")
                 )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "enable trigger trg_sufficiency_replay_immutable"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "enable trigger trg_sufficiency_replay_no_truncate"
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    async def install_provenance_only() -> None:
+        engine = create_async_engine(isolated_database_env)
+        decision_id = str(uuid4())
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into audit_events(id,entity_type,entity_id,event_type,actor_id,"
+                        "actor_roles,claim_snapshot,auth_source,is_dev_auth,event_payload) values("
+                        ":decision,'project_guide',:guide,'MigrationTestDecision',"
+                        ":profile,'[]','{}','workstream_internal',false,'{}')"
+                    ),
+                    {"decision": decision_id, **ids},
+                )
+                await connection.execute(
+                    text(
+                        "update guide_sufficiency_reports set "
+                        "project_setup_run_id=:setup,setup_generation=1,"
+                        "agent_material_sha256=:digest,agent_material_byte_count=1,"
+                        "created_by_actor_profile_id=:profile,created_via_identity_link_id=:link,"
+                        "created_by_service_identity='workstream.project.setup',"
+                        "creation_scope_type='service',creation_scope_project_id=:project,"
+                        "creation_action_id='project.guide_sufficiency.run',"
+                        "authorization_decision_event_id=:decision where id=:report"
+                    ),
+                    {"decision": decision_id, "digest": digest, **ids},
+                )
+        finally:
+            await engine.dispose()
+
+    async def clear_product_evidence() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
                 await connection.execute(
                     text("delete from guide_sufficiency_reports where id=:report"),
                     {"report": ids["report"]},
@@ -255,8 +321,17 @@ def test_0050_replay_is_append_only_and_blocks_populated_downgrade(
             ):
                 command.downgrade(config, "0049_rev_auth_readiness")
             assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+            asyncio.run(clear_replay())
+            asyncio.run(install_provenance_only())
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade guide sufficiency authority with evidence",
+            ):
+                command.downgrade(config, "0049_rev_auth_readiness")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
         finally:
-            asyncio.run(clear_evidence())
+            asyncio.run(clear_replay())
+            asyncio.run(clear_product_evidence())
             command.upgrade(config, HEAD_REVISION)
 
 

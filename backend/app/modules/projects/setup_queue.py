@@ -81,9 +81,10 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     repository = ProjectRepository(session)
     expected_task_id = pre_submit_setup_task_id(setup_run_id, setup_generation)
     setup_run = await repository.get_project_setup_run(setup_run_id)
-    if setup_run is not None:
-        setup_run.celery_task_id = expected_task_id
-        await session.commit()
+    if setup_run is None:
+        raise ProjectSetupQueueError("project setup run missing before dispatch")
+    setup_run.celery_task_id = expected_task_id
+    await session.commit()
     try:
         task_id = await asyncio.to_thread(
             enqueue_pre_submit_setup_pipeline,
@@ -93,10 +94,6 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run_id=setup_run_id,
             setup_generation=setup_generation,
         )
-        if task_id != expected_task_id:
-            raise ProjectSetupQueueError(
-                "project setup queue returned the wrong task identity"
-            )
     except ProjectSetupQueueError as exc:
         logger.warning(
             "project setup pipeline enqueue failed after commit",
@@ -114,6 +111,26 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run.status = "enqueue_failed"
             setup_run.current_step = "enqueue"
             setup_run.error_code = exc.__class__.__name__
+            setup_run.error_summary = "project setup failed"
+            await session.commit()
+        return None
+    if task_id != expected_task_id:
+        logger.error(
+            "project setup queue accepted the wrong task identity",
+            extra={
+                "project_id": project_id,
+                "guide_id": guide_id,
+                "source_snapshot_id": source_snapshot_id,
+                "setup_run_id": setup_run_id,
+                "error_code": "ProjectSetupTaskIdentityMismatch",
+                "error_summary": "project setup delivery rejected",
+            },
+        )
+        setup_run = await repository.get_project_setup_run(setup_run_id)
+        if setup_run is not None:
+            setup_run.status = "enqueue_identity_mismatch"
+            setup_run.current_step = "enqueue"
+            setup_run.error_code = "ProjectSetupTaskIdentityMismatch"
             setup_run.error_summary = "project setup failed"
             await session.commit()
         return None

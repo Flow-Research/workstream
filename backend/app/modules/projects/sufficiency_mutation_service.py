@@ -6,7 +6,7 @@ import hashlib
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import AsyncIterator, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import JsonValue
@@ -34,7 +34,7 @@ from app.modules.authorization.runtime import (
     ProjectSetupServiceCustodyContext,
 )
 from app.modules.projects.models import GuideSufficiencyReport
-from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import (
     GuideSufficiencyAcknowledgement,
     GuideSufficiencyFindingInput,
@@ -168,15 +168,20 @@ class GuideSufficiencyMutationService:
             raise GuideNotFound("guide not found")
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can change sufficiency state")
-        snapshot = (
-            await self._projects.lock_latest_guide_source_snapshot(
-                str(project_id), str(guide_id), guide.version
+        try:
+            snapshot = (
+                await self._projects.lock_latest_guide_source_snapshot(
+                    str(project_id), str(guide_id), guide.version
+                )
+                if lock
+                else await self._projects.get_latest_guide_source_snapshot(
+                    str(project_id), str(guide_id), guide.version
+                )
             )
-            if lock
-            else await self._projects.get_latest_guide_source_snapshot(
-                str(project_id), str(guide_id), guide.version
-            )
-        )
+        except ProjectRepositoryIntegrityError as exc:
+            raise PolicySetupBlocked(
+                "latest guide source snapshot is ambiguous; create a fresh source snapshot"
+            ) from exc
         if snapshot is None or snapshot.id != str(source_snapshot_id):
             raise PolicySetupConflict("guide source snapshot is stale")
         await self._validation.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
@@ -341,7 +346,7 @@ class GuideSufficiencyMutationService:
         project_id: UUID,
         guide_id: UUID,
         payload: GuideSufficiencyReportCreate,
-    ) -> GuideSufficiencyMutationOutcome:
+    ) -> AsyncIterator[GuideSufficiencyMutationOutcome]:
         """Create one explicitly human-authored sufficiency report."""
         action = ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE
         report_id, operation_id = uuid4(), uuid4()
@@ -495,7 +500,7 @@ class GuideSufficiencyMutationService:
         project_id: UUID,
         guide_id: UUID,
         source_snapshot_id: UUID,
-    ) -> GuideSufficiencyMutationOutcome:
+    ) -> AsyncIterator[GuideSufficiencyMutationOutcome]:
         """Run verified ART material for one canonically resolved human."""
         if self._material is None:
             raise PolicySetupBlocked("verified guide sufficiency is unavailable")
@@ -1013,7 +1018,7 @@ class GuideSufficiencyMutationService:
             )
         except ProjectAgentRuntimeError:
             raise AgentRuntimeUnavailable(
-                "project guide sufficiency agent is unavailable"
+                "project guide agent runtime is unavailable"
             ) from None
 
         try:

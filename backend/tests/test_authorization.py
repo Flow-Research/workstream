@@ -2415,6 +2415,17 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             human_sufficiency_run.model_dump()
         ),
     )
+    service_report = sufficiency_resources[
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE
+    ].model_dump()
+    service_report["execution_kind"] = "setup_service"
+    service_report["setup_service_custody"] = setup_custody_by_step[
+        "guide_sufficiency"
+    ].model_dump()
+    with pytest.raises(
+        ValidationError, match="only a sufficiency run may use setup-service authority"
+    ):
+        ProjectGuideSufficiencyMutationResourceContext.model_validate(service_report)
     with pytest.raises(ValidationError):
         ProjectGuideMutationResourceContext(
             resource_type="project_guide_mutation",
@@ -2721,7 +2732,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 100 ActionIds, 45 active actions, and\n55 planned actions" in operations
+        "71 PermissionIds, 100 ActionIds, 48 active actions, and\n52 planned actions" in operations
     )
 
 
@@ -4124,7 +4135,7 @@ async def test_project_read_kernel_prefers_admin_and_records_project_role_author
     decision = await service.require(ActionId.PROJECT_READ, resource)
     assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
     assert decision.matched_grant_id == admin_grant.id
-    assert decision.matched_scope_project_id is None
+    assert decision.matched_scope_project_id == project_id
     assert decision.revalidated is True
 
     project_grant = SimpleNamespace(id=uuid4())
@@ -5565,6 +5576,14 @@ async def test_prepared_sufficiency_run_admits_only_exact_setup_service_custody(
     assert decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
     assert decision.matched_grant_id is None
     assert decision.matched_scope_project_id is None
+    assert len(evidence.events) == 1
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            caller,
+            resource,
+        )
     assert len(evidence.events) == 1
 
 
