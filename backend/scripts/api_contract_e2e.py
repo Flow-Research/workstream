@@ -903,10 +903,17 @@ async def create_policy_bundle_for_guide(
         await run_artifact_internal_operation("verification", identifier)
         await continue_guide_setup_after_verification(identifier)
 
-    published_work = await scan_artifact_pending_work(
-        publish_put_attempt,
-        publish_verification_job,
-    )
+    published_work = 0
+    for _ in range(8):
+        published_generation = await scan_artifact_pending_work(
+            publish_put_attempt,
+            publish_verification_job,
+        )
+        published_work += published_generation
+        if published_generation == 0:
+            break
+    else:
+        raise AssertionError("guide artifact worker did not drain bounded committed work")
     ensure(published_work > 0, "guide artifact worker found no committed work")
     queued_setup = await request_json(
         client,
