@@ -1,82 +1,194 @@
-# WS-AUTH-001-12E PR Trust Bundle
+# Workstream PR Trust Bundle
 
-## Intent
+## Chunk
 
-Activate exactly the three guide-sufficiency mutations: manual report create,
-agent run, and warning acknowledgement. Public mutation remains Project
-Manager-only; the fixed `workstream.project.setup` service may execute only the
-internal run command with exact setup custody.
+`WS-AUTH-001-12E` - Activate guide-sufficiency mutations
 
-## Design and scope
+## Goal
 
-- All durable mutations use the existing opaque, process-local,
-  transaction-bound `PreparedAuthorizationHandle` protocol.
-- Decisions bind actor/link, grant or fixed service, action, project, draft
-  guide/version, source snapshot/hash, setup run/generation, material digest,
-  operation, request digest, idempotency key, session, and root transaction.
-- PostgreSQL migration 0050 adds immutable replay and complete create/acknowledge
-  authorization provenance without rewriting historical rows.
-- External agent work occurs outside a prepared handle. Final authority and
-  canonical lineage are reacquired before persistence.
-- Replay reservation, report or acknowledgement, allowed decision evidence,
-  and replay completion commit atomically.
-- The active Celery worker reloads fixed-service authority at execution time.
-  Handles, bytes, extracted content, credentials, and authorization context do
-  not enter Celery payloads.
+Activate exactly manual sufficiency-report creation, agent-run requests, and
+warning acknowledgement. Keep public mutation Project Manager-only and grant
+the fixed `workstream.project.setup` service only the internal run command.
 
-## Critical safety proof
+## Intent And Planning Context
 
-- Fixed-service tokens are concealed at public admission before product lookup.
-- Wrong actor/link/action/resource/session/transaction, copied or replayed
-  handles, stale lineage/material/output, and cross-action keys fail closed.
-- Deterministic Celery task identity is stored before enqueue and rebound at
-  worker admission and setup custody.
-- Terminal runs and wrong-task deliveries cannot be revived.
-- A setup run made terminal in a competing transaction during agent execution
-  is rejected under the final lock with no report or output attachment.
-- A fault after final PREP and replay staging rolls back the protected product
-  row, replay row, and allowed audit evidence together.
+- Intent: close the guide-sufficiency durable authorization boundary without
+  introducing another authorization protocol.
+- Chunk contract: `chunks/WS-AUTH-001-12E-guide-sufficiency-mutations.md`.
 
-## Local evidence
+## What Changed
 
-- Ruff over backend application, tests, and scripts: passed.
-- Project sufficiency selector: 31 passed.
-- Authorization prepared/catalogue/service selector: 144 passed.
-- Migration 0050 upgrade/downgrade selector: 2 passed.
-- Mid-flight terminal race: 1 passed.
-- Real API contract E2E: passed.
-- Semantic lane collection: 2,928 tests assigned across five lanes.
-- Stale authorization docs, stale Workstream wording, Markdown links, and seven
-  lightweight agent-gate tests: passed.
-- Diff whitespace check: passed.
-- External-review correction selectors for OpenAPI/action parity,
-  authorization boundaries, ART fixed-service composition, and canonical
-  schema/reset custody: passed.
+- Added the three active catalogue actions and exact human/fixed-service guards.
+- Added prepared authorization and final locked revalidation to all durable
+  sufficiency mutations.
+- Added migration 0050 for immutable replay custody and complete authorization
+  provenance.
+- Connected the setup worker through fresh deterministic service authority.
+- Added runtime, migration, API, replay, transaction, and coverage proof.
 
-The repository-wide suite and the authoritative per-file 90 percent coverage
-gate intentionally run in hosted GitHub Actions; the user's machine is not used
-for the roughly four-hour local full suite.
+## Why It Changed
 
-## Internal review
+The former guide-sufficiency mutations could not safely become live until the
+actor, identity link, grant/service identity, guide lineage, material, request,
+transaction, and idempotency facts were bound and revalidated atomically.
 
-Security, product/operations, QA, senior engineering, architecture, test delta,
-CI integrity, documentation, and reuse/dedup reviews passed. Architecture and
-test-delta reviewers recorded only non-blocking future-maintenance risks.
+## Design Chosen
 
-## Human review focus
+- Reuse the opaque, process-local, single-use, transaction-bound
+  `PreparedAuthorizationHandle`.
+- Run external agent work without an open prepared handle, then reload and lock
+  canonical facts before the protected write.
+- Commit replay completion, product mutation, and allowed evidence atomically.
+- Carry identifiers only through Celery and acquire fresh service authority in
+  the worker.
 
-- Confirm only the three intended catalogue actions become active.
-- Inspect migration 0050 replay/provenance constraints and downgrade refusal.
-- Inspect the external-agent transaction break and final locked revalidation.
-- Inspect fixed-service task identity, terminal-state fencing, and the absence
-  of service authority on public routes.
+## Alternatives Rejected
 
-## Remaining gate
+- Raw `AuthorizationContext` as durable authority: not transaction-bound.
+- Serializing prepared handles into Celery: violates process/session custody.
+- ART- or project-local authorization evaluators: duplicate AUTH policy paths.
+- Preserving legacy mutation behavior: no backward compatibility is required.
 
-The initial hosted run exposed stale cross-suite fixtures and one missing test
-reset guard; those failures and all actionable CodeRabbit findings have been
-corrected without weakening CI. The next exact pushed SHA must pass GitHub
-`Backend / test`, `Agent Gates`, the full
-78 percent repository baseline, AUTH subsystem coverage, the two new per-file
-90 percent coverage checks, and CodeRabbit. No merge is authorized by this
-bundle.
+## Scope Control
+
+### Allowed Files Changed
+
+- AUTH catalogue, runtime, PREP, kernel, migration, and tests.
+- Project sufficiency mutation/queue/worker integration and tests.
+- Exact operations, specification, roadmap, and initiative records.
+- Narrow CI coverage assertions for the new subsystem files.
+
+### Files Outside Stated Scope
+
+- ART fixed-service authorization composition was narrowed to the shared AUTH
+  principal resolver; its focused adapter tests prove behavior is unchanged.
+
+## Product Behavior
+
+- [x] Product behavior changed: Project Managers can create reports, request an
+  agent run, and acknowledge warnings under exact project authority; only the
+  fixed project-setup service can execute the internal run command.
+
+## Evidence
+
+### Commands Run
+
+```bash
+cd backend && .venv/bin/ruff check .
+cd backend && .venv/bin/pytest -q <focused AUTH/ART/API/audit selectors>
+cd backend && .venv/bin/alembic upgrade head
+git diff --check
+```
+
+### Result Summary
+
+```text
+Ruff: passed
+Project sufficiency selector before hosted review: 31 passed
+Authorization selector: 144 passed
+Migration 0050 selector: 2 passed
+API contract E2E: passed
+Semantic collection: 2,928 tests across five hosted lanes
+External-review shared-foundation selectors: passed
+Canonical schema fingerprint and reset custody: passed
+```
+
+The repository-wide suite and authoritative coverage gates run in GitHub
+Actions; the user's machine is not used for the roughly four-hour local suite.
+
+## Acceptance Criteria Proof
+
+- [x] Exactly three sufficiency actions become active.
+- [x] Human and fixed-service authority remain disjoint.
+- [x] Final decisions bind exact actor/link, authority, lineage, material,
+  operation, request, idempotency, session, and transaction facts.
+- [x] Replay, copied/wrong handles, stale context, cross-resource use, and
+  mid-flight terminal transitions fail closed.
+- [x] Celery stores deterministic task custody before enqueue and never carries
+  handles, bytes, credentials, or authorization contexts.
+- [x] Product write, replay completion, and allowed evidence commit atomically.
+
+## Test Delta
+
+### Tests Added
+
+- Prepared handle integrity, denial, replay, and service-custody tests.
+- Human routes, worker execution, stale lineage/material, transaction rollback,
+  mid-flight terminal race, and deterministic broker identity tests.
+- Migration upgrade/downgrade, append-only replay, provenance-only rollback
+  refusal, schema parity, and API contract tests.
+
+### Tests Modified
+
+- Active-action, OpenAPI, audit, operations-count, ART principal-composition,
+  and project setup fixtures were updated for the exact activated surface.
+
+### Tests Removed Or Skipped
+
+- None.
+
+## Internal Reviewer Results
+
+Reviewed code SHA: `aefec9e3703079744441161ea40356c308cd89fb`
+
+Reviewed at: 2026-08-03
+
+Reviewer run IDs: `12e_arch_final`, `12e_impl_qa`, `12e_impl_senior`,
+`12e_product_final`, `12e_security_final`, `12e_test_delta`, plus recorded CI,
+docs, and reuse tracks.
+
+| Reviewer | Result | Blocking Findings | Notes |
+|---|---:|---|---|
+| Senior engineering | PASS | None | Final implementation review |
+| QA/test | PASS | None | Focused DB proof passed |
+| Security/auth | PASS | None | Replay namespace and custody verified |
+| Product/ops | PASS | None | Mid-flight terminal repair verified |
+| Architecture | PASS WITH LOW RISKS | None | Legacy helper retirement is follow-up |
+| CI integrity | PASS | None | No gate weakening |
+| Docs | PASS | None | Canonical surfaces aligned |
+| Reuse/dedup | PASS | None | Shared PREP/service resolver reused |
+| Test delta | PASS WITH LOW RISKS | None | No skipped or weakened tests |
+
+## External Review
+
+| Source | Status | Notes |
+|---|---:|---|
+| CodeRabbit | Re-review pending | All actionable first-review findings fixed or explicitly deferred in the external-response record |
+| GitHub checks | Rerun pending | Initial shared/project failures repaired; exact corrected head pushed |
+
+## CI And Gate Integrity
+
+- [x] No workflow weakening.
+- [x] No lint/test/docstring gate weakening.
+- [x] No coverage threshold weakening.
+- [x] No package script weakening.
+- [x] No unpinned new GitHub Action.
+- [x] Checkout credential persistence remains disabled.
+
+## Remaining Risks
+
+- The exact corrected head still requires all hosted lanes, aggregate and
+  per-file coverage, Agent Gates, and fresh CodeRabbit review.
+- Large legacy `ProjectService` sufficiency helpers remain a low-risk future
+  retirement item; live routes and workers use the new orchestrator.
+
+## Follow-Up Work
+
+- Add PR `#263` to the capability ledger only after human merge.
+- Retire or quarantine legacy commit-owning sufficiency helpers in a separately
+  bounded cleanup chunk.
+
+## Human Review Focus
+
+- The three-action activation boundary and human/service separation.
+- Migration 0050 replay/provenance constraints and downgrade refusal.
+- External-agent transaction break and final locked revalidation.
+- Deterministic task identity, terminal fencing, and atomic evidence.
+
+## Human Merge Ownership
+
+- [ ] I can explain what changed.
+- [ ] I can explain why it changed.
+- [ ] I know what could break.
+- [ ] I accept the remaining risks.
+- [ ] The user explicitly approved this specific PR for merge.
