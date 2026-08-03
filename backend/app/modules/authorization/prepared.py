@@ -39,6 +39,9 @@ from app.modules.authorization.runtime import (
     ProjectGuideMutationResourceContext,
     ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSourceSnapshotMutationResourceContext,
+    ProjectPolicyMutationPrepareDenialResourceContext,
+    ProjectReviewPolicyMutationResourceContext,
+    ProjectRevisionPolicyMutationResourceContext,
 )
 
 
@@ -94,6 +97,17 @@ class _PreparedAuthorizationBinding:
     guide_mutation_guide_id: UUID | None = None
     guide_mutation_target_resource_id: UUID | None = None
     guide_mutation_operation_id: UUID | None = None
+    policy_mutation_project_id: UUID | None = None
+    policy_mutation_guide_id: UUID | None = None
+    policy_mutation_policy_id: UUID | None = None
+    policy_mutation_operation_id: UUID | None = None
+    policy_mutation_request_digest: str | None = None
+    policy_mutation_policy_digest: str | None = None
+    policy_mutation_generation: int | None = None
+    policy_mutation_predecessor_id: UUID | None = None
+    policy_mutation_predecessor_generation: int | None = None
+    policy_mutation_predecessor_digest: str | None = None
+    policy_mutation_guide_status: str | None = None
 
 
 @dataclass(slots=True)
@@ -132,6 +146,45 @@ def _guide_mutation_binding_matches(
         and binding.guide_mutation_guide_id == resource.guide_id
         and binding.guide_mutation_target_resource_id == resource.resource_id
         and binding.guide_mutation_operation_id == resource.operation_id
+    )
+
+
+def _policy_mutation_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectReviewPolicyMutationResourceContext
+    | ProjectRevisionPolicyMutationResourceContext,
+) -> bool:
+    """Return whether final policy lineage matches prepared route facts."""
+    return (
+        binding.policy_mutation_project_id == resource.scope_project_id
+        and binding.policy_mutation_guide_id == resource.guide_id
+        and binding.policy_mutation_policy_id == resource.resource_id
+        and binding.policy_mutation_operation_id == resource.operation_id
+        and binding.policy_mutation_request_digest == resource.request_digest
+        and binding.policy_mutation_policy_digest == resource.policy_digest
+        and binding.policy_mutation_generation == resource.policy_generation
+        and binding.policy_mutation_predecessor_id == resource.predecessor_policy_id
+        and binding.policy_mutation_predecessor_generation == resource.predecessor_policy_generation
+        and binding.policy_mutation_predecessor_digest == resource.current_policy_digest
+        and binding.policy_mutation_guide_status == resource.guide_status
+    )
+
+
+def _policy_mutation_denial_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectPolicyMutationPrepareDenialResourceContext,
+) -> bool:
+    """Return whether bounded denial facts match the prepared policy request."""
+    expected_action = (
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE
+        if resource.requested_policy_kind == "review"
+        else ActionId.PROJECT_REVISION_POLICY_UPDATE
+    )
+    return (
+        binding.action_id is expected_action
+        and binding.policy_mutation_project_id == resource.scope_project_id
+        and binding.policy_mutation_guide_id == resource.requested_guide_id
+        and binding.policy_mutation_request_digest == resource.request_digest
     )
 
 
@@ -211,8 +264,19 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
             final_resource_context,
-            (ProjectGuideMutationResourceContext, ProjectGuideSourceSnapshotMutationResourceContext),
+            (
+                ProjectGuideMutationResourceContext,
+                ProjectGuideSourceSnapshotMutationResourceContext,
+            ),
         ) and not _guide_mutation_binding_matches(issuance.binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context,
+            (
+                ProjectReviewPolicyMutationResourceContext,
+                ProjectRevisionPolicyMutationResourceContext,
+            ),
+        ) and not _policy_mutation_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
@@ -239,6 +303,10 @@ class PreparedAuthorizationService:
         if isinstance(final_resource_context, ProjectCreateResourceContext) and not (
             _project_create_binding_matches(binding, final_resource_context)
         ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context, ProjectPolicyMutationPrepareDenialResourceContext
+        ) and not _policy_mutation_denial_binding_matches(binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         await self._authorization._complete_prepared_denial(
             self._consumer_token,
@@ -285,6 +353,13 @@ class PreparedAuthorizationService:
         operation_generation = None
         guide_mutation_project_id = guide_mutation_guide_id = None
         guide_mutation_target_resource_id = guide_mutation_operation_id = None
+        policy_mutation_project_id = policy_mutation_guide_id = None
+        policy_mutation_policy_id = policy_mutation_operation_id = None
+        policy_mutation_request_digest = None
+        policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
+        policy_mutation_generation = policy_mutation_predecessor_generation = None
+        policy_mutation_predecessor_id = None
+        policy_mutation_guide_status = None
         if action_id is ActionId.PROJECT_CREATE:
             try:
                 operation_id = UUID(str(caller_input.request_value["operation_id"]))
@@ -306,9 +381,7 @@ class PreparedAuthorizationService:
             ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         }:
             try:
-                guide_mutation_project_id = UUID(
-                    str(caller_input.request_value["project_id"])
-                )
+                guide_mutation_project_id = UUID(str(caller_input.request_value["project_id"]))
                 raw_guide_id = caller_input.request_value.get("guide_id")
                 guide_mutation_guide_id = (
                     UUID(str(raw_guide_id)) if raw_guide_id is not None else None
@@ -316,9 +389,7 @@ class PreparedAuthorizationService:
                 guide_mutation_target_resource_id = UUID(
                     str(caller_input.request_value["target_resource_id"])
                 )
-                guide_mutation_operation_id = UUID(
-                    str(caller_input.request_value["operation_id"])
-                )
+                guide_mutation_operation_id = UUID(str(caller_input.request_value["operation_id"]))
             except (KeyError, TypeError, ValueError) as exc:
                 raise PreparedAuthorizationHandleInvalid(
                     "invalid prepared authorization handle"
@@ -336,9 +407,40 @@ class PreparedAuthorizationService:
                     and guide_mutation_target_resource_id != guide_mutation_guide_id
                 )
             ):
+                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if action_id in {
+            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+            ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        }:
+            try:
+                policy_mutation_project_id = UUID(str(caller_input.request_value["project_id"]))
+                policy_mutation_guide_id = UUID(str(caller_input.request_value["guide_id"]))
+                policy_mutation_policy_id = UUID(str(caller_input.request_value["policy_id"]))
+                policy_mutation_operation_id = UUID(str(caller_input.request_value["operation_id"]))
+                policy_mutation_request_digest = str(caller_input.request_value["request_digest"])
+                policy_mutation_policy_digest = str(caller_input.request_value["policy_digest"])
+                policy_mutation_generation = int(caller_input.request_value["policy_generation"])
+                raw_predecessor_id = caller_input.request_value["predecessor_policy_id"]
+                policy_mutation_predecessor_id = (
+                    UUID(str(raw_predecessor_id)) if raw_predecessor_id is not None else None
+                )
+                raw_predecessor_generation = caller_input.request_value[
+                    "predecessor_policy_generation"
+                ]
+                policy_mutation_predecessor_generation = (
+                    int(raw_predecessor_generation)
+                    if raw_predecessor_generation is not None
+                    else None
+                )
+                raw_predecessor_digest = caller_input.request_value["predecessor_policy_digest"]
+                policy_mutation_predecessor_digest = (
+                    str(raw_predecessor_digest) if raw_predecessor_digest is not None else None
+                )
+                policy_mutation_guide_status = str(caller_input.request_value["guide_status"])
+            except (KeyError, TypeError, ValueError) as exc:
                 raise PreparedAuthorizationHandleInvalid(
                     "invalid prepared authorization handle"
-                )
+                ) from exc
         return _PreparedAuthorizationBinding(
             action_id=action_id,
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
@@ -358,6 +460,17 @@ class PreparedAuthorizationService:
             guide_mutation_guide_id=guide_mutation_guide_id,
             guide_mutation_target_resource_id=guide_mutation_target_resource_id,
             guide_mutation_operation_id=guide_mutation_operation_id,
+            policy_mutation_project_id=policy_mutation_project_id,
+            policy_mutation_guide_id=policy_mutation_guide_id,
+            policy_mutation_policy_id=policy_mutation_policy_id,
+            policy_mutation_operation_id=policy_mutation_operation_id,
+            policy_mutation_request_digest=policy_mutation_request_digest,
+            policy_mutation_policy_digest=policy_mutation_policy_digest,
+            policy_mutation_generation=policy_mutation_generation,
+            policy_mutation_predecessor_id=policy_mutation_predecessor_id,
+            policy_mutation_predecessor_generation=(policy_mutation_predecessor_generation),
+            policy_mutation_predecessor_digest=policy_mutation_predecessor_digest,
+            policy_mutation_guide_status=policy_mutation_guide_status,
         )
 
     @staticmethod
@@ -366,10 +479,7 @@ class PreparedAuthorizationService:
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:
         guide_resource = _GUIDE_RESOURCE_BY_ACTION.get(action_id)
-        if (
-            guide_resource is not None
-            and isinstance(resource, guide_resource[1])
-        ):
+        if guide_resource is not None and isinstance(resource, guide_resource[1]):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
                 artifact_resource_type=guide_resource[0],
@@ -411,6 +521,14 @@ class PreparedAuthorizationService:
             ActionId.PROJECT_GUIDE_UPDATE,
             ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         } and isinstance(resource, ProjectGuideMutationPrepareDenialResourceContext):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=resource.scope_project_id,
+            )
+        if action_id in {
+            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+            ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        } and isinstance(resource, ProjectPolicyMutationPrepareDenialResourceContext):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,

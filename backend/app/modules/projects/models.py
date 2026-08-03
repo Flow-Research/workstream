@@ -169,6 +169,63 @@ class GuideMutationIdempotencyRecord(Base):
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PolicyMutationIdempotencyRecord(Base):
+    """Replay custody for one guide-bound policy replacement."""
+
+    __tablename__ = "policy_mutation_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_profile_id",
+            "action_id",
+            "idempotency_key",
+            name="uq_policy_mutation_replay_namespace",
+        ),
+        UniqueConstraint("operation_id", name="uq_policy_mutation_operation_identity"),
+        Index(
+            "ix_policy_mutation_custody_lookup",
+            "policy_id",
+            "action_id",
+            "policy_generation",
+            "status",
+        ),
+        CheckConstraint(
+            "action_id in ('project.review_policy.update','project.revision_policy.update')",
+            name="ck_policy_mutation_action",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "policy_hash ~ '^sha256:[0-9a-f]{64}$' and "
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_policy_mutation_digests",
+        ),
+        CheckConstraint("policy_generation > 0", name="ck_policy_mutation_generation"),
+        CheckConstraint("status in ('pending','committed')", name="ck_policy_mutation_status"),
+        CheckConstraint(
+            "(status='pending' and response_json is null and committed_at is null) or "
+            "(status='committed' and response_json is not null and committed_at is not null)",
+            name="ck_policy_mutation_state_shape",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(ForeignKey("actor_identity_links.id"))
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    resource_context_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False)
+    policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    response_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ProjectGuide(Base):
     """Versioned human-facing project guide material."""
 
@@ -176,17 +233,17 @@ class ProjectGuide(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "version", name="uq_project_guides_project_version"),
         CheckConstraint(
-            "(selected_review_policy_id is null and "
+            "((selected_review_policy_id is null and "
             "selected_review_policy_generation is null and selected_review_policy_hash is null "
-            "and selected_revision_policy_id is null and "
+            ") or (selected_review_policy_id is not null and "
+            "selected_review_policy_generation is not null and "
+            "selected_review_policy_hash is not null)) and "
+            "((selected_revision_policy_id is null and "
             "selected_revision_policy_generation is null and "
             "selected_revision_policy_hash is null) or "
-            "(selected_review_policy_id is not null and "
-            "selected_review_policy_generation is not null and "
-            "selected_review_policy_hash is not null and "
-            "selected_revision_policy_id is not null and "
+            "(selected_revision_policy_id is not null and "
             "selected_revision_policy_generation is not null and "
-            "selected_revision_policy_hash is not null)",
+            "selected_revision_policy_hash is not null))",
             name="policy_selection_shape",
         ),
         CheckConstraint(
@@ -440,6 +497,22 @@ class ReviewPolicy(Base):
             "semantics_status in ('complete','legacy_incomplete')",
             name="review_policy_identity_shape",
         ),
+        CheckConstraint(
+            "semantics_status='legacy_incomplete' or "
+            "(created_by_actor_profile_id is not null and "
+            "created_via_identity_link_id is not null and "
+            "created_by_admin_role_grant_id is not null and "
+            "creation_scope_type in ('system','project') and creation_action_id = "
+            "'project.review_policy.update' and authorization_decision_event_id is not null)",
+            name="review_policy_authority_shape",
+        ),
+        CheckConstraint(
+            "semantics_status='legacy_incomplete' or "
+            "((supersedes_policy_id is null and predecessor_policy_hash is null and "
+            "policy_generation=1) or (supersedes_policy_id is not null and "
+            "predecessor_policy_hash ~ '^sha256:[0-9a-f]{64}$' and policy_generation>1))",
+            name="review_policy_predecessor_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -449,6 +522,20 @@ class ReviewPolicy(Base):
     policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     semantics_status: Mapped[str] = mapped_column(String(24), nullable=False)
     supersedes_policy_id: Mapped[str | None] = mapped_column(ForeignKey("review_policies.id"))
+    predecessor_policy_hash: Mapped[str | None] = mapped_column(String(71))
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(String(36))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     review_preference_window_seconds: Mapped[int | None] = mapped_column(Integer)
     review_lease_duration_seconds: Mapped[int | None] = mapped_column(Integer)
     max_active_review_leases_per_reviewer: Mapped[int | None] = mapped_column(Integer)
@@ -493,6 +580,22 @@ class RevisionPolicy(Base):
             "semantics_status in ('complete','legacy_incomplete')",
             name="revision_policy_identity_shape",
         ),
+        CheckConstraint(
+            "semantics_status='legacy_incomplete' or "
+            "(created_by_actor_profile_id is not null and "
+            "created_via_identity_link_id is not null and "
+            "created_by_admin_role_grant_id is not null and "
+            "creation_scope_type in ('system','project') and creation_action_id = "
+            "'project.revision_policy.update' and authorization_decision_event_id is not null)",
+            name="revision_policy_authority_shape",
+        ),
+        CheckConstraint(
+            "semantics_status='legacy_incomplete' or "
+            "((supersedes_policy_id is null and predecessor_policy_hash is null and "
+            "policy_generation=1) or (supersedes_policy_id is not null and "
+            "predecessor_policy_hash ~ '^sha256:[0-9a-f]{64}$' and policy_generation>1))",
+            name="revision_policy_predecessor_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -502,6 +605,20 @@ class RevisionPolicy(Base):
     policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     semantics_status: Mapped[str] = mapped_column(String(24), nullable=False)
     supersedes_policy_id: Mapped[str | None] = mapped_column(ForeignKey("revision_policies.id"))
+    predecessor_policy_hash: Mapped[str | None] = mapped_column(String(71))
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(String(36))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     max_revision_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     revision_deadline_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     allowed_resubmission_states: Mapped[list[str]] = mapped_column(
@@ -786,8 +903,7 @@ class GuideSufficiencyReport(Base):
             name="ck_guide_sufficiency_reports_generation_positive",
         ),
         CheckConstraint(
-            "agent_material_sha256 is null or "
-            "agent_material_sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            "agent_material_sha256 is null or agent_material_sha256 ~ '^sha256:[0-9a-f]{64}$'",
             name="ck_guide_sufficiency_reports_material_sha256",
         ),
         CheckConstraint(

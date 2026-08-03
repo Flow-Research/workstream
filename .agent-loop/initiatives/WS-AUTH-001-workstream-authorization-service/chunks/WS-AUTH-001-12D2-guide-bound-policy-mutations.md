@@ -22,8 +22,10 @@ alternate writer.
 
 ## One writer path
 
-- Surviving API: separate `PUT /projects/{project_id}/review-policy` and
-  `PUT /projects/{project_id}/revision-policy` routes in the dedicated
+- Surviving API: separate
+  `PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy` and
+  `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy` routes
+  in the dedicated
   `backend/app/modules/projects/policy_mutation_router.py`, registered once by
   `backend/app/api/router.py`, each declaring its exact primary ActionId. This
   follows the project-create and guide-mutation router boundary on current main.

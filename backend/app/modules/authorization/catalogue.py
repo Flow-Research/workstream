@@ -214,7 +214,7 @@ class ActionOwner(StrEnum):
     AUTH_12B2 = "WS-AUTH-001-12B2"
     AUTH_12C = "WS-AUTH-001-12C"
     AUTH_12D = "WS-AUTH-001-12D"
-    AUTH_12D2 = "WS-AUTH-001-12D2"
+    XINT_003_02B = "WS-XINT-003-02B"
     AUTH_12E = "WS-AUTH-001-12E"
     AUTH_12F = "WS-AUTH-001-12F"
     AUTH_12G = "WS-AUTH-001-12G"
@@ -450,15 +450,15 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12D,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
-        ActionOwner.AUTH_12D2,
+        ActionOwner.XINT_003_02B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
         PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
-        ActionOwner.AUTH_12D2,
+        ActionOwner.XINT_003_02B,
     ),
     _planned(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
@@ -800,6 +800,8 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_CREATE,
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,

@@ -17,7 +17,7 @@ import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, func, select, text, update
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from fastapi import HTTPException
 from sqlalchemy.schema import CreateIndex
 
@@ -54,6 +54,7 @@ from app.modules.projects.models import (
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PolicyMutationIdempotencyRecord,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
@@ -63,11 +64,6 @@ from app.modules.projects.models import (
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
-)
-from app.modules.projects.policy_lineage import (
-    ReviewPolicySemantics,
-    RevisionPolicySemantics,
-    policy_digest,
 )
 from app.modules.projects.guide_mutation_repository import GuideMutationRepository
 from app.modules.tasks.models import AuditEvent
@@ -164,9 +160,7 @@ async def test_project_policy_lock_queries_lock_only_policy_rows() -> None:
     await repository.lock_review_policy("project-id", "v1")
     await repository.lock_revision_policy("project-id", "v1")
 
-    rendered = [
-        str(statement.compile(dialect=postgresql.dialect())) for statement in statements
-    ]
+    rendered = [str(statement.compile(dialect=postgresql.dialect())) for statement in statements]
     assert "FOR UPDATE OF review_policies" in rendered[0]
     assert "FOR UPDATE OF project_guides" not in rendered[0]
     assert "FOR UPDATE OF revision_policies" in rendered[1]
@@ -2057,71 +2051,51 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
     )
     assert response.status_code == 201, response.text
     guide = response.json()
-    async with db_session.get_session_factory()() as session:
-        review_id = revision_id = None
-        if review_policy is not None:
-            values = (
-                review_policy
-                if isinstance(review_policy, dict)
-                else {
-                    "requires_second_review": False,
-                    "allowed_decisions": ["accept", "needs_revision", "reject"],
-                    "minimum_finding_fields": ["issue", "required_fix"],
-                }
-            )
-            values.pop("sla_hours", None)
-            values = {
-                "review_preference_window_seconds": 3600,
-                "review_lease_duration_seconds": 1800,
-                "max_active_review_leases_per_reviewer": 1,
-                "self_review_allowed": False,
-                "reject_policy": "close_task",
-                "finding_evidence_requirement": "optional",
-                **values,
+    if review_policy is not None:
+        values = (
+            dict(review_policy)
+            if isinstance(review_policy, dict)
+            else {
+                "requires_second_review": False,
+                "allowed_decisions": ["accept", "needs_revision", "reject"],
+                "minimum_finding_fields": ["issue", "required_fix"],
             }
-            review_hash = policy_digest(
-                "review",
-                ReviewPolicySemantics.model_validate(values),
-            )
-            review_id = str(uuid4())
-            session.add(
-                ReviewPolicy(
-                    id=review_id,
-                    project_id=project_id,
-                    guide_version=guide["version"],
-                    policy_generation=1,
-                    policy_hash=review_hash,
-                    semantics_status="complete",
-                    **values,
-                )
-            )
-        if revision_policy is not None:
-            values = (
-                revision_policy
-                if isinstance(revision_policy, dict)
-                else {
-                    "max_revision_rounds": 7,
-                    "revision_deadline_hours": 48,
-                    "allowed_resubmission_states": ["needs_revision"],
-                    "reviewer_reassignment_rule": "same reviewer preferred",
-                }
-            )
-            values.pop("auto_reject_after_limit", None)
-            revision_hash = policy_digest(
-                "revision", RevisionPolicySemantics.model_validate(values)
-            )
-            revision_id = str(uuid4())
-            session.add(
-                RevisionPolicy(
-                    id=revision_id,
-                    project_id=project_id,
-                    guide_version=guide["version"],
-                    policy_generation=1,
-                    policy_hash=revision_hash,
-                    semantics_status="complete",
-                    **values,
-                )
-            )
+        )
+        values.pop("sla_hours", None)
+        values = {
+            "review_preference_window_seconds": 3600,
+            "review_lease_duration_seconds": 1800,
+            "max_active_review_leases_per_reviewer": 1,
+            "self_review_allowed": False,
+            "reject_policy": "close_task",
+            "finding_evidence_requirement": "optional",
+            **values,
+        }
+        policy_response = await client.put(
+            f"/api/v1/projects/{project_id}/guides/{guide['id']}/review-policy",
+            headers=auth_headers() | {"If-Match": '"no-current-policy"'},
+            json=values,
+        )
+        assert policy_response.status_code == 200, policy_response.text
+    if revision_policy is not None:
+        values = (
+            dict(revision_policy)
+            if isinstance(revision_policy, dict)
+            else {
+                "max_revision_rounds": 7,
+                "revision_deadline_hours": 48,
+                "allowed_resubmission_states": ["needs_revision"],
+                "reviewer_reassignment_rule": "same reviewer preferred",
+            }
+        )
+        values.pop("auto_reject_after_limit", None)
+        policy_response = await client.put(
+            f"/api/v1/projects/{project_id}/guides/{guide['id']}/revision-policy",
+            headers=auth_headers() | {"If-Match": '"no-current-policy"'},
+            json=values,
+        )
+        assert policy_response.status_code == 200, policy_response.text
+    async with db_session.get_session_factory()() as session:
         if payment_policy is not None:
             values = (
                 payment_policy
@@ -2143,20 +2117,81 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
                     **values,
                 )
             )
-        guide_row = await session.get(ProjectGuide, guide["id"])
-        assert guide_row is not None
-        if review_id is not None and revision_id is not None:
-            guide_row.selected_review_policy_id = review_id
-            guide_row.selected_review_policy_generation = 1
-            guide_row.selected_review_policy_hash = review_hash
-            guide_row.selected_revision_policy_id = revision_id
-            guide_row.selected_revision_policy_generation = 1
-            guide_row.selected_revision_policy_hash = revision_hash
         await session.commit()
     await add_project_manager_admin_grant(project_id)
     if source_snapshot is not None:
         await create_source_snapshot(client, project_id, guide["id"], source_snapshot)
     return guide
+
+
+@pytest.mark.asyncio
+async def test_policy_mutation_api_commits_exact_custody_and_rejects_direct_append(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client, name="Policy custody")
+    payload = complete_guide_payload()
+    payload["review_policy"] = None
+    payload["revision_policy"] = None
+    guide = await create_guide(project_client, project["id"], payload)
+    headers = auth_headers() | {"If-Match": '"no-current-policy"'}
+    body = {
+        "review_preference_window_seconds": 3600,
+        "review_lease_duration_seconds": 1800,
+        "max_active_review_leases_per_reviewer": 1,
+        "self_review_allowed": False,
+        "reject_policy": "close_task",
+        "finding_evidence_requirement": "optional",
+        "requires_second_review": False,
+        "allowed_decisions": ["accept", "needs_revision", "reject"],
+        "minimum_finding_fields": ["issue", "required_fix"],
+    }
+    path = f"/api/v1/projects/{project['id']}/guides/{guide['id']}/review-policy"
+    created = await project_client.put(path, headers=headers, json=body)
+    replayed = await project_client.put(path, headers=headers, json=body)
+    assert created.status_code == replayed.status_code == 200
+    assert created.json() == replayed.json()
+
+    async with db_session.get_session_factory()() as session:
+        policy = await session.get(ReviewPolicy, created.json()["id"])
+        assert policy is not None
+        replay_count = await session.scalar(
+            select(func.count())
+            .select_from(PolicyMutationIdempotencyRecord)
+            .where(PolicyMutationIdempotencyRecord.policy_id == policy.id)
+        )
+        assert replay_count == 1
+        session.add(
+            ReviewPolicy(
+                id=str(uuid4()),
+                project_id=policy.project_id,
+                guide_version=policy.guide_version,
+                policy_generation=2,
+                policy_hash=policy.policy_hash,
+                semantics_status="complete",
+                supersedes_policy_id=policy.id,
+                predecessor_policy_hash=policy.policy_hash,
+                created_by_actor_profile_id=policy.created_by_actor_profile_id,
+                created_via_identity_link_id=policy.created_via_identity_link_id,
+                created_by_admin_role_grant_id=policy.created_by_admin_role_grant_id,
+                creation_scope_type=policy.creation_scope_type,
+                creation_scope_project_id=policy.creation_scope_project_id,
+                creation_action_id=policy.creation_action_id,
+                authorization_decision_event_id=policy.authorization_decision_event_id,
+                review_preference_window_seconds=policy.review_preference_window_seconds,
+                review_lease_duration_seconds=policy.review_lease_duration_seconds,
+                max_active_review_leases_per_reviewer=(
+                    policy.max_active_review_leases_per_reviewer
+                ),
+                self_review_allowed=policy.self_review_allowed,
+                reject_policy=policy.reject_policy,
+                finding_evidence_requirement=policy.finding_evidence_requirement,
+                requires_second_review=policy.requires_second_review,
+                allowed_decisions=policy.allowed_decisions,
+                minimum_finding_fields=policy.minimum_finding_fields,
+            )
+        )
+        with pytest.raises(DBAPIError, match="policy mutation custody mismatch"):
+            await session.commit()
 
 
 async def test_create_guide_never_enqueues_setup_or_runs_agents(
@@ -7137,9 +7172,13 @@ async def test_openai_agent_sdk_sends_exact_canonical_verified_material(
         ),
     )
     material = GuideSourceMaterial(
-        project_id="project-1", guide_id="guide-1", guide_version="v1",
-        source_snapshot_id="snapshot-1", source_snapshot_hash="sha256:" + "1" * 64,
-        guide_material={}, verified_artifact_material=True,
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={},
+        verified_artifact_material=True,
     )
     runtime = OpenAIAgentSdkProjectGuideRuntime(
         Settings(project_agent_openai_agent_sdk_model="gpt-test")

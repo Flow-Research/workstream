@@ -6,8 +6,8 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 
 | ActionId | PermissionId | Principal and scope | Resource family | Surface owner | State | Activation wave |
 |---|---|---|---|---|---|---|
-| `project.review_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + ReviewPolicy version | project/REV semantics; AUTH mutation | registered planned | `WS-XINT-003-02B` after 02A lineage |
-| `project.revision_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + RevisionPolicy version | project/REV semantics; AUTH mutation | registered planned | `WS-XINT-003-02B` after 02A lineage |
+| `project.review_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + ReviewPolicy version | project/REV semantics; AUTH mutation | active | `WS-XINT-003-02B` after 02A lineage |
+| `project.revision_policy.update` | `project.review_policy.manage` | Project Manager grant for exact project | draft guide + RevisionPolicy version | project/REV semantics; AUTH mutation | active | `WS-XINT-003-02B` after 02A lineage |
 | `review.queue.read` | `review.queue.read` | reviewer grant; exact project; self-review denied | concealed current-work view | REV | registered planned | `WS-XINT-003-03A` |
 | `review.claim` | `review.claim` | reviewer grant; exact project; self-review denied | queue entry + global reviewer lease state | REV | registered planned | `WS-XINT-003-03A` |
 | `review.release` | `review.release` | owning reviewer and active lease | ReviewLease | REV | registered planned | `WS-XINT-003-03A` |

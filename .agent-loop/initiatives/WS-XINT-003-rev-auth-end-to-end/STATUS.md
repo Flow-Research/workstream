@@ -2,9 +2,10 @@
 
 ## Current status
 
-WS-XINT-003-01 is merged. WS-XINT-003-02A immutable policy identity and
-downstream lineage is implemented on its bounded branch and has passed final
-internal review. No policy mutation action or public surface is activated.
+WS-XINT-003-01 and WS-XINT-003-02A are merged. WS-XINT-003-02B policy mutation
+activation is the active bounded implementation chunk from `origin/main` at
+`2c24c91d`. No policy mutation action or public surface was active at its
+starting baseline.
 
 ## Baseline
 
@@ -44,5 +45,6 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-Open the 02A PR, run exact-head hosted CI and CodeRabbit, obtain human merge,
-and stop. WS-XINT-003-02B requires a new explicit user start after 02A merges.
+WS-XINT-003-02B implementation and internal review are complete. Open the PR,
+run exact-head hosted review, resolve every valid external finding, obtain human
+merge, and stop before review lifecycle activation.

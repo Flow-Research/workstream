@@ -439,13 +439,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 76
+    assert len(route_inventory) == 78
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "1df58dc46d473ed04a9c26b2b90899ed471fa9aaedced43b4f1e2dc477cac350"
+        "eebf8e5d7fc791a4513b80f6da3fa5cb724eb26e4ce46af8306e1836854a9fd2"
     )
-    assert len(protected_inventory) == 74
+    assert len(protected_inventory) == 76
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "8c629cd977bb0eedf99d5ea73f05708f6549f635974998b31abdd9a25636ad76"
+        "e40f11c7580bfd48b3554add18a41b913104096c480c91b11c8f33ac9d50ee37"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
@@ -513,6 +513,12 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "POST /api/v1/projects": "project.create",
         "POST /api/v1/projects/{project_id}/guides": "project.guide.create",
         "PATCH /api/v1/projects/{project_id}/guides/{guide_id}": "project.guide.update",
+        "PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy": (
+            "project.review_policy.update"
+        ),
+        "PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy": (
+            "project.revision_policy.update"
+        ),
         "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots": (
             "project.guide_source_snapshot.create"
         ),

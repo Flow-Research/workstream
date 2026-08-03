@@ -866,6 +866,32 @@ class ProjectRepository:
             .with_for_update(of=RevisionPolicy)
         )
 
+    async def add_review_policy_version(
+        self, policy: ReviewPolicy, guide: ProjectGuide
+    ) -> ReviewPolicy:
+        """Append one immutable review policy and advance its locked selector."""
+        self._session.add(policy)
+        await self._session.flush([policy])
+        guide.selected_review_policy_id = policy.id
+        guide.selected_review_policy_generation = policy.policy_generation
+        guide.selected_review_policy_hash = policy.policy_hash
+        await self._session.flush()
+        await self._session.refresh(policy)
+        return policy
+
+    async def add_revision_policy_version(
+        self, policy: RevisionPolicy, guide: ProjectGuide
+    ) -> RevisionPolicy:
+        """Append one immutable revision policy and advance its locked selector."""
+        self._session.add(policy)
+        await self._session.flush([policy])
+        guide.selected_revision_policy_id = policy.id
+        guide.selected_revision_policy_generation = policy.policy_generation
+        guide.selected_revision_policy_hash = policy.policy_hash
+        await self._session.flush()
+        await self._session.refresh(policy)
+        return policy
+
     async def get_pre_submit_checker_policy(
         self,
         policy_id: str,

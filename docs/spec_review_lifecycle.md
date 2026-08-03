@@ -19,10 +19,12 @@ The canonical REV-AUTH action custody is
 `.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
 REV owns lifecycle and immutable policy semantics; AUTH owns evaluation, PREP,
 and decision evidence. ReviewPolicy and RevisionPolicy use immutable,
-append-only identities installed by XINT-003-02A; their only future writer is
-the PREP-bound mutation surface owned by XINT-003-02B. XINT-002-07A activates
-reviewer packet materialization only. ART review-evidence binding remains
-planned/unavailable and 07B is reserved pending separate REV-owned intent.
+append-only identities installed by XINT-003-02A; their only writer is the
+guide-bound PREP mutation surface activated by XINT-003-02B. This configuration
+surface does not activate review queues, leases, findings, decisions, or
+revision execution. XINT-002-07A activates reviewer packet materialization
+only. ART review-evidence binding remains planned/unavailable and 07B is
+reserved pending separate REV-owned intent.
 
 ## Precedence And Archival Inputs
 

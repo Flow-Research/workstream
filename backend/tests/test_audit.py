@@ -190,6 +190,8 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         ActionId.PROJECT_READ,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,

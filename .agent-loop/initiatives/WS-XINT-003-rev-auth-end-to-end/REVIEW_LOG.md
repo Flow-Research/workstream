@@ -81,3 +81,32 @@ test semantics mapping. Its post-main-merge review also found that the guide
 sufficiency migration test did not protect cleanup when the initial downgrade
 failed. All findings were valid and corrected; the exact response is in
 `reviews/WS-XINT-003-02A-external-review-response.md`.
+
+## WS-XINT-003-02B guide-bound policy mutation activation
+
+Architecture, security/auth, product/operations, QA/test, senior engineering,
+reuse/dedup, docs, test-delta, and CI integrity reviewed the completed runtime
+chunk. Valid findings corrected full PREP and denial binding, replay-before-PREP
+ordering, same-actor replay, exact opaque selectors, route rollback, database
+successor/predecessor custody, live fixture bypasses, and operator docs. All
+tracks passed after correction; no finding remains open. Final evidence is in
+`reviews/WS-XINT-003-02B-internal-review.md`.
+
+The first hosted Backend run failed the unchanged docstring gate because 22 new
+02B callables reduced coverage to 79.7 percent. The new surface was documented,
+and the same local gate passes at 80.5 percent without a threshold or workflow
+change. External evidence is in
+`reviews/WS-XINT-003-02B-external-review-response.md`.
+
+CodeRabbit's first pass found valid replay timestamp immutability, downgrade
+locking, historical trigger allow-list, fixture-copy, and replacement-selector
+documentation issues. Its related indexing, typing, exact-exception,
+constraint-shape, and reservation-branch notes were also valid. All were fixed;
+none was deferred.
+
+CodeRabbit's second pass found a valid post-lock guide-version revalidation gap;
+it now denies before PREP consumption. Hosted migration evidence then exposed a
+stale 0047 head constant and an incorrect unprefixed constraint lookup. The
+0048 head is now exact, the installed constraint is behaviorally exercised for
+independent and partial selector cases, and the focused isolated PostgreSQL
+round trip passes.

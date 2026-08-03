@@ -34,15 +34,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
-    ProjectGuide,
     ProjectSetupRun,
-    ReviewPolicy,
-    RevisionPolicy,
-)
-from app.modules.projects.policy_lineage import (
-    ReviewPolicySemantics,
-    RevisionPolicySemantics,
-    policy_digest,
 )
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
@@ -112,6 +104,8 @@ async def seed_active_guide_for_pre_12h_e2e(
                 text("alter table project_guides enable trigger guide_mutation_product_custody")
             )
             await session.commit()
+
+
 DEFAULT_FLOW_ISSUER = "https://auth.flow.local/e2e"
 DEFAULT_FLOW_AUDIENCE = "workstream-api"
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -419,6 +413,7 @@ async def request_json(
     payload: dict | None = None,
     expected_status: int = 200,
     idempotency_key: str | None = None,
+    if_match: str | None = None,
 ) -> dict | list:
     """Call one API endpoint and assert its status.
 
@@ -430,6 +425,7 @@ async def request_json(
         payload: Optional JSON payload.
         expected_status: Expected HTTP status code.
         idempotency_key: Optional UUID replay key for mutation boundaries.
+        if_match: Optional exact HTTP policy selector precondition.
 
     Returns:
         Parsed JSON response body.
@@ -440,11 +436,11 @@ async def request_json(
     request_id = str(uuid4())
     correlation_id = str(uuid4())
     headers = {} if token is None else auth_headers(token)
-    headers.update(
-        {"X-Request-ID": request_id, "X-Correlation-ID": correlation_id}
-    )
+    headers.update({"X-Request-ID": request_id, "X-Correlation-ID": correlation_id})
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
+    if if_match is not None:
+        headers["If-Match"] = if_match
     response = await client.request(
         method,
         path,
@@ -472,9 +468,10 @@ async def request_json(
     if response.headers.get("x-correlation-id") != correlation_id:
         raise AssertionError(f"{method} {path} did not preserve the correlation ID")
     if expected_status >= 400:
-        if not isinstance(body, dict) or body.get("error", {}).get(
-            "correlation_id"
-        ) != correlation_id:
+        if (
+            not isinstance(body, dict)
+            or body.get("error", {}).get("correlation_id") != correlation_id
+        ):
             raise AssertionError(f"{method} {path} returned invalid error context")
     print(f"PASS {method} {path} -> {response.status_code}")
     return body
@@ -574,8 +571,7 @@ def assert_checker_run_result_integrity(checker_run: dict, expected_names: set[s
         "checker warning count does not match returned results",
     )
     ensure(
-        checker_run["failed_count"]
-        == sum(1 for result in results if result["status"] == "failed"),
+        checker_run["failed_count"] == sum(1 for result in results if result["status"] == "failed"),
         "checker failed count does not match returned results",
     )
     ensure(
@@ -648,91 +644,68 @@ def guide_payload(run_id: str) -> dict:
     }
 
 
-async def seed_pending_policy_boundaries(project_id: str, guide_version: str) -> None:
-    """Seed policies whose clean-cut authorization routes arrive after AUTH-12D.
+async def configure_policy_boundaries(
+    client: httpx.AsyncClient,
+    token: str,
+    project_id: str,
+    guide_id: str,
+    guide_version: str,
+) -> None:
+    """Configure both policies through their sole active HTTP boundaries.
 
-    The E2E flow must keep proving the downstream lifecycle while guide create no
-    longer accepts embedded policy writes. These direct fixtures are removed as
-    each dedicated policy boundary is activated.
+    Args:
+        client: Real HTTP client.
+        token: Project Manager Flow bearer token.
+        project_id: Project whose draft guide is configured.
+        guide_id: Exact draft guide receiving both policies.
+        guide_version: Guide version used by the direct PaymentPolicy fixture.
     """
+    await request_json(
+        client,
+        "PUT",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/review-policy",
+        token,
+        {
+            "review_preference_window_seconds": 3600,
+            "review_lease_duration_seconds": 1800,
+            "max_active_review_leases_per_reviewer": 1,
+            "self_review_allowed": False,
+            "reject_policy": "close_task",
+            "finding_evidence_requirement": "optional",
+            "requires_second_review": False,
+            "allowed_decisions": ["accept", "needs_revision", "reject"],
+            "minimum_finding_fields": ["issue", "required_fix"],
+        },
+        idempotency_key=str(uuid4()),
+        if_match='"no-current-policy"',
+    )
+    await request_json(
+        client,
+        "PUT",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/revision-policy",
+        token,
+        {
+            "max_revision_rounds": 7,
+            "revision_deadline_hours": 48,
+            "allowed_resubmission_states": ["needs_revision"],
+            "reviewer_reassignment_rule": "same reviewer preferred",
+        },
+        idempotency_key=str(uuid4()),
+        if_match='"no-current-policy"',
+    )
     async with db_session.get_session_factory()() as session:
-        review_id = str(uuid4())
-        revision_id = str(uuid4())
-        review_semantics = ReviewPolicySemantics(
-            review_preference_window_seconds=3600,
-            review_lease_duration_seconds=1800,
-            allowed_decisions=("accept", "needs_revision", "reject"),
-            minimum_finding_fields=("issue", "required_fix"),
-        )
-        revision_semantics = RevisionPolicySemantics(
-            max_revision_rounds=7,
-            revision_deadline_hours=48,
-            allowed_resubmission_states=("needs_revision",),
-            reviewer_reassignment_rule="same reviewer preferred",
-        )
-        review_hash = policy_digest("review", review_semantics)
-        revision_hash = policy_digest("revision", revision_semantics)
-        session.add_all(
-            [
-                ReviewPolicy(
-                    id=review_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=review_hash,
-                    semantics_status="complete",
-                    **review_semantics.model_dump(mode="python"),
-                ),
-                RevisionPolicy(
-                    id=revision_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=revision_hash,
-                    semantics_status="complete",
-                    **revision_semantics.model_dump(mode="python"),
-                ),
-                PaymentPolicy(
-                    id=str(uuid4()),
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    base_amount="25.00",
-                    currency="USD",
-                    payout_type="fixed",
-                    revision_payment_rule="none",
-                    rejection_payment_rule="none",
-                    accepted_payment_rule="pay base amount",
-                ),
-            ]
-        )
-        await session.flush()
-        guide = await session.scalar(
-            select(ProjectGuide).where(
-                ProjectGuide.project_id == project_id,
-                ProjectGuide.version == guide_version,
+        session.add(
+            PaymentPolicy(
+                id=str(uuid4()),
+                project_id=project_id,
+                guide_version=guide_version,
+                base_amount="25.00",
+                currency="USD",
+                payout_type="fixed",
+                revision_payment_rule="none",
+                rejection_payment_rule="none",
+                accepted_payment_rule="pay base amount",
             )
-        )
-        if guide is None:
-            raise RuntimeError("policy seed requires its exact project guide")
-        await session.execute(
-            text("alter table project_guides disable trigger guide_mutation_product_custody")
-        )
-        await session.execute(
-            text("alter table project_guides disable trigger guide_lineage_lifecycle_guard")
-        )
-        guide.selected_review_policy_id = review_id
-        guide.selected_review_policy_generation = 1
-        guide.selected_review_policy_hash = review_hash
-        guide.selected_revision_policy_id = revision_id
-        guide.selected_revision_policy_generation = 1
-        guide.selected_revision_policy_hash = revision_hash
-        await session.flush()
-        await session.execute(text("set constraints all immediate"))
-        await session.execute(
-            text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
-        )
-        await session.execute(
-            text("alter table project_guides enable trigger guide_mutation_product_custody")
         )
         await session.commit()
 
@@ -1118,7 +1091,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         read_actions = {
             path: item["get"]["x-workstream-action-id"]
             for path, item in openapi["paths"].items()
-            if path in {
+            if path
+            in {
                 "/api/v1/projects/{project_id}/contributor-candidates",
                 "/api/v1/projects/{project_id}/role-grants",
                 "/api/v1/projects/{project_id}/role-grants/{grant_id}",
@@ -1134,13 +1108,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 "project.contributor_candidate.list"
             ),
             "/api/v1/projects/{project_id}/role-grants": "project_role_grant.list",
-            "/api/v1/projects/{project_id}/role-grants/{grant_id}": (
-                "project_role_grant.read"
-            ),
+            "/api/v1/projects/{project_id}/role-grants/{grant_id}": ("project_role_grant.read"),
             "/api/v1/projects/{project_id}": "project.read",
-            "/api/v1/actors/me/authorization-context": (
-                "actor.authorization_context.read"
-            ),
+            "/api/v1/actors/me/authorization-context": ("actor.authorization_context.read"),
             "/api/v1/projects/{project_id}/active-guide": "project.active_guide.read",
             "/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy": (
                 "project.effective_submission_artifact_policy.read"
@@ -1149,19 +1119,30 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 "project.pre_submit_checker_policy.read"
             ),
         }
-        assert openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
-            "x-workstream-action-id"
-        ] == "project_role_grant.issue"
-        assert openapi["paths"]["/api/v1/projects"]["post"][
-            "x-workstream-action-id"
-        ] == "project.create"
-        assert openapi["paths"][
-            "/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke"
-        ]["post"]["x-workstream-action-id"] == "project_role_grant.revoke"
+        assert (
+            openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
+                "x-workstream-action-id"
+            ]
+            == "project_role_grant.issue"
+        )
+        assert (
+            openapi["paths"]["/api/v1/projects"]["post"]["x-workstream-action-id"]
+            == "project.create"
+        )
+        assert (
+            openapi["paths"]["/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke"]["post"][
+                "x-workstream-action-id"
+            ]
+            == "project_role_grant.revoke"
+        )
         await request_json(client, "GET", "/api/v1/auth/me", expected_status=401)
         await request_json(client, "GET", "/api/v1/auth/me", invalid_token, expected_status=401)
-        await request_json(client, "GET", "/api/v1/auth/me", wrong_issuer_token, expected_status=401)
-        await request_json(client, "GET", "/api/v1/auth/me", wrong_audience_token, expected_status=401)
+        await request_json(
+            client, "GET", "/api/v1/auth/me", wrong_issuer_token, expected_status=401
+        )
+        await request_json(
+            client, "GET", "/api/v1/auth/me", wrong_audience_token, expected_status=401
+        )
         await request_json(client, "GET", "/api/v1/auth/me", expired_token, expected_status=401)
         await request_json(client, "GET", "/api/v1/auth/me", future_nbf_token, expected_status=401)
         manager = await request_json(client, "GET", "/api/v1/auth/me", manager_token)
@@ -1216,10 +1197,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             headers=auth_headers(fixed_service_token),
         )
         assert unprovisioned_service.status_code == 403
-        assert (
-            unprovisioned_service.json()["error"]["code"]
-            == "service_actor_not_provisioned"
-        )
+        assert unprovisioned_service.json()["error"]["code"] == "service_actor_not_provisioned"
         service_headers = auth_headers(manager_token) | {
             "Idempotency-Key": str(uuid4()),
             "X-Request-ID": str(uuid4()),
@@ -1304,18 +1282,14 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             headers=auth_headers(fixed_service_token),
         )
         assert reactivated_service_admission.status_code == 403
-        assert (
-            reactivated_service_admission.json()["error"]["code"]
-            == "permission_not_granted"
-        )
+        assert reactivated_service_admission.json()["error"]["code"] == "permission_not_granted"
 
         service_link_id = service_admin_link["identity_link_id"]
         link_lifecycle_key = str(uuid4())
         link_lifecycle_reason = "Real HTTP service identity-link lifecycle proof"
         revoked_service_link = await client.post(
             f"/api/v1/actor-identity-links/{service_link_id}/revoke",
-            headers=auth_headers(manager_token)
-            | {"Idempotency-Key": link_lifecycle_key},
+            headers=auth_headers(manager_token) | {"Idempotency-Key": link_lifecycle_key},
             json={"reason": link_lifecycle_reason},
         )
         assert revoked_service_link.status_code == 200, revoked_service_link.text
@@ -1331,22 +1305,17 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             headers=auth_headers(fixed_service_token),
         )
         assert revoked_service_admission.status_code == 403
-        assert (
-            revoked_service_admission.json()["error"]["code"]
-            == "identity_link_revoked"
-        )
+        assert revoked_service_admission.json()["error"]["code"] == "identity_link_revoked"
         replayed_service_link = await client.post(
             f"/api/v1/actor-identity-links/{service_link_id}/revoke",
-            headers=auth_headers(manager_token)
-            | {"Idempotency-Key": link_lifecycle_key},
+            headers=auth_headers(manager_token) | {"Idempotency-Key": link_lifecycle_key},
             json={"reason": link_lifecycle_reason},
         )
         assert replayed_service_link.status_code == 200, replayed_service_link.text
         assert replayed_service_link.json() == revoked_service_link.json()
         mismatched_service_link = await client.post(
             f"/api/v1/actor-identity-links/{service_link_id}/revoke",
-            headers=auth_headers(manager_token)
-            | {"Idempotency-Key": link_lifecycle_key},
+            headers=auth_headers(manager_token) | {"Idempotency-Key": link_lifecycle_key},
             json={"reason": "Different link lifecycle request"},
         )
         assert mismatched_service_link.status_code == 409, mismatched_service_link.text
@@ -1357,10 +1326,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             json={"reason": "Conflicting link lifecycle request"},
         )
         assert conflicting_service_link.status_code == 409, conflicting_service_link.text
-        assert (
-            conflicting_service_link.json()["error"]["code"]
-            == "identity_link_already_revoked"
-        )
+        assert conflicting_service_link.json()["error"]["code"] == "identity_link_already_revoked"
         repaired_service_link = await client.post(
             f"/api/v1/actor-identity-links/{service_link_id}/reactivate",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
@@ -1398,8 +1364,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
 
         project_response = await client.post(
             "/api/v1/projects",
-            headers=auth_headers(project_reader_token)
-            | {"Idempotency-Key": str(uuid4())},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
             json={
                 "name": f"API Contract Real API {run_id}",
                 "slug": f"api-contract-real-api-{run_id}",
@@ -1503,7 +1468,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
             idempotency_key=str(uuid4()),
         )
-        await seed_pending_policy_boundaries(project["id"], guide["version"])
+        await configure_policy_boundaries(
+            client,
+            project_reader_token,
+            project["id"],
+            guide["id"],
+            guide["version"],
+        )
         patched_guide = await request_json(
             client,
             "PATCH",
@@ -1573,8 +1544,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         visible_checker_policy = await request_json(
             client,
             "GET",
-            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-            "pre-submit-checker-policy",
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
             project_reader_token,
         )
         ensure(
@@ -1745,22 +1715,42 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             project_reader_token,
         )
         assert set(grant) == {
-            "id", "project_id", "actor_profile_id", "role", "status", "version",
-            "grant_method", "qualification_snapshot", "granted_by_actor_profile_id",
-            "granted_by_admin_role_grant_id", "granted_at", "grant_reason",
-            "revoked_by_actor_profile_id", "revoked_at", "revoked_reason",
+            "id",
+            "project_id",
+            "actor_profile_id",
+            "role",
+            "status",
+            "version",
+            "grant_method",
+            "qualification_snapshot",
+            "granted_by_actor_profile_id",
+            "granted_by_admin_role_grant_id",
+            "granted_at",
+            "grant_reason",
+            "revoked_by_actor_profile_id",
+            "revoked_at",
+            "revoked_reason",
         }
         assert set(grant["qualification_snapshot"]) == {
-            "id", "requested_role", "skills_snapshot", "reputation_snapshot",
-            "prior_project_work_refs", "external_expertise_refs",
-            "captured_by_actor_profile_id", "captured_by_admin_role_grant_id",
+            "id",
+            "requested_role",
+            "skills_snapshot",
+            "reputation_snapshot",
+            "prior_project_work_refs",
+            "external_expertise_refs",
+            "captured_by_actor_profile_id",
+            "captured_by_admin_role_grant_id",
             "captured_at",
         }
         assert set(grant["qualification_snapshot"]["skills_snapshot"]) == {
-            "availability", "reference_ids", "unavailable_reason",
+            "availability",
+            "reference_ids",
+            "unavailable_reason",
         }
         assert set(grant["qualification_snapshot"]["reputation_snapshot"]) == {
-            "availability", "reference_ids", "unavailable_reason",
+            "availability",
+            "reference_ids",
+            "unavailable_reason",
         }
         assert grant["revoked_by_actor_profile_id"] is None
         assert grant["revoked_at"] is None
@@ -1813,8 +1803,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert issue_after_revoke.status_code == 409, issue_after_revoke.text
         assert (
-            issue_after_revoke.json()["error"]["code"]
-            == "project_role_grant_replay_state_changed"
+            issue_after_revoke.json()["error"]["code"] == "project_role_grant_replay_state_changed"
         )
         link_case_body = role_issue_body | {
             "role": "reviewer",
@@ -1833,8 +1822,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert revoked_target_link.status_code == 200, revoked_target_link.text
         link_case_revoke = await client.post(
-            f"/api/v1/projects/{project['id']}/role-grants/"
-            f"{link_case_issue.json()['id']}/revoke",
+            f"/api/v1/projects/{project['id']}/role-grants/{link_case_issue.json()['id']}/revoke",
             headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Remove reviewer authority after target link revocation"},
         )
@@ -1859,13 +1847,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert concealed_replay.status_code == 404, concealed_replay.text
         concealed_replay_error = concealed_replay.json()["error"]
         assert {
-            key: value
-            for key, value in concealed_replay_error.items()
-            if key != "correlation_id"
+            key: value for key, value in concealed_replay_error.items() if key != "correlation_id"
         } == {
-            key: value
-            for key, value in missing_grant["error"].items()
-            if key != "correlation_id"
+            key: value for key, value in missing_grant["error"].items() if key != "correlation_id"
         }
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
         ready_work_context = await request_json(
@@ -1967,8 +1951,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             {"reason": "real worker claim"},
         )
         ensure(
-            claim["assignment"]["contributor_id"]
-            == canonical_actor["actor_profile_id"],
+            claim["assignment"]["contributor_id"] == canonical_actor["actor_profile_id"],
             "task claim did not return canonical contributor attribution",
         )
         await request_json(
@@ -2088,7 +2071,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert locked["locked_revision_policy_generation"] == 1
         assert locked["locked_revision_policy_hash"] == screened["locked_revision_policy_hash"]
         assert locked["locked_payment_policy_version"] == "v1"
-        assert all(item["finalized_at"] == locked["finalized_at"] for item in locked["evidence_items"])
+        assert all(
+            item["finalized_at"] == locked["finalized_at"] for item in locked["evidence_items"]
+        )
         checker_run = await wait_for_submission_checker_run(client, manager_token, submission["id"])
         assert checker_run["routing_recommendation"] == "allow_review"
         assert checker_run["triggered_by"] == "workstream-system:pre-review-gate"
@@ -2125,9 +2110,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert finalized_event["external_subject"] == worker_subject
         assert finalized_event["external_issuer"] == flow_issuer
         assert finalized_event["auth_source"] == "flow"
-        assert finalized_event["event_payload"]["finalized_at"].replace("+00:00", "Z") == locked[
-            "finalized_at"
-        ]
+        assert (
+            finalized_event["event_payload"]["finalized_at"].replace("+00:00", "Z")
+            == locked["finalized_at"]
+        )
         requester_actor_id = finalized_event["actor_id"]
         assert requester_actor_id
         assert requester_actor_id != "workstream-system:pre-review-gate"
@@ -2150,8 +2136,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert all(event["claim_snapshot"] == {} for event in worker_audit_events)
         assert all(
-            "artifact_hash_manifest" not in event["event_payload"]
-            for event in worker_audit_events
+            "artifact_hash_manifest" not in event["event_payload"] for event in worker_audit_events
         )
         await request_json(
             client,
@@ -2168,6 +2153,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
     print(f"assignment_id={claim['assignment']['id']}")
     print(f"submission_id={submission['id']}")
     print(f"submission_finalized_at={locked['finalized_at']}")
+
 
 async def main(env: dict[str, str]) -> None:
     """Start the API server and exercise the backend API contract.
