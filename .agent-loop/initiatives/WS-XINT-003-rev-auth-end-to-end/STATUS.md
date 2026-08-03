@@ -2,10 +2,11 @@
 
 ## Current status
 
-WS-XINT-003-01 and WS-XINT-003-02A are merged. WS-XINT-003-02B policy mutation
-activation is the active bounded implementation chunk from `origin/main` at
-`2c24c91d`. No policy mutation action or public surface was active at its
-starting baseline.
+WS-XINT-003-01, WS-XINT-003-02A, and WS-XINT-003-02B are merged. PR #248 merged
+02B as `25fc27c4` on 2026-08-03 after Backend, Agent Gates, and CodeRabbit passed
+on the final PR head. Exactly `project.review_policy.update` and
+`project.revision_policy.update` are active; review/revision lifecycle actions
+remain planned or unavailable.
 
 ## Baseline
 
@@ -27,8 +28,9 @@ REV-owned semantics with AUTH-owned mutation authorization.
 - Runtime owner XINT-002-07 has one approved v0.1 sub-wave: 07A packet
   materialization. Evidence binding remains planned/unavailable and 07B is
   reserved pending separate REV-owned intent.
-- All registered review actions remain planned; four lifecycle/recovery actions
-  remain missing until 08R; no service identity is provisioned by chunk 01.
+- Registered review/revision lifecycle actions remain planned; four
+  lifecycle/recovery actions remain missing until 08R. The two policy mutation
+  actions activated by 02B are setup authority, not lifecycle activation.
 
 ## WS-XINT-003-02A implementation
 
@@ -45,6 +47,6 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-WS-XINT-003-02B implementation and internal review are complete. Open the PR,
-run exact-head hosted review, resolve every valid external finding, obtain human
-merge, and stop before review lifecycle activation.
+Discuss and authorize the next bounded REV-AUTH chunk. Do not infer review
+lifecycle activation from the 02B merge and do not start a successor
+automatically.
