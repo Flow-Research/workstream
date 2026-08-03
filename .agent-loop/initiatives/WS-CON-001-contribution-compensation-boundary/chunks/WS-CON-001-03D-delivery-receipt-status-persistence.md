@@ -21,6 +21,8 @@ backend/tests/{test_compensation,test_alembic}.py
 ```text
 background executor, callback, adapter, router or reconciliation behavior
 provider request/attempt/balance, points ledger or settlement data
+raw callback bodies, headers, signatures, URLs/endpoints, auth tokens,
+unbounded provider messages/codes, opaque provider references or PII
 AUTH/ART edit, dependency or CI weakening
 ```
 
@@ -45,6 +47,12 @@ AUTH/ART edit, dependency or CI weakening
 - [ ] Status is rebuildable and cannot overwrite award/receipt truth.
 - [ ] Callback-before-ack, duplicate exact receipt and changed receipt are
   representable without provider-attempt/balance/ledger data.
+- [ ] Receipt storage is a closed allowlist: bounded binding-scoped non-secret
+  event/reference identifiers, exact quantities, closed statuses/failure codes,
+  canonical digests, and timestamps only. Raw bodies, headers, signatures,
+  URLs/endpoints, tokens, unbounded strings, PII, balances, ledgers, settlement
+  data, and opaque provider references are rejected rather than redacted into
+  durable truth.
 - [ ] State constraints permit failed then fulfilled, prohibit any transition
   away from fulfilled, prohibit partial fulfillment, and preserve every failed
   receipt without allowing it to mutate award quantity or truth.
@@ -52,6 +60,7 @@ AUTH/ART edit, dependency or CI weakening
 
 ## Verification and reviewers
 
-Execute CON-03D in `../RUNTIME_VERIFICATION.md`; changed compensation code is at
-least 90 percent. Senior engineering, QA/test, security/auth, product/ops,
+Execute CON-03D in `../RUNTIME_VERIFICATION.md`; include rejection tests for
+every forbidden receipt field and read/export non-disclosure proof. Changed
+compensation code is at least 90 percent. Senior engineering, QA/test, security/auth, product/ops,
 architecture, docs, reuse/dedup and test-delta are required. Stop after schema.

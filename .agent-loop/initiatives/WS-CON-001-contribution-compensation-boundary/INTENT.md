@@ -1,94 +1,65 @@
-# Intent: WS-CON-001 Contribution Record And Compensation Boundary
+# Intent: WS-CON-001 Contribution And Compensation
 
-## Human-level goal
+## Goal
 
-Implement the canonical contribution-policy, ContributionRecord,
-CompensationAward, fulfillment, and operations boundary that participates
-atomically in human Review without taking ownership of authentication,
-authorization, review decisions, artifact storage, external settlement, a
-points ledger, or reputation scoring.
+Complete the backend contribution and conditional-compensation boundary on
+current `main` without taking ownership of review judgment, authorization,
+artifact custody, external settlement, or reputation scoring.
 
-The supplied WS-CON reference pair is input to reconcile, not authority to
-accept blindly. The active contract follows trusted repository decisions and
-current main `8d5eb15b`, including the contributor foundation in AUTH PR #153,
-AUTH-09D-B PR #152, ART-02B1 PR #151, REV PLAN2 PR #150, AUTH-09D-A PR #148,
-REV-02 PR #147, REV-01 PR #145, AUTH-09C PR #146, ART PR #141, AUTH-09B PR
-#143, REV planning PR #128, AUTH PR #140, and the underlying WS-XINT-001
-boundary from PR #139. PR #153 establishes canonical human `contributor_id`
-lineage for TaskAssignment and Submission; it does not add CON authority,
-service admission, review behavior, or outbox execution.
+Workstream must turn authorized human review into immutable facts:
+
+- every committed human Review creates one reviewer `completed_review`
+  ContributionRecord;
+- only an accepted Review creates REV-owned `FinalAcceptance`, which is the
+  source of one submitter `accepted_submission` ContributionRecord;
+- locked ContributionPolicy rules decide whether either contribution creates
+  no award or immutable money/project-points CompensationAwards;
+- fulfillment happens asynchronously and never controls lifecycle truth.
+
+## Current-main reason for PLAN4
+
+The original plan stopped at the July 2026 outbox-persistence milestone. Since
+then AUTH, ART, REV/XINT, project-policy, CI, and repository contribution rules
+changed materially. The authored CON status still described CON-02A as active,
+AUTH-09E/PREP as future, and an obsolete migration head. PLAN4 replaces those
+operational claims with a capability-ordered plan against `main` `10720382`.
 
 ## Success state
 
-- Every valid recorded human Review creates one immutable reviewer
-  `completed_review` contribution.
-- REV creates one immutable `FinalAcceptance` only for `Review(accept)`.
-  `accepted_submission` consumes that FinalAcceptance; it is never inferred
-  directly from `Review.decision`. `needs_revision` and `reject` create neither.
-- TaskAssignment and ReviewLease freeze independent published
-  ContributionPolicyVersions before work is performed.
-- Explicit unpaid rules create no award; compensated rules create at most one
-  money and one project-points CompensationAward.
-- REV owns the request and single commit: Review/task effects, optional
-  FinalAcceptance, CON-flushed contributions/awards, and REV-staged shared
-  audit/outbox rows commit or roll back together.
-- One mandatory CON participant exposes a reviewer operation before the
-  decision branch and an accept-only submitter operation after FinalAcceptance
-  and accepted task effects; no nullable cross-actor omnibus input exists.
-- Core contribution creation copies stabilized artifact-hash lineage supplied
-  by REV and has no ART or provider dependency.
-- Downstream adapters fulfill awards but never determine eligibility.
-- Every fulfillment-obligation writer uses the one shared lifecycle fence
-  composed with CON by REV-12A3 before monotonic root-ordinal allocation; drain
-  dispatch/callback completes only same-generation roots at or below the
-  persisted cutoff.
-- Every protected human/service surface uses AUTH's exact grant or
-  ServiceIdentity/static-matrix path, prepared mutation protocol when needed,
-  and AUTH-owned activation.
-- Public APIs use `/api/v1` only.
+- ContributionPolicyVersion is the only award-policy authority.
+- TaskAssignment freezes the submitter policy version before work.
+- REV-owned ReviewLease freezes the reviewer policy version before review.
+- ContributionRecord and CompensationAward rows are immutable and replay-safe.
+- REV owns Review, FinalAcceptance, task/assignment effects, audit/outbox
+  staging, and the single transaction commit.
+- CON exposes narrow caller-session participants and never commits REV work.
+- ART supplies stable accepted Submission/binding identity; CON performs no
+  provider read or write in the decision transaction.
+- AUTH owns every PermissionId, ActionId, ServiceIdentity, matrix row,
+  evaluator, prepared-authority capability, and action activation.
+- Delivery, callbacks, reconciliation, and projection executors each use their
+  own authority; dispatcher authority never transfers to a handler.
+- Optional contribution-evidence projection remains separate from core
+  PostgreSQL contribution and award truth.
 
 ## Non-goals
 
-- Workstream-owned login, sessions, passwords, or token-role authority.
-- AUTH catalogue, grant, static-matrix, evaluator, or activation implementation.
-- REV models, routes, lifecycle decisions, or commits.
-- Mandatory contribution-evidence artifacts. A future projection is optional
-  and separately approved.
-- Provider-specific settlement SDKs, attempts, payout batches, accounts,
-  balances, points ledgers, credits, or blockchain work.
-- Reputation scores, aggregates, adjudication, appeals, reversals, or mutable
-  contribution/award truth. V0.1 has no adjudication policy, action, queue,
-  lease, state, decision, contribution, branch, readiness gate, or initiative
-  dependency.
-- A second artifact store, raw provider references, or ArtifactStore injection.
-- Frontend work before backend contracts and guards stabilize.
+- Workstream login, password, session, or token issuance.
+- Review queue, lease, judgment, finding, revision, or FinalAcceptance
+  ownership.
+- Artifact bytes, provider credentials, scratch paths, or storage decisions.
+- Payment accounts, balances, payout ledgers, KYC, blockchain settlement, or
+  provider SDK integration.
+- Reputation scoring or runtime reputation projection.
+- Adjudication, appeals, reversals, or mutable contribution history in v0.1.
+- Frontend work before the backend contracts and lifecycle guards are stable.
 
-## Context
+## Human decisions retained
 
-Workstream certifies useful human work independently from external fulfillment.
-Reviewer work is a contribution for every valid Review. ContributionPolicy
-decides what that work earns. FinalAcceptance is the stable REV-owned fact that
-allows CON to recognize accepted submitter work without treating the mutable
-shape of a Review decision as its source. Immutable awards record the result;
-adapters carry out fulfillment later.
-
-## Human judgment required
-
-1. Approve the repository-owned active specification while preserving archival
-   reference inputs.
-2. The complete removal of the retired guide-bound economic schema remains
-   approved; choose only the deterministic pre-production row classification
-   for migration.
-3. Resolve D11 action-specific AdminRole candidates for award detail, delivery
-   recovery, and audit.
-4. Approve exact ServiceIdentity/ActionId/static-row boundaries for dispatcher,
-   delivery, reconciliation, projection rebuild, and callback execution. The
-   shared dispatcher cannot inherit handler authority.
-5. Optional contribution-evidence projection remains deferred unless separately
-   approved.
-
-## Risk class
-
-L0 for planning/contract reconciliation. Each runtime chunk is L1 because it
-touches authorization, economic records, schema, lifecycle, audit, or cross-
-domain transactions.
+- Review decisions remain exactly `accept`, `needs_revision`, and `reject`.
+- Reviewer contribution exists for all three valid decisions.
+- Submitter contribution exists only through FinalAcceptance on accept.
+- Explicit unpaid rules create no CompensationAward.
+- Optional evidence projection is not a release prerequisite.
+- Each implementation chunk remains separately bounded and stops at its own
+  human merge checkpoint.

@@ -6,6 +6,10 @@ Implement feature-neutral claim/invoke/finalize, retry, dead-letter, replay,
 retention, typed handler registry, claim validation, and drain observation. L1
 background-execution/operations/auth risk.
 
+This is a later execution-foundation chunk. It is not a prerequisite for
+`03A`, `03B`, `02C`, or REV persistence, and it must not start until AUTH has
+merged the complete dispatcher contract below.
+
 ## Allowed files
 
 ```text

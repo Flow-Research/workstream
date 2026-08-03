@@ -5,6 +5,11 @@
 Persist immutable `ProjectCompensationAdapterBinding` identity/lifecycle
 without adapter behavior. L1 economic/auth/data risk.
 
+This is the recommended first runtime chunk after PLAN4. It depends on merged
+outbox persistence only for repository-wide baseline coherence; it does not
+depend on the dispatcher, lifecycle audit participant, or AUTH action
+registration.
+
 ## Allowed files
 
 ```text
@@ -34,6 +39,8 @@ credentials, secrets, raw provider refs, dependency or CI weakening
 - [ ] Schema supports callback guards but creates no ActorProfile, identity
   link, ServiceIdentity, static row, adapter, route, or delivery behavior.
 - [ ] Upgrade/downgrade and duplicate/state races use isolated PostgreSQL.
+- [ ] The migration is allocated from the then-current single head; no fixed
+  revision number is reserved while ART #249 remains open.
 
 ## Verification and reviewers
 
