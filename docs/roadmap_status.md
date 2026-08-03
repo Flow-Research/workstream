@@ -4,6 +4,12 @@ This is the capability ledger for current v0.1 development. It records what is
 implemented on `main`, what is being integrated, and what remains before the
 v0.1 lifecycle is proven. It intentionally contains no delivery calendar.
 
+The complete product is source-agnostic governed contribution infrastructure.
+This ledger deliberately tracks the narrower v0.1 proof: one secured path from
+project rules and a task through exact artifact custody, checks, authorized
+review, revision when needed, and immutable contribution facts. Flow-token
+verification is the current identity adapter, not the product definition.
+
 Implementation claims must be supported by code, migrations, tests, and merged
 history. A plan, contract, draft pull request, or historical specification is
 not evidence that behavior is live.

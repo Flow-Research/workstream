@@ -1,14 +1,18 @@
 # AGENTS.md
 
-This repository is for Workstream, Flow's task evaluation and contribution infrastructure.
+This repository is for Workstream, source-agnostic governed contribution
+infrastructure for work performed by humans, AI agents, or both.
 
 ## Core Definition
 
-Workstream manages project guides, task queues, submission packets, automated
-checks, reviewer routing, evaluation sprints, revision loops, contribution
-records, compensation award and fulfillment state, and reputation signals.
+Workstream turns project-defined tasks, immutable submissions, deterministic
+checks, and authorized review into trusted `ContributionRecord` facts. Those
+facts establish who completed what, under which locked rules, using which exact
+artifact, and with what verified outcome. Applications and economic systems may
+consume the facts; they do not control Workstream lifecycle truth.
 
-Workstream is how Flow measures, certifies, and coordinates useful human-agent work.
+Flow Identity is the current v0.1 external authentication provider, not the
+definition or ownership boundary of Workstream.
 
 ## Working Rules
 

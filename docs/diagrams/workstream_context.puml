@@ -34,13 +34,17 @@ rectangle "Reviewer\n----\nReviews evidence,\nfindings, and\nchecker results" as
 rectangle "Operator\n----\nAudits and performs\nregistered recovery" as operator #F1F3F5
 rectangle "Access Administrator\n----\nManages actors, identity links,\nand administrative grants" as access_administrator #F1F3F5
 
-rectangle "Workstream\n----\nFlow task evaluation\nand contribution\ninfrastructure" as workstream #E7F5FF
+rectangle "Workstream\n----\nGoverned contribution\ninfrastructure\nTrusted ContributionRecords" as workstream #E7F5FF
 
 cloud "Flow Identity\n----\nHuman identity\nand auth tokens" as flow_auth
 database "Postgres\n----\nRecord database" as postgres
 rectangle "Immutable Artifact Storage\n----\nLocal focused dev\nMinIO local/CI proof\nAWS S3 hosted v0.1" as storage #E6FCF5
 
-rectangle "Future Adapter Boundary\n----\nExternal task origins\nERC-8004 agent identity/reputation\nERC-8183 task contract/escrow\nx402 / OmniClaw / USDC settlement\nReputation and reporting consumers" as future_boundary #FFF3BF
+rectangle "Source Systems\n----\nManual / Markdown / CSV today\nFuture applications, programs,\nmarketplaces, and task origins" as source_systems #FFF3BF
+
+rectangle "Consequence Consumers\n----\nPayment and project points\nReputation and eligibility\nReporting and datasets\nModel training and other uses" as consequence_consumers #FFF3BF
+
+rectangle "Future Protocol Adapters\n----\nERC-8004 identity/reputation\nERC-8183 task contract/escrow\nx402 / OmniClaw / USDC settlement" as future_protocols #FFF3BF
 
 project_manager --> workstream : operates
 finance_authority --> workstream : governs contribution policy
@@ -53,7 +57,9 @@ workstream --> flow_auth : verifies externally issued Flow tokens
 workstream --> postgres : records lifecycle
 workstream --> storage : stores evidence
 
-future_boundary ..> workstream : source intake
-workstream ..> future_boundary : adapter outputs
+source_systems ..> workstream : requests governed work
+workstream ..> consequence_consumers : publishes trusted facts
+future_protocols ..> workstream : identity / task context
+workstream ..> future_protocols : governed outcomes
 
 @enduml
