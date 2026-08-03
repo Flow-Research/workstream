@@ -27,6 +27,10 @@
   operations use the physical PostgreSQL name in both directions, guide
   continuation recovery publishes the continuation directly with an
   independent bound, and the two documentation claims now match implementation.
+- After AUTH PR #248 merged, ART was rebased as the single successor migration
+  `0049_guide_source_v2`. Hosted run `30784652926` proved the exact combined
+  AUTH+ART public-schema fingerprint; the fail-closed test constant now records
+  that observed value.
 
 ## Comments deferred
 

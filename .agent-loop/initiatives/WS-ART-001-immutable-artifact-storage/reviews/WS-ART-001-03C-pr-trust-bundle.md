@@ -111,7 +111,8 @@ reuse/dedup, test-delta, and QA passed after findings were resolved.
 
 Agent Gates pass after one stale-vocabulary correction. Three Backend runs
 progressively exposed stale setup-run, verified-report, warning-acknowledgement,
-and direct-service fixture assumptions; the repairs
+and direct-service fixture assumptions. A fourth run established the exact
+combined AUTH+ART schema fingerprint after migration reconciliation; the repairs
 are recorded in the external-review response and require a fresh hosted rerun.
 All earlier CodeRabbit inline findings were resolved, and its latest
 incremental review produced no new actionable findings.
