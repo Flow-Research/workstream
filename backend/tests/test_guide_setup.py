@@ -9,7 +9,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from app.interfaces.artifact_operations import (
+    GuideSufficiencyMaterialRequest,
+    GuideSufficiencyMaterialUnavailable,
+)
 from app.modules.artifacts.guide_setup import GuideSetupPreparationService, _VerifiedItem
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 
 
 class _ScalarResult:
@@ -183,3 +190,34 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
     assert extraction_request.source_item_id == item.item_id
     assert extraction_request.project_setup_run_id == ids[3]
     assert extraction_request.setup_generation == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("observed", "expected_code", "has_incident_id"),
+    [
+        ((SimpleNamespace(id=str(uuid4())),), "guide_artifact_incident", True),
+        ((None, SimpleNamespace(status="unsupported")), "guide_source_format_unsupported", False),
+        ((None, None, SimpleNamespace(status="ambiguous")), "guide_source_format_ambiguous", False),
+        ((None, None, None), "guide_source_extraction_failed", False),
+    ],
+)
+async def test_sufficiency_failure_maps_exact_persisted_state(
+    observed: tuple[object | None, ...], expected_code: str, has_incident_id: bool
+) -> None:
+    session = SimpleNamespace(scalar=AsyncMock(side_effect=observed))
+    adapter = SqlAlchemyGuideSufficiencyMaterialAdapter(session)
+    ids = [uuid4() for _ in range(4)]
+    request = GuideSufficiencyMaterialRequest(
+        project_id=ids[0],
+        guide_id=ids[1],
+        guide_source_snapshot_id=ids[2],
+        project_setup_run_id=ids[3],
+        setup_generation=4,
+    )
+
+    failure = await adapter._failure_for(request, str(uuid4()))
+
+    assert isinstance(failure, GuideSufficiencyMaterialUnavailable)
+    assert failure.code == expected_code
+    assert (failure.incident_id is not None) is has_incident_id
