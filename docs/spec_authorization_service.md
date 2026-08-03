@@ -362,6 +362,25 @@ uses the canonical custody map and exact merged REV proof.
 | `review.revision_context.legacy_close` | `operations.reconcile.run` | `WS-XINT-003-08A` |
 | `review.lifecycle.activation.manage` | `operations.reconcile.run` | `WS-XINT-003-08B` |
 
+### REV integration contracts
+
+`WS-XINT-003-02D` publishes the complete inert REV authorization manifest in
+`app.modules.authorization.review_contracts`. Every registered `review.*`
+ActionId maps to one strict typed resource family or, for the two unapproved
+evidence-upload actions, to explicit `unsupported_future_intent`. Shared
+families retain exact action discriminators; fixed-service contracts bind the
+exact service identity and server-derived execution mode. In particular, the
+two services sharing `review.reconcile.run` cannot exchange modes.
+
+These frozen scalar models carry no ORM rows, bytes, provider values, callback,
+or prepared handle. Publishing them changes no action availability and adds no
+evaluator. Reads continue through request-scoped authorization. Mutations and
+service commands later use the existing opaque, process-local, transaction-
+bound `PreparedAuthorizationHandle`; REV locks and composes canonical facts,
+while the exact activation wave installs the corresponding AUTH evaluator.
+XINT-002 packet, evidence-binding, and revision-submission actions are external
+handoff references only and are not redefined by this manifest.
+
 Initial and revision submission use the same `submission.create` action,
 permission, and route. Revision preparation is an internal participant and
 lifecycle guard of that command; no `submission.revise` or revision-prepare
