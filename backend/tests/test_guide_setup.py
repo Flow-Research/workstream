@@ -54,6 +54,17 @@ def _factory(session: _Session):
     return lambda: session
 
 
+def test_guide_setup_service_composes_canonical_materialization_and_extraction() -> None:
+    session_factory = object()
+    service = GuideSetupPreparationService(
+        session_factory, object(), object(), object()  # type: ignore[arg-type]
+    )
+
+    assert service._session_factory is session_factory
+    assert service._materialization is not None
+    assert service._extraction is not None
+
+
 @pytest.mark.asyncio
 async def test_prepare_generation_rejects_missing_run_and_empty_snapshot() -> None:
     service = object.__new__(GuideSetupPreparationService)
