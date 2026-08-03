@@ -128,6 +128,11 @@ async def test_verified_worker_stops_exactly_on_blocked_sufficiency(
     )
     monkeypatch.setattr(
         project_setup_worker,
+        "get_database_url",
+        lambda: "postgresql+asyncpg://unused",
+    )
+    monkeypatch.setattr(
+        project_setup_worker,
         "async_sessionmaker",
         lambda *_args, **_kwargs: _factory(session),
     )
@@ -150,6 +155,14 @@ async def test_verified_worker_stops_exactly_on_blocked_sufficiency(
         guide_id="guide",
         source_snapshot_id="snapshot",
         setup_generation=3,
+    )
+    service.run_verified_guide_sufficiency_agent.assert_awaited_once_with(
+        project_setup_worker.project_setup_pipeline_actor(),
+        "project",
+        "guide",
+        "snapshot",
+        "run",
+        3,
     )
     assert service.update_project_setup_run_status.await_args_list == [
         (("run",), {"status": "running_sufficiency_agent", "current_step": "guide_sufficiency"}),
