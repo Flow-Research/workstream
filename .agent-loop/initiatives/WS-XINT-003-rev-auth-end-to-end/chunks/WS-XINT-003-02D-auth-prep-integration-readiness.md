@@ -54,7 +54,8 @@ docs/spec_review_lifecycle.md
 - No omnibus nullable resource context, generic dictionary/service locator,
   local REV policy engine, fallback authority, or role-only shortcut.
 - No edit to `runtime.py`, `prepared.py`, `kernel.py`, `catalogue.py`, service
-  identity registration, migrations, routes, workers, or REV product code.
+  identity registration, migrations, routes, background execution code, or REV
+  product code.
 - No XINT-002 contract implementation. Shared ART/submission rows are manifest
   references only and retain their existing owners, types, and activation gates.
 

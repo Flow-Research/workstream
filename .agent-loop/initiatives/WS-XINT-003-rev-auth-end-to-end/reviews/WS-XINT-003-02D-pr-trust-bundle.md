@@ -23,7 +23,7 @@ resource-context family. Every lifecycle action remains planned/unavailable.
 ## Exclusions
 
 No PREP/kernel/runtime evaluator, catalogue, service registry, migration,
-route, worker, REV repository/model, lifecycle mutation, provider I/O, or action
+route, background execution code, REV repository/model, lifecycle mutation, provider I/O, or action
 availability changes.
 
 ## Evidence
