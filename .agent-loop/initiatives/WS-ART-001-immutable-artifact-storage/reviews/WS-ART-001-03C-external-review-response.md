@@ -31,6 +31,10 @@
   `0049_guide_source_v2`. Hosted run `30784652926` proved the exact combined
   AUTH+ART public-schema fingerprint; the fail-closed test constant now records
   that observed value.
+- Hosted run `30786024204` reduced the suite to one stale synthetic fixture: a
+  policy-context test created setup generation 2 while all verified ART lineage
+  remained generation 1. The test now reuses the exact source setup generation
+  and varies only the effective-policy context it is intended to isolate.
 
 ## Comments deferred
 

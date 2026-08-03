@@ -9348,20 +9348,11 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
             return await super().derive_post_submit_checker_policy(material, context)
 
     async with db_session.get_session_factory()() as session:
-        new_setup_run = ProjectSetupRun(
-            id=str(uuid4()),
-            project_id=project["id"],
-            guide_id=guide["id"],
-            guide_version=guide["version"],
-            source_snapshot_id=bundle["source_snapshot"]["id"],
-            source_snapshot_hash=bundle["source_snapshot"]["bundle_hash"],
-            setup_generation=2,
-            status="running_post_submit_derivation_agent",
-            current_step="post_submit_checker_policy_derivation",
-            output_submission_artifact_policy_id=next_submission_policy["id"],
-            created_by="project-manager-subject",
-        )
-        session.add(new_setup_run)
+        new_context_run = await session.get(ProjectSetupRun, body["setup_run"]["id"])
+        assert new_context_run is not None
+        new_context_run.status = "running_post_submit_derivation_agent"
+        new_context_run.current_step = "post_submit_checker_policy_derivation"
+        new_context_run.output_submission_artifact_policy_id = next_submission_policy["id"]
         await session.commit()
         new_context_service = ProjectService(
             session,
@@ -9379,7 +9370,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
             bundle["source_snapshot"]["id"],
             next_effective_policy["id"],
             next_pre_submit_policy["id"],
-            new_setup_run.id,
+            new_context_run.id,
         )
         assert created is True
         persisted_new_context_policy = await session.get(
