@@ -1,145 +1,72 @@
 # Chunk Map: WS-REV-001 Review And Revision Lifecycle
 
-REV-03P is reconciled into WS-XINT-003-02 and is not an independent policy
-writer. AUTH activation follows the exact XINT-003 waves.
+## Live sequence
 
-REV owns every review/revision lifecycle row, rule, command, service job, projection,
-fence, and route. AUTH owns catalogue, principals, PREP/evaluation/evidence and
-availability. REV runtime work begins after XINT-003-02C/02D fail-closed
-readiness and does not wait for action activation; XINT activation then waits
-for the exact merged REV child. Only REV-13C releases product routes.
+Historical PLAN through PLAN3 and retired 02-family records remain evidence.
+PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 
-## Rule
+| Chunk | Purpose | Gate | Status |
+|---|---|---|---|
+| `WS-REV-001-PLAN4` | Current-main full lifecycle replan | AUTH 02D merged PR #257 | Proposed planning PR |
+| `WS-REV-001-03A1` | Queue and admission-idempotency persistence | PLAN4 approved | First proposed runtime child |
+| `WS-REV-001-03A2` | Lease and preference persistence | 03A1 | Skeleton |
+| `WS-REV-001-03B` | Normalized packet-manifest persistence | 03A2 + exact ART membership contract | Skeleton |
+| `WS-REV-001-04A` | Immutable Review/finding/resolution/decision-request persistence | 03B | Skeleton |
+| `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + shared audit/outbox | Skeleton |
+| `WS-REV-001-05A` | Atomic final `allow_review` admission | 04B + exact TASK/CHECKER/ART handoff | Skeleton |
+| `WS-REV-001-05B` | Concealed active-lease/one-offer/none query | 05A | Skeleton |
+| `WS-REV-001-06A` | Atomic claim, policy freeze, packet freeze | 05B + 03B + CON freeze + ART packet proof | Skeleton |
+| `WS-REV-001-06B` | Owned release and preferred decline | 06A | Skeleton |
+| `WS-REV-001-06C` | Preference/lease expiry and lazy recovery | 06B + fixed service admission | Skeleton |
+| `WS-REV-001-07A` | Lease-bounded packet/context/chain reads | 06C + ART 07A | Skeleton |
+| `WS-REV-001-07B` | Immutable reviewer notes/findings | 07A | Skeleton; no evidence upload |
+| `WS-REV-001-08` | Pure decision validator/effect plan | 07B | Skeleton; no canonical write |
+| `WS-REV-001-09A1` | Review-rooted revision episode/preparation persistence | 08 + human round/deadline decision | Skeleton |
+| `WS-REV-001-09A2` | TASK revision participant and context resolver | 09A1 | Skeleton |
+| `WS-REV-001-09A3` | Contributor finding-response records | 09A2 | Skeleton; no evidence upload |
+| `WS-REV-001-09A4` | Human prepared N+1 and checker-source XOR | 09A3 + TASK/ART submission cutover | Skeleton |
+| `WS-REV-001-09A5` | Replacement-assignment preparation successor | 09A4 + AUTH replacement contract | Skeleton |
+| `WS-REV-001-09B` | Finding replay/resolution/preferred return | 09A5 | Skeleton |
+| `WS-REV-001-10` | Canonical Review/FinalAcceptance/TASK/CON transaction | 09B + CON participant + audit/outbox | Skeleton; first Review commit |
+| `WS-REV-001-11A` | Queue inspection and privileged queue/lease commands | 10 | Skeleton |
+| `WS-REV-001-11B` | Revision repair and obligation close | 11A | Skeleton |
+| `WS-REV-001-11C` | Reconciliation persistence and service jobs | 11B | Skeleton |
+| `WS-REV-001-11D` | Legacy closure and ART recovery delegation | 11C + ART recovery port | Skeleton |
+| `WS-REV-001-12P1` | Deterministic projection handler | 11D + shared dispatcher | Skeleton |
+| `WS-REV-001-12P2` | Artifact-reference reconciliation/projection rebuild | 12P1 + ART typed repair port | Skeleton |
+| `WS-REV-001-12P3` | Notifications, admin reads, metrics, drain facts | 12P2 | Skeleton |
+| `WS-REV-001-12A1` | Lifecycle release-controller persistence | 12P3 + dependency manifest | Skeleton |
+| `WS-REV-001-12A2` | REV/TASK/CHECKER mutation fences | 12A1 | Skeleton |
+| `WS-REV-001-12A3` | CON mutation/cutoff/drain fences | 12A2 + CON hooks | Skeleton |
+| `WS-REV-001-12A4` | Operator transitions and crash recovery | 12A3 | Skeleton |
+| `WS-REV-001-13A` | Dependency preflight and drill harness | 12A4 | Skeleton |
+| `WS-REV-001-13B` | Pre-release docs/generated evidence | 13A | Skeleton |
+| `WS-REV-001-13C` | Product routers and final conformance release | 13B + exact AUTH activations | Skeleton; sole release |
 
-One executable chunk maps to one PR. Merged parent IDs remain non-executable
-split records. A proposed child is not executable until its own current-main
-contract is authored, internally reviewed, explicitly started, and every owner
-gate is proven by exact chunk ID, merged PR/SHA, migration head where relevant,
-typed symbol/manifest, and tests.
-
-## Current sequence
-
-| Chunk | Title | Risk | Gate | Status |
-|---|---|---:|---|---|
-| `WS-REV-001-PLAN` | Review And Revision Lifecycle Planning | L1 | None | Merged PR #128 |
-| `WS-REV-001-01` | Canonical Contract Adoption And Dependency Conformance | L1 | PLAN | Merged PR #145 |
-| `WS-REV-001-02` | Locked Review Policy And Task Lifecycle Alignment | L1 | 01 | Merged PR #147; non-executable split record |
-| `WS-REV-001-PLAN2` | REV-02A Runtime Readiness Plan Refresh | L1 | 02; planning-only human start | Merged PR #150 |
-| `WS-REV-001-02A` | Guide Chronology And Task Locking Split | L1 | Historical | Superseded boundary-crossing plan; never executable by REV |
-| `WS-REV-001-02A1` | Project And Setup Publication Fence | L1 | Historical | Retired from REV; upstream owner concern |
-| `WS-REV-001-02A3` | Guide Activation Chronology | L1 | Historical | Retired from REV; upstream owner concern |
-| `WS-REV-001-02A4` | Task Guide Triplet And Screening | L1 | Historical | Retired from REV; upstream owner concern |
-| `WS-REV-001-02A2` | Prepared Superseded Guide Reactivation | L1 | Historical | Retired from REV; upstream owner concern |
-| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | Historical | Superseded; any upstream gap is reported to its owner |
-| `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | Historical | Superseded as an ownership chunk; REV consumes owner-supplied Submission lineage |
-| `WS-REV-001-PLAN3` | Allow-Review Boundary Reset | L1 | Historical | Merged boundary correction |
-| `WS-REV-001-03P` | Review And Revision Policy Persistence | L1 | Reconciled into `WS-XINT-003-02` | Planning input only; never executable independently |
-| `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | PLAN3 | Non-executable split record |
-| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | merged `WS-XINT-003-02C/02D`; exact `allow_review`, Submission/artifact, and actor handoffs | Proposed contract; requires current-main refresh and explicit user request |
-| `WS-REV-001-03B` | Normalized Review Packet Manifest Persistence | L1 | 03A; exact ART packet-membership owner chunk merged | Proposed; owner chunk unscheduled |
-| `WS-REV-001-04` | Review Chain Persistence | L1 | 03B | Non-executable split record |
-| `WS-REV-001-04A` | Immutable Review Chain And Decision Request Persistence | L1 | 03B; current actor constraints | Proposed; no contract yet |
-| `WS-REV-001-04B` | Final Acceptance, Task Linkage, Audit, And Outbox Persistence | L1 | 04A; merged `WS-CON-001-02A` and `02C` | Proposed; no contract yet |
-| `WS-REV-001-05` | Checker Routing And Queue Views | L1 | 04B | Non-executable split record |
-| `WS-REV-001-05A` | Atomic Checker Admission Participant | L1 | 04B; merged ART 05/06A/06B exact admission facts | Proposed; no contract yet |
-| `WS-REV-001-05B` | Server-Selected Reviewer And Admin Queue Reads | L1 | 05A; exact AUTH read contracts | Proposed; no contract yet |
-| `WS-REV-001-06` | Claims, Preference, And Timers | L1 | 05B | Non-executable split record |
-| `WS-REV-001-06A` | Atomic Claim, Lease, Packet, And Reviewer Policy Freeze | L1 | 05B; merged 03B persistence contract; merged `WS-CON-001-06`; AUTH PREP/custody/service contracts | Proposed; consumes 03B and owns no packet schema/migration |
-| `WS-REV-001-06B` | Owned Release, Decline, And Preference Transitions | L1 | 06A; exact AUTH mutation contracts | Proposed; no contract yet |
-| `WS-REV-001-06C` | Preference And Lease Expiry With Lazy Recovery | L1 | 06B; provisioned/admitted exact service identities | Proposed; no contract yet |
-| `WS-REV-001-07` | Review Context And Finding Evidence | L1 | 06C | Non-executable split record |
-| `WS-REV-001-07A` | Lease-Bounded Packet And Review Chain Context | L1 | 06C; exact ART packet-read owner chunk | Proposed; owner chunk unscheduled |
-| `WS-REV-001-07B` | Reviewer Finding And Note Records | L1 | 07A; no artifact candidate/finalize port and no evidence-upload action | Proposed; v0.1 records only |
-| `WS-REV-001-08` | Pure Decision, Final Acceptance, And Task-Effect Contract | L1 | 07B; typed participant contracts; v0.1 findings are records/notes, not uploaded evidence | Proposed; executable contract after repair, no canonical write |
-| `WS-REV-001-09A` | Revision Context Preparation And Resubmission | L1 | 08 | Non-executable split record |
-| `WS-REV-001-09A1` | Review-Rooted Revision Preparation Persistence | L1 | 08; exact owner-supplied guide/task facts; approved human round/deadline semantics; migration/head refresh | Proposed; no contract yet |
-| `WS-REV-001-09A2` | Revision Preparation Participant, Resolver, And Task Context | L1 | 09A1 | Proposed; task-owned flush-only participant, no transaction composition |
-| `WS-REV-001-09A3` | Human Revision Finding Response Records | L1 | 09A2; no artifact candidate/finalize port and no response-evidence action | Proposed; v0.1 text/metadata records only |
-| `WS-REV-001-09A4` | Hidden Human Prepared N+1 And Checker Source Compatibility | L1 | 09A3; merged AUTH-14 contract amendment only; ART digest contract | Proposed; adds preparation binding/source XOR while consuming owner-supplied checker source; AUTH-14 owns public request acknowledgement, authorization cutover, and activation |
-| `WS-REV-001-09A5` | Hidden Replacement Assignment Preparation Transfer | L1 | 09A4; merged AUTH-13 contract amendment only | Proposed; AUTH-13 later owns public command/cutover/activation |
-| `WS-REV-001-09B` | Finding Replay, Resolution, And Preferred Return Routing | L1 | 09A5 | Proposed |
-| `WS-REV-001-10` | Canonical Review, Final Acceptance, And CON Atomic Integration | L1 | 09B; merged `WS-CON-001-03C` and `07`; stabilized digest owner chunk | Proposed; first canonical decision commit |
-| `WS-REV-001-11` | Administrative Recovery And Reconciliation | L1 | 10 | Non-executable split record |
-| `WS-REV-001-11A` | Privileged Queue And Lease Commands | L1 | 10; exact AUTH command contracts | Proposed; no contract yet |
-| `WS-REV-001-11B` | Revision Repair And Obligation Closure | L1 | 11A; registered additive actions | Proposed; no contract yet |
-| `WS-REV-001-11C` | Reconciliation Persistence, Historical Admission Scan, And Service Jobs | L1 | 11B; exact service identities/admission | Proposed; owns batched resumable audited scan/classification |
-| `WS-REV-001-11D` | Legacy Closure And ART Recovery Delegation | L1 | 11C; ART Operator recovery port | Proposed; no contract yet |
-| `WS-REV-001-12` | Projection And Observability | L1 | 11D | Non-executable split record |
-| `WS-REV-001-12P1` | Deterministic Review Projection Handler | L1 | 11D; merged CON outbox dispatcher/handler registry | Proposed; no contract yet |
-| `WS-REV-001-12P2` | Artifact Reference Reconciliation And Projection Rebuild Jobs | L1 | 12P1; exact services/actions/ART projection port | Proposed; no contract yet |
-| `WS-REV-001-12P3` | Notifications, Admin Reads, Metrics, And Drain Observation | L1 | 12P2 | Proposed; no contract yet |
-| `WS-REV-001-12A` | Joint Lifecycle Release Control | L1 | 12P3 | Non-executable split record; preserves canonical parent ID |
-| `WS-REV-001-12A1` | Lifecycle Controller Persistence And Typed Ports | L1 | 12P3; exact core CON readiness manifest | Proposed; no contract yet |
-| `WS-REV-001-12A2` | REV, Task, And Checker Mutation Fence Composition | L1 | 12A1 | Proposed; no contract yet |
-| `WS-REV-001-12A3` | CON Writer, Dispatcher, Callback, Cutoff, And Drain Fences | L1 | 12A2; CON 03D/08A/08B/10B/11 hooks | Proposed; no contract yet |
-| `WS-REV-001-12A4` | Operator Transition, Drain, And Crash Recovery | L1 | 12A3; exact AUTH Operator contract | Proposed; no contract yet |
-| `WS-REV-001-13` | Coherent Product Release And Proof | L1 | 12A4 | Non-executable split record |
-| `WS-REV-001-13A` | Exact Dependency Preflight, Manifests, And Drill Harness | L1 | 12A4; every owner gate exact and merged | Proposed; no contract yet |
-| `WS-REV-001-13B` | Pre-Release Documentation And Generated Artifact Preparation | L1 | 13A; hidden behavior proof | Proposed; no contract yet |
-| `WS-REV-001-13C` | Product Router Registration And Final HTTP Proof | L1 | 13B; exact AUTH activations; ART 07; CON 11 | Proposed; sole product release |
-
-## Same-initiative order
+## Dependency shape
 
 ```text
-PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(historical, superseded)
--> PLAN3(boundary reset) -> WS-XINT-003-02 (03P planning input)
--> 03(parent) -> 03A -> 03B
--> 04(parent) -> 04A -> 04B
--> 05(parent) -> 05A -> 05B
--> 06(parent) -> 06A -> 06B -> 06C
--> 07(parent) -> 07A -> 07B
--> 08
--> 09A(parent) -> 09A1 -> 09A2 -> 09A3 -> 09A4 -> 09A5 -> 09B
--> 10
--> 11(parent) -> 11A -> 11B -> 11C -> 11D
--> 12(parent) -> 12P1 -> 12P2 -> 12P3
--> 12A(parent) -> 12A1 -> 12A2 -> 12A3 -> 12A4
--> 13(parent) -> 13A -> 13B -> 13C
+AUTH 02D -> PLAN4 -> 03A1 -> 03A2
+ART membership -> 03B -> 04A -> 04B
+TASK/CHECKER/ART admission -> 05A -> 05B
+CON freeze + ART packet -> 06A -> 06B -> 06C -> 07A -> 07B -> 08
+human decision -> 09A1 -> 09A2 -> 09A3 -> 09A4 -> 09A5 -> 09B
+CON decision participant -> 10
+11A -> 11B -> 11C -> 11D
+12P1 -> 12P2 -> 12P3 -> 12A1 -> 12A2 -> 12A3 -> 12A4
+13A -> 13B -> 13C
 ```
 
-Non-executable parents do not consume a PR after this planning refresh. Their
-first child is the successor of the preceding executable chunk.
+Distinct owner initiatives may progress concurrently. A missing owner gate
+blocks only its consumer child, not earlier independent REV persistence.
 
-REV-07B and REV-09A3 are v0.1 note/finding/response record chunks, not artifact
-evidence-upload chunks. They use no evidence-upload ActionId or ART
-candidate/finalize port. Any future uploaded evidence requires a separate
-approved REV-owned intent plus exact ART and AUTH owner work.
+## Contract rule
 
-## Owner-gate rule
+Only PLAN4 and 03A1 are concrete in this planning refresh. Every later row is a
+reviewed architectural skeleton and must receive an exact current-main child
+contract before implementation. That contract must name exact allowed files,
+migration head, symbols, tests, reviewers, and owner evidence.
 
-Phrases such as "AUTH contributor foundation", "ART owner amendment", or
-"CON participant" describe required ownership but are not executable gates.
-Before a child starts, replace each phrase in its new contract with:
+## Stop
 
-```text
-owner chunk ID + merged PR + merge SHA + migration head (if schema)
-+ typed symbol/manifest + exact focused and regression test evidence
-```
-
-Known merged/planned CON IDs may be named, but proposed status remains blocked.
-The contributor clean cut is merged as
-`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` through PR #153 at `8d5eb15b`. ART
-packet-read/review-evidence/digest work still lacks exact merged owner chunks;
-REV neither invents those IDs nor edits owner plans.
-
-## Parent split records
-
-Parent 02A and all of its children are retired historical planning records.
-Existing parent contract files for 03, 04, 05, 06, 07, 09A, 11, 12, former 12A
-release control, and 13 remain non-executable split records.
-They must not be used as implementation authorization. New child contracts are
-authored only from the then-current main when each child receives a human start.
-
-## Reviewers
-
-Every executable chunk requires senior engineering, QA/test, security/auth, and
-product/ops. Architecture and reuse/dedup apply throughout. Schema/routes/jobs/
-active behavior add docs and test-delta. Workflows, scripts, dependencies, test
-configuration, or coverage changes add CI integrity.
-
-## Stop condition
-
-PLAN3 is complete. Never resume 02A, 02A1, 02A2, 02A3, 02A4, 02B, or 02C as
-REV implementation. Policy work proceeds only through `WS-XINT-003-02`; later
-REV feature chunks require current-main contract refresh and an explicit user
-request under the ordinary engineering loop.
+Planning does not start implementation. After human approval, start 03A1 only.

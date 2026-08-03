@@ -606,3 +606,46 @@ submitter accepted-submission contribution. Submission and Review predecessor
 chains remain fully traversable for future adjudication without implementing
 adjudication now. A missing owner capability is documented and escalated to the
 human; REV never fills it opportunistically.
+
+### D29 - AUTH 02D Unblocks Hidden REV Core
+
+Merged PR #257 publishes the closed typed authorization contracts for all
+approved REV actions while keeping those actions unavailable. REV may now build
+hidden persistence and lifecycle rules without waiting for activation. Later
+XINT activation consumes exact merged REV behavior; it does not authorize or
+implement that behavior.
+
+### D30 - Core Persistence Proceeds Before External Integration
+
+ART and CON do not block queue, lease, Review-chain, FinalAcceptance, or
+revision persistence that contains only REV-owned facts and reference slots.
+The exact consumer child waits when a typed foreign handoff is not merged.
+REV never guesses the missing interface or imports the foreign repository.
+
+### D31 - Queue And Lease Persistence Are Separate L1 Children
+
+The former 03A combined child is non-executable. 03A1 owns queue and admission-
+idempotency persistence; 03A2 owns lease and preference persistence. Automatic
+checker admission remains 05A, and claim behavior remains 06A.
+
+### D32 - v0.1 Review Evidence Is Records, Not Uploaded Artifacts
+
+ReviewFinding and SubmissionFindingResponse store bounded text/metadata.
+`review.finding_evidence.ingest`,
+`review.finding_response_evidence.ingest`, and ART review-evidence binding stay
+future-intent-required and unavailable. ART packet materialization remains in
+scope because it supplies the exact submitted work being reviewed.
+
+### D33 - Contribution Cardinality And Source Are Fixed
+
+Every committed human Review invokes CON's reviewer operation exactly once.
+Only accept creates REV-owned FinalAcceptance and invokes CON's submitter
+operation. Needs revision and reject create no submitter contribution. CON owns
+ContributionRecord and award persistence; REV owns orchestration and one commit.
+
+### D34 - PLAN4 Is The Live Sequence
+
+PLAN4, the live CHUNK_MAP, and the active review specification control future
+work. PLAN2/PLAN3 and retired 02-family files remain historical evidence. Only
+03A1 is proposed as the first runtime child after PLAN4 approval; later child
+contracts must be refreshed from then-current main.

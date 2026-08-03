@@ -1,403 +1,190 @@
 # Plan: WS-REV-001 Review And Revision Lifecycle
 
-Current cross-initiative authority and policy-writer sequencing is canonical in
-`../WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`. Planning artifacts do
-not require signed starts, active-chunk state, or merge intents.
+## Current authority
 
-## Boundary Reset — 2026-07-22
+This PLAN4 refresh supersedes PLAN2/PLAN3 implementation sequencing while
+preserving their boundary correction: REV begins only at a final current
+CheckerRun `allow_review`. Historical files remain evidence, not executable
+authority. Current implementation must follow this plan, `CHUNK_MAP.md`, the
+active `docs/spec_review_lifecycle.md`, and exact refreshed child contracts.
 
-This section supersedes every later passage that assigns Project Guide setup,
-publication, activation, chronology, reactivation, or general Task-context
-stamping to a REV chunk. Those passages remain historical planning evidence but
-are not implementation authority.
-
-REV consumes one existing finalized Submission after a durable final current
-CheckerRun recommends `allow_review`. It then owns admission into review,
-routing, leases, packet semantics, immutable Reviews/findings/resolutions,
-human revision replay, FinalAcceptance, and decision orchestration into CON.
-Every Review creates one reviewer contribution; accept alone creates
-FinalAcceptance and the submitter accepted-submission contribution.
-
-Submission and Review history are immutable predecessor chains scoped to one
-Task and must be completely traversable for operations and future adjudication.
-Adjudication itself remains out of scope. Missing upstream facts become typed
-owner handoffs and blockers; REV does not implement them.
-
-## Planning authority
-
-This PLAN3 candidate is reconciled from current trusted main
-`14fa4316f7d984f2176657bfafd2a2dae56f944e`; its single Alembic head is
-`0033_authorization_read_rate_control`. Worktree branches, unmerged PRs, and proposed owner
-changes are discovery evidence only. The detailed facts below were captured at
-the earlier PLAN2 snapshot and are historical unless independently re-proven.
-
-Generated loop memory naming retired 02A1 is historical only and has no
-implementation authority. The current WS-XINT-003 chunk map governs future
-cross-initiative sequence; implementation still requires an explicit user
-request under the ordinary repository engineering loop.
-They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
-schema head, typed contract, and tests exist on trusted main.
-
-Historical PLAN2 merged facts were:
-
-- the PLAN2 snapshot Alembic head was `0028_artifact_admission`;
-- TaskAssignment and Submission attribution use canonical `contributor_id`
-  ActorProfile foreign keys and database-enforced human lineage;
-- the AUTH catalogue contains 74 PermissionIds and 65 ActionIds, with 15 active
-  and 50 planned;
-- all 24 REV lifecycle action dependencies remain unavailable;
-- ART admission and prepared put-attempt foundation is merged through PR #154,
-  but provider execution/publication, review packet reads, review-evidence
-  candidate/finalize, and server-derived stabilized Submission artifact lineage
-  do not have merged owner contracts;
-- CON has merged its canonical specification, but its outbox, audit,
-  contribution-policy, contribution/award, freeze, and atomic participant
-  runtime chunks remain proposed.
-
-AUTH-09D-A is merged through PR #148 at
-`99ae4c963e53f317175dcb308b9e47c93ccf19ed` and supplies database-backed
-ActorProfile lifecycle status/provenance in migration `0026`. The separate
-`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` merged through PR #153 at `8d5eb15b` from
-reviewed head `6a70b33f`; migration `0027_contributor_foundation` clean-cuts
-both task-subsystem owner fields, adds canonical-human constraints, and exposes
-transaction-local active-human revalidation without changing authorization
-availability. That external runtime gate is satisfied. Each REV migration still
-allocates only the then-current next revision at its own explicit start.
-ART PR #154 later advanced the sole head to `0028_artifact_admission` without
-changing a Project/setup writer. It creates no REV migration conflict; every
-future REV child still refreshes from then-current trusted main.
-
-## Shipping boundary
-
-The v0.1 product path is:
+## Architecture
 
 ```text
-project guide -> task -> submission -> checkers -> review/revision
--> FinalAcceptance on accept -> ContributionRecord
--> CompensationAward where frozen policy permits
--> asynchronous external fulfillment
+TASK/CHECKER/ART handoff
+  immutable Submission + final allow_review + verified binding facts
+        |
+        v
+REV hidden core
+  admission -> queue -> offer -> claim -> lease -> packet/context
+  -> Review/findings -> revision or FinalAcceptance
+        |
+        +-> AUTH evaluates exact typed contracts and stages decision evidence
+        +-> TASK applies typed lifecycle effects
+        +-> ART materializes only authorized packet bytes
+        +-> CON stages contribution/award facts
+        +-> shared audit/outbox stage in the same caller transaction
 ```
 
-Review decisions stored by the product are only `accept`, `needs_revision`, and
-`reject`. Every valid Review, every submitted finding, and every later finding
-resolution is immutable. A later round appends new records.
+REV owns lifecycle state and orchestration. It never imports foreign
+repositories or repairs foreign facts.
 
-Adjudication is disabled and unimplemented. This initiative adds no
-adjudication action, state, queue, lease, policy, decision, contribution, or
-readiness dependency. Stable origin and lineage interfaces may accept a new
-future origin kind only through a separately approved migration and lifecycle;
-that future compatibility does not implement adjudication now.
+## Delivery strategy
 
-## Canonical decision transaction
+### Wave 1 — Independent REV persistence
 
-The review request or service command owns the only transaction and commit.
-AUTH, task, REV, CON, audit, and outbox collaborators are session-bound,
-flush-only participants.
+1. `03A1` adds queue/admission-idempotency persistence only.
+2. `03A2` adds lease/preference persistence only.
+3. `03B` adds normalized immutable ReviewPacketManifest persistence after the
+   ART membership contract is exact.
+4. `04A` adds immutable Review/finding/resolution and decision-request
+   persistence.
+5. `04B` adds FinalAcceptance plus shared audit/outbox linkage persistence.
+
+These chunks expose no routes, activate no actions, and perform no ART or CON
+operation. This wave can proceed in order after AUTH 02D; only 03B waits for an
+exact ART packet-membership contract.
+
+### Wave 2 — Admission and server-selected work
+
+6. `05A` composes final `allow_review` admission using owner-supplied
+   Submission, CheckerRun, and verified ART facts. It creates exactly one open
+   queue entry and transitions only through typed TASK/CHECKER participants.
+7. `05B` implements concealed current-work selection: active lease, one
+   server-selected offer, or none. It never exposes the backlog.
+
+AUTH action activation remains separate in XINT-003-03A and does not release a
+product router.
+
+### Wave 3 — Claim, lease, and packet
+
+8. `06A` implements atomic claim, one-active-lease capacity, reviewer policy
+   freeze through CON, and packet-manifest freeze with ART-owned membership.
+9. `06B` implements owned release and preferred decline.
+10. `06C` implements database-time preference/lease expiry, lazy recovery, and
+    fixed-service commands.
+11. `07A` implements lease-bounded context and chain reads, consuming ART
+    packet materialization without raw storage access.
+12. `07B` implements immutable reviewer notes/findings as records only.
+
+### Wave 4 — Decision and human revision core
+
+13. `08` is pure decision validation and effect planning. It commits no Review.
+14. `09A1` persists Review-rooted revision episodes/preparation after the human
+    approves round/deadline semantics.
+15. `09A2` publishes the typed TASK revision participant and context resolver.
+16. `09A3` adds immutable contributor finding-response records.
+17. `09A4` integrates prepared human N+1 Submission lineage while preserving
+    the separate CheckerRun-remediation source.
+18. `09A5` handles replacement-assignment preparation successors.
+19. `09B` replays findings/resolutions and creates preferred return routing.
+
+Uploaded reviewer/response evidence is excluded from v0.1.
+
+### Wave 5 — Canonical decision commit
+
+20. `10` composes the first canonical decision transaction:
 
 ```text
-compute canonical request key/digest without a database lock
--> AUTH prepare and authority lock
--> reserve/lock ReviewDecisionRequest
--> lock the review lifecycle fence
--> lock ReviewLease
--> lock ReviewQueueEntry
--> lock WorkstreamTask
--> lock the exact Submission.task_assignment_id row
--> lock the exact Submission
--> lock predecessor Review/finding/resolution/evidence rows in stable ID order
--> recompose final facts and consume/evaluate AUTH handle once
--> append immutable Review and submitted findings/resolutions
--> consume ReviewLease and close ReviewQueueEntry
--> CON reviewer operation creates completed_review and evaluates reviewer freeze
--> apply decision branch
--> stage shared audit/outbox rows
--> commit once
+AUTH consume
+-> Review/finding/resolution append
+-> lease consume + queue close
+-> reviewer CON operation
+-> decision branch
+-> accept only: FinalAcceptance + TASK accept + submitter CON operation
+-> needs_revision: TASK state + revision preparation
+-> reject: exact assignment block + TASK reject
+-> shared audit/outbox
+-> one commit
 ```
 
-The user-confirmed ReviewLease-before-queue order controls this command. Other
-commands must publish their own order and may not refer vaguely to a universal
-canonical order. Cross-domain rows of the same type lock by ascending primary
-key. Database time is read after the relevant locks. No remote ART or external
-fulfillment call occurs in the transaction.
+Any participant failure rolls back all product effects. ART/provider I/O is
+forbidden inside this transaction.
 
-Decision branches are exact:
+### Wave 6 — Recovery, projection, and lifecycle control
 
-- `accept`: append `FinalAcceptance`, set Task `accepted`, complete the exact
-  reviewed TaskAssignment, invoke CON submitter operation from
-  `FinalAcceptance`, then stage shared audit/outbox.
-- `needs_revision`: invoke the task-owned preparation participant, append the
-  human-Review-rooted initial preparation, set Task
-  `needs_revision`, keep the assignment active, and create no FinalAcceptance or
-  submitter contribution.
-- `reject`: block the exact immutable `Submission.task_assignment_id`, set Task
-  `rejected`, and create no FinalAcceptance or submitter contribution.
+21. `11A` adds queue inspection and privileged queue/lease commands.
+22. `11B` adds covered-project revision repair and obligation close.
+23. `11C` adds resumable reconciliation and authority-invalidation jobs.
+24. `11D` adds true-legacy closure and typed ART recovery delegation.
+25. `12P1` adds deterministic review projection handling on shared outbox.
+26. `12P2` adds artifact-reference reconciliation and projection rebuild.
+27. `12P3` adds notifications, bounded admin reads, metrics, and drain facts.
+28. `12A1` persists the single lifecycle release controller.
+29. `12A2` composes REV/TASK/CHECKER mutation fences.
+30. `12A3` composes CON writer/dispatcher/callback cutoff and drain fences.
+31. `12A4` adds Operator transitions and crash-safe forward recovery.
 
-Every branch creates the reviewer `completed_review` ContributionRecord. CON
-failure rolls back the Review and all lifecycle effects. External award/points
-delivery is post-commit outbox work and cannot roll back acceptance.
+### Wave 7 — Conformance and release
 
-## FinalAcceptance
+32. `13A` verifies exact merged dependency manifests and builds the drill
+    harness.
+33. `13B` prepares current documentation and generated evidence without
+    exposing routes.
+34. `13C` registers the coherent REV product routers and performs final HTTP,
+    database, job, storage, authorization, contribution, and recovery proof.
 
-`FinalAcceptance` is an immutable internal derived fact created only by the
-successful accept branch. It has no public/manual create API and no separate
-authorization action. It records project, task, exact Submission, source Review,
-accepted submitter, database acceptance time, recording reviewer, and frozen
-ReviewPolicy context. PostgreSQL enforces unique task, source Review, and
-Submission plus exact same-chain actor/policy lineage.
+`13C` is the sole product release. Earlier AUTH activations enable hidden
+integrated proof only.
 
-Submitter `accepted_submission` contribution consumes FinalAcceptance and never
-infers acceptance from `Review.decision`. Reviewer `completed_review`
-contribution consumes Review and ReviewLease directly.
+## Authorization protocol
 
-## One Project Guide pipeline
+Reads use request-scoped AUTH evaluation with the exact frozen contract.
+Mutations prepare an opaque handle, lock AUTH authority first, lock REV and
+participant facts in the command-specific published order, recompose the final
+typed contract, consume once, stage bounded decision evidence, flush all
+participants, and commit once at the route/service-command boundary.
 
-Project Guide is the single task and review authority. Task stamps one immutable
-guide identity triplet when leaving draft. Submission copies the exact task or
-prepared-revision context used for that attempt. The reviewer reads the context
-stamped on the exact leased Submission and never performs a separate rebase.
+Unavailable actions fail closed. REV never changes catalogue availability.
 
-Project Guide activation receives an immutable per-project positive
-`activation_sequence`. Version strings are never ordered. A superseded guide
-retains its original sequence and provenance if intentionally reactivated.
+## Data and history invariants
 
-Publication and task screening both lock Project first. Publication then locks
-candidate/current guide and every exact generation input in a declared stable
-type/ID order. Task screening locks Project, Task, and the selected active guide
-before stamping. This prevents activation from changing the active generation
-between task context selection and commit.
+- One queue entry per admitted Submission.
+- One active lease per queue entry and one active lease globally per reviewer.
+- Immutable queue age; preference and lease timers are independent.
+- One Review per Submission; every Review records the exact lease, packet,
+  reviewer, policy, checker admission, and artifact lineage.
+- Every revised Submission points to its immediate predecessor; every later
+  Review points to the prior Review; findings/responses/resolutions append.
+- Accept alone creates one FinalAcceptance, unique by Review, Submission, and
+  Task.
+- Checker remediation and human revision sources are mutually exclusive.
 
-02A1 first makes every current setup writer share one Project-first fence.
-02A3 then adds chronology, freezes the complete activated guide row except exact
-lifecycle transitions, and explicitly introduces a no-write idempotent repeat
-for the sole active candidate; current runtime rejects that repeat, so this is
-additive behavior rather than a claimed preservation. Draft first activation
-remains allowed and a superseded candidate remains denied. 02A4 finally stamps
-the exact Task triplet. After the pure REV contracts and AUTH-PREP/custody merge,
-02A2 adds the hidden prepared-authorized reactivation branch while
-`project.guide.activate` remains unavailable. Its reviewed resource manifest
-then gates AUTH-12 evaluator/cutover/activation. The bodyless command requires `If-Match` for
-the exact current active guide ETag; missing precondition fails with 428 and a
-stale/mismatched precondition fails with 412. Therefore a delayed retry cannot
-silently replace a newer guide.
+## External intersections
 
-Task guide ID, version, and activation sequence are nullable only together while
-draft and complete thereafter. PostgreSQL validates that the triplet names one
-same-project guide and rejects every valid-to-valid mutation after allocation.
+### ART/CHECKER to REV
 
-## Human Review revision preparation
+The handoff contains identifiers and verified facts only. REV owns admission
+meaning, not checker output or artifact custody. Until the final handoff merges,
+core persistence continues but `05A`, `06A`, and `07A` remain gated.
 
-Controlled Project Guide rebase is rooted only in an immutable
-`Review(needs_revision)` and its exact prior Submission. Checker-caused
-`needs_revision` remains a distinct supported upstream remediation path anchored
-to its final CheckerRun. It keeps the Task's existing locked context, creates no
-Review/ReviewFinding/reviewer contribution, consumes no human ReviewPolicy
-revision round/deadline, and does not use D6 close or human finding replay.
-Corrected N+1 persists the unique server-derived
-`remediation_source_checker_run_id` for that exact predecessor CheckerRun.
+### REV to CON
 
-`RevisionContextPreparation` is task-owned and directly references the exact
-Review and prior Submission. It forms an immutable non-branching root/successor
-chain with one head. The task participant owns guide resolution, Task Context,
-and N+1 validation; REV invokes it through typed human-review facts without
-importing task/project repositories.
+REV invokes ordered typed operations. Every Review gets reviewer
+`completed_review`; accept additionally gets submitter `accepted_submission`
+from FinalAcceptance. CON owns policy, records, awards, and fulfillment.
 
-```text
-Review(needs_revision) after reviewer CON operation
--> append the Review-rooted initial preparation
--> Task needs_revision -> REV audit/outbox -> review transaction commits once
-```
+## Alternatives rejected
 
-No contributor-readable human-review-caused `needs_revision` state may exist
-without one preparation head. Unsafe context creates a blocked head rather than
-a missing root.
-
-Preparation compares the prior Submission guide identity/sequence to the
-currently active guide:
-
-- exact pair: `kept`;
-- any different internally consistent active pair: `rebased` with `forward` or
-  `backward` direction;
-- missing, incomplete, revoked, inconsistent, or unsafe pair: `blocked`.
-
-It freezes guide/source/task-execution policy context, not contribution policy.
-Task Context returns the exact head. Submission N+1 acknowledges the head ID and
-digest; a later guide activation does not silently change it.
-
-Human revision requires one immutable response for every unresolved blocking
-ReviewFinding and later resolution during review, and returns prefer the prior
-reviewer. Checker remediation shows contributor-safe checker messages/fixes,
-creates no fake ReviewFinding response/resolution, preserves current guide/task
-context, and returns to ordinary open routing after corrected checker admission.
-
-## Revision limits and deadlines
-
-The exact human Review revision-round counting source, deadline anchor, and
-boundary remain a human-owned product decision before 09A1. They are not
-inferred from checker retries, task SLA, current time, or archival examples.
-Whatever values are approved freeze on the Review-rooted episode and use
-database time. At exhaustion, Task remains `needs_revision` and assignment
-active; context repair cannot bypass exhaustion, and only exact D6 close may
-terminate the human revision episode. No synthetic reject is created.
-
-An exact final CheckerRun proves a checker-remediation task is not a rootless
-human revision. Only state that claims human Review revision but has no
-unambiguous originating Review/preparation is
-`legacy_revision_context_unrecoverable`; migration never fabricates a Review.
-
-## Artifact boundary
-
-REV consumes typed ART capabilities only. It never receives ArtifactStore,
-provider adapters/references, scratch paths, or raw repository access.
-
-- Queue admission uses stabilized submission/checker facts from exact ART-owned
-  cutover contracts.
-- Claim creates a normalized immutable ReviewPacketManifest and item rows only
-  after ART defines exact packet membership relations. JSON/opaque ID sets are
-  prohibited.
-- Context content reads require an active exact lease for the exact Submission.
-  History is metadata-only; prior, sibling, later, expired, and consumed leases
-  grant no byte access.
-- v0.1 reviewer findings/notes and contributor responses are REV-owned records;
-  they use no ART candidate/finalize port and no evidence-upload ActionId. Any
-  future uploaded evidence requires separate approved REV-owned intent and
-  exact ART/AUTH owner work.
-- Core Review/CON transactions copy stabilized digest lineage and make no ART
-  call.
-
-ART currently has no scheduled owner chunks for packet read or server-derived
-Submission artifact digest. Those are hard blockers. REV may
-record required capability shapes but must not invent ART chunk IDs or start ART
-work.
-
-## Contribution and outbox boundary
-
-CON owns ContributionPolicyVersion persistence, TaskAssignment/ReviewLease
-freezes, ContributionRecord and award persistence, delivery records, and the
-two-operation flush-only decision participant. REV owns Review,
-FinalAcceptance, lifecycle orchestration, shared audit/outbox staging, and the
-single commit.
-
-Exact merged CON gates are consumed by chunk ID, PR, SHA, migration head, typed
-symbol, and tests. `WS-CON-001-03B` precedes the ReviewLease policy FK;
-`WS-CON-001-02A` and `02C` precede Review/FinalAcceptance shared outbox/audit
-persistence; `WS-CON-001-06` precedes claim freeze; `WS-CON-001-03C` and `07`
-precede the first canonical decision commit. Proposed status is not readiness.
-
-## Authorization boundary
-
-Reads use request-scoped AUTH `require`; protected mutations use AUTH's exact
-merged prepared protocol. REV does not query grants, register actions, provision
-service identities, integrate evaluators, or change availability.
-
-Before REV begins full lifecycle implementation, WS-XINT-003-02C installs the
-complete unavailable REV catalogue and fixed-service matrix, and
-WS-XINT-003-02D publishes the closed PREP/read integration contracts. REV hidden
-chunks depend on that readiness, not on active actions. REV owns canonical
-loaders/composers and proves behavior while the real AUTH kernel continues to
-deny unavailable actions; matching XINT activation follows exact hidden proof.
-
-Every external AUTH edge must name the owner chunk and prove merged PR/SHA,
-typed actor/action/resource contracts, static service rows where applicable,
-and denial/race tests. Placeholder names remain fail-closed planning labels,
-not executable dependencies. All actions remain unavailable until AUTH merges
-the matching feature-gated activation after hidden behavior.
-
-AUTH activation does not release a product route. `WS-REV-001-13C` remains the
-sole product-router registration and final HTTP proof after complete integrated
-conformance.
-
-## Persistence and immutability
-
-`Submission` remains the only versioned submission entity. Submission and
-Review predecessor chains are exact N-1 and non-branching. Human identity fields
-use canonical human ActorProfile IDs after the AUTH foundation. Service/system
-actors remain explicitly typed and cannot occupy contributor/reviewer fields.
-
-Evidence binding identity and scope are immutable. Pre-decision evidence uses
-an immutable slot/binding relation; attachment to a finding/response is a
-separately appended immutable relation in the Review or submission transaction.
-No row described as immutable is later updated set-once.
-
-PostgreSQL owns uniqueness, XOR, same-chain, actor-kind, status/provenance,
-immutability, and deferred cross-row integrity. Services validate for useful
-errors but do not substitute for database enforcement.
-
-## Chunk strategy
-
-PLAN3 is merged historical boundary correction. The entire 02A family,
-02B, and 02C are retired historical records and are never executable by REV.
-03P is reconciled into WS-XINT-003-02 and is not independently executable.
-That chunk requires current-main refresh, risk routing, plan review, and exact
-owner evidence. Queue persistence follows separately in 03A.
-
-The detailed order is maintained in `CHUNK_MAP.md`. The important boundaries
-are:
-
-- Upstream owners supply Project Guide, Task, Submission, checker, AUTH, ART,
-  and CON facts through typed, proven handoffs; REV reports gaps and stops.
-- 03A queue/lease base schema and immutable linkage only; 03B normalized packet
-  manifest after ART contract.
-- 04A immutable review-chain persistence; 04B FinalAcceptance/task linkage and
-  shared audit/outbox persistence primitives.
-- 05A online checker admission; 05B server-selected reviewer/admin reads.
-  Historical admission classification/scan belongs to 11C reconciliation.
-- 06A claim/freeze; 06B release/decline/preferences; 06C expiry/lazy recovery.
-- 07A lease-bounded context and packet; 07B reviewer finding/note records with
-  no reviewer artifact upload or evidence action.
-- 08 pure decision schemas, validation, and typed participant inputs only.
-- 09A1 Review-rooted preparation schema; 09A2 preparation resolver and Task
-  Context; 09A3 revision-obligation response records only (no separate
-  artifact upload or evidence action); 09A4 internal prepared human N+1 plus
-  the exact source XOR that consumes the owner's immutable checker-remediation
-  `remediation_source_checker_run_id`;
-  09A5 replacement-assignment transfer; 09B replay/resolution/return routing.
-- 10 first hidden canonical Review/FinalAcceptance/CON transaction.
-- 11A privileged queue/lease commands; 11B PM repair/D6 close; 11C
-  reconciliation persistence/jobs; 11D true-legacy close and ART delegation.
-- 12P1 projection; 12P2 projection/artifact reconciliation jobs; 12P3 reads,
-  notifications, metrics, and drain observation.
-- 12A1-12A4 separately build hidden release controller, REV fences, CON fences,
-  and Operator transition/drain recovery.
-- 13A preflight/manifests/drill harness; 13B pre-release docs/generated preparation;
-  13C sole product router registration and final HTTP proof.
-
-## Release control
-
-Persisted lifecycle phase controls whether already-registered commands may
-execute. It does not dynamically unregister FastAPI routes or rewrite AUTH
-action/static-service catalogues. Scheduler shutdown is an operational action;
-database fences remain the correctness boundary.
-
-Product reads and mutation classes are defined separately. A disabled phase may
-allow bounded readiness/administrative reads while denying product mutations.
-Forward reactivation reuses static router registration and AUTH mappings after
-phase, drain, service, and dependency checks pass.
-
-Checker needs-revision routing is one server-derived checker-completion class:
-it is allowed with checker completion through `revision_cutover_fenced` and
-denied from `admission_fenced`. It creates only CheckerRun-rooted task state,
-audit, and outbox under the existing locked task context. Human Review
-preparation is an internal consequence of leased `review.decision` and shares
-that completion class; it is never an independently phase-enabled command.
-
-Chunk 13C is the only product router-registration and active-release-document
-point. Earlier chunks keep routes absent, build hidden composition, add reusable
-drill scenarios, and may update only planned/pre-release documentation.
+- Waiting for all ART/CON work before any REV persistence.
+- Building foreign behavior inside REV to unblock integration.
+- One giant schema or decision PR.
+- Public routes before recovery and lifecycle fences.
+- A separate SubmissionVersion, artifact store, authorization protocol, audit
+  ledger, outbox, or contribution writer.
+- Review evidence uploads in v0.1.
 
 ## Verification strategy
 
-Every runtime chunk must run focused tests, Ruff, real-PostgreSQL isolated full
-suite at the repository 78 percent floor, and at least 90 percent coverage for
-materially changed backend subsystems. Migration chunks additionally prove one
-head, preflight, upgrade, downgrade/re-upgrade where safe, protected-row refusal,
-transactional failure behavior, and direct-SQL constraints.
-
-Every chunk runs stale Workstream/AUTH/ART/REV wording scans applicable on
-current main, Markdown links, `git diff --check`, agent gates, and required
-internal reviewer fanout. Test changes may not weaken,
-skip, or rewrite existing checker-caused revision coverage.
+Each child freezes exact commands at start. Required proof includes Ruff,
+typecheck where configured, focused unit/service/API tests, PostgreSQL migration
+and direct-SQL constraints, independent-session race tests, fault injection,
+architecture scans, stale wording/link checks, at least 90 percent coverage for
+materially changed subsystems, and GitHub-hosted repository coverage at or
+above 78 percent. Full local suite runs are not required.
 
 ## Stop rule
 
-Complete PLAN3 and stop. No runtime child starts automatically, and no retired 02A-family,
-02B, or 02C contract may be revived as REV work.
+This planning refresh starts no runtime child. After review and human approval,
+start only `WS-REV-001-03A1`. Stop after its PR; do not begin 03A2
+automatically.
