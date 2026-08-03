@@ -885,13 +885,13 @@ async def create_policy_bundle_for_guide(
         )
         ensure(upload.status_code == 202, f"guide source upload failed: {upload.text}")
     setup_run = None
-    for _ in range(240):
+    for _ in range(120):
         setup_response = await client.get(
             f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
             headers=auth_headers(diagnostic_reader_token),
         )
         if setup_response.status_code == 404:
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(1.0)
             continue
         ensure(
             setup_response.status_code == 200,
@@ -900,7 +900,7 @@ async def create_policy_bundle_for_guide(
         setup_run = setup_response.json()
         if setup_run["status"] in {"policy_draft_ready", "sufficiency_blocked", "setup_blocked"}:
             break
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(1.0)
     ensure(setup_run is not None, "guide setup run was not observable")
     ensure(
         setup_run["status"] == "policy_draft_ready",
