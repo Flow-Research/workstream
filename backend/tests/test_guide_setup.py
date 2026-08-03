@@ -109,6 +109,63 @@ def test_project_setup_tasks_dispatch_exact_canonical_arguments(
 
 
 @pytest.mark.asyncio
+async def test_verified_worker_stops_exactly_on_blocked_sufficiency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    from app.workers import project_setup as project_setup_worker
+
+    engine = SimpleNamespace(dispose=AsyncMock())
+    session = _Session()
+    report = SimpleNamespace(status="blocked", id="report-id")
+    service = SimpleNamespace(
+        validate_project_setup_run_context=AsyncMock(),
+        update_project_setup_run_status=AsyncMock(),
+        run_verified_guide_sufficiency_agent=AsyncMock(return_value=(report, True)),
+    )
+    monkeypatch.setattr(
+        project_setup_worker, "create_async_engine", lambda *_args, **_kwargs: engine
+    )
+    monkeypatch.setattr(
+        project_setup_worker,
+        "async_sessionmaker",
+        lambda *_args, **_kwargs: _factory(session),
+    )
+    monkeypatch.setattr(
+        project_setup_worker, "ProjectService", lambda *_args, **_kwargs: service
+    )
+
+    result = await project_setup_worker._run_verified_pre_submit_sufficiency_continuation(
+        "project", "guide", "snapshot", "run", 3
+    )
+
+    assert result == {
+        "status": "sufficiency_blocked",
+        "guide_sufficiency_report_id": "report-id",
+        "idempotent": False,
+    }
+    service.validate_project_setup_run_context.assert_awaited_once_with(
+        "run",
+        project_id="project",
+        guide_id="guide",
+        source_snapshot_id="snapshot",
+        setup_generation=3,
+    )
+    assert service.update_project_setup_run_status.await_args_list == [
+        (("run",), {"status": "running_sufficiency_agent", "current_step": "guide_sufficiency"}),
+        (
+            ("run",),
+            {
+                "status": "sufficiency_blocked",
+                "current_step": "guide_sufficiency",
+                "output_sufficiency_report_id": "report-id",
+            },
+        ),
+    ]
+    engine.dispose.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
 async def test_prepare_generation_rejects_missing_run_and_empty_snapshot() -> None:
     service = object.__new__(GuideSetupPreparationService)
     service._session_factory = _factory(_Session())
