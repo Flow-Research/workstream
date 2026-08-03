@@ -251,10 +251,12 @@ def downgrade() -> None:
     op.execute("drop function reject_sufficiency_replay_mutation()")
     op.drop_table("guide_sufficiency_mutation_idempotency_records")
     op.drop_constraint(
-        "ck_guide_sufficiency_ack_authority_shape", "guide_sufficiency_reports", type_="check"
+        op.f("ck_guide_sufficiency_ack_authority_shape"),
+        "guide_sufficiency_reports",
+        type_="check",
     )
     op.drop_constraint(
-        "ck_guide_sufficiency_creation_authority_shape",
+        op.f("ck_guide_sufficiency_creation_authority_shape"),
         "guide_sufficiency_reports",
         type_="check",
     )

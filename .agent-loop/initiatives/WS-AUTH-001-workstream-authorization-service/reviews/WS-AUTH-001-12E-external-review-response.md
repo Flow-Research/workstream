@@ -27,6 +27,9 @@
   deterministic Celery identity expectations, service actor provenance,
   bounded agent-runtime wording, unverified legacy-material rejection, and
   ambiguous latest-snapshot translation.
+- Repaired the second hosted run's task-lifecycle downgrade failure by applying
+  Alembic's naming-convention expansion symmetrically when dropping both new
+  check constraints.
 
 ## Comments deferred
 
