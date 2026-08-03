@@ -2,7 +2,8 @@
 
 ## Status
 
-Planning skeleton. Refresh only after 03A1 merges; do not start automatically.
+Planning skeleton. Refresh only after 03A1 and CON-03B merge; do not start
+automatically.
 
 ## Parent initiative
 
@@ -36,8 +37,11 @@ Review decisions, ART/CON calls, or action activation.
 
 - One active lease per queue entry and one globally per human reviewer through
   PostgreSQL partial uniqueness.
-- Completed attempts are immutable and retain reviewer, queue, policy-freeze
-  reference slots, database timestamps, generation, and close provenance.
+- Every lease stores an immutable, non-null FK to CON's canonical reviewer
+  `ContributionPolicyVersion`; REV neither duplicates its fields nor selects a
+  substitute policy source.
+- Completed attempts are immutable and retain reviewer, queue, frozen policy-
+  version reference, database timestamps, generation, and close provenance.
 - Preference state preserves immutable queue age separately from availability
   time and lease expiry.
 - Canonical ActorProfile FKs and human-kind guards prevent service identities
@@ -56,8 +60,8 @@ reuse/dedup, docs, test-delta, and CI integrity.
 
 ## Human review focus
 
-Partial uniqueness, immutable attempts, actor kind, timer separation, and no
-claim behavior.
+Partial uniqueness, immutable attempts, exact CON policy-version FK, actor kind,
+timer separation, and no claim behavior.
 
 ## Stop conditions
 

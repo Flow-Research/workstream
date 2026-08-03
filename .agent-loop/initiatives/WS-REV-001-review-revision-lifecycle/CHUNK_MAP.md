@@ -9,13 +9,13 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 |---|---|---|---|
 | `WS-REV-001-PLAN4` | Current-main full lifecycle replan | AUTH 02D merged PR #257 | Proposed planning PR |
 | `WS-REV-001-03A1` | Queue and admission-idempotency persistence | PLAN4 approved | First proposed runtime child |
-| `WS-REV-001-03A2` | Lease and preference persistence | 03A1 | Skeleton |
-| `WS-REV-001-03B` | Normalized packet-manifest persistence | 03A2 + exact ART membership contract | Skeleton |
+| `WS-REV-001-03A2` | Lease and preference persistence | 03A1 + CON-03B canonical ContributionPolicyVersion target | Skeleton |
+| `WS-REV-001-03B` | Normalized packet-manifest persistence | 03A2 + ART-owned contract-only packet membership port published before ART-07A runtime | Skeleton |
 | `WS-REV-001-04A` | Immutable Review/finding/resolution/decision-request persistence | 03B | Skeleton |
-| `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + shared audit/outbox | Skeleton |
-| `WS-REV-001-05A` | Atomic final `allow_review` admission | 04B + exact TASK/CHECKER/ART handoff | Skeleton |
+| `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + CON-02A outbox persistence + CON-02C audit participant | Skeleton; enables CON-03C schema work |
+| `WS-REV-001-05A` | Atomic final `allow_review` admission | 04B + exact TASK/CHECKER/ART admission manifest after ART checker routing/XINT activation | Skeleton |
 | `WS-REV-001-05B` | Concealed active-lease/one-offer/none query | 05A | Skeleton |
-| `WS-REV-001-06A` | Atomic claim, policy freeze, packet freeze | 05B + 03B + CON freeze + ART packet proof | Skeleton |
+| `WS-REV-001-06A` | Atomic claim, policy freeze, packet freeze | 05B + 03B + CON-06 freeze + exact ART packet proof | Skeleton |
 | `WS-REV-001-06B` | Owned release and preferred decline | 06A | Skeleton |
 | `WS-REV-001-06C` | Preference/lease expiry and lazy recovery | 06B + fixed service admission | Skeleton |
 | `WS-REV-001-07A` | Lease-bounded packet/context/chain reads | 06C + ART 07A | Skeleton |
@@ -27,7 +27,7 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 | `WS-REV-001-09A4` | Human prepared N+1 and checker-source XOR | 09A3 + TASK/ART submission cutover | Skeleton |
 | `WS-REV-001-09A5` | Replacement-assignment preparation successor | 09A4 + AUTH replacement contract | Skeleton |
 | `WS-REV-001-09B` | Finding replay/resolution/preferred return | 09A5 | Skeleton |
-| `WS-REV-001-10` | Canonical Review/FinalAcceptance/TASK/CON transaction | 09B + CON participant + audit/outbox | Skeleton; first Review commit |
+| `WS-REV-001-10` | Canonical Review/FinalAcceptance/TASK/CON transaction | 09B + CON-07 participant + shared audit/outbox | Skeleton; first Review commit |
 | `WS-REV-001-11A` | Queue inspection and privileged queue/lease commands | 10 | Skeleton |
 | `WS-REV-001-11B` | Revision repair and obligation close | 11A | Skeleton |
 | `WS-REV-001-11C` | Reconciliation persistence and service jobs | 11B | Skeleton |
@@ -46,12 +46,15 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 ## Dependency shape
 
 ```text
-AUTH 02D -> PLAN4 -> 03A1 -> 03A2
-ART membership -> 03B -> 04A -> 04B
-TASK/CHECKER/ART admission -> 05A -> 05B
-CON freeze + ART packet -> 06A -> 06B -> 06C -> 07A -> 07B -> 08
+AUTH 02D -> PLAN4 -> 03A1
+CON-03B + 03A1 -> 03A2
+ART contract-only membership port + 03A2 -> 03B -> 04A
+CON-02A + CON-02C + 04A -> 04B -> CON-03C
+TASK/CHECKER/ART admission manifest -> 05A -> 05B
+CON-06 + ART packet proof -> 06A -> 06B -> 06C
+REV lease/manifest -> ART-07A -> REV-07A -> 07B -> 08
 human decision -> 09A1 -> 09A2 -> 09A3 -> 09A4 -> 09A5 -> 09B
-CON decision participant -> 10
+CON-07 decision participant -> 10
 11A -> 11B -> 11C -> 11D
 12P1 -> 12P2 -> 12P3 -> 12A1 -> 12A2 -> 12A3 -> 12A4
 13A -> 13B -> 13C
@@ -59,6 +62,8 @@ CON decision participant -> 10
 
 Distinct owner initiatives may progress concurrently. A missing owner gate
 blocks only its consumer child, not earlier independent REV persistence.
+Current AUTH/XINT/CON status prose is not uniformly refreshed to current main;
+each child must verify signed merge evidence and runtime symbols at start.
 
 ## Contract rule
 

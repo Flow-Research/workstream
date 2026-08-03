@@ -54,6 +54,10 @@ REV consumes these facts and never edits their general intake semantics.
   contributor responses are records only.
 - ART reviewer packet materialization remains future `WS-ART-001-07A` and
   requires a hidden REV packet manifest.
+- The current ART plan does not yet publish the contract-only packet membership
+  identifier/port that REV-03B needs. ART must publish that type first without
+  depending on REV runtime; REV then owns normalized lifecycle membership and
+  ART-07A consumes the resulting manifest for byte materialization.
 - ART's submission/checker cutover remains incomplete. Until the final typed
   admission handoff merges, REV may build persistence and pure rules but must
   not guess binding identifiers or call the raw ArtifactStore.
@@ -62,7 +66,8 @@ REV consumes these facts and never edits their general intake semantics.
 
 - Shared transactional outbox persistence exists under
   `backend/app/modules/outbox/`.
-- Shared audit services exist under `backend/app/modules/audit/`.
+- Shared audit services exist under `backend/app/modules/audit/`, but that does
+  not by itself prove the planned CON-02C lifecycle-audit participant.
 - CON runtime review integration remains future. The stable boundary is one
   ordered reviewer operation for every Review and one submitter operation only
   after REV creates FinalAcceptance on accept.
@@ -107,7 +112,12 @@ revision coverage.
 
 ## Dependencies and integration gates
 
-- Core REV persistence: AUTH 02D merged; safe to begin.
+- Queue/admission-idempotency persistence: AUTH 02D merged; safe to begin.
+- Lease persistence requires merged CON-03B canonical
+  ContributionPolicyVersion target; it is not yet evidenced merged.
+- Packet-manifest persistence requires a published ART contract-only membership
+  identifier/port without an ART-07A runtime dependency; it is currently an
+  owner gap.
 - Automatic queue admission: exact final TASK/CHECKER/ART handoff merged.
 - Claim packet creation: queue/lease persistence, CON reviewer-policy freeze,
   and exact ART packet membership/materialization contracts.
@@ -128,8 +138,9 @@ revision coverage.
 ## Unknowns requiring later owner evidence
 
 - Final typed ART/CHECKER-to-REV admission manifest.
-- Final ART reviewer packet materialization input/output types.
+- ART contract-only reviewer packet membership input and later ART-07A
+  materialization input/output types.
 - Final CON reviewer-policy freeze and two-operation decision participant.
 - Exact TASK decision and human-revision participant interfaces.
 
-These unknowns do not block the first REV-only persistence child.
+These unknowns do not block 03A1. They do block their named later consumers.

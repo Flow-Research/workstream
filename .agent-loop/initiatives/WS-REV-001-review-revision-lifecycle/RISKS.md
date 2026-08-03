@@ -23,3 +23,7 @@
 | R19 | Far-future contracts freeze stale filenames/migrations | High | Skeletons only; exact contract refreshed at each start from current main. |
 | R20 | Human revision limit/deadline semantics are guessed | Critical | Explicit human decision before 09A1; no inference from checker retries or SLA. |
 | R21 | Full local testing consumes excessive time/resources | Medium | Focused local proof only; GitHub Actions runs full suite and coverage. |
+| R22 | REV creates leases before CON's canonical policy-version target exists | Critical | 03A2 is gated on merged CON-03B and requires a non-null immutable FK; no placeholder policy model or nullable retrofit. |
+| R23 | REV packet semantics and ART packet materialization form a circular dependency | Critical | ART first publishes a contract-only membership port with no REV runtime dependency; REV-03B owns the normalized manifest; ART-07A consumes the merged lease/manifest; REV-07A consumes ART materialization. |
+| R24 | Hidden REV tests imply an unavailable AUTH action can succeed | Critical | Before XINT activation, prove feature rules and unavailable denial separately; positive PREP/evaluator proof belongs to the matching XINT activation. |
+| R25 | A stale owner-plan status is mistaken for merged capability | Critical | Each consumer child verifies signed merge history and exact runtime symbols; REV documents and escalates owner gaps without editing their plans. |

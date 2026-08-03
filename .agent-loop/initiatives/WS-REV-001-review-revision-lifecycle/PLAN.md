@@ -31,10 +31,11 @@ repositories or repairs foreign facts.
 
 ## Delivery strategy
 
-### Wave 1 — Independent REV persistence
+### Wave 1 — REV persistence with explicit owner gates
 
 1. `03A1` adds queue/admission-idempotency persistence only.
-2. `03A2` adds lease/preference persistence only.
+2. `03A2` adds lease/preference persistence only after CON-03B publishes the
+   canonical `ContributionPolicyVersion` target required by every lease.
 3. `03B` adds normalized immutable ReviewPacketManifest persistence after the
    ART membership contract is exact.
 4. `04A` adds immutable Review/finding/resolution and decision-request
@@ -42,8 +43,10 @@ repositories or repairs foreign facts.
 5. `04B` adds FinalAcceptance plus shared audit/outbox linkage persistence.
 
 These chunks expose no routes, activate no actions, and perform no ART or CON
-operation. This wave can proceed in order after AUTH 02D; only 03B waits for an
-exact ART packet-membership contract.
+operation. After AUTH 02D, 03A1 can proceed independently. 03A2 waits for
+CON-03B's exact policy-version persistence contract; 03B waits for the exact
+ART packet-membership identifier contract. These are schema-reference gates,
+not permission for REV to implement foreign behavior.
 
 ### Wave 2 — Admission and server-selected work
 
@@ -54,7 +57,9 @@ exact ART packet-membership contract.
    server-selected offer, or none. It never exposes the backlog.
 
 AUTH action activation remains separate in XINT-003-03A and does not release a
-product router.
+product router. Before activation, REV proves its hidden feature rules and the
+AUTH-unavailable denial path separately; the positive integrated authorization
+path belongs to the matching XINT activation after the REV behavior merges.
 
 ### Wave 3 — Claim, lease, and packet
 
@@ -152,17 +157,58 @@ Unavailable actions fail closed. REV never changes catalogue availability.
 
 ## External intersections
 
-### ART/CHECKER to REV
+### Cross-initiative consume/produce contract
 
-The handoff contains identifiers and verified facts only. REV owns admission
-meaning, not checker output or artifact custody. Until the final handoff merges,
-core persistence continues but `05A`, `06A`, and `07A` remain gated.
+| Owner to consumer | REV consumes | REV produces | First gated child |
+|---|---|---|---|
+| AUTH/XINT to REV | Closed typed action contracts, request-scoped evaluation/PREP, principals, action availability | Canonical resource composers, hidden lifecycle behavior, resource manifests, and integration fixtures for later XINT activation | Positive authorization only at the matching XINT activation; no REV child changes AUTH availability |
+| TASK/CHECKER/ART to REV | Existing immutable Submission, final current CheckerRun `allow_review`, exact verified artifact binding/hash, and packet membership identifiers | Idempotent admission result, queue identity, ReviewPacketManifest semantics, and typed lifecycle commands | `05A`; ART byte materialization remains separately gated |
+| REV to ART to REV | Active lease plus immutable packet manifest/membership | ART returns authorized exact packet materialization; REV returns no decision or note storage to ART | ART-07A, then REV-07A |
+| CON to REV | Canonical ContributionPolicyVersion FK target, lifecycle-audit participant, reviewer-policy freeze operation, atomic decision participant, shared dispatcher and release hooks | ReviewLease policy-version reference/freeze facts; immutable Review and FinalAcceptance sources; staged audit/outbox facts | CON-03B gates REV-03A2; CON-02C gates REV-04B; CON-06 gates REV-06A; CON-07 gates REV-10 |
+| REV to future adjudication | Nothing at v0.1 runtime | Traversable Submission-predecessor, Review-predecessor, finding, response, resolution, and FinalAcceptance lineage | Future intent only |
+
+The TASK/CHECKER/ART handoff contains identifiers and verified facts only. REV
+owns admission meaning, not checker output or artifact custody. ART's admission
+chain through its final checker-output routing and the corresponding XINT
+activation must provide the exact current-main manifest before `05A` starts.
+REV-03B defines normalized packet semantics without waiting for ART-07A runtime;
+ART-07A later consumes the lease/manifest and materializes bytes, and REV-07A
+consumes that materialization. This ordering avoids a circular dependency.
+
+### Current cross-plan gates
+
+Owner plans are dependency evidence, not authority for REV to edit their work.
+Some AUTH/XINT/CON status prose predates current main, so every consuming child
+must recheck the implementation and signed merge history rather than trusting a
+stale `Proposed` or `Active` label.
+
+| Required owner output | Producer | Current-main state at PLAN4 | REV consumer |
+|---|---|---|---|
+| Closed typed REV authorization/PREP schemas, actions unavailable | XINT-003-02D | Merged in PR #257 | Hidden REV services; later positive activation remains XINT-owned |
+| Canonical reviewer ContributionPolicyVersion persistence target | CON-03B | Not evidenced merged; owner plan is stale and must be refreshed by CON | 03A2 |
+| Reviewer-packet membership identifier/port contract, with no REV runtime dependency | ART-owned contract-only precursor to ART-07A | Missing exact published contract; report to ART owner | 03B |
+| Shared lifecycle-audit participant | CON-02C | Not evidenced merged; generic audit persistence alone is insufficient | 04B |
+| Final Submission/CheckerRun/verified-binding admission manifest | ART checker chain through ART-06B and XINT-06B | Not evidenced complete | 05A |
+| Reviewer-policy freeze participant | CON-06 | Future after REV lease schema and CON prerequisites | 06A |
+| Exact reviewer packet materialization | ART-07A, activated by XINT-002-07A | Future after merged REV lease/manifest | 07A |
+| Atomic contribution/award decision participant | CON-07 | Future after REV-04B/09B and CON prerequisites | 10 |
+| Shared dispatcher/handler registry | CON-02B | Not evidenced merged | 12P1 |
+| CON cutoff/drain hooks | CON-03D/08A/08B/10B/11 as refreshed by CON | Future | 12A3 and 13C |
+
+The missing ART contract-only precursor is an ART-owner gap, not a new REV
+chunk. REV-03B cannot start until ART publishes it. This explicit precursor
+breaks the former ART-07A ↔ REV-03B cycle: ART publishes types first, REV
+persists the semantic manifest, then ART-07A materializes it.
 
 ### REV to CON
 
 REV invokes ordered typed operations. Every Review gets reviewer
 `completed_review`; accept additionally gets submitter `accepted_submission`
 from FinalAcceptance. CON owns policy, records, awards, and fulfillment.
+ReviewLease stores a non-null immutable reference to CON's canonical reviewer
+ContributionPolicyVersion; it does not duplicate policy fields or own policy
+selection. CON-03C may consume merged REV Review/FinalAcceptance/ReviewLease
+schema, and REV-10 waits for CON-07's mandatory flush-only participant.
 
 ## Alternatives rejected
 

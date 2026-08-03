@@ -617,10 +617,13 @@ implement that behavior.
 
 ### D30 - Core Persistence Proceeds Before External Integration
 
-ART and CON do not block queue, lease, Review-chain, FinalAcceptance, or
-revision persistence that contains only REV-owned facts and reference slots.
-The exact consumer child waits when a typed foreign handoff is not merged.
-REV never guesses the missing interface or imports the foreign repository.
+ART and CON do not block queue persistence or other REV-owned persistence that
+contains no unresolved foreign invariant. They do gate the exact consumer
+schema or behavior: CON-03B gates ReviewLease because its canonical reviewer
+ContributionPolicyVersion FK is mandatory; ART's membership identifier contract
+gates ReviewPacketManifest; later CON and ART operations gate claim, packet read,
+and decision composition. REV never guesses the missing interface, creates a
+placeholder foreign model, or imports the foreign repository.
 
 ### D31 - Queue And Lease Persistence Are Separate L1 Children
 

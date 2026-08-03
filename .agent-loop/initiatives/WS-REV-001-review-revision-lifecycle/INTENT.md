@@ -67,8 +67,10 @@ contributions.
 - AUTH owns ActorProfile/grant evaluation, PREP, evidence, fixed principals,
   catalogue, and availability. REV locks its own facts and composes the exact
   final `review_contracts.py` model.
-- ART owns bytes, verified bindings, materialization, provider behavior, and
-  packet-byte delivery. REV owns only packet membership and lifecycle meaning.
+- ART owns bytes, verified bindings, the typed binding/membership identifier
+  port, materialization, provider behavior, and packet-byte delivery. REV owns
+  normalized packet-manifest membership and lifecycle meaning after consuming
+  those identifiers.
 - TASK owns task/assignment/Submission transitions through typed
   caller-transaction participants; REV owns decision orchestration.
 - CON owns ContributionRecord, policy, awards, and fulfillment through typed

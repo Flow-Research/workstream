@@ -44,8 +44,10 @@ docs/spec_review_lifecycle.md (only if a normative contradiction is found)
   matrix describe one consistent path from `allow_review` through contribution.
 - AUTH 02D is the stable authority boundary and no lifecycle action is described
   as active.
-- Core REV persistence can proceed independently; exact external integration
-  children remain gated on typed merged owner evidence.
+- Queue persistence can proceed independently; any REV schema or behavior with
+  a foreign invariant remains gated on the exact merged owner contract (for
+  example CON-03B before ReviewLease and ART membership identifiers before the
+  packet manifest).
 - Existing Submission is preserved; no uploaded review evidence or adjudication
   enters v0.1.
 - Every Review creates a reviewer contribution through CON; accept alone creates

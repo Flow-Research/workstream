@@ -21,10 +21,19 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 
 ## Parallel safety
 
-- Core REV persistence can begin after PLAN4 approval without waiting for all
-  ART or CON runtime work.
-- ART gates only admission/packet consumers that need its final typed facts.
-- CON gates only lease policy freeze and canonical decision composition.
+- REV-03A1 queue/admission-idempotency persistence can begin after PLAN4
+  approval without waiting for ART or CON runtime work. Later persistence
+  children wait for their named schema/port gates.
+- ART gates only manifest/admission/packet consumers that need its final typed
+  facts; REV does not wait for ART-07A runtime to define packet semantics.
+- CON-03B gates 03A2's mandatory policy-version FK; CON-06 gates claim-time
+  freeze; CON-07 gates canonical decision composition.
+- ART must publish a contract-only packet-membership port before REV-03B. ART-
+  07A then consumes the merged REV lease/manifest; this removes the former
+  circular gate.
+- AUTH/XINT/CON planning status labels are partly stale. Future REV children
+  must verify exact current-main code and signed merges; REV will report those
+  owner-doc gaps rather than edit foreign plans.
 - Missing external behavior is reported to its owner and never implemented in
   REV.
 

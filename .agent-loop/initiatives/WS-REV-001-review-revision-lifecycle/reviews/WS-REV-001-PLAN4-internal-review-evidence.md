@@ -17,7 +17,31 @@ AUTH 02D at `3479ee71`.
   stale phrase was corrected.
 
 The corrected exact diff passes the failed authorization wording command and
-the complete deterministic verification set. No finding remains open.
+the complete deterministic verification set.
+
+## End-to-end owner-plan reconciliation
+
+A second critical review traced AUTH/XINT, ART/XINT, CON, and REV production and
+consumption gates. It found three valid planning defects:
+
+- 03A2 had incorrectly been treated as independent even though ReviewLease
+  requires CON-03B's non-null canonical ContributionPolicyVersion FK;
+- ART-07A and REV-03B formed a packet-contract cycle without a contract-only
+  owner precursor; and
+- audit/outbox/CON gates and positive AUTH proof were not distinguished
+  precisely enough from generic persistence or unavailable-action testing.
+
+The plan now gates 03A2 on CON-03B, requires ART to publish the membership port
+before REV-03B, orders REV manifest -> ART-07A materialization -> REV-07A read,
+gates 04B on CON-02C, names CON-06/07 and later dispatcher/release dependencies,
+and reserves positive authorization proof for matching XINT activation. It also
+records stale owner-plan status as an owner gap that each REV consumer must
+verify from signed current-main evidence rather than silently repair.
+
+The architecture re-review passed after two low cleanup findings (duplicate
+risk IDs and conditional gate wording) were corrected. Security/docs/CI and
+QA/product reported no blocking finding. QA's low stale parent-chunk reference
+in the conformance matrix was corrected to 03A1, 05A, and 09A4.
 
 ## Deterministic evidence
 
