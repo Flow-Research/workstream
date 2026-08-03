@@ -1,7 +1,11 @@
 # Status
 
-`WS-DOCS-001-01` is locally complete and ready for pull-request review.
+`WS-DOCS-001-01` is merged. It replaced calendar-driven entry guidance with a
+capability-based v0.1 README, contribution path, agent guidance, current-status
+ledger, and historical-planning index.
 
-The entry-path rewrite is complete locally. Deterministic documentation checks
-pass, and all valid internal review findings have been resolved. Merge remains
-a human decision after GitHub checks and external review.
+`WS-DOCS-001-02` is the bounded current-state reconciliation. It removes the
+remaining calendar language from current-facing material, classifies preserved
+early planning and review documents as history, and refreshes this initiative's
+own merged state. It changes no product behavior, architecture contract,
+workflow, CI policy, or implementation initiative.
