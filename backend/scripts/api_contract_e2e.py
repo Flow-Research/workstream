@@ -24,6 +24,7 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from app.db import session as db_session
+from app.core.config import get_settings
 from app.modules.actors.models import ActorIdentityLink
 from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
@@ -2302,5 +2303,6 @@ if __name__ == "__main__":
     api_env = api_environment()
     assert_isolated_database_url(api_env["WORKSTREAM_DATABASE_URL"])
     os.environ.update(api_env)
+    get_settings.cache_clear()
     command.upgrade(alembic_config(), "head")
     asyncio.run(main(api_env))
