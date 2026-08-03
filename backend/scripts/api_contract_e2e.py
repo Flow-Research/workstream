@@ -923,8 +923,41 @@ async def create_policy_bundle_for_guide(
     )
     setup_worker_result = None
     if queued_setup["status"] == "queued":
+        from app.interfaces.project_agents import (
+            GuideSufficiencyAgentResult,
+            SubmissionArtifactPolicyDerivationResult,
+        )
+        from app.modules.projects import service as project_service_module
         from app.workers.project_setup import run_pre_submit_setup_pipeline
 
+        class E2EProjectGuideAgentRuntime:
+            """Deterministic agent boundary for the isolated real-API drill."""
+
+            async def analyze_guide_sufficiency(self, _material):
+                return GuideSufficiencyAgentResult(
+                    status="guide_sufficient",
+                    findings=[],
+                    summary="Verified guide material is sufficient for the API drill.",
+                    agent_version="api-contract-e2e-v0.1",
+                )
+
+            async def derive_submission_artifact_policy(self, material, sufficiency_report):
+                return SubmissionArtifactPolicyDerivationResult(
+                    policy_version=(
+                        "agent-"
+                        f"{material.source_snapshot_hash.removeprefix('sha256:')[:12]}"
+                    ),
+                    policy_body=submission_artifact_policy_body(),
+                    change_summary=(
+                        "Derived from verified guide material after "
+                        f"{sufficiency_report.agent_name} review."
+                    ),
+                    agent_version="api-contract-e2e-v0.1",
+                )
+
+        project_service_module.get_project_guide_agent_runtime = (
+            lambda: E2EProjectGuideAgentRuntime()
+        )
         setup_worker_result = await asyncio.to_thread(
             run_pre_submit_setup_pipeline,
             project_id,
@@ -1110,30 +1143,29 @@ async def create_approved_post_submit_policy_ci_bridge(
             approved_at=datetime.now(UTC),
             created_by=manager_subject,
         )
-        setup_run = ProjectSetupRun(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            source_snapshot_id=source_snapshot["id"],
-            source_snapshot_hash=source_snapshot["bundle_hash"],
-            setup_generation=1,
-            status="post_submit_policy_compiled",
-            current_step="post_submit_checker_policy_compilation",
-            output_sufficiency_report_id=sufficiency_report["id"],
-            output_submission_artifact_policy_id=submission_artifact_policy["id"],
-            output_post_submit_checker_policy_id=post_submit_policy.id,
-            post_submit_derivation_summary={
-                "status": "compiled",
-                "post_submit_checker_policy_id": post_submit_policy.id,
-                "required_checkers": post_submit_policy.required_checkers,
-                "warning_checkers": post_submit_policy.warning_checkers,
-                "blocking_severities": post_submit_policy.blocking_severities,
-            },
-            created_by=manager_subject,
+        setup_run = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+                ProjectSetupRun.source_snapshot_id == source_snapshot["id"],
+            )
         )
+        ensure(setup_run is not None, "verified project setup run was not created")
+        setup_run.status = "post_submit_policy_compiled"
+        setup_run.current_step = "post_submit_checker_policy_compilation"
+        setup_run.output_sufficiency_report_id = sufficiency_report["id"]
+        setup_run.output_submission_artifact_policy_id = submission_artifact_policy["id"]
+        setup_run.output_post_submit_checker_policy_id = post_submit_policy.id
+        setup_run.post_submit_derivation_summary = {
+            "status": "compiled",
+            "post_submit_checker_policy_id": post_submit_policy.id,
+            "required_checkers": post_submit_policy.required_checkers,
+            "warning_checkers": post_submit_policy.warning_checkers,
+            "blocking_severities": post_submit_policy.blocking_severities,
+        }
+        setup_run.error_code = None
+        setup_run.error_summary = None
         session.add(post_submit_policy)
-        session.add(setup_run)
         await session.commit()
         return {"id": post_submit_policy.id, "policy_hash": post_submit_policy.policy_hash}
 
