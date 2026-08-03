@@ -1,5 +1,15 @@
 # Internal Plan Review Log: WS-REV-001
 
+## WS-REV-001-PLAN4 Current-Main End-To-End Refresh - 2026-08-03
+
+Architecture passed the full revised sequence and confirmed that 03A1 is a
+safe REV-only first runtime child. QA/product and security/docs/CI found the
+same stale background-execution phrase through the required authorization
+wording scan and no lifecycle, cardinality, boundary, or chunk-order defect.
+The phrase was replaced with current background-job terminology; every required
+deterministic check then passed. Evidence is recorded in
+`reviews/WS-REV-001-PLAN4-internal-review-evidence.md`.
+
 ## WS-REV-001-PLAN3 External Review Repair - 2026-07-22
 
 CodeRabbit and CI identified four valid documentation/evidence issues: retired
