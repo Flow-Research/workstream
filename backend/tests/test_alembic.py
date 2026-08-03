@@ -11963,13 +11963,8 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
     assert upgraded["action_definition"].count(additions) == 2
     assert upgraded["action_definition"].replace(additions, "") == prior["action_definition"]
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
-    assert prior["identity_values"] == ("human", "service", *historical_identities)
-    assert upgraded["identity_values"] == (
-        "human",
-        "service",
-        *historical_identities,
-        *_XINT003_02C_IDENTITIES,
-    )
+    assert prior["identity_values"] == historical_identities
+    assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)
     assert restored == prior
     assert repeated == upgraded
 

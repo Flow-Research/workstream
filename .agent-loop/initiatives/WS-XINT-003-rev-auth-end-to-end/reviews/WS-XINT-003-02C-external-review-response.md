@@ -12,6 +12,12 @@ action-parity tests needed to exclude the new 0049 owners while exercising the
 mandatory identity link. Both fixture lifecycles now match their migration
 era; runtime constraints were not relaxed.
 
+Schema-A then confirmed PostgreSQL renders `actor_kind` literals with a
+different cast from the service-identity allow-list. The exact-value assertion
+continues parsing every `character varying` allow-list literal (including any
+unexpected namespace), while correctly excluding the separately cast
+`human`/`service` kind predicates.
+
 ## CodeRabbit
 
 Two documentation findings were valid and fixed:
