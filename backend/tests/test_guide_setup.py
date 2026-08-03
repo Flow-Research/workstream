@@ -167,8 +167,12 @@ async def test_prepare_item_binds_materializes_and_extracts(monkeypatch: pytest.
     assert binding_request.logical_role == "guide_source_original"
     assert binding_request.verified_content_id == item.content_id
     materialization_request = service._materialization.materialize_guide_source.await_args.args[0]
+    assert materialization_request.project_id == ids[0]
+    assert materialization_request.guide_id == ids[1]
+    assert materialization_request.guide_source_snapshot_id == ids[2]
     assert materialization_request.binding_id == binding_id
     assert materialization_request.source_item_id == item.item_id
+    assert materialization_request.project_setup_run_id == ids[3]
     assert materialization_request.setup_generation == 3
     extraction_request = service._extraction.extract.await_args.args[0]
     assert extraction_request.binding_id == binding_id
