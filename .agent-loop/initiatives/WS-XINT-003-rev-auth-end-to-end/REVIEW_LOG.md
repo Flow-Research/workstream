@@ -110,3 +110,7 @@ stale 0047 head constant and an incorrect unprefixed constraint lookup. The
 0048 head is now exact, the installed constraint is behaviorally exercised for
 independent and partial selector cases, and the focused isolated PostgreSQL
 round trip passes.
+
+PR #248 merged the completed chunk as `25fc27c4` on 2026-08-03. Backend, Agent
+Gates, and CodeRabbit passed on the final PR head. No review/revision lifecycle
+action was activated, and no successor chunk starts automatically.
