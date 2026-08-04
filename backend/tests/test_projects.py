@@ -26,6 +26,7 @@ from sqlalchemy.schema import CreateIndex
 from app.core.config import get_settings
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
+from app.core import project_agents as project_agents_core
 from app.adapters.project_agents import build_project_guide_agent_runtime
 from app.adapters.project_agents.openai_agent_sdk import (
     POLICY_DERIVATION_INSTRUCTIONS,
@@ -2608,6 +2609,25 @@ def deterministic_project_agent_runtime(monkeypatch: pytest.MonkeyPatch) -> None
         "get_project_guide_agent_runtime",
         lambda: DeterministicTestProjectGuideAgentRuntime(),
     )
+
+
+def test_project_agent_composition_builds_runtime_from_current_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = object()
+    runtime = object()
+    received: list[object] = []
+
+    monkeypatch.setattr(project_agents_core, "get_settings", lambda: settings)
+
+    def build(current_settings: object) -> object:
+        received.append(current_settings)
+        return runtime
+
+    monkeypatch.setattr(project_agents_core, "build_project_guide_agent_runtime", build)
+
+    assert project_agents_core.get_project_guide_agent_runtime() is runtime
+    assert received == [settings]
 
 
 def test_project_guide_partial_unique_index_metadata_compiles() -> None:

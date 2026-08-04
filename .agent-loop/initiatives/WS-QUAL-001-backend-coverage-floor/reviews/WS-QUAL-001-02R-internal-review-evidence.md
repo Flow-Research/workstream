@@ -30,16 +30,22 @@ architecture, public contract, or contributor documentation.
 - The first QA pass used PLAN2's older baseline. The refreshed authoritative
   hosted baseline is Backend run `30891776021` on `b47a7e64`: 20,782 covered of
   23,455 statements. The exact 89.55-percent threshold is 21,004 statements.
-- Added-test coverage union supplies 222 previously missing statements:
-  project service 194, project repository 15, and project setup queue 13.
-  The projected exact-denominator result is 21,004 / 23,455, or 89.550203
-  percent. Hosted exact-head fan-in must confirm it.
+- The first exact-head hosted fan-in measured 21,003 / 23,455, or 89.545939
+  percent, one statement below the chunk target. A final focused composition
+  test now executes `app.core.project_agents.get_project_guide_agent_runtime`
+  and asserts that it supplies current settings to the adapter factory.
+- Senior engineering, QA, test delta, CI integrity, product/ops, and
+  reuse/dedup each re-reviewed this final one-test delta. All passed; CI
+  integrity retains only the expected low risk that hosted exact-head evidence
+  remains authoritative.
 
 ## Commands and evidence
 
 - `cd backend && .venv/bin/ruff check tests/test_projects.py` — pass.
 - Focused new-test review run — 59 passed, 322 deselected; reviewer-observed
   times ranged from 60.45 to 90.22 seconds on the constrained local machine.
+- Final composition test — pass; all six focused reviewer tracks independently
+  observed the test or inspected the exact delta.
 - `git diff --check origin/main...HEAD` — pass.
 - Allowed path check — only `backend/tests/test_projects.py` before this
   evidence record was added.

@@ -8,9 +8,12 @@ internal reviews.
 
 The latest complete current-main hosted baseline is Backend run `30891776021`
 on `b47a7e64`: 88.603709 percent across 23,455 statements and 2,936 tests.
-02R's measured test union projects 21,004 covered statements, or 89.550203
-percent. The global CI floor remains 78 percent; named protected subsystem
-checks remain blocking at 90 percent.
+02R's first exact-head hosted run passed but measured 21,003 covered
+statements, or 89.545939 percent, one statement below the chunk's 89.55-percent
+target. A meaningful project-agent composition test now covers that remaining
+factory statement and awaits exact-head hosted verification. The global CI
+floor remains 78 percent; named protected subsystem checks remain blocking at
+90 percent.
 
 Historical QUAL work delivered the isolated database runner and test-integrity
 guards through PRs #103, #105, and #108. The many stopped semantic-analysis

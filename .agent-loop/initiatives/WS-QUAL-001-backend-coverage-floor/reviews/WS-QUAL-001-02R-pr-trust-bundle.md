@@ -14,8 +14,8 @@ threshold, dependency, or public API file changes.
   project resolution, strict effective-policy limits, activation readiness,
   submission-policy derivation and approval, correction/supersession, setup
   queue payloads and bounded failures, post-submit summaries, and correction
-  history.
-- Added 59 focused cases through 16 test functions and parameterization.
+  history, plus project-agent runtime composition from current settings.
+- Added 60 focused cases through 17 test functions and parameterization.
 - Reused production service, repository, and queue entry points without adding
   duplicate broad HTTP/PostgreSQL flows.
 
@@ -30,14 +30,18 @@ Current-main Backend run `30891776021` on
 - 546.201 seconds in the slowest lane.
 
 The 89.55-percent threshold requires `ceil(23,455 * 0.8955) = 21,004`
-covered statements. The union of the new tests with that hosted report covers
-222 previously missing statements, projecting exactly 21,004 / 23,455, or
-89.550203 percent. GitHub's final exact-head fan-in is authoritative.
+covered statements. The first exact-head run (`30902039458`) passed every
+semantic lane and the final fan-in, but measured 21,003 / 23,455, or
+89.545939 percent: one statement below this chunk's stricter contract target.
+The final composition-boundary test exercises the previously uncovered
+project-agent runtime factory statement. A fresh GitHub exact-head fan-in is
+authoritative for acceptance.
 
 ## Test and CI integrity
 
 - Ruff passes for the changed test file.
-- Focused new tests pass; reviewer runs observed 59 passing cases.
+- Focused new tests pass; reviewer runs observed 59 passing cases before the
+  final one-case composition correction, which also passes independently.
 - No test was removed, skipped, xfailed, weakened, or excluded from coverage.
 - No workflow, runner, lane, coverage command, or threshold changed.
 - Stale wording, authorization documentation, artifact contract, Markdown
@@ -48,17 +52,19 @@ covered statements. The union of the new tests with that hosted report covers
 ## Internal review
 
 Senior engineering, QA, test delta, CI integrity, product/ops, and reuse/dedup
-all pass on code revision `f32ebc6c0c2cf8411ca0373127b0fefd523156f8`.
-Low risks are the size of the existing mixed test module, fake fidelity, and
-the need to confirm exact coverage/runtime in hosted CI.
+all passed on code revision `f32ebc6c0c2cf8411ca0373127b0fefd523156f8`.
+Focused re-review of the CodeRabbit repair passed on `055b0db4`; the final
+one-test coverage correction is undergoing focused re-review. Low risks are
+the size of the existing mixed test module, fake fidelity, and the need to
+confirm exact coverage/runtime in hosted CI.
 
 ## External review
 
 | Source | Status | Required outcome |
 |---|---:|---|
-| Agent Gates | Pending | Pass on exact PR head |
-| Backend | Pending | All semantic lanes/fan-in pass; >=89.55 percent |
-| CodeRabbit | Repair pending | Settings-cache isolation finding repaired; fresh exact-head result required |
+| Agent Gates | Passed on `055b0db4` | Must pass again on final exact PR head |
+| Backend | Correction pending | Run `30902039458` passed, but 89.545939 percent missed the contract by one statement; final head must reach >=89.55 percent |
+| CodeRabbit | Passed/rate-limited on `055b0db4` | Settings-cache finding repaired and answered; final exact-head status required |
 
 ## Human review focus
 

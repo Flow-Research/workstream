@@ -19,5 +19,17 @@ was removed.
 
 ## Deferred comments
 
-None. A fresh CodeRabbit result and complete Backend run are required on the
-repaired exact head.
+None.
+
+## Hosted coverage correction
+
+Backend run `30902039458` passed all five semantic lanes and the final fan-in
+on repaired head `055b0db4`. It completed 2,995 tests with 21,003 / 23,455
+covered statements (89.545939 percent), 671.329 seconds total hosted wall time,
+and a 500.118-second slowest lane. Runtime remained within the contract, but
+coverage missed the 89.55-percent target by one statement.
+
+The final test exercises the real project-agent composition boundary and
+asserts that the runtime factory receives the current settings. Ruff and the
+focused test pass locally. Fresh exact-head Agent Gates, Backend, and external
+review status remain required.
