@@ -25,8 +25,6 @@ from app.modules.artifacts.models import (
     ArtifactReplica,
     ArtifactRecoveryAttempt,
     ArtifactStorageNamespace,
-    ArtifactUploadItem,
-    ArtifactUploadSession,
 )
 from app.modules.checkers.models import CheckerRun
 from app.modules.projects.models import (
@@ -71,21 +69,6 @@ class VerifiedGuideContentCandidate:
     replica_id: str
     sha256: str
     byte_count: int
-
-
-@dataclass(frozen=True, slots=True)
-class ContributorAdmissionFacts:
-    """Authoritative upload-item ownership and state."""
-
-    upload_item_id: str
-    project_id: str
-    task_id: str | None
-    actor_profile_id: str
-    session_state: str
-    item_state: str
-    expected_sha256: str | None
-    expected_size: int | None
-    media_type: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,27 +147,11 @@ class ArtifactRepository:
             raise RuntimeError("PostgreSQL clock did not return a timestamp")
         return value
 
-    async def lock_upload_item(self, item_id: str) -> ArtifactUploadItem | None:
-        """Load one upload item with a row lock."""
-        result = await self._session.execute(
-            select(ArtifactUploadItem).where(ArtifactUploadItem.id == item_id).with_for_update()
-        )
-        return result.scalar_one_or_none()
-
     async def lock_checker_run(self, checker_run_id: str) -> CheckerRun | None:
         """Lock one checker run for canonical recovery resource derivation."""
         return await self._session.scalar(
             select(CheckerRun).where(CheckerRun.id == checker_run_id).with_for_update()
         )
-
-    async def lock_upload_session(self, session_id: str) -> ArtifactUploadSession | None:
-        """Load one upload session with a row lock."""
-        result = await self._session.execute(
-            select(ArtifactUploadSession)
-            .where(ArtifactUploadSession.id == session_id)
-            .with_for_update()
-        )
-        return result.scalar_one_or_none()
 
     async def get_guide_admission_facts(
         self, guide_source_item_id: str
@@ -314,50 +281,6 @@ class ArtifactRepository:
             guide_source_snapshot_id=lineage.source_snapshot_id,
             guide_id=lineage.guide_id,
             project_id=lineage.project_id,
-        )
-
-    async def get_contributor_admission_facts(
-        self, upload_item_id: str
-    ) -> ContributorAdmissionFacts | None:
-        """Load canonical contributor upload ownership and state."""
-        row = (
-            await self._session.execute(
-                select(
-                    ArtifactUploadItem.id,
-                    WorkstreamTask.project_id,
-                    WorkstreamTask.id.label("task_id"),
-                    ArtifactUploadSession.actor_id,
-                    ArtifactUploadSession.state.label("session_state"),
-                    ArtifactUploadItem.state.label("item_state"),
-                    ArtifactUploadItem.expected_sha256,
-                    ArtifactUploadItem.expected_size,
-                    ArtifactUploadItem.media_type,
-                )
-                .join(
-                    ArtifactUploadSession,
-                    ArtifactUploadSession.id == ArtifactUploadItem.session_id,
-                )
-                .join(
-                    WorkstreamTask,
-                    (WorkstreamTask.id == ArtifactUploadSession.task_id)
-                    & (WorkstreamTask.project_id == ArtifactUploadSession.project_id),
-                )
-                .where(ArtifactUploadItem.id == upload_item_id)
-                .with_for_update(of=(ArtifactUploadSession, ArtifactUploadItem, WorkstreamTask))
-            )
-        ).one_or_none()
-        if row is None:
-            return None
-        return ContributorAdmissionFacts(
-            upload_item_id=row.id,
-            project_id=row.project_id,
-            task_id=row.task_id,
-            actor_profile_id=row.actor_id,
-            session_state=row.session_state,
-            item_state=row.item_state,
-            expected_sha256=row.expected_sha256,
-            expected_size=row.expected_size,
-            media_type=row.media_type,
         )
 
     async def get_checker_output_admission_facts(
@@ -810,19 +733,6 @@ class ArtifactRepository:
         self._session.add(receipt)
         await self._session.flush()
         return receipt
-
-    async def get_receipt_for_item(self, upload_item_id: str) -> ArtifactOperationReceipt | None:
-        """Load the Workstream put receipt for one upload item."""
-        result = await self._session.execute(
-            select(ArtifactOperationReceipt)
-            .where(ArtifactOperationReceipt.upload_item_id == upload_item_id)
-            .order_by(
-                ArtifactOperationReceipt.created_at.desc(),
-                ArtifactOperationReceipt.id,
-            )
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
 
     async def claim_storage_namespace(
         self, namespace: ArtifactStorageNamespace

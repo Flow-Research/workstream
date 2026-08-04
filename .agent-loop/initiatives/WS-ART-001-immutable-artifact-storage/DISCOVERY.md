@@ -184,3 +184,62 @@ binding, checker materialization/output custody, reviewer packet byte access,
 and accepted-contribution identity projection. REV owns review lifecycle and
 notes/findings; CON owns ContributionRecord; client delivery remains a future
 owner and is not silently implemented by ART v0.1.
+
+## 2026-08-04 ART-04A1 Legacy Contributor Intake Discovery
+
+Observations on merged `main` at `2feaf47d`:
+
+- No HTTP route currently exposes upload-session or upload-item creation, but
+  `ArtifactUploadSession` and `ArtifactUploadItem` remain active SQLAlchemy
+  metadata in `app/modules/artifacts/models.py` and `app/db/models.py`.
+- `ContributorArtifactAdmissionRequest` in
+  `app/modules/artifacts/schemas.py` remains an internal command that accepts
+  caller authorization plus an upload-item id. `ArtifactAdmissionService`
+  still dispatches that type through `_contributor_facts`, so the obsolete
+  contributor intake remains reachable to internal callers even without an
+  HTTP route.
+- `ArtifactRepository` still exposes upload-item/session locks, contributor
+  relationship lookup, and upload-item receipt lookup. These methods are used
+  only by the retired contributor path and compatibility state projection.
+- Shared put recovery and verification still conditionally mutate an upload
+  item when `ArtifactPutAttempt.upload_item_id` is present. Removing the two
+  ledgers therefore also requires removing those compatibility mutations while
+  preserving guide and checker-output recovery.
+- `ArtifactPutAttempt.upload_item_id` and
+  `ArtifactOperationReceipt.upload_item_id` still foreign-key the legacy item
+  table. Receipt contract version 1 identifies historical acknowledgements only
+  through `upload_item_id`; version 2 may also carry it for contributor puts.
+  Historical audit values cannot remain readable if the column is dropped.
+- Existing migration tests already seed populated legacy sessions/items,
+  attempts, and receipts and exercise database invariants. ART-04A1 needs a new
+  head migration that refuses unsafe populated cutover instead of fabricating a
+  replacement identity or silently deleting evidence.
+- AUTH has already removed the obsolete action identifiers from the active
+  catalogue and service matrix; `tests/test_authorization.py` retains the
+  deterministic historical-only proof. ART must not edit AUTH availability or
+  create aliases.
+
+Implementation constraints derived from the current code:
+
+- Remove the contributor admission request variant, service dispatch, repository
+  relationship methods, upload-ledger models, and conditional upload-item state
+  projection from shared recovery/verification.
+- Do not detach or preserve nullable `upload_item_id` compatibility columns.
+  Refuse any populated historical reference before dropping the columns and
+  ledgers, leaving that deployment unchanged for a separate maintenance decision.
+- The migration must fail closed when rows exist whose deletion would discard
+  non-represented contributor state. Upgrade/downgrade behavior and the exact
+  safe-empty condition require plan-review approval before implementation.
+- No replacement route, ZIP parser, scratch orchestration, provider write, AUTH
+  action activation, Submission, checker, or review behavior belongs to 04A1.
+
+Plan-review resolution:
+
+- 04A1 is a complete safe-empty clean cut. It takes exclusive locks and refuses
+  atomically when any session/item row, contributor put attempt, contract-v1
+  receipt, or non-null upload-item reference exists. Refusal preserves the old
+  schema and all historical identifiers for a separately approved maintenance
+  decision. A successful upgrade therefore removes the contributor columns and
+  ledger tables completely; it does not retain detached compatibility fields.
+- Downgrade recreates only the exact empty legacy schema proven by the upgrade
+  precondition. It never fabricates a session/item lineage from newer facts.

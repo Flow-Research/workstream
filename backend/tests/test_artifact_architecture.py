@@ -6,6 +6,8 @@ import ast
 from pathlib import Path
 
 from app.interfaces import artifact_operations
+from app.db.base import Base
+from app.main import create_app
 
 
 BACKEND_ROOT = Path(__file__).parents[1]
@@ -69,8 +71,19 @@ INTERNAL_ADMISSION_TYPES = {
     "ArtifactAdmissionService",
     "ArtifactAdmissionResult",
     "CheckerOutputArtifactAdmissionRequest",
-    "ContributorArtifactAdmissionRequest",
     "GuideArtifactAdmissionRequest",
+}
+
+RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
+    "ArtifactUploadItem",
+    "ArtifactUploadSession",
+    "ContributorArtifactAdmissionRequest",
+    "ContributorAdmissionFacts",
+    "get_contributor_admission_facts",
+    "get_receipt_for_item",
+    "lock_upload_item",
+    "lock_upload_session",
+    "_contributor_facts",
 }
 PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
 CONCRETE_ADAPTER_MODULES = {
@@ -114,6 +127,37 @@ def _declared_annotation_names(tree: ast.AST) -> set[str]:
                 names.update(_annotation_names(node.args.kwarg.annotation))
             names.update(_annotation_names(node.returns))
     return names
+
+
+def test_retired_contributor_intake_has_no_runtime_declaration_or_reference() -> None:
+    runtime_files = _python_files(APP_ROOT)
+    for path in runtime_files:
+        tree = _tree(path)
+        names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)} | {
+            node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+        }
+        declared = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        assert not ((names | declared) & RETIRED_CONTRIBUTOR_INTAKE_NAMES), path
+
+    assert "artifact_upload_sessions" not in Base.metadata.tables
+    assert "artifact_upload_items" not in Base.metadata.tables
+
+
+def test_no_retired_or_replacement_contributor_intake_route_is_composed() -> None:
+    paths = set(create_app().openapi()["paths"])
+    forbidden_fragments = (
+        "artifact-upload",
+        "artifact_upload",
+        "upload-session",
+        "upload_session",
+        "submission-bundle",
+        "submission_bundle",
+    )
+    assert not {path for path in paths if any(fragment in path for fragment in forbidden_fragments)}
 
 
 def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() -> None:
