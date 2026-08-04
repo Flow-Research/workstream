@@ -1119,6 +1119,19 @@ The hidden 04A2 structural inspector uses the closed internal failure tokens
 They contain no submitted paths or parser details. Their eventual HTTP/API
 mapping remains deferred to the submission-admission route chunk.
 
+The hidden 04A3 semantic change gate adds the closed internal failure tokens
+`submission_archive_unchanged`, `submission_manifest_unchanged`, and
+`submission_canonical_predecessor_unavailable`; stale revalidation uses
+`submission_predecessor_stale`. The first two distinguish exact
+archive equality from equal semantic content with different ZIP packaging. The
+third fails closed when a non-first Submission predecessor lacks ART-owned
+canonical archive and manifest identities; legacy caller-owned package or
+manifest fields are never a fallback. These failures occur before checker or
+provider I/O and create no Submission, checker, review, admission, outbox,
+contribution, compensation, reputation, task-state, or assignment-state effect.
+Their eventual HTTP/API mapping remains deferred to the submission-admission
+route chunk.
+
 Only a passing result is handed immediately to generic durable admission in the
 same process. Workstream writes the outer ZIP once, independently reads it back,
 and publishes a `ready` bindable admission only after exact verification. Existing put
