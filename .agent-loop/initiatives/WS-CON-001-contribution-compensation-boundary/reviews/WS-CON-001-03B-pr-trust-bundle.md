@@ -44,5 +44,8 @@ economic rules.
 
 ## Remaining External Gate
 
-GitHub CI and CodeRabbit must pass on the published exact head. Human merge is
-required, and no subsequent chunk begins automatically.
+The first hosted project-lifecycle run exposed an import-order failure from an
+unnecessary reverse ORM relationship. That relationship was removed without
+changing database lineage, and the exact formerly failing project test passes
+in isolation. GitHub CI and CodeRabbit must pass on the repaired exact head.
+Human merge is required, and no subsequent chunk begins automatically.

@@ -84,7 +84,6 @@ class ContributionPolicy(Base):
     )
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    project: Mapped["Project"] = relationship(back_populates="contribution_policies")  # noqa: F821
     versions: Mapped[list["ContributionPolicyVersion"]] = relationship(
         back_populates="policy",
         foreign_keys="ContributionPolicyVersion.contribution_policy_id",
