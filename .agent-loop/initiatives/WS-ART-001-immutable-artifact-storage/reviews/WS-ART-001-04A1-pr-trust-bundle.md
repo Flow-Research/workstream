@@ -64,7 +64,11 @@ was corrected without changing production guards, and the complete operator and
 recovery pair passes 15 tests. A subsequent schema-contract shard exposed one
 remaining broad assertion that required the intentionally retired tables; it now
 asserts those table columns are discarded, and the exact schema test passes.
-Fresh hosted Backend/Agent Gates are required on the final correction commit.
+All shards subsequently passed, but aggregate ART coverage was 89.52%. Current
+checker-output observation tests now replace the removed contributor coverage
+for mismatch, provider conflict, and verified-replica collision; all pass and
+project 90.01% against the authenticated hosted coverage baseline. Fresh hosted
+Backend/Agent Gates are required on the final correction commit.
 
 ## Remaining risks and follow-up
 

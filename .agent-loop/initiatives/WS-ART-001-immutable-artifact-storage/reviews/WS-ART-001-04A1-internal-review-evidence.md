@@ -21,6 +21,10 @@ Result: PASS.
 - After the schema-contract shard exposed a stale broad-schema expectation, the
   exact current-schema test passed with the retired intake tables asserted
   absent instead of present.
+- Current checker-output mismatch, provider-conflict, and verified-replica
+  collision proofs pass. Against the authenticated hosted coverage baseline,
+  they restore the ART subsystem projection from 89.52% to 90.01% without
+  changing the required threshold.
 - Stale artifact/auth/wording scans, Markdown links, and `git diff --check`
   passed. No dependency, workflow, coverage-threshold, or package-script change
   was made.

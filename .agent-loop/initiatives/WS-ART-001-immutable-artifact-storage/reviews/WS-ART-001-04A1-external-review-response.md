@@ -30,3 +30,11 @@ The fresh run proved `shared_foundations`, `project_lifecycle`,
 tables this chunk intentionally removes. The assertion now classifies
 `artifact_upload_sessions.id` and `artifact_upload_items.id` as discarded
 columns. The exact formerly failing schema test passes locally.
+
+All five shards then passed, while the aggregate ART subsystem coverage gate
+reported `89.52%`. The deleted contributor tests had also carried ambiguous-put
+terminal coverage. That proof is now restored on the current task-scoped
+checker-output producer for mismatch, provider conflict, and collision with an
+already verified replica. All three cases pass. Combining those exact tests
+with the authenticated hosted shard coverage reaches `90.01%`; the hosted gate
+must confirm the final commit.
