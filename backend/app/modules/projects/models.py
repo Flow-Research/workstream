@@ -73,8 +73,6 @@ class Project(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )
-
-
 class ProjectCreateIdempotencyRecord(Base):
     """Project-owned reservation and replay state for one project creation."""
 

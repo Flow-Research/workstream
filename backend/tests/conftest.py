@@ -21,10 +21,11 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "ae47899464f7635fbbc426f0f53abd005c3a0489edd3d18cfe6b1889c9eacd5c"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "e52ae0ebd83dbd1786fc2ea2dac25608a0c61f8b0f623cb0d19fa854c8db95c9"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
+    "iso_4217_currency_codes",
 )
 RESETTABLE_TEST_TABLES = (
     "actor_identity_links",
@@ -50,6 +51,10 @@ RESETTABLE_TEST_TABLES = (
     "checker_policies",
     "checker_results",
     "checker_runs",
+    "contribution_award_definitions",
+    "contribution_policies",
+    "contribution_policy_versions",
+    "contribution_rules",
     "effective_project_submission_artifact_policies",
     "evidence_items",
     "guide_source_artifact_ingests",
@@ -73,6 +78,7 @@ RESETTABLE_TEST_TABLES = (
     "policy_mutation_idempotency_records",
     "pre_submit_checker_policies",
     "project_compensation_adapter_bindings",
+    "project_compensation_units",
     "project_create_idempotency_records",
     "project_guides",
     "project_role_grants",
@@ -98,6 +104,11 @@ TRUNCATE_GUARDED_TABLES = (
     "guide_source_snapshot_items",
     "outbox_events",
     "policy_mutation_idempotency_records",
+    "contribution_award_definitions",
+    "contribution_policies",
+    "contribution_policy_versions",
+    "contribution_rules",
+    "project_compensation_units",
     "project_create_idempotency_records",
     "project_role_grants",
     "project_role_qualification_snapshots",

@@ -2,13 +2,16 @@
 
 ## Current baseline
 
-- Reconciled main: `cda59fc32e3a60e1e2c337cae7ebeaa94b95e12b`.
-- Alembic head on main: `0053_compensation_bindings`.
+- Reconciled main: `9550b3cdb8ac12dea72931277cf46ac1b8ffda7f`.
+- Alembic head on main: `0054_guide_sufficiency_authority`; 03B advances the branch
+  to `0055_contribution_policy` after AUTH migration
+  `0054_guide_sufficiency_authority`.
 - CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
-- PLAN5 is the active documentation/specification reconciliation for the
-  human-confirmed complete-context `needs_revision` rebase rule.
-- Runtime contains shared outbox persistence and the schema-only compensation
-  binding foundation; contribution,
+- PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
+  `needs_revision` rebase rule.
+- Runtime on main contains shared outbox persistence and the schema-only
+  compensation binding foundation. 03B is complete on its bounded branch and
+  adds contribution-policy persistence; contribution-record,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
 - The pre-existing local deletion of the archival reference PDF is user-owned
   and excluded from this planning change.
@@ -70,7 +73,8 @@ schema work. Current dependency analysis yields:
 
 ## Immediate next action
 
-Finish PLAN5 canonical reconciliation and stop at its PR checkpoint. It changes
-no runtime. After human merge approval, 03B remains the next proposed runtime
-chunk; binding creation remains deferred to 04A after AUTH approves the exact
-adapter identity/capability contract.
+Publish 03B for external CI, CodeRabbit, and human review, then stop at its PR
+checkpoint. Do not begin another chunk automatically. After 03B merges it
+unblocks the stable policy-version FK required by REV-03A2; binding creation
+remains deferred to 04A after AUTH approves the exact adapter
+identity/capability contract.

@@ -103,6 +103,7 @@ LANES = (
             "tests/test_ci_test_lanes.py",
             "tests/test_config.py",
             "tests/test_compensation.py",
+            "tests/test_contributions.py",
             "tests/test_coverage_contract.py",
             "tests/test_external_service_adapters.py",
             "tests/test_guide_artifacts.py",

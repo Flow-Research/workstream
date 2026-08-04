@@ -361,6 +361,10 @@ jobs:
         working-directory: backend
         run: coverage report --include='app/modules/checkers/*' --precision=2 --fail-under=90
 
+      - name: Contribution subsystem coverage
+        working-directory: backend
+        run: coverage report --include='app/modules/contributions/*' --precision=2 --fail-under=90
+
       - name: API router composition coverage
         working-directory: backend
         run: coverage report --include='app/api/router.py' --precision=2 --fail-under=90
