@@ -2,18 +2,19 @@
 
 ## Audited baseline
 
-Hosted Backend run `30835801412` on the PR #259 exact tested tree produced:
+Hosted Backend run `30854931616` on the final PR #249 tested tree
+`19d48f7ea4bf20cb29f03cbba54f98683ce52661` produced:
 
-- 2,914 collected and completed tests;
-- 20,787 covered statements of 23,368;
-- 2,581 missed statements;
-- 88.954981 percent global statement coverage;
-- 936.775 seconds total backend wall time;
-- 755.531 seconds in the slowest semantic lane.
+- 2,925 collected and completed tests;
+- 20,793 covered statements of 23,475;
+- 2,682 missed statements;
+- 88.575080 percent global statement coverage;
+- 640.284 seconds total backend wall time;
+- 468.506 seconds in the slowest semantic lane.
 
-At the current denominator, 90 percent permits at most 2,336 missed statements.
-The suite therefore needs 245 additional covered statements, plus reasonable
-headroom for concurrent application growth before the floor changes.
+At the current denominator, 90 percent permits at most 2,347 missed statements.
+The suite therefore needs 335 additional covered statements to reach 90
+percent and 394 to reach the required 90.25-percent pre-switch headroom.
 
 ## Current CI behavior
 
@@ -33,14 +34,14 @@ The latest hosted coverage JSON identifies these high-value gaps:
 
 | Module | Statements | Missing | Coverage |
 |---|---:|---:|---:|
-| `app/modules/projects/service.py` | 1,527 | 520 | 65.95% |
-| `app/modules/checkers/service.py` | 579 | 170 | 70.64% |
+| `app/modules/projects/service.py` | 1,451 | 550 | 62.10% |
+| `app/modules/checkers/service.py` | 579 | 169 | 70.81% |
 | `app/modules/authorization/router.py` | 484 | 168 | 65.29% |
-| `app/modules/artifacts/service.py` | 959 | 139 | 85.51% |
+| `app/modules/artifacts/service.py` | 959 | 138 | 85.61% |
 | `app/modules/tasks/service.py` | 682 | 108 | 84.16% |
-| `app/modules/projects/repository.py` | 282 | 87 | 69.15% |
+| `app/modules/projects/repository.py` | 285 | 96 | 66.32% |
 | `app/modules/artifacts/operator.py` | 204 | 80 | 60.78% |
-| `app/modules/projects/router.py` | 184 | 68 | 63.04% |
+| `app/modules/projects/router.py` | 178 | 63 | 64.61% |
 | `app/modules/artifacts/guide_extraction_worker.py` | 237 | 65 | 72.57% |
 
 Smaller gaps exist in checker repository/router/runner/compiler, project setup
@@ -65,8 +66,8 @@ refactor production services merely to raise coverage.
 
 ## Risks discovered
 
-- Adding another 245 database-heavy lines of coverage could worsen the current
-  15.6-minute hosted wall time.
+- Adding hundreds of database-heavy covered lines could worsen the current
+  10.7-minute hosted wall time.
 - Testing implementation branches without outcomes can manufacture percentage
   while adding little confidence.
 - Raising the floor in the same PR as broad tests makes failures harder to

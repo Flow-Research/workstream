@@ -5,7 +5,7 @@ Parent initiative: `WS-QUAL-001`
 ## Goal
 
 Replace the obsolete milestone ladder with an evidence-backed closure plan from
-the current hosted 88.954981-percent baseline.
+the current hosted 88.575080-percent baseline.
 
 ## Risk class and SLA
 

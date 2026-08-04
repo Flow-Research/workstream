@@ -8,8 +8,8 @@ checks and all required internal plan reviewers pass after scope, ownership,
 contract, runtime, and historical-classification repairs. No QUAL implementation
 chunk is active; PLAN2 awaits GitHub and human review.
 
-The latest complete hosted baseline is 88.954981 percent across 23,368
-statements and 2,914 tests. The global CI floor remains 78 percent. Multiple
+The latest complete hosted baseline after ART-03C is 88.575080 percent across
+23,475 statements and 2,925 tests. The global CI floor remains 78 percent. Multiple
 named changed subsystems already have blocking 90-percent checks.
 
 Historical QUAL work delivered the isolated database runner and test-integrity

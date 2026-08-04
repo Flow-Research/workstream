@@ -8,9 +8,11 @@ backend floor.
 
 ## Baseline evidence
 
-Backend run `30835801412` and its hosted evidence artifact record 2,914
-completed tests, 20,787 covered of 23,368 statements, 88.954981-percent global
-coverage, 936.775 seconds wall time, and a 755.531-second slowest lane.
+Backend run `30854931616` on exact tested tree
+`19d48f7ea4bf20cb29f03cbba54f98683ce52661` and its hosted evidence record 2,925
+completed tests, 20,793 covered of 23,475 statements, 88.575080-percent global
+coverage, 640.284 seconds wall time, and a 468.506-second slowest lane. This is
+the final ART-03C tested tree later merged to `main` through PR #249.
 
 ## Scope
 
@@ -64,3 +66,6 @@ Hosted Agent Gates found two ambiguous role-like references in changed planning
 lines. They now say background-job modules/ownership, avoiding confusion with a
 product actor class. CodeRabbit produced no actionable finding because its
 review request was temporarily rate-limited.
+
+After PRs #258 and #249 advanced `main`, PLAN2 merged that trusted head and
+replaced its older PR #259 baseline with the final ART-03C hosted evidence.

@@ -51,7 +51,7 @@ database/HTTP coverage already owned by another layer.
 
 - Reviving `01B2` and the complex base-evidence ratchet: unnecessary now that
   exact lane custody and hosted coverage evidence exist.
-- One large 245-line coverage PR: crosses project, checker, task, artifact, and
+- One large cross-owner coverage PR: crosses project, checker, task, artifact, and
   authorization ownership and is difficult to review.
 - Raising the floor immediately: current measured coverage is below 90.
 - Excluding low-coverage services or files: makes the global percentage false.

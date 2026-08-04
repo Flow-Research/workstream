@@ -15,8 +15,8 @@ remains practical for contributors.
 
 ## Current truth
 
-The latest complete hosted result before this reconciliation ran 2,914 tests
-and covered 20,787 of 23,368 application statements: 88.954981 percent. The
+The latest complete hosted result after ART-03C ran 2,925 tests and covered
+20,793 of 23,475 application statements: 88.575080 percent. The
 global CI floor remains 78 percent, while named new or materially changed
 subsystems are already protected at 90 percent.
 

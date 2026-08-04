@@ -30,4 +30,5 @@ None beyond normal PR review and explicit merge approval.
 
 Hosted Agent Gates must pass on the repaired exact head. Backend was already
 fully green on the prior head, and no backend, test, workflow, or threshold file
-changes in this repair.
+changes originate in this repair. PLAN2 also reconciles merged PRs #258 and
+#249 and uses PR #249's final hosted coverage evidence as the current baseline.
