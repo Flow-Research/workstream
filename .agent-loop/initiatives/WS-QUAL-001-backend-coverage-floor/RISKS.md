@@ -1,14 +1,14 @@
-# Risks: WS-QUAL-001 Backend Coverage Floor
+# Risks: WS-QUAL-001 Current-Main Coverage Closure
 
-| Risk | Control |
-|---|---|
-| Tests chase lines instead of behavior | Require meaningful outcome assertions and QA/product review |
-| Coverage is inflated by exclusions | Measure all `backend/app` modules; prohibit omit lists and coverage pragmas |
-| Shared Postgres state corrupts evidence | One provisioner owns a strictly named local database, cleanup, and migration-head evidence |
-| Giant PR becomes unreviewable | Split project, task/checker, and residual coverage into bounded chunks |
-| Threshold is silently weakened later | CI-integrity review and PR template; floor can only stay level or rise |
-| Tests over-mock persistence and workers | Require focused integration proof for repository, queue, and audit outcomes |
-| Coverage tracing makes the suite too slow | Profile fixtures separately; never trade correctness or isolation for speed |
-| A test exposes a production bug | Stop and create a separately scoped corrective chunk |
-| Credentials leak through commands/evidence | Accept admin DSN only from environment; record only database name and redact URLs |
-| Ratchet is lowered with its own checker | Compare configuration/evidence to merge base and require CI-integrity review |
+| Risk | Consequence | Control |
+|---|---|---|
+| Coverage-only tests | Higher percentage without stronger behavior proof | Require observable outcomes and QA/test-delta review |
+| More database/HTTP tests | Backend CI becomes slower | Prefer pure/use-case/adapter-contract tests unless the real boundary is essential |
+| Concurrent denominator growth | Candidate falls below 90 before floor merge | Remeasure current main and require >=90.25% headroom before 04R |
+| Threshold bundled with tests | Harder diagnosis and pressure to bargain | Keep the 90-percent switch in separate chunk 04R |
+| Production defect discovered | QUAL scope expands into product repair | Stop and hand defect to owning initiative |
+| Historical parser revival | Reintroduces complexity and maintenance burden | Mark 01B2 and old replacements superseded |
+| File exclusion or pragma | False global measurement | Preserve complete app inventory and existing stale/coverage guards |
+| Duplicate invariant tests | Slower suite and ambiguous ownership | Map each new test to its owning layer and review existing proof first |
+
+No secret, credential, deployment, payment, or production-data access is needed.
