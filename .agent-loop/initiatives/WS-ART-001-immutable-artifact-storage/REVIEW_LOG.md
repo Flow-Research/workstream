@@ -283,3 +283,19 @@
 - CodeRabbit's one valid external finding closes non-canonical root
   relationship parts and fails closed on malformed relationship-part shapes;
   focused security and test-delta re-review cover the repair.
+
+## WS-ART-001-04A3
+
+- Tightened the L1 contract before implementation to make 04A3 process-local,
+  exclude legacy caller-owned package/manifest authority, freeze the manifest
+  schema, and defer durable persistence/binding to 04C2/05A.
+- Extended the existing safe outer-ZIP read with exact file hashes and
+  executable normalization, then added the canonical manifest and typed
+  unchanged-work gate without a second parser or durable/public side effect.
+- Security review found that an optional current-predecessor selector left a
+  future stale-comparison seam. Non-first comparison now requires exact equality
+  with the locked/reloaded current selector and has omission/advancement proof.
+- Focused evidence passes 85 tests and 92.11 percent owned coverage. Ruff,
+  semantic-lane inventory, stale scans, links, and diff checks pass.
+- Architecture, security, QA, product/ops, senior engineering, CI integrity,
+  docs, reuse/dedup, and test-delta final reviews pass.
