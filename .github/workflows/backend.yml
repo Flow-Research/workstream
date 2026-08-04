@@ -457,7 +457,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          coverage json -o .ci/test-lanes/coverage.json
+          coverage json --include='app/*' -o .ci/test-lanes/coverage.json
           python - <<'PY'
           from __future__ import annotations
 
