@@ -63,11 +63,10 @@ mandatory platform/locked-guide checks. It is not candidate storage, carries no
 provider reference, cannot cross a process boundary, and is discarded on
 failure or process loss.
 
-Only a passing preparation enters generic durable admission. Existing
-`ArtifactUploadSession`/`ArtifactUploadItem` rows and planned actions are legacy
-unavailable staging input and must be removed or made statically unreachable by
-ART-04A plus the separately reviewed AUTH registration handoff before the new
-surface activates.
+Only a passing preparation enters generic durable admission. The retired
+`ArtifactUploadSession`/`ArtifactUploadItem` staging path is absent from the
+current runtime and schema. Submission-bundle preparation enters generic
+durable admission directly after its bounded checks pass.
 
 ### ArtifactStorageAdmissionLedger
 
@@ -140,8 +139,7 @@ A bounded PostgreSQL scanner publishes `prepared`,
 uses read-only `observe_put_result`, then opens and hashes any observed object.
 Matching bytes complete the original charges and Transaction B facts exactly
 once. Authoritative absence releases charges and moves the producer attempt to
-`absent_replay_required`; a legacy contributor upload item, while it exists,
-moves to `replay_required`. Mismatched bytes remain charged, quarantine the key, and
+`absent_replay_required`. Mismatched bytes remain charged, quarantine the key, and
 create an incident. Terminal writes require matching executor and generation.
 No background resolver performs another provider write.
 
@@ -172,9 +170,8 @@ availability_state = unknown | available | unavailable
 integrity_state    = unknown | valid | invalid
 ```
 
-Transaction B sets the `ArtifactPutAttempt` to `object_confirmed`, sets a legacy
-contributor upload item, while it exists, to `stored_pending_verification`, and
-creates the replica as `pending/unknown/unknown`. A matching complete read makes the
+Transaction B sets the `ArtifactPutAttempt` to `object_confirmed` and creates
+the replica as `pending/unknown/unknown`. A matching complete read makes the
 admission bindable and replica `verified/available/valid`. A provider-unavailable or
 conflict job result does not fabricate a replica observation.
 
@@ -182,8 +179,7 @@ A confirmed absent object sets the replica to
 `missing/unavailable/unknown`. Before any binding exists, and only while the
 original producer attempt remains eligible, an exact replay by the original
 authorized producer may move that same replica to `pending/unknown/unknown`,
-set the attempt back to `object_confirmed`, set a legacy contributor upload item,
-while it exists, to `stored_pending_verification`, append a new operation receipt,
+set the attempt back to `object_confirmed`, append a new operation receipt,
 and create a new verification job. After a binding exists, the missing
 replica is terminal and cannot return to pending in v0.1. A digest/size mismatch
 sets the replica to `integrity_mismatch/available/invalid`, fails the pre-binding
@@ -762,8 +758,7 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
    stores or resolves an exact replay candidate.
 6. Transaction B validates the reservation/CAS, completes every provisional
    charge, records content, replica, and operation receipt, sets the
-   `ArtifactPutAttempt` to `object_confirmed`, sets a legacy contributor upload item, while it exists,
-   to `stored_pending_verification`, and sets the replica to
+   `ArtifactPutAttempt` to `object_confirmed`, and sets the replica to
    `pending/unknown/unknown`.
 7. The transaction creates an outbox/publication obligation for one
    verification job.
@@ -786,8 +781,7 @@ The attempt scanner publishes resolution after an ambiguous outcome or expired
 execution lease. Resolution performs a fresh read-only observation and full
 hash. A confirmed object completes the same charges and Transaction B facts.
 Fresh authoritative absence releases them and moves the `ArtifactPutAttempt` to
-`absent_replay_required`; while a legacy contributor upload item exists, it
-alone moves to `replay_required`. Replay must atomically reacquire every
+`absent_replay_required`. Replay must atomically reacquire every
 applicable charge before another provider call. Integrity-mismatched or
 quarantined existing bytes remain completed and charged.
 

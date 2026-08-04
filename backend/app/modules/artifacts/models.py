@@ -30,130 +30,6 @@ UUID_CHECK = (
 )
 
 
-class ArtifactUploadSession(Base):
-    """Mutable staging authority for one bounded artifact set."""
-
-    __tablename__ = "artifact_upload_sessions"
-    __table_args__ = (
-        CheckConstraint(
-            "state in ('open', 'sealed', 'consumed', 'expired', 'cancelled')",
-            name="state",
-        ),
-        CheckConstraint(
-            "maximum_bytes >= 0 and current_bytes >= 0 and reserved_bytes >= 0",
-            name="byte_counts_nonnegative",
-        ),
-        CheckConstraint(
-            "maximum_items >= 0 and current_items >= 0 and reserved_items >= 0",
-            name="item_counts_nonnegative",
-        ),
-        CheckConstraint(
-            "current_bytes + reserved_bytes <= maximum_bytes",
-            name="byte_limit",
-        ),
-        CheckConstraint(
-            "current_items + reserved_items <= maximum_items",
-            name="item_limit",
-        ),
-        CheckConstraint("cas_version >= 0", name="cas_nonnegative"),
-        CheckConstraint(
-            "artifact_set_hash is null or " + SHA256_CHECK.format(column="artifact_set_hash"),
-            name="artifact_set_hash_shape",
-        ),
-        CheckConstraint(
-            "(state = 'consumed') = (consumed_at is not null)",
-            name="consumed_timestamp",
-        ),
-        CheckConstraint(
-            "state not in ('sealed', 'consumed') or artifact_set_hash is not null",
-            name="sealed_hash_required",
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    actor_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    project_id: Mapped[str] = mapped_column(
-        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    task_id: Mapped[str | None] = mapped_column(String(36), index=True)
-    guide_id: Mapped[str | None] = mapped_column(String(36), index=True)
-    permitted_roles: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    state: Mapped[str] = mapped_column(String(30), nullable=False, default="open", index=True)
-    maximum_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    current_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    reserved_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    maximum_items: Mapped[int] = mapped_column(Integer, nullable=False)
-    current_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    reserved_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    artifact_set_hash: Mapped[str | None] = mapped_column(String(71))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    cas_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
-class ArtifactUploadItem(Base):
-    """Per-item staging and recovery ledger under an upload session."""
-
-    __tablename__ = "artifact_upload_items"
-    __table_args__ = (
-        UniqueConstraint("session_id", "idempotency_key", name="uq_artifact_item_operation"),
-        CheckConstraint(
-            "state in ('reserved', 'uploading', 'replay_required', "
-            "'stored_pending_verification', 'ready', 'failed', 'cancelled')",
-            name="state",
-        ),
-        CheckConstraint(
-            "reserved_bytes >= 0 and cas_version >= 0 and "
-            "(expected_size is null or expected_size >= 0)",
-            name="counts_nonnegative",
-        ),
-        CheckConstraint(SHA256_CHECK.format(column="request_digest"), name="request_digest_shape"),
-        CheckConstraint(
-            "expected_sha256 is null or " + SHA256_CHECK.format(column="expected_sha256"),
-            name="expected_sha256_shape",
-        ),
-        CheckConstraint(
-            "((state in ('stored_pending_verification', 'ready')) and "
-            "content_id is not null and provider_object_ref is not null) or "
-            "((state not in ('stored_pending_verification', 'ready')) and "
-            "content_id is null and provider_object_ref is null)",
-            name="stored_result_required",
-        ),
-        CheckConstraint(
-            "state != 'failed' or error_code is not null",
-            name="failed_error_required",
-        ),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    session_id: Mapped[str] = mapped_column(
-        ForeignKey("artifact_upload_sessions.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    logical_role: Mapped[str] = mapped_column(String(100), nullable=False)
-    display_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    media_type: Mapped[str | None] = mapped_column(String(200))
-    reserved_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    expected_sha256: Mapped[str | None] = mapped_column(String(71))
-    expected_size: Mapped[int | None] = mapped_column(Integer)
-    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
-    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    state: Mapped[str] = mapped_column(String(30), nullable=False, default="reserved", index=True)
-    cas_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    provider_object_ref: Mapped[str | None] = mapped_column(String(1024))
-    content_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_contents.id", ondelete="RESTRICT"), index=True
-    )
-    error_code: Mapped[str | None] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-
 class ArtifactContent(Base):
     """Immutable provider-neutral identity for exact stored bytes."""
 
@@ -759,7 +635,7 @@ class ArtifactPutAttempt(Base):
         ),
         UniqueConstraint("operation_identity", name="uq_artifact_put_attempt_operation"),
         CheckConstraint(
-            "producer_request_type in ('guide', 'contributor', 'checker_output')",
+            "producer_request_type in ('guide', 'checker_output')",
             name="producer_request_type",
         ),
         CheckConstraint(
@@ -767,7 +643,7 @@ class ArtifactPutAttempt(Base):
             name="producer_type",
         ),
         CheckConstraint(
-            "((producer_request_type in ('guide', 'contributor') "
+            "((producer_request_type = 'guide' "
             "and producer_type = 'actor_profile' and "
             + UUID_CHECK.format(column="producer_ref")
             + ") or (producer_request_type = 'checker_output' "
@@ -830,13 +706,10 @@ class ArtifactPutAttempt(Base):
         ),
         CheckConstraint(
             "(producer_request_type = 'guide' and guide_source_item_id is not null "
-            "and upload_item_id is null and checker_run_id is null and task_id is null "
-            "and logical_role is null) or "
-            "(producer_request_type = 'contributor' and guide_source_item_id is null "
-            "and upload_item_id is not null and checker_run_id is null and task_id is not null "
+            "and checker_run_id is null and task_id is null "
             "and logical_role is null) or "
             "(producer_request_type = 'checker_output' and guide_source_item_id is null "
-            "and upload_item_id is null and checker_run_id is not null and task_id is not null "
+            "and checker_run_id is not null and task_id is not null "
             "and octet_length(logical_role) between 1 and 100)",
             name="producer_reference",
         ),
@@ -854,9 +727,6 @@ class ArtifactPutAttempt(Base):
     )
     guide_source_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("guide_source_snapshot_items.id", ondelete="RESTRICT"), index=True
-    )
-    upload_item_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_upload_items.id", ondelete="RESTRICT"), index=True
     )
     checker_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("checker_runs.id", ondelete="RESTRICT"), index=True
@@ -972,12 +842,9 @@ class ArtifactOperationReceipt(Base):
         CheckConstraint("outcome = 'stored_pending_verification'", name="outcome"),
         CheckConstraint("attempt_number > 0", name="attempt_positive"),
         CheckConstraint(
-            "(contract_version = 1 and put_attempt_id is null and upload_item_id is not null "
-            "and guide_source_item_id is null and checker_run_id is null) or "
-            "(contract_version = 2 and put_attempt_id is not null and "
-            "((upload_item_id is not null)::int + "
-            "(guide_source_item_id is not null)::int + "
-            "(checker_run_id is not null)::int) = 1)",
+            "contract_version = 2 and put_attempt_id is not null and "
+            "((guide_source_item_id is not null)::int + "
+            "(checker_run_id is not null)::int) = 1",
             name="contract_producer_reference",
         ),
     )
@@ -986,10 +853,6 @@ class ArtifactOperationReceipt(Base):
     contract_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     put_attempt_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), index=True
-    )
-    upload_item_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_upload_items.id", ondelete="RESTRICT"),
-        index=True,
     )
     guide_source_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("guide_source_snapshot_items.id", ondelete="RESTRICT"), index=True
