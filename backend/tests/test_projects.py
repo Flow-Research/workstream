@@ -8488,7 +8488,9 @@ async def test_manual_sufficiency_report_exact_replay_reauthorizes_and_mismatch_
     assert created.json()["agent_version"] is None
 
 
-async def test_sufficiency_mutation_fail_closed_internal_guards() -> None:
+async def test_sufficiency_mutation_fail_closed_internal_guards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Exercise replay, lineage, and authority guards without provider side effects."""
 
     module = sufficiency_mutation_service_module
@@ -8562,10 +8564,94 @@ async def test_sufficiency_mutation_fail_closed_internal_guards() -> None:
         ):
             pass
 
+    class Connection:
+        async def scalar(self, *_: object, **__: object) -> bool:
+            return False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    class Engine:
+        def connect(self) -> Connection:
+            return Connection()
+
+    monkeypatch.setattr(module, "AsyncEngine", Engine)
+    service._session = SimpleNamespace(bind=Engine())
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        async with service._execution_fence(
+            resolved.profile.id,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            uuid4(),
+        ):
+            pass
+
     async def fixed_lineage(*_: object, **__: object):
         return lineage
 
     service._lineage = fixed_lineage
+    no_material = module.GuideSufficiencyMutationService(object())
+    with pytest.raises(PolicySetupBlocked, match="verified guide sufficiency is unavailable"):
+        await no_material._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=None,  # type: ignore[arg-type]
+            key=uuid4(),
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="setup_service",
+            setup_service_custody=None,  # type: ignore[arg-type]
+        )
+
+    missing_setup_lineage = module.replace(lineage, setup_run_id=None)
+
+    async def missing_setup(*_: object, **__: object):
+        return missing_setup_lineage
+
+    missing_setup_service = module.GuideSufficiencyMutationService(object(), material=object())
+    missing_setup_service._lineage = missing_setup
+    with pytest.raises(RuntimeError, match="required setup run was not resolved"):
+        await missing_setup_service._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=None,  # type: ignore[arg-type]
+            key=uuid4(),
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="setup_service",
+            setup_service_custody=None,  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="setup_run_context_mismatch"):
+        await service.resolve_setup_service_custody(
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            setup_run_id=uuid4(),
+            setup_generation=lineage.setup_generation,
+            task_id=uuid4(),
+            correlation_id=uuid4(),
+        )
+
+    class MissingSetupRun:
+        async def lock_project_setup_run(self, _selected_id: str):
+            return None
+
+    service._projects = MissingSetupRun()
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="setup_run_context_mismatch"):
+        await service.resolve_setup_service_custody(
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            setup_run_id=cast(UUID, lineage.setup_run_id),
+            setup_generation=lineage.setup_generation,
+            task_id=uuid4(),
+            correlation_id=uuid4(),
+        )
     payload = module.GuideSufficiencyReportCreate(
         source_snapshot_id=str(snapshot_id),
         status="passed",
@@ -8619,6 +8705,239 @@ async def test_sufficiency_mutation_fail_closed_internal_guards() -> None:
         )
 
     assert not hasattr(module.GuideSufficiencyMutationService, "run_agent")
+
+
+async def test_sufficiency_mutation_manual_dispatch_commits_and_replays() -> None:
+    """Exercise async human dispatch and exact replay without database fixtures."""
+    module = sufficiency_mutation_service_module
+    project_id, guide_id, snapshot_id, setup_run_id = (uuid4() for _ in range(4))
+    lineage = module._Lineage(
+        guide_version="v1",
+        snapshot_id=snapshot_id,
+        snapshot_hash=sha256_hash("manual-dispatch-snapshot"),
+        setup_generation=1,
+        setup_run_id=setup_run_id,
+        stale_output_digest=sha256_hash("mutable-queue-progress"),
+    )
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(uuid4())),
+        identity_link=SimpleNamespace(id=str(uuid4())),
+    )
+    now = datetime.now(UTC)
+    setup_run = SimpleNamespace(
+        id=str(setup_run_id),
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        guide_version="v1",
+        source_snapshot_id=str(snapshot_id),
+        setup_generation=1,
+        celery_task_id=project_setup_queue_module.pre_submit_setup_task_id(str(setup_run_id), 1),
+        continuation_verification_job_id=None,
+        continuation_started_at=None,
+        status="enqueue_failed",
+        current_step="guide_sufficiency",
+        output_sufficiency_report_id=None,
+        output_submission_artifact_policy_id=None,
+        output_post_submit_checker_policy_id=None,
+        post_submit_derivation_summary=None,
+        error_code=None,
+        error_artifact_incident_id=None,
+        error_summary=None,
+        created_by="project-manager-subject",
+        created_at=now,
+        updated_at=now,
+        started_at=None,
+        finished_at=None,
+    )
+
+    class Projects:
+        setup_available = True
+
+        async def lock_project_setup_run(self, selected_id: str):
+            assert selected_id == str(setup_run_id)
+            return setup_run if self.setup_available else None
+
+        async def get_sufficiency_report_for_snapshot(self, selected_id: str):
+            assert selected_id == str(snapshot_id)
+            return None
+
+    class Replay:
+        record: object | None = None
+        completed: dict | None = None
+        disposition = "claimed"
+
+        async def find(self, *_: object):
+            return self.record
+
+        async def reserve(self, **facts: object):
+            record = SimpleNamespace(**facts, status="pending", response_json=None)
+            self.record = record
+            return self.disposition, record
+
+        async def complete(self, record: object, **facts: object) -> None:
+            self.completed = facts
+            record.status = "committed"
+            record.response_json = facts["response_json"]
+
+    class Prepared:
+        async def consume(self, _handle: object, _action: object, _caller: object, resource):
+            return SimpleNamespace(
+                matched_authority_kind=module.MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                matched_grant_id=uuid4(),
+                matched_scope_project_id=project_id,
+                resource_context_digest=canonical_json_hash(resource.model_dump(mode="json")),
+            )
+
+    service = module.GuideSufficiencyMutationService(object())
+    replay = Replay()
+    service._projects = Projects()
+    service._replay = replay
+
+    queue_progress = "before-dispatch"
+
+    async def fixed_lineage(*_: object, **__: object):
+        return module.replace(
+            lineage,
+            stale_output_digest=sha256_hash(queue_progress),
+        )
+
+    async def prepared_handle(*_: object, **__: object):
+        return object()
+
+    service._lineage = fixed_lineage
+    service._prepare = prepared_handle
+    key = uuid4()
+    created = await service.authorize_manual_dispatch(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        key,
+        project_id,
+        guide_id,
+        snapshot_id,
+    )
+    assert created.replayed is False
+    assert created.dispatch_claimed is True
+    assert created.response.status == "dispatch_pending"
+    assert replay.completed is not None
+
+    replay.record.action_id = ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value
+    replay.record.identity_link_id = resolved.identity_link.id
+    setup_run.status = "queued"
+    setup_run.current_step = "queued"
+    queue_progress = "after-dispatch"
+    replayed = await service.authorize_manual_dispatch(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        key,
+        project_id,
+        guide_id,
+        snapshot_id,
+    )
+    assert replayed.replayed is True
+    assert replayed.response == created.response
+
+    replay.record.resource_context_digest = sha256_hash("wrong-resource")
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            key,
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    replay.record.resource_context_digest = canonical_json_hash(
+        module.GuideSufficiencyMutationService._resource(
+            project_id=project_id,
+            guide_id=guide_id,
+            report_id=None,
+            operation_id=replay.record.operation_id,
+            request_digest=replay.record.request_digest,
+            lineage=service._manual_dispatch_lineage(lineage, project_id, guide_id),
+            target_kind="run",
+        ).model_dump(mode="json")
+    )
+    replay.record.status = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            key,
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    replay.record.status = "committed"
+    original_digest = replay.record.request_digest
+    replay.record.request_digest = sha256_hash("wrong-request")
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            key,
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    replay.record.request_digest = original_digest
+
+    replay.record = None
+    setup_run.status = "policy_draft_ready"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="run_not_needed"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            uuid4(),
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    setup_run.status = "queued"
+    setup_run.celery_task_id = None
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="material_not_ready"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            uuid4(),
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    setup_run.celery_task_id = str(uuid4())
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="task_identity_stale"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            uuid4(),
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    setup_run.celery_task_id = project_setup_queue_module.pre_submit_setup_task_id(
+        str(setup_run_id), 1
+    )
+    replay.disposition = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            uuid4(),
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
+    replay.disposition = "claimed"
+    replay.record = None
+    service._projects.setup_available = False
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="setup_run_context_mismatch"):
+        await service.authorize_manual_dispatch(
+            resolved,
+            Prepared(),
+            uuid4(),
+            project_id,
+            guide_id,
+            snapshot_id,  # type: ignore[arg-type]
+        )
 
 
 async def test_sufficiency_mutation_services_commit_human_create_and_acknowledgement() -> None:

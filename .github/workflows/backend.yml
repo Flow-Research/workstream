@@ -422,7 +422,7 @@ jobs:
           set -euo pipefail
           coverage run --append -m pytest -q -p pytest_asyncio.plugin \
             tests/test_projects.py \
-            -k 'verified_worker_composes_fresh_exact_setup_service_authority or sufficiency_mutation_fail_closed_internal_guards or sufficiency_mutation_services_commit_human_create_and_acknowledgement or public_sufficiency_mutation_conceals_service_before_product_lookup or setup_service_adoption_requires_exact_report_and_source_provenance'
+            -k 'verified_worker_composes_fresh_exact_setup_service_authority or sufficiency_mutation_fail_closed_internal_guards or sufficiency_mutation_manual_dispatch_commits_and_replays or sufficiency_mutation_services_commit_human_create_and_acknowledgement or public_sufficiency_mutation_conceals_service_before_product_lookup or setup_service_adoption_requires_exact_report_and_source_provenance'
           for source in \
             app/modules/projects/sufficiency_mutation_repository.py \
             app/modules/projects/sufficiency_mutation_service.py
