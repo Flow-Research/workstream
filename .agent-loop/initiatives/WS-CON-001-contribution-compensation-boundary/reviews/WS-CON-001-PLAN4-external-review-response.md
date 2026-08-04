@@ -2,7 +2,8 @@
 
 ## Comments addressed
 
-CodeRabbit raised four valid planning findings on PR #261:
+CodeRabbit raised four initial findings and two refreshed-review findings on
+PR #261:
 
 1. Receipt quantities/units and digest provenance were under-specified. The
    `03D` contract now permits only the canonical award quantity/binding unit and
@@ -17,6 +18,11 @@ CodeRabbit raised four valid planning findings on PR #261:
 4. Dependency summaries omitted `04A -> 04B`, `03B -> 03C`, and `04A/04B ->
    08A` gates. The canonical specification, chunk map, and executable `04B`,
    `03C`, and `08A` child contracts now include them.
+5. The `08A` child contract omitted its explicit `03D` receipt-persistence
+   prerequisite. Its executable prerequisite gate now includes `CON-03D`.
+6. Two canonical dependency views used broad REV persistence labels. Both now
+   require the exact merged `REV-04B` runtime `Review`, `ReviewLease`, and
+   `FinalAcceptance` targets required by the `03C` child contract.
 
 Internal repair review then found the canonical receipt section still allowed
 ambiguous request/payload digests. The specification now matches `03D`: only

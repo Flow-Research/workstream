@@ -68,8 +68,9 @@ changed.
 
 Agent Gates and CodeRabbit pass on PR #261. The old Backend run failed one AUTH
 actor-profile concurrency test also failing on current main; the refreshed
-current-main head requires a green rerun or upstream AUTH repair. Four valid
-CodeRabbit findings were repaired and recorded in
+current-main head requires a green rerun or upstream AUTH repair. Six valid
+CodeRabbit findings, including the final `03D -> 08A` and exact REV-04B runtime
+gate corrections, were repaired and recorded in
 `WS-CON-001-PLAN4-external-review-response.md`; the refreshed external review
 is pending. Migration numbering must be refreshed at implementation start. AUTH registrations,
 legacy-row classification, REV runtime targets, and provider/callback contracts

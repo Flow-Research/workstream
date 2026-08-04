@@ -895,7 +895,7 @@ transaction participants do not wait for generic dispatch:
 CON-01 -> CON-02A
 CON-03A -> CON-03B -> REV lease/policy-freeze persistence
 CON-02C -> REV Review/FinalAcceptance transaction foundation
-REV FinalAcceptance foundation -> CON-03C -> CON-03D
+REV-04B runtime Review/ReviewLease/FinalAcceptance -> CON-03C -> CON-03D
 CON-03A -> CON-04A
 CON-03B + CON-04A -> CON-04B -> CON-05A -> CON-05B -> CON-06
 stable REV revision lineage + CON-03C/03D + CON-05A + CON-06 -> CON-07 -> REV-10
@@ -921,8 +921,8 @@ CON-03B ContributionPolicyVersion persistence
   -> REV-03 ReviewLease foreign key
 
 CON-02A outbox persistence + CON-02C audit
-  -> REV-04 Review/FinalAcceptance persistence
-REV-04 Review/FinalAcceptance persistence + CON-03B
+  -> REV-04B runtime Review/ReviewLease/FinalAcceptance
+REV-04B runtime Review/ReviewLease/FinalAcceptance + CON-03B
   -> CON-03C exact contribution source schema
 
 REV lease schema/caller facts + CON-06 reviewer freeze

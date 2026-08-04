@@ -2989,8 +2989,14 @@ as part of PLAN4.
 PR #261 Agent Gates and CodeRabbit pass. Hosted Backend has one AUTH
 actor-profile concurrency failure independently reproduced on current main;
 publication still requires a green rerun or upstream AUTH repair. CodeRabbit
-raised four valid planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
+raised four initial valid planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
 registration evidence, the receipt-risk exclusion list, and omitted dependency
 edges. The repair closes all four in the `03D` contract, conformance/risk
 records, canonical specification, and chunk map; refreshed external review is
 the remaining PR gate.
+
+CodeRabbit's refreshed review raised two additional dependency-specific gaps:
+the `08A` executable contract omitted `CON-03D`, and canonical dependency views
+used broad REV persistence labels. The repair adds the explicit `03D -> 08A`
+gate and names exact merged `REV-04B` runtime
+`Review`/`ReviewLease`/`FinalAcceptance` targets.
