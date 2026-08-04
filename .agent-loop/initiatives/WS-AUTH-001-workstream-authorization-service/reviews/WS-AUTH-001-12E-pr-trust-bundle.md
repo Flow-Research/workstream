@@ -24,6 +24,11 @@ the fixed `workstream.project.setup` service only the internal run command.
 - Added migration 0051 for immutable replay custody and complete authorization
   provenance.
 - Connected the setup worker through fresh deterministic service authority.
+- Reconciled ART-03C so a human-requested verified report does not advance the
+  setup ledger; the fixed service may adopt that exact report only after fresh
+  authority and complete material/source-usage revalidation.
+- Kept manual diagnostic reports separate from the single authoritative
+  verified-report slot.
 - Added runtime, migration, API, replay, transaction, and coverage proof.
 
 ## Why It Changed
@@ -86,7 +91,7 @@ git diff --check
 Ruff: passed
 Project sufficiency selector before hosted review: 31 passed
 Authorization selector: 144 passed
-Migration 0050 selector: 2 passed
+Migration 0051 selector: passed
 API contract E2E: passed
 Semantic collection: 2,928 tests across five hosted lanes
 External-review shared-foundation selectors: passed
