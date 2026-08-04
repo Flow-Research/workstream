@@ -1,3 +1,8 @@
+# Historical Superseded Contract — Do Not Implement
+
+PLAN2 supersedes this milestone contract. It remains only as historical
+evidence and cannot authorize current work.
+
 # Chunk Contract: WS-QUAL-001-03 Project Boundary Coverage
 
 ## Goal, risk, and budget
