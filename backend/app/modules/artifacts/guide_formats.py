@@ -10,6 +10,8 @@ from typing import BinaryIO
 import zipfile
 from xml.etree import ElementTree
 
+from app.modules.artifacts.zip_safety import zip_directory_facts
+
 
 DETECTOR_NAME = "workstream.guide_format"
 DETECTOR_VERSION = "1"
@@ -32,24 +34,6 @@ OOXML_REQUIRED_MARKERS = {
     "pptx": frozenset({"[Content_Types].xml", "_rels/.rels", "ppt/presentation.xml"}),
     "xlsx": frozenset({"[Content_Types].xml", "_rels/.rels", "xl/workbook.xml"}),
 }
-
-
-def zip_directory_facts(source: BinaryIO | BytesIO) -> tuple[int, int]:
-    """Read bounded EOCD facts before ZipFile allocates its entry inventory."""
-    source.seek(0, 2)
-    size = source.tell()
-    source.seek(max(0, size - 65_557))
-    tail = source.read(65_557)
-    marker = tail.rfind(b"PK\x05\x06")
-    if marker < 0 or len(tail) - marker < 22:
-        raise zipfile.BadZipFile("missing end of central directory")
-    if tail[marker + 4 : marker + 8] != b"\x00\x00\x00\x00":
-        raise zipfile.BadZipFile("multi-disk archive")
-    entry_count = int.from_bytes(tail[marker + 10 : marker + 12], "little")
-    central_directory_bytes = int.from_bytes(tail[marker + 12 : marker + 16], "little")
-    if entry_count == 0xFFFF or central_directory_bytes == 0xFFFFFFFF:
-        raise zipfile.BadZipFile("zip64 archive is unsupported")
-    return entry_count, central_directory_bytes
 
 
 @dataclass(frozen=True, slots=True)

@@ -66,10 +66,10 @@ normalizes regular-file executable intent into the semantic manifest; and it
 requires fresh AUTH prepared capabilities at durable put intent and atomic
 Submission/binding consumption.
 
-## Current Planning Correction
+## Completed Guide Pipeline And Current Submission Work
 
-ART-03A and AUTH `WS-XINT-002-04A` are merged. Before ART-03B implementation,
-the guide-content boundary is being corrected explicitly: verified binding,
+ART-03A and AUTH `WS-XINT-002-04A` are merged. The guide-content boundary was
+implemented explicitly as verified binding,
 full-read materialization, format classification, isolated extraction,
 canonical extraction provenance, incremental complex-format support, and
 same-generation sufficiency continuation are separate PR-sized contracts.
@@ -77,7 +77,8 @@ same-generation sufficiency continuation are separate PR-sized contracts.
 material port, all-items-required semantics, deterministic 12 MiB assembly,
 normalized report-to-extraction provenance, and the hidden pre-submit
 identifier/generation continuation. AUTH binding/read production activation
-remains unmerged; ART-03C remains blocked on that implementation.
+merged through PR #245, and ART-03C's verified-pipeline cutover subsequently
+merged.
 
 After 03B3A merged, the original complex-format chunk was found too broad for
 one dependency and parser-security review. It is replaced by 03B3B1 dependency
@@ -103,12 +104,14 @@ omission facts on the shared OOXML boundary. 03B3B3C merged through PR #235 and
 adds bounded PPTX slide/notes extraction. 03B3B3D merged through PR #238 and
 adds bounded XLSX cell extraction. 03B3B4 merged through PR #239 and adds only
 bounded PNG/JPEG/WebP structural metadata. 03B4 merged through PR #240 and adds
-the hidden same-generation sufficiency continuation. AUTH binding/read actions
-remain planned.
+the hidden same-generation sufficiency continuation. ART-03C and ART-04A1 are
+merged. ART-04A1 merged through PR #264. ART-04A2 is implemented on its
+bounded branch with internal L1 reviews passed; hosted PR gates and human merge
+remain pending.
 
-AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
-activates only fixed-service binding and guide read. ART-03C then removes the
-legacy identity/excerpt path and makes the verified pipeline authoritative.
+AUTH `WS-XINT-002-04B` activated only fixed-service binding and guide read.
+ART-03C removed the legacy identity/excerpt path and made the verified pipeline
+authoritative.
 
 ## Gate
 

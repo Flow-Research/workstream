@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
-from app.adapters.artifacts import create_artifact_store_bootstrap
+from app.adapters.artifacts import create_artifact_store_bootstrap, submission_archive_limits
 from app.adapters.artifacts.s3_compatible import create_minio_artifact_store_bootstrap
 from app.adapters.auth.flow import FlowAuthVerifier
 from app.api.deps.auth import get_application_auth_verifier
@@ -60,6 +60,37 @@ def test_default_settings_are_fail_closed(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.api_admin_mutation_rate_window_seconds == 60
     assert settings.api_authorization_read_rate_limit == 120
     assert settings.api_authorization_read_rate_window_seconds == 60
+    limits = submission_archive_limits(settings)
+    assert limits.maximum_expanded_bytes == 512 * 1024 * 1024
+    assert limits.maximum_entry_bytes == 128 * 1024 * 1024
+
+
+def test_submission_archive_settings_map_to_fixed_validated_limits() -> None:
+    settings = Settings(
+        artifact_submission_zip_maximum_entries=12,
+        artifact_submission_zip_maximum_path_bytes=120,
+        artifact_submission_zip_maximum_path_depth=6,
+        artifact_submission_zip_maximum_central_directory_bytes=300,
+        artifact_submission_zip_maximum_entry_bytes=100,
+        artifact_submission_zip_maximum_expanded_bytes=200,
+        artifact_submission_zip_maximum_compression_ratio=8,
+        artifact_submission_zip_maximum_inspection_seconds=9.0,
+    )
+    limits = submission_archive_limits(settings)
+    assert limits.maximum_entries == 12
+    assert limits.maximum_path_bytes == 120
+    assert limits.maximum_path_depth == 6
+    assert limits.maximum_central_directory_bytes == 300
+    assert limits.maximum_entry_bytes == 100
+    assert limits.maximum_expanded_bytes == 200
+    assert limits.maximum_compression_ratio == 8
+    assert limits.maximum_inspection_seconds == 9.0
+
+    with pytest.raises(ValidationError, match="entry limit"):
+        Settings(
+            artifact_submission_zip_maximum_entry_bytes=2,
+            artifact_submission_zip_maximum_expanded_bytes=1,
+        )
 
 
 def test_rate_limit_secret_is_canonical_and_redacted() -> None:

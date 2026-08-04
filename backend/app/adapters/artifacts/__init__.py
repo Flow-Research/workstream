@@ -26,6 +26,7 @@ from app.modules.artifacts.preparation import (
     ArtifactPreparationService,
     ArtifactScratchManager,
 )
+from app.modules.artifacts.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
 )
@@ -101,6 +102,26 @@ def artifact_preparation_limits(settings: Settings) -> ArtifactPreparationLimits
         cleanup_margin_seconds=settings.artifact_scratch_cleanup_margin_seconds,
         stream_buffer_bytes=settings.artifact_stream_buffer_bytes,
         maximum_source_bytes=settings.artifact_maximum_bytes,
+    )
+
+
+def submission_archive_limits(settings: Settings) -> SubmissionArchiveLimits:
+    """Map validated settings to the fixed outer-ZIP safety contract."""
+    return SubmissionArchiveLimits(
+        maximum_entries=settings.artifact_submission_zip_maximum_entries,
+        maximum_path_bytes=settings.artifact_submission_zip_maximum_path_bytes,
+        maximum_path_depth=settings.artifact_submission_zip_maximum_path_depth,
+        maximum_central_directory_bytes=(
+            settings.artifact_submission_zip_maximum_central_directory_bytes
+        ),
+        maximum_entry_bytes=settings.artifact_submission_zip_maximum_entry_bytes,
+        maximum_expanded_bytes=settings.artifact_submission_zip_maximum_expanded_bytes,
+        maximum_compression_ratio=(
+            settings.artifact_submission_zip_maximum_compression_ratio
+        ),
+        maximum_inspection_seconds=(
+            settings.artifact_submission_zip_maximum_inspection_seconds
+        ),
     )
 
 

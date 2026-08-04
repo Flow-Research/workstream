@@ -119,6 +119,7 @@ LANES = (
             "tests/test_local_artifact_store.py",
             "tests/test_merge_test_lane_evidence.py",
             "tests/test_s3_artifact_store.py",
+            "tests/test_submission_archive.py",
             "tests/test_test_lane_evidence.py",
             "tests/test_actors.py",
             "tests/test_api_rate_controls.py",

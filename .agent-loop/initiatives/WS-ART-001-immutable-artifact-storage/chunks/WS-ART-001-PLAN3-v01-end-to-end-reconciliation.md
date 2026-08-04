@@ -48,7 +48,7 @@ git diff --check
 | Chunk | Required focused test module(s) |
 |---|---|
 | `04A1` | `tests/test_artifact_architecture.py`, `tests/test_alembic.py` |
-| `04A2` | `tests/test_submission_archive.py`, `tests/test_artifact_scratch_manager.py` |
+| `04A2` | `tests/test_submission_archive.py` (including the canonical `PreparedArtifact.inspect(...)` scratch-custody and cleanup seam) |
 | `04A3` | `tests/test_submission_manifest.py`, `tests/test_submission_change_gate.py` |
 | `04B` | `tests/test_submission_precheck.py`, `tests/test_checker_materialization.py` |
 | `04C1`-`04C2` | `tests/test_submission_bundle_admission.py`, `tests/test_artifact_verification.py`, `tests/test_artifact_recovery.py` |
