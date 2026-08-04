@@ -3917,9 +3917,6 @@ async def test_guide_source_metadata_snapshot_replay_stays_queued_for_verified_b
             )
         ).all()
         assert len(runs) == 1
-        assert runs[0].celery_task_id == project_setup_queue_module.pre_submit_setup_task_id(
-            runs[0].id, runs[0].setup_generation
-        )
         assert runs[0].celery_task_id is None
         assert runs[0].status == "queued"
 
@@ -8374,13 +8371,14 @@ async def test_setup_service_links_authorized_human_agent_report_without_rerun(
         setup_run_id = setup_run.id
         setup_generation = setup_run.setup_generation
 
-    async def accept_fixture_provenance(*_: object, **__: object) -> None:
-        """The fake material port has no ART rows; exact lineage has separate tests."""
+    async def fixture_report_usages(*_: object, **__: object) -> list[object]:
+        """The fake material port declares no source provenance."""
+        return []
 
     monkeypatch.setattr(
-        sufficiency_mutation_service_module.GuideSufficiencyMutationService,
-        "_validate_adoptable_verified_report",
-        accept_fixture_provenance,
+        ProjectService,
+        "_verified_report_usages",
+        fixture_report_usages,
     )
     monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", adapter)
     async with db_session.get_session_factory()() as session:
@@ -8487,21 +8485,31 @@ async def test_setup_service_adoption_requires_exact_report_and_source_provenanc
         material_byte_count=42,
         source_provenance=(provenance,),
     )
-    report.setup_generation = 3
-    with pytest.raises(
-        module.GuideSufficiencyMutationConflict,
-        match="sufficiency_report_provenance_mismatch",
-    ):
-        await service._validate_adoptable_verified_report(
-            report,
-            lineage,
-            project_id=project_id,
-            guide_id=guide_id,
-            material_digest=material_digest,
-            material_byte_count=42,
-            source_provenance=(provenance,),
-        )
-    report.setup_generation = lineage.setup_generation
+    mismatches = (
+        ("setup_generation", 3),
+        ("project_setup_run_id", str(uuid4())),
+        ("agent_material_sha256", sha256_hash("wrong-material")),
+        ("creation_action_id", module.ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE.value),
+        ("created_by_admin_role_grant_id", None),
+        ("created_by_service_identity", ServiceIdentity.PROJECT_SETUP.value),
+    )
+    for field, invalid in mismatches:
+        original = getattr(report, field)
+        setattr(report, field, invalid)
+        with pytest.raises(
+            module.GuideSufficiencyMutationConflict,
+            match="sufficiency_report_provenance_mismatch",
+        ):
+            await service._validate_adoptable_verified_report(
+                report,
+                lineage,
+                project_id=project_id,
+                guide_id=guide_id,
+                material_digest=material_digest,
+                material_byte_count=42,
+                source_provenance=(provenance,),
+            )
+        setattr(report, field, original)
     service._validation.usages = []
     with pytest.raises(
         module.GuideSufficiencyMutationConflict,
