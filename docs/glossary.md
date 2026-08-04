@@ -192,7 +192,9 @@ The human-facing operating guide for a project. It contains the project instruct
 
 The Workstream-owned sufficiency record for a project guide version and source
 snapshot. It is normally produced by `ProjectGuideSufficiencyAgent`, but an
-authorized covered Project Manager can create a manual report when needed.
+authorized covered Project Manager may also request that agent assessment over
+the canonical verified material. A separately created manual report is
+diagnostic and does not replace agent provenance.
 It records
 whether the guide passed, is blocked by gaps, or passed with warnings that an
 authorized covered Project Manager must acknowledge before activation. Manual reports

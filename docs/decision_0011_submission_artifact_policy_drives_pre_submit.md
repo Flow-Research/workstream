@@ -36,18 +36,21 @@ Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.
 
 Workstream binds all downstream setup records to the exact guide source
-snapshot, not only to `guide_version`. `GuideSourceSnapshot` records include the
-guide id, canonical manifest JSON, bundle hash, and capture timestamp. Snapshot
-items record source kind, sanitized durable ref, ingestion adapter, content
-hash, optional future content id, media type, capture timestamp, and optional
-bounded `content_excerpt` inside the canonical manifest. The bundle hash is
+snapshot, not only to `guide_version`. `GuideSourceSnapshot` v2 records include
+the guide id, server-owned generation, canonical manifest JSON, bundle hash, and
+capture timestamp. Snapshot items record server-owned item identity/order and
+non-authoritative source kind, sanitized label, ingestion adapter, and media
+type. Exact byte identity comes only from verified ART bindings and extraction
+usage provenance. The bundle hash is
 `sha256(canonical_json(manifest_json))`. Canonical JSON uses UTF-8, sorted
-object keys, no insignificant whitespace, and source items sorted by
-`(source_kind, durable_ref, content_hash)`. Volatile database ids, capture
-timestamps, and transient fetch locators are excluded from the canonical
-manifest. Non-finite numbers such as `NaN` or `Infinity` are rejected before
-hashing. Duplicate source items with the same `source_kind + durable_ref` are
-rejected before hashing. Changing any included document, example, rubric,
+object keys and no insignificant whitespace. Caller hashes, content ids,
+excerpts, provider references, capture timestamps, and transient fetch locators
+are excluded. Non-finite numbers such as `NaN` or `Infinity` are rejected before
+hashing. The manifest builder rejects duplicate `(source_kind, source_label)`
+pairs before hashing and assigns server-owned item IDs and orders. Integrity
+validation and database constraints reject duplicate IDs or orders later.
+Changing the declared source-item set or any verified bound
+content creates a new setup generation. Changing any document, example, rubric,
 repository doc, representative task excerpt, task sample, or inline guide body
 creates a new snapshot and invalidates prior sufficiency reports, derived
 policies, effective policies, checker specs, checker bundles, acknowledgements,
@@ -61,12 +64,12 @@ A new guide-source snapshot invalidates prior setup records for new activation
 and unlocked tasks only. Tasks already locked to an earlier snapshot retain
 that policy context unless an explicit audited rebase occurs.
 
-URL-backed guide ingestion separates the temporary fetch locator from durable
-source identity. Approved retrieval adapters can fetch legitimate documentation
-that uses ordinary query parameters. Query strings are temporary fetch inputs
-only. Workstream must not persist query strings, signed URLs, credentials,
-token-bearing refs, or local filesystem paths. The durable source record is an
-opaque sanitized source ref plus content hash or future content id.
+Retrieval adapters may use temporary locators to fetch legitimate source
+material, but locators never enter snapshot authority. Workstream persists only
+the sanitized, non-authoritative source label and adapter/media metadata there;
+verified ART bindings provide exact byte identity. Query strings, signed URLs,
+credentials, token-bearing references, local paths, and provider locations are
+never durable source-item identity.
 
 `ProjectGuideSufficiencyAgent` evaluates whether the guide is sufficient for
 submitters, reviewers, and Workstream quality control. Blocking guide gaps stop

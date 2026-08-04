@@ -1146,7 +1146,10 @@ class GuideSufficiencyMutationService:
         if (
             setup_run is None
             or setup_run.setup_generation != final.setup_generation
-            or setup_run.output_sufficiency_report_id is not None
+            or (
+                execution_kind == "setup_service"
+                and setup_run.output_sufficiency_report_id is not None
+            )
             or (
                 execution_kind == "setup_service"
                 and (
@@ -1196,7 +1199,8 @@ class GuideSufficiencyMutationService:
                 decision_event_id=str(decision.decision_id),
             ),
         )
-        setup_run.output_sufficiency_report_id = report.id
+        if execution_kind == "setup_service":
+            setup_run.output_sufficiency_report_id = report.id
         await self._session.flush()
         response = GuideSufficiencyReportResponse.model_validate(report)
         await self._replay.complete(

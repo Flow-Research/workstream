@@ -1081,7 +1081,7 @@ with exact setup custody and no matched human grant.
 | `project.setup_run.update` | `project.guide.manage` | `WS-AUTH-001-12B2` |
 | `project.guide.activate` | `project.guide.manage` | `WS-AUTH-001-12H` |
 
-Migration `0050_guide_sufficiency_authority` preserves historical sufficiency
+Migration `0051_guide_sufficiency_authority` preserves historical sufficiency
 rows as readable, unattributed records while requiring complete creation or
 acknowledgement authority provenance for new 12E mutations. Its replay ledger
 is append-only, and downgrade is refused after any 12E replay or provenance

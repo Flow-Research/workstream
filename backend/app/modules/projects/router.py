@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -20,11 +21,11 @@ from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
 )
 from app.modules.artifacts.authorization import get_artifact_authorization_context
-from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
-from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
+from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.projects.schemas import (
     ActiveGuideReadResponse,
@@ -71,6 +72,7 @@ from app.modules.authorization.runtime import (
 )
 from app.schemas.auth import ActorContext
 
+LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
@@ -187,6 +189,11 @@ async def ingest_guide_source_artifact(
         ArtifactAdmissionRelationshipError,
         ArtifactAuthorityDeniedError,
     ) as exc:
+        LOGGER.warning(
+            "guide_source_artifact_ingest_rejected type=%s reason=%s",
+            type(exc).__name__,
+            str(exc),
+        )
         raise HTTPException(status_code=404, detail="Guide source not found") from exc
     return GuideArtifactIngestResponse.model_validate(result, from_attributes=True)
 
@@ -482,7 +489,8 @@ async def run_submission_artifact_policy_derivation_agent(
     """Run Workstream's submission artifact policy derivation agent."""
     try:
         result, created = await ProjectService(
-            session
+            session,
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
         ).run_submission_artifact_policy_derivation_agent(
             actor,
             project_id,

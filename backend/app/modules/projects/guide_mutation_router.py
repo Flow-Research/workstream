@@ -32,7 +32,6 @@ from app.modules.projects.schemas import (
     ProjectGuideUpdate,
 )
 from app.modules.projects.service import ProjectServiceError
-from app.modules.projects.setup_queue import dispatch_pre_submit_setup_pipeline_after_commit
 from app.schemas.auth import AuthVerificationResult
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -159,16 +158,6 @@ async def _finish(session, outcome):
     if outcome.setup_run_id and not outcome.replayed and outcome.setup_generation is None:
         raise RuntimeError("committed project setup generation is unavailable")
     await (session.rollback() if outcome.replayed else session.commit())
-    if outcome.setup_run_id and not outcome.replayed:
-        snapshot = outcome.response
-        await dispatch_pre_submit_setup_pipeline_after_commit(
-            session,
-            project_id=snapshot.project_id,
-            guide_id=snapshot.guide_id,
-            source_snapshot_id=snapshot.id,
-            setup_run_id=outcome.setup_run_id,
-            setup_generation=outcome.setup_generation,
-        )
     return outcome.response
 
 

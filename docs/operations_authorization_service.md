@@ -1339,7 +1339,7 @@ commit its complete replay, decision, and row provenance atomically. Once any
 12D custody or attributed mutation exists, downgrade is intentionally refused;
 operators must not delete authority evidence merely to force rollback.
 
-Migration `0050_guide_sufficiency_authority` leaves historical sufficiency
+Migration `0051_guide_sufficiency_authority` leaves historical sufficiency
 reports readable with null authorization provenance. New 12E mutations record
 complete creation or acknowledgement provenance and use the append-only
 `guide_sufficiency_mutation_idempotency_records` replay ledger. Downgrade is

@@ -14,8 +14,6 @@ from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
 from app.modules.projects.service import (
-    PolicySetupBlocked,
-    PolicySetupConflict,
     ProjectService,
     ProjectServiceError,
     StaleProjectSetupContinuation,
@@ -163,6 +161,7 @@ def run_post_submit_setup_continuation(
         )
     )
 
+
 async def _run_pre_submit_setup_pipeline(
     project_id: str,
     guide_id: str,
@@ -170,7 +169,24 @@ async def _run_pre_submit_setup_pipeline(
     setup_run_id: str,
     setup_generation: int,
 ) -> dict[str, Any]:
-    """Execute the project setup pipeline using async service contracts."""
+    """Execute only the verified same-generation project setup pipeline."""
+    return await _run_verified_pre_submit_sufficiency_continuation(
+        project_id,
+        guide_id,
+        source_snapshot_id,
+        setup_run_id,
+        setup_generation,
+    )
+
+
+async def _run_verified_pre_submit_sufficiency_continuation(
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    setup_run_id: str,
+    setup_generation: int,
+) -> dict[str, Any]:
+    """Run the live ART-backed same-generation sufficiency continuation."""
     actor = project_setup_pipeline_actor()
     engine = create_async_engine(get_database_url(), pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -333,134 +349,6 @@ async def _run_pre_submit_setup_pipeline(
         await engine.dispose()
 
 
-async def _run_verified_pre_submit_sufficiency_continuation(
-    project_id: str,
-    guide_id: str,
-    source_snapshot_id: str,
-    setup_run_id: str,
-    setup_generation: int,
-) -> dict[str, Any]:
-    """Exercise the hidden ART-backed continuation before AUTH-04B activation."""
-    engine = create_async_engine(get_database_url(), pool_pre_ping=True)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        async with session_factory() as session:
-            service = ProjectService(session)
-            try:
-                outcome = await _run_authorized_setup_sufficiency(
-                    session,
-                    project_id=project_id,
-                    guide_id=guide_id,
-                    source_snapshot_id=source_snapshot_id,
-                    setup_run_id=setup_run_id,
-                    setup_generation=setup_generation,
-                )
-                report, created = outcome.response, outcome.created
-                if report.status == "blocked":
-                    await service.update_project_setup_run_status(
-                        setup_run_id,
-                        status="sufficiency_blocked",
-                        current_step="guide_sufficiency",
-                        output_sufficiency_report_id=report.id,
-                    )
-                    return {
-                        "status": "sufficiency_blocked",
-                        "guide_sufficiency_report_id": report.id,
-                        "idempotent": not created,
-                    }
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="running_policy_derivation_agent",
-                    current_step="submission_artifact_policy_derivation",
-                    output_sufficiency_report_id=report.id,
-                )
-                return {
-                    "status": "sufficiency_complete",
-                    "guide_sufficiency_report_id": report.id,
-                    "idempotent": not created,
-                }
-            except GuideSufficiencyMaterialUnavailable as exc:
-                await session.rollback()
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="setup_blocked",
-                    current_step="guide_sufficiency",
-                    error_code=exc.code,
-                    error_artifact_incident_id=(
-                        str(exc.incident_id) if exc.incident_id is not None else None
-                    ),
-                    error_summary="project setup failed; inspect server logs with the setup run id",
-                )
-                return {
-                    "status": "setup_blocked",
-                    "error_code": exc.code,
-                    "guide_sufficiency_report_id": None,
-                }
-            except PolicySetupConflict:
-                await session.rollback()
-                error_code = "guide_source_material_changed"
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="setup_blocked",
-                    current_step="guide_sufficiency",
-                    error_code=error_code,
-                    error_summary="project setup failed; inspect server logs with the setup run id",
-                )
-                return {
-                    "status": "setup_blocked",
-                    "error_code": error_code,
-                    "guide_sufficiency_report_id": None,
-                }
-            except PolicySetupBlocked:
-                await session.rollback()
-                error_code = "verified_guide_sufficiency_unavailable"
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="setup_blocked",
-                    current_step="guide_sufficiency",
-                    error_code=error_code,
-                    error_summary="project setup failed; inspect server logs with the setup run id",
-                )
-                return {
-                    "status": "setup_blocked",
-                    "error_code": error_code,
-                    "guide_sufficiency_report_id": None,
-                }
-            except ProjectServiceError:
-                await session.rollback()
-                error_code = "guide_source_stale"
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="setup_blocked",
-                    current_step="guide_sufficiency",
-                    error_code=error_code,
-                    error_summary="project setup failed; inspect server logs with the setup run id",
-                )
-                return {
-                    "status": "setup_blocked",
-                    "error_code": error_code,
-                    "guide_sufficiency_report_id": None,
-                }
-            except Exception:
-                await session.rollback()
-                logger.exception("verified guide sufficiency continuation failed")
-                error_code = "project_setup_failed"
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="setup_blocked",
-                    current_step="guide_sufficiency",
-                    error_code=error_code,
-                    error_summary="project setup failed; inspect server logs with the setup run id",
-                )
-                return {
-                    "status": "setup_blocked",
-                    "error_code": error_code,
-                    "guide_sufficiency_report_id": None,
-                }
-    finally:
-        await engine.dispose()
-
-
 async def _run_post_submit_setup_continuation(
     project_id: str,
     guide_id: str,
@@ -475,7 +363,10 @@ async def _run_post_submit_setup_continuation(
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with session_factory() as session:
-            service = ProjectService(session)
+            service = ProjectService(
+                session,
+                guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+            )
             try:
                 start_status = await service.start_post_submit_setup_continuation(
                     setup_run_id,

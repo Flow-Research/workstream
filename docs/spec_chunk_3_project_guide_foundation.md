@@ -132,7 +132,6 @@ Adds protected v1 routes:
 - `POST /api/v1/projects/{project_id}/guides`
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
@@ -150,9 +149,11 @@ project setup pipeline; guide creation alone does not. The pipeline runs guide s
 continues to submission artifact policy derivation when sufficiency is not
 blocked.
 
-`run-sufficiency-agent` is an admin/project_manager repair and diagnostics
-endpoint. It returns `201` when it creates a new report and `200` when it reuses
-the existing sufficiency row for the same source snapshot.
+ART-03C makes verified guide bindings and canonical extraction usages resume the
+same setup generation automatically. The authorized `run-sufficiency-agent`
+route remains available for a covered Project Manager to request the same
+verified assessment directly; invoking it does not resume or advance the
+automatic setup run. Both paths use the canonical same-generation ART material.
 `derive-submission-artifact-policy` is an admin/project_manager repair and
 diagnostics endpoint. It returns `201` when it creates a new policy and `200`
 only when it reuses an existing agent-derived policy for the same source
@@ -163,11 +164,12 @@ policies persist `manual_admin_derivation`; agent-created policies persist
 version. Manual policy creation requires sufficiency clearance first. Agent
 policy derivation requires a Workstream-agent sufficiency report for the same
 snapshot, and persisted agent identity is server-owned rather than copied from
-provider output. A source snapshot has one sufficiency report. If a manual
-report exists for that snapshot, `run-sufficiency-agent` reuses that row, while
-`derive-submission-artifact-policy` rejects it; operators continue through
-manual policy creation after clearance or create a fresh guide-source snapshot
-before running the agent path.
+provider output. A source snapshot may have one diagnostic report and one
+verified agent report. Diagnostic reports support manual inspection and policy
+authoring but cannot satisfy agent derivation or activation. The verified report
+may be produced by the authorized human request or the automatic fixed-service
+continuation and records one exact extraction usage for every declared source
+item.
 
 `POST /submission-artifact-policies/{policy_id}/approve` returns the merged
 `EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the

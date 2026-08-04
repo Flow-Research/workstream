@@ -15,7 +15,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from alembic import command
@@ -24,6 +24,7 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from app.db import session as db_session
+from app.core.config import get_settings
 from app.modules.actors.models import ActorIdentityLink
 from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
@@ -55,6 +56,15 @@ EXPECTED_DURABLE_CHECKERS = {
     "check_confidentiality_attestation",
     "check_low_quality_generated_artifacts",
 }
+
+GUIDE_ARTIFACT_PIPELINE_SERVICE_IDENTITIES = (
+    "workstream.artifact.put_resolver",
+    "workstream.artifact.verifier",
+    "workstream.artifact.scheduler",
+    "workstream.artifact.binding",
+    "workstream.artifact.guide_reader",
+    "workstream.project.setup",
+)
 
 
 async def seed_active_guide_for_pre_12h_e2e(
@@ -112,6 +122,8 @@ LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
 ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
 NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
+TEST_MINIO_ACCESS_KEY = "workstream-minio"
+TEST_MINIO_SECRET_KEY = "workstream-minio-secret-key"
 STRONG_ATTESTATION = (
     "I attest this submission contains no confidential client data, credentials, "
     "secrets, tokens, passwords, API keys, private source material, source code, "
@@ -279,10 +291,36 @@ def api_environment() -> dict[str, str]:
     env["WORKSTREAM_FLOW_AUTH_ISSUER"] = flow_issuer
     env["WORKSTREAM_FLOW_AUTH_AUDIENCE"] = flow_audience
     env["WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET"] = flow_secret
-    env["WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART"] = "false"
+    env["WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART"] = "true"
     env["WORKSTREAM_CELERY_TASK_ALWAYS_EAGER"] = "true"
     env["WORKSTREAM_CELERY_BROKER_URL"] = "memory://"
     env["WORKSTREAM_CELERY_RESULT_BACKEND_URL"] = "cache+memory://"
+    minio_endpoint = env.get("WORKSTREAM_TEST_MINIO_ENDPOINT")
+    minio_bucket = env.get("WORKSTREAM_TEST_MINIO_BUCKET")
+    minio_prefix = env.get("WORKSTREAM_TEST_MINIO_PREFIX")
+    if minio_endpoint and minio_bucket and minio_prefix:
+        scratch_parent = Path(env.get("RUNNER_TEMP", "/tmp"))
+        env.update(
+            {
+                "WORKSTREAM_ARTIFACT_STORE_BACKEND": "s3_compatible",
+                "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(
+                    scratch_parent / "workstream-api-contract-scratch"
+                ),
+                "WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE": "minio",
+                "WORKSTREAM_ARTIFACT_S3_REGION": "us-east-1",
+                "WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL": minio_endpoint,
+                "WORKSTREAM_ARTIFACT_S3_BUCKET": minio_bucket,
+                "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX": minio_prefix,
+                "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "path",
+                "WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE": "local_static",
+                "WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID": TEST_MINIO_ACCESS_KEY,
+                "WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY": TEST_MINIO_SECRET_KEY,
+                "WORKSTREAM_ARTIFACT_ADMISSION_TASK_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES": "67108864",
+                "WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES": "67108864",
+            }
+        )
     env.setdefault(
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
         base64.b64encode(os.urandom(32)).decode("ascii"),
@@ -475,6 +513,33 @@ async def request_json(
             raise AssertionError(f"{method} {path} returned invalid error context")
     print(f"PASS {method} {path} -> {response.status_code}")
     return body
+
+
+async def provision_guide_artifact_pipeline_services(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    run_id: str,
+) -> None:
+    """Provision the exact fixed principals used by the real guide pipeline."""
+    for service_identity in GUIDE_ARTIFACT_PIPELINE_SERVICE_IDENTITIES:
+        response = await client.post(
+            "/api/v1/service-actors",
+            headers=auth_headers(manager_token)
+            | {
+                "Idempotency-Key": str(uuid4()),
+                "X-Request-ID": str(uuid4()),
+                "X-Correlation-ID": str(uuid4()),
+            },
+            json={
+                "service_identity": service_identity,
+                "subject": f"real-api-{service_identity.removeprefix('workstream.')}-{run_id}",
+                "reason": "Real API guide artifact pipeline authority proof",
+            },
+        )
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["service_identity"] == service_identity
+        assert body["actor_status"] == "active"
 
 
 async def wait_for_submission_checker_run(
@@ -794,9 +859,8 @@ async def create_policy_bundle_for_guide(
             "items": [
                 {
                     "source_kind": "inline_markdown",
-                    "durable_ref": f"inline:/guides/{run_id}/guide",
+                    "source_label": f"guide-{run_id}.md",
                     "ingestion_adapter": "manual_import",
-                    "content_hash": sha256_token(f"{run_id}:guide"),
                     "media_type": "text/markdown",
                 }
             ]
@@ -804,19 +868,134 @@ async def create_policy_bundle_for_guide(
         201,
         idempotency_key=str(uuid4()),
     )
+    for item in snapshot["items"]:
+        payload = (
+            json.dumps({"guide_source": item["source_label"]}, sort_keys=True).encode()
+            if item["media_type"] == "application/json"
+            else f"# {item['source_label']}\nBounded verified guide material.\n".encode()
+        )
+        upload = await client.post(
+            f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
+            f"{snapshot['id']}/items/{item['id']}/artifact",
+            headers={
+                "Authorization": f"Bearer {diagnostic_reader_token}",
+                "Idempotency-Key": str(uuid4()),
+                "Content-Type": item["media_type"] or "application/octet-stream",
+            },
+            content=payload,
+        )
+        ensure(upload.status_code == 202, f"guide source upload failed: {upload.text}")
+    # The hosted contract drill intentionally has no broker-backed worker.
+    # Drive the canonical async worker adapters on this process's event loop so
+    # SQLAlchemy connections never cross loops. Each adapter still consumes
+    # its exact fixed-service authority and provider-neutral ART boundary.
+    from app.adapters.artifacts.internal_workers import (
+        continue_guide_setup_after_verification,
+        run_artifact_internal_operation,
+        scan_artifact_pending_work,
+    )
+
+    async def publish_put_attempt(attempt_id: str) -> None:
+        await run_artifact_internal_operation("put", UUID(attempt_id))
+
+    async def publish_verification_job(job_id: str) -> None:
+        identifier = UUID(job_id)
+        await run_artifact_internal_operation("verification", identifier)
+        await continue_guide_setup_after_verification(identifier)
+
+    published_work = 0
+    for _ in range(8):
+        published_generation = await scan_artifact_pending_work(
+            publish_put_attempt,
+            publish_verification_job,
+        )
+        published_work += published_generation
+        if published_generation == 0:
+            break
+    else:
+        raise AssertionError("guide artifact worker did not drain bounded committed work")
+    ensure(published_work > 0, "guide artifact worker found no committed work")
+    queued_setup = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        diagnostic_reader_token,
+    )
+    setup_worker_result = None
+    if queued_setup["status"] == "queued":
+        from app.interfaces.project_agents import (
+            GuideSufficiencyAgentResult,
+            SubmissionArtifactPolicyDerivationResult,
+        )
+        from app.modules.projects import service as project_service_module
+        from app.workers.project_setup import run_pre_submit_setup_pipeline
+
+        class E2EProjectGuideAgentRuntime:
+            """Deterministic agent boundary for the isolated real-API drill."""
+
+            async def analyze_guide_sufficiency(self, _material):
+                return GuideSufficiencyAgentResult(
+                    status="guide_sufficient",
+                    findings=[],
+                    summary="Verified guide material is sufficient for the API drill.",
+                    agent_version="api-contract-e2e-v0.1",
+                )
+
+            async def derive_submission_artifact_policy(self, material, sufficiency_report):
+                return SubmissionArtifactPolicyDerivationResult(
+                    policy_version=(
+                        "agent-"
+                        f"{material.source_snapshot_hash.removeprefix('sha256:')[:12]}"
+                    ),
+                    policy_body=submission_artifact_policy_body(),
+                    change_summary=(
+                        "Derived from verified guide material after "
+                        f"{sufficiency_report.agent_name} review."
+                    ),
+                    agent_version="api-contract-e2e-v0.1",
+                )
+
+        project_service_module.get_project_guide_agent_runtime = (
+            lambda: E2EProjectGuideAgentRuntime()
+        )
+        setup_worker_result = await asyncio.to_thread(
+            run_pre_submit_setup_pipeline,
+            project_id,
+            guide_id,
+            snapshot["id"],
+            queued_setup["id"],
+            queued_setup["setup_generation"],
+        )
+    setup_run = None
+    for _ in range(120):
+        setup_response = await client.get(
+            f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+            headers=auth_headers(diagnostic_reader_token),
+        )
+        if setup_response.status_code == 404:
+            await asyncio.sleep(1.0)
+            continue
+        ensure(
+            setup_response.status_code == 200,
+            f"guide setup run lookup failed: {setup_response.text}",
+        )
+        setup_run = setup_response.json()
+        if setup_run["status"] in {"policy_draft_ready", "sufficiency_blocked", "setup_blocked"}:
+            break
+        await asyncio.sleep(1.0)
+    ensure(setup_run is not None, "guide setup run was not observable")
+    ensure(
+        setup_run["status"] == "policy_draft_ready",
+        "verified guide setup did not produce a draft policy: "
+        f"run={json.dumps(setup_run, sort_keys=True)} "
+        f"worker={json.dumps(setup_worker_result, sort_keys=True)}",
+    )
     report = await request_json(
         client,
-        "POST",
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/"
+        f"{setup_run['output_sufficiency_report_id']}",
         diagnostic_reader_token,
-        {
-            "source_snapshot_id": snapshot["id"],
-            "status": "passed",
-            "findings": [],
-            "summary": "Guide is sufficient for the API contract real API drill.",
-        },
-        201,
-        idempotency_key=str(uuid4()),
     )
     reports = await request_json(
         client,
@@ -835,15 +1014,10 @@ async def create_policy_bundle_for_guide(
     )
     policy = await request_json(
         client,
-        "POST",
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
-        manager_token,
-        {
-            "source_snapshot_id": snapshot["id"],
-            "policy_version": "v1",
-            "policy_body": submission_artifact_policy_body(),
-        },
-        201,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
+        f"{setup_run['output_submission_artifact_policy_id']}",
+        diagnostic_reader_token,
     )
     policies = await request_json(
         client,
@@ -969,30 +1143,29 @@ async def create_approved_post_submit_policy_ci_bridge(
             approved_at=datetime.now(UTC),
             created_by=manager_subject,
         )
-        setup_run = ProjectSetupRun(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            source_snapshot_id=source_snapshot["id"],
-            source_snapshot_hash=source_snapshot["bundle_hash"],
-            setup_generation=1,
-            status="post_submit_policy_compiled",
-            current_step="post_submit_checker_policy_compilation",
-            output_sufficiency_report_id=sufficiency_report["id"],
-            output_submission_artifact_policy_id=submission_artifact_policy["id"],
-            output_post_submit_checker_policy_id=post_submit_policy.id,
-            post_submit_derivation_summary={
-                "status": "compiled",
-                "post_submit_checker_policy_id": post_submit_policy.id,
-                "required_checkers": post_submit_policy.required_checkers,
-                "warning_checkers": post_submit_policy.warning_checkers,
-                "blocking_severities": post_submit_policy.blocking_severities,
-            },
-            created_by=manager_subject,
+        setup_run = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+                ProjectSetupRun.source_snapshot_id == source_snapshot["id"],
+            )
         )
+        ensure(setup_run is not None, "verified project setup run was not created")
+        setup_run.status = "post_submit_policy_compiled"
+        setup_run.current_step = "post_submit_checker_policy_compilation"
+        setup_run.output_sufficiency_report_id = sufficiency_report["id"]
+        setup_run.output_submission_artifact_policy_id = submission_artifact_policy["id"]
+        setup_run.output_post_submit_checker_policy_id = post_submit_policy.id
+        setup_run.post_submit_derivation_summary = {
+            "status": "compiled",
+            "post_submit_checker_policy_id": post_submit_policy.id,
+            "required_checkers": post_submit_policy.required_checkers,
+            "warning_checkers": post_submit_policy.warning_checkers,
+            "blocking_severities": post_submit_policy.blocking_severities,
+        }
+        setup_run.error_code = None
+        setup_run.error_summary = None
         session.add(post_submit_policy)
-        session.add(setup_run)
         await session.commit()
         return {"id": post_submit_policy.id, "policy_hash": post_submit_policy.policy_hash}
 
@@ -1202,8 +1375,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert creator_system_grant.status_code == 201, creator_system_grant.text
         service_payload = {
-            "service_identity": "workstream.artifact.verifier",
-            "subject": f"real-api-artifact-verifier-{run_id}",
+            "service_identity": "workstream.review.projection",
+            "subject": f"real-api-review-projection-{run_id}",
             "reason": "Real HTTP controlled service provisioning proof",
         }
         fixed_service_token = issue_flow_token(
@@ -1383,6 +1556,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert terminal_service.status_code == 409, terminal_service.text
         assert terminal_service.json()["error"]["code"] == "actor_deactivated_terminal"
+
+        await provision_guide_artifact_pipeline_services(client, manager_token, run_id)
 
         project_response = await client.post(
             "/api/v1/projects",
@@ -2192,6 +2367,9 @@ async def main(env: dict[str, str]) -> None:
     try:
         await wait_for_health(base_url, process, log_path)
         await exercise_api_contract(base_url, env)
+    except BaseException:
+        print(log_path.read_text(encoding="utf-8"), file=sys.stderr)
+        raise
     finally:
         process.terminate()
         try:
@@ -2205,5 +2383,6 @@ if __name__ == "__main__":
     api_env = api_environment()
     assert_isolated_database_url(api_env["WORKSTREAM_DATABASE_URL"])
     os.environ.update(api_env)
+    get_settings.cache_clear()
     command.upgrade(alembic_config(), "head")
     asyncio.run(main(api_env))

@@ -287,24 +287,11 @@ trust a mutable URL or mutable draft guide body. They bind to
 sha256(canonical_json(manifest_json))
 ```
 
-Canonical JSON uses UTF-8, sorted object keys, no insignificant whitespace, and
-source items sorted by `(source_kind, durable_ref, content_hash)`. Volatile
-database ids, capture timestamps, and transient fetch locators are excluded from
-the canonical manifest. Duplicate source items with the same
-`source_kind + durable_ref` are rejected before hashing. Changing any included
-document, example, rubric, repository doc, or inline guide body creates a new
-snapshot and bundle hash.
-
-Every snapshot includes a server-derived `project_guide` source item whose
-content hash is computed from the current guide material fields. Caller-supplied
-source items can add external docs, examples, or rubrics, but they cannot omit
-the guide body from the bundle hash.
-
-Source items may include a bounded `content_excerpt` in the canonical manifest
-so setup agents can inspect representative task examples or source snippets
-without following mutable refs at runtime. `content_excerpt` is untrusted source
-material, is included in `bundle_hash`, and is not stored as a separate mutable
-database column.
+Canonical JSON uses UTF-8, sorted object keys, and no insignificant whitespace.
+The v2 manifest contains the server-owned snapshot id and generation plus each
+server-owned item id/order and its non-authoritative source metadata. Caller
+hashes, content identifiers, excerpts, provider references, and fetch locators
+are excluded. Changing a declaration creates a new snapshot and setup generation.
 
 ## GuideSourceSnapshotItem
 
@@ -314,24 +301,25 @@ Fields:
 - `source_snapshot_id`
 - `item_order`
 - `source_kind`
-- `durable_ref`
+- `source_label`
 - `ingestion_adapter`
-- `content_hash`
-- `artifact_content_id`
 - `media_type`
 - `created_at`
 
 `GuideSourceSnapshotItem` records each material item included in the guide
 bundle. `source_kind` distinguishes inline markdown, URL-backed documentation,
 repository docs, examples, rubrics, imported files, and other approved source
-types. `durable_ref` is opaque and sanitized; it is not the temporary fetch
-locator. `artifact_content_id` references Workstream's provider-neutral
-immutable content record; provider object references remain replica details.
+types. `source_label` is display metadata, not content identity or a fetch
+locator. Exact bytes become authoritative only through
+`GuideSourceArtifactIngest -> ArtifactContent -> GuideSourceArtifactBinding ->
+GuideSourceExtractionUsage`; provider object references remain replica details.
 
-URL-backed guide ingestion is split into two identities:
+Guide ingestion keeps temporary retrieval inputs separate from durable facts:
 
 - temporary fetch locator: used only by an approved retrieval adapter
-- durable source record: opaque sanitized source ref plus `artifact_content_id`
+- snapshot declaration: server-owned item identity/order plus a sanitized,
+  non-authoritative source label
+- durable byte identity: exact verified `ArtifactContent` bound through ART
 
 Ordinary URL query parameters can be used by approved adapters when fetching
 legitimate documentation. Query strings are temporary fetch inputs only.
@@ -358,6 +346,8 @@ Fields:
 - `source_snapshot_hash`
 - `setup_generation`
 - `celery_task_id`
+- `continuation_verification_job_id`
+- `continuation_started_at`
 - `status`
 - `current_step`
 - `output_sufficiency_report_id`
@@ -399,6 +389,7 @@ Current step values are stable setup diagnostics, not product lifecycle states:
 Statuses:
 
 - `queued`
+- `dispatch_pending`
 - `enqueue_failed`
 - `running_sufficiency_agent`
 - `sufficiency_blocked`
@@ -499,11 +490,13 @@ the SHA-256 and byte count of the canonical material sent to the agent. Their
 source provenance is normalized into `GuideSufficiencyReportSourceUsage` rows.
 
 Manual sufficiency reports persist `agent_name` and `agent_version` as null.
-Reports created through the agent route persist Workstream-owned agent identity;
-provider-returned names or versions are not trusted as audit provenance.
-A source snapshot has one sufficiency report. If a manual report already exists
-for a snapshot, operators either continue through manual policy creation after
-clearance or create a new guide-source snapshot to run the agent path.
+Reports created through either the authorized Project Manager agent request or
+the automatic fixed-service continuation persist Workstream-owned agent
+identity; provider-returned names or versions are not trusted as audit
+provenance. The human request does not advance the automatic setup ledger. A
+source snapshot may have one diagnostic report and one verified agent report.
+Only the verified report, with a complete exact source-usage set, may support
+agent policy derivation or guide activation.
 
 ## GuideSufficiencyReportSourceUsage
 

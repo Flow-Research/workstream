@@ -1,66 +1,92 @@
-# Discovery: WS-QUAL-001 Backend Coverage Floor
+# Discovery: WS-QUAL-001 Current-Main Coverage Closure
 
-## Current enforcement
+## Audited baseline
 
-- `backend/pyproject.toml` has pytest configuration but no code-coverage tool or
-  threshold.
-- `.github/workflows/backend.yml` installs the development extra and runs plain
-  `pytest -q`.
-- `.github/pull_request_template.md` prohibits threshold weakening, but no code
-  threshold currently exists.
+Hosted Backend run `30854931616` on the final PR #249 tested tree
+`19d48f7ea4bf20cb29f03cbba54f98683ce52661` produced:
 
-## Measured baseline
+- 2,925 collected and completed tests;
+- 20,793 covered statements of 23,475;
+- 2,682 missed statements;
+- 88.575080 percent global statement coverage;
+- 640.284 seconds total backend wall time;
+- 468.506 seconds in the slowest semantic lane.
 
-An exact application measurement on the AUTH-02 tree used:
+At the current denominator, 90 percent permits at most 2,347 missed statements.
+The suite therefore needs 335 additional covered statements to reach 90
+percent and 394 to reach the required 90.25-percent pre-switch headroom.
 
-```bash
-pytest -q --cov=app --cov-report=term-missing --cov-fail-under=90
-```
+## Current CI behavior
 
-After rerunning the contaminated project group against an isolated database,
-the combined diagnostic result was 5,660 covered statements out of 7,232:
-78.26 percent. Reaching 90 percent on that tree requires about 849 additional
-covered statements, subject to the final main-based baseline.
+`.github/workflows/backend.yml` runs five semantic lanes, combines exactly five
+coverage files, runs the real API contract drill, blocks below 78 percent
+globally, and applies multiple 90-percent subsystem/per-file checks. Lane
+custody, PostgreSQL isolation, and coverage fan-in are already implemented.
 
-Largest measured gaps:
+`backend/scripts/coverage_policy.py` and
+`backend/tests/test_coverage_contract.py` are merged historical integrity
+machinery. The current workflow does not invoke that policy script. PLAN2 does
+not wire it into CI or expand its static Python analysis.
+
+## Largest current gaps
+
+The latest hosted coverage JSON identifies these high-value gaps:
 
 | Module | Statements | Missing | Coverage |
 |---|---:|---:|---:|
-| `app/modules/projects/service.py` | 1,631 | 656 | 60% |
-| `app/modules/tasks/service.py` | 650 | 270 | 58% |
-| `app/modules/checkers/service.py` | 579 | 196 | 66% |
-| `app/modules/projects/repository.py` | 233 | 82 | 65% |
-| `app/modules/projects/router.py` | 211 | 76 | 64% |
-| `app/modules/tasks/router.py` | 152 | 49 | 68% |
+| `app/modules/projects/service.py` | 1,451 | 550 | 62.10% |
+| `app/modules/checkers/service.py` | 579 | 169 | 70.81% |
+| `app/modules/authorization/router.py` | 484 | 168 | 65.29% |
+| `app/modules/artifacts/service.py` | 959 | 138 | 85.61% |
+| `app/modules/tasks/service.py` | 682 | 108 | 84.16% |
+| `app/modules/projects/repository.py` | 285 | 96 | 66.32% |
+| `app/modules/artifacts/operator.py` | 204 | 80 | 60.78% |
+| `app/modules/projects/router.py` | 178 | 63 | 64.61% |
+| `app/modules/artifacts/guide_extraction_worker.py` | 237 | 65 | 72.57% |
 
-## Database contamination finding
+Smaller gaps exist in checker repository/router/runner/compiler, project setup
+queue and policy replay, authorization read/repository code, auth API/deps/
+schemas, artifact extraction/materialization, background-job modules, and actor
+services.
 
-The shared `workstream_test` database contained Alembic revision
-`0016_artifact_domain` from another worktree while the measured branch ended at
-`0015_post_submit_correction`. That caused 27 cascading project fixture errors.
-A new isolated database produced 234/234 passing project tests. Coverage proof
-must never share a mutable migration database across concurrent worktrees.
+## Existing ownership and test layers
 
-## Existing test ownership
+- Project behavior: `backend/tests/test_projects.py` and focused project files.
+- Task behavior: `backend/tests/test_tasks.py`.
+- Checker behavior: `backend/tests/test_checkers.py` and runner tests.
+- Artifact behavior: focused artifact, storage, guide, and recovery tests.
+- Authorization behavior: focused actor/authorization/API tests.
+- Test isolation: `backend/scripts/run_isolated_tests.py`.
+- Semantic execution: `backend/scripts/run_test_lanes.py`.
 
-- Project behavior: `backend/tests/test_projects.py`
-- Task behavior: `backend/tests/test_tasks.py`
-- Checker behavior: `backend/tests/test_checkers.py`
-- Auth/adapters/core: focused files under `backend/tests/`
-- Shared database fixtures and locking: `backend/tests/conftest.py`
+The largest services depend directly on `AsyncSession`; this makes broad unit
+extraction an architectural concern outside QUAL. Tests may use small typed
+fakes or existing fixtures where behavior is observable, but QUAL must not
+refactor production services merely to raise coverage.
 
-## Unknowns to resolve in chunk 01
+## Risks discovered
 
-- Exact `origin/main` baseline after a clean isolated full run.
-- Natural behavioral groupings that provide the largest defensible coverage
-  gains without coupling tests to implementation details.
-- Whether existing fixture cost can be reduced without changing test semantics.
-- Exact Alembic head and app-file inventory on the reviewed main tree.
+- Adding hundreds of database-heavy covered lines could worsen the current
+  10.7-minute hosted wall time.
+- Testing implementation branches without outcomes can manufacture percentage
+  while adding little confidence.
+- Raising the floor in the same PR as broad tests makes failures harder to
+  diagnose and encourages threshold bargaining.
+- Concurrent AUTH, ART, and REV work can increase the denominator; the final
+  floor chunk must remeasure current `main` and retain headroom.
 
-## Existing variable and guard behavior
+## Conventions to preserve
 
-`backend/tests/conftest.py` gives `WORKSTREAM_TEST_DATABASE_URL` precedence over
-`WORKSTREAM_DATABASE_URL`; coverage commands must therefore provision and set
-the former. Both API drill scripts currently allow only `workstream_test` and
-`test_workstream`, so chunk 01 must update and test those guards for the strict
-derived local name. The nonlocal write-risk override is not an isolation tool.
+- Complete `backend/app` inventory and combined semantic-lane coverage.
+- Real PostgreSQL for constraints, locks, migrations, transactions, triggers,
+  and concurrency.
+- Real MinIO for the protocol boundary.
+- Global 78-percent floor until the exact 90-percent switch merges.
+- Existing protected 90-percent subsystem gates.
+- Test-delta and CI-integrity review for every QUAL implementation PR.
+
+## Unknowns resolved per implementation chunk
+
+The exact missing lines and best observable tests must be refreshed from the
+then-current hosted coverage JSON. A contract may not promise a coverage gain
+from stale line numbers or require tests that merely execute code.
