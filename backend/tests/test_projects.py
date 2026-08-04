@@ -7510,6 +7510,453 @@ async def test_sufficiency_mutation_fail_closed_internal_guards() -> None:
         )
 
 
+async def test_sufficiency_mutation_services_commit_human_create_and_acknowledgement() -> None:
+    """Exercise both human mutation success paths through their service boundary."""
+
+    module = sufficiency_mutation_service_module
+    project_id, guide_id, snapshot_id = uuid4(), uuid4(), uuid4()
+    lineage = module._Lineage(
+        guide_version="v1",
+        snapshot_id=snapshot_id,
+        snapshot_hash=sha256_hash("snapshot"),
+        setup_generation=1,
+        setup_run_id=uuid4(),
+        stale_output_digest=sha256_hash("stale-output"),
+    )
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(uuid4())),
+        identity_link=SimpleNamespace(id=str(uuid4())),
+    )
+    decision = SimpleNamespace(
+        matched_authority_kind=module.MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=project_id,
+        resource_context_digest=sha256_hash("resource-context"),
+        decision_id=uuid4(),
+    )
+
+    class Prepared:
+        async def prepare(self, *_: object):
+            return object()
+
+        async def consume(self, *_: object):
+            return decision
+
+    class Replay:
+        record: object | None = None
+        disposition = "claimed"
+
+        async def find(self, *_: object):
+            return self.record
+
+        async def reserve(self, **_: object):
+            return self.disposition, SimpleNamespace(id=str(uuid4()))
+
+        async def complete(self, *_: object, **__: object) -> None:
+            return None
+
+    class Projects:
+        report: GuideSufficiencyReport | None = None
+        lock_report = True
+        snapshot_report: GuideSufficiencyReport | None = None
+
+        async def get_sufficiency_report_for_snapshot(self, _: str):
+            return self.snapshot_report
+
+        async def add_guide_sufficiency_report(self, report: GuideSufficiencyReport):
+            report.created_at = datetime.now(UTC)
+            self.report = report
+            return report
+
+        async def get_guide_sufficiency_report(self, _: str):
+            return self.report
+
+        async def lock_guide_sufficiency_report(self, *_: object):
+            return self.report if self.lock_report else None
+
+    async def fixed_lineage(*_: object, **__: object):
+        return lineage
+
+    service = module.GuideSufficiencyMutationService(object())
+    projects = Projects()
+    replay = Replay()
+    service._projects = projects  # type: ignore[assignment]
+    service._replay = replay  # type: ignore[assignment]
+    service._lineage = fixed_lineage  # type: ignore[method-assign]
+    payload = module.GuideSufficiencyReportCreate(
+        source_snapshot_id=str(snapshot_id),
+        status="passed",
+        findings=[],
+        summary="Human-authored assessment.",
+    )
+
+    created = await service.create_report(
+        resolved, Prepared(), uuid4(), project_id, guide_id, payload  # type: ignore[arg-type]
+    )
+
+    assert created.created is True
+    assert created.replayed is False
+    assert projects.report is not None
+    create_replay_key = uuid4()
+    _, create_replay_digest = service._caller(
+        action=ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        route="POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        actor_profile_id=resolved.profile.id,
+        identity_link_id=resolved.identity_link.id,
+        key=create_replay_key,
+        project_id=project_id,
+        guide_id=guide_id,
+        report_id=UUID(projects.report.id),
+        operation_id=uuid4(),
+        lineage=lineage,
+        target_kind="report",
+        body=payload.model_dump(mode="json"),
+    )
+    create_replay_record = SimpleNamespace(
+        identity_link_id=resolved.identity_link.id,
+        request_digest=create_replay_digest,
+        resource_context_digest=decision.resource_context_digest,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        status="committed",
+        response_json=created.response.model_dump(mode="json"),
+        report_id=projects.report.id,
+        operation_id=uuid4(),
+    )
+    replay.record = create_replay_record
+    create_replayed = await service.create_report(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        create_replay_key,
+        project_id,
+        guide_id,
+        payload,
+    )
+    assert create_replayed.replayed is True
+
+    replay.record = None
+    projects.report.status = "passed_with_warnings"
+    projects.report.findings = [
+        {"severity": "warning", "code": "thin_examples", "message": "Examples are thin."}
+    ]
+    acknowledged = await service.acknowledge_warnings(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        uuid4(),
+        project_id,
+        guide_id,
+        UUID(projects.report.id),
+        module.GuideSufficiencyAcknowledgement(
+            acknowledgement_note="Accepted with known thin examples."
+        ),
+    )
+
+    assert acknowledged.replayed is False
+    assert acknowledged.response.warnings_acknowledged_by_actor == resolved.profile.id
+    assert projects.report.warning_acknowledgement_action_id == (
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE.value
+    )
+    acknowledgement_key = uuid4()
+    acknowledgement_payload = module.GuideSufficiencyAcknowledgement(
+        acknowledgement_note="Accepted with known thin examples."
+    )
+    _, acknowledgement_digest = service._caller(
+        action=ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        route=(
+            "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
+            "sufficiency-reports/{report_id}/acknowledge-warnings"
+        ),
+        actor_profile_id=resolved.profile.id,
+        identity_link_id=resolved.identity_link.id,
+        key=acknowledgement_key,
+        project_id=project_id,
+        guide_id=guide_id,
+        report_id=UUID(projects.report.id),
+        operation_id=uuid4(),
+        lineage=lineage,
+        target_kind="warning_acknowledgement",
+        body=acknowledgement_payload.model_dump(mode="json"),
+    )
+    acknowledgement_record = SimpleNamespace(
+        identity_link_id=resolved.identity_link.id,
+        request_digest=acknowledgement_digest,
+        resource_context_digest=decision.resource_context_digest,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        report_id=projects.report.id,
+        status="committed",
+        response_json=acknowledged.response.model_dump(mode="json"),
+        operation_id=uuid4(),
+    )
+    replay.record = acknowledgement_record
+    acknowledgement_replayed = await service.acknowledge_warnings(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        acknowledgement_key,
+        project_id,
+        guide_id,
+        UUID(projects.report.id),
+        acknowledgement_payload,
+    )
+    assert acknowledgement_replayed.replayed is True
+
+    service._material = object()  # type: ignore[assignment]
+    projects.report.creation_action_id = ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value
+    projects.report.project_setup_run_id = str(lineage.setup_run_id)
+    projects.report.setup_generation = lineage.setup_generation
+    projects.report.agent_material_sha256 = sha256_hash("verified-agent-material")
+    run_key = uuid4()
+    _, run_digest = service._caller(
+        action=ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        route=(
+            "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
+            "source-snapshots/{source_snapshot_id}/run-sufficiency-agent"
+        ),
+        actor_profile_id=resolved.profile.id,
+        identity_link_id=resolved.identity_link.id,
+        key=run_key,
+        project_id=project_id,
+        guide_id=guide_id,
+        report_id=None,
+        operation_id=uuid4(),
+        lineage=lineage,
+        target_kind="run",
+        body={"source_snapshot_id": str(snapshot_id)},
+    )
+    run_record = SimpleNamespace(
+        identity_link_id=resolved.identity_link.id,
+        request_digest=run_digest,
+        resource_context_digest=decision.resource_context_digest,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        setup_run_id=str(lineage.setup_run_id),
+        setup_generation=lineage.setup_generation,
+        status="committed",
+        response_json=module.GuideSufficiencyReportResponse.model_validate(
+            projects.report
+        ).model_dump(mode="json"),
+        report_id=projects.report.id,
+        operation_id=uuid4(),
+    )
+    replay.record = run_record
+    run_replayed = await service._run_agent(
+        actor_profile_id=resolved.profile.id,
+        identity_link_id=resolved.identity_link.id,
+        prepared=Prepared(),  # type: ignore[arg-type]
+        key=run_key,
+        project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        execution_kind="human",
+        setup_service_custody=None,
+    )
+    assert run_replayed.replayed is True
+
+    replay.record.identity_link_id = str(uuid4())
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=Prepared(),  # type: ignore[arg-type]
+            key=run_key,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="human",
+            setup_service_custody=None,
+        )
+
+    lineage_calls = 0
+
+    async def changing_lineage(*_: object, **__: object):
+        nonlocal lineage_calls
+        lineage_calls += 1
+        return lineage if lineage_calls % 2 else module.replace(lineage, setup_generation=2)
+
+    service._lineage = changing_lineage  # type: ignore[method-assign]
+    replay.record = None
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="sufficiency_lineage_stale"):
+        await service.create_report(
+            resolved, Prepared(), uuid4(), project_id, guide_id, payload  # type: ignore[arg-type]
+        )
+    projects.report.status = "passed_with_warnings"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="sufficiency_lineage_stale"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            uuid4(),
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    service._lineage = fixed_lineage  # type: ignore[method-assign]
+
+    replay.record = create_replay_record
+    create_replay_record.resource_context_digest = sha256_hash("wrong-resource-context")
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service.create_report(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            create_replay_key,
+            project_id,
+            guide_id,
+            payload,
+        )
+    replay.record = None
+    projects.snapshot_report = projects.report
+    with pytest.raises(
+        module.GuideSufficiencyMutationConflict,
+        match="sufficiency_report_already_exists",
+    ):
+        await service.create_report(
+            resolved, Prepared(), uuid4(), project_id, guide_id, payload  # type: ignore[arg-type]
+        )
+    projects.snapshot_report = None
+    replay.disposition = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service.create_report(
+            resolved, Prepared(), uuid4(), project_id, guide_id, payload  # type: ignore[arg-type]
+        )
+    replay.disposition = "claimed"
+
+    replay.record = None
+    projects.report.status = "passed_with_warnings"
+    projects.report.warnings_acknowledged_at = datetime.now(UTC)
+    with pytest.raises(
+        module.GuideSufficiencyMutationConflict,
+        match="sufficiency_warnings_already_acknowledged",
+    ):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            uuid4(),
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    projects.report.warnings_acknowledged_at = None
+    replay.disposition = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            uuid4(),
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    replay.disposition = "claimed"
+    projects.lock_report = False
+    with pytest.raises(module.SufficiencyReportNotFound):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            uuid4(),
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    projects.lock_report = True
+    projects.report.status = "passed"
+    with pytest.raises(PolicySetupBlocked, match="only sufficiency warnings"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            uuid4(),
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    projects.report.status = "passed_with_warnings"
+
+    replay.record = acknowledgement_record
+    acknowledgement_record.identity_link_id = str(uuid4())
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            acknowledgement_key,
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    acknowledgement_record.identity_link_id = resolved.identity_link.id
+    acknowledgement_record.status = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            acknowledgement_key,
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    acknowledgement_record.status = "committed"
+    acknowledgement_record.resource_context_digest = sha256_hash("wrong-resource-context")
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service.acknowledge_warnings(
+            resolved,
+            Prepared(),  # type: ignore[arg-type]
+            acknowledgement_key,
+            project_id,
+            guide_id,
+            UUID(projects.report.id),
+            acknowledgement_payload,
+        )
+    replay.record = run_record
+    replay.record.identity_link_id = resolved.identity_link.id
+    replay.record.status = "pending"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_pending"):
+        await service._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=Prepared(),  # type: ignore[arg-type]
+            key=run_key,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="human",
+            setup_service_custody=None,
+        )
+    replay.record.status = "committed"
+    projects.report.creation_action_id = "wrong.action"
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=Prepared(),  # type: ignore[arg-type]
+            key=run_key,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="human",
+            setup_service_custody=None,
+        )
+    projects.report.creation_action_id = ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value
+    replay.record.resource_context_digest = sha256_hash("wrong-resource-context")
+    with pytest.raises(module.GuideSufficiencyMutationConflict, match="idempotency_mismatch"):
+        await service._run_agent(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            prepared=Prepared(),  # type: ignore[arg-type]
+            key=run_key,
+            project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            execution_kind="human",
+            setup_service_custody=None,
+        )
+
+
 async def test_public_sufficiency_mutation_conceals_service_before_product_lookup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

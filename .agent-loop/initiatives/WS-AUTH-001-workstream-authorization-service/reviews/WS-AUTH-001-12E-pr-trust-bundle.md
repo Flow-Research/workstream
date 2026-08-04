@@ -117,6 +117,9 @@ Actions; the user's machine is not used for the roughly four-hour local suite.
   mid-flight terminal race, and deterministic broker identity tests.
 - Migration upgrade/downgrade, append-only replay, provenance-only rollback
   refusal, schema parity, and API contract tests.
+- Focused service-boundary coverage for successful human create and warning
+  acknowledgement plus replay, mismatch, duplicate, stale-lineage, pending,
+  and wrong-state denials.
 
 ### Tests Modified
 
@@ -148,13 +151,16 @@ docs, and reuse tracks.
 | Docs | PASS | None | Canonical surfaces aligned |
 | Reuse/dedup | PASS | None | Shared PREP/service resolver reused |
 | Test delta | PASS WITH LOW RISKS | None | No skipped or weakened tests |
+| CI integrity repair | PASS WITH LOW RISKS | None | Focused coverage append preserves the 78/90 percent gates and disables ambient plugin autoload |
+| QA coverage repair | PASS WITH LOW RISKS | None | Real service boundary and fail-closed branches exercised; hosted exact-head proof remains pending |
+| Test delta coverage repair | PASS WITH LOW RISKS | None | Exact selector, no skipped tests, and no weakened assertions or thresholds |
 
 ## External Review
 
 | Source | Status | Notes |
 |---|---:|---|
 | CodeRabbit | Re-review pending | All actionable first-review findings fixed or explicitly deferred in the external-response record |
-| GitHub checks | Rerun pending | Initial shared/project failures repaired; exact corrected head pushed |
+| GitHub checks | Rerun pending | All semantic lanes passed on the prior exact head; focused repair targets the remaining guide-sufficiency per-file gate |
 
 ## CI And Gate Integrity
 

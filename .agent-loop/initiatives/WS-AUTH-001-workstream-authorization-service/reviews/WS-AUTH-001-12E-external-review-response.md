@@ -36,6 +36,10 @@
   sanitized runtime-message assertion and extending migration/model status
   parity for the distinct post-acceptance `enqueue_identity_mismatch` state,
   including safe downgrade refusal and the refreshed schema fingerprint.
+- Repaired the aggregate guide-sufficiency per-file coverage failure with one
+  focused, plugin-isolated service-boundary proof. Combined with the exact
+  hosted lane artifact, repository coverage is 91.18 percent and service
+  coverage is 90.19 percent; neither threshold was changed.
 
 ## Comments deferred
 
@@ -68,6 +72,10 @@ None. The user retains merge authority for PR #263.
 - Four ART fixed-service adapter regressions: passed.
 - Canonical migration rebuild and schema fingerprint computation: passed.
 - Test-database reset against the append-only replay trigger: passed.
+- Focused human sufficiency create, acknowledgement, replay, mismatch,
+  duplicate, stale-lineage, pending, and wrong-state proof: passed.
+- Exact hosted-lane artifact plus focused proof: repository 91.18 percent and
+  service 90.19 percent per-file coverage.
 - Local project-lifecycle collection is unstable on this machine due to
   repeatable Python segmentation faults; the corrected complete semantic lanes
   remain assigned to hosted GitHub Actions as requested by the user.

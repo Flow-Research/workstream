@@ -415,8 +415,13 @@ jobs:
       - name: Guide sufficiency mutation per-file coverage
         working-directory: backend
         shell: bash
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
         run: |
           set -euo pipefail
+          coverage run --append -m pytest -q -p pytest_asyncio.plugin \
+            tests/test_projects.py \
+            -k 'sufficiency_mutation_services_commit_human_create_and_acknowledgement'
           for source in \
             app/modules/projects/sufficiency_mutation_repository.py \
             app/modules/projects/sufficiency_mutation_service.py
