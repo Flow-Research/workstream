@@ -48,6 +48,13 @@ preserved. A fresh merged-head migration produced the combined canonical schema
 digest `f30127e0acd66d6e2e0cc4d56741ddc8b7cd09175d8c3251749624a0fc353aee`,
 which replaces both branch-local fingerprints.
 
+The first reconciled hosted run passed project lifecycle, shared foundations,
+and schema contracts B, then found two REV downgrade assertions that still
+named REV's former branch-local head. Both downgrade refusals behaved correctly
+and atomically retained the merged current head. Their expected revision is now
+`0052_legacy_intake_removal`; no REV downgrade guard, model, or product behavior
+changed.
+
 ## Hosted CI correction
 
 The first Backend sharded run failed one `shared_foundations` test. Replacing
