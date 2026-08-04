@@ -2,9 +2,33 @@
 
 ## Status and prerequisite
 
-Current-main contract refresh from merge `3479ee71`. AUTH-12C and AUTH-12D are
-merged. XINT-003-02A/02B satisfy and supersede the old 12D2 prerequisite. The
-three 12E actions remain planned and unavailable.
+Post-ART-03C reconciliation against main merge `2feaf47d`. AUTH-12C and
+AUTH-12D are merged. XINT-003-02A/02B satisfy and supersede the old 12D2
+prerequisite. ART-03C owns the verified guide-source cutover and automatic
+same-generation continuation, but its removal of the Project Manager HTTP
+agent-run route exceeded ART ownership and conflicts with this approved AUTH
+activation. This refreshed contract restores that route only over canonical
+ART-verified material. The three 12E actions remain planned and unavailable
+until this chunk merges.
+
+## Post-ART-03C boundary reconciliation
+
+- `POST .../run-sufficiency-agent` is an AUTH-owned Project Manager action. It
+  is not the Project Manager resume/finalize command prohibited by ART-03C.
+- ART-03C remains authoritative for byte ingestion, binding, classification,
+  extraction, source-usage lineage, recovery, and automatic continuation.
+- Both human HTTP execution and fixed setup-service execution must use the
+  same canonical same-generation ART material port. Neither path may revive
+  caller excerpts, durable references, hashes, CIDs, or other legacy material.
+- The automatic setup-service path remains independent of the human route and
+  never borrows Project Manager authority. The human route never advances or
+  resumes a setup run merely by invoking the agent.
+- A manual report remains diagnostic and cannot satisfy verified setup,
+  derivation, or activation evidence. Only an agent report with exact verified
+  extraction/source-usage lineage may occupy the authoritative verified slot.
+- ART migration `0050_guide_source_v2` is now the predecessor. AUTH owns
+  `0051_guide_sufficiency_authority`; no duplicate migration identifier or
+  Alembic branch is permitted.
 
 ## Parent initiative
 
@@ -49,7 +73,7 @@ backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
 backend/app/**/project_setup.py
-backend/alembic/versions/0050_guide_sufficiency_authority.py
+backend/alembic/versions/0051_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py
@@ -60,6 +84,9 @@ backend/scripts/api_contract_e2e.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 docs/operations_project_operating_manual.md
+docs/glossary.md
+docs/architecture_data_model.md
+docs/spec_chunk_3_project_guide_foundation.md
 docs/roadmap_status.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 ```
@@ -123,7 +150,8 @@ migration 0046 or introduce a second prepared-authorization protocol.
   and source-usage row staging. It reuses an AUTH-owned service
   context/revalidation path for `workstream.project.setup`; it must not copy
   ART-private authorization helpers or add a setup-service resolver.
-- Migration 0050 adds one immutable replay ledger plus separate complete
+- Migration 0051, based on ART migration `0050_guide_source_v2`, adds one
+  immutable replay ledger plus separate complete
   creation and acknowledgement authorization-provenance shapes. It does not
   duplicate ART extraction/source-usage provenance from 0046. Historical rows
   remain nullable/readable and are not rewritten.
@@ -155,11 +183,12 @@ migration 0046 or introduce a second prepared-authorization protocol.
   than removed. The obsolete manual-report reuse test becomes a stronger
   conflict test with zero material/agent calls. ART-03B4 material/provenance
   tests remain unchanged, unskipped, and in their canonical lanes.
-- Manual reports remain a distinct explicit manual-policy input. They are never
-  returned as an agent-run replay, treated as fixed-service setup output, or
-  accepted as agent-created derivation evidence. A human or service agent run
-  conflicts on a pre-existing manual report unless it has the exact run-owned
-  action, setup/material provenance, and replay identity for that mode.
+- Manual reports remain distinct diagnostic records. They are never returned
+  as an agent-run replay, treated as fixed-service setup output, accepted as
+  derivation/activation evidence, or allowed to occupy the authoritative
+  verified-report slot. A human or service agent run reuses only an exact
+  run-owned report with matching action, setup/material provenance, source
+  usages, and replay identity.
 - PostgreSQL proves constraint closure, concurrent one-effect replay,
   append-only replay completion, populated downgrade refusal where required,
   safe empty downgrade, and re-upgrade. Existing migration 0046 remains
@@ -169,6 +198,10 @@ migration 0046 or introduce a second prepared-authorization protocol.
 - The project operating manual documents all three active routes, UUID
   idempotency, Project Manager-only public admission, service-token rejection,
   and distinct manual versus agent-backed setup paths.
+- Canonical glossary and data-model wording states that manual sufficiency
+  reports are diagnostic only and cannot satisfy verified derivation or guide
+  activation. The historical chunk-3 specification is explicitly marked as
+  historical wherever its superseded manual-report behavior is discussed.
 - The current capability ledger records the merged 12E activation without
   claiming downstream policy derivation, guide activation, or setup-worker
   cutover.
@@ -180,7 +213,7 @@ cd backend
 .venv/bin/ruff check app tests scripts
 .venv/bin/pytest -q tests/test_authorization.py -k 'sufficiency and (prepared or service or unavailable or catalogue)'
 .venv/bin/pytest -q tests/test_projects.py -k 'sufficiency'
-.venv/bin/pytest -q tests/test_alembic.py -k '0050 or guide_sufficiency_authority'
+.venv/bin/pytest -q tests/test_alembic.py -k '0051 or guide_sufficiency_authority'
 .venv/bin/pytest -q tests/test_ci_test_lanes.py
 .venv/bin/coverage erase
 .venv/bin/coverage run --concurrency=greenlet -m pytest -q tests/test_authorization.py -k 'prepared or catalogue or sufficiency or service'
