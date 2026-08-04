@@ -14,7 +14,7 @@
 | R10 | Checker remediation is confused with human revision | Critical | Source XOR, separate participants, no synthetic Review/finding/contribution. |
 | R11 | Decision partially commits without contribution effects | Critical | First Review commit only in chunk 10 with mandatory CON participant and fault injection. |
 | R12 | Submitter contribution is inferred directly from Review | Critical | Accept-only REV FinalAcceptance is the sole CON submitter source. |
-| R13 | Contribution terms rebase with guide context | Critical | Assignment and lease freezes remain independent of guide/revision context. |
+| R13 | Human revision publishes mixed guide/policy context or rewrites completed economic history | Critical | One complete-context preparation keeps/rebases all applicable components atomically; completed lease/contribution/award history remains immutable; checker remediation performs no human rebase. |
 | R14 | Public routes expose incomplete lifecycle | Critical | Routes remain absent until 13C; AUTH activation is hidden proof, not product release. |
 | R15 | Timers or recovery depend on background-job delivery | High | Database-time truth, lazy recovery, idempotent sweeps, reconciliation. |
 | R16 | Cross-domain lock order deadlocks | Critical | Command-specific published order, stable ID sorting, both-order tests. |

@@ -18,9 +18,9 @@ ladder are superseded before implementation.
 
 | Chunk | Purpose | Risk | State |
 |---|---|---:|---|
-| `WS-QUAL-001-PLAN2` | Reconcile current hosted baseline, retire obsolete machinery, and define the small closure sequence | L1 | Planning in progress |
-| `WS-QUAL-001-02R` | Project/setup observable behavior coverage | L2 | Proposed after PLAN2 |
-| `WS-QUAL-001-03R` | Checker observable behavior coverage | L2 | Proposed after 02R only if more headroom is needed |
+| `WS-QUAL-001-PLAN2` | Reconcile current hosted baseline, retire obsolete machinery, and define the small closure sequence | L1 | Merged PR #260 |
+| `WS-QUAL-001-02R` | Project/setup observable behavior coverage | L2 | Merged PR #265 |
+| `WS-QUAL-001-03R` | Checker observable behavior coverage | L2 | Implementation in progress |
 | `WS-QUAL-001-04R` | Change the exact global hosted CI floor from 78 to 90 after current-main proof | L1 | Proposed after measured >=90.25% proof |
 
 One chunk maps to one PR. A test chunk may close early when its behavioral scope

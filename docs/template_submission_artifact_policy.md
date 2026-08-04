@@ -82,6 +82,13 @@ override Workstream rules, or weaken default checks.
 
 Every project inherits Workstream default submission artifact rules. Project policy can add stricter requirements, but it cannot remove, weaken, downgrade, or bypass these defaults.
 
+All defaults are named and versioned in the central Workstream pre-submission
+checker catalogue. The locked project policy adds constrained rules to that
+same catalogue execution; it does not create another API or registry. Catalogue
+availability is deployment-owned. A disabled mandatory entry makes submission
+preparation unavailable, while a disabled advisory entry is explicitly recorded
+and does not silently pass. Project configuration cannot disable either class.
+
 Default required packet fields:
 
 - summary
@@ -114,17 +121,19 @@ Default storage rules:
   query strings, bucket secrets, and token-bearing references are rejected
   before persistence
 
-Default forbidden artifacts:
+Default high-confidence forbidden artifacts:
 
 - `.env`
 - `.git`
-- credentials
-- secrets
-- private keys
-- tokens
+- exact known credential files
+- exact known private-key files
 - `.pem`
 - `.key`
-- `node_modules`
+
+Broad names such as `token`, `secret`, `credential`, or dependency directories
+are not universal blockers solely because a path contains the word. They must
+be a narrowly defined high-confidence match, an advisory catalogue check, or a
+locked project-specific rule.
 
 A project-required artifact that matches a Workstream default forbidden rule remains blocked. That conflict is a project setup defect.
 
@@ -212,11 +221,13 @@ Generated policy lock:
 Tasks lock this project checker compiled bundle hash before entering the contributor pipeline. Tasks
 do not derive or compile their own checker by default.
 
-Blocked submission-create attempts return `pre_submission_checker_failed` with
-structured pass/fail/warning details.
-The preflight endpoint returns `PreSubmitCheckResponse` with `status`,
-`eligible_to_submit`, and `results`. Neither path returns review decision
-values: `accept`, `needs_revision`, or `reject`.
+Failed submission-bundle preparation returns
+`pre_submission_checker_failed` with bounded same-request status, eligibility,
+and pass/fail/warning details. No independently invocable preflight endpoint or
+ID-addressed evidence-read route exists. These results never use review decision
+values: `accept`, `needs_revision`, or `reject`. After verified preparation,
+final Submission creation consumes the ready admission under fresh authority
+and does not rerun scratch-bound checks.
 
 Expected generated checks:
 

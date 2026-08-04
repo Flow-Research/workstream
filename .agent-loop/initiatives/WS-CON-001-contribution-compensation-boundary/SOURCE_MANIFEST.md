@@ -2,8 +2,8 @@
 
 ## Reconciliation baseline
 
-- Current `main`: `b47a7e64f7d75cda8a0681d1aff3bf0c4a5be4aa`.
-- Current migration head: `0052_legacy_intake_removal`.
+- Current `main`: `cda59fc32e3a60e1e2c337cae7ebeaa94b95e12b`.
+- Current migration head: `0053_compensation_bindings`.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and
   `.agent-loop/README.md`. Historical signed-start and merge-intent records are
@@ -21,6 +21,7 @@
 - `docs/spec_authorization_service.md`
 - `docs/spec_artifact_storage_service.md`
 - `docs/decision_0009_review_decisions_are_canonical.md`
+- `docs/decision_0010_revision_context_rebase.md`
 - `docs/decision_0012_workstream_authorization_service.md`
 - `docs/decision_0013_immutable_artifact_storage_boundary.md`
 - `docs/decision_0014_external_service_adapter_convention.md`
@@ -36,8 +37,8 @@
   persistence/append only; no dispatcher exists.
 - `backend/app/modules/audit/**`: existing shared audit foundation; no typed
   lifecycle participant yet.
-- `backend/app/modules/compensation/**` and migration `0053` add only the
-  in-review adapter-binding schema; no creation/lifecycle service exists.
+- `backend/app/modules/compensation/**` and merged migration `0053` add only the
+  adapter-binding schema; no creation/lifecycle service exists.
 - Review queue persistence now exists; ReviewLease, Review, and FinalAcceptance
   lifecycle implementation remain absent.
 

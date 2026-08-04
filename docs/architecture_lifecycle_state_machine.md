@@ -163,17 +163,24 @@ Required before entering:
 
 Before the contributor resumes from a human Review, Workstream appends one
 immutable Review-rooted RevisionContextPreparation in the same transaction that
-enters `needs_revision`. Exact prior Submission guide identity/activation-
-sequence match with the currently active guide keeps context. Any different
-valid active pair rebases forward or backward. Missing, inconsistent, revoked,
-or unsafe context blocks for Project Manager repair. Checker-caused remediation
+enters `needs_revision`. It compares the complete prior stamped context with
+the active applicable guide/source, submission/checker, review, revision,
+task-execution, and submitter ContributionPolicy context. Exact component
+matches keep; every changed valid component rebases together. Missing,
+inconsistent, revoked, or unsafe context blocks the whole preparation for
+Project Manager repair. The continuing TaskAssignment receives the selected
+submitter policy only for the next attempt; the completed Review and lease do
+not change. Checker-caused remediation
 remains a distinct CheckerRun-rooted path, keeps the Task's locked context, and
 creates no Review, ReviewFinding, preparation, reviewer contribution, or
 synthetic human actor. Its corrected Submission persists the unique immutable
 `remediation_source_checker_run_id` for the exact predecessor CheckerRun; a
 later retry cannot rewrite that causal lineage.
 
-A revision context rebase never mutates the prior submitted attempt. It only stamps the next submission attempt. The contributor and reviewer must see the prior version, the next version, and the guide or policy change summary.
+A revision context rebase never mutates the prior submitted attempt or
+completed contribution/award. It prepares and stamps only the next attempt. The
+contributor and reviewer must see prior and next versions and the complete
+guide/policy change summary.
 
 ### ACCEPTED
 
@@ -285,9 +292,9 @@ submission v2 -> accepted
 Each resubmission must link to the prior submission it supersedes.
 
 Each submitted version keeps its own stamped guide and policy context. A later
-revision may rebase forward or backward to the currently active guide. The
-immutable preparation records that next-attempt context and never rewrites an
-earlier Submission.
+human revision may rebase every changed valid component to the complete current
+applicable context. The immutable preparation records that next-attempt context
+and never rewrites an earlier Submission, Review, contribution, or award.
 
 ## Revision Replay
 

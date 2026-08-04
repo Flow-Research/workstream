@@ -48,7 +48,8 @@ TaskAssignment contribution-source lineage, submitter, or submitter policy.
 The submitter operation exists only after REV creates FinalAcceptance and
 applies accepted task/assignment effects. It receives exact locked
 FinalAcceptance, TaskAssignment, versioned Submission, project/task, submitter
-ActorProfile, assignment-frozen submitter ContributionPolicyVersion, the same
+ActorProfile, submitter ContributionPolicyVersion selected on the assignment
+for that exact prepared attempt, the same
 authorization/request/correlation lineage, and stabilized artifact hash. It
 never uses direct Review/ReviewLease contribution-source fields.
 
@@ -69,8 +70,9 @@ never uses direct Review/ReviewLease contribution-source fields.
 - [ ] Repeated idempotent decision returns the same rows; a later revision
   Review creates a distinct reviewer contribution; automated outcomes create
   none.
-- [ ] Reviewer uses lease-frozen policy; submitter uses assignment-frozen
-  policy. Matching explicit unpaid rule creates no award; compensated rule
+- [ ] Reviewer uses lease-frozen policy; submitter uses the assignment policy
+  selected for the exact attempt, including any prior human-revision rebase.
+  Matching explicit unpaid rule creates no award; compensated rule
   creates at most one money and one project-points award copied from immutable
   definitions.
 - [ ] CON copies the supplied stabilized digest exactly into
@@ -93,6 +95,12 @@ never uses direct Review/ReviewLease contribution-source fields.
   audit/outbox step rolls back Review/FinalAcceptance/task/assignment/
   contribution/award/audit/outbox together. The reviewer operation never
   commits independently and no post-commit repair path exists.
+- [ ] Needs revision composes the task-owned complete-context preparation after
+  the reviewer operation in the same caller transaction. The reviewer
+  contribution keeps its lease freeze; preparation may update only the next-
+  attempt assignment selector. Review, reviewer award, task/assignment effects,
+  preparation or blocked result, audit/outbox, and visibility roll back
+  together. CON-07 does not own the rebase.
 - [ ] No FinalAcceptance create action/API exists. Static/runtime proof finds no
   adjudication policy, grant/action, queue/lease, state, decision, contribution,
   conditional branch, readiness check, or initiative dependency.

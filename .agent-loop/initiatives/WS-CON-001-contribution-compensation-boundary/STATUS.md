@@ -2,13 +2,13 @@
 
 ## Current baseline
 
-- Reconciled main: `b47a7e64f7d75cda8a0681d1aff3bf0c4a5be4aa`.
-- Alembic head on main: `0052_legacy_intake_removal`.
-- CON-01 and CON-02A are merged.
-- CON-03A adapter-binding persistence is the active implementation chunk and
-  allocates linear migration `0053_compensation_bindings`.
-- Runtime contains shared outbox persistence and the in-review compensation
-  binding schema only; contribution,
+- Reconciled main: `cda59fc32e3a60e1e2c337cae7ebeaa94b95e12b`.
+- Alembic head on main: `0053_compensation_bindings`.
+- CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
+- PLAN5 is the active documentation/specification reconciliation for the
+  human-confirmed complete-context `needs_revision` rebase rule.
+- Runtime contains shared outbox persistence and the schema-only compensation
+  binding foundation; contribution,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
 - The pre-existing local deletion of the archival reference PDF is user-owned
   and excluded from this planning change.
@@ -46,13 +46,14 @@ schema work. Current dependency analysis yields:
 
 1. PLAN4 planning reconciliation.
 2. CON-03A adapter-binding persistence.
-3. CON-03B contribution-policy persistence, unblocking REV-03A2.
-4. CON-02C lifecycle-audit participant before REV-04B.
-5. Hidden policy/binding behavior and legacy clean cut as AUTH contracts become
+3. PLAN5 complete-context human revision-rebase reconciliation.
+4. CON-03B contribution-policy persistence, unblocking REV-03A2.
+5. CON-02C lifecycle-audit participant before REV-04B.
+6. Hidden policy/binding behavior and legacy clean cut as AUTH contracts become
    available.
-6. Contribution/award persistence after REV provides stable FK targets.
-7. Atomic REV/CON participant after both sides' lineage exists.
-8. Dispatcher and fulfillment later, after exact AUTH service registration.
+7. Contribution/award persistence after REV provides stable FK targets.
+8. Atomic REV/CON participant after both sides' lineage exists.
+9. Dispatcher and fulfillment later, after exact AUTH service registration.
 
 ## Current blockers
 
@@ -69,7 +70,7 @@ schema work. Current dependency analysis yields:
 
 ## Immediate next action
 
-Finish CON-03A schema evidence and review, publish it without the user-owned PDF
-deletion, and stop at its PR checkpoint. Binding creation remains deferred to
-04A after AUTH approves the exact adapter identity/capability contract; do not
-start 03B or another CON chunk automatically.
+Finish PLAN5 canonical reconciliation and stop at its PR checkpoint. It changes
+no runtime. After human merge approval, 03B remains the next proposed runtime
+chunk; binding creation remains deferred to 04A after AUTH approves the exact
+adapter identity/capability contract.

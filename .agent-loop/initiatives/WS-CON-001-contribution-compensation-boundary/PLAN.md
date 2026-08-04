@@ -41,8 +41,10 @@ CON-03B, while later REV-04B waits for CON-02C.
    exact binding actions/contexts and keeps them unavailable until hidden proof.
 6. `04B` adds hidden contribution-policy behavior under the same
    registration-before-behavior-before-activation sequence.
-7. `05A` removes semantic use of retired guide-bound economic terms and freezes
-   the submitter ContributionPolicyVersion on TaskAssignment.
+7. `05A` removes semantic use of retired guide-bound economic terms, initially
+   freezes the submitter ContributionPolicyVersion on TaskAssignment, and
+   supplies the guarded update boundary later consumed by human revision
+   preparation for complete next-attempt rebase.
 8. `05B` removes the now-unreachable legacy economic schema after an approved
    deterministic row classification and zero-consumer proof.
 

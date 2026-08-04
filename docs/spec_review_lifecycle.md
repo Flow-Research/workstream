@@ -237,8 +237,11 @@ Task.
 
 The submitter `ContributionPolicyVersion` freezes on the exact TaskAssignment.
 The reviewer version freezes independently on each ReviewLease. Project Guide
-rebase changes neither freeze. A later lease may freeze the then-current
-reviewer terms without rewriting an earlier lease.
+or policy publication changes neither freeze during an active attempt. After a
+human `needs_revision`, complete-context preparation may atomically update the
+continuing TaskAssignment to the current valid submitter version for the next
+attempt. A later lease freezes the then-current reviewer terms without
+rewriting an earlier lease.
 
 ## Checker Admission
 
@@ -484,24 +487,29 @@ Controlled revision preparation applies only after an immutable human
 `Review(needs_revision)`. Checker-caused remediation remains the distinct
 CheckerRun-rooted path above and performs no guide rebase or human finding replay.
 
-Revision preparation compares the prior Submission's stamped guide identity and
-activation sequence with the project's currently active Project Guide pair:
+Revision preparation compares the prior Submission's complete stamped context
+with the project's complete currently active applicable guide and policy
+context:
 
-- exact identity and activation-sequence match: `kept`;
-- any different internally consistent active pair: `rebased`, recording
-  `forward` or `backward`, including intentional reactivation of an older guide;
-- missing, incomplete, revoked, internally inconsistent, or unsafe active
-  context: `blocked` for covered Project Manager repair.
+- exact component identity/version/activation match: `kept`;
+- every changed internally consistent active component: `rebased` together,
+  recording `forward` or `backward` where applicable, including intentional
+  reactivation of an older version;
+- any missing, incomplete, revoked, internally inconsistent, crossed-project,
+  or unsafe active component: the whole context is `blocked` for covered
+  Project Manager repair.
 
 Version strings are never ordered. Activation sequence records chronology but
 does not overrule which guide is currently active.
 
 `RevisionContextPreparation` is immutable and rooted in the exact
 `needs_revision` Review and prior Submission. It freezes the complete selected
-next-attempt guide/source/task-execution policy context, context digest, outcome,
-direction, change summary, source TaskAssignment, currently authorized target
-TaskAssignment, preparation sequence, preparing actor/process, and audit link.
-It does not contain or rebase a ContributionPolicyVersion.
+next-attempt guide/source, submission/checker, review, revision,
+task-template/task-execution, and submitter ContributionPolicy context; context
+digest; outcome; direction; change summary; source and target TaskAssignment;
+preparation sequence; preparing actor/process; and audit link. It records prior
+and next submitter ContributionPolicyVersion and atomically updates the
+continuing assignment when that selector changed.
 
 Each episode forms one non-branching preparation chain: one root per Review,
 one child per preparation, same task/Review/source lineage across an edge, and
@@ -519,6 +527,14 @@ No guide rebase occurs during review. The reviewer evaluates the exact guide and
 task-execution context stamped on the single Submission covered by
 the active lease. History shows the prior and new guide versions, direction,
 and change summary.
+
+The needs-revision Review and its reviewer contribution/award use the completed
+ReviewLease's frozen policy. The next Submission uses the complete prepared
+context, and the next ReviewLease independently freezes the reviewer policy
+then current. Accept and reject perform no rebase. The Review, reviewer
+contribution/award, task and assignment effects, initial preparation or blocked
+outcome, audit/outbox effects, and contributor-visible state commit once or
+roll back together.
 
 ## Finding Replay And Resubmission
 

@@ -4,8 +4,10 @@
 
 Remove the retired guide-bound economic contract from every semantic consumer,
 classify existing rows, and freeze the active published
-ContributionPolicyVersion on each successful new TaskAssignment. Physical dead-
-schema removal belongs to 05B.
+ContributionPolicyVersion on each successful new TaskAssignment. Supply the
+same guarded current-version selection contract for later task-owned human
+revision preparation; publication itself never mutates an assignment. Physical
+dead-schema removal belongs to 05B.
 
 ## Risk
 
@@ -40,8 +42,10 @@ provider/artifact calls; unrelated checker behavior
 
 ## Acceptance criteria
 
-- [ ] Every new TaskAssignment has immutable non-null
-  `submitter_contribution_policy_version_id`.
+- [ ] Every new TaskAssignment has non-null
+  `submitter_contribution_policy_version_id`, initially frozen at claim and
+  mutable only by the explicit audited task-owned human revision preparation
+  path. Direct or publication-driven updates are rejected.
 - [ ] Exact merged Submission.task_assignment_id lineage is preserved; no
   parallel submission identity is added.
 - [ ] No runtime/API/setup/task/checker/review consumer treats retired guide-
@@ -63,7 +67,11 @@ provider/artifact calls; unrelated checker behavior
   manifest proves the freeze, canonical guards, rollback, and real-kernel
   unavailable behavior before activation.
 - [ ] Missing/invalid policy fails with no assignment/task/audit/outbox partial
-  state. Later publication never updates an assignment.
+  state. Later publication never updates an assignment. A later human
+  needs-revision preparation locks and validates the complete current context,
+  keeps an unchanged version or updates a changed valid version for the next
+  attempt, and records prior/next lineage atomically through the task-owned
+  lifecycle.
 - [ ] Publish versus claim and binding-state versus claim pass both lock orders
   without deadlock or mixed versions.
 - [ ] Existing rows follow the approved deterministic classification and cannot

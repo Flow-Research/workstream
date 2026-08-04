@@ -409,8 +409,8 @@ The paired artifact hidden-behavior matrix is closed:
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`, and `artifact.guide_source.binding.create -> artifact.binding.create`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
 | `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
-| `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04B depends on 04A3, XINT-002-06A activates its fixed pre-submit materializer before 04C1, and the contributor action remains unavailable until complete 04C2 evidence and WS-XINT-002-05A |
-| `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
+| `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04A4 removes the legacy standalone precheck after 04A3, 04B1-04B3 implement the sole catalogue/materialization/evidence path, XINT-002-06A activates its fixed pre-submit materializer before 04C1, and the contributor action remains unavailable until complete 04C2 evidence and WS-XINT-002-05A |
+| `WS-ART-001-04B2` and `04B3` | hidden `artifact.pre_submit.checker_input.materialize` resource/guard usage mapped to `artifact.checker_input.materialize`; 04B2 owns exact sealed materialization and 04B3 consumes it in the complete effective plan |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-06B` | `artifact.checker_output.write` mapped to `artifact.checker_output.write`; `artifact.checker_output.binding.create` mapped to `artifact.binding.create`, both using the checker-run resource |
@@ -418,8 +418,8 @@ The paired artifact hidden-behavior matrix is closed:
 WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation
 may execute that ActionId while it remains planned. The mandatory order is
-ART-04A1 -> 04A2 -> 04A3 -> 04B -> XINT-002-06A -> ART-04C1 -> 04C2 ->
-XINT-002-05A. This ensures fixed-service pre-submit materialization is active
+ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> 04A4 -> 04B1 -> 04B2 -> 04B3 ->
+XINT-002-06A -> ART-04C1 -> 04C2 -> XINT-002-05A. This ensures fixed-service pre-submit materialization is active
 before contributor preparation can become live.
 
 WS-XINT-002-04A activates only `artifact.guide_source.ingest`. The existing
@@ -509,7 +509,7 @@ remain planned and unavailable, and add no migration.
 | `artifact.verification.execute` | `artifact.verification.execute` | fixed verifier service | verification job | `02D` |
 | `artifact.pending_work.scan` | `artifact.pending_work.scan` | fixed scheduler service | system pending-work scope | `02D` |
 | `artifact.put_attempt.resolve` | `artifact.put_attempt.resolve` | fixed put-resolver service | put attempt | `02D` |
-| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
+| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B2/04B3` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `07A` |

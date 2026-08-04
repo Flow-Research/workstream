@@ -72,3 +72,22 @@ fulfillment. Runtime reputation scoring remains deferred.
 
 PLAN4 changes planning records only. The recommended next implementation is
 03A, and it begins only after human approval from then-current main.
+
+## D13 — Human revision rebases complete current context
+
+Publication or activation never silently changes an active assignment,
+Submission, or ReviewLease. Accept and reject finish under the versions frozen
+for that attempt. After a human `needs_revision`, revision preparation compares
+the complete applicable current Project Guide/source activation,
+submission-artifact policy, pre-submit and post-submit checker policies, review
+policy, revision policy, task-template/task-execution context, and
+ContributionPolicyVersion. It atomically keeps unchanged components or rebases
+all changed components for the next attempt.
+The completed reviewer contribution retains its lease-frozen policy; the
+revised submitter attempt uses the rebased assignment policy; and the next
+ReviewLease independently freezes the then-current reviewer policy. Prior
+Submissions, Reviews, ContributionRecords, and CompensationAwards remain
+immutable. Incomplete or inconsistent current context blocks rather than
+publishing a mixed version set. The Review, reviewer contribution/award, task
+and assignment effects, initial preparation or blocked outcome, audit/outbox,
+and contributor-visible state commit once or roll back together.

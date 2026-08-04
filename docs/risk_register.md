@@ -33,8 +33,9 @@ A task can be sent back for revision after the project guide or policies changed
 Mitigation:
 
 - prior Submissions remain tied to their stamped guide and policy context
-- exact stamped guide identity/activation-sequence match keeps context; any
-  different valid active pair rebases forward or backward; unsafe context blocks
+- exact stamped guide/policy component matches keep context; every changed
+  valid active component rebases together; unsafe context blocks the whole
+  preparation
 - Task Context returns the frozen preparation; reviewer context uses the exact
   leased Submission stamp without a separate rebase
 - every rebase records an audit event

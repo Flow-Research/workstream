@@ -69,12 +69,13 @@ closure defined by the active review lifecycle contract.
 Guide and policy changes do not silently mutate submitted attempts. A submitted
 attempt stays tied to the guide and policy versions stamped on that Submission.
 After a human `needs_revision` Review, preparation compares the prior
-Submission's stamped Project Guide identity and activation sequence with the
-project's currently active pair. An exact match keeps context, any different
-internally consistent active pair rebases forward or backward, and missing or
-unsafe context blocks for manager repair. RevisionPolicy does not select among
-those outcomes. The reviewer always uses the context stamped on the exact leased
-Submission and performs no separate rebase.
+Submission's complete stamped context with the project's complete applicable
+active Project Guide, submission/checker, review, revision, task-execution, and
+submitter ContributionPolicy context. Exact component matches are kept, every
+changed valid component is rebased together, and missing or unsafe context
+blocks the whole preparation for manager repair. RevisionPolicy does not select
+a stale context. The reviewer always uses the context stamped on the exact
+leased Submission and performs no separate rebase.
 
 Rules that affect acceptance judgment may be encoded in the human-facing
 project guide, review policy, revision policy, task template, or checker
@@ -83,10 +84,12 @@ implementation. Rules that affect submission intake must be encoded in
 `PreSubmitCheckerPolicy`. Chat messages and informal notices are not
 enforceable rules until they are moved into those contracts.
 
-Publication of a `ContributionPolicyVersion` is independent of guide activation. A
-`TaskAssignment` freezes the active submitter `ContributionPolicyVersion`, and
-a `ReviewLease` independently freezes the active reviewer version. Guide or
-revision-context changes never silently replace either frozen version.
+Publication of a `ContributionPolicyVersion` is independent of guide
+activation and never silently changes active work. Task claim initially freezes
+the submitter version on `TaskAssignment`; human revision preparation may
+atomically rebase it with the rest of the next-attempt context. Each
+`ReviewLease` independently freezes the reviewer version then current and is
+never rewritten.
 
 ## Consequences
 

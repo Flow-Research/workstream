@@ -137,6 +137,26 @@ PreSubmitCheckerPolicy =
   trusted compiler output from EffectiveProjectSubmissionArtifactPolicy
 ```
 
+Runtime execution uses one code-owned, versioned
+`PreSubmissionCheckerCatalogue`. The catalogue contains both Workstream-owned
+artifact-custody/default checks and the constrained primitives referenced by a
+locked project policy. Compilation produces one ordered
+`EffectivePreSubmissionExecutionPlan`; it does not create a project-specific
+checker API or registry.
+
+Every catalogue entry declares a stable checker ID and version, owner, phase,
+order/dependencies, classification, typed input capability, bounded limits and
+result schema, policy trace, and `enabled|disabled` operational state. In v0.1,
+availability is startup-validated, versioned deployment configuration—not a
+contributor, Project Manager, task, or project-policy toggle.
+
+- disabling a mandatory security, integrity, or contributor-accountability
+  entry makes preparation fail closed as infrastructure unavailable;
+- disabling an advisory entry allows the rest of the plan to run but records
+  that disabled entry in the bounded execution manifest;
+- a locked project-required rule cannot be disabled at runtime; changing it
+  requires a new approved policy lineage.
+
 `SubmissionArtifactPolicyDerivationAgent` produces the artifact-intake contract
 at project setup time. Workstream's trusted checker compiler builds and
 validates the constrained checker specification and persists the project-level
@@ -191,6 +211,27 @@ Approved pre-submit checker primitives include:
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
 
+The catalogue also registers the non-policy artifact-custody prelude already
+owned by ART: outer-ZIP validation, archive/path/resource safety, exact archive
+identity, semantic-manifest identity, executable normalization,
+unchanged-revision rejection, and sealed scratch-tree integrity. These gates
+produce trusted inputs for policy primitives and cannot be removed or
+downgraded by the compiler.
+
+The stable v0.1 platform IDs are defined by the active ART chunk contract and
+include `artifact.outer_zip.valid`, `artifact.archive.paths_safe`,
+`artifact.archive.entries_safe`, `artifact.archive.resources_bounded`,
+`artifact.archive.integrity_verified`, `artifact.archive.identity_computed`,
+`artifact.manifest.semantic_identity_computed`,
+`artifact.manifest.executable_normalized`,
+`artifact.revision.content_changed`,
+`artifact.scratch.sealed_tree_verified`,
+`submission.packet.required_fields`,
+`submission.attestation.required_topics`,
+`artifact.sensitive_paths.high_confidence`, and
+`artifact.quality.placeholder_signal`. Renaming or removing one requires a new
+catalogue version and migration/replay decision; aliases are not accepted.
+
 The trusted compiler must keep `warn_low_quality_generated_artifact`
 warning-only; escalating that primitive to blocking is rejected because it would
 change contributor-facing intake semantics.
@@ -212,33 +253,26 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
   structured checker result for project operators
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
-Pre-submit has two API contracts:
+The legacy standalone `/tasks/{id}/submission-precheck` contract is superseded.
+Pre-submit checks now run only inside the continuous submission-bundle
+preparation request against the exact uploaded ZIP in bounded scratch:
 
 ```text
-POST /tasks/{id}/submission-precheck
-200 PreSubmitCheckResponse
-{
-  "status": "failed",
-  "eligible_to_submit": false,
-  "results": [...]
-}
-```
-
-```text
-POST /tasks/{id}/submissions
+POST /api/v1/tasks/{id}/submission-bundle-preparations
 422 DomainError
 {
   "code": "pre_submission_checker_failed",
-  "details": {
-    "status": "failed",
-    "eligible_to_submit": false,
-    "results": [...]
-  }
+  "details": {"status": "failed", "eligible_to_submit": false, "results": [...]}
 }
 ```
 
-`pre_submission_checker_failed` is the submission-creation error code. It is not
-a review decision and is not the response type for the preflight endpoint.
+There is no independently invocable precheck route and no reusable client-owned
+manifest input. The bounded result is returned only to the authorized actor in
+that same request. A passing preparation later returns an admission identity;
+`POST /api/v1/tasks/{id}/submissions` consumes that verified ready admission under its
+separate fresh authority and does not rerun scratch-bound checks.
+
+`pre_submission_checker_failed` is an intake error code, not a review decision.
 
 Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a finalized submission.
 
@@ -274,17 +308,18 @@ separation before this ADR can be closed as fully implemented.
 
 ## Default Workstream Submission Artifact Rules
 
-Every submission must include:
+Contributor preparation supplies:
 
 - summary
-- package hash when a package reference is supplied
-- artifact hash manifest
 - contributor attestation
+- exactly one outer ZIP containing every required work/evidence file
 
-Every artifact manifest entry must include:
+Workstream—not the client—computes and binds:
 
-- artifact name or relative path
-- artifact hash
+- exact outer-ZIP SHA-256 and byte count
+- the canonical semantic manifest and every entry hash/byte count
+- required-file/evidence facts from that manifest and sealed workspace
+- the immutable pre-submit evidence set and verified ready-admission identity
 
 Every artifact path must be safe:
 
@@ -297,7 +332,7 @@ Uploaded artifacts and storage-backed evidence require `sha256:<64 lowercase hex
 
 Persisted storage references must be Workstream-issued opaque object references or validated object-storage adapter references. Raw signed URLs, credential-bearing URLs, query strings, local filesystem paths, bucket secrets, and token-bearing references are rejected before persistence. Normalization is allowed only for already-approved adapter references that contain no secrets, credentials, or query material.
 
-Default forbidden artifacts remain blocked even if a project policy accidentally lists them as required. A required artifact that violates the default forbidden policy is a project setup defect.
+Default forbidden artifacts remain blocked even if a project policy accidentally lists them as required. A required artifact that violates the default forbidden policy is a project setup defect. Universal blocking patterns must be narrowly high-confidence. Broad name heuristics such as `token*`, `secret*`, `credential*`, or dependency-directory names require explicit classification as advisory or project-specific unless the exact match proves a generic custody risk.
 
 The effective policy merge is deterministic:
 

@@ -39,11 +39,11 @@ checker policy, review policy, revision policy, contribution policy, or task
 template.
 
 Prior submitted attempts remain tied to their stamped context. Human-review
-revision preparation compares the prior Project Guide identity/activation
-sequence with the currently active pair: exact match keeps, any different valid
-pair rebases forward or backward, and unsafe context blocks. The contributor
-sees the frozen result and the reviewer consumes the context stamped on the
-leased Submission without rebasing.
+revision preparation compares the complete prior context with all applicable
+current guide and policy selectors: exact components keep, every changed valid
+component rebases together, and unsafe context blocks. The contributor sees the
+frozen result and the reviewer consumes the context stamped on the leased
+Submission without rebasing.
 
 ## 3. Same Lifecycle, Different Domain Language
 

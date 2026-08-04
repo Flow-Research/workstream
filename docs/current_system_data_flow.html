@@ -515,7 +515,7 @@
             <article class="step">
               <span class="num">6</span>
               <h3>Pre-submit intake checks run</h3>
-              <p>Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating a submission row. Preflight failures return PreSubmitCheckResponse details. Blocked submission-create attempts return pre_submission_checker_failed with pass/fail/warning details.</p>
+              <p>Workstream runs one effective pre-submission plan against the uploaded outer ZIP in bounded scratch before creating a submission. Failed preparation returns bounded same-request pre_submission_checker_failed details; there is no standalone preflight route.</p>
               <div class="data">
                 <code>no submission yet</code>
                 <code>no checker run yet</code>
@@ -525,29 +525,30 @@
 
             <article class="step">
               <span class="num">7</span>
-              <h3>Submission packet is created</h3>
-              <p>After blocking pre-submit checks pass, Workstream creates the submission with summary, package reference, artifact hashes, evidence references, and attestation.</p>
+              <h3>Verified admission is published</h3>
+              <p>After blocking pre-submit checks pass, Workstream stores the outer ZIP once, independently reads it back, and publishes a capacity-charged ready admission bound to the server-generated manifest and pre-submit evidence.</p>
               <div class="data">
-                <code>Submission v1</code>
-                <code>EvidenceItem</code>
-                <code>artifact_hash_manifest</code>
+                <code>SubmissionBundleAdmission: ready</code>
+                <code>ArtifactContent</code>
+                <code>SubmissionBundleManifest</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">8</span>
-              <h3>Submission is finalized</h3>
-              <p>The server records finalization against the task's server-owned guide and policy context, finalizes evidence rows, and schedules the checker run.</p>
+              <h3>Submission consumes the admission</h3>
+              <p>Under fresh human and fixed-service authority, one transaction locks the ready admission and task context, creates the immutable Submission and exact artifact binding, and marks the admission consumed.</p>
               <div class="data">
-                <code>finalized_at</code>
-                <code>submission_finalized</code>
+                <code>Submission v1</code>
+                <code>ArtifactBinding</code>
+                <code>admission: consumed</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">9</span>
               <h3>Automatic checkers execute</h3>
-              <p>Registered checkers run against the exact finalized submission, package hash, artifacts, and policy context.</p>
+              <p>Registered post-submit checkers materialize and rehash the exact immutable Submission binding, manifest, and locked policy context.</p>
               <div class="data">
                 <code>CheckerRun</code>
                 <code>CheckerResult</code>
@@ -599,7 +600,7 @@
             </div>
             <div class="record">
               <strong>Submission Packet</strong>
-              <span>Submission version, package URI, package hash, artifact hash manifest, evidence rows.</span>
+              <span>Submission version, consumed ready admission, immutable ArtifactBinding/ArtifactContent identity, server-generated SubmissionBundleManifest, and pre-submit evidence set.</span>
             </div>
             <div class="record">
               <strong>Checker Trail</strong>
@@ -607,7 +608,7 @@
             </div>
             <div class="record">
               <strong>Audit Events</strong>
-              <span>Task creation, status changes, submission finalization, checker gate start/pass/block.</span>
+              <span>Task creation, status changes, admission publication/consumption, checker gate start/pass/block.</span>
             </div>
             <div class="record">
               <strong>Visibility Rules</strong>
@@ -631,16 +632,16 @@
           <li>Guide activation fails if the immutable guide source snapshot, guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching provenance, or required review and revision policy context is missing.</li>
           <li>Pre-submit intake failures create no submission row or submission version.</li>
           <li>Revision resubmission states are limited to needs_revision in v0.1.</li>
-          <li>Submission packet does not carry guide or policy versions from the contributor.</li>
-          <li>Submission finalization records against the task's server-owned guide and policy context.</li>
-          <li>Evidence rows finalize with the submission.</li>
-          <li>Checker runs bind to submission version, package hash, and artifact hashes.</li>
+          <li>Submission input does not carry provider references, package hashes, manifests, guide versions, or policy versions from the contributor.</li>
+          <li>Submission creation consumes one verified ready admission against the task's server-owned guide and policy context.</li>
+          <li>Pre-submit evidence binds to the same manifest and admission.</li>
+          <li>Checker runs bind to the immutable Submission, ArtifactBinding, ArtifactContent, and server-generated manifest identities.</li>
           <li>Duplicate checker results fail the real API drill.</li>
           <li>Contributor-facing review decisions stay accept, needs_revision, and reject.</li>
         </ul>
 
         <div class="mini-flow">
-          <div><strong>Clean path:</strong> active guide -&gt; ready task -&gt; finalized submission -&gt; checker pass -&gt; review_pending.</div>
+          <div><strong>Clean path:</strong> active guide -&gt; ready task -&gt; verified admission -&gt; immutable submission -&gt; checker pass -&gt; review_pending.</div>
           <div><strong>Contributor-fix path:</strong> checker failure -&gt; needs_revision -&gt; new submission version.</div>
           <div><strong>Setup-defect path:</strong> task_setup_blocked -&gt; project manager repair -&gt; trusted checker retry.</div>
         </div>

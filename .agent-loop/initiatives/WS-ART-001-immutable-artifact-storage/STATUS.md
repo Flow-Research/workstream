@@ -112,10 +112,17 @@ remain pending.
 
 AUTH `WS-XINT-002-04B` activated only fixed-service binding and guide read.
 ART-03C removed the legacy identity/excerpt path and made the verified pipeline
-authoritative. ART-04A2 merged through PR #266. ART-04A3 is implemented on its
-bounded branch with canonical server-derived semantic manifests, executable
-normalization, and fail-closed unchanged-work comparison. Internal L1 reviews
-and focused evidence pass; hosted PR gates and human merge remain pending.
+authoritative. ART-04A2 merged through PR #266. ART-04A3 merged through PR #268
+and provides canonical server-derived semantic manifests, executable
+normalization, and fail-closed unchanged-work comparison.
+
+`WS-ART-001-PLAN4` is the planning-only correction, implemented with all
+required internal L1 review tracks passing. It replaces the
+oversized 04B contract with 04A4 legacy standalone-precheck removal, 04B1
+catalogue/effective-plan composition, 04B2 sealed materialization plus mandatory
+platform/default execution, and 04B3 locked-project execution plus immutable
+bounded evidence. No runtime behavior or AUTH availability changes in PLAN4;
+hosted PR gates and human merge remain pending.
 
 ## Gate
 

@@ -121,15 +121,19 @@ submission policy schema.
 
 `SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`. Workstream then generates, persists, and locks project `PreSubmitCheckerPolicy` with a compiled bundle hash from that effective project submission artifact policy. Tasks lock the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering the contributor pipeline.
 
-Blocking pre-submit failures prevent submission creation. Preflight failures
-return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
-results=[...])`. Blocked submission-create attempts return
-`pre_submission_checker_failed` with structured pass/fail/warning details and
+Blocking pre-submit failures prevent submission creation. The continuous
+submission-bundle preparation request returns `pre_submission_checker_failed`
+with bounded same-request status, eligibility, and pass/fail/warning details and
 create no submission row, no submission version, no task transition to
-`submitted`, and no submission-created audit event. Workstream still writes a
-task audit event named `pre_submission_check_failed` with the structured checker
-result for project operators; this is audit evidence, not a product review
-decision.
+`submitted`, and no submission-created audit event. Workstream writes a task
+audit event named `pre_submission_check_failed` containing only this closed,
+path-redacted projection: actor-profile ID, project ID, task ID, preparation
+attempt ID, effective-plan hash, terminal status, pass/warning/failure counts,
+and a bounded ordered list of catalogue ID/version plus stable outcome code.
+It excludes filenames, archive paths, scratch/provider references, credentials,
+raw checker output, evidence content, and free-form or unbounded messages. This
+is audit evidence, not a product review decision. No independently invocable
+preflight route exists.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 
@@ -137,12 +141,12 @@ For guide and context resolution, TaskAssignment contributes only its `task_id`;
 it still retains required contributor, assignment, status, and frozen submitter
 contribution-policy attribution. Each immutable Submission stamps the exact
 Project Guide identity, version, and activation sequence used by that attempt.
-After a human `needs_revision` Review, exact stamped identity and
-activation-sequence match with the currently active guide keeps context. Any
-different valid active pair prepares a forward or backward rebase; incomplete,
-inconsistent, revoked, or unsafe context blocks for manager repair. Task Context
-returns the frozen preparation. No guide rebase occurs during review; the
-reviewer uses the context stamped on the leased Submission.
+After a human `needs_revision` Review, preparation compares the complete prior
+stamped context with all applicable current guide and policy selectors. Exact
+component matches keep; every changed valid component rebases together;
+incomplete, inconsistent, revoked, or unsafe context blocks for manager repair.
+Task Context returns the frozen preparation. No rebase occurs during review;
+the reviewer uses the context stamped on the leased Submission.
 
 ### Task Contract
 
@@ -163,10 +167,14 @@ reviewing auditable:
 - deadline or SLA when applicable
 - source type and source reference when imported
 
-Compensation is not task-guide context. TaskAssignment freezes the active
-published submitter `ContributionPolicyVersion`; ReviewLease independently
-freezes the reviewer version. Either rule may be explicitly unpaid and therefore
-create no award.
+Compensation remains an independently owned CON policy, but its selected version
+is part of the complete governing work context. Task claim initially freezes
+the submitter `ContributionPolicyVersion`; ReviewLease independently freezes the
+reviewer version. Publication never silently changes an active attempt. A human
+`needs_revision` atomically rebases every changed applicable next-attempt
+context component, including the submitter version, while the completed lease
+and prior history remain immutable. Either rule may be explicitly unpaid and
+therefore create no award.
 
 ### Human Accountability
 
