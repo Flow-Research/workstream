@@ -151,6 +151,8 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
             content_id = replica.content_id
             source_job_id = source_job.id
             source_job_cas_version = source_job.cas_version
+            submission_id = source_job.recovery_submission_id
+            assert submission_id is not None
             binding_id = "00000000-0000-0000-0000-000000000101"
             second_binding_id = "00000000-0000-0000-0000-000000000102"
             observation_receipt_id = "00000000-0000-0000-0000-000000000201"
@@ -312,6 +314,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "authority race",
                         "client_idempotency_key": "authority-race",
                         "expected_source_job_cas_version": source_job_cas_version,
@@ -331,6 +334,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                         json={
                             "project_id": project_id,
                             "task_id": task_id,
+                            "submission_id": submission_id,
                             "reason": "identity race",
                             "client_idempotency_key": str(unavailable_context.actor_status),
                             "expected_source_job_cas_version": source_job_cas_version,
@@ -343,6 +347,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "stale source fence",
                         "client_idempotency_key": "stale-source",
                         "expected_source_job_cas_version": source_job_cas_version + 1,
@@ -355,12 +360,13 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "provider remained unavailable",
                         "client_idempotency_key": "operator-http-retry",
                         "expected_source_job_cas_version": source_job_cas_version,
                     },
                 )
-                assert retry.status_code == 202
+                assert retry.status_code == 202, retry.text
                 recovery_id = retry.json()["recovery_attempt_id"]
                 retry_job_id = retry.json()["retry_verification_job_id"]
                 replay = await client.post(
@@ -368,6 +374,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "provider remained unavailable",
                         "client_idempotency_key": "operator-http-retry",
                         "expected_source_job_cas_version": source_job_cas_version,
@@ -381,6 +388,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "altered replay",
                         "client_idempotency_key": "operator-http-retry",
                         "expected_source_job_cas_version": source_job_cas_version,
@@ -392,6 +400,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "pending retry is ineligible",
                         "client_idempotency_key": "ineligible-retry",
                         "expected_source_job_cas_version": 0,
@@ -495,6 +504,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     json={
                         "project_id": project_id,
                         "task_id": task_id,
+                        "submission_id": submission_id,
                         "reason": "cross-project probe",
                         "client_idempotency_key": "cross-project-probe",
                         "expected_source_job_cas_version": source_job_cas_version,

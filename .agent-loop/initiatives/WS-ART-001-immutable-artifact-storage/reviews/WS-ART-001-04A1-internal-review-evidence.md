@@ -15,6 +15,9 @@ Result: PASS.
   tests before review corrections, followed by 64 migration, architecture,
   authorization, checker lifecycle, and task-scoped recovery tests after the
   corrections.
+- After hosted CI exposed missing submission lineage in the replacement
+  checker-output operator fixture, the corrected operator/recovery pair passed
+  all 15 tests.
 - Stale artifact/auth/wording scans, Markdown links, and `git diff --check`
   passed. No dependency, workflow, coverage-threshold, or package-script change
   was made.
@@ -45,6 +48,8 @@ Result: PASS.
   to contract version 1.
 - Canonical decisions and operator guidance no longer describe upload items as
   current runtime state.
+- Every operator recovery request backed by the replacement checker-output
+  fixture now carries its canonical submission identity.
 
 ## Residual risk
 

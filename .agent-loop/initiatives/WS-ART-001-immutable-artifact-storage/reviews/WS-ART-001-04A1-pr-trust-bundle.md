@@ -57,8 +57,12 @@ their surviving generic guarantees were re-established on current producers.
 ## Reviewer results and external review
 
 Architecture, security, QA, product/operations, senior engineering,
-documentation, reuse, and test-delta reviews pass. Hosted GitHub Backend/Agent
-Gates and CodeRabbit remain pending when this bundle is written.
+documentation, reuse, and test-delta reviews pass. CodeRabbit completed without
+actionable comments. The first hosted Backend run exposed one stale test request
+that omitted the replacement checker's canonical submission lineage; the test
+was corrected without changing production guards, and the complete operator and
+recovery pair passes 15 tests. Fresh hosted Backend/Agent Gates are required on
+the correction commit.
 
 ## Remaining risks and follow-up
 
