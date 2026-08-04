@@ -30,7 +30,9 @@ child. The pre-existing user-owned PDF deletion remains excluded.
 - Focused compensation coverage: 100%.
 - Single Alembic head, Ruff, Markdown links, stale wording/auth scans, and diff
   hygiene pass.
-- All eight required internal reviewer tracks pass on exact implementation
+- Semantic-lane integrity/evidence suite: 70 passed; compensation tests are
+  assigned to exactly one lane without weakening any gate or threshold.
+- All nine required internal reviewer tracks pass on exact implementation
   commit `684cad7c87a2ebac9e5ad91c8e2cdbabecd6235a`.
 
 ## Human Review Focus

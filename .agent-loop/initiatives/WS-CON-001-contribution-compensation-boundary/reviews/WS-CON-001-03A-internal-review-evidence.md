@@ -25,6 +25,7 @@ Markdown links: passed
 stale Workstream wording: passed
 stale authorization documentation: passed
 git diff --check: passed
+semantic-lane integrity tests: 70 passed
 ```
 
 PostgreSQL rejects invalid route keys, non-active initial lifecycle shapes,
@@ -44,8 +45,15 @@ fields.
 | Docs | PASS | Live 03A state separated from historical PLAN4 snapshots. |
 | Reuse/dedup | PASS | No duplicate production abstraction or factory path. |
 | Test delta | PASS | No removed, skipped, or weakened tests. |
+| CI integrity | PASS | Compensation tests assigned to exactly one semantic lane; no gate or threshold weakened. |
 
 Open reviewer sessions: none.
+
+The first hosted semantic-lane inventory correctly failed closed because the
+new compensation test module was unassigned. The repair adds it to
+`shared_foundations`; the lane/evidence regression suite passes and independent
+CI-integrity review confirms that no exclusion, skip, bypass, or threshold
+change was introduced.
 
 ## Deferred Boundary
 

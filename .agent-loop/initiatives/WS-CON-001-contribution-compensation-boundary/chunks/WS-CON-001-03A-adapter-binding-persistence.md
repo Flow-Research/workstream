@@ -17,6 +17,7 @@ backend/app/modules/compensation/{__init__,models,schemas}.py
 backend/app/db/models.py
 backend/alembic/versions/<next>_project_compensation_adapter_bindings.py
 backend/tests/{conftest,test_compensation,test_alembic}.py
+backend/scripts/run_test_lanes.py
 docs/{architecture_data_model,spec_contribution_compensation}.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/**
 .agent-loop/merge-intents/WS-CON-001-03A.json
