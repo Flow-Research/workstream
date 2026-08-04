@@ -44,10 +44,10 @@ def zip_directory_layout(
     comment_bytes = int.from_bytes(tail[marker + 20 : marker + 22], "little")
     if marker + 22 + comment_bytes != len(tail):
         raise zipfile.BadZipFile("trailing archive content")
-    disk, directory_disk, disk_entries, entries, directory_bytes, directory_offset = (
+    disk, directory_disk, _disk_entries, entries, directory_bytes, directory_offset = (
         struct.unpack_from("<HHHHII", tail, marker + 4)
     )
-    if disk or directory_disk or disk_entries != entries:
+    if disk or directory_disk:
         raise zipfile.BadZipFile("multi-disk archive")
     if entries != 0xFFFF and directory_bytes != 0xFFFFFFFF:
         if directory_offset + directory_bytes != absolute_marker:

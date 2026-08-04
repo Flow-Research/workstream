@@ -81,8 +81,11 @@ resolved.
 
 ## External review
 
-CodeRabbit and hosted GitHub checks have not run yet. Findings must be triaged
-against the exact PR head before merge.
+CodeRabbit was rate-limited and produced no substantive comments. The first
+hosted `shared_foundations` shard exposed two guide-OOXML stable-classification
+regressions in the moved neutral ZIP probe; the helper was corrected and 119
+focused guide/submission tests pass. Fresh hosted checks are required on that
+correction commit.
 
 ## Remaining risks and follow-up
 
