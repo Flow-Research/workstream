@@ -34,6 +34,11 @@ Verification commands:
 - Hosted Backend semantic lanes and final coverage fan-in.
 - Test-delta scan for skips, xfails, deleted assertions, and coverage narrowing.
 
+The 1,200-second local full-file timeout is a bounded diagnostic limit on the
+constrained development machine and may be reached before collection completes.
+Only the hosted Backend exact-head run is authoritative proof of the complete
+suite pass.
+
 Required reviewers: senior, QA, test-delta, CI integrity, product/ops, reuse.
 Human focus: checker invariant ownership and fast-layer placement. This chunk
 does not change or test TASK-owned lifecycle behavior merely for percentage.

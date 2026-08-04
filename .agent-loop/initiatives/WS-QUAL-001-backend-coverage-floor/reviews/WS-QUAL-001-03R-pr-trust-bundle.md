@@ -87,8 +87,11 @@ insertion.
 
 ## External review
 
-Agent Gates, Backend, CodeRabbit, and human review are pending on the published
-exact PR head. None is represented as passed before publication.
+Agent Gates passed on the published head. CodeRabbit's one trivial finding was
+valid: the contract needed to distinguish the bounded local 1,200-second
+diagnostic timeout from hosted complete-pass authority. The contract now says
+that explicitly. Backend exact-head semantic lanes and final fan-in are still
+running; human review remains pending.
 
 ## Remaining risks and follow-up work
 
