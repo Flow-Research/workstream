@@ -2,9 +2,10 @@
 
 ## Current baseline
 
-- Reconciled main: `b224971d9f207e7aa0925fcc12dad15900375a51`.
-- Alembic head on main: `0053_compensation_bindings`; 03B advances the branch
-  to `0054_contribution_policy`.
+- Reconciled main: `9550b3cdb8ac12dea72931277cf46ac1b8ffda7f`.
+- Alembic head on main: `0054_guide_sufficiency_authority`; 03B advances the branch
+  to `0055_contribution_policy` after AUTH migration
+  `0054_guide_sufficiency_authority`.
 - CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
 - PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
   `needs_revision` rebase rule.

@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0054_contribution_policy"
+HEAD_REVISION = "0055_contribution_policy"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -99,6 +99,232 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12G,
     ActionOwner.AUTH_12H,
 }
+
+
+def test_0054_guide_sufficiency_authority_safe_empty_downgrade_and_reupgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Remove and restore 12E only while no authorization evidence exists."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0049_rev_auth_readiness")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0049_rev_auth_readiness"
+            )
+            command.upgrade(config, HEAD_REVISION)
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            command.upgrade(config, HEAD_REVISION)
+
+
+def test_0050_replay_is_append_only_and_blocks_populated_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove replay constraint closure, sole completion, and downgrade refusal."""
+    config = _alembic_config()
+    ids = {
+        name: str(uuid4())
+        for name in ("profile", "link", "project", "guide", "snapshot", "setup", "report")
+    }
+    ids["slug"] = f"replay-{ids['project']}"
+    replay_id, operation_id, key = uuid4(), uuid4(), uuid4()
+    digest = f"sha256:{'a' * 64}"
+    final_digest = f"sha256:{'b' * 64}"
+
+    async def exercise() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await insert_historical_project(
+                    connection,
+                    project_id=ids["project"],
+                    name="0050 replay",
+                    slug=ids["slug"],
+                )
+                custody_triggers = (
+                    ("project_guides", "guide_mutation_product_custody"),
+                    ("guide_source_snapshots", "source_snapshot_product_custody"),
+                    ("project_setup_runs", "source_setup_run_custody"),
+                )
+                for table, trigger in custody_triggers:
+                    await connection.execute(
+                        text(f"alter table {table} disable trigger {trigger}")
+                    )
+                statements = (
+                    "insert into actor_profiles(id,actor_kind,status,provisioning_method,"
+                    "service_identity,created_by) values(:profile,'service','active',"
+                    "'manual_service_provisioning','workstream.project.setup',:profile)",
+                    "insert into actor_identity_links(id,actor_profile_id,issuer,subject,"
+                    "subject_kind,status,linked_by) values(:link,:profile,'https://identity.test',"
+                    "'workstream.project.setup','service','active',:profile)",
+                    "insert into project_guides(id,project_id,version,status,content_markdown,"
+                    "created_by) values(:guide,:project,'v1','draft','# guide','migration-test')",
+                    "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
+                    "manifest_schema_version,manifest_json,bundle_hash,captured_by) values("
+                    ":snapshot,:project,:guide,'v1','1','{}'::json,:digest,'migration-test')",
+                    "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
+                    "source_snapshot_id,source_snapshot_hash,setup_generation,status,current_step,"
+                    "created_by) values(:setup,:project,:guide,'v1',:snapshot,:digest,1,"
+                    "'running_sufficiency_agent','guide_sufficiency','migration-test')",
+                    "insert into guide_sufficiency_reports(id,project_id,guide_id,guide_version,"
+                    "source_snapshot_id,source_snapshot_hash,status,findings,summary,created_by) "
+                    "values(:report,:project,:guide,'v1',:snapshot,:digest,'passed','[]'::json,"
+                    "'ready','migration-test')",
+                )
+                for statement in statements:
+                    await connection.execute(text(statement), {**ids, "digest": digest})
+                for table, trigger in custody_triggers:
+                    await connection.execute(
+                        text(f"alter table {table} enable trigger {trigger}")
+                    )
+                values = {
+                    "id": replay_id,
+                    "profile": ids["profile"],
+                    "link": ids["link"],
+                    "key": key,
+                    "request": digest,
+                    "resource": final_digest,
+                    "operation": operation_id,
+                    **ids,
+                }
+                await connection.execute(
+                    text(
+                        "insert into guide_sufficiency_mutation_idempotency_records("
+                        "id,actor_profile_id,identity_link_id,action_id,idempotency_key,"
+                        "request_digest,resource_context_digest,operation_id,project_id,guide_id,"
+                        "source_snapshot_id,setup_run_id,setup_generation,status) values("
+                        ":id,:profile,:link,'project.guide_sufficiency.run',:key,:request,:resource,"
+                        ":operation,:project,:guide,:snapshot,:setup,1,'pending')"
+                    ),
+                    values,
+                )
+                with pytest.raises(DBAPIError, match="invalid guide sufficiency replay mutation"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "update guide_sufficiency_mutation_idempotency_records "
+                                "set setup_generation=2 where id=:id"
+                            ),
+                            {"id": replay_id},
+                        )
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "update guide_sufficiency_mutation_idempotency_records set "
+                        "status='committed',response_json='{}'::json,report_id=:report,"
+                        "committed_at=now() where id=:id"
+                    ),
+                    {"id": replay_id, "report": ids["report"]},
+                )
+            async with engine.begin() as connection:
+                with pytest.raises(DBAPIError, match="invalid guide sufficiency replay mutation"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "update guide_sufficiency_mutation_idempotency_records "
+                                "set response_json=cast(:response as json) where id=:id"
+                            ),
+                            {"id": replay_id, "response": json.dumps({"changed": True})},
+                        )
+                with pytest.raises(DBAPIError, match="guide sufficiency replay rows are append-only"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text("truncate guide_sufficiency_mutation_idempotency_records")
+                        )
+        finally:
+            await engine.dispose()
+
+    async def clear_replay() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "disable trigger trg_sufficiency_replay_immutable"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "disable trigger trg_sufficiency_replay_no_truncate"
+                    )
+                )
+                await connection.execute(
+                    text("truncate guide_sufficiency_mutation_idempotency_records")
+                )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "enable trigger trg_sufficiency_replay_immutable"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table guide_sufficiency_mutation_idempotency_records "
+                        "enable trigger trg_sufficiency_replay_no_truncate"
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    async def install_provenance_only() -> None:
+        decision_id = str(uuid4())
+        await _insert_authority_audit_fixture(isolated_database_env, decision_id)
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "update guide_sufficiency_reports set "
+                        "project_setup_run_id=:setup,setup_generation=1,"
+                        "agent_material_sha256=:digest,agent_material_byte_count=1,"
+                        "created_by_actor_profile_id=:profile,created_via_identity_link_id=:link,"
+                        "created_by_service_identity='workstream.project.setup',"
+                        "creation_scope_type='service',creation_scope_project_id=:project,"
+                        "creation_action_id='project.guide_sufficiency.run',"
+                        "authorization_decision_event_id=:decision where id=:report"
+                    ),
+                    {"decision": decision_id, "digest": digest, **ids},
+                )
+        finally:
+            await engine.dispose()
+
+    async def clear_product_evidence() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("delete from guide_sufficiency_reports where id=:report"),
+                    {"report": ids["report"]},
+                )
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            asyncio.run(exercise())
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade guide sufficiency authority with evidence",
+            ):
+                command.downgrade(config, "0049_rev_auth_readiness")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+            asyncio.run(clear_replay())
+            asyncio.run(install_provenance_only())
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade guide sufficiency authority with evidence",
+            ):
+                command.downgrade(config, "0049_rev_auth_readiness")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            asyncio.run(clear_replay())
+            asyncio.run(clear_product_evidence())
+            command.upgrade(config, HEAD_REVISION)
 
 
 def _alembic_config() -> Config:

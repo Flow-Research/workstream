@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Adds migration `0054_contribution_policy` and the SQLAlchemy/Pydantic
+Adds migration `0055_contribution_policy` and the SQLAlchemy/Pydantic
 foundation for project-scoped contribution policies and immutable published
 economic rules.
 
@@ -35,7 +35,7 @@ economic rules.
 
 ## Human Review Focus
 
-1. Confirm 0054 remains a linear child of 0053 on the reconciled main head.
+1. Confirm 0055 remains a linear child of AUTH 0054 on the reconciled main head.
 2. Confirm deferred graph validation and child locking prevent mixed published
    economic truth.
 3. Confirm money/points unit provenance and exact numeric constraints match the

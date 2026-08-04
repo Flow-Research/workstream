@@ -117,7 +117,10 @@ async def test_verified_worker_stops_exactly_on_blocked_sufficiency(
 
     engine = SimpleNamespace(dispose=AsyncMock())
     session = _Session()
-    report = SimpleNamespace(status="blocked", id="report-id")
+    project_id, guide_id, snapshot_id, setup_run_id, report_id = (
+        str(uuid4()) for _ in range(5)
+    )
+    report = SimpleNamespace(status="blocked", id=report_id)
     service = SimpleNamespace(
         validate_project_setup_run_context=AsyncMock(),
         update_project_setup_run_status=AsyncMock(),
@@ -139,39 +142,49 @@ async def test_verified_worker_stops_exactly_on_blocked_sufficiency(
     monkeypatch.setattr(
         project_setup_worker, "ProjectService", lambda *_args, **_kwargs: service
     )
+    authorized_run = AsyncMock(return_value=SimpleNamespace(response=report))
+    monkeypatch.setattr(
+        project_setup_worker,
+        "_run_authorized_setup_sufficiency",
+        authorized_run,
+    )
 
     result = await project_setup_worker._run_verified_pre_submit_sufficiency_continuation(
-        "project", "guide", "snapshot", "run", 3
+        project_id, guide_id, snapshot_id, setup_run_id, 3
     )
 
     assert result == {
         "status": "sufficiency_blocked",
-        "guide_sufficiency_report_id": "report-id",
-        "idempotent": False,
+        "guide_sufficiency_report_id": report_id,
+        "submission_artifact_policy_id": None,
     }
     service.validate_project_setup_run_context.assert_awaited_once_with(
-        "run",
-        project_id="project",
-        guide_id="guide",
-        source_snapshot_id="snapshot",
+        setup_run_id,
+        project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=3,
+        celery_task_id=project_setup_worker.pre_submit_setup_task_id(setup_run_id, 3),
+    )
+    authorized_run.assert_awaited_once_with(
+        session,
+        project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_run_id=setup_run_id,
         setup_generation=3,
     )
-    service.run_verified_guide_sufficiency_agent.assert_awaited_once_with(
-        project_setup_worker.project_setup_pipeline_actor(),
-        "project",
-        "guide",
-        "snapshot",
-        "run",
-        3,
-    )
     assert service.update_project_setup_run_status.await_args_list == [
-        (("run",), {"status": "running_sufficiency_agent", "current_step": "guide_sufficiency"}),
         (
-            ("run",),
+            (setup_run_id,),
+            {"status": "running_sufficiency_agent", "current_step": "guide_sufficiency"},
+        ),
+        (
+            (setup_run_id,),
             {
                 "status": "sufficiency_blocked",
                 "current_step": "guide_sufficiency",
-                "output_sufficiency_report_id": "report-id",
+                "output_sufficiency_report_id": report_id,
             },
         ),
     ]

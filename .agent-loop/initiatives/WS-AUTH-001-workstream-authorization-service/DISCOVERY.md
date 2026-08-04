@@ -445,3 +445,73 @@ need an independently reviewable contract and production-code budget.
   identity plus self context; admin-only setup diagnostics; and effective
   policy/active-guide projection. Each runtime child hard-removes token-role
   authority from every surface it owns.
+
+## WS-AUTH-001-12E current-main refresh — 2026-08-03
+
+## Observed merged baseline
+
+- Trusted `main` is merge `3479ee71`. AUTH-12C and AUTH-12D are merged, and
+  XINT-003-02A/02B replaced the old 12D2 dependency with immutable
+  ReviewPolicy/RevisionPolicy lineage plus the sole authorized mutation path.
+- `project.guide_sufficiency_report.create`, `project.guide_sufficiency.run`,
+  and `project.guide_sufficiency.warnings.acknowledge` are registered under
+  `AUTH_12E`, mapped to `project.guide.manage`, and remain planned.
+- `ProjectGuideSufficiencyMutationResourceContext` already closes the three
+  target kinds and separates human execution from exact
+  `workstream.project.setup` custody. `PreparedAuthorizationService` can derive
+  project scope through the canonical project-mutation map, but does not yet
+  retain and compare sufficiency-specific final facts. 12E must add those
+  bindings; project scope plus a request digest is insufficient.
+- Public sufficiency mutations in `projects/router.py` still resolve the legacy
+  `ActorContext`; `ProjectService` still authorizes them with
+  the former role-claim helper, owns commits, and records no canonical AUTH decision
+  provenance.
+- ART-03B4 already merged the verified guide-material pipeline and migration
+  `0046_guide_sufficiency`. It owns extraction/source-usage provenance. AUTH-12E
+  must reuse that behavior and must not create another materialization or
+  extraction path.
+- The discovery head was `0049_rev_auth_readiness`; after later merged ART and
+  compensation migrations, 12E allocates `0054_guide_sufficiency_authority`
+  after `0053_compensation_bindings`, rather than reusing or editing 0046.
+
+## Exact 12E implementation gap
+
+- Add one sufficiency-mutation orchestration service and one replay-only
+  repository. The request/service command owns the root transaction and commit.
+- Reuse the AUTH-owned service context/revalidation path for the fixed setup
+  identity; do not copy ART-private service-resolution helpers. Extract the
+  current ART-material mapping, prompt-digest, report-construction, and
+  source-usage staging blocks into pure shared helpers rather than duplicating
+  them in the orchestrator.
+- Extend the existing prepared binding—not the protocol—with explicit project,
+  guide/version, snapshot/hash, report, setup generation, target/execution kind,
+  setup-service custody, stale-output/material digest, operation, and request
+  facts, and compare them against the final typed resource at consume time.
+- Add an idempotency ledger for the three actions and additive authorization
+  provenance for report creation and warning acknowledgement. Historical rows
+  remain nullable/readable; exact new writes are complete and constrained.
+- Replace the three public legacy role checks with resolved human actor plus
+  canonical PREP. 12E changes only Celery worker admission and the authorized
+  command boundary for guide sufficiency; 12B2 owns the complete setup-service
+  call-graph cutover.
+- For agent execution, cheap authority must deny before material/provider/agent
+  work. No prepared handle crosses rollback, agent execution, ART
+  materialization, session, or transaction. Final persistence prepares and
+  consumes fresh authority after locking the exact current lineage and
+  recomputing server-owned output facts.
+- Existing report uniqueness is not sufficient replay custody: it cannot detect
+  changed idempotency input, identity-link substitution, or action reuse.
+
+## Risks and proof focus
+
+- A denial after provider/agent work would violate side-effect ordering.
+- Reusing the legacy `created_by` or warning-role strings as authority would
+  preserve a second authorization path.
+- Human and fixed-service execution must remain disjoint even though both may
+  use `project.guide_sufficiency.run`.
+- Concurrent exact replay must produce one report/acknowledgement and a stable
+  response; changed reuse, revoked authority, stale snapshot/setup generation,
+  wrong transaction/session, and copied handles must deny without partial
+  product state or allowed audit evidence.
+- ART source-usage rows and material digests must remain ART-owned facts; AUTH
+  binds their identifiers/digests but does not interpret extracted content.

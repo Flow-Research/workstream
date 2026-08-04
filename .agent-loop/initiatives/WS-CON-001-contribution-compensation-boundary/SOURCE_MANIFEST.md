@@ -2,8 +2,9 @@
 
 ## Reconciliation baseline
 
-- Current `main`: `cda59fc32e3a60e1e2c337cae7ebeaa94b95e12b`.
-- Current migration head: `0053_compensation_bindings`.
+- Reconciled `main`: `9550b3cdb8ac12dea72931277cf46ac1b8ffda7f`.
+- Current migration head on `main`: `0054_guide_sufficiency_authority`;
+  this branch advances it to `0055_contribution_policy`.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and
   `.agent-loop/README.md`. Historical signed-start and merge-intent records are

@@ -8,7 +8,7 @@ migration-owned ISO 4217 registry, exact quantity validation, and PostgreSQL
 guards. It adds no service, route, claim, award result, adapter execution,
 AUTH/ART behavior, or public API.
 
-Trusted main baseline: `b224971d9f207e7aa0925fcc12dad15900375a51`.
+Reconciled main baseline: `9550b3cdb8ac12dea72931277cf46ac1b8ffda7f`.
 The user-owned archival PDF deletion is excluded from this chunk.
 
 ## Deterministic Evidence
@@ -22,7 +22,7 @@ Ruff: passed
 git diff --check: passed
 Markdown links: passed
 stale Workstream/review/authorization/artifact scans: passed
-Alembic head: 0054_contribution_policy
+Alembic head: 0055_contribution_policy
 ```
 
 The PostgreSQL proof covers complete and incomplete policy graphs, configured

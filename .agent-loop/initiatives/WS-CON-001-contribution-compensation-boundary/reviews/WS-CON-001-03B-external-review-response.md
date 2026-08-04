@@ -12,7 +12,7 @@
   boundary and contract doc scope are current, migration check-constraint names
   now follow metadata conventions, and the contribution migration round trip no
   longer runs from the shared lane. The canonical partitioned Alembic test
-  already proves the same 0054 head downgrade/upgrade path.
+  already proves the same 0055 head downgrade/upgrade path.
 - Removed the redundant configured-unit unique index; its composite primary key
   remains the award-definition FK target.
 

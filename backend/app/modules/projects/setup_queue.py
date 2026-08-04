@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
+from uuid import NAMESPACE_URL, uuid5
 
 from celery.exceptions import CeleryError
 from kombu.exceptions import KombuError
@@ -24,6 +25,16 @@ def dispatch_stale_before() -> datetime:
 
 class ProjectSetupQueueError(RuntimeError):
     """Raised when Workstream cannot enqueue project setup automation."""
+
+
+def pre_submit_setup_task_id(setup_run_id: str, setup_generation: int) -> str:
+    """Return the stable broker/execution id for one setup generation."""
+    return str(
+        uuid5(
+            NAMESPACE_URL,
+            f"workstream.project_setup.guide_sufficiency:{setup_run_id}:{setup_generation}",
+        )
+    )
 
 
 def enqueue_pre_submit_setup_pipeline(
@@ -72,21 +83,31 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     setup_run_id: str,
     setup_generation: int,
     verification_job_id: str | None = None,
+    claimed_task_id: str | None = None,
 ) -> str | None:
     """Dispatch one committed setup intent and record its bounded outcome."""
     from app.modules.projects.repository import ProjectRepository
 
     repository = ProjectRepository(session)
+    expected_task_id = pre_submit_setup_task_id(setup_run_id, setup_generation)
     setup_run = await repository.lock_project_setup_run(setup_run_id)
     if setup_run is None:
-        return None
+        raise ProjectSetupQueueError("project setup run missing before dispatch")
     if setup_run.status == "dispatch_pending" and setup_run.celery_task_id is not None:
-        if setup_run.updated_at > dispatch_stale_before():
+        if setup_run.celery_task_id != expected_task_id:
+            raise ProjectSetupQueueError("project setup task identity is stale before dispatch")
+        if claimed_task_id is not None and claimed_task_id != setup_run.celery_task_id:
+            raise ProjectSetupQueueError("project setup dispatch claim is stale")
+        if claimed_task_id is None and setup_run.updated_at > dispatch_stale_before():
             return setup_run.celery_task_id
         deterministic_task_id = setup_run.celery_task_id
         setup_run.updated_at = datetime.now(UTC)
+    elif setup_run.status == "queued" and setup_run.celery_task_id is not None:
+        if setup_run.celery_task_id != expected_task_id:
+            raise ProjectSetupQueueError("project setup task identity is stale before dispatch")
+        return setup_run.celery_task_id
     elif setup_run.status in {"queued", "enqueue_failed"}:
-        deterministic_task_id = f"guide-setup-{setup_run_id}-g{setup_generation}"
+        deterministic_task_id = expected_task_id
         setup_run.status = "dispatch_pending"
         setup_run.current_step = "dispatch"
         setup_run.celery_task_id = deterministic_task_id
@@ -99,6 +120,8 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
         setup_run.continuation_started_at = datetime.now(UTC)
     setup_run.error_code = None
     setup_run.error_summary = None
+    if deterministic_task_id != expected_task_id:
+        raise ProjectSetupQueueError("project setup task identity is stale before dispatch")
     await session.commit()
     try:
         task_id = await asyncio.to_thread(
@@ -128,6 +151,26 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run.current_step = "enqueue"
             setup_run.celery_task_id = None
             setup_run.error_code = exc.__class__.__name__
+            setup_run.error_summary = "project setup failed"
+        await session.commit()
+        return None
+    if task_id != deterministic_task_id:
+        logger.error(
+            "project setup queue accepted the wrong task identity",
+            extra={
+                "project_id": project_id,
+                "guide_id": guide_id,
+                "source_snapshot_id": source_snapshot_id,
+                "setup_run_id": setup_run_id,
+                "error_code": "ProjectSetupTaskIdentityMismatch",
+                "error_summary": "project setup delivery rejected",
+            },
+        )
+        setup_run = await repository.lock_project_setup_run(setup_run_id)
+        if setup_run is not None and setup_run.status == "dispatch_pending":
+            setup_run.status = "enqueue_identity_mismatch"
+            setup_run.current_step = "enqueue"
+            setup_run.error_code = "ProjectSetupTaskIdentityMismatch"
             setup_run.error_summary = "project setup failed"
         await session.commit()
         return None

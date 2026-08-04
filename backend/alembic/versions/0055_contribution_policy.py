@@ -1,7 +1,7 @@
 """add contribution-policy persistence
 
-Revision ID: 0054_contribution_policy
-Revises: 0053_compensation_bindings
+Revision ID: 0055_contribution_policy
+Revises: 0054_guide_sufficiency_authority
 Create Date: 2026-08-04
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0054_contribution_policy"
-down_revision = "0053_compensation_bindings"
+revision = "0055_contribution_policy"
+down_revision = "0054_guide_sufficiency_authority"
 branch_labels = depends_on = None
 
 # SIX is the ISO 4217 Maintenance Agency. Snapshot: List One, 2026-08-04.
