@@ -21,8 +21,8 @@ backend/tests/{test_contributions,test_projects,test_alembic}.py
 backend/tests/conftest.py only canonical reset table inventory and schema fingerprint
 .github/workflows/backend.yml only fixed contribution subsystem coverage gate
 backend/scripts/run_test_lanes.py only assign test_contributions to shared_foundations
-docs/spec_contribution_compensation.md only configured-unit persistence clarification
-docs/architecture_data_model.md only configured-unit persistence clarification
+docs/spec_contribution_compensation.md only configured-unit and exact-numeric persistence clarification
+docs/architecture_data_model.md only configured-unit and exact-numeric persistence clarification
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/**
 ```
 

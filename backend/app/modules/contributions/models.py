@@ -230,12 +230,6 @@ class ProjectCompensationUnit(Base):
             ["iso_4217_currency_codes.code"],
             name="fk_project_compensation_unit_iso_currency",
         ),
-        UniqueConstraint(
-            "project_id",
-            "instrument_type",
-            "unit_code",
-            name="uq_project_compensation_unit_identity",
-        ),
         CheckConstraint(
             "instrument_type in ('money','project_points')", name="instrument_type"
         ),

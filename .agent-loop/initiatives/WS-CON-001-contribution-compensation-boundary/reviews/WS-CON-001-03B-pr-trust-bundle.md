@@ -23,10 +23,10 @@ economic rules.
 
 ## Verification
 
-- 44 focused isolated PostgreSQL tests passed; the added active-selector
-  negative regression also passed in isolation.
+- 44 focused isolated PostgreSQL tests passed, including the active-selector
+  negative regression.
 - Canonical head upgrade/downgrade passed.
-- Contribution subsystem coverage is 95%.
+- Contribution subsystem coverage is 94.89%.
 - Hosted CI enforces at least 90% contribution-subsystem coverage.
 - The contribution test module is assigned exactly once to the
   `shared_foundations` semantic lane; lane-integrity tests pass.

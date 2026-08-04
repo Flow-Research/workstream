@@ -49,11 +49,11 @@ def upgrade() -> None:
         sa.Column("retired_at", sa.DateTime(timezone=True)),
         sa.CheckConstraint(
             "status in ('draft','active','retired')",
-            name="ck_contribution_policies_status",
+            name="status",
         ),
         sa.CheckConstraint(
             "char_length(btrim(name)) between 1 and 200",
-            name="ck_contribution_policies_name",
+            name="name",
         ),
         sa.CheckConstraint(
             "(status='draft' and current_published_version_id is null "
@@ -62,11 +62,11 @@ def upgrade() -> None:
             "and retired_by is null and retired_at is null) or "
             "(status='retired' and current_published_version_id is not null "
             "and retired_by is not null and retired_at is not null)",
-            name="ck_contribution_policies_lifecycle_shape",
+            name="lifecycle_shape",
         ),
         sa.CheckConstraint(
             "retired_at is null or retired_at >= created_at",
-            name="ck_contribution_policies_retirement_timestamp",
+            name="retirement_timestamp",
         ),
         sa.ForeignKeyConstraint(
             ["project_id"], ["projects.id"], name="fk_contribution_policy_project"
@@ -108,11 +108,11 @@ def upgrade() -> None:
         sa.Column("retired_at", sa.DateTime(timezone=True)),
         sa.CheckConstraint(
             "version_number > 0",
-            name="ck_contribution_policy_versions_version_number_positive",
+            name="version_number_positive",
         ),
         sa.CheckConstraint(
             "status in ('draft','published','retired')",
-            name="ck_contribution_policy_versions_status",
+            name="status",
         ),
         sa.CheckConstraint(
             "(status='draft' and published_by is null and published_at is null "
@@ -121,12 +121,12 @@ def upgrade() -> None:
             "and retired_by is null and retired_at is null) or "
             "(status='retired' and published_by is not null and published_at is not null "
             "and retired_by is not null and retired_at is not null)",
-            name="ck_contribution_policy_versions_lifecycle_shape",
+            name="lifecycle_shape",
         ),
         sa.CheckConstraint(
             "(published_at is null or published_at >= created_at) and "
             "(retired_at is null or retired_at >= published_at)",
-            name="ck_contribution_policy_versions_lifecycle_timestamps",
+            name="lifecycle_timestamps",
         ),
         sa.ForeignKeyConstraint(
             ["contribution_policy_id", "project_id"],
@@ -186,11 +186,11 @@ def upgrade() -> None:
         sa.Column("compensation_mode", sa.String(16), nullable=False),
         sa.CheckConstraint(
             "contribution_type in ('accepted_submission','completed_review')",
-            name="ck_contribution_rules_contribution_type",
+            name="contribution_type",
         ),
         sa.CheckConstraint(
             "compensation_mode in ('unpaid','compensated')",
-            name="ck_contribution_rules_compensation_mode",
+            name="compensation_mode",
         ),
         sa.ForeignKeyConstraint(
             ["contribution_policy_version_id", "project_id"],
@@ -219,7 +219,7 @@ def upgrade() -> None:
         "iso_4217_currency_codes",
         sa.Column("code", sa.String(3), nullable=False),
         sa.CheckConstraint(
-            "code ~ '^[A-Z]{3}$'", name="ck_iso_4217_currency_codes_code"
+            "code ~ '^[A-Z]{3}$'", name="code"
         ),
         sa.PrimaryKeyConstraint("code", name="pk_iso_4217_currency_codes"),
     )
@@ -245,27 +245,27 @@ def upgrade() -> None:
         sa.Column("retired_at", sa.DateTime(timezone=True)),
         sa.CheckConstraint(
             "instrument_type in ('money','project_points')",
-            name="ck_project_compensation_units_instrument_type",
+            name="instrument_type",
         ),
         sa.CheckConstraint(
             "status in ('active','retired')",
-            name="ck_project_compensation_units_status",
+            name="status",
         ),
         sa.CheckConstraint(
             "(instrument_type='money' and iso_currency_code is not null "
             "and unit_code=iso_currency_code) or "
             "(instrument_type='project_points' and iso_currency_code is null "
             "and unit_code ~ '^[A-Za-z][A-Za-z0-9._:-]{0,31}$')",
-            name="ck_project_compensation_units_unit_identity",
+            name="unit_identity",
         ),
         sa.CheckConstraint(
             "(status='active' and retired_by is null and retired_at is null) or "
             "(status='retired' and retired_by is not null and retired_at is not null)",
-            name="ck_project_compensation_units_lifecycle_shape",
+            name="lifecycle_shape",
         ),
         sa.CheckConstraint(
             "retired_at is null or retired_at >= created_at",
-            name="ck_project_compensation_units_retirement_time",
+            name="retirement_time",
         ),
         sa.ForeignKeyConstraint(
             ["project_id"], ["projects.id"], name="fk_project_compensation_unit_project"
@@ -291,12 +291,6 @@ def upgrade() -> None:
             "unit_code",
             name="pk_project_compensation_units",
         ),
-        sa.UniqueConstraint(
-            "project_id",
-            "instrument_type",
-            "unit_code",
-            name="uq_project_compensation_unit_identity",
-        ),
     )
 
     op.create_table(
@@ -312,20 +306,20 @@ def upgrade() -> None:
         sa.Column("adapter_binding_id", sa.Uuid(), nullable=False),
         sa.CheckConstraint(
             "contribution_type in ('accepted_submission','completed_review')",
-            name="ck_contribution_award_definitions_contribution_type",
+            name="contribution_type",
         ),
         sa.CheckConstraint(
             "instrument_type in ('money','project_points')",
-            name="ck_contribution_award_definitions_instrument_type",
+            name="instrument_type",
         ),
         sa.CheckConstraint(
             "quantity > 0 and quantity < 100000000000000000000 "
             "and scale(quantity) between 0 and 18",
-            name="ck_contribution_award_definitions_quantity_exact_bounds",
+            name="quantity_exact_bounds",
         ),
         sa.CheckConstraint(
             "instrument_type <> 'project_points' or scale(quantity)=0",
-            name="ck_contribution_award_definitions_project_points_whole",
+            name="project_points_whole",
         ),
         sa.ForeignKeyConstraint(
             [

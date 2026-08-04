@@ -80,6 +80,7 @@ distributed-lane changes.
 
 ## Stop
 
-CON-03A stops at its PR checkpoint. It does not start 03B, expose binding
-creation/lifecycle behavior, or substitute existing ART/REV identities for the
-future AUTH-approved compensation adapter contract.
+CON-03B stops at this PR checkpoint. No later chunk starts until 03B passes its
+external checks and receives human merge approval. Binding creation/lifecycle
+behavior remains deferred and existing ART/REV identities do not substitute
+for the future AUTH-approved compensation adapter contract.

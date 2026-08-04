@@ -6,16 +6,12 @@ import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 from uuid import UUID, uuid4
 
-from alembic import command
-from alembic.config import Config
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import delete, inspect, text, update
+from sqlalchemy import delete, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
 from app.db import session as db_session
@@ -962,29 +958,3 @@ async def test_publish_lock_rejects_concurrent_draft_child_mutation(
         "published",
         "rejected",
     ]
-
-
-@pytest.mark.postgres_schema_contract
-def test_0054_contribution_policy_migration_round_trip(
-    contribution_database_env: str,
-) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
-    command.downgrade(config, "0053_compensation_bindings")
-
-    async def table_names() -> set[str]:
-        engine = create_async_engine(contribution_database_env)
-        try:
-            async with engine.connect() as connection:
-                return set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
-        finally:
-            await engine.dispose()
-
-    assert "contribution_policies" not in asyncio.run(table_names())
-    command.upgrade(config, "0054_contribution_policy")
-    assert {
-        "contribution_policies",
-        "contribution_policy_versions",
-        "contribution_rules",
-        "contribution_award_definitions",
-    } <= asyncio.run(table_names())

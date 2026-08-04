@@ -15,10 +15,9 @@ The user-owned archival PDF deletion is excluded from this chunk.
 
 ```text
 44 focused isolated PostgreSQL tests passed
-1 additional isolated active-selector negative regression passed
 1 canonical Alembic head upgrade/downgrade test passed
 33 semantic-lane integrity tests passed
-contributions module coverage: 95% (required at least 90%)
+contributions module coverage: 94.89% (required at least 90%)
 Ruff: passed
 git diff --check: passed
 Markdown links: passed
