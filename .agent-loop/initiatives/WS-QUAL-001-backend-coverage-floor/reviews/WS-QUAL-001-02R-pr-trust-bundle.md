@@ -58,7 +58,7 @@ the need to confirm exact coverage/runtime in hosted CI.
 |---|---:|---|
 | Agent Gates | Pending | Pass on exact PR head |
 | Backend | Pending | All semantic lanes/fan-in pass; >=89.55 percent |
-| CodeRabbit | Pending | Findings addressed or explicitly documented |
+| CodeRabbit | Repair pending | Settings-cache isolation finding repaired; fresh exact-head result required |
 
 ## Human review focus
 

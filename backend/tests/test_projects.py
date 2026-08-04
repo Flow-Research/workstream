@@ -953,6 +953,16 @@ class _RecordingSession:
         self.refreshed.append(value)
 
 
+@pytest.fixture
+def isolated_project_settings_cache() -> Iterator[None]:
+    """Keep settings overrides from leaking when a direct setup test fails."""
+    get_settings.cache_clear()
+    try:
+        yield
+    finally:
+        get_settings.cache_clear()
+
+
 @pytest.mark.asyncio
 async def test_submission_policy_derivation_persists_verified_agent_result(
     monkeypatch: pytest.MonkeyPatch,
@@ -1119,9 +1129,9 @@ async def test_submission_policy_derivation_returns_concurrent_winner(
 @pytest.mark.asyncio
 async def test_submission_policy_approval_builds_fresh_effective_and_checker_chain(
     monkeypatch: pytest.MonkeyPatch,
+    isolated_project_settings_cache: None,
 ) -> None:
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "false")
-    get_settings.cache_clear()
     project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
     guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
     snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
@@ -1198,7 +1208,6 @@ async def test_submission_policy_approval_builds_fresh_effective_and_checker_cha
     assert added_checker[0].effective_policy_id == added_effective[0].id
     assert session.commits == 1
     assert session.refreshed == [added_effective[0], added_checker[0]]
-    get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
@@ -1297,10 +1306,10 @@ async def test_post_submit_policy_correction_supersedes_and_restarts_setup() -> 
 @pytest.mark.parametrize("continuation", [False, True])
 def test_project_setup_queue_enqueues_exact_task_payload(
     monkeypatch: pytest.MonkeyPatch,
+    isolated_project_settings_cache: None,
     continuation: bool,
 ) -> None:
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
-    get_settings.cache_clear()
     from app.workers import project_setup as worker_module
 
     captured: dict[str, Any] = {}
@@ -1356,10 +1365,10 @@ def test_project_setup_queue_enqueues_exact_task_payload(
 @pytest.mark.parametrize("continuation", [False, True])
 def test_project_setup_queue_normalizes_broker_failure(
     monkeypatch: pytest.MonkeyPatch,
+    isolated_project_settings_cache: None,
     continuation: bool,
 ) -> None:
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
-    get_settings.cache_clear()
     from app.workers import project_setup as worker_module
 
     task = (
