@@ -33,6 +33,7 @@ L1 — CI/test policy planning correction.
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/STATUS.md",
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/README.md",
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/WS-QUAL-001-04M-changed-scope-mutation-pilot.md",
+    ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/WS-QUAL-001-05M-blocking-behavior-mutation-gate.md",
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/WS-QUAL-001-PLAN3R1-late-external-review-correction.md",
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/reviews/WS-QUAL-001-PLAN3-pr-trust-bundle.md",
     ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/reviews/WS-QUAL-001-PLAN3R1-external-review-response.md",

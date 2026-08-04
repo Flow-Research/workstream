@@ -85,9 +85,9 @@ reviewer session remains open.
 
 ## External review
 
-Agent Gates, CodeRabbit, and human review are pending publication. Backend is
-not required by the planning diff unless GitHub policy schedules it; no Backend
-file changes.
+This section records the pre-publication state of PLAN3. PR #272 later received
+five valid CodeRabbit findings before merge; PLAN3R1 records their disposition
+in `WS-QUAL-001-PLAN3R1-external-review-response.md`. No Backend files changed.
 
 ## Remaining risks
 

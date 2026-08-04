@@ -40,7 +40,6 @@ scripts/git_delta.py
 scripts/test_git_delta.py
 scripts/workstream_agent_gate.py
 scripts/behavior-claim.schema.json
-scripts/mutation-requirements.txt
 scripts/test_lightweight_agent_gates.py
 .ci/behavior-claims/WS-QUAL-001-04M.json
 .ci/behavior-claims/README.md
@@ -59,6 +58,7 @@ replacement, reduction, or bypass of Backend semantic lanes, API E2E, or fan-in
 full-backend mutation on ordinary PRs
 mutation pragmas or free-form exclusion lists
 production dependency changes
+creation or modification of the protected mutation-tool dependency authority
 pull_request_target, privileged PR-code execution, writable workflow token,
 checkout credentials, secrets in mutation execution, or unpinned Actions
 ```
@@ -70,10 +70,11 @@ checkout credentials, secrets in mutation execution, or unpinned Actions
       approved package, version, and hash authority from the protected base
       revision (or an equivalently protected allowlist or prebuilt runtime),
       never from a requirements manifest editable by the pull request.
+- [ ] That protected dependency authority exists before the 04M branch starts;
+      04M cannot introduce or modify it. If no approved authority exists, 04M
+      stops for a separate bounded prerequisite rather than installing a tool.
 - [ ] `backend/pyproject.toml` contains configuration only; the mutation engine
       is absent from production dependencies and ordinary dev extras.
-      If `scripts/mutation-requirements.txt` is used, the trusted base-revision
-      copy is the sole mutation-tool dependency authority;
       `backend/uv.lock` remains unchanged and is not a second install path.
 - [ ] Deterministic policy always selects and mutates eligible changed
       production targets, then adds any bounded test-only behavior claims with
