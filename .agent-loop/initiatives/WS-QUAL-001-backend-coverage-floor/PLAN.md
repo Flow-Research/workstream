@@ -1,77 +1,122 @@
-# Plan: WS-QUAL-001 Current-Main Coverage Closure
+# Plan: WS-QUAL-001 Behavior And Mutation Assurance
 
 ## Approach
 
-Retire the old milestone ladder and close the remaining gap with two declared
-bounded test chunks followed by one floor switch. One additional owner-specific
-test chunk is permitted only when 02R and 03R exhaust their meaningful gaps
-without reaching the required headroom:
+Retire the proposed global-90 floor switch and deliver behavior assurance in
+two independently reviewed implementation chunks.
 
-1. Add fast project/setup behavior tests for observable service, repository,
-   routing, queue, and replay gaps.
-2. If still needed, add fast checker behavior tests for observable service,
-   repository, runner, compiler, and routing gaps.
-3. On current `main`, prove at least 90.25 percent globally and change only the
-   canonical GitHub global floor from 78 to 90.
+### Stage 1: changed-scope mutation pilot
 
-Each test chunk starts by reading the current hosted coverage JSON and selecting
-behavioral gaps. It prefers pure functions, typed fakes, direct use-case calls,
-and adapter contracts. PostgreSQL, MinIO, or HTTP is used only when that
-boundary is itself the assertion.
+Add one exactly pinned mutation engine and a Workstream-owned policy wrapper.
+The wrapper derives a closed set of eligible production targets from the git
+delta or from an explicit test-only behavior claim. It selects the smallest
+owner test set, runs under a hard timeout, and emits machine-readable exact-head
+evidence.
 
-## Coverage target
+The pilot does not block on mutation score. It does block on infrastructure
+failure, malformed evidence, target escape, missing claimed tests, ordinary
+test failure, or any weakening of existing Backend checks. Pilot results must
+distinguish killed, survived, timeout, suspicious, excluded, and error mutants.
 
-The last necessary test chunk must reach at least 90.25 percent before the CI
-switch. This is operational headroom, not a permanent higher policy floor. If
-concurrent main growth moves the measured result below 90.25 percent, the floor
-chunk stops and returns to one owner-specific test plan; it never lowers or
-rounds around the target.
+`mutmut` is the leading pilot candidate because its current documentation
+supports pytest-aware test selection, function/module wildcards, incremental
+results, parallel execution, source/selection configuration, covered-line
+filtering, and Python 3.11/3.12. The implementation chunk must still prove a
+pinned release against Workstream's async pytest and isolated-service setup;
+planning does not pre-approve an unusable dependency.
 
-## Test-quality rule
+### Stage 2: blocking behavior-mutation gate
 
-Every new test must name and assert one observable contract such as returned
-data, persisted state, emitted audit/outbox fact, queue decision, mapped error,
-authorization denial, idempotent replay, or recovery outcome. A test whose only
-effect is executing previously missed lines is invalid.
+Only after pilot review, add a separate required check for eligible changed
+production logic and test-only PRs that claim behavioral improvement. The gate
+uses the pilot's deterministic target and evidence grammar.
 
-No chunk may introduce skips, xfails, coverage pragmas, omit/include narrowing,
-deleted assertions, broad mocking of the behavior under test, or duplicated
-database/HTTP coverage already owned by another layer.
+There is no repository-wide mutation percentage. Every eligible survivor
+blocks unless it has a narrow, typed classification accepted by policy (for
+example, demonstrably equivalent or non-behavioral). Missing, stale, broad, or
+free-form exclusions fail closed. Timeout and tool errors do not count as
+killed mutants and cannot silently pass.
 
-## Boundaries
+## Behavior ownership
 
-- QUAL changes tests and, only in the final chunk, the global CI threshold and
-  its lightweight invariant test.
-- A production defect discovered by a stronger test is reported and fixed in a
-  separate owning initiative/chunk.
-- Production service decomposition, repository ports, UnitOfWork design, type
-  checking, mutation testing, and property-test architecture require separate
-  initiatives. They are not hidden inside coverage closure.
-- CI runtime optimization remains WS-CI-owned. QUAL records test-time impact and
-  must avoid obvious regressions but does not redesign lane infrastructure.
+A qualifying behavior claim identifies:
+
+- production module and callable or bounded target;
+- owning test nodes;
+- observable contract (return, persisted state, emitted fact, denial, mapped
+  error, idempotent replay, or recovery outcome);
+- relevant real boundary, if PostgreSQL, MinIO, HTTP, lock, trigger, or
+  concurrency is essential.
+
+The canonical input is a schema-v1 JSON file at
+`.ci/behavior-claims/<chunk-id>.json`, validated by a repository-owned schema
+and policy parser. Chat, PR prose, labels, workflow inputs, and environment
+variables cannot widen targets. Behavior claims contain repository-relative
+production targets, qualified callables, owning pytest node IDs, and typed
+observable outcomes. Test-only non-behavioral maintenance uses a narrow typed
+classification defined by policy rather than free-form exemption text.
+
+Test-only changes that claim coverage or stronger behavior must provide this
+mapping. Documentation-only, fixture-only, generated-code, and non-behavioral
+maintenance changes are outside mutation selection but remain subject to
+ordinary tests and review.
+
+## Runtime and isolation strategy
+
+- Never mutate the full backend in ordinary PR CI.
+- Start with pure or direct-service logic whose owning tests avoid PostgreSQL
+  and HTTP unless those boundaries are the behavior being proved.
+- Run mutation work independently from the existing Backend critical path.
+- Pilot command limit: 12 minutes inside a 15-minute job limit.
+- A blocking rollout must demonstrate a practical hosted p95 and cannot extend
+  required PR latency by more than two minutes when run in parallel.
+- Mutation caches are acceleration only; evidence binds the exact source,
+  configuration, selected tests, tool version, and result set.
+
+## Dependency and evidence integrity
+
+- Pin the selected engine and its transitive dependency closure with hashes.
+- Do not add the mutation engine to production dependencies.
+- Install the engine only from `scripts/mutation-requirements.txt` with
+  `pip install --require-hashes`; `backend/pyproject.toml` may contain tool
+  configuration but cannot add the engine to ordinary dev extras.
+- Never apply mutants to the contributor worktree in CI.
+- Upload bounded result evidence without source secrets, environment values,
+  database contents, or artifact payloads.
+- The policy wrapper, not mutable PR prose, determines eligibility and validates
+  results.
+- Mutation CI runs only on an unprivileged `pull_request`/`push` boundary with
+  explicit read-only permissions, pinned Actions, checkout credentials
+  disabled, no secrets or writable token in the mutation subprocess, and
+  bounded non-restorable artifacts/caches.
 
 ## Alternatives rejected
 
-- Reviving `01B2` and the complex base-evidence ratchet: unnecessary now that
-  exact lane custody and hosted coverage evidence exist.
-- One large cross-owner coverage PR: crosses project, checker, task, artifact, and
-  authorization ownership and is difficult to review.
-- Raising the floor immediately: current measured coverage is below 90.
-- Excluding low-coverage services or files: makes the global percentage false.
-- More arbitrary shards: changes runtime distribution, not test architecture or
-  coverage quality.
+- `WS-QUAL-001-04R` global floor switch: superseded before implementation.
+- Full-suite-per-mutant execution: too slow and poorly owned.
+- Score-only gating: hides which behavior remains unproved.
+- Non-blocking forever: measures quality without protecting it.
+- Immediate blocking rollout: lacks runtime and equivalent-mutant calibration.
+- Mutating only covered lines as the sole eligibility rule: can hide untested
+  changed behavior; covered-line filtering may optimize the pilot but cannot
+  define the full policy.
 
 ## Verification strategy
 
-Every implementation chunk runs focused tests, Ruff for changed tests, complete
-test-delta review, relevant stale-contract checks, and hosted Backend. The final
-floor chunk additionally proves the combined coverage JSON covers the complete
-application inventory at or above 90.25 percent and that every protected
-90-percent check remains blocking.
+Each implementation chunk runs focused policy tests, mutation-engine smoke
+tests, Ruff, Agent Gates, Markdown/stale scans, internal reviewer tracks, and
+hosted Backend. The pilot additionally proves at least one known strong test
+kills its representative mutants and at least one deliberately weak test leaves
+a representative mutant alive. The blocking chunk proves survivors, timeouts,
+errors, missing evidence, stale evidence, and target escape all stop the gate.
 
 ## Dependency order
 
-PLAN2 -> 02R -> optional 03R -> 04R. If those exact owner-scoped chunks do not
-provide enough headroom, stop and plan one additional owner-specific test chunk
-from the refreshed report. Do not create a percentage-driven residual bucket.
-The CI floor change always remains a separate final PR.
+`PLAN3 -> 04M pilot -> human calibration checkpoint -> 05M blocking gate`.
+`05M` cannot begin from planning alone; it requires accepted exact hosted pilot
+evidence and a new explicit human instruction.
+
+## Stop
+
+Planning does not install a mutation engine, change a workflow, or change a
+coverage threshold. Stop after the PLAN3 PR and human checkpoint.
