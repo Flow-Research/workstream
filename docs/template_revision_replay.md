@@ -23,13 +23,18 @@
 | direction | `forward`, `backward`, or `null` |
 | prior guide ID/version/activation sequence | `<values>` |
 | next guide ID/version/activation sequence | `<values>` |
-| frozen source snapshot and task-execution policies | `<bounded references>` |
+| prior/next source, submission/checker, review, revision, and task-execution policies | `<bounded references>` |
+| prior submitter ContributionPolicyVersion | `<uuid>` |
+| next submitter ContributionPolicyVersion | `<uuid>` |
 | change summary | `<contributor-visible summary>` |
 | audit event ID | `<uuid>` |
 
 The reviewer consumes the context stamped on the revised Submission and does
-not perform a separate rebase. ContributionPolicyVersion is not part of this
-preparation.
+not perform a separate rebase. The completed reviewer contribution retains the
+originating ReviewLease freeze. This preparation records and atomically applies
+the complete selected next-attempt context, including a changed submitter
+ContributionPolicyVersion; the next ReviewLease independently freezes the
+reviewer version then current.
 
 ## Immutable Finding Responses
 

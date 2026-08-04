@@ -88,6 +88,8 @@ Accept-only effects:
 - ContributionRecord ID/type `accepted_submission`:
 - source FinalAcceptance ID and TaskAssignment ID:
 - submitter-frozen ContributionPolicyVersion:
+- revision-prepared submitter ContributionPolicyVersion lineage, when this is a
+  post-`needs_revision` attempt:
 - CompensationAward ID or explicit unpaid result:
 
 `needs_revision` and `reject` contain no FinalAcceptance or submitter

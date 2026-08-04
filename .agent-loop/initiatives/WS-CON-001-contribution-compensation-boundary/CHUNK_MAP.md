@@ -11,23 +11,24 @@ signed-loop records do not make behavior live.
 | `PLAN`-`PLAN3` | Original boundary and cross-initiative planning | Historical planning |
 | `01` | Canonical specification and ADR 0016 | Merged PR #144 |
 | `02A` | Shared transactional outbox persistence/append | Merged PR #155; migration 0029 |
+| `03A` | Adapter-binding persistence | Merged PR #267; migration 0053 |
 
 ## Current reconciliation
 
 | Chunk | Goal | Risk | Status |
 |---|---|---:|---|
 | `PLAN4` | Reconcile current main, ART/AUTH/REV changes, open PRs, and end-to-end order | L1 | Merged PR #261 |
+| `PLAN5` | Reconcile complete-context human needs-revision rebase across guide, policy, REV, and CON contracts | L1 | Active specification chunk; no runtime |
 
 ## Core runtime chunks
 
 | Chunk | Goal | Entry gate | Status |
 |---|---|---|---|
-| `03A` | Adapter-binding persistence | PLAN4 accepted; refreshed after ART PR #264 | Active schema-only chunk; migration 0053 |
 | `03B` | Contribution-policy persistence | 03A | Proposed; unblocks REV-03A2 FK |
 | `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Proposed; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
-| `05A` | Legacy semantic cutover + TaskAssignment policy freeze | 04B + task/assignment authority contract + row-classification decision | Proposed |
+| `05A` | Legacy semantic cutover + initial TaskAssignment policy freeze and guarded human-revision rebase support | 04B + task/assignment/revision authority contract + row-classification decision | Proposed |
 | `05B` | Legacy economic schema removal | 05A zero-consumer proof | Proposed |
 | `06` | Reviewer policy lookup/freeze participant | 05B + REV lease contract/caller facts | Proposed; CON never owns lease |
 | `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B |

@@ -53,7 +53,13 @@ money and/or project-points `ContributionAwardDefinition` rows.
 
 TaskAssignment freezes the submitter policy version during authorized task
 claim. ReviewLease independently freezes the reviewer policy version during
-authorized review claim. Later publication changes only new work.
+authorized review claim. Later publication alone changes only new work and
+never mutates an active attempt. After a human `needs_revision`, the task-owned
+revision preparation atomically rebases a changed submitter policy together
+with every changed applicable next-attempt context component. The completed
+Review and reviewer award retain the prior lease freeze; the next ReviewLease
+freezes the reviewer version then current. Prior contributions and awards are
+never rewritten.
 
 The retired guide-bound economic-policy aggregate and all semantic and physical
 consumers are removed through CON-05A/05B. No alias, fallback, dual read/write,

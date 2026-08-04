@@ -162,9 +162,11 @@ Contributor-facing lane for fixable issues from automated checks, pre-review gat
 Policy:
 
 - after a human `needs_revision` Review, Workstream compares the prior
-  Submission guide identity/activation sequence with the currently active guide
-- exact match keeps; any different valid pair rebases forward or backward;
-  unsafe context blocks for manager repair
+  Submission's complete governing context with the currently active applicable
+  guide/source, submission/checker, review, revision, task-execution, and
+  submitter ContributionPolicy context
+- exact component matches keep; every changed valid component rebases together;
+  unsafe or incomplete context blocks the whole preparation for manager repair
 - Task Context returns the frozen preparation and change summary; the reviewer
   never rebases the leased Submission
 - out-of-band guidance is not enforceable until it is encoded into guide, policy, task template, or checker contracts
@@ -258,10 +260,10 @@ Every operating day starts with:
 | `SUBMITTED -> EVALUATION_PENDING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
 | `EVALUATION_PENDING -> REVIEW_PENDING` | durable, final, current CheckerRun for the exact Submission with outcome exactly `allow_review`, verified artifact bindings, no blocking failures |
 | `EVALUATION_PENDING -> NEEDS_REVISION` | durable, final, current CheckerRun for the exact Submission with outcome exactly `needs_revision`, verified artifact bindings, outcome source `auto_checker`, contributor-visible checker failures with severity, message, suggested fix |
-| `REVIEW_PENDING -> NEEDS_REVISION` | immutable Review, at least one blocking ReviewFinding, reviewer `completed_review`; no FinalAcceptance or submitter contribution |
+| `REVIEW_PENDING -> NEEDS_REVISION` | immutable Review, at least one blocking ReviewFinding, reviewer `completed_review` under the completed lease freeze, atomic complete-context kept/rebased/blocked preparation for the next attempt; no FinalAcceptance or submitter contribution |
 | `REVIEW_PENDING -> ACCEPTED` | immutable accepting Review, FinalAcceptance, reviewer `completed_review`, submitter `accepted_submission` sourced from FinalAcceptance, applicable awards |
 | `REVIEW_PENDING -> REJECTED` | immutable rejected Review, bounded reason, same-task assignment block, reviewer `completed_review`; no FinalAcceptance or submitter contribution |
-| `NEEDS_REVISION -> SUBMITTED` | exact preparation head/digest, replacement Submission, response for every unresolved blocking finding, policy limit/deadline not reached |
+| `NEEDS_REVISION -> SUBMITTED` | exact complete-context preparation head/digest, replacement Submission stamped with its selected guide/policy context, response for every unresolved blocking finding, policy limit/deadline not reached |
 | `NEEDS_REVISION -> CANCELLED` | covered manager limit/deadline closure or Operator legacy-context closure, bounded canonical reason, assignment release; no synthetic Review or contribution |
 | compensation `pending -> fulfilled` | immutable fulfillment receipt, external reference, and audit event |
 

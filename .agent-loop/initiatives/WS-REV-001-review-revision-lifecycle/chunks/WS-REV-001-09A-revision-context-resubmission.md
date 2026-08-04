@@ -12,7 +12,11 @@ CheckerRun-rooted path and is not treated as legacy.
   RevisionContextPreparation persistence after human approval of exact round/
   deadline semantics.
 - `WS-REV-001-09A2`: task-owned preparation participant and guide-context
-  resolver plus Task Context read. The participant uses 09A1 persistence and
+  resolver plus Task Context read. It resolves the complete applicable current
+  guide/source, submission/checker, review, revision, task-execution, and
+  submitter ContributionPolicy context; keeps unchanged components, rebases all
+  changed valid components together, or blocks the whole preparation. The
+  participant uses 09A1 persistence and
   flushes through the caller's session; decision transaction composition and
   the single commit remain in chunk 10.
 - `WS-REV-001-09A3`: human Review finding responses/evidence only.
@@ -28,7 +32,7 @@ CheckerRun-rooted path and is not treated as legacy.
   AUTH-13 owns public command/cutover/activation after its contract amendment.
 
 Checker remediation creates no Review/finding/reviewer contribution, performs no
-guide rebase, consumes no human revision round/deadline, and returns to open
+human complete-context rebase, consumes no human revision round/deadline, and returns to open
 routing. Human Review revision requires blocking-finding responses and later
 prefers the prior reviewer.
 

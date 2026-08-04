@@ -405,17 +405,19 @@ enter human grant evaluation, borrow Operator authority, or occupy a human FK.
 Shared outbox dispatch retains its separately owned identity. Authorization and
 audit retain actor kind so UUID shape never implies human authority.
 
-### D17 - Contribution Policy Freeze Is Independent Of Revision Context
+### D17 - Contribution Policy Freeze Rebases Only At Human Revision Boundary
 
-Legacy compensation-context state is removed by WS-CON. It is not retained in the
-final Project Guide, Submission, CheckerRun, Task Context, or
-RevisionContextPreparation contract, and it is not replaced by the current
-moving `ContributionPolicyVersion`.
+Legacy compensation-context state is removed by WS-CON and no moving selector
+may silently change an active attempt. Task claim initially freezes the
+submitter `ContributionPolicyVersion`; each ReviewLease independently freezes
+the reviewer version. Accept and reject use those exact versions.
 
-Submitter `ContributionPolicyVersion` freezes once on the exact TaskAssignment;
-reviewer `ContributionPolicyVersion` freezes separately on each ReviewLease. Forward or backward guide
-rebase changes neither an existing assignment freeze nor an existing lease
-freeze. A later lease may independently freeze the then-current reviewer terms.
+After a human `needs_revision`, complete-context preparation keeps an unchanged
+submitter version or atomically rebases a changed valid version on the
+continuing TaskAssignment for the next attempt, with prior/next lineage in the
+preparation. The completed Review and reviewer contribution retain the old
+lease freeze. A later lease independently freezes the reviewer version then
+current. Prior history is never rewritten.
 
 ### D18 - Authority-Loss Replacement Preserves Source And Changes Target
 

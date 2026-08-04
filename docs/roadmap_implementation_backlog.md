@@ -66,6 +66,9 @@ and REV-13 joint release; this backlog does not activate an endpoint or job.
 - assign skill tags
 - freeze submitter ContributionPolicyVersion on TaskAssignment and reviewer
   version on ReviewLease
+- after human `needs_revision`, atomically keep/rebase/block the complete
+  next-attempt context and update only the continuing assignment's submitter
+  version when it changed
 - change status only through allowed transitions
 - record status audit event
 - block direct `SUBMITTED -> ACCEPTED`
@@ -116,8 +119,8 @@ and REV-13 joint release; this backlog does not activate an endpoint or job.
 - create replay for resubmission
 - append one immutable response for each unresolved blocking finding
 - append later `FindingResolution` values without editing the prior finding
-- prepare the next attempt from the active Project Guide using the deterministic
-  keep/forward-rebase/backward-rebase/block rule
+- prepare the next attempt from the complete active Project Guide and policy
+  context using the deterministic keep/rebase/block rule
 
 ### Compensation And Reputation
 

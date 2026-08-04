@@ -31,6 +31,10 @@ operational claims with a capability-ordered plan, now refreshed through
 ## Success state
 
 - ContributionPolicyVersion is the only award-policy authority.
+- Publication never silently changes an active attempt. Human
+  `needs_revision` is the only in-progress boundary that atomically rebases
+  every changed applicable next-attempt context component, including the
+  submitter ContributionPolicyVersion; completed history remains immutable.
 - TaskAssignment freezes the submitter policy version before work.
 - REV-owned ReviewLease freezes the reviewer policy version before review.
 - ContributionRecord and CompensationAward rows are immutable and replay-safe.

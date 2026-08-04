@@ -160,9 +160,10 @@ Acceptance:
 
 1. Contributor opens a needs-revision task rooted in an immutable
    `Review(needs_revision)`.
-2. Workstream prepares immutable context from the currently active Project Guide.
-3. Exact prior identity/activation-sequence match keeps; any different valid
-   active pair rebases forward or backward; unsafe context blocks.
+2. Workstream prepares immutable context from every applicable currently active
+   Project Guide and policy selector.
+3. Exact prior component matches keep; every changed valid component rebases
+   together; unsafe context blocks the whole preparation.
 4. Contributor sees the frozen preparation and each unresolved blocking finding.
 5. Contributor appends one SubmissionFindingResponse and optional evidence per required finding.
 6. Contributor resubmits.

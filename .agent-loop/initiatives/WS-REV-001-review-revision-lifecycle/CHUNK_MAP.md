@@ -22,7 +22,7 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 | `WS-REV-001-07B` | Immutable reviewer notes/findings | 07A | Skeleton; no evidence upload |
 | `WS-REV-001-08` | Pure decision validator/effect plan | 07B | Skeleton; no canonical write |
 | `WS-REV-001-09A1` | Review-rooted revision episode/preparation persistence | 08 + human round/deadline decision | Skeleton |
-| `WS-REV-001-09A2` | TASK revision participant and context resolver | 09A1 | Skeleton |
+| `WS-REV-001-09A2` | TASK complete-context revision participant and resolver | 09A1 + CON current-version selection contract | Skeleton |
 | `WS-REV-001-09A3` | Contributor finding-response records | 09A2 | Skeleton; no evidence upload |
 | `WS-REV-001-09A4` | Human prepared N+1 and checker-source XOR | 09A3 + TASK/ART submission cutover | Skeleton |
 | `WS-REV-001-09A5` | Replacement-assignment preparation successor | 09A4 + AUTH replacement contract | Skeleton |

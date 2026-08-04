@@ -19,21 +19,31 @@ rooted resubmission path using the Task's existing locked context; it does not
 fabricate a Review, finding, preparation, reviewer contribution, or human actor.
 
 Before contributor access, Workstream appends a RevisionContextPreparation. It
-compares the prior Submission's stamped Project Guide identity and activation
-sequence with the currently active guide:
+compares the prior Submission's complete stamped governing context with the
+currently active applicable Project Guide/source, submission-artifact,
+pre-submit/post-submit checker, review, revision, task-template/task-execution,
+and submitter ContributionPolicy context:
 
-- exact pair match: `kept`;
-- any different valid active pair: `rebased` with `forward` or `backward`;
+- every exact component match: `kept`;
+- all changed valid active components: `rebased` together, with `forward` or
+  `backward` recorded where the component is ordered;
 - missing, incomplete, inconsistent, revoked, or unsafe context: `blocked`.
 
-The preparation freezes the selected guide/source/task-execution policy context,
-context digest, prior Submission, originating Review, source and target
-TaskAssignments, and change summary. Task Context returns the validated head,
-not a moving live guide. No guide rebase occurs during review; the reviewer
-reads the context stamped on the leased Submission.
+The preparation keeps every exact component match and rebases every changed
+valid component as one selected context. Any missing, incomplete, inconsistent,
+revoked, or unsafe component blocks the whole preparation. It freezes the
+selected context, context digest, prior Submission, originating Review, source
+and target TaskAssignments, prior/next submitter ContributionPolicyVersion, and
+change summary. Task Context returns the validated head, not moving selectors.
+No rebase occurs during review; the reviewer reads the context stamped on the
+leased Submission.
 
-ContributionPolicyVersion is independent. The TaskAssignment freeze and each
-ReviewLease freeze never change because guide context rebases.
+The completed reviewer contribution uses the originating ReviewLease freeze.
+The continuing TaskAssignment is updated only by successful human revision
+preparation for the next submitter attempt, and each later ReviewLease
+independently freezes the reviewer version then current. The decision,
+reviewer contribution/award, task/assignment effects, preparation or blocked
+outcome, audit/outbox, and visible state commit once or roll back together.
 
 ## Submitter Response
 
@@ -55,7 +65,7 @@ ReviewFinding response or resolution.
 ## Resubmission And Checks
 
 A human-Review Submission N+1 acknowledges the exact preparation head/digest,
-links its immediate predecessor, and stamps the frozen context. A checker-
+links its immediate predecessor, and stamps the complete frozen context. A checker-
 remediation Submission N+1 instead binds the exact final needs-revision
 CheckerRun and the Task's existing locked context; it carries no preparation or
 ReviewFinding response. Both paths rerun the normal finalization and checker

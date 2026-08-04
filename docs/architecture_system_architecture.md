@@ -211,7 +211,8 @@ Owns:
 
 - immutable RevisionContextPreparation chains
 - SubmissionFindingResponse and FindingResolution lineage
-- exact Project Guide keep/forward/backward/block classification
+- complete Project Guide/policy context keep/forward/backward/block
+  classification, including prior/next submitter ContributionPolicyVersion
 - resubmission and preferred-return linkage
 
 ### Artifact Service Boundary

@@ -7,6 +7,7 @@
 | CON invents AUTH identifiers or authority | Privilege escalation and dual authorization paths | AUTH exclusively registers contexts, actions, identities, matrices, evaluators, PREP, and activation. |
 | REV/CON ownership blurs at policy freeze | CON could own ReviewLease or REV could own contribution policy | CON returns a policy-version lookup result; REV alone writes and transitions its lease. |
 | ART/provider work enters review transaction | Availability coupling and broken atomicity | REV supplies stable artifact identity/hash; CON performs zero provider or ART calls. |
+| Human revision mixes new guide/policies with stale contribution terms or rewrites completed awards | Incoherent contributor obligations and corrupted economic history | One task-owned complete-context preparation keeps/rebases/blocks atomically; only the next-attempt TaskAssignment selector changes; completed lease/contribution/award history remains immutable. |
 | Planning evidence is treated as runtime | Wrong migration or dependency assumptions | Treat ART #249 as merged ART runtime and REV #258 as merged planning evidence only; refresh main before every implementation. |
 | Migration collision with ART/REV | Broken linear history | Allocate only from the then-current Alembic head; no number is reserved in planning. |
 | Legacy economic rows are guessed | Corrupted award policy lineage | Require explicit deterministic classification or fail closed before 05A/05B. |

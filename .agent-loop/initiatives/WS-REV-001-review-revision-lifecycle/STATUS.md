@@ -2,6 +2,13 @@
 
 ## Current status
 
+WS-CON-001-PLAN5 is the active cross-specification input for revision behavior:
+a human `needs_revision` atomically keeps/rebases/blocks the complete applicable
+next-attempt guide and policy context, including the submitter
+ContributionPolicyVersion. Existing Submissions, Reviews, leases,
+ContributionRecords, and awards remain immutable; checker remediation remains
+distinct.
+
 `WS-REV-001-03A1` implements the hidden queue/admission persistence foundation.
 PR #262 is reconciled with trusted main `2feaf47d`; ART retains migration 0050
 and REV owns its exact 0051 successor. The chunk adds no REV route, action
