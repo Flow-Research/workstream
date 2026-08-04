@@ -12,7 +12,7 @@ nitpicks, so the absence of a new summary comment was not treated as closure:
   now derives the real immutable `Submission.id` from the persisted
   `CheckerRun` lineage and passes it explicitly in every task-scoped recovery
   request, including retries.
-- **Receipt nullability — resolved:** migration 0051 now makes
+- **Receipt nullability — resolved:** migration 0052 now makes
   `artifact_operation_receipts.put_attempt_id` non-null after its locked
   populated-legacy preflight. The ORM matches that v2-only invariant, the
   downgrade restores legacy nullability before recreating the v1 shape, and a
@@ -41,7 +41,12 @@ fingerprint. The database migrations completed successfully, but fixture reset
 failed closed because `EXPECTED_PUBLIC_SCHEMA_SHA256` still named the prior
 nullable schema. The constant now records the hosted schema digest
 `8acef1c1d96ced0a4d4723ce71aa2e675ab841ec4305d9421ed0584313b98b55`;
-no reset guard was removed or weakened.
+no reset guard was removed or weakened. After REV-03A1 merged its own migration
+as revision 0051, ART was rebased as revision 0052 with
+`0051_review_queue_foundation` as its parent; REV's schema and tests were
+preserved. A fresh merged-head migration produced the combined canonical schema
+digest `f30127e0acd66d6e2e0cc4d56741ddc8b7cd09175d8c3251749624a0fc353aee`,
+which replaces both branch-local fingerprints.
 
 ## Hosted CI correction
 

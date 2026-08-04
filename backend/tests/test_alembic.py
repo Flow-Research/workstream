@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0051_legacy_intake_removal"
+HEAD_REVISION = "0052_legacy_intake_removal"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -106,6 +106,42 @@ def _alembic_config() -> Config:
     config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("script_location", str(project_root / "alembic"))
     return config
+
+
+async def _review_queue_foundation_state(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            revision = await connection.scalar(text("select version_num from alembic_version"))
+            queue_count = await connection.scalar(text("select count(*) from review_queue_entries"))
+            admission_count = await connection.scalar(
+                text("select count(*) from review_admission_idempotency_records")
+            )
+            triggers = set(
+                (
+                    await connection.execute(
+                        text(
+                            "select tgname from pg_trigger where tgrelid in "
+                            "('review_queue_entries'::regclass, "
+                            "'review_admission_idempotency_records'::regclass) "
+                            "and not tgisinternal"
+                        )
+                    )
+                ).scalars()
+            )
+        return {
+            "revision": str(revision),
+            "queue_count": int(queue_count or 0),
+            "admission_count": int(admission_count or 0),
+            "queue_guard": "review_queue_entries_guard" in triggers,
+            "admission_guard": "review_admission_records_guard" in triggers,
+            "queue_truncate_guard": "review_queue_entries_reject_truncate" in triggers,
+            "admission_truncate_guard": (
+                "review_admission_idempotency_records_reject_truncate" in triggers
+            ),
+        }
+    finally:
+        await engine.dispose()
 
 
 def test_service_identity_migration_contract_is_frozen_from_application_modules() -> None:
@@ -465,6 +501,29 @@ async def _project_setup_run_check_constraint_names(database_url: str) -> set[st
             return set(rows.all())
     finally:
         await engine.dispose()
+
+
+def test_0051_review_queue_foundation_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """0051 creates no queue history and reverses only while still unused."""
+    config = _alembic_config()
+    with migration_lock():
+        command.downgrade(config, "0050_guide_source_v2")
+        command.upgrade(config, "0051_review_queue_foundation")
+        state = asyncio.run(_review_queue_foundation_state(isolated_database_env))
+        assert state == {
+            "revision": "0051_review_queue_foundation",
+            "queue_count": 0,
+            "admission_count": 0,
+            "queue_guard": True,
+            "admission_guard": True,
+            "queue_truncate_guard": True,
+            "admission_truncate_guard": True,
+        }
+        command.downgrade(config, "0050_guide_source_v2")
+        command.upgrade(config, "head")
 
 
 def test_0034_project_role_issue_evidence_exact_safe_round_trip(

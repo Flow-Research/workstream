@@ -1,7 +1,7 @@
 """remove the inactive multi-step contributor artifact intake
 
-Revision ID: 0051_legacy_intake_removal
-Revises: 0050_guide_source_v2
+Revision ID: 0052_legacy_intake_removal
+Revises: 0051_review_queue_foundation
 Create Date: 2026-08-04
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0051_legacy_intake_removal"
-down_revision = "0050_guide_source_v2"
+revision = "0052_legacy_intake_removal"
+down_revision = "0051_review_queue_foundation"
 branch_labels = depends_on = None
 
 

@@ -17,7 +17,7 @@ legacy lineage.
   and dispatch, repository lookups, and shared mutation branches.
 - Narrowed put-attempt and receipt constraints to current guide/checker
   producers only.
-- Added migration `0051_legacy_intake_removal`: exclusive-lock preflight,
+- Added migration `0052_legacy_intake_removal`: exclusive-lock preflight,
   atomic populated refusal, safe-empty removal, and exact empty downgrade.
 - Replaced useful generic contributor-fixture coverage with guide and
   task-scoped checker-output proofs.

@@ -45,6 +45,10 @@ from app.modules.projects.models import (  # noqa: F401
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.reviews.models import (  # noqa: F401
+    ReviewAdmissionIdempotencyRecord,
+    ReviewQueueEntry,
+)
 from app.modules.tasks.models import (  # noqa: F401
     AuditEvent,
     EvidenceItem,
