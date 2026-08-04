@@ -143,6 +143,11 @@ def test_review_models_are_registered_without_routes() -> None:
     assert "review_admission_idempotency_records" in Base.metadata.tables
     assert "active_lease_id" not in Base.metadata.tables["review_queue_entries"].columns
     assert "review_lease_id" not in Base.metadata.tables["review_queue_entries"].columns
+    assert {
+        "queue_state",
+        "closed_at",
+        "closed_reason",
+    }.isdisjoint(ReviewQueueEntryInput.model_fields)
     route_paths = {getattr(route, "path", None) for route in create_app().routes}
     assert not any(path and path.startswith("/api/v1/reviews") for path in route_paths)
 
@@ -421,6 +426,55 @@ async def test_database_enforces_routing_uniqueness_and_immutable_lineage(
         await session.rollback()
 
     async with db_session.get_session_factory()() as session:
+        await session.execute(
+            text("update review_queue_entries set routing_generation=2 where id=:id"),
+            {"id": value.id},
+        )
+        await session.commit()
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(DBAPIError, match="review queue generations cannot decrease"):
+            await session.execute(
+                text("update review_queue_entries set routing_generation=1 where id=:id"),
+                {"id": value.id},
+            )
+        await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
+        await session.execute(
+            text("update review_queue_entries set lifecycle_generation=2 where id=:id"),
+            {"id": value.id},
+        )
+        await session.commit()
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(DBAPIError, match="review queue generations cannot decrease"):
+            await session.execute(
+                text("update review_queue_entries set lifecycle_generation=1 where id=:id"),
+                {"id": value.id},
+            )
+        await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
+        await session.execute(
+            text(
+                "update review_queue_entries set queue_state='closed', "
+                "closed_at=statement_timestamp(), closed_reason='admin_cancelled', "
+                "lifecycle_generation=2 where id=:id"
+            ),
+            {"id": value.id},
+        )
+        await session.commit()
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(DBAPIError, match="closed review queue entries cannot reopen"):
+            await session.execute(
+                text(
+                    "update review_queue_entries set queue_state='pending', "
+                    "closed_at=null, closed_reason=null, lifecycle_generation=3 where id=:id"
+                ),
+                {"id": value.id},
+            )
+        await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError, match="review queue identity is immutable"):
             await session.execute(
                 text(
@@ -466,7 +520,10 @@ async def test_preferred_shape_is_storage_only_and_lease_shape_is_impossible(
         await session.commit()
 
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError, match="ck_review_queue_entries_queue_state"):
+        with pytest.raises(
+            IntegrityError,
+            match=r"ck_review_queue_entries_(queue_state|lifecycle_shape)",
+        ):
             await session.execute(
                 text("update review_queue_entries set queue_state='leased' where id=:id"),
                 {"id": preferred.id},

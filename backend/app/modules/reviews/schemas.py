@@ -9,13 +9,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ReviewQueueState(StrEnum):
-    """Queue states persistable before ReviewLease exists."""
-
-    PENDING = "pending"
-    CLOSED = "closed"
-
-
 class ReviewRoutingMode(StrEnum):
     """Stored routing shapes; selection behavior is implemented later."""
 
@@ -31,14 +24,6 @@ class ReviewRoutingReason(StrEnum):
     ADMIN_ASSIGNMENT = "admin_assignment"
 
 
-class ReviewQueueCloseReason(StrEnum):
-    """Closed queue outcomes available to later lifecycle commands."""
-
-    REVIEW_RECORDED = "review_recorded"
-    TASK_CLOSED = "task_closed"
-    ADMIN_CANCELLED = "admin_cancelled"
-
-
 class ReviewQueueEntryInput(BaseModel):
     """Exact values for one queue identity; this input grants no authority."""
 
@@ -50,13 +35,10 @@ class ReviewQueueEntryInput(BaseModel):
     submission_id: str = Field(min_length=36, max_length=36)
     submission_version: int = Field(gt=0)
     admitting_checker_run_id: str = Field(min_length=36, max_length=36)
-    queue_state: ReviewQueueState = ReviewQueueState.PENDING
     routing_mode: ReviewRoutingMode
     routing_reason: ReviewRoutingReason
     preferred_reviewer_id: str | None = Field(default=None, min_length=36, max_length=36)
     preference_expires_at: datetime | None = None
-    closed_at: datetime | None = None
-    closed_reason: ReviewQueueCloseReason | None = None
 
 
 class ReviewAdmissionReservationInput(BaseModel):

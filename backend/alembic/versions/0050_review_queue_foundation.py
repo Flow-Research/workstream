@@ -276,6 +276,13 @@ def _create_guards() -> None:
                 old.admitting_checker_run_id,old.first_queued_at,old.created_at) then
               raise exception 'review queue identity is immutable' using errcode='55000';
             end if;
+            if old.queue_state='closed' and new.queue_state <> 'closed' then
+              raise exception 'closed review queue entries cannot reopen' using errcode='23514';
+            end if;
+            if new.routing_generation < old.routing_generation
+               or new.lifecycle_generation < old.lifecycle_generation then
+              raise exception 'review queue generations cannot decrease' using errcode='23514';
+            end if;
             return new;
           end if;
           select project_id into task_project from workstream_tasks where id=new.task_id;

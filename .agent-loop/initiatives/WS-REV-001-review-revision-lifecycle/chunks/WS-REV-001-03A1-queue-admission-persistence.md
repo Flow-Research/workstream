@@ -39,6 +39,8 @@ backend/alembic/versions/0050_review_queue_foundation.py
 backend/tests/test_alembic.py
 backend/tests/test_review_queue_persistence.py
 backend/tests/conftest.py (schema fingerprint/fixture registration only)
+backend/scripts/run_test_lanes.py (canonical lane registration only)
+backend/tests/test_ci_test_lanes.py (lane registration assertion only)
 docs/architecture_data_model.md
 .agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/**
 .agent-loop/merge-intents/WS-REV-001-03A1.json

@@ -135,6 +135,10 @@ async def _review_queue_foundation_state(database_url: str) -> dict[str, object]
             "admission_count": int(admission_count or 0),
             "queue_guard": "review_queue_entries_guard" in triggers,
             "admission_guard": "review_admission_records_guard" in triggers,
+            "queue_truncate_guard": "review_queue_entries_reject_truncate" in triggers,
+            "admission_truncate_guard": (
+                "review_admission_idempotency_records_reject_truncate" in triggers
+            ),
         }
     finally:
         await engine.dispose()
@@ -238,6 +242,8 @@ def test_0050_review_queue_foundation_empty_round_trip(
             "admission_count": 0,
             "queue_guard": True,
             "admission_guard": True,
+            "queue_truncate_guard": True,
+            "admission_truncate_guard": True,
         }
         command.downgrade(config, "0049_rev_auth_readiness")
         command.upgrade(config, "head")

@@ -46,13 +46,11 @@ class ReviewQueueRepository:
             submission_id=value.submission_id,
             submission_version=value.submission_version,
             admitting_checker_run_id=value.admitting_checker_run_id,
-            queue_state=value.queue_state.value,
+            queue_state="pending",
             routing_mode=value.routing_mode.value,
             routing_reason=value.routing_reason.value,
             preferred_reviewer_id=value.preferred_reviewer_id,
             preference_expires_at=value.preference_expires_at,
-            closed_at=value.closed_at,
-            closed_reason=value.closed_reason.value if value.closed_reason else None,
         )
         self._session.add(record)
         await self._session.flush()
