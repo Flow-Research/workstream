@@ -116,13 +116,15 @@ authoritative. ART-04A2 merged through PR #266. ART-04A3 merged through PR #268
 and provides canonical server-derived semantic manifests, executable
 normalization, and fail-closed unchanged-work comparison.
 
-`WS-ART-001-PLAN4` is the planning-only correction, implemented with all
-required internal L1 review tracks passing. It replaces the
-oversized 04B contract with 04A4 legacy standalone-precheck removal, 04B1
-catalogue/effective-plan composition, 04B2 sealed materialization plus mandatory
-platform/default execution, and 04B3 locked-project execution plus immutable
-bounded evidence. No runtime behavior or AUTH availability changes in PLAN4;
-hosted PR gates and human merge remain pending.
+`WS-ART-001-PLAN4` merged through PR #271. Discovery for its proposed 04A4
+implementation proved the early clean cut unsafe because live legacy Submission
+creation still calls the shared precheck service and the verified-admission
+replacement is not yet available. PLAN5 is the active planning correction: it
+supersedes 04A4, makes 04B1 the next implementation chunk, and assigns complete
+legacy route/public-service/internal-guard/caller-package removal to the 05B
+admission-backed Submission cutover. All required internal L1 reviews pass after
+repair; local documentation and agent gates pass. No runtime behavior or AUTH
+availability changes in PLAN5; hosted PR review remains pending.
 
 ## Gate
 

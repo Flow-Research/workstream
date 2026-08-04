@@ -229,9 +229,9 @@ Workstream default submission artifact rules require:
 - safe relative artifact paths
 - production artifact hashes shaped as `sha256:<64 lowercase hex>`
 - pre-cutover only: validated caller-supplied storage references and manifest;
-  `WS-ART-001-04A4` removes the standalone caller-owned precheck, and
-  `WS-ART-001-05B` removes the remaining Submission fields so checkers consume
-  Workstream artifact bindings only
+  `WS-ART-001-05B` removes the standalone caller-owned precheck, its internal
+  legacy Submission guard, and the remaining Submission fields together so
+  checkers consume Workstream artifact bindings only
 - no credentials, signed URLs, query strings, raw local filesystem paths, or token-bearing references
 - narrowly high-confidence sensitive-file exclusions such as `.env`, `.git`,
   exact known credential/private-key files, `.pem`, and `.key`; broad
@@ -247,8 +247,9 @@ contributor pipeline. Tasks lock references to the shared project's compiled che
 bundle hash. It runs inside continuous submission-bundle preparation before
 Workstream creates a submission. Failures return the bounded same-request code
 `pre_submission_checker_failed` with status, eligibility, and structured
-pass/fail/warning details. There is no standalone preflight route, and this is
-not a review decision value.
+pass/fail/warning details. Until ART-05B, the old standalone preflight route is
+frozen legacy behavior and is not an authoritative result for the new path.
+ART-05B removes it completely; this result is not a review decision value.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
