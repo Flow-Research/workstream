@@ -35,6 +35,14 @@ Local correction evidence:
   before pytest produced a result; hosted sharded Backend and Agent Gates are
   the authoritative execution evidence for this correction.
 
+The first hosted correction run then exposed the expected schema-custody delta:
+making `put_attempt_id` non-null changed the canonical public-schema
+fingerprint. The database migrations completed successfully, but fixture reset
+failed closed because `EXPECTED_PUBLIC_SCHEMA_SHA256` still named the prior
+nullable schema. The constant now records the hosted schema digest
+`8acef1c1d96ced0a4d4723ce71aa2e675ab841ec4305d9421ed0584313b98b55`;
+no reset guard was removed or weakened.
+
 ## Hosted CI correction
 
 The first Backend sharded run failed one `shared_foundations` test. Replacing
