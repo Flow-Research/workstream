@@ -2,11 +2,13 @@
 
 ## Baseline
 
-- Protected `main`: `10720382cd9639f00f09578f772b97ab3afc358b`.
-- Latest Backend run for that SHA passed.
-- Current Alembic head: `0049_rev_auth_readiness`.
-- Open ART PR #249 proposes `0050_guide_source_v2_cutover`; no CON migration
-  number is reserved before that PR's disposition and a fresh main update.
+- Protected `main`: `2feaf47dd5bb448db076179d96751caa55fb0994`.
+- Latest Backend run for that SHA failed one unrelated AUTH actor-profile
+  concurrency test in `shared_foundations`; the same failure also occurred on
+  the prior PR head. This planning diff changes no AUTH/runtime/test/CI files.
+- Current Alembic head: `0050_guide_source_v2`.
+- ART PR #249 merged the guide-source v2 cutover. No CON migration number is
+  reserved before a fresh main update at implementation start.
 - CON-01 merged in PR #144; CON-02A merged in PR #155 as migration
   `0029_shared_transactional_outbox`.
 - Current runtime has generic outbox persistence/append but no dispatcher,
@@ -50,9 +52,9 @@ Merged ART now owns verified guide-source byte ingest, binding generation,
 materialization, bounded PDF/DOCX/PPTX/XLSX/image extraction, and sufficiency
 continuation. AUTH guide binding/read activation merged through PR #245.
 
-Open ART PR #249 performs the verified guide-source clean cut. It is not merged
-and its proposed `0050` migration is not current main; its checks and merge
-state are mutable and must be re-read before implementation.
+ART PR #249 merged the verified guide-source clean cut and migration `0050`.
+Its guide setup continuation and verified-source contracts are current runtime
+evidence; they do not implement CON behavior or alter CON ownership.
 
 ART's remaining submission/reviewer work preserves the CON boundary:
 
@@ -112,9 +114,9 @@ REV-04B and 02B deferred until AUTH supplies its exact service authority.
 
 ## Risks and unknowns
 
-- PR #249 may change the migration head or ART dependency wording before its
-  merge; every implementation chunk must refresh current main. REV PLAN4 is
-  merged, but each REV child still refreshes its exact runtime contract.
+- Later migration-bearing merges may change the migration head; every
+  implementation chunk must refresh current main. REV PLAN4 is merged, but
+  each REV child still refreshes its exact runtime contract.
 - The deterministic classification of legacy economic rows remains a human
   data-migration decision before CON-05A/05B.
 - Exact CON ActionIds, service identities, dual-principal behavior, and

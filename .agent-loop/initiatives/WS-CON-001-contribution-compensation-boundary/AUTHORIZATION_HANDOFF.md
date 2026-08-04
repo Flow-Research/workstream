@@ -2,11 +2,12 @@
 
 ## Current baseline
 
-Current `main` is `10720382cd9639f00f09578f772b97ab3afc358b` with the AUTH
+Current `main` is `2feaf47dd5bb448db076179d96751caa55fb0994` with the AUTH
 actor, grant, fixed-service, prepared-mutation, project-guide, policy-mutation,
-and REV-readiness foundations plus merged REV PLAN4, with the database still at migration
-`0049_rev_auth_readiness`. These foundations do not create CON runtime,
-activate CON behavior, or give an outbox dispatcher feature authority.
+and REV-readiness foundations plus merged REV PLAN4 and ART foundations. The
+database is at migration `0050_guide_source_v2`. These foundations do
+not create CON runtime, activate CON behavior, or give an outbox dispatcher
+feature authority.
 
 AUTH owns identifiers, stable permission mappings, principals, grants,
 fixed-service identities and matrix rows, prepared authorization, evaluators,

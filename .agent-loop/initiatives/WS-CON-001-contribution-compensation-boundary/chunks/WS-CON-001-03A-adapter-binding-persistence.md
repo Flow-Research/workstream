@@ -40,7 +40,8 @@ credentials, secrets, raw provider refs, dependency or CI weakening
   link, ServiceIdentity, static row, adapter, route, or delivery behavior.
 - [ ] Upgrade/downgrade and duplicate/state races use isolated PostgreSQL.
 - [ ] The migration is allocated from the then-current single head; no fixed
-  revision number is reserved while ART #249 remains open.
+  revision number is reserved until current main is refreshed at chunk start;
+  ART #249 has consumed migration `0050`.
 
 ## Verification and reviewers
 

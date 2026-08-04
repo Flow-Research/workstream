@@ -65,8 +65,9 @@ AUTH dispatcher registration -> 02B
 07 + 02B + 04A/04B -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
 ```
 
-ART-03C/remaining submission custody and REV-03A1 may progress concurrently in
-their own branches. Their open PRs are integration input, not merged gates.
+ART-03C is merged baseline evidence. Remaining ART submission/reviewer custody
+and REV-03A1 may progress concurrently in their own branches; any open PRs are
+integration input, not merged gates.
 
 ## Review requirements
 

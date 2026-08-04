@@ -2970,7 +2970,9 @@ mandatory rather than expanded authority.
 ## 2026-08-03 - WS-CON-001-PLAN4 Current-Main Reconciliation
 
 The planning refresh reconciles CON with current ART, AUTH, REV, and XINT
-boundaries at main `10720382`, including merged REV PLAN4 PR #258. Review
+boundaries, initially at main `10720382` with merged REV PLAN4 PR #258 and then
+refreshed through main `2feaf47d` with merged ART PR #249 and Alembic head
+`0050_guide_source_v2`. Review
 repair removed false `02C` coupling,
 neutralized mutable open-PR status, replaced the obsolete dispatcher-first
 canonical sequence with the current partial order, corrected the legacy
@@ -2984,8 +2986,10 @@ excluded from any PLAN4 commit or PR. Deterministic diff, link, stale wording,
 stale authorization, and lightweight gate checks pass. No runtime chunk starts
 as part of PLAN4.
 
-PR #261 hosted Backend and Agent Gates passed. CodeRabbit raised four valid
-planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
+PR #261 Agent Gates and CodeRabbit pass. Hosted Backend has one AUTH
+actor-profile concurrency failure independently reproduced on current main;
+publication still requires a green rerun or upstream AUTH repair. CodeRabbit
+raised four valid planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
 registration evidence, the receipt-risk exclusion list, and omitted dependency
 edges. The repair closes all four in the `03D` contract, conformance/risk
 records, canonical specification, and chunk map; refreshed external review is

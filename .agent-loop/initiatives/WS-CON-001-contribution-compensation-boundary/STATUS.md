@@ -2,9 +2,10 @@
 
 ## Current baseline
 
-- Reconciled main: `10720382cd9639f00f09578f772b97ab3afc358b`.
-- Backend CI for that SHA: passed.
-- Alembic head on main: `0049_rev_auth_readiness`.
+- Reconciled main: `2feaf47dd5bb448db076179d96751caa55fb0994`.
+- Backend CI for that SHA: failing one AUTH actor-profile concurrency test in
+  `shared_foundations`; the planning diff changes no AUTH/runtime/test/CI files.
+- Alembic head on main: `0050_guide_source_v2`.
 - CON-01 and CON-02A are merged.
 - No CON runtime chunk is active in this worktree.
 - Runtime contains shared outbox persistence only; contribution, compensation,
@@ -27,10 +28,10 @@ CON dispatcher and protected CON surface identifiers remain unregistered.
 
 ### ART
 
-Guide byte ingest, binding, extraction, and sufficiency foundations are merged.
-AUTH guide binding/read activation is merged. ART PR #249 is the verified
-guide-source cutover; it remains open and unmerged. Its proposed 0050 migration
-is not part of main. Re-check its checks and merge state before implementation.
+Guide byte ingest, binding, extraction, sufficiency foundations, and the
+verified guide-source v2 cutover are merged. AUTH guide binding/read activation
+is merged. ART PR #249 and migration `0050_guide_source_v2` are now part
+of main; their contracts remain ART-owned inputs rather than CON behavior.
 
 ### REV
 
@@ -63,12 +64,13 @@ schema work. Current dependency analysis yields:
   decision.
 - CON-03C: REV Review/ReviewLease/FinalAcceptance tables are not implemented.
 - CON-06/07: corresponding REV lease/decision caller contracts are future.
-- Migration allocation: refresh after PR #249 and any other migration-bearing
-  merge; do not assume 0050/0051.
+- Migration allocation: refresh after any later migration-bearing merge; do
+  not assume `0051` remains available.
 
 ## Immediate next action
 
-Publish the reviewed PLAN4 planning repair without the user-owned PDF deletion.
+Publish the reviewed PLAN4 planning repair without the user-owned PDF deletion
+and obtain a green rerun or upstream AUTH repair for the concurrency failure.
 After PLAN4 merges and the human approves implementation, refresh main and
 implement only CON-03A. Stop at its PR checkpoint; do not start 03B or another
 CON chunk automatically.

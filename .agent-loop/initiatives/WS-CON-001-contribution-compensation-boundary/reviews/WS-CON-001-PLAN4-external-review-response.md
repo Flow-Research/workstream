@@ -30,6 +30,15 @@ bundle sections in the PR body.
 
 None.
 
+## Hosted CI triage
+
+Backend run `30848526550` failed only
+`tests/test_auth.py::test_actor_profile_lifecycle_real_postgres_concurrency`
+in `shared_foundations` after 2,210 tests passed. The same AUTH concurrency test
+failed on current main run `30871111339`. PLAN4 changes no AUTH runtime, tests,
+workflow, or CI configuration. The branch was refreshed through current main;
+publication still requires a green rerun or an AUTH-owned upstream repair.
+
 ## Human decisions needed
 
 No new decision. Human review and merge ownership remain unchanged.
@@ -44,5 +53,5 @@ No new decision. Human review and merge ownership remain unchanged.
 
 ## Remaining risks
 
-ART #249 remains open. Migration allocation and all future AUTH, REV, provider,
+ART #249 is merged. Migration allocation and all future AUTH, REV, provider,
 callback, and legacy-row gates must be refreshed at their owning chunk.

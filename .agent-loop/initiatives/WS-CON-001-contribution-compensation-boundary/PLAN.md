@@ -20,8 +20,8 @@ independent policy persistence needed by REV.
 
 ### Phase A — current planning and independent schema foundations
 
-1. `PLAN4` reconciles current main, open ART work, merged REV PLAN4, boundaries, and chunk
-   order. It changes no runtime.
+1. `PLAN4` reconciles current main, merged ART #249 plus remaining ART gates,
+   merged REV PLAN4, boundaries, and chunk order. It changes no runtime.
 2. `03A` persists project compensation adapter-binding identity/lifecycle with
    no provider behavior or credentials.
 3. `03B` persists ContributionPolicy, immutable versions/rules/definitions,

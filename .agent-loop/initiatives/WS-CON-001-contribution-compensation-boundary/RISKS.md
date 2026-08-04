@@ -7,7 +7,7 @@
 | CON invents AUTH identifiers or authority | Privilege escalation and dual authorization paths | AUTH exclusively registers contexts, actions, identities, matrices, evaluators, PREP, and activation. |
 | REV/CON ownership blurs at policy freeze | CON could own ReviewLease or REV could own contribution policy | CON returns a policy-version lookup result; REV alone writes and transitions its lease. |
 | ART/provider work enters review transaction | Availability coupling and broken atomicity | REV supplies stable artifact identity/hash; CON performs zero provider or ART calls. |
-| Open PR is treated as merged | Wrong migration or dependency assumptions | Treat ART #249 as open until merged; treat REV #258 as merged planning evidence only; refresh main before every implementation. |
+| Planning evidence is treated as runtime | Wrong migration or dependency assumptions | Treat ART #249 as merged ART runtime and REV #258 as merged planning evidence only; refresh main before every implementation. |
 | Migration collision with ART/REV | Broken linear history | Allocate only from the then-current Alembic head; no number is reserved in planning. |
 | Legacy economic rows are guessed | Corrupted award policy lineage | Require explicit deterministic classification or fail closed before 05A/05B. |
 | Dispatcher authority leaks to handlers | Cross-feature service privilege | Dispatcher owns mechanics only; every protected handler has independent identity/action/context. |

@@ -2,8 +2,8 @@
 
 ## Reconciliation baseline
 
-- Current `main`: `10720382cd9639f00f09578f772b97ab3afc358b`.
-- Current migration head: `0049_rev_auth_readiness`.
+- Current `main`: `2feaf47dd5bb448db076179d96751caa55fb0994`.
+- Current migration head: `0050_guide_source_v2`.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and
   `.agent-loop/README.md`. Historical signed-start and merge-intent records are
@@ -48,8 +48,8 @@
 - `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/**`
 - `.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**`
 - `.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/**`
-- Open ART PR #249: proposed guide-source v2 cutover; not merged and not
-  current migration evidence.
+- Merged ART PR #249: guide-source v2 cutover and migration `0050`; current ART
+  runtime evidence, not CON implementation.
 - Merged REV PR #258: current PLAN4 planning refresh; not runtime and does not
   satisfy a runtime gate by itself.
 

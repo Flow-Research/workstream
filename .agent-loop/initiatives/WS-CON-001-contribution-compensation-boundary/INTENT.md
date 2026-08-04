@@ -22,7 +22,8 @@ The original plan stopped at the July 2026 outbox-persistence milestone. Since
 then AUTH, ART, REV/XINT, project-policy, CI, and repository contribution rules
 changed materially. The authored CON status still described CON-02A as active,
 AUTH-09E/PREP as future, and an obsolete migration head. PLAN4 replaces those
-operational claims with a capability-ordered plan against `main` `10720382`.
+operational claims with a capability-ordered plan, now refreshed through
+`main` `2feaf47d`.
 
 ## Success state
 

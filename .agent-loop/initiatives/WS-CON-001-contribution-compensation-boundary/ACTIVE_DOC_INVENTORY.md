@@ -23,9 +23,9 @@ The active package is:
 - current contribution/governance instructions in `AGENTS.md`,
   `CONTRIBUTING.md`, and `.agent-loop/README.md`;
 - current capability truth in `docs/roadmap_status.md`;
-- merged AUTH, ART, REV, XINT, and CON history through `10720382`;
+- merged AUTH, ART, REV, XINT, and CON history through `2feaf47d`;
 - current backend modules and migration graph;
-- mutable open-PR evidence for ART #249, clearly labelled unmerged, and merged
+- merged ART #249 runtime evidence and merged
   REV PLAN4 PR #258.
 
 ## Intentionally unchanged

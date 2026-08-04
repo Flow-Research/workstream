@@ -12,8 +12,8 @@ runtime change without starting implementation.
 
 ## What changed and why
 
-- Rebased the planning baseline to main `10720382`, including merged REV PLAN4
-  PR #258, while keeping open ART PR #249 unmerged evidence.
+- Refreshed the planning baseline through main `2feaf47d`, including merged REV
+  PLAN4 PR #258 and merged ART runtime PR #249.
 - Replaced the obsolete dispatcher-first linear order with a capability-based
   partial order: `03A -> 03B`, independent `02C`, then exact REV/CON gates.
 - Deferred `02B` until AUTH supplies the complete dispatcher
@@ -50,23 +50,28 @@ behavior remains unchanged.
 - `python3 scripts/check_stale_authorization_docs.py`
 - `python3 -m unittest -v scripts.test_lightweight_agent_gates`
 
-All checks pass. No tests or CI controls changed.
+All listed local checks pass. Hosted Backend currently has the independently
+reproduced AUTH concurrency failure described below. No tests or CI controls
+changed.
 
 ## Reviewer results
 
 - Architecture: PASS after dependency-handoff repair.
 - Security/auth: PASS.
 - Product/ops: PASS after merged-REV risk wording repair.
-- QA/test/CI: PASS WITH CONDITIONS; no actionable finding, with the PDF
-  exclusion as the sole mechanical condition.
+- QA/test/CI: PASS WITH CONDITIONS; the user-owned PDF deletion remains
+  excluded, and hosted Backend must become green after the current-main push.
 - Docs: PASS after correcting source-manifest paths.
 - Senior engineering/reuse: PASS after aligning the `06` gate and `03D` scope.
 
 ## External review, remaining risks, and follow-up
 
-Hosted Backend and Agent Gates pass on PR #261. Four valid CodeRabbit findings
-were repaired and recorded in `WS-CON-001-PLAN4-external-review-response.md`;
-the refreshed external review is pending. ART #249 remains open, so migration numbering must be refreshed later. AUTH registrations,
+Agent Gates and CodeRabbit pass on PR #261. The old Backend run failed one AUTH
+actor-profile concurrency test also failing on current main; the refreshed
+current-main head requires a green rerun or upstream AUTH repair. Four valid
+CodeRabbit findings were repaired and recorded in
+`WS-CON-001-PLAN4-external-review-response.md`; the refreshed external review
+is pending. Migration numbering must be refreshed at implementation start. AUTH registrations,
 legacy-row classification, REV runtime targets, and provider/callback contracts
 remain future explicit gates.
 

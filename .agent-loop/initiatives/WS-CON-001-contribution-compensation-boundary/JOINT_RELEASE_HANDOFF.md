@@ -17,13 +17,12 @@ owner contracts.
 
 ## Current cross-initiative state
 
-At current `main` (`10720382`), AUTH readiness, ART guide foundations, and REV
-PLAN4 are
-merged, but the live REV lifecycle and CON runtime are not implemented. ART PR
-#249 proposes the v2 guide-source cutover and migration `0050`; it must be
-treated as unmerged until it is actually merged. REV PR #258 is merged planning
-evidence, not runtime behavior. Re-read ART #249 and the current migration head
-before implementation; refresh each REV child contract against its exact gate.
+At current `main` (`2feaf47d`), AUTH readiness, ART guide foundations and v2
+guide-source cutover, and REV PLAN4 are merged, but the live REV lifecycle and
+CON runtime are not implemented. ART PR #249 and migration `0050` are current
+runtime evidence. REV PR #258 is merged planning evidence, not runtime
+behavior. Re-read the current migration head before implementation and refresh
+each REV child contract against its exact gate.
 
 ## Correct dependency sequence
 
