@@ -204,8 +204,7 @@ durable acknowledgement-unknown attempt rather than committing a terminal fact.
 7. Transaction B records provider acknowledgement, completes the provisional
    admission charges, sets the `ArtifactPutAttempt` to `object_confirmed`, and
    creates the replica with pending verification and unknown
-   availability/integrity; while a legacy contributor upload item exists, it
-   alone moves to `stored_pending_verification`. No binding exists.
+   availability/integrity. No binding exists.
 8. A durable verification job is committed in PostgreSQL and published to
    Celery after commit. A periodic scanner republishes pending work within the
    configured SLA.
@@ -218,8 +217,7 @@ charges provisional. A PostgreSQL scanner publishes ambiguous and expired
 in-flight attempts; a fixed service principal runs read-only
 `observe_put_result` plus a complete hash. Matching bytes complete Transaction B
 once, authoritative absence releases charges and moves the put attempt to
-`absent_replay_required`; while a legacy contributor upload item exists, it
-alone moves to `replay_required`. Mismatched bytes quarantine the key. No background
+`absent_replay_required`. Mismatched bytes quarantine the key. No background
 resolver repeats a provider write. Exact replay after absence must atomically
 reacquire capacity before another provider call.
 Workstream never stores upload bytes in Postgres, Redis, or Celery payloads.

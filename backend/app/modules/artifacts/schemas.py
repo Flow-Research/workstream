@@ -29,16 +29,6 @@ class GuideArtifactAdmissionRequest:
 
 @final
 @dataclass(frozen=True, slots=True)
-class ContributorArtifactAdmissionRequest:
-    """One prepared contributor item admitted under its upload session."""
-
-    authorization_context: AuthorizationContext
-    upload_item_id: UUID
-    source: CommittedArtifactSource
-
-
-@final
-@dataclass(frozen=True, slots=True)
 class CheckerOutputArtifactAdmissionRequest:
     """One prepared checker output admitted under its exact checker run."""
 
@@ -49,9 +39,7 @@ class CheckerOutputArtifactAdmissionRequest:
 
 
 ArtifactAdmissionRequest: TypeAlias = (
-    GuideArtifactAdmissionRequest
-    | ContributorArtifactAdmissionRequest
-    | CheckerOutputArtifactAdmissionRequest
+    GuideArtifactAdmissionRequest | CheckerOutputArtifactAdmissionRequest
 )
 
 
