@@ -36,5 +36,5 @@ initiatives but are not QUAL coverage-closure work.
 
 Project and checker test chunks retain one product owner each. If they do not
 reach the required headroom, planning adds one exact owner-specific successor
-from refreshed evidence rather than combining ART, AUTH, TASK, workers, and
-adapters to chase a percentage.
+from refreshed evidence rather than combining ART, AUTH, TASK, background-job,
+and adapter ownership to chase a percentage.

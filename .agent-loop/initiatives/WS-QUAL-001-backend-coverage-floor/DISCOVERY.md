@@ -45,7 +45,8 @@ The latest hosted coverage JSON identifies these high-value gaps:
 
 Smaller gaps exist in checker repository/router/runner/compiler, project setup
 queue and policy replay, authorization read/repository code, auth API/deps/
-schemas, artifact extraction/materialization, workers, and actor services.
+schemas, artifact extraction/materialization, background-job modules, and actor
+services.
 
 ## Existing ownership and test layers
 

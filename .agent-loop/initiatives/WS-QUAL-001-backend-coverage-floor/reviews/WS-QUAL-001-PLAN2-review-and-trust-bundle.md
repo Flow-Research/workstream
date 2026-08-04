@@ -57,3 +57,10 @@ contract remains separately started after this planning PR merges.
 
 GitHub checks and explicit human approval are required. PLAN2 authorizes no
 test or workflow implementation by itself.
+
+## External repair
+
+Hosted Agent Gates found two ambiguous role-like references in changed planning
+lines. They now say background-job modules/ownership, avoiding confusion with a
+product actor class. CodeRabbit produced no actionable finding because its
+review request was temporarily rate-limited.
