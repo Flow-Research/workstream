@@ -43,6 +43,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     assert modules_by_lane["project_lifecycle"] == {"tests/test_projects.py"}
     assert modules_by_lane["task_lifecycle"] == {
         "tests/test_checkers.py",
+        "tests/test_review_queue_persistence.py",
         "tests/test_tasks.py",
     }
     assert {

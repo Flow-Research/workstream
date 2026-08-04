@@ -26,8 +26,8 @@ until this chunk merges.
 - A manual report remains diagnostic and cannot satisfy verified setup,
   derivation, or activation evidence. Only an agent report with exact verified
   extraction/source-usage lineage may occupy the authoritative verified slot.
-- ART migration `0050_guide_source_v2` is now the predecessor. AUTH owns
-  `0051_guide_sufficiency_authority`; no duplicate migration identifier or
+- REV migration `0051_review_queue_foundation` is now the predecessor. AUTH owns
+  `0052_guide_sufficiency_authority`; no duplicate migration identifier or
   Alembic branch is permitted.
 
 ## Parent initiative
@@ -73,7 +73,7 @@ backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
 backend/app/**/project_setup.py
-backend/alembic/versions/0051_guide_sufficiency_authority.py
+backend/alembic/versions/0052_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py
@@ -150,7 +150,7 @@ migration 0046 or introduce a second prepared-authorization protocol.
   and source-usage row staging. It reuses an AUTH-owned service
   context/revalidation path for `workstream.project.setup`; it must not copy
   ART-private authorization helpers or add a setup-service resolver.
-- Migration 0051, based on ART migration `0050_guide_source_v2`, adds one
+- Migration 0052, based on REV migration `0051_review_queue_foundation`, adds one
   immutable replay ledger plus separate complete
   creation and acknowledgement authorization-provenance shapes. It does not
   duplicate ART extraction/source-usage provenance from 0046. Historical rows

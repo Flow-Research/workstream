@@ -1,26 +1,16 @@
-# Risks: WS-CON-001 Contribution Record And Compensation Boundary
+# Risks: WS-CON-001 Contribution And Compensation
 
-| Risk | Impact | Mitigation | Owner |
-|---|---|---|---|
-| Competing award-eligibility models | Critical | ContributionPolicy is sole authority; semantic then physical clean cut with no fallback | CON-05A/B |
-| Review commits without contribution | Critical | Mandatory flush-only participant and one REV-owned commit; fault-injection rollback | CON-07 + REV |
-| Reviewer contribution depends on branch state | Critical | Required reviewer operation precedes every branch and has no FinalAcceptance/submitter input; separate accept-only submitter operation | CON-07 + REV-08/10 |
-| Submitter contribution inferred from mutable decision shape | Critical | REV-owned immutable FinalAcceptance is the sole accepted_submission source; unique task/Review/Submission and source-shape constraints | REV + CON-03C/07 |
-| Mandatory ART projection blocks product truth | Critical | No ART/evidence work in core transaction or release; optional successor only | CON-07/09/11 |
-| Wrong frozen policy | Critical | Assignment/lease freeze before work; immutable versions; concurrency proof | CON-05A/06 |
-| task.claim activates before submitter policy freeze | Critical | AUTH-PREP + task seam -> CON-05A hidden participant -> task-owned composition -> AUTH-13 activation; pre-activation real-kernel denial | AUTH + task + CON-05A |
-| Dispatcher inherits handler authority | Critical | Dispatcher-only action; exact independent service authority for protected handlers | CON-02B/08A/10C + AUTH |
-| Release cutoff misses admitted fulfillment work | Critical | Shared fence before every writer ordinal; maximum-ordinal same-session observation; both-order cutoff races; completion-only drain | CON-03D/08/10B/C/11 + REV-12A |
-| Operations request authority leaks into execution | Critical | 10B persists bounded human requests only; 10C uses exact fixed-service actions, cross-executor denial, replay/finding proof, and projection-only mutation | CON-10B/10C + AUTH |
-| Broad or dynamic service access | Critical | Closed ServiceIdentity/static rows, controlled provisioning, AUTH-09E, cross-service denial | AUTH + CON |
-| Partial ART/REV custody transfer | High | Reference complete WS-XINT handoffs; no local subset or dual writer | AUTH |
-| Cross-domain deadlock/partial commit | Critical | AUTH-first common prefix; operation-specific REV/task lifecycle-before-policy order; one session/commit; both-order PostgreSQL tests | AUTH + REV + CON |
-| Prepared handle substitution or stale authority | Critical | Exact session/action/actor-ref/idempotency/request-digest binding; AUTH consumption after final-fact recomposition; single use and non-consumption on rejected substitution | AUTH + each mutation owner |
-| Wrong grant substitutes for shipping authority | High | Exact submitter and reviewer grants only; unrelated project/admin grants deny; no adjudication dependency | AUTH + task/REV |
-| Provider I/O under locks | Critical | Durable pre-I/O state; release transaction/fence before adapter call | CON-08A/outbox |
-| Callback spoofing/replay | Critical | Exact service identity/static row, binding match, prepared protocol, idempotent receipt | CON-08B + AUTH |
-| Legacy row ambiguity | High | Human-approved deterministic rebuild/classification; migration fails closed | Human + CON-05 |
-| Premature public release | High | Hidden OpenAPI, exact manifest, AUTH activation, joint REV/CON gate | CON-11 + REV |
-| Adjudication scope leaks into v0.1 | High | Accept/reject are terminal; no adjudication model/action/queue/state/contribution/readiness or initiative gate | REV + CON |
-
-No runtime work starts while a blocking decision or prerequisite remains open.
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Old status is treated as current behavior | Duplicate or misordered work | PLAN4 binds current code, migration head, capability ledger, and PR state; dated evidence stays historical. |
+| Dispatcher blocks independent policy work | REV lease persistence remains unnecessarily blocked | Move 03A/03B ahead of 02B; defer dispatcher until its actual consumers and AUTH contract. |
+| CON invents AUTH identifiers or authority | Privilege escalation and dual authorization paths | AUTH exclusively registers contexts, actions, identities, matrices, evaluators, PREP, and activation. |
+| REV/CON ownership blurs at policy freeze | CON could own ReviewLease or REV could own contribution policy | CON returns a policy-version lookup result; REV alone writes and transitions its lease. |
+| ART/provider work enters review transaction | Availability coupling and broken atomicity | REV supplies stable artifact identity/hash; CON performs zero provider or ART calls. |
+| Planning evidence is treated as runtime | Wrong migration or dependency assumptions | Treat ART #249 as merged ART runtime and REV #258 as merged planning evidence only; refresh main before every implementation. |
+| Migration collision with ART/REV | Broken linear history | Allocate only from the then-current Alembic head; no number is reserved in planning. |
+| Legacy economic rows are guessed | Corrupted award policy lineage | Require explicit deterministic classification or fail closed before 05A/05B. |
+| Dispatcher authority leaks to handlers | Cross-feature service privilege | Dispatcher owns mechanics only; every protected handler has independent identity/action/context. |
+| Optional evidence becomes core availability dependency | ART outage blocks contribution truth | Keep 09A/09B deferred and PostgreSQL reads authoritative. |
+| Provider receipt leaks secrets | Security/privacy incident | Persist only bounded non-sensitive receipt facts; explicitly deny provider bodies, secrets, tokens, signatures, URLs, PII, balances, ledgers, settlement data, and digests derived from any forbidden input. |
+| Review decision and contribution partially commit | Canonical truth divergence | REV owns one transaction and commit; CON participants flush only with fault-injection proof. |

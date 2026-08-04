@@ -21,7 +21,7 @@ the fixed `workstream.project.setup` service only the internal run command.
 - Added the three active catalogue actions and exact human/fixed-service guards.
 - Added prepared authorization and final locked revalidation to all durable
   sufficiency mutations.
-- Added migration 0051 for immutable replay custody and complete authorization
+- Added migration 0052 for immutable replay custody and complete authorization
   provenance.
 - Connected the setup worker through fresh deterministic service authority.
 - Reconciled ART-03C so a human-requested verified report does not advance the
@@ -91,7 +91,7 @@ git diff --check
 Ruff: passed
 Project sufficiency selector before hosted review: 31 passed
 Authorization selector: 144 passed
-Migration 0051 selector: passed
+Migration 0052 selector: passed
 API contract E2E: passed
 Semantic collection: 2,928 tests across five hosted lanes
 External-review shared-foundation selectors: passed

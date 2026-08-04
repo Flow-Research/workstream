@@ -325,8 +325,9 @@ null or a non-secret opaque token with the same length and character bounds; it
 is required for `fulfilled` and null for `failed`. Neither value is returned by
 contributor/product reads or emitted in integration events.
 
-A fulfilled receipt requires the exact award `NUMERIC(38, 18)` quantity and a
-bounded fulfillment time. A failed receipt requires one closed Workstream code:
+A fulfilled receipt requires the exact award `NUMERIC(38, 18)` quantity, the
+exact binding unit, and a bounded fulfillment time. A failed receipt requires
+one closed Workstream code:
 `ADAPTER_REJECTED`, `DESTINATION_UNAVAILABLE`, `PROVIDER_UNAVAILABLE`,
 `PROVIDER_TIMEOUT`, or `UNKNOWN_PROVIDER_FAILURE`; unknown provider values map
 to the last code before persistence. Failed receipts have null quantity,
@@ -335,13 +336,17 @@ receipt. A conflicting replay fails closed.
 
 Raw provider secrets, authentication tokens, unbounded callback bodies,
 free-form messages/codes, headers, signatures, endpoints, credentials, URLs,
-markup, and provider metadata MUST NOT be persisted, logged, emitted, exported,
+markup, provider metadata, PII, balances, ledgers, and settlement data MUST NOT
+be persisted, logged, emitted, exported,
 or returned. This prohibition does not include the bounded non-secret opaque
 `external_event_id` and `external_reference` identifiers defined above; those
 may be stored only in their canonical receipt/status fields and remain excluded
 from product reads and integration events. Only closed canonical facts, those
-bounded identifiers, and canonical request/payload digests may cross into
-receipt, audit, outbox, or diagnostic records.
+bounded identifiers, and platform-generated digests derived exclusively from
+approved stored receipt fields may cross into receipt, audit, outbox, or
+diagnostic records. Digests derived from provider bodies, tokens, signatures,
+URLs, PII, balances, ledgers, settlement data, or any other forbidden input are
+themselves forbidden and MUST be rejected before persistence.
 
 ### CompensationStatusProjection
 
@@ -883,19 +888,28 @@ No dependent chunk may treat an unresolved gate as an implicit default.
 
 ## Required Implementation Order
 
-The core dependency order is:
+The core dependency order is a partial order. Persistence and flush-only
+transaction participants do not wait for generic dispatch:
 
 ```text
-CON-01
--> CON-02A -> CON-02B -> CON-02C
--> CON-03A -> CON-03B -> CON-03C -> CON-03D
--> CON-04A -> CON-04B
--> CON-05A -> CON-05B
--> CON-06 -> CON-07
--> CON-08A -> CON-08R -> CON-08B
--> CON-10A -> CON-10B -> CON-10C
--> CON-11
+CON-01 -> CON-02A
+CON-03A -> CON-03B -> REV lease/policy-freeze persistence
+CON-02C -> REV Review/FinalAcceptance transaction foundation
+REV-04B runtime Review/ReviewLease/FinalAcceptance -> CON-03C -> CON-03D
+CON-03A -> CON-04A
+CON-03B + CON-04A -> CON-04B -> CON-05A -> CON-05B -> CON-06
+stable REV revision lineage + CON-03C/03D + CON-05A + CON-06 -> CON-07 -> REV-10
+AUTH dispatcher contract -> CON-02B
+CON-02B + CON-03D + CON-04A/B + CON-07 -> CON-08A -> CON-08R -> CON-08B
+CON-08B -> CON-10A -> CON-10B
+CON-02B + CON-10B -> CON-10C
+all required hidden behavior and cross-initiative gates -> CON-11
 ```
+
+Independent branches may be scheduled separately, but each chunk remains
+bounded by its reviewed contract. CON-02B is intentionally later because it
+requires the exact AUTH dispatcher identity/action/admission contract; it is
+not a prerequisite for CON-02C, CON-03A, or CON-03B.
 
 Cross-initiative interleaving is mandatory:
 
@@ -906,12 +920,13 @@ REV-02 exact Submission/TaskAssignment attribution
 CON-03B ContributionPolicyVersion persistence
   -> REV-03 ReviewLease foreign key
 
-CON-02A outbox + CON-02C audit
-  -> REV-04 Review/FinalAcceptance persistence
+CON-02A outbox persistence + CON-02C audit
+  -> REV-04B runtime Review/ReviewLease/FinalAcceptance
+REV-04B runtime Review/ReviewLease/FinalAcceptance + CON-03B
   -> CON-03C exact contribution source schema
 
-CON-06 reviewer freeze
-  -> REV-06 claim composition
+REV lease schema/caller facts + CON-06 reviewer freeze
+  -> REV-06A claim composition
 
 REV-09B stable lineage + CON-03C + CON-07
   -> REV-10 first canonical Review-committing transaction
