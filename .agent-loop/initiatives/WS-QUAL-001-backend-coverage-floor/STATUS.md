@@ -19,7 +19,7 @@ replacements remain historical evidence, not work to resume.
 ## Current gate
 
 `WS-QUAL-001-03R` is the current implementation chunk. It must add meaningful
-checker-owned behavior tests and gain at least 155 covered statements on the
+checker-owned behavior tests and gain at least 152 covered statements on the
 current-main denominator to reach the 90.25-percent headroom target. The
 focused test union measures
 168 unique previously missing checker statements and projects 21,621 / 23,938,
