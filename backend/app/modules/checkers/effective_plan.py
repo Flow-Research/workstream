@@ -176,6 +176,8 @@ def compile_effective_pre_submission_execution_plan(
         raise EffectivePreSubmissionPlanError("compiled checker bundle envelope is invalid")
     if compiled_bundle.get("effective_policy_hash") != lineage.effective_policy_hash:
         raise EffectivePreSubmissionPlanError("compiled checker effective policy mismatch")
+    if canonical_json_hash(effective_policy) != lineage.effective_policy_hash:
+        raise EffectivePreSubmissionPlanError("locked effective policy hash mismatch")
     try:
         validate_compiled_pre_submit_checker_bundle(
             effective_policy,

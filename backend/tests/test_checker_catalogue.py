@@ -58,7 +58,7 @@ def _effective_policy() -> dict[str, object]:
 
 
 def _compiled_and_lineage() -> tuple[dict[str, object], EffectivePreSubmissionPlanLineage]:
-    effective_policy_hash = "sha256:" + "1" * 64
+    effective_policy_hash = canonical_json_hash(_effective_policy())
     compiled = compile_effective_project_submission_artifact_policy(
         _effective_policy(), effective_policy_hash
     )
@@ -339,6 +339,22 @@ def test_effective_plan_rejects_bundle_that_omits_locked_required_rule() -> None
             lineage=altered_lineage,
             effective_policy=_effective_policy(),
             compiled_bundle=altered,
+            catalogue=build_pre_submission_checker_catalogue(),
+        )
+
+
+def test_effective_plan_rejects_policy_body_that_does_not_match_locked_hash() -> None:
+    compiled_bundle, lineage = _compiled_and_lineage()
+    weakened_policy = {
+        **_effective_policy(),
+        "required_artifacts": [],
+    }
+
+    with pytest.raises(EffectivePreSubmissionPlanError, match="policy hash mismatch"):
+        compile_effective_pre_submission_execution_plan(
+            lineage=lineage,
+            effective_policy=weakened_policy,
+            compiled_bundle=compiled_bundle,
             catalogue=build_pre_submission_checker_catalogue(),
         )
 
