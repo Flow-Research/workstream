@@ -154,6 +154,9 @@ same setup generation automatically. The authorized `run-sufficiency-agent`
 route remains available for a covered Project Manager to request the same
 verified assessment directly; invoking it does not resume or advance the
 automatic setup run. Both paths use the canonical same-generation ART material.
+
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
+
 `derive-submission-artifact-policy` is an admin/project_manager repair and
 diagnostics endpoint. It returns `201` when it creates a new policy and `200`
 only when it reuses an existing agent-derived policy for the same source

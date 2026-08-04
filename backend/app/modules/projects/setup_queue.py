@@ -163,7 +163,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
             setup_run.current_step = "enqueue"
             setup_run.error_code = "ProjectSetupTaskIdentityMismatch"
             setup_run.error_summary = "project setup failed"
-            await session.commit()
+        await session.commit()
         return None
     setup_run = await repository.lock_project_setup_run(setup_run_id)
     if setup_run is not None and setup_run.status == "dispatch_pending":
