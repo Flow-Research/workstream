@@ -225,7 +225,7 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a compiled bundle hash, and locked by tasks before they enter the contributor pipeline. It runs as part of the single versioned pre-submission catalogue against the uploaded ZIP in bounded scratch before Workstream creates a submission. A failed preparation returns `pre_submission_checker_failed` with bounded same-request details. There is no standalone preflight route, and results never use review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated project checker matrix produced from the effective project submission artifact policy and one immutable default-catalogue snapshot. The compiled bundle embeds the catalogue version, canonical manifest digest, ordered entry ID/version/configuration hashes, and enabled/disabled state. Its compiled bundle hash therefore commits transitively to that exact snapshot, and each task locks that hash before entering the contributor pipeline. Runtime uses the same snapshot to derive the effective-plan hash. It runs against the uploaded ZIP in bounded scratch before Workstream creates a submission. A failed preparation returns `pre_submission_checker_failed` with bounded same-request details. There is no standalone preflight route, and results never use review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 

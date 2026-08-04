@@ -69,13 +69,20 @@ archive permission metadata is excluded. Nested archives remain opaque in v0.1.
 
 ## Evidence
 
-| Type | Label | URI Or Reference | Hash | Proves Which Artifact Or Claim |
-| --- | --- | --- | --- | --- |
-| `<type>` | `<label>` | `<Workstream artifact binding ID>` | `sha256:<64 lowercase hex>` | `<claim>` |
+Required evidence files belong inside the same outer ZIP at the paths defined by
+the locked Project Guide. The contributor does not submit a separate evidence
+URI, provider reference, hash, or evidence ID. After inspection, Workstream may
+project server-derived evidence facts:
 
-When relevant, include the command, environment, dataset/version, or generation settings that produced the evidence.
+| Normalized ZIP Path | Server SHA-256 | Byte Count | Locked Requirement |
+| --- | --- | --- | --- |
+| `<server-derived path>` | `sha256:<64 lowercase hex>` | `<server-derived bytes>` | `<locked project rule>` |
 
-Workstream assigns evidence IDs at persistence time. Checker run IDs are created only after post-submit internal checks run.
+When relevant, the evidence file itself should describe the command,
+environment, dataset/version, or generation settings that produced it.
+
+Workstream assigns any evidence identity at persistence time. Checker run IDs
+are created only after post-submit internal checks run.
 
 ## Draft Checker Notes
 

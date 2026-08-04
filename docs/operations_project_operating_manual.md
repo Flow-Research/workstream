@@ -246,8 +246,9 @@ Before locking a submission packet:
 
 - task is assigned to submitter
 - summary exists
-- output package or reference exists
-- evidence exists
+- exactly one outer ZIP is uploaded through submission-bundle preparation
+- every project-required output/evidence file exists inside that ZIP
+- contributor attestation exists
 - revision replay exists when task was previously `NEEDS_REVISION`
 - effective project submission artifact policy is loaded
 - generated project pre-submit checker policy runs

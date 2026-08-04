@@ -1448,6 +1448,13 @@ Fields:
 - `id`
 - `checker_run_id`
 - `checker_name`
+- `dispatch_authority`
+- `definition_id` (catalogue ID for pre-submit; registry checker ID for durable)
+- `definition_version` (catalogue or registry version selected by authority)
+- `result_source`
+- `effective_plan_hash`
+- `rule_instance_id` (nullable only for non-policy/default definitions)
+- `locked_policy_hash` (nullable only when no locked policy produced the result)
 - `status`
 - `severity`
 - `message`
@@ -1459,6 +1466,13 @@ Fields:
 - `contributor_visible`
 - `metadata`
 - `created_at`
+
+These authority-neutral provenance fields are explicitly typed and persisted.
+`dispatch_authority` discriminates the identity namespace. The API/result
+envelope serializes them under `definition` and `policy_trace`; they are never
+hidden only in the open-ended `metadata` field. Pre-submit evidence uses the
+same typed envelope without creating a durable `CheckerRun`; its immutable
+evidence rows store these fields directly under the 04B3 schema.
 
 Status:
 

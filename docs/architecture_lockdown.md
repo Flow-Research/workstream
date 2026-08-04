@@ -125,10 +125,15 @@ Blocking pre-submit failures prevent submission creation. The continuous
 submission-bundle preparation request returns `pre_submission_checker_failed`
 with bounded same-request status, eligibility, and pass/fail/warning details and
 create no submission row, no submission version, no task transition to
-`submitted`, and no submission-created audit event. Workstream still writes a
-task audit event named `pre_submission_check_failed` with the structured checker
-result for project operators; this is audit evidence, not a product review
-decision. No independently invocable preflight route exists.
+`submitted`, and no submission-created audit event. Workstream writes a task
+audit event named `pre_submission_check_failed` containing only this closed,
+path-redacted projection: actor-profile ID, project ID, task ID, preparation
+attempt ID, effective-plan hash, terminal status, pass/warning/failure counts,
+and a bounded ordered list of catalogue ID/version plus stable outcome code.
+It excludes filenames, archive paths, scratch/provider references, credentials,
+raw checker output, evidence content, and free-form or unbounded messages. This
+is audit evidence, not a product review decision. No independently invocable
+preflight route exists.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 

@@ -271,3 +271,10 @@ startup-validated deployment configuration. Disabling mandatory custody,
 integrity, or accountability fails preparation closed; only advisory entries
 may be disabled while remaining execution continues. Project policy and
 task/runtime input cannot toggle catalogue availability.
+
+The catalogue snapshot is immutable. Its version, canonical manifest digest,
+ordered entry ID/version/configuration hashes, and enabled/disabled state are
+embedded in the compiled `PreSubmitCheckerPolicy`. The existing task-locked
+compiled-bundle hash therefore commits to the exact default snapshot without a
+second task-lock field; runtime derives and records the effective-plan hash from
+that same snapshot plus the locked project rules.

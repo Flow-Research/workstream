@@ -50,22 +50,22 @@ and quality rules enter only through the locked project policy.
 
 Initial stable v0.1 entries:
 
-| Stable ID | Classification | Phase | Source |
-|---|---|---|---|
-| `artifact.outer_zip.valid` | `mandatory_security` | custody | 04A2 result |
-| `artifact.archive.paths_safe` | `mandatory_security` | custody | 04A2 result |
-| `artifact.archive.entries_safe` | `mandatory_security` | custody | 04A2 result |
-| `artifact.archive.resources_bounded` | `mandatory_security` | custody | 04A2 result |
-| `artifact.archive.integrity_verified` | `mandatory_integrity` | custody | 04A2 result |
-| `artifact.archive.identity_computed` | `mandatory_integrity` | identity | 04A2 result |
-| `artifact.manifest.semantic_identity_computed` | `mandatory_integrity` | identity | 04A3 result |
-| `artifact.manifest.executable_normalized` | `mandatory_integrity` | identity | 04A3 result |
-| `artifact.revision.content_changed` | `mandatory_integrity` | identity | 04A3 result |
-| `artifact.scratch.sealed_tree_verified` | `mandatory_integrity` | materialization | 04B2 execution |
-| `submission.packet.required_fields` | `mandatory_accountability` | default policy | 04B2 execution |
-| `submission.attestation.required_topics` | `mandatory_accountability` | default policy | 04B2 execution |
-| `artifact.sensitive_paths.high_confidence` | `mandatory_security` | default policy | 04B2 execution |
-| `artifact.quality.placeholder_signal` | advisory | default policy | 04B2 execution |
+| Stable ID | Persisted public name | Classification | Phase | Typed dispatch capability |
+|---|---|---|---|---|
+| `artifact.outer_zip.valid` | same as stable ID | `mandatory_security` | custody | 04A2 archive-inspection result |
+| `artifact.archive.paths_safe` | same as stable ID | `mandatory_security` | custody | 04A2 archive-inspection result |
+| `artifact.archive.entries_safe` | same as stable ID | `mandatory_security` | custody | 04A2 archive-inspection result |
+| `artifact.archive.resources_bounded` | same as stable ID | `mandatory_security` | custody | 04A2 archive-inspection result |
+| `artifact.archive.integrity_verified` | same as stable ID | `mandatory_integrity` | custody | 04A2 archive-inspection result |
+| `artifact.archive.identity_computed` | same as stable ID | `mandatory_integrity` | identity | 04A2 archive-commitment result |
+| `artifact.manifest.semantic_identity_computed` | same as stable ID | `mandatory_integrity` | identity | 04A3 manifest result |
+| `artifact.manifest.executable_normalized` | same as stable ID | `mandatory_integrity` | identity | 04A3 manifest result |
+| `artifact.revision.content_changed` | same as stable ID | `mandatory_integrity` | identity | 04A3 change-gate result |
+| `artifact.scratch.sealed_tree_verified` | same as stable ID | `mandatory_integrity` | materialization | 04B2 sealed-tree verifier |
+| `submission.packet.required_fields` | `check_submission_packet` | `mandatory_accountability` | default policy | `validate_submission_packet` |
+| `submission.attestation.required_topics` | `check_confidentiality_attestation` | `mandatory_accountability` | default policy | `require_attestation` |
+| `artifact.sensitive_paths.high_confidence` | `check_forbidden_files` | `mandatory_security` | default policy | `forbid_artifact` |
+| `artifact.quality.placeholder_signal` | `check_low_quality_generated_artifacts` | `advisory` | default policy | `warn_low_quality_generated_artifact` |
 
 04A2/04A3 entries import the exact typed, process-local result from those
 capabilities into the plan; 04B never reruns or independently reinterprets the
@@ -73,14 +73,31 @@ ZIP. Their configuration state is still visible in the catalogue. Because they
 are mandatory, configuring one disabled makes intake unavailable before its
 owning capability is invoked.
 
-The same catalogue registers the existing constrained project primitives under
-their current canonical names: `validate_submission_packet`,
-`enforce_storage_scheme`, `require_manifest_field`, `verify_hash`,
-`require_file`, `require_minimum_evidence`, `forbid_artifact`,
-`require_attestation`, `limit_file_size`, `limit_package_size`,
-`require_packaging`, and `warn_low_quality_generated_artifact`. A compiled
-project rule receives a deterministic rule instance ID derived from the locked
-policy lineage and configuration; it does not register a new checker type.
+The same catalogue maps each constrained project rule type through one closed
+namespace:
+
+| Stable catalogue ID | Persisted public checker name | Dispatch primitive |
+|---|---|---|
+| `policy.submission_packet.validate` | `check_submission_packet` | `validate_submission_packet` |
+| `policy.storage_scheme.enforce` | `check_evidence_integrity` | `enforce_storage_scheme` |
+| `policy.manifest_field.require` | `check_evidence_integrity` | `require_manifest_field` |
+| `policy.hash.verify` | `check_evidence_integrity` | `verify_hash` |
+| `policy.file.require` | `check_required_files` | `require_file` |
+| `policy.evidence.minimum` | `check_evidence_present` | `require_minimum_evidence` |
+| `policy.artifact.forbid` | `check_forbidden_files` | `forbid_artifact` |
+| `policy.attestation.require` | `check_confidentiality_attestation` | `require_attestation` |
+| `policy.file_size.limit` | `check_evidence_integrity` | `limit_file_size` |
+| `policy.package_size.limit` | `check_evidence_integrity` | `limit_package_size` |
+| `policy.packaging.require` | `check_submission_packet` | `require_packaging` |
+| `policy.generated_quality.warn` | `check_low_quality_generated_artifacts` | `warn_low_quality_generated_artifact` |
+
+For platform rows whose public name is “same as stable ID,” no second primitive
+alias exists: dispatch consumes the named typed 04A/04B capability. The
+effective plan and every result persist the public name alongside the stable
+catalogue ID/version. Dispatch uses only the mapped capability or implementation
+primitive. A compiled project rule receives a deterministic rule-instance ID
+derived from catalogue ID/version, locked policy lineage, and canonical
+configuration; it does not register another checker type or alias.
 
 `disabled` is observable configuration state, not success. Mandatory disabled
 entries make preparation unavailable; advisory disabled entries are retained in

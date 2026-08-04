@@ -332,8 +332,11 @@ from execution only through startup-validated, versioned deployment
 configuration and is recorded in the bounded result manifest. Contributors,
 Project Managers, task parameters, and project policy cannot toggle catalogue
 availability or weaken a mandatory default. Project policy may narrow platform
-limits but cannot raise them. Checker failure creates findings only and destroys
-scratch without durable artifact, Submission, or review state.
+limits but cannot raise them. Only a completed checker result may create bounded
+structured contributor findings. Infrastructure failure, disabled mandatory
+checks, resource exhaustion, cancellation, and authorization failure produce a
+stable retryable infrastructure outcome with no contributor finding, durable
+artifact, Submission, or review state; scratch is destroyed.
 
 A passing result stays bound to the same process-local scratch generation and is
 consumed immediately by the normal durable admission path. It is never a

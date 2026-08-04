@@ -324,3 +324,13 @@
   reuse/dedup, and test-delta reviews pass after repair. Docs review identified
   and repaired final route-prefix and AUTH owner-table drift; final confirmation
   is recorded before publication.
+- CodeRabbit then found seven valid specification gaps: namespace mapping,
+  typed result provenance, infrastructure/finding separation, audit redaction,
+  immutable catalogue snapshot locking, stale historical response wording, and
+  residual client-shaped evidence fields. All are repaired after rebasing onto
+  current main; the external response and complete PR trust bundle record the
+  disposition.
+- Focused architecture, security, QA, and docs re-review pass the external
+  repair. Architecture additionally required authority-neutral shared result
+  identity and complete platform/default dispatch mapping; both were repaired
+  before final publication.

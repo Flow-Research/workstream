@@ -12,15 +12,37 @@ Every checker returns:
 
 ```json
 {
-  "name": "check_submission_packet",
+  "definition": {
+    "dispatch_authority": "pre_submission_catalogue",
+    "definition_id": "policy.submission_packet.validate",
+    "definition_version": 1,
+    "public_name": "check_submission_packet",
+    "source": "locked_project_policy"
+  },
+  "policy_trace": {
+    "effective_plan_hash": "sha256:<64 lowercase hex>",
+    "rule_instance_id": "sha256:<64 lowercase hex>",
+    "locked_policy_hash": "sha256:<64 lowercase hex>"
+  },
   "status": "passed",
   "severity": "info",
+  "code": "submission_packet_complete",
   "message": "Submission packet is complete.",
   "suggested_fix": null,
   "evidence": [],
   "metadata": {}
 }
 ```
+
+`definition` and `policy_trace` are typed provenance, not arbitrary metadata.
+The discriminating `dispatch_authority` gives `definition_id/version` exact
+meaning: for `pre_submission_catalogue` they are the catalogue ID/version; for
+`durable_checker_registry` they are the registered durable checker ID/version.
+For Workstream defaults, `source=workstream_default` and policy-only fields may
+be null under the closed schema. Serialization preserves this exact nesting.
+Persistence uses explicit authority-neutral columns or schema-validated typed
+JSON fields for every member; none may be stored only inside open-ended
+`metadata`.
 
 Status:
 
@@ -39,11 +61,13 @@ Severity:
 ## Durable/Post-Submit Checker Registry
 
 Every durable/post-submit checker is registered with a stable definition before
-projects reference it. Pre-submit intake is not dispatched by this registry:
-the single versioned `PreSubmissionCheckerCatalogue` owns artifact-custody
-defaults and constrained project-policy primitives. Shared implementations may
-be exposed through typed adapters, but neither registry may duplicate IDs,
-primitive maps, or dispatch authority.
+projects reference it. The durable registry owns post-submit dispatch.
+Pre-submit intake is not dispatched by this registry: the single versioned
+`PreSubmissionCheckerCatalogue` is the pre-submit dispatch authority and owns
+artifact-custody defaults plus constrained project-policy primitives. Shared
+implementations may be exposed through typed adapters, but neither the durable
+registry nor the pre-submission catalogue may duplicate IDs, primitive maps, or
+dispatch authority.
 
 Definition fields:
 

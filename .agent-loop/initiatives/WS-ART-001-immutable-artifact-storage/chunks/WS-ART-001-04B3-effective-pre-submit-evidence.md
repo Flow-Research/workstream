@@ -33,6 +33,13 @@ Submission, or separate contributor route.
 - one ordered result contains both platform/default and locked project entries,
   each with catalogue ID/version, source, status, severity, bounded code/message,
   and policy trace;
+- the canonical typed result envelope nests identity under `definition`
+  (`dispatch_authority`, authority-neutral definition ID/version, public name,
+  source) and trace
+  under `policy_trace` (effective-plan hash, deterministic rule-instance ID,
+  locked-policy hash); immutable evidence persists each member explicitly and
+  never relies on open-ended `metadata` for required provenance; for this
+  pre-submit authority, definition ID/version are exactly catalogue ID/version;
 - execution binds actor/task/project/assignment, predecessor, archive identity,
   manifest ID/hash, scratch generation, locked guide/policy/checker hashes, and
   effective plan identity;
