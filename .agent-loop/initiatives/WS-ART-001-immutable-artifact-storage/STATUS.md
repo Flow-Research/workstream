@@ -112,7 +112,10 @@ remain pending.
 
 AUTH `WS-XINT-002-04B` activated only fixed-service binding and guide read.
 ART-03C removed the legacy identity/excerpt path and made the verified pipeline
-authoritative.
+authoritative. ART-04A2 merged through PR #266. ART-04A3 is implemented on its
+bounded branch with canonical server-derived semantic manifests, executable
+normalization, and fail-closed unchanged-work comparison. Internal L1 reviews
+and focused evidence pass; hosted PR gates and human merge remain pending.
 
 ## Gate
 
