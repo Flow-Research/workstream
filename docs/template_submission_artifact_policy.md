@@ -33,24 +33,23 @@ Bundle hash algorithm:
 sha256(canonical_json(manifest_json))
 ```
 
-Canonical JSON uses UTF-8, sorted object keys, no insignificant whitespace, and
-source items sorted by `(source_kind, durable_ref, content_hash)`. Exclude
-database ids, capture timestamps, and transient fetch locators. Reject duplicate
-source items with the same `source_kind + durable_ref` before hashing.
+The `guide_source_snapshot.v2` manifest uses UTF-8 canonical JSON with sorted
+object keys and no insignificant whitespace. It includes server-owned snapshot,
+generation, item id, and item order facts plus non-authoritative source metadata.
+Caller byte hashes, content ids, excerpts, provider refs, and fetch locators are excluded.
 
 Source snapshot items:
 
-| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Artifact Content ID | Media Type | Content Excerpt |
-| --- | --- | --- | --- | --- | --- | --- |
-| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file / representative_task / task_sample>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<ArtifactContent id after ingest>` | `<media type>` | `<bounded untrusted excerpt when needed>` |
+| Item ID | Item Order | Source Kind | Source Label | Ingestion Adapter | Media Type |
+| --- | --- | --- | --- | --- | --- |
+| `<server UUID>` | `<server order>` | `<approved kind>` | `<sanitized display label>` | `<adapter>` | `<declared media type>` |
 
-Temporary fetch locators are adapter inputs only. Durable source refs must not
+Temporary fetch locators are adapter inputs only. Source labels must not
 store query strings, signed URLs, credentials, token-bearing refs, local
 filesystem paths, or private storage paths.
 
-`content_excerpt` is optional, bounded, and included in the source snapshot
-bundle hash when present. It is source material for setup agents only; it cannot
-grant authority, weaken defaults, or replace deterministic checker rules.
+Caller excerpts are not accepted. Setup agents receive only canonical bounded
+content produced from exact verified ART bindings and extraction usages.
 
 ## Guide Sufficiency
 

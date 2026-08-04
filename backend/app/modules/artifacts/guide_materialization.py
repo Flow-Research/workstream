@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -38,6 +38,9 @@ from app.modules.artifacts.models import (
     GuideSourceArtifactIncident,
     GuideSourceFormatClassification,
 )
+
+if TYPE_CHECKING:
+    from app.modules.artifacts.guide_extraction_service import GuideExtractionRequest
 from app.modules.artifacts.preparation import (
     ArtifactPreparationDeadlineError,
     ArtifactPreparationService,
@@ -50,6 +53,7 @@ from app.modules.artifacts.service import (
     ArtifactStorageNamespaceSpec,
     validate_artifact_replica_execution_namespace,
 )
+from app.modules.artifacts.sources import PreparedArtifact
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.projects.models import (
     GuideSourceSnapshot,
@@ -188,35 +192,7 @@ class ArtifactMaterializationService:
                 before = await self._load_read_facts(session, request)
                 if before is None:
                     raise GuideSourceMaterializationError("guide source read is unavailable")
-                facts = self._authority_facts(before)
-                authority = self._authority_factory(session)
-                prepared_authorization = await authority.prepare(
-                    facts=facts,
-                    idempotency_key=request.idempotency_key,
-                )
-                await authority.consume(
-                    prepared_authorization=prepared_authorization,
-                    facts=facts,
-                )
-                try:
-                    prepared = await self._preparation.prepare(
-                        self._store.open(before.provider_object_ref),
-                        media_type=before.media_type,
-                    )
-                except ArtifactObjectMissingError as exc:
-                    raise _GuideReadIncident("missing") from exc
-                except ArtifactInputMismatchError as exc:
-                    raise _GuideReadIncident("changed") from exc
-                except (ArtifactStoreUnavailableError, ArtifactPreparationDeadlineError) as exc:
-                    raise _GuideReadIncident("unavailable") from exc
-                commitment = prepared.commitment
-                if commitment.sha256 != before.sha256 or commitment.byte_count != before.byte_count:
-                    code = "truncated" if commitment.byte_count < before.byte_count else "changed"
-                    raise _GuideReadIncident(
-                        code,
-                        observed_sha256=commitment.sha256,
-                        observed_byte_count=commitment.byte_count,
-                    )
+                prepared = await self._authorize_and_prepare(session, request, before)
                 try:
                     detected = await prepared.inspect(
                         BoundGuideFormatInspector(
@@ -281,6 +257,79 @@ class ArtifactMaterializationService:
         finally:
             if prepared is not None:
                 await prepared.close()
+
+    async def prepare_authorized_guide_source(
+        self,
+        request: GuideSourceMaterializationRequest,
+    ) -> PreparedArtifact:
+        """Return one freshly authorized, fully verified scratch artifact."""
+        if request.setup_generation <= 0:
+            raise GuideSourceMaterializationError("guide source read is unavailable")
+        before: _ReadFacts | None = None
+        prepared: PreparedArtifact | None = None
+        try:
+            async with self._session_factory() as session, session.begin():
+                before = await self._load_read_facts(session, request)
+                if before is None:
+                    raise GuideSourceMaterializationError("guide source read is unavailable")
+                prepared = await self._authorize_and_prepare(session, request, before)
+                after = await self._load_read_facts(session, request)
+                if after != before:
+                    raise GuideSourceMaterializationError("guide source read is unavailable")
+            result = prepared
+            prepared = None
+            return result
+        except _GuideReadIncident as incident:
+            if before is not None:
+                try:
+                    await self._record_incident(
+                        before,
+                        incident.code,
+                        observed_sha256=incident.observed_sha256,
+                        observed_byte_count=incident.observed_byte_count,
+                    )
+                except SQLAlchemyError:
+                    logger.exception("guide source incident could not be recorded")
+            raise GuideSourceMaterializationError("guide artifact incident") from None
+        finally:
+            if prepared is not None:
+                await prepared.close()
+
+    async def _authorize_and_prepare(
+        self,
+        session: AsyncSession,
+        request: GuideSourceMaterializationRequest,
+        before: _ReadFacts,
+    ) -> PreparedArtifact:
+        """Consume exact read authority and verify one provider stream in scratch."""
+        facts = self._authority_facts(before)
+        authority = self._authority_factory(session)
+        handle = await authority.prepare(
+            facts=facts,
+            idempotency_key=request.idempotency_key,
+        )
+        await authority.consume(prepared_authorization=handle, facts=facts)
+        try:
+            prepared = await self._preparation.prepare(
+                self._store.open(before.provider_object_ref),
+                media_type=before.media_type,
+            )
+        except ArtifactObjectMissingError as exc:
+            raise _GuideReadIncident("missing") from exc
+        except ArtifactInputMismatchError as exc:
+            raise _GuideReadIncident("changed") from exc
+        except (ArtifactStoreUnavailableError, ArtifactPreparationDeadlineError) as exc:
+            raise _GuideReadIncident("unavailable") from exc
+        commitment = prepared.commitment
+        if commitment.sha256 != before.sha256 or commitment.byte_count != before.byte_count:
+            await prepared.close()
+            code = "truncated" if commitment.byte_count < before.byte_count else "changed"
+            raise _GuideReadIncident(
+                code,
+                observed_sha256=commitment.sha256,
+                observed_byte_count=commitment.byte_count,
+            )
+        return prepared
 
     async def _load_read_facts(
         self,
@@ -375,7 +424,9 @@ class ArtifactMaterializationService:
                     ArtifactPutAttempt.namespace_fingerprint
                     == ArtifactReplica.namespace_fingerprint,
                     ArtifactPutAttempt.status == "object_confirmed",
-                    ArtifactPutAttempt.terminal_result_code == "object_confirmed",
+                    ArtifactPutAttempt.terminal_result_code.in_(
+                        ("acknowledged", "observed_confirmed")
+                    ),
                 )
                 .order_by(ArtifactVerificationReceipt.created_at.desc())
                 .limit(1)
@@ -501,4 +552,28 @@ class ArtifactMaterializationService:
             detected_format=classification.detected_format,
             status=classification.status,
             replayed=replayed,
+        )
+
+
+class AuthorizedGuideExtractionMaterializer:
+    """Adapt the canonical guide reader to extraction's fresh-source contract."""
+
+    def __init__(self, materialization: ArtifactMaterializationService) -> None:
+        self._materialization = materialization
+
+    async def materialize_with_fresh_authority(
+        self, request: GuideExtractionRequest
+    ) -> PreparedArtifact:
+        """Obtain a new AUTH-04B decision and independently read exact bytes."""
+        return await self._materialization.prepare_authorized_guide_source(
+            GuideSourceMaterializationRequest(
+                idempotency_key=uuid4(),
+                project_id=request.project_id,
+                guide_id=request.guide_id,
+                guide_source_snapshot_id=request.source_snapshot_id,
+                source_item_id=request.source_item_id,
+                project_setup_run_id=request.project_setup_run_id,
+                setup_generation=request.setup_generation,
+                binding_id=request.binding_id,
+            )
         )

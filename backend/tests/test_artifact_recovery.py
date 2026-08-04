@@ -341,16 +341,17 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
         table="guide_source_snapshot_items",
         triggers=("guide_source_snapshot_items_custody",),
     ):
-        session.add(GuideSourceSnapshotItem(
-            id=item_id,
-            source_snapshot_id=snapshot_id,
-            item_order=0,
-            source_kind="inline",
-            durable_ref="guide.md",
-            ingestion_adapter="inline",
-            content_hash=source.commitment.sha256,
-            media_type=source.commitment.media_type,
-        ))
+        session.add(
+            GuideSourceSnapshotItem(
+                id=item_id,
+                source_snapshot_id=snapshot_id,
+                item_order=0,
+                source_kind="inline",
+                source_label="guide.md",
+                ingestion_adapter="inline",
+                media_type=source.commitment.media_type,
+            )
+        )
         await session.flush()
     await session.commit()
     prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)

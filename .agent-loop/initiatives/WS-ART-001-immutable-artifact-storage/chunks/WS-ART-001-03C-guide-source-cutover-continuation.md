@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-03C - Guide Source Cutover And Continuation
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after split 03B and AUTH-04B
+Initiative: `WS-ART-001` | Risk: L1 | Status: Implemented; awaiting hosted review and human merge
 
 Artifact contract phase: `guide_source_cutover`
 
@@ -43,6 +43,24 @@ adding a Project Manager resume command.
 - changed subsystem coverage is at least 90 percent and repository coverage
   remains at least 78 percent.
 
+## Approved Implementation Clarification
+
+- `GuideSourceSnapshot` remains the immutable ordered source-item declaration;
+  it is not byte identity and gains no separate finalize lifecycle;
+- schema v2 uses server-owned snapshot/item identity plus non-authoritative
+  source metadata only; caller hash, CID, excerpt, and provider/locator fields
+  are absent from request, response, and manifest authority;
+- `GuideSourceArtifactIngest -> ArtifactContent -> GuideSourceArtifactBinding ->
+  classification/extraction usage` is the sole content identity/material path;
+- the existing `ProjectSetupRun.setup_generation` is the only continuation
+  fence; automatic continuation waits for complete same-generation verified
+  material and adds no Project Manager resume/finalize route;
+- legacy agent/manual paths cannot create a sufficiency report usable by policy
+  derivation or activation without exact verified report source-usage lineage;
+- production binding/read consumes the existing AUTH-04B fixed-service prepared
+  adapters before protected mutation/provider read; no ART-local authorization
+  path is introduced.
+
 ## Exact CI Coverage Gates
 
 ```bash
@@ -63,12 +81,12 @@ coverage report --include='app/adapters/project_agents/*,app/interfaces/project_
 
 ```bash
 docker compose up -d --wait postgres redis minio
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_projects.py tests/test_project_setup.py tests/test_guide_artifacts.py tests/test_artifact_recovery.py -q --cov=app.modules.projects --cov=app.modules.artifacts --cov=app.workers --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_projects.py tests/test_guide_artifacts.py tests/test_guide_bindings.py tests/test_guide_extraction.py tests/test_artifact_recovery.py -q --cov=app.modules.projects --cov=app.modules.artifacts --cov=app.workers --cov-report=term-missing --cov-fail-under=90)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 (cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/api_contract_e2e.py)
 (cd backend && .venv/bin/ruff check app tests)
 python3 scripts/check_stale_artifact_contracts.py
-python3 scripts/test_agent_gates.py
+python3 -m unittest -v scripts.test_lightweight_agent_gates
 ```
 
 ## Required Reviewers
