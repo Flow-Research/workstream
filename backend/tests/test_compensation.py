@@ -43,13 +43,7 @@ def compensation_database_env(
         get_settings.cache_clear()
 
 
-async def _seed_binding_facts(
-    *,
-    profile_status: str = "active",
-    link_status: str = "active",
-    actor_kind: str = "service",
-    service_identity: str | None = ServiceIdentity.ARTIFACT_VERIFIER.value,
-) -> tuple[str, str, str]:
+async def _seed_binding_facts() -> tuple[str, str, str]:
     project_id = str(uuid4())
     adapter_actor_id = str(uuid4())
     creator_id = str(uuid4())
@@ -66,23 +60,12 @@ async def _seed_binding_facts(
                 ),
                 ActorProfile(
                     id=adapter_actor_id,
-                    actor_kind=actor_kind,
-                    status=profile_status,
-                    provisioning_method=(
-                        "manual_service_provisioning"
-                        if actor_kind == "service"
-                        else "automatic_first_access"
-                    ),
-                    service_identity=service_identity if actor_kind == "service" else None,
+                    actor_kind="service",
+                    status="active",
+                    provisioning_method="manual_service_provisioning",
+                    # Structural FK fixture only; 03A exposes no creation behavior.
+                    service_identity=ServiceIdentity.ARTIFACT_VERIFIER.value,
                     created_by=creator_id,
-                    suspended_by=creator_id if profile_status == "suspended" else None,
-                    suspended_at=now if profile_status == "suspended" else None,
-                    suspension_reason="test suspension" if profile_status == "suspended" else None,
-                    deactivated_by=creator_id if profile_status == "deactivated" else None,
-                    deactivated_at=now if profile_status == "deactivated" else None,
-                    deactivation_reason=(
-                        "test deactivation" if profile_status == "deactivated" else None
-                    ),
                 ),
             ]
         )
@@ -104,13 +87,9 @@ async def _seed_binding_facts(
                     actor_profile_id=adapter_actor_id,
                     issuer="https://compensation.test",
                     subject=f"adapter-{adapter_actor_id}",
-                    subject_kind=actor_kind,
-                    status=link_status,
+                    subject_kind="service",
+                    status="active",
                     linked_by=creator_id,
-                    last_verified_at=now if actor_kind == "human" else None,
-                    revoked_by=creator_id if link_status == "revoked" else None,
-                    revoked_at=now if link_status == "revoked" else None,
-                    revoked_reason="test revocation" if link_status == "revoked" else None,
                 ),
             ]
         )
@@ -205,23 +184,65 @@ def test_binding_input_rejects_secret_or_provider_fields() -> None:
             ProjectCompensationAdapterBindingInput.model_validate(values | {field: "secret"})
 
 
+@pytest.mark.parametrize("status", ("suspended", "retired"))
 @pytest.mark.asyncio
 async def test_database_rejects_invalid_lifecycle_shape(
     compensation_database_env: str,
+    status: str,
 ) -> None:
     project_id, actor_id, creator_id = await _seed_binding_facts()
     async with db_session.get_session_factory()() as session:
         values = _binding_input(project_id, actor_id, creator_id).model_dump()
         values["instrument_type"] = "money"
+        now = datetime.now(UTC)
         session.add(
             ProjectCompensationAdapterBinding(
                 **values,
-                status="retired",
-                binding_lifecycle_version=1,
+                status=status,
+                binding_lifecycle_version=2,
+                suspended_by=creator_id if status == "suspended" else None,
+                suspended_at=now if status == "suspended" else None,
+                retired_by=creator_id if status == "retired" else None,
+                retired_at=now if status == "retired" else None,
             )
         )
         with pytest.raises(DBAPIError):
             await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_noncanonical_route_keys(
+    compensation_database_env: str,
+) -> None:
+    project_id, actor_id, creator_id = await _seed_binding_facts()
+    invalid_values = (
+        "",
+        "1adapter",
+        "adapter/path",
+        "https://provider",
+        "adapter key",
+        "adapter@key",
+        "adapter?key",
+        "adapter..secret",
+        "adapter\nkey",
+        "ü",
+        "a" * 121,
+    )
+    async with db_session.get_session_factory()() as session:
+        for route_key in invalid_values:
+            facts = _binding_input(project_id, actor_id, creator_id).model_dump()
+            facts["instrument_type"] = "money"
+            facts["route_key"] = route_key
+            with pytest.raises(DBAPIError):
+                async with session.begin_nested():
+                    session.add(
+                        ProjectCompensationAdapterBinding(
+                            **facts,
+                            status="active",
+                            binding_lifecycle_version=1,
+                        )
+                    )
+                    await session.flush()
 
 
 @pytest.mark.asyncio
@@ -301,6 +322,32 @@ def test_0053_binding_migration_round_trip(
         finally:
             await engine.dispose()
 
+    async def binding_columns() -> set[str]:
+        engine = create_async_engine(compensation_database_env)
+        try:
+            async with engine.connect() as connection:
+                columns = await connection.run_sync(
+                    lambda sync: inspect(sync).get_columns("project_compensation_adapter_bindings")
+                )
+                return {column["name"] for column in columns}
+        finally:
+            await engine.dispose()
+
     assert "project_compensation_adapter_bindings" not in asyncio.run(table_names())
     command.upgrade(config, "0053_compensation_bindings")
     assert "project_compensation_adapter_bindings" in asyncio.run(table_names())
+    assert asyncio.run(binding_columns()) == {
+        "id",
+        "project_id",
+        "instrument_type",
+        "adapter_actor_id",
+        "route_key",
+        "status",
+        "binding_lifecycle_version",
+        "created_by",
+        "created_at",
+        "suspended_by",
+        "suspended_at",
+        "retired_by",
+        "retired_at",
+    }

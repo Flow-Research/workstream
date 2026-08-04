@@ -58,13 +58,9 @@ def upgrade() -> None:
             name="ck_project_compensation_adapter_bindings_lifecycle_version_positive",
         ),
         sa.CheckConstraint(
-            "(status='active' and suspended_by is null and suspended_at is null "
-            "and retired_by is null and retired_at is null) or "
-            "(status='suspended' and suspended_by is not null and suspended_at is not null "
-            "and retired_by is null and retired_at is null) or "
-            "(status='retired' and retired_by is not null and retired_at is not null "
-            "and ((suspended_by is null and suspended_at is null) or "
-            "(suspended_by is not null and suspended_at is not null)))",
+            "status='active' and binding_lifecycle_version=1 "
+            "and suspended_by is null and suspended_at is null "
+            "and retired_by is null and retired_at is null",
             name="ck_project_compensation_adapter_bindings_lifecycle_shape",
         ),
         sa.CheckConstraint(

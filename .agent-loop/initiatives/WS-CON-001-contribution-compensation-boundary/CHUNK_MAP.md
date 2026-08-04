@@ -16,13 +16,13 @@ signed-loop records do not make behavior live.
 
 | Chunk | Goal | Risk | Status |
 |---|---|---:|---|
-| `PLAN4` | Reconcile current main, ART/AUTH/REV changes, open PRs, and end-to-end order | L1 | Proposed planning-only change |
+| `PLAN4` | Reconcile current main, ART/AUTH/REV changes, open PRs, and end-to-end order | L1 | Merged PR #261 |
 
 ## Core runtime chunks
 
 | Chunk | Goal | Entry gate | Status |
 |---|---|---|---|
-| `03A` | Adapter-binding persistence | PLAN4 accepted; refresh current migration head | Recommended first runtime chunk |
+| `03A` | Adapter-binding persistence | PLAN4 accepted; refreshed after ART PR #264 | Active schema-only chunk; migration 0053 |
 | `03B` | Contribution-policy persistence | 03A | Proposed; unblocks REV-03A2 FK |
 | `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Proposed; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
@@ -78,5 +78,6 @@ distributed-lane changes.
 
 ## Stop
 
-This planning change stops before runtime. The recommended next bounded change
-after human approval is CON-03A only.
+CON-03A stops at its PR checkpoint. It does not start 03B, expose binding
+creation/lifecycle behavior, or substitute existing ART/REV identities for the
+future AUTH-approved compensation adapter contract.

@@ -1116,7 +1116,8 @@ Fields:
 syntax, controls, and Unicode are forbidden. Provider endpoints, credentials,
 and tokens are deployment secrets, not domain fields. At most one binding is
 active per project and instrument. Persistence rejects all updates until the
-owning lifecycle behavior chunks install their authorized transition guards.
+owning lifecycle behavior chunks install their authorized transition guards;
+until then, only active version-1 rows with null lifecycle fields may be inserted.
 
 ## ProjectLesson
 

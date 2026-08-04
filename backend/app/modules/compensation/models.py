@@ -50,13 +50,9 @@ class ProjectCompensationAdapterBinding(Base):
             name="lifecycle_version_positive",
         ),
         CheckConstraint(
-            "(status='active' and suspended_by is null and suspended_at is null "
-            "and retired_by is null and retired_at is null) or "
-            "(status='suspended' and suspended_by is not null and suspended_at is not null "
-            "and retired_by is null and retired_at is null) or "
-            "(status='retired' and retired_by is not null and retired_at is not null "
-            "and ((suspended_by is null and suspended_at is null) or "
-            "(suspended_by is not null and suspended_at is not null)))",
+            "status='active' and binding_lifecycle_version=1 "
+            "and suspended_by is null and suspended_at is null "
+            "and retired_by is null and retired_at is null",
             name="lifecycle_shape",
         ),
         CheckConstraint(

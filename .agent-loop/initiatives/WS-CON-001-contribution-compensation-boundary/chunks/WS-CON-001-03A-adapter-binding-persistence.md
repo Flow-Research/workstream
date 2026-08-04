@@ -47,10 +47,11 @@ credentials, secrets, raw provider refs, dependency or CI weakening
   adapter identity/capability contract, then lock and validate its active
   service profile and link. Existing ART/REV identities are not valid positive
   compensation-adapter evidence. CON creates no AUTH row or value.
-- [ ] Composite constraints preserve project/instrument ownership and valid
-  active/suspended/retired row shapes. `binding_lifecycle_version` is positive
-  and starts at 1. Creation is active-only with every suspension/retirement
-  field null; all lifecycle actor fields reference `actor_profiles`. Future
+- [ ] Composite constraints preserve project/instrument ownership. This chunk
+  permits only active rows at lifecycle version 1 with every
+  suspension/retirement field null; all lifecycle actor fields reference
+  `actor_profiles`. Future lifecycle behavior migrations may expand the row
+  shapes only when their guards exist. Future
   transitions must increment the version exactly once and preserve timestamp
   ordering. Until the owning behavior chunks install those guards, PostgreSQL
   rejects every update to a created binding.

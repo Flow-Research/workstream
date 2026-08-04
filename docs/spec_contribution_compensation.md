@@ -212,7 +212,8 @@ retired_at
 At most one binding is active for each project and instrument.
 `binding_lifecycle_version` starts at 1 and, once lifecycle behavior is
 authorized, increments exactly once per valid transition. This persistence
-chunk rejects all updates until those behavior guards exist. `route_key` is a
+chunk permits only active version-1 inserts and rejects all updates until those
+behavior guards exist. `route_key` is a
 1-120 character non-secret ASCII domain routing identifier matching
 `^[A-Za-z][A-Za-z0-9._:-]{0,119}$`; it rejects traversal pairs (`..`),
 whitespace, slashes, URL/query syntax, `@`, control characters, and Unicode.
