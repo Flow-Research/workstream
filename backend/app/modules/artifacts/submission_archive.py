@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import hashlib
 import math
 from pathlib import PurePosixPath
 import stat
@@ -52,6 +53,8 @@ class SubmissionArchiveEntry:
     normalized_path: str
     entry_type: SubmissionArchiveEntryType
     byte_count: int
+    sha256: str | None
+    executable: bool | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +175,8 @@ class SubmissionArchiveInspector:
                             implicit_path,
                             SubmissionArchiveEntryType.DIRECTORY,
                             0,
+                            None,
+                            None,
                         )
                     )
                     if len(paths) > self._limits.maximum_entries:
@@ -186,7 +191,7 @@ class SubmissionArchiveInspector:
                 entry.normalized_path == path for entry in results
             ):
                 continue
-            actual = (
+            actual, digest = (
                 self._read_member(
                     archive,
                     info,
@@ -194,12 +199,20 @@ class SubmissionArchiveInspector:
                     remaining_expanded_bytes=self._limits.maximum_expanded_bytes - total,
                 )
                 if entry_type is SubmissionArchiveEntryType.FILE
-                else 0
+                else (0, None)
             )
             total += actual
             if total > self._limits.maximum_expanded_bytes:
                 self._reject(SubmissionArchiveFailureCode.LIMIT_EXCEEDED)
-            results.append(SubmissionArchiveEntry(path, entry_type, actual))
+            results.append(
+                SubmissionArchiveEntry(
+                    path,
+                    entry_type,
+                    actual,
+                    digest,
+                    self._normalized_executable(info) if digest is not None else None,
+                )
+            )
         return results
 
     def _validated_path(
@@ -253,7 +266,7 @@ class SubmissionArchiveInspector:
         *,
         started: float,
         remaining_expanded_bytes: int,
-    ) -> int:
+    ) -> tuple[int, str]:
         maximum_output = min(
             self._limits.maximum_entry_bytes, remaining_expanded_bytes
         )
@@ -268,18 +281,28 @@ class SubmissionArchiveInspector:
             archive, info, started=started, maximum_output_bytes=maximum_output
         )
         actual = 0
+        digest = hashlib.sha256()
         try:
             with archive.open(info, "r") as member:
                 while chunk := member.read(_READ_BYTES):
                     self._check_deadline(started)
                     actual += len(chunk)
+                    digest.update(chunk)
                     if actual > maximum_output:
                         self._reject(SubmissionArchiveFailureCode.LIMIT_EXCEEDED)
         except (EOFError, OSError, RuntimeError, zipfile.BadZipFile):
             self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
         if actual != info.file_size:
             self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
-        return actual
+        return actual, f"sha256:{digest.hexdigest()}"
+
+    @staticmethod
+    def _normalized_executable(info: zipfile.ZipInfo) -> bool:
+        """Collapse valid Unix execute intent without preserving permissions."""
+        if info.create_system != 3:
+            return False
+        mode = info.external_attr >> 16
+        return bool(mode & 0o111)
 
     def _validate_record_coverage(
         self,
