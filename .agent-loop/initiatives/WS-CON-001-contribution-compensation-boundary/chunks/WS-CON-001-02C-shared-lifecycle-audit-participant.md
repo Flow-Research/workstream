@@ -6,6 +6,11 @@ Extend the existing shared AuditEvent repository/service with one typed
 caller-transaction lifecycle participant required by REV and CON. L1 audit/
 cross-domain-transaction risk.
 
+This feature-neutral participant is independent of policy persistence and the
+outbox dispatcher. It may proceed after PLAN4 against the current AuditEvent
+contract and must merge before the REV FinalAcceptance decision transaction
+that consumes it.
+
 ## Allowed files
 
 ```text

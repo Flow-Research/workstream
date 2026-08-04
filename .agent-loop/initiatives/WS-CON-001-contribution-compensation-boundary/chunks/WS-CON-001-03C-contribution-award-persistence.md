@@ -6,6 +6,12 @@ Persist immutable contribution/award truth against exact merged
 FinalAcceptance, Review, ReviewLease, TaskAssignment, and Submission targets.
 L1 history/economic risk.
 
+## Prerequisites
+
+- CON-03B ContributionPolicyVersion/rule/definition persistence is merged.
+- REV-04B runtime FinalAcceptance, Review, and ReviewLease targets are merged.
+- Planning records alone satisfy neither gate.
+
 ## Allowed files
 
 ```text
@@ -61,5 +67,5 @@ mutable/void/delete/adjust path, dependency or CI weakening
 Execute CON-03C in `../RUNTIME_VERIFICATION.md`; changed subsystems are at least
 90 percent. Senior engineering, QA/test, security/auth, product/ops,
 architecture, docs, reuse/dedup and test-delta are required. Stop if exact
-REV-04 runtime FinalAcceptance/Review/ReviewLease targets are not merged. Merged
-REV PR #128 is planning authority only and does not satisfy that runtime gate.
+CON-03B policy targets or REV-04B runtime FinalAcceptance/Review/ReviewLease
+targets are not merged. Merged REV planning does not satisfy that runtime gate.

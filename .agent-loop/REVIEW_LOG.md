@@ -2966,3 +2966,37 @@ superseded `609be24d` revision as current and proposed omitting signed PR #201
 from the first-parent recovery chain. The external-review response records why
 final code review is bound to `f3eab24e` and why exact PR #201 reconciliation is
 mandatory rather than expanded authority.
+
+## 2026-08-03 - WS-CON-001-PLAN4 Current-Main Reconciliation
+
+The planning refresh reconciles CON with current ART, AUTH, REV, and XINT
+boundaries, initially at main `10720382` with merged REV PLAN4 PR #258 and then
+refreshed through main `2feaf47d` with merged ART PR #249 and Alembic head
+`0050_guide_source_v2`. Review
+repair removed false `02C` coupling,
+neutralized mutable open-PR status, replaced the obsolete dispatcher-first
+canonical sequence with the current partial order, corrected the legacy
+decision reference and verification command, tightened receipt data
+minimization, and removed stale AUTH vocabulary/counts.
+
+Final architecture, security/auth, product/ops, QA/test/CI, docs, and senior
+engineering/reuse review have no open actionable findings. QA's sole condition
+is mechanical: the pre-existing user-owned reference-PDF deletion must remain
+excluded from any PLAN4 commit or PR. Deterministic diff, link, stale wording,
+stale authorization, and lightweight gate checks pass. No runtime chunk starts
+as part of PLAN4.
+
+PR #261 Agent Gates and CodeRabbit pass. Hosted Backend has one AUTH
+actor-profile concurrency failure independently reproduced on current main;
+publication still requires a green rerun or upstream AUTH repair. CodeRabbit
+raised four initial valid planning gaps covering receipt quantity/digest provenance, strict AUTH-owned
+registration evidence, the receipt-risk exclusion list, and omitted dependency
+edges. The repair closes all four in the `03D` contract, conformance/risk
+records, canonical specification, and chunk map; refreshed external review is
+the remaining PR gate.
+
+CodeRabbit's refreshed review raised two additional dependency-specific gaps:
+the `08A` executable contract omitted `CON-03D`, and canonical dependency views
+used broad REV persistence labels. The repair adds the explicit `03D -> 08A`
+gate and names exact merged `REV-04B` runtime
+`Review`/`ReviewLease`/`FinalAcceptance` targets.

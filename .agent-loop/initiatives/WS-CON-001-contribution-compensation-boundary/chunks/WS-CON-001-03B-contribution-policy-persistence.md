@@ -6,6 +6,10 @@ Persist `ContributionPolicy`, immutable versions, exact rules, award
 definitions, and one-active-policy-per-project without commands. L1 economic/
 data risk.
 
+This chunk follows `03A`. Its published immutable
+`ContributionPolicyVersion` identity is the non-null foreign-key target needed
+by REV `03A2` lease/policy-freeze persistence; it does not implement REV rows.
+
 ## Allowed files
 
 ```text
@@ -37,8 +41,10 @@ public API, background executor, dependency or CI weakening
   project_points definition, each with exact positive decimal/unit/binding/
   provenance constraints.
 - [ ] Published/retired content is immutable; missing policy has no fallback.
-- [ ] Legacy classification follows D2/CON-05 and rewrites no history.
+- [ ] Legacy classification follows D10/CON-05 and rewrites no history.
 - [ ] Upgrade/downgrade and selector/version races use isolated PostgreSQL.
+- [ ] The migration is allocated from the then-current single head and exposes
+  a stable owner contract for the later REV foreign key.
 
 ## Verification and reviewers
 

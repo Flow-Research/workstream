@@ -1,162 +1,95 @@
-# Joint REV/CON Release Handoff
+# Joint ART/AUTH/REV/CON Release Handoff
 
-## Boundary
+## Ownership
 
-REV owns Review decisions, FinalAcceptance, queue/lease/task effects, shared
-audit/outbox staging for the decision transaction, release-control state, and
-the single route commit. CON owns ContributionPolicy, ContributionRecord,
-CompensationAward, fulfillment behavior, and CON projections. AUTH owns all
-authorization and activation.
+- ART owns immutable artifact admission, submission evidence, guide-source
+  processing, and the future typed packet-membership contract.
+- AUTH owns identities, permissions, evaluators, prepared authorization,
+  availability, and activation.
+- REV owns review policy, queue, lease, Review, FinalAcceptance, review/task
+  effects, cross-domain composition, and the single decision-route commit.
+- CON owns ContributionPolicy, adapter bindings, ContributionRecord,
+  CompensationAward, fulfillment truth, and CON projections.
 
-The canonical cross-boundary source is merged
-`WS-XINT-001/REV_CON_HANDOFF.md`. Merged REV PR #128 originally landed at
-`0302bcf`; REV-01 PR #145 canonically published it, REV-02 PR #147 decomposed
-the first runtime parent, and planning-only REV PLAN2 PR #150 refreshed the
-remaining runtime child gates. They remain the reviewed owner contract in
-current main `8d5eb15b`; ART-02B1 PR #151 changes ArtifactStore provider
-implementation and proof only, while AUTH-09D-B PR #152 changes administrative
-identity-link lifecycle only. Contributor-foundation PR #153 changes canonical
-TaskAssignment/Submission attribution to `contributor_id` and enforces human
-lineage/write identity but adds no review or contribution transaction behavior;
-none enters this transaction;
-runtime REV behavior remains
-unimplemented.
+The core review transaction performs no ART provider I/O. It consumes only
+already-persisted canonical identities and stabilized hashes supplied by the
+owner contracts.
 
-## Required decision composition
+## Current cross-initiative state
 
-```text
-AUTH locks exact reviewer authority and prepares review.decision handle bound to
-session/action/actor reference/idempotency key/canonical request digest
--> REV locks and recomposes canonical facts
--> AUTH consumes the handle, evaluates once, and stages decision evidence
--> REV stages Review/findings/resolutions, consumes ReviewLease, closes queue
--> CON reviewer operation creates completed_review from Review/ReviewLease,
-   evaluates only the lease-frozen reviewer rule, and returns typed staging inputs
--> on accept, REV creates immutable FinalAcceptance linked to Review,
-   canonical Submission, Task, submitter, reviewer and locked ReviewPolicy
-   then accepts Task and completes TaskAssignment
-   -> CON submitter operation creates accepted_submission from FinalAcceptance
-      and TaskAssignment, evaluates only the assignment-frozen submitter rule,
-      and returns typed staging inputs
--> on needs_revision, REV sets Task to needs_revision and keeps TaskAssignment active
--> on reject, REV sets Task to rejected with a bounded human reason and blocks
-   only the same-task TaskAssignment with its source Review
--> REV stages shared audit/outbox rows from the typed participant result
--> request route or service command commits once
-```
+At current `main` (`2feaf47d`), AUTH readiness, ART guide foundations and v2
+guide-source cutover, and REV PLAN4 are merged, but the live REV lifecycle and
+CON runtime are not implemented. ART PR #249 and migration `0050` are current
+runtime evidence. REV PR #258 is merged planning evidence, not runtime
+behavior. Re-read the current migration head before implementation and refresh
+each REV child contract against its exact gate.
 
-The participant is one mandatory interface with two ordered operation-specific
-inputs. The reviewer input never carries nullable FinalAcceptance or submitter
-policy/source facts. The submitter input does not exist outside `accept` and
-never uses direct Review/ReviewLease contribution-source fields.
-
-No no-op participant, post-commit repair, ART call, evidence projection, or
-provider I/O exists in this transaction. CON copies stabilized artifact-hash
-lineage from REV facts.
-
-## FinalAcceptance contract
-
-The external shorthand `submission_version_id` means canonical
-`Submission.id`; the repository stores `submission_id` because each immutable
-Submission row is already one version. Merged REV-04 retains
-`policy_context_ref` as the foreign key to the exact locked `ReviewPolicy.id`
-and retains `recorded_by` for the canonical reviewer ActorProfile. CON consumes
-those owner-defined names without aliases. REV owns this record and the
-composite same-chain constraints.
+## Correct dependency sequence
 
 ```text
-FinalAcceptance
-  id
-  project_id
-  task_id                  UNIQUE
-  submission_id            UNIQUE
-  source_review_id         UNIQUE
-  accepted_submitter_id
-  accepted_at
-  recorded_by
-  policy_context_ref
+CON 03A adapter-binding persistence
+-> CON 03B ContributionPolicy persistence
+   -> enables REV 03A2 lease/policy-freeze persistence
+
+CON 02C lifecycle audit participant
+-> REV 04B FinalAcceptance/audit/outbox transaction foundation
+-> CON 03C ContributionRecord/CompensationAward persistence
+-> CON 03D delivery/receipt/status and ordinal persistence
+
+REV lease schema/caller facts + CON 04B policy service
+-> CON 06 claim-time policy lookup/freeze participant
+
+stable REV revision lineage + CON 03C/03D + CON 05A + CON 06
+-> CON 07 mandatory review-decision participant
+-> REV 10 hidden contribution composition
+
+AUTH dispatcher registration/admission contract
+-> CON 02B hidden outbox dispatcher
+-> later fulfillment/projection executor work
 ```
 
-It is created only inside `Review(accept)`. There is no public/manual creation
-API and no separate authorization action. `needs_revision` and `reject` create
-none. Accept/reject are terminal in v0.1; there is no adjudication, appeal,
-replacement acceptance, or reopen path.
+REV `03A1` queue/admission may proceed independently. REV owns
+ReviewLease/preference; CON never owns or duplicates it. REV `03B` depends on
+an ART-owned typed packet-membership contract, not on ART provider calls.
 
-For `needs_revision`, REV keeps the same TaskAssignment `active`. For `reject`,
-REV blocks only that same-task TaskAssignment, binds the block to the reject
-Review, and sets the Task to canonical `rejected` with its bounded human reason;
-it changes no grant or unrelated task. The archival `closed/review_rejected`
-wording is not a lifecycle token.
+## Decision transaction
 
-Optional reviewer-quality sampling is non-mutating audit only. It does not
-delay or replace FinalAcceptance and cannot change Review/task/contribution
-truth.
+```text
+AUTH prepares exact review.decision authority
+-> REV locks ReviewLease, Submission, Task, assignment, and policy facts
+-> AUTH evaluates once and stages decision evidence
+-> REV stages Review and task/lease effects
+-> CON stages completed_review contribution inputs
+-> on accept, REV creates immutable FinalAcceptance and completes task/assignment
+-> CON stages accepted_submission contribution and conditional awards
+-> shared audit and outbox participants flush in the same session
+-> REV route commits once
+```
 
-`completed_review` binds directly to Review and ReviewLease and is unique per
-Review. `accepted_submission` binds to FinalAcceptance and TaskAssignment and
-is unique per FinalAcceptance. Database checks make those source shapes
-mutually exclusive; CON never infers a submitter record by reading
-Review.decision.
+`needs_revision` creates no FinalAcceptance and keeps the assignment active.
+`reject` creates no FinalAcceptance and blocks only the same-task assignment
+with the source Review. Stored decisions remain exactly `accept`,
+`needs_revision`, and `reject`. There is no adjudication, appeal, replacement
+acceptance, no-op CON participant, post-commit repair, or second ledger.
 
-## Release prerequisites
+## Release gates
 
-- ContributionPolicy publish/freeze and adapter-binding behavior are merged.
-- TaskAssignment and ReviewLease carry exact frozen policy-version IDs.
-- REV-04B FinalAcceptance persistence and its locked decision-lineage contract
-  are merged, including exact task/Review/Submission uniqueness and
-  ReviewPolicy lineage.
-- Shared outbox/audit participants and CON-07 are mandatory and merged.
-- REV hidden claim/decision composition then consumes CON-06/07 and has no
-  fallback.
-- AUTH complete REV custody transfer, exact evaluators, reviewer grant path,
-  prepared protocol, and activation are merged. The transfer is the complete
-  PR #140 19-action map, not a local review.claim/review.decision subset.
-- Every public/service CON action has exact AUTH registration, evaluator,
-  principal path, and activation after hidden behavior.
-- Protected outbox handlers have their own exact service authority; dispatcher
-  authority is not inherited.
-- Every CON fulfillment-obligation creation, requeue, successor, and repair
-  writer exposes a mandatory hook that acquires REV-12A3's shared
-  `JointLifecycleMutationFence` before allocating an immutable monotonically
-  increasing root ordinal or locking obligation rows.
-- CON dispatch and callback hooks consume that shared fence. In
-  `delivery_draining`, they may complete only the same generation and a root
-  ordinal at or below REV's persisted cutoff; they cannot create successor,
-  retry-root, repair, or other follow-on obligations.
-- `FulfillmentLifecycleDrainObservationPort` is same-session/read-only and
-  returns pending/claimed/retryable/in-flight counts, nonterminal delivery and
-  callback obligations, and the current maximum root ordinal through typed
-  shared-outbox capability. REV imports no CON/outbox repository.
-- Exact migrations, handler registry, task IDs, route inventory, and retained
-  tests are bound to merged SHAs.
+- ContributionPolicy and adapter-binding schemas and hidden services are
+  merged; tasks and review leases freeze the exact policy version.
+- REV FinalAcceptance persistence is merged with exact Review, Submission,
+  Task, submitter, reviewer, and locked ReviewPolicy lineage.
+- Shared audit and outbox append participants are mandatory and flush-only.
+- CON review participants are mandatory, typed, and rollback-safe.
+- AUTH exact evaluators and activations occur only after hidden behavior.
+- Each protected executor/callback has independent fixed-service authority; it
+  cannot borrow `outbox.dispatch`.
+- ART packet facts cross via typed ports; review/contribution code imports no
+  ART repositories and performs no provider I/O.
+- One integrated PostgreSQL proof covers all three review decisions,
+  uniqueness, frozen-policy behavior, no-self-review, rollback, retry/replay,
+  and negative authority cases.
 
-ART storage and optional contribution-evidence projection are not prerequisites.
+## Stop
 
-## Startup and readiness
-
-Startup fails on closed catalogue/static-matrix/context/evaluator/active-feature
-parity drift. Missing provisioned fixed-service ActorProfile/link rows do not
-stop startup or administrative provisioning, but runtime calls deny and release
-readiness remains false until exact rows exist.
-
-## Joint live proof
-
-The release drill covers accept with exactly one FinalAcceptance, accepted Task,
-completed Assignment, and submitter contribution; needs_revision with an active
-Assignment and neither acceptance fact nor submitter contribution; reject with
-canonical rejected Task, same-task blocked Assignment/source Review, and neither
-acceptance fact nor submitter contribution; one reviewer contribution per
-Review, explicit unpaid, money+points, frozen-version changes,
-repeated/revision Reviews, no-self-review, grant revocation, source-shape and
-uniqueness conflicts, atomic rollback, adapter outage/replay,
-callback-before-ack, failure then fulfillment, reconciliation, every obligation
-writer versus cutoff capture in both orders, same-generation pre-cutoff
-dispatch/callback completion, post-cutoff denial before provider I/O, drain
-fencing, and hidden-to-active route transition. It asserts zero ART calls and
-no adjudication action/state/queue/readiness dependency.
-
-## Ownership and stop
-
-CON-11 publishes the hidden dependency manifest but registers no route.
-REV-13A consumes it in preflight and REV-13C owns the sole public product
-release and final HTTP proof. This handoff starts no chunk automatically.
+This handoff is dependency documentation only. It starts no ART, AUTH, REV, or
+CON implementation and does not treat an open PR as merged evidence.
