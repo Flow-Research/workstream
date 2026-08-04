@@ -858,6 +858,22 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
 
+Contributor outer-ZIP inspection uses additional startup-fixed bounds. These
+limits govern scratch inspection only; they do not activate submission routes
+or durable admission. Raising the 512 MiB ceiling requires a separately
+approved operational change.
+
+| Environment variable | Default | Maximum | Contract |
+|---|---:|---:|---|
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_ENTRIES` | `2000` | `100000` | Central-directory entries plus deterministic implicit directories. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_PATH_BYTES` | `1024` | `4096` | UTF-8 bytes in one normalized POSIX path. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_PATH_DEPTH` | `32` | `256` | Segments in one normalized path. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_CENTRAL_DIRECTORY_BYTES` | `8388608` | `67108864` | Bounded central-directory allocation guard. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_ENTRY_BYTES` | `134217728` | `536870912` | Actual expanded bytes for one regular file. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_EXPANDED_BYTES` | `536870912` | `536870912` | Actual expanded bytes across the complete outer archive. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO` | `100` | `10000` | Maximum expanded-to-compressed ratio for one file. |
+| `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_INSPECTION_SECONDS` | `300` | `1800` | Complete synchronous inspector deadline inside the preparation deadline. |
+
 Enabled artifact storage also requires an explicit durable-byte policy. None
 of these limits has a default, and startup fails unless all four are positive:
 
@@ -1065,6 +1081,8 @@ normalized file/directory paths, entry type, file SHA-256/byte count, and the
 normalized executable flag for each regular file. Nested
 archives remain opaque in v0.1. Exact archive or semantic-manifest equality with
 the immediate prior immutable Submission rejects before checker/provider I/O.
+The v0.1 structural safety boundary accepts only stored and raw-DEFLATE member
+compression; other ZIP compression methods fail closed before admission.
 
 For a regular Unix-created ZIP entry with valid mode metadata, `executable` is
 true when any execute bit is present. It defaults false for non-Unix or invalid
@@ -1092,6 +1110,14 @@ This is infrastructure state, not a checker result, review decision, or
 contributor outcome. It creates no durable artifact, admission, Submission,
 compensation, contribution, or reputation effect. Scratch is cleaned and
 process loss requires reupload without manager/operator approval.
+
+The hidden 04A2 structural inspector uses the closed internal failure tokens
+`submission_archive_malformed`, `submission_archive_limit_exceeded`,
+`submission_archive_unsafe_entry`, `submission_archive_encrypted`,
+`submission_archive_collision`, `submission_archive_integrity_failure`, and
+`submission_archive_timeout`.
+They contain no submitted paths or parser details. Their eventual HTTP/API
+mapping remains deferred to the submission-admission route chunk.
 
 Only a passing result is handed immediately to generic durable admission in the
 same process. Workstream writes the outer ZIP once, independently reads it back,

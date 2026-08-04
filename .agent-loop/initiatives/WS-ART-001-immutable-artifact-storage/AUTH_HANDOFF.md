@@ -13,9 +13,10 @@ activation custody, and availability.
 ## 2026-08-02 Reconciliation
 
 XINT-002-01 already registered the one contributor action and removed the six
-obsolete upload-session actions. AUTH-04B has an approved corrected contract,
-but its implementation/activation has not merged; guide binding/read remain
-planned. No ART status may describe that planning merge as runtime activation.
+obsolete upload-session actions. AUTH-04B implementation merged in PR #245;
+fixed-service guide binding/read are active, and ART-03C completed the verified
+guide-pipeline cutover. Submission actions remain governed by the later split
+activation order below.
 
 The remaining AUTH order requires one correction before submission work can go
 live: split XINT-06 into `06A` (pre-submit materializer only, after hidden
@@ -25,7 +26,8 @@ from activating while its mandatory fixed materializer still denies.
 
 ## Guide Source Sequence
 
-1. Existing guide-source actions remain planned and unavailable.
+1. Guide-source ingest and fixed-service binding/read are active through their
+   merged AUTH chunks; contributor submission actions remain unavailable.
 2. ART-03A implements hidden `artifact.guide_source.ingest` behavior and its
    exact resource/guard/surface manifest.
 3. AUTH activates only that exact action through a separately reviewed AUTH
