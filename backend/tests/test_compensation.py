@@ -280,9 +280,7 @@ async def test_repository_refreshes_preloaded_actor_before_validation(
         assert await stale_session.get(ActorProfile, actor_id) is not None
         assert (
             await stale_session.scalar(
-                select(ActorIdentityLink).where(
-                    ActorIdentityLink.actor_profile_id == actor_id
-                )
+                select(ActorIdentityLink).where(ActorIdentityLink.actor_profile_id == actor_id)
             )
             is not None
         )
@@ -290,10 +288,7 @@ async def test_repository_refreshes_preloaded_actor_before_validation(
         now = datetime.now(UTC)
         async with db_session.get_session_factory()() as mutator_session:
             await mutator_session.execute(
-                text(
-                    "alter table actor_profiles disable trigger "
-                    "actor_profile_history_guard"
-                )
+                text("alter table actor_profiles disable trigger actor_profile_history_guard")
             )
             await mutator_session.execute(
                 update(ActorProfile)
@@ -306,12 +301,14 @@ async def test_repository_refreshes_preloaded_actor_before_validation(
                 )
             )
             await mutator_session.execute(
-                text(
-                    "alter table actor_profiles enable trigger "
-                    "actor_profile_history_guard"
-                )
+                text("set constraints all immediate")
             )
             await mutator_session.commit()
+        async with db_session.get_session_factory()() as restore_session:
+            await restore_session.execute(
+                text("alter table actor_profiles enable trigger actor_profile_history_guard")
+            )
+            await restore_session.commit()
 
         with pytest.raises(
             CompensationAdapterActorInvalid,
@@ -429,9 +426,7 @@ def test_0053_binding_migration_round_trip(
         engine = create_async_engine(compensation_database_env)
         try:
             async with engine.connect() as connection:
-                return set(
-                    await connection.run_sync(lambda sync: inspect(sync).get_table_names())
-                )
+                return set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
         finally:
             await engine.dispose()
 
