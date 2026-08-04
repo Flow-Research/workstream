@@ -91,7 +91,12 @@ async def _reviewable_lineage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[dict, dict, dict]:
     project = await create_active_project(client)
-    task = await create_started_task(client, project["id"], monkeypatch)
+    task = await create_started_task(
+        client,
+        project["id"],
+        monkeypatch,
+        subject="review-worker-two",
+    )
     submission_response = await client.post(
         f"/api/v1/tasks/{task['id']}/submissions",
         headers=auth_headers(),
@@ -104,6 +109,27 @@ async def _reviewable_lineage(
     assert checker["status"] == "completed"
     assert checker["routing_recommendation"] == "allow_review"
     return project, task, submission | {"checker_run_id": checker["id"]}
+
+
+async def _additional_reviewable_submission(
+    client: AsyncClient,
+    project: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict, dict]:
+    """Create another exact task/submission/checker lineage in one project."""
+    task = await create_started_task(client, project["id"], monkeypatch)
+    submission_response = await client.post(
+        f"/api/v1/tasks/{task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert submission_response.status_code == 201, submission_response.text
+    submission = submission_response.json()
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    _, checker = await get_submission_and_automatic_pre_review_run(client, submission["id"])
+    assert checker["status"] == "completed"
+    assert checker["routing_recommendation"] == "allow_review"
+    return task, submission | {"checker_run_id": checker["id"]}
 
 
 def _queue_input(project: dict, task: dict, submission: dict) -> ReviewQueueEntryInput:
@@ -255,11 +281,11 @@ async def test_database_enforces_admission_replay_and_queue_identity_constraints
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project, task, submission = await _reviewable_lineage(review_client, monkeypatch)
-    other_project, other_task, other_submission = await _reviewable_lineage(
-        review_client, monkeypatch
+    other_task, other_submission = await _additional_reviewable_submission(
+        review_client, project, monkeypatch
     )
     base = _reservation_input(project, task, submission)
-    other = _reservation_input(other_project, other_task, other_submission)
+    other = _reservation_input(project, other_task, other_submission)
     async with db_session.get_session_factory()() as session:
         session.add(ReviewAdmissionIdempotencyRecord(**base.model_dump()))
         await session.commit()
@@ -271,7 +297,7 @@ async def test_database_enforces_admission_replay_and_queue_identity_constraints
                     "id": uuid4(),
                     "idempotency_key": uuid4(),
                     "operation_id": uuid4(),
-                    "project_id": other_project["id"],
+                    "project_id": str(uuid4()),
                 }
             ),
             "review admission task project mismatch",
@@ -319,7 +345,7 @@ async def test_database_enforces_admission_replay_and_queue_identity_constraints
             await session.rollback()
 
     base_queue = _queue_input(project, task, submission)
-    other_queue = _queue_input(other_project, other_task, other_submission)
+    other_queue = _queue_input(project, other_task, other_submission)
     async with db_session.get_session_factory()() as session:
         repository = ReviewQueueRepository(session)
         await repository.add_queue_entry(base_queue)
@@ -337,6 +363,7 @@ async def test_database_enforces_admission_replay_and_queue_identity_constraints
                 {"queue_id": other_queue.id, "id": base.id},
             )
         await session.rollback()
+
 
 @pytest.mark.asyncio
 async def test_database_rejects_non_admissible_checker_and_project_mismatch(
@@ -365,13 +392,15 @@ async def test_database_rejects_non_admissible_checker_and_project_mismatch(
                 await session.flush()
             await session.rollback()
 
-    _, other_task, other_submission = await _reviewable_lineage(review_client, monkeypatch)
+    other_task, other_submission = await _additional_reviewable_submission(
+        review_client, project, monkeypatch
+    )
     task_mismatch = _queue_input(project, task, submission).model_copy(
         update={"id": uuid4(), "task_id": other_task["id"]}
     )
     async with db_session.get_session_factory()() as session:
         session.add(ReviewQueueEntry(**task_mismatch.model_dump()))
-        with pytest.raises(IntegrityError, match="fk_review_queue_submission_lineage"):
+        with pytest.raises(DBAPIError, match="review queue checker lineage mismatch"):
             await session.flush()
         await session.rollback()
 
@@ -551,14 +580,14 @@ async def test_populated_review_queue_foundation_refuses_downgrade(
 
     def downgrade() -> None:
         with migration_lock():
-            command.downgrade(config, "0049_rev_auth_readiness")
+            command.downgrade(config, "0050_guide_source_v2")
 
     with pytest.raises(RuntimeError, match="cannot downgrade populated review queue foundation"):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0050_review_queue_foundation"
+            "0051_review_queue_foundation"
         )
         assert await session.scalar(
             select(ReviewAdmissionIdempotencyRecord.id).where(
@@ -587,13 +616,13 @@ async def test_populated_review_queue_row_alone_refuses_downgrade(
 
     def downgrade() -> None:
         with migration_lock():
-            command.downgrade(config, "0049_rev_auth_readiness")
+            command.downgrade(config, "0050_guide_source_v2")
 
     with pytest.raises(RuntimeError, match="cannot downgrade populated review queue foundation"):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0050_review_queue_foundation"
+            "0051_review_queue_foundation"
         )
         assert await session.get(ReviewQueueEntry, queue_value.id) is not None

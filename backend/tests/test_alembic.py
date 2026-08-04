@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0050_review_queue_foundation"
+HEAD_REVISION = "0051_review_queue_foundation"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -223,21 +223,43 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
     with migration_lock():
         command.downgrade(config, "base")
         command.upgrade(config, "head")
+        constraint_names = asyncio.run(
+            _project_setup_run_check_constraint_names(isolated_database_env)
+        )
+        assert "ck_project_setup_runs_ck_project_setup_runs_status" in constraint_names
         command.downgrade(config, "base")
 
 
-def test_0050_review_queue_foundation_empty_round_trip(
+async def _project_setup_run_check_constraint_names(database_url: str) -> set[str]:
+    """Return physical check-constraint names for the setup-run table."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.scalars(
+                text(
+                    "select constraint_name from information_schema.table_constraints "
+                    "where table_schema = current_schema() "
+                    "and table_name = 'project_setup_runs' "
+                    "and constraint_type = 'CHECK'"
+                )
+            )
+            return set(rows.all())
+    finally:
+        await engine.dispose()
+
+
+def test_0051_review_queue_foundation_empty_round_trip(
     isolated_database_env: str,
     migration_lock,
 ) -> None:
-    """0050 creates no queue history and reverses only while still unused."""
+    """0051 creates no queue history and reverses only while still unused."""
     config = _alembic_config()
     with migration_lock():
-        command.downgrade(config, "0049_rev_auth_readiness")
-        command.upgrade(config, "0050_review_queue_foundation")
+        command.downgrade(config, "0050_guide_source_v2")
+        command.upgrade(config, "0051_review_queue_foundation")
         state = asyncio.run(_review_queue_foundation_state(isolated_database_env))
         assert state == {
-            "revision": "0050_review_queue_foundation",
+            "revision": "0051_review_queue_foundation",
             "queue_count": 0,
             "admission_count": 0,
             "queue_guard": True,
@@ -245,7 +267,7 @@ def test_0050_review_queue_foundation_empty_round_trip(
             "queue_truncate_guard": True,
             "admission_truncate_guard": True,
         }
-        command.downgrade(config, "0049_rev_auth_readiness")
+        command.downgrade(config, "0050_guide_source_v2")
         command.upgrade(config, "head")
 
 
@@ -2492,7 +2514,7 @@ def test_0045_guide_source_metadata_authority_round_trip(
 
 
 def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migration_lock) -> None:
-    """Pre-0045 guide rows remain readable with explicitly null custody."""
+    """0045 preserves historical rows while the later v2 clean cut refuses them."""
     config = _alembic_config()
     project_id, guide_id, snapshot_id, setup_run_id = (str(uuid4()) for _ in range(4))
     snapshot_hash = "sha256:" + "0" * 64
@@ -2591,11 +2613,16 @@ def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migrat
             command.downgrade(config, "base")
             command.upgrade(config, "0044_project_create_authority")
             asyncio.run(seed_and_read(seed=True))
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
             command.downgrade(config, "0044_project_create_authority")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
+            with pytest.raises(
+                RuntimeError,
+                match="guide source v2 requires an empty guide-source namespace",
+            ):
+                command.upgrade(config, "0050_guide_source_v2")
         finally:
             asyncio.run(reset_schema())
 

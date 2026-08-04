@@ -31,4 +31,3 @@ No blocking finding remains. All reviewer sessions completed.
 The worktree has no `WORKSTREAM_TEST_DATABASE_URL`; PostgreSQL execution, the
 six-principal API case, schema lanes, and repository-wide 78-percent coverage
 remain assigned to hosted GitHub Actions on the exact PR head.
-

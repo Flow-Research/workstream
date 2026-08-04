@@ -19,7 +19,8 @@ leases, Reviews, revisions, FinalAcceptance, or contributions.
 
 - Added `ReviewQueueEntry` and `ReviewAdmissionIdempotencyRecord` models,
   schemas, and caller-transaction repository operations.
-- Added Alembic revision 0050 with exact lineage/admissibility guards,
+- Added REV Alembic revision 0051, following ART-owned 0050, with exact
+  lineage/admissibility guards,
   immutable identity, replay constraints, delete/truncate protection, and
   populated downgrade refusal.
 - Registered the models and schema fingerprint, added focused PostgreSQL tests,

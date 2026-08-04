@@ -17,6 +17,10 @@
   `missing_lane_modules:tests/test_review_queue_persistence.py`. The focused REV
   module is now registered once in `task_lifecycle`, and the canonical lane
   ownership assertion is updated.
+- Trusted `main` advanced through ART PR #249 while the repair was under review.
+  ART retains its merged `0050_guide_source_v2`; REV is reconciled as the exact
+  `0051_review_queue_foundation` successor, with both shared test conflicts
+  resolved additively.
 
 ## Comments deferred
 
@@ -38,6 +42,9 @@ behavior or crossing REV ownership.
 - Isolated PostgreSQL `tests/test_review_queue_persistence.py` with complete
   `app.modules.reviews` branch coverage and 90 percent floor: PASS.
 - Isolated PostgreSQL `tests/test_alembic.py -k review_queue_foundation`: PASS.
+- Reconciled ART+REV schema fingerprint and sole 0051 head: PASS.
+- Two tests that needed a second lineage were updated for ART's merged unique
+  project/actor behavior; their isolated exact-node reruns pass.
 
 ## Remaining risks
 

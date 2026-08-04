@@ -195,6 +195,7 @@ class Settings(BaseSettings):
 
     artifact_pending_work_scan_interval_seconds: int = Field(default=60, gt=0, le=3600)
     artifact_pending_work_scan_page_size: int = Field(default=100, gt=0, le=1000)
+    guide_setup_continuation_scan_page_size: int = Field(default=100, gt=0, le=1000)
     artifact_execution_lease_seconds: float = Field(default=900.0, gt=0.0, le=7200.0)
     artifact_complete_read_deadline_seconds: float = Field(default=600.0, gt=0.0, le=7200.0)
     artifact_terminal_persistence_margin_seconds: float = Field(

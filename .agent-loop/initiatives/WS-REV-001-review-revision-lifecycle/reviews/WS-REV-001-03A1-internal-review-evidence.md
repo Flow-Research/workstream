@@ -4,7 +4,8 @@
 
 - Trusted base: `10720382cd9639f00f09578f772b97ab3afc358b`
 - Reviewed implementation commit: `a5a778b4c1be2602d406fdf23c05bd8320f1c8cb`
-- Scope: hidden REV queue/admission persistence, migration 0050, focused tests,
+- Scope: hidden REV queue/admission persistence, originally migration 0050 and
+  reconciled to migration 0051 after ART PR #249, focused tests,
   data-model documentation, initiative status, and one merge intent
 - Runtime exposure: none; no route, checker hook, lease, Review, revision,
   contribution, AUTH, ART, or upstream mutation behavior is added
@@ -40,8 +41,9 @@
 
 ## Deterministic evidence
 
-- `backend/.venv/bin/alembic heads`: PASS; sole head
-  `0050_review_queue_foundation`.
+- `backend/.venv/bin/alembic heads`: PASS on the original implementation; after
+  reconciliation with ART PR #249, the sole head is the REV successor
+  `0051_review_queue_foundation`.
 - Isolated `tests/test_alembic.py -k review_queue_foundation`: PASS.
 - Isolated `tests/test_review_queue_persistence.py`: PASS, 10 focused tests.
 - Isolated `--cov=app.modules.reviews --cov-branch --cov-fail-under=90`: PASS.

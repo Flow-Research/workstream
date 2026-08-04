@@ -26,8 +26,9 @@ No expedited SLA.
 
 ## Allowed files
 
-Current main has the single head `0049_rev_auth_readiness`. This chunk owns the
-exact successor `0050_review_queue_foundation.py` and the following scope:
+Current main now has the single ART-owned head `0050_guide_source_v2`. After
+rebasing PR #262, this chunk owns its exact successor
+`0051_review_queue_foundation.py` and the following scope:
 
 ```text
 backend/app/modules/reviews/__init__.py
@@ -35,7 +36,7 @@ backend/app/modules/reviews/models.py
 backend/app/modules/reviews/repository.py
 backend/app/modules/reviews/schemas.py
 backend/app/db/models.py (metadata registration only)
-backend/alembic/versions/0050_review_queue_foundation.py
+backend/alembic/versions/0051_review_queue_foundation.py
 backend/tests/test_alembic.py
 backend/tests/test_review_queue_persistence.py
 backend/tests/conftest.py (schema fingerprint/fixture registration only)

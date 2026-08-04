@@ -1,7 +1,7 @@
 """add hidden review queue and admission idempotency persistence
 
-Revision ID: 0050_review_queue_foundation
-Revises: 0049_rev_auth_readiness
+Revision ID: 0051_review_queue_foundation
+Revises: 0050_guide_source_v2
 Create Date: 2026-08-03
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0050_review_queue_foundation"
-down_revision = "0049_rev_auth_readiness"
+revision = "0051_review_queue_foundation"
+down_revision = "0050_guide_source_v2"
 branch_labels = depends_on = None
 
 

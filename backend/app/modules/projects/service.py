@@ -11,9 +11,10 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,14 +123,13 @@ def bounded_canonical_guide_material(material: GuideSourceMaterial) -> bytes:
     if len(payload) > MAXIMUM_GUIDE_AGENT_MATERIAL_BYTES:
         raise GuideSufficiencyMaterialUnavailable("guide_source_limit_exceeded")
     return payload
+
+
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
 ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
 HASH_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 HASH_TOKEN_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
-CONTENT_CID_PATTERN = re.compile(
-    r"^(cid:[a-z0-9][a-z0-9._:-]{2,198}|ipfs://[A-Za-z0-9]{46,120}|bafy[a-z2-7]{20,120}|Qm[1-9A-HJ-NP-Za-km-z]{44})$"
-)
 SAFE_TOKEN_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 SAFE_PUBLIC_SUMMARY_LABEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9 _-]{0,79}$")
 SECRET_REF_PATTERN = re.compile(
@@ -207,8 +207,7 @@ SECRET_ARTIFACT_SINGLE_TOKENS = {
     "token",
     "tokens",
 }
-ALLOWED_SOURCE_REF_SCHEMES = {"https", "http", "repo", "inline", "import", "s3", "r2"}
-GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION = "guide_source_snapshot.v1"
+GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION = "guide_source_snapshot.v2"
 EFFECTIVE_POLICY_SCHEMA_VERSION = "effective_project_submission_artifact_policy.v1"
 MERGE_ALGORITHM_VERSION = "workstream_default_merge.v1"
 PLATFORM_HASH_ALGORITHM = "sha256"
@@ -300,23 +299,11 @@ DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS = [
     "*.key",
     "node_modules",
 ]
-OPAQUE_SOURCE_REF_SCHEMES = {"inline", "import", "repo"}
-OPAQUE_SOURCE_REF_NAMESPACES = {
-    "docs",
-    "examples",
-    "fixtures",
-    "guides",
-    "manual-imports",
-    "project-docs",
-    "rubrics",
-    "source-material",
-    "task-docs",
-}
 GUIDE_SOURCE_MATERIAL_FIELDS = {
     "content_markdown",
 }
 REPRESENTATIVE_TASK_SOURCE_KINDS = {"example", "representative_task", "task_sample", "task_example"}
-SOURCE_ITEM_CONTENT_EXCERPT_MAX_LENGTH = 12000
+SOURCE_ITEM_SOURCE_LABEL_MAX_LENGTH = 500
 WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY: dict[str, Any] = {
     "schema_version": "workstream_default_submission_artifact_policy.v1",
     "required_packet_fields": DEFAULT_REQUIRED_PACKET_FIELDS,
@@ -685,87 +672,6 @@ class ProjectService:
         await self._session.refresh(report)
         return GuideSufficiencyReportResponse.model_validate(report)
 
-    async def run_guide_sufficiency_agent(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-    ) -> tuple[GuideSufficiencyReportResponse, bool]:
-        """Run the configured guide sufficiency agent for a source snapshot.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            guide_id: Guide whose immutable source snapshot should be analyzed.
-            source_snapshot_id: Source snapshot id to analyze.
-
-        Returns:
-            Existing or newly persisted sufficiency report plus whether it was created.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can run sufficiency analysis")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        if existing is not None:
-            return GuideSufficiencyReportResponse.model_validate(existing), False
-
-        material = await self._guide_source_material(guide, snapshot)
-        await self._session.rollback()
-        try:
-            result = await self._project_agent_runtime().analyze_guide_sufficiency(material)
-        except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable(
-                "project guide sufficiency agent is unavailable"
-            ) from None
-        payload = GuideSufficiencyReportCreate(
-            source_snapshot_id=material.source_snapshot_id,
-            status=AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
-            findings=[finding.model_dump(mode="json") for finding in result.findings],
-            summary=result.summary,
-        )
-        self._validate_sufficiency_report_payload(payload)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can run sufficiency analysis")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        if existing is not None:
-            return GuideSufficiencyReportResponse.model_validate(existing), False
-        report = GuideSufficiencyReport(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            status=payload.status,
-            findings=[finding.model_dump(mode="json") for finding in payload.findings],
-            summary=payload.summary,
-            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
-            created_by=actor.actor_id,
-        )
-        try:
-            report = await self._repo.add_guide_sufficiency_report(report)
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-            if existing is not None:
-                return GuideSufficiencyReportResponse.model_validate(existing), False
-            raise PolicySetupConflict(
-                "guide sufficiency report conflicted with concurrent setup; retry"
-            ) from exc
-        await self._session.refresh(report)
-        return GuideSufficiencyReportResponse.model_validate(report), True
-
     async def run_verified_guide_sufficiency_agent(
         self,
         actor: ActorContext,
@@ -791,34 +697,6 @@ class ProjectService:
         guide_version = guide.version
         source_snapshot_hash = snapshot.bundle_hash
         first = await self._guide_sufficiency_material.load(request)
-        def agent_item(item) -> GuideSourceItemMaterial:
-            return GuideSourceItemMaterial(
-                source_kind=item.source_kind,
-                durable_ref="",
-                ingestion_adapter=item.ingestion_adapter,
-                content_hash=item.artifact_sha256,
-                media_type=item.media_type,
-                source_item_id=str(item.source_item_id),
-                item_order=item.item_order,
-                binding_id=str(item.binding_id),
-                artifact_content_id=str(item.content_id),
-                artifact_sha256=item.artifact_sha256,
-                artifact_byte_count=item.artifact_byte_count,
-                classification_id=str(item.classification_id),
-                detected_format=item.detected_format,
-                extraction_attempt_id=str(item.extraction_attempt_id),
-                extraction_usage_id=str(item.extraction_usage_id),
-                extracted_content_id=str(item.extracted_content_id),
-                extractor_name=item.extractor_name,
-                extractor_version=item.extractor_version,
-                extraction_policy_version=item.extraction_policy_version,
-                canonical_output_sha256=item.canonical_output_sha256,
-                omission_facts=item.omission_facts,
-                canonical_content=item.canonical_content,
-                structural_metadata=item.structural_metadata,
-                untrusted_data=True,
-                untrusted_data_label="UNTRUSTED_GUIDE_SOURCE_DATA",
-            )
 
         material = GuideSourceMaterial(
             project_id=guide.project_id,
@@ -830,8 +708,7 @@ class ProjectService:
                 field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
             },
             verified_artifact_material=True,
-            source_items=[agent_item(item) for item in first.source_items],
-            source_refs=[],
+            source_items=[self._verified_agent_item(item) for item in first.source_items],
             # Authoritative items already retain source_kind; do not duplicate
             # canonical bytes in the legacy representative projection.
             representative_task_material=RepresentativeTaskMaterialContext(items=[]),
@@ -854,7 +731,9 @@ class ProjectService:
         try:
             result = await self._project_agent_runtime().analyze_guide_sufficiency(material)
         except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable("project guide sufficiency agent is unavailable") from None
+            raise AgentRuntimeUnavailable(
+                "project guide sufficiency agent is unavailable"
+            ) from None
         payload = GuideSufficiencyReportCreate(
             source_snapshot_id=source_snapshot_id,
             status=AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
@@ -864,7 +743,9 @@ class ProjectService:
         self._validate_sufficiency_report_payload(payload)
         second = await self._guide_sufficiency_material.load(request)
         second_material = material.model_copy(
-            update={"source_items": [agent_item(item) for item in second.source_items]}
+            update={
+                "source_items": [self._verified_agent_item(item) for item in second.source_items]
+            }
         )
         second_prompt = bounded_canonical_guide_material(second_material)
         second_prompt_sha256 = f"sha256:{hashlib.sha256(second_prompt).hexdigest()}"
@@ -1006,12 +887,14 @@ class ProjectService:
         await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
         self._merge_effective_submission_artifact_policy(policy_body)
-        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
+        sufficiency_report = await self._repo.get_diagnostic_sufficiency_report_for_snapshot(
+            snapshot.id
+        )
         self._validate_sufficiency_report_allows_policy_approval(
             sufficiency_report,
             snapshot,
         )
-        source_material_refs = self._source_material_refs(snapshot)
+        source_material_refs = await self._verified_source_material_refs(sufficiency_report)
         policy = SubmissionArtifactPolicy(
             id=str(uuid4()),
             project_id=project_id,
@@ -1071,7 +954,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
-        self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
+        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
         assert sufficiency_report is not None
         existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
             project_id,
@@ -1082,7 +965,11 @@ class ProjectService:
             self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
             return SubmissionArtifactPolicyResponse.model_validate(existing), False
 
-        material = await self._guide_source_material(guide, snapshot)
+        material = await self._verified_guide_source_material(
+            guide,
+            snapshot,
+            sufficiency_report,
+        )
         runtime_report = GuideSufficiencyAgentResult(
             status=REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS[sufficiency_report.status],
             findings=[
@@ -1120,7 +1007,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
-        self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
+        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
         existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
             project_id,
             guide.version,
@@ -1129,7 +1016,7 @@ class ProjectService:
         if existing is not None:
             self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
             return SubmissionArtifactPolicyResponse.model_validate(existing), False
-        source_material_refs = self._source_material_refs(snapshot)
+        source_material_refs = await self._verified_source_material_refs(sufficiency_report)
         policy = SubmissionArtifactPolicy(
             id=str(uuid4()),
             project_id=project_id,
@@ -1205,6 +1092,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
+        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
         assert sufficiency_report is not None
         effective_policy = await self._repo.get_effective_submission_artifact_policy_by_id(
             effective_policy_id
@@ -1258,7 +1146,11 @@ class ProjectService:
         superseded_policy_id = superseded_policy.id if has_correction_feedback else None
         superseded_policy_hash = superseded_policy.policy_hash if has_correction_feedback else None
 
-        material = await self._guide_source_material(guide, snapshot)
+        material = await self._verified_guide_source_material(
+            guide,
+            snapshot,
+            sufficiency_report,
+        )
         context = self._post_submit_derivation_context(
             sufficiency_report,
             effective_policy,
@@ -1535,11 +1427,17 @@ class ProjectService:
             raise PolicySetupBlocked("submission artifact policy body hash mismatch")
         if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
             self._validate_agent_derived_submission_artifact_policy(policy, snapshot)
-        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
+            sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
+        else:
+            sufficiency_report = await self._repo.get_diagnostic_sufficiency_report_for_snapshot(
+                snapshot.id
+            )
         self._validate_sufficiency_report_allows_policy_approval(
             sufficiency_report,
             snapshot,
         )
+        if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
+            await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
 
         effective_policy = self._merge_effective_submission_artifact_policy(policy.policy_body)
         effective_policy_hash = self._hash_canonical_json(effective_policy)
@@ -1806,6 +1704,10 @@ class ProjectService:
             revision_policy,
             payment_policy,
         )
+        try:
+            await self._require_verified_report_sources(sufficiency_report)
+        except PolicySetupBlocked as exc:
+            raise GuideActivationBlocked(str(exc)) from exc
         setup_run = await self._repo.get_latest_project_setup_run(project_id, guide.id)
         if (
             setup_run is None
@@ -2103,6 +2005,12 @@ class ProjectService:
         )
         if setup_run is None:
             raise ProjectSetupRunNotFound("project setup run not found")
+        if status == "running_sufficiency_agent" and setup_run.status not in {
+            "queued",
+            "dispatch_pending",
+            "running_sufficiency_agent",
+        }:
+            return ProjectSetupRunResponse.model_validate(setup_run)
         if uses_continuation_payload:
             assert continuation_effective_policy_id is not None
             assert continuation_pre_submit_checker_policy_id is not None
@@ -2765,16 +2673,29 @@ class ProjectService:
         response.items = [GuideSourceSnapshotItemResponse.model_validate(item) for item in items]
         return response
 
-    async def _guide_source_material(
+    async def _verified_guide_source_material(
         self,
         guide: ProjectGuide,
         snapshot: GuideSourceSnapshot,
+        report: GuideSufficiencyReport,
     ) -> GuideSourceMaterial:
-        """Build the immutable material context passed to project setup agents."""
-        source_items = self._source_material_items(snapshot)
-        representative_task_items = [
-            item for item in source_items if item.source_kind in REPRESENTATIVE_TASK_SOURCE_KINDS
-        ]
+        """Build agent material only from exact verified extraction provenance."""
+        if (
+            self._guide_sufficiency_material is None
+            or report.project_setup_run_id is None
+            or report.setup_generation is None
+        ):
+            raise PolicySetupBlocked("verified guide sufficiency is unavailable")
+        loaded = await self._guide_sufficiency_material.load(
+            GuideSufficiencyMaterialRequest(
+                project_id=UUID(guide.project_id),
+                guide_id=UUID(guide.id),
+                guide_source_snapshot_id=UUID(snapshot.id),
+                project_setup_run_id=UUID(report.project_setup_run_id),
+                setup_generation=report.setup_generation,
+            )
+        )
+        source_items = [self._verified_agent_item(item) for item in loaded.source_items]
         return GuideSourceMaterial(
             project_id=guide.project_id,
             guide_id=guide.id,
@@ -2784,30 +2705,39 @@ class ProjectService:
             guide_material={
                 field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
             },
+            verified_artifact_material=True,
             source_items=source_items,
-            source_refs=[item.durable_ref for item in source_items],
-            representative_task_material=RepresentativeTaskMaterialContext(
-                items=representative_task_items
-            ),
+            representative_task_material=RepresentativeTaskMaterialContext(items=[]),
         )
 
-    def _source_material_items(
-        self,
-        snapshot: GuideSourceSnapshot,
-    ) -> list[GuideSourceItemMaterial]:
-        """Return typed source items from a guide-source snapshot manifest."""
-        return [
-            GuideSourceItemMaterial.model_validate(self._normalized_source_manifest_item(item))
-            for item in snapshot.manifest_json["items"]
-        ]
-
-    def _source_material_refs(self, snapshot: GuideSourceSnapshot) -> list[str]:
-        """Return durable source refs from a validated guide-source snapshot."""
-        return [item.durable_ref for item in self._source_material_items(snapshot)]
-
-    def _normalized_source_manifest_item(self, item: dict[str, Any]) -> dict[str, Any]:
-        """Normalize optional source manifest fields introduced during v0.1."""
-        return {**item, "content_excerpt": item.get("content_excerpt")}
+    @staticmethod
+    def _verified_agent_item(item: Any) -> GuideSourceItemMaterial:
+        """Project one canonical extraction row into bounded untrusted agent input."""
+        return GuideSourceItemMaterial(
+            source_kind=item.source_kind,
+            ingestion_adapter=item.ingestion_adapter,
+            media_type=item.media_type,
+            source_item_id=str(item.source_item_id),
+            item_order=item.item_order,
+            binding_id=str(item.binding_id),
+            artifact_content_id=str(item.content_id),
+            artifact_sha256=item.artifact_sha256,
+            artifact_byte_count=item.artifact_byte_count,
+            classification_id=str(item.classification_id),
+            detected_format=item.detected_format,
+            extraction_attempt_id=str(item.extraction_attempt_id),
+            extraction_usage_id=str(item.extraction_usage_id),
+            extracted_content_id=str(item.extracted_content_id),
+            extractor_name=item.extractor_name,
+            extractor_version=item.extractor_version,
+            extraction_policy_version=item.extraction_policy_version,
+            canonical_output_sha256=item.canonical_output_sha256,
+            omission_facts=item.omission_facts,
+            canonical_content=item.canonical_content,
+            structural_metadata=item.structural_metadata,
+            untrusted_data=True,
+            untrusted_data_label="UNTRUSTED_GUIDE_SOURCE_DATA",
+        )
 
     async def validate_source_snapshot_integrity(
         self,
@@ -2836,7 +2766,13 @@ class ProjectService:
             fail()
         if snapshot.manifest_schema_version != GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION:
             fail()
+        if set(manifest) != {"schema_version", "snapshot_id", "generation", "items"}:
+            fail()
         if manifest.get("schema_version") != GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION:
+            fail()
+        if manifest.get("snapshot_id") != snapshot.id:
+            fail()
+        if manifest.get("generation") != snapshot.creation_generation:
             fail()
         manifest_items = manifest.get("items")
         if not isinstance(manifest_items, list) or not manifest_items:
@@ -2850,63 +2786,50 @@ class ProjectService:
             fail()
 
         row_items: list[dict[str, Any]] = []
-        seen_refs: set[tuple[str, str]] = set()
+        seen_labels: set[tuple[str, str]] = set()
         required_fields = {
+            "item_id",
+            "item_order",
             "source_kind",
-            "durable_ref",
+            "source_label",
             "ingestion_adapter",
-            "content_hash",
-            "content_cid",
             "media_type",
-            "content_excerpt",
         }
-        persisted_item_fields = required_fields - {"content_excerpt"}
         for index, item in enumerate(persisted_items):
             if item.item_order != index:
                 fail()
             row_item = {
+                "item_id": item.id,
+                "item_order": item.item_order,
                 "source_kind": item.source_kind,
-                "durable_ref": item.durable_ref,
+                "source_label": item.source_label,
                 "ingestion_adapter": item.ingestion_adapter,
-                "content_hash": item.content_hash,
-                "content_cid": item.content_cid,
                 "media_type": item.media_type,
             }
-            ref_key = (item.source_kind, item.durable_ref)
-            if ref_key in seen_refs:
+            label_key = (item.source_kind, item.source_label)
+            if label_key in seen_labels:
                 fail()
-            seen_refs.add(ref_key)
+            seen_labels.add(label_key)
             row_items.append(row_item)
 
         for manifest_item in manifest_items:
             if not isinstance(manifest_item, dict):
                 fail()
-            manifest_item = self._normalized_source_manifest_item(manifest_item)
             if set(manifest_item) != required_fields:
+                fail()
+            if not isinstance(manifest_item["item_id"], str):
+                fail()
+            if not isinstance(manifest_item["item_order"], int):
                 fail()
             if not isinstance(manifest_item["source_kind"], str):
                 fail()
-            if not isinstance(manifest_item["durable_ref"], str):
+            if not isinstance(manifest_item["source_label"], str):
                 fail()
             if not isinstance(manifest_item["ingestion_adapter"], str):
-                fail()
-            if not isinstance(manifest_item["content_hash"], str):
-                fail()
-            if not HASH_PATTERN.fullmatch(manifest_item["content_hash"]):
-                fail()
-            if manifest_item["content_cid"] is not None and not isinstance(
-                manifest_item["content_cid"],
-                str,
-            ):
                 fail()
             if manifest_item["media_type"] is not None and not isinstance(
                 manifest_item["media_type"],
                 str,
-            ):
-                fail()
-            if manifest_item["content_excerpt"] is not None and (
-                not isinstance(manifest_item["content_excerpt"], str)
-                or len(manifest_item["content_excerpt"]) > SOURCE_ITEM_CONTENT_EXCERPT_MAX_LENGTH
             ):
                 fail()
             try:
@@ -2924,51 +2847,19 @@ class ProjectService:
                 ):
                     fail()
                 if (
-                    self._sanitize_durable_source_ref(manifest_item["durable_ref"])
-                    != manifest_item["durable_ref"]
-                ):
-                    fail()
-                self._require_sha256_hash(
-                    manifest_item["content_hash"],
-                    "source item content hash",
-                )
-                if (
-                    self._sanitize_content_cid(manifest_item["content_cid"])
-                    != manifest_item["content_cid"]
+                    _guide_source_label(manifest_item["source_label"])
+                    != manifest_item["source_label"]
                 ):
                     fail()
             except ProjectServiceError:
                 fail()
 
-        manifest_row_items = [
-            {
-                field: manifest_item[field]
-                for field in required_fields
-                if field in persisted_item_fields
-            }
-            for manifest_item in (
-                self._normalized_source_manifest_item(item) for item in manifest_items
-            )
-        ]
-        if manifest_row_items != row_items:
+        if manifest_items != row_items:
             fail()
 
     def _safe_source_token(self, value: str, label: str) -> str:
         """Validate a source token field used in durable policy records."""
         return _guide_source_token(value, label)
-
-    def _sanitize_durable_source_ref(self, durable_ref: str) -> str:
-        """Reject unsafe durable source refs and return a canonical ref.
-
-        Durable source refs are audit identity, not temporary fetch locators.
-        Query strings, fragments, credentials, signed URL material, local paths,
-        and token-bearing values are rejected before persistence.
-        """
-        return _guide_source_durable_ref(durable_ref)
-
-    def _sanitize_content_cid(self, content_cid: str | None) -> str | None:
-        """Validate optional immutable content identifiers before persistence."""
-        return _guide_source_content_cid(content_cid)
 
     def _require_sha256_hash(self, value: str, label: str) -> None:
         """Validate platform hash shape."""
@@ -3359,7 +3250,7 @@ class ProjectService:
         if sufficiency_report.status == "blocked":
             raise PolicySetupBlocked("guide sufficiency has blocking gaps")
 
-    def _validate_agent_sufficiency_report_for_derivation(
+    async def _validate_agent_sufficiency_report_for_derivation(
         self,
         sufficiency_report: GuideSufficiencyReport | None,
     ) -> None:
@@ -3371,10 +3262,89 @@ class ProjectService:
         if (
             sufficiency_report.agent_name != PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
             or sufficiency_report.agent_version != PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION
+            or sufficiency_report.project_setup_run_id is None
+            or sufficiency_report.setup_generation is None
+            or sufficiency_report.agent_material_sha256 is None
+            or sufficiency_report.agent_material_byte_count is None
         ):
             raise PolicySetupBlocked(
                 "agent sufficiency report is required before policy derivation"
             )
+        await self._verified_report_usages(sufficiency_report)
+
+    async def _verified_report_usages(
+        self,
+        sufficiency_report: GuideSufficiencyReport,
+    ) -> list[GuideSufficiencyReportSourceUsage]:
+        """Load the complete exact-run usage set for one verified report."""
+        if (
+            sufficiency_report.project_setup_run_id is None
+            or sufficiency_report.setup_generation is None
+        ):
+            raise PolicySetupBlocked("verified guide source material is required")
+        usages = list(
+            (
+                await self._session.scalars(
+                    select(GuideSufficiencyReportSourceUsage)
+                    .join(
+                        GuideSourceSnapshotItem,
+                        GuideSourceSnapshotItem.id
+                        == GuideSufficiencyReportSourceUsage.source_item_id,
+                    )
+                    .where(
+                        GuideSufficiencyReportSourceUsage.report_id == sufficiency_report.id,
+                        GuideSufficiencyReportSourceUsage.project_setup_run_id
+                        == sufficiency_report.project_setup_run_id,
+                        GuideSufficiencyReportSourceUsage.setup_generation
+                        == sufficiency_report.setup_generation,
+                        GuideSourceSnapshotItem.source_snapshot_id
+                        == sufficiency_report.source_snapshot_id,
+                    )
+                    .order_by(GuideSufficiencyReportSourceUsage.item_order)
+                )
+            ).all()
+        )
+        expected_count = int(
+            await self._session.scalar(
+                select(func.count(GuideSourceSnapshotItem.id)).where(
+                    GuideSourceSnapshotItem.source_snapshot_id
+                    == sufficiency_report.source_snapshot_id
+                )
+            )
+            or 0
+        )
+        if (
+            expected_count == 0
+            or len(usages) != expected_count
+            or len({usage.source_item_id for usage in usages}) != expected_count
+            or [usage.item_order for usage in usages] != list(range(expected_count))
+        ):
+            raise PolicySetupBlocked("verified guide source material is required")
+        return usages
+
+    async def _verified_source_material_refs(
+        self,
+        sufficiency_report: GuideSufficiencyReport | None,
+    ) -> list[str]:
+        """Project only verified extraction provenance into policy references."""
+        if sufficiency_report is None:
+            raise PolicySetupBlocked("verified guide source material is required")
+        if sufficiency_report.agent_name is None:
+            return []
+        usages = await self._verified_report_usages(sufficiency_report)
+        return [
+            f"artifact-content:{usage.content_id}#extraction-usage:{usage.extraction_usage_id}"
+            for usage in usages
+        ]
+
+    async def _require_verified_report_sources(
+        self,
+        sufficiency_report: GuideSufficiencyReport | None,
+    ) -> None:
+        """Require exact extraction usage before a guide can become active."""
+        if sufficiency_report is None:
+            raise PolicySetupBlocked("verified guide source material is required")
+        await self._verified_report_usages(sufficiency_report)
 
     def _validate_agent_derived_submission_artifact_policy(
         self,
@@ -3956,52 +3926,41 @@ class ProjectService:
 
 def build_guide_source_snapshot_manifest(
     payload: GuideSourceSnapshotCreate,
-    guide: ProjectGuide,
+    *,
+    snapshot_id: str,
+    generation: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Compose one canonical guide-source manifest without service state."""
-    guide_material = {
-        field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
-    }
-    normalized_items = [
-        {
-            "source_kind": "project_guide",
-            "durable_ref": f"inline:/guides/{guide.id}/{guide.version}",
-            "ingestion_adapter": "workstream_project_guide",
-            "content_hash": canonical_json_hash(guide_material),
-            "content_cid": None,
-            "media_type": "application/json",
-            "content_excerpt": None,
-        }
-    ]
-    seen_refs = {("project_guide", normalized_items[0]["durable_ref"])}
+    """Compose a v2 declaration whose byte identity comes only from ART."""
+    declared_items: list[dict[str, Any]] = []
+    seen_labels: set[tuple[str, str]] = set()
     for item in payload.items:
         source_kind = _guide_source_token(item.source_kind, "source kind")
         ingestion_adapter = _guide_source_token(item.ingestion_adapter, "ingestion adapter")
-        durable_ref = _guide_source_durable_ref(item.durable_ref)
-        if not HASH_PATTERN.fullmatch(item.content_hash):
-            raise PolicySetupBlocked("source item content hash must be sha256:<64 lowercase hex>")
-        content_cid = _guide_source_content_cid(item.content_cid)
-        duplicate_key = (source_kind, durable_ref)
-        if duplicate_key in seen_refs:
-            raise SourceSnapshotInvalid("duplicate source item durable reference")
-        seen_refs.add(duplicate_key)
-        normalized_items.append(
+        source_label = _guide_source_label(item.source_label)
+        duplicate_key = (source_kind, source_label)
+        if duplicate_key in seen_labels:
+            raise SourceSnapshotInvalid("duplicate source item label")
+        seen_labels.add(duplicate_key)
+        declared_items.append(
             {
                 "source_kind": source_kind,
-                "durable_ref": durable_ref,
+                "source_label": source_label,
                 "ingestion_adapter": ingestion_adapter,
-                "content_hash": item.content_hash,
-                "content_cid": content_cid,
                 "media_type": item.media_type,
-                "content_excerpt": item.content_excerpt,
             }
         )
-    sorted_items = sorted(
-        normalized_items,
-        key=lambda item: (item["source_kind"], item["durable_ref"], item["content_hash"]),
+    sorted_declarations = sorted(
+        declared_items,
+        key=lambda item: (item["source_kind"], item["source_label"], item["ingestion_adapter"]),
     )
+    sorted_items = [
+        {"item_id": str(uuid4()), "item_order": index, **item}
+        for index, item in enumerate(sorted_declarations)
+    ]
     return {
         "schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
+        "snapshot_id": snapshot_id,
+        "generation": generation,
         "items": sorted_items,
     }, sorted_items
 
@@ -4013,91 +3972,16 @@ def _guide_source_token(value: str, label: str) -> str:
     return normalized
 
 
-def _guide_source_durable_ref(durable_ref: str) -> str:
-    raw_ref = durable_ref.strip()
-    decoded_ref = _decode_guide_source_ref(raw_ref)
-    if "\\" in raw_ref or "\\" in decoded_ref:
-        raise SourceSnapshotInvalid("durable source refs cannot contain local path separators")
-    parsed, decoded_parsed = urlparse(raw_ref), urlparse(decoded_ref)
-    if not parsed.scheme or parsed.scheme.lower() not in ALLOWED_SOURCE_REF_SCHEMES:
-        raise SourceSnapshotInvalid("durable source ref scheme is not approved")
-    scheme = parsed.scheme.lower()
-    if decoded_parsed.scheme and decoded_parsed.scheme.lower() != scheme:
-        raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
-    if decoded_parsed.netloc and decoded_parsed.netloc != parsed.netloc:
-        raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
-    if scheme in OPAQUE_SOURCE_REF_SCHEMES and (
-        parsed.netloc
-        or parsed.path.startswith("//")
-        or decoded_parsed.netloc
-        or decoded_parsed.path.startswith("//")
+def _guide_source_label(value: str) -> str:
+    normalized = " ".join(value.split())
+    if not normalized or len(normalized) > SOURCE_ITEM_SOURCE_LABEL_MAX_LENGTH:
+        raise SourceSnapshotInvalid("source label is invalid")
+    if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
+        raise SourceSnapshotInvalid("source label contains control characters")
+    if any(character in normalized for character in (":", "/", "\\", "%", ";")) or (
+        SECRET_REF_PATTERN.search(normalized)
     ):
-        raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
-    if parsed.username or parsed.password or "@" in parsed.netloc:
-        raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
-    if (
-        ";" in raw_ref
-        or ";" in decoded_ref
-        or parsed.query
-        or parsed.fragment
-        or parsed.params
-        or decoded_parsed.query
-        or decoded_parsed.fragment
-        or decoded_parsed.params
-    ):
-        raise SourceSnapshotInvalid(
-            "durable source refs cannot contain query, fragment, or path parameters"
-        )
-    if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
-        raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-    decoded_path = _decode_guide_source_ref(parsed.path or "")
-    if any(segment in {".", ".."} for segment in decoded_path.split("/") if segment):
-        raise SourceSnapshotInvalid("durable source refs cannot contain path traversal")
-    if decoded_path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
-        r"^/?[A-Za-z]:/", decoded_path
-    ):
-        raise SourceSnapshotInvalid("durable source refs cannot be local filesystem paths")
-    if SECRET_ARTIFACT_NAME_PATTERN.search(decoded_path):
-        raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-    if scheme in OPAQUE_SOURCE_REF_SCHEMES:
-        segments = [segment for segment in decoded_path.split("/") if segment]
-        if (
-            not decoded_path.startswith("/")
-            or len(segments) < 2
-            or segments[0] not in OPAQUE_SOURCE_REF_NAMESPACES
-        ):
-            raise SourceSnapshotInvalid(
-                "opaque durable source refs must use an approved virtual namespace"
-            )
-    if scheme in {"http", "https"} and not parsed.netloc:
-        raise SourceSnapshotInvalid("http source refs require a host")
-    netloc, path = parsed.netloc.lower(), parsed.path or ""
-    return f"{scheme}://{netloc}{path}" if netloc else f"{scheme}:{path}"
-
-
-def _decode_guide_source_ref(value: str) -> str:
-    decoded = value
-    for _ in range(5):
-        next_decoded = unquote(decoded)
-        if next_decoded == decoded:
-            return decoded
-        decoded = next_decoded
-    raise SourceSnapshotInvalid("durable source refs cannot contain nested encoded locators")
-
-
-def _guide_source_content_cid(content_cid: str | None) -> str | None:
-    if content_cid is None:
-        return None
-    normalized = content_cid.strip()
-    parsed = urlparse(normalized)
-    if parsed.query or parsed.fragment or parsed.username or parsed.password:
-        raise SourceSnapshotInvalid("content CID cannot contain credentials or locators")
-    if SECRET_REF_PATTERN.search(normalized):
-        raise SourceSnapshotInvalid("content CID cannot contain credential material")
-    if normalized.startswith(("/", "\\", "~")) or parsed.scheme == "file":
-        raise SourceSnapshotInvalid("content CID cannot be a local filesystem path")
-    if not CONTENT_CID_PATTERN.fullmatch(normalized):
-        raise SourceSnapshotInvalid("content CID must be an approved opaque identifier")
+        raise SourceSnapshotInvalid("source label cannot contain a locator or credential material")
     return normalized
 
 
@@ -4108,14 +3992,12 @@ def build_guide_source_snapshot_items(
     """Build deterministic source-item rows shared by all snapshot writers."""
     return [
         GuideSourceSnapshotItem(
-            id=str(uuid4()),
+            id=item["item_id"],
             source_snapshot_id=snapshot_id,
-            item_order=index,
+            item_order=item["item_order"],
             source_kind=item["source_kind"],
-            durable_ref=item["durable_ref"],
+            source_label=item["source_label"],
             ingestion_adapter=item["ingestion_adapter"],
-            content_hash=item["content_hash"],
-            content_cid=item.get("content_cid"),
             media_type=item.get("media_type"),
         )
         for index, item in enumerate(items)
