@@ -10,12 +10,15 @@ from app.core.hashing import canonical_json_hash
 from app.modules.checkers.catalogue import (
     PreSubmissionCheckerCatalogue,
     PreSubmissionCheckerDefinition,
+    PreSubmissionCheckerPhase,
     PreSubmissionCheckerState,
 )
 from app.modules.checkers.compiler import (
     PRE_SUBMIT_BUNDLE_SCHEMA_VERSION,
     PRE_SUBMIT_COMPILER_VERSION,
     PRIMITIVES_VERSION,
+    PreSubmitCheckerCompilerError,
+    validate_compiled_pre_submit_checker_bundle,
 )
 
 
@@ -154,6 +157,7 @@ class EffectivePreSubmissionExecutionPlan:
 def compile_effective_pre_submission_execution_plan(
     *,
     lineage: EffectivePreSubmissionPlanLineage,
+    effective_policy: dict[str, Any],
     compiled_bundle: dict[str, Any],
     catalogue: PreSubmissionCheckerCatalogue,
 ) -> EffectivePreSubmissionExecutionPlan:
@@ -172,6 +176,17 @@ def compile_effective_pre_submission_execution_plan(
         raise EffectivePreSubmissionPlanError("compiled checker bundle envelope is invalid")
     if compiled_bundle.get("effective_policy_hash") != lineage.effective_policy_hash:
         raise EffectivePreSubmissionPlanError("compiled checker effective policy mismatch")
+    try:
+        validate_compiled_pre_submit_checker_bundle(
+            effective_policy,
+            lineage.effective_policy_hash,
+            compiled_bundle,
+            compiler_version=PRE_SUBMIT_COMPILER_VERSION,
+        )
+    except PreSubmitCheckerCompilerError as exc:
+        raise EffectivePreSubmissionPlanError(
+            f"compiled checker bundle does not enforce the locked effective policy: {exc}"
+        ) from exc
     rules = compiled_bundle.get("rules")
     if not isinstance(rules, list) or not rules:
         raise EffectivePreSubmissionPlanError("compiled checker bundle rules are invalid")
@@ -301,13 +316,7 @@ def _plan_body(
 
 
 def _phase_order(phase: str) -> int:
-    return {
-        "custody": 0,
-        "identity": 1,
-        "materialization": 2,
-        "default_policy": 3,
-        "project_policy": 4,
-    }[phase]
+    return list(PreSubmissionCheckerPhase).index(PreSubmissionCheckerPhase(phase))
 
 
 def _validate_sha256(value: str) -> None:

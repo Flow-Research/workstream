@@ -208,6 +208,7 @@ def test_mandatory_disabled_fails_closed_and_advisory_disabled_stays_visible() -
     ):
         compile_effective_pre_submission_execution_plan(
             lineage=lineage,
+            effective_policy=_effective_policy(),
             compiled_bundle=compiled_bundle,
             catalogue=mandatory_disabled,
         )
@@ -217,6 +218,7 @@ def test_mandatory_disabled_fails_closed_and_advisory_disabled_stays_visible() -
     )
     plan = compile_effective_pre_submission_execution_plan(
         lineage=lineage,
+        effective_policy=_effective_policy(),
         compiled_bundle=compiled_bundle,
         catalogue=advisory_disabled,
     )
@@ -231,11 +233,13 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
     compiled_bundle, lineage = _compiled_and_lineage()
     first = compile_effective_pre_submission_execution_plan(
         lineage=lineage,
+        effective_policy=_effective_policy(),
         compiled_bundle=compiled_bundle,
         catalogue=build_pre_submission_checker_catalogue(),
     )
     second = compile_effective_pre_submission_execution_plan(
         lineage=lineage,
+        effective_policy=_effective_policy(),
         compiled_bundle=compiled_bundle,
         catalogue=build_pre_submission_checker_catalogue(),
     )
@@ -257,6 +261,7 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
     changed_lineage = replace(lineage, project_id=uuid4())
     changed = compile_effective_pre_submission_execution_plan(
         lineage=changed_lineage,
+        effective_policy=_effective_policy(),
         compiled_bundle=compiled_bundle,
         catalogue=build_pre_submission_checker_catalogue(),
     )
@@ -267,6 +272,7 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
     )
     state_changed = compile_effective_pre_submission_execution_plan(
         lineage=lineage,
+        effective_policy=_effective_policy(),
         compiled_bundle=compiled_bundle,
         catalogue=advisory_disabled,
     )
@@ -281,6 +287,7 @@ def test_effective_plan_rejects_stale_or_non_catalogue_bundle_facts() -> None:
                 lineage,
                 pre_submit_policy_bundle_hash="sha256:" + "9" * 64,
             ),
+            effective_policy=_effective_policy(),
             compiled_bundle=compiled_bundle,
             catalogue=build_pre_submission_checker_catalogue(),
         )
@@ -294,6 +301,7 @@ def test_effective_plan_rejects_stale_or_non_catalogue_bundle_facts() -> None:
     with pytest.raises(EffectivePreSubmissionPlanError, match="unknown"):
         compile_effective_pre_submission_execution_plan(
             lineage=altered_lineage,
+            effective_policy=_effective_policy(),
             compiled_bundle=altered,
             catalogue=build_pre_submission_checker_catalogue(),
         )
@@ -305,7 +313,32 @@ def test_effective_plan_rejects_stale_or_non_catalogue_bundle_facts() -> None:
                 lineage,
                 pre_submit_policy_bundle_hash=canonical_json_hash(stale_envelope),
             ),
+            effective_policy=_effective_policy(),
             compiled_bundle=stale_envelope,
+            catalogue=build_pre_submission_checker_catalogue(),
+        )
+
+
+def test_effective_plan_rejects_bundle_that_omits_locked_required_rule() -> None:
+    compiled_bundle, lineage = _compiled_and_lineage()
+    altered = {
+        **compiled_bundle,
+        "rules": [
+            dict(rule)
+            for rule in compiled_bundle["rules"]
+            if rule["primitive"] != "require_file"
+        ],
+    }
+    altered_lineage = replace(
+        lineage,
+        pre_submit_policy_bundle_hash=canonical_json_hash(altered),
+    )
+
+    with pytest.raises(EffectivePreSubmissionPlanError, match="locked effective policy"):
+        compile_effective_pre_submission_execution_plan(
+            lineage=altered_lineage,
+            effective_policy=_effective_policy(),
+            compiled_bundle=altered,
             catalogue=build_pre_submission_checker_catalogue(),
         )
 
@@ -341,7 +374,7 @@ async def test_application_startup_installs_fixed_catalogue_configuration() -> N
     app = create_app(
         Settings(
             environment="test",
-            artifact_pre_submission_checker_disabled_ids=("artifact.quality.placeholder_signal"),
+            artifact_pre_submission_checker_disabled_ids="artifact.quality.placeholder_signal",
         )
     )
     async with app.router.lifespan_context(app):
