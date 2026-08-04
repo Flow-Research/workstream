@@ -225,11 +225,11 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a compiled bundle hash, and locked by tasks before they enter the contributor pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a compiled bundle hash, and locked by tasks before they enter the contributor pipeline. It runs as part of the single versioned pre-submission catalogue against the uploaded ZIP in bounded scratch before Workstream creates a submission. A failed preparation returns `pre_submission_checker_failed` with bounded same-request details. There is no standalone preflight route, and results never use review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 
-The contributor-facing domain error code returned when a submission-create attempt is blocked by pre-submit checks. It includes structured pass/fail/warning details in the error details and is not a review decision. It must not be stored as `accept`, `needs_revision`, or `reject`. The preflight endpoint returns `PreSubmitCheckResponse` instead of this error code.
+The contributor-facing domain error code returned when submission-bundle preparation is blocked by pre-submit checks. It includes bounded structured pass/fail/warning details in the same response and is not a review decision. It must not be stored as `accept`, `needs_revision`, or `reject`.
 
 ## Task
 
@@ -267,7 +267,11 @@ review, compensate, and audit work.
 
 ## Submission Packet
 
-The contributor's submitted output plus summary, artifacts, evidence references, hashes, and metadata. Workstream assigns the submission version server-side after blocking pre-submit checks pass.
+The contributor supplies a summary, accountability attestation, and one outer
+ZIP containing every required output/evidence file. Workstream derives the
+archive hash/size, semantic manifest, evidence facts, verified admission,
+artifact binding, and immutable Submission version server-side. Clients do not
+supply canonical hashes, manifests, provider references, or content IDs.
 
 ## Checker
 

@@ -1,6 +1,9 @@
-# Chunk Contract: WS-ART-001-04B - Scratch-Bound Pre-Submission Checks
+# Superseded Chunk Contract: WS-ART-001-04B - Scratch-Bound Pre-Submission Checks
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04A3
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by PLAN4
+
+This combined contract is retained as historical evidence. It is replaced by
+`04B1`, `04B2`, and `04B3`; no implementation may start from this file.
 
 Artifact contract phase: `upload_admission`
 

@@ -121,15 +121,14 @@ submission policy schema.
 
 `SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`. Workstream then generates, persists, and locks project `PreSubmitCheckerPolicy` with a compiled bundle hash from that effective project submission artifact policy. Tasks lock the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering the contributor pipeline.
 
-Blocking pre-submit failures prevent submission creation. Preflight failures
-return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
-results=[...])`. Blocked submission-create attempts return
-`pre_submission_checker_failed` with structured pass/fail/warning details and
+Blocking pre-submit failures prevent submission creation. The continuous
+submission-bundle preparation request returns `pre_submission_checker_failed`
+with bounded same-request status, eligibility, and pass/fail/warning details and
 create no submission row, no submission version, no task transition to
 `submitted`, and no submission-created audit event. Workstream still writes a
 task audit event named `pre_submission_check_failed` with the structured checker
 result for project operators; this is audit evidence, not a product review
-decision.
+decision. No independently invocable preflight route exists.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 

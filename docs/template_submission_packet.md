@@ -51,13 +51,13 @@ ReviewLease reviewer freeze during contribution creation. Only a prior human
 `needs_revision` preparation may have rebased the assignment selector; project
 publication or submission input cannot change it.
 
-Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating the submission.
-Preflight failures return `PreSubmitCheckResponse` with structured
-pass/fail/warning details. Blocked submission-create attempts return
-`pre_submission_checker_failed` with the same structured details, create no
+Workstream runs the single effective pre-submission plan against the uploaded
+outer ZIP in bounded scratch before creating the submission. Failed preparation
+returns `pre_submission_checker_failed` with bounded same-request structured
+details, creates no
 submission row, no submission version, and no submission-created audit event,
-and do not return review decision values: `accept`, `needs_revision`, or
-`reject`.
+and does not return review decision values: `accept`, `needs_revision`, or
+`reject`. There is no standalone preflight endpoint.
 
 ## Submission Bundle Manifest
 

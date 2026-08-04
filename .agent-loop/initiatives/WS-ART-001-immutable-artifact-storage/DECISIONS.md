@@ -506,7 +506,7 @@ new snapshot. None creates a sufficiency decision.
 
 The continuous submission-bundle request cannot become live while its fixed
 pre-submit materializer is unavailable. AUTH therefore splits checker
-activation: pre-submit materialization activates after hidden ART-04B evidence
+activation: pre-submit materialization activates after hidden ART-04B1-04B3 evidence
 and before XINT-05A activates contributor preparation. Post-submit
 materialization and checker output/binding activate later after ART-06A/06B.
 
@@ -538,3 +538,49 @@ v0.1 Workstream lifecycle and requires a future reviewed initiative.
 Local/MinIO product lifecycle proof, AWS deployment activation proof, and final
 cross-domain conformance are separate PRs. AWS readiness cannot bury product
 behavior, and product API proof cannot claim AWS production eligibility.
+
+## D52 - One Versioned Pre-Submission Checker Catalogue
+
+All Workstream platform defaults and constrained project-policy primitives are
+registered in one code-owned, versioned catalogue. Each entry has a stable ID,
+version, owner, phase/order, dependencies, classification, input capability,
+default operational state, disabled behavior, limits, bounded result contract,
+and policy trace. The effective execution plan combines non-bypassable artifact
+custody, Workstream defaults, and the task-locked Project Guide policy. It runs
+through one internal API and returns one ordered result envelope. A second
+registry, project-specific execution API, or scattered string dispatch is
+forbidden.
+
+## D53 - Disabling A Mandatory Default Fails Closed
+
+Every catalogue entry exposes `enabled|disabled`, but availability is not a
+policy bypass. Only startup-validated, versioned deployment configuration may
+disable an entry in v0.1. Contributors, Project Managers, project policy, and
+task parameters cannot toggle it. Disabling a mandatory security, integrity,
+or accountability entry makes submission-bundle preparation unavailable and
+causes no durable or provider effect. Disabling an advisory entry permits the
+remaining plan to run and records the disabled entry in bounded evidence. A
+locked project-required rule cannot be disabled at runtime; changing it
+requires a new approved policy lineage.
+
+## D54 - Generic Defaults Avoid Project Semantics
+
+Workstream defaults cover universal custody and submission-contract facts:
+outer-ZIP structure, archive/path/resource safety, exact archive identity,
+semantic manifest identity, executable normalization, unchanged-work rejection,
+sealed scratch integrity, high-confidence sensitive-file exclusions, required
+packet fields, and contributor accountability. Task-specific filenames,
+directory layouts, languages, tests, evidence meaning, and quality criteria
+come only from the locked Project Guide policy. Ambiguous name heuristics such
+as broad `token*`, `secret*`, `credential*`, or dependency-directory matches
+must not silently remain universal blocking rules; the implementing chunk must
+classify them as narrowly high-confidence blocking checks, advisory checks, or
+project-specific policy and prove the migration.
+
+## D55 - Legacy Standalone Precheck Is Removed Before Catalogue Execution
+
+The existing caller-owned `/submission-precheck` request cannot prove the exact
+uploaded ZIP or sealed server manifest and would create a second execution API.
+04A4 removes its route, schemas, service entry point, and OpenAPI surface before
+04B1 installs the authoritative catalogue. Pre-production accepts this clean-cut
+gap; there is no compatibility alias, redirect, or caller-manifest adapter.

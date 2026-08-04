@@ -307,10 +307,33 @@ separate cumulative safety proof.
 
 Both identities are compared with the immediate prior immutable `Submission`.
 Exact archive equality or semantic equality rejects before checker and provider
-I/O. Mandatory Workstream gates and the task's locked Project Guide checker then
-consume the same read-only scratch tree. A project may narrow platform limits
-but cannot disable gates or raise limits. Checker failure creates findings only
-and destroys scratch without durable artifact, Submission, or review state.
+I/O. One ordered pre-submission execution then consumes the same read-only
+scratch tree. It is assembled from a central, versioned Workstream checker
+catalogue:
+
+```text
+non-bypassable artifact-custody gates
++ Workstream default submission-policy checks
++ task-locked Project Guide checks
+= one effective pre-submission execution plan and one result envelope
+```
+
+The catalogue is the sole registry for stable checker identifiers, versions,
+phase/order, dependencies, owner, input capability, severity class, default
+availability, disabled behavior, resource limits, stable outcomes, and policy
+trace. Runtime services may dispatch through typed adapters, but may not grow a
+second checker registry or scattered name-based conditionals.
+
+Every catalogue entry has explicit `enabled|disabled` operational state. A
+disabled mandatory security, integrity, or contributor-accountability entry
+makes preparation fail closed as platform infrastructure unavailable; it is
+never recorded as skipped-and-passing. A disabled advisory entry is omitted
+from execution only through startup-validated, versioned deployment
+configuration and is recorded in the bounded result manifest. Contributors,
+Project Managers, task parameters, and project policy cannot toggle catalogue
+availability or weaken a mandatory default. Project policy may narrow platform
+limits but cannot raise them. Checker failure creates findings only and destroys
+scratch without durable artifact, Submission, or review state.
 
 A passing result stays bound to the same process-local scratch generation and is
 consumed immediately by the normal durable admission path. It is never a
@@ -565,8 +588,10 @@ them; no runtime plugin discovery or parser fallback is permitted.
    identity/continuation clean cut.
 2. Contributor intake accepts one outer ZIP, inspects and manifests its complete
    tree in bounded private scratch, and rejects exact or semantic unchanged work.
-3. Mandatory platform gates and locked Project Guide pre-submit checks execute
-   against that same scratch tree. Failure produces no durable bytes.
+3. The central Workstream checker catalogue composes mandatory platform gates,
+   Workstream default submission-policy checks, and locked Project Guide checks
+   into one ordered effective execution against that same scratch tree. Failure
+   produces no durable bytes.
 4. Passing bytes enter the existing immutable store once. Complete read-back
    verification publishes one bindable admission; ambiguity uses existing ART
    recovery.
@@ -686,7 +711,10 @@ AUTH-04B implementation/activation [merged PR #245]
 -> ART-04A1 legacy contributor-intake removal
 -> ART-04A2 bounded outer-ZIP safety/intake
 -> ART-04A3 semantic manifest + unchanged-work gate
--> ART-04B scratch-bound platform/project prechecks
+-> ART-04A4 legacy standalone precheck clean cut
+-> ART-04B1 default-checker catalogue and effective-plan contract
+-> ART-04B2 sealed scratch materialization and platform-default execution
+-> ART-04B3 locked-project execution and immutable bounded evidence
 -> XINT-06A pre-submit materializer activation
 -> ART-04C1 durable intent + one provider write
 -> ART-04C2 verified ready-admission publication
@@ -705,7 +733,8 @@ AUTH-04B implementation/activation [merged PR #245]
 -> XINT-08 + ART-08C final v0.1 conformance
 ```
 
-04A1-04C2 remain hidden internal pieces of one continuous contributor request.
+04A1-04C2, including split 04B1-04B3, remain hidden internal pieces of one
+continuous contributor request.
 No intermediate HTTP route, durable upload session, scratch handle, local path,
 or prepared authorization crosses those PR boundaries. 04C2 alone composes the
 hidden endpoint after every internal dependency exists.

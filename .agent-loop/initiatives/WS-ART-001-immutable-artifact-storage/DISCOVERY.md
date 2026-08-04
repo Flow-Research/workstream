@@ -243,3 +243,31 @@ Plan-review resolution:
   ledger tables completely; it does not retain detached compatibility fields.
 - Downgrade recreates only the exact empty legacy schema proven by the upgrade
   precondition. It never fabricates a session/item lineage from newer facts.
+
+## 2026-08-04 Default Pre-Submission Checker Catalogue Discovery
+
+Merged ART-04A2/04A3 already own outer-ZIP safety, resource bounds, archive
+identity, canonical semantic manifests, executable normalization, and the
+unchanged-work gate. These trusted capabilities must be registered into
+pre-submission execution, not reimplemented as another checker stack.
+
+Projects already merge `WorkstreamDefaultSubmissionArtifactPolicy` with the
+approved `SubmissionArtifactPolicy`, and the trusted compiler emits a locked
+`PreSubmitCheckerPolicy`. The remaining defects are execution shape and
+catalogue ownership:
+
+- checker names/defaults are spread across policy constants, compiler
+  primitives, legacy registry code, templates, and historical docs;
+- the legacy `/tasks/{task_id}/submission-precheck` accepts caller-owned packet
+  and manifest facts and cannot be the authoritative one-ZIP execution path;
+- combined 04B crosses catalogue, sealed materialization, platform execution,
+  project execution, persistence, and API-result boundaries;
+- broad forbidden-name patterns can false-positive legitimate generic projects;
+- `disabled` has no safe canonical meaning for non-bypassable defaults.
+
+PLAN4 splits 04B into catalogue/effective-plan composition, sealed default
+execution, and locked-project execution/evidence. v0.1 catalogue state is
+startup-validated deployment configuration. Disabling mandatory custody,
+integrity, or accountability fails preparation closed; only advisory entries
+may be disabled while remaining execution continues. Project policy and
+task/runtime input cannot toggle catalogue availability.
