@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -20,6 +21,9 @@ from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
 )
 from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
+)
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
@@ -58,6 +62,7 @@ from app.modules.authorization.runtime import (
 )
 from app.schemas.auth import ActorContext
 
+LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
@@ -174,6 +179,11 @@ async def ingest_guide_source_artifact(
         ArtifactAdmissionRelationshipError,
         ArtifactAuthorityDeniedError,
     ) as exc:
+        LOGGER.warning(
+            "guide_source_artifact_ingest_rejected type=%s reason=%s",
+            type(exc).__name__,
+            str(exc),
+        )
         raise HTTPException(status_code=404, detail="Guide source not found") from exc
     return GuideArtifactIngestResponse.model_validate(result, from_attributes=True)
 
@@ -267,7 +277,7 @@ async def create_guide_sufficiency_report(
     actor: Annotated[ActorContext, Depends(get_registered_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GuideSufficiencyReportResponse:
-    """Record Workstream's sufficiency assessment for a guide snapshot."""
+    """Record a diagnostic report that cannot replace verified agent provenance."""
     try:
         return await ProjectService(session).create_guide_sufficiency_report(
             actor,
@@ -335,41 +345,6 @@ async def get_submission_artifact_policy(
     response = SubmissionArtifactPolicyResponse.model_validate(policy)
     await session.commit()
     return response
-
-
-@router.post(
-    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent",
-    response_model=GuideSufficiencyReportResponse,
-    status_code=201,
-    responses={
-        200: {
-            "model": GuideSufficiencyReportResponse,
-            "description": "Existing guide sufficiency report reused.",
-        }
-    },
-)
-async def run_guide_sufficiency_agent(
-    project_id: str,
-    guide_id: str,
-    source_snapshot_id: str,
-    response: Response,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> GuideSufficiencyReportResponse:
-    """Run Workstream's guide sufficiency agent for a source snapshot."""
-    try:
-        result, created = await ProjectService(session).run_guide_sufficiency_agent(
-            actor,
-            project_id,
-            guide_id,
-            source_snapshot_id,
-        )
-        response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return result
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
 
 
 @router.post(
@@ -447,7 +422,8 @@ async def run_submission_artifact_policy_derivation_agent(
     """Run Workstream's submission artifact policy derivation agent."""
     try:
         result, created = await ProjectService(
-            session
+            session,
+            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
         ).run_submission_artifact_policy_derivation_agent(
             actor,
             project_id,
@@ -520,9 +496,7 @@ async def approve_submission_artifact_policy(
     "/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
     response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
     openapi_extra={
-        "x-workstream-action-id": (
-            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ.value
-        )
+        "x-workstream-action-id": (ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ.value)
     },
     dependencies=[Depends(enforce_human_authorization_read)],
 )
@@ -548,9 +522,7 @@ async def get_current_effective_submission_artifact_policy(
 @router.get(
     "/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
     response_model=PreSubmitCheckerPolicySummaryResponse,
-    openapi_extra={
-        "x-workstream-action-id": ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ.value
-    },
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ.value},
     dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_current_pre_submit_checker_policy(

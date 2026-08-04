@@ -23,9 +23,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIsNone(local_target("#local-heading"))
 
     def test_tool_specific_agent_paths_are_rejected(self) -> None:
-        failures = forbidden_path_failures(
-            [Path(".claude/settings.json"), Path("docs/guide.md")]
-        )
+        failures = forbidden_path_failures([Path(".claude/settings.json"), Path("docs/guide.md")])
         self.assertEqual(len(failures), 1)
         self.assertIn(".claude/settings.json", failures[0])
 
@@ -47,6 +45,57 @@ class LightweightAgentGateTests(unittest.TestCase):
         )
         self.assertIn("README.md:1: AMBIGUOUS_S3_ADAPTER_NAME", failures)
 
+    def test_stale_artifact_rejects_legacy_guide_content_identity(self) -> None:
+        failures = scan_artifact_text(
+            "backend/app/modules/projects/example.py",
+            "Caller supplied content_" + "cid.",
+            "guide_source_cutover",
+        )
+        self.assertIn(
+            "backend/app/modules/projects/example.py:1: LEGACY_GUIDE_CONTENT_CID",
+            failures,
+        )
+
+    def test_stale_artifact_rejects_legacy_guide_durable_ref(self) -> None:
+        failures = scan_artifact_text(
+            "backend/app/modules/projects/example.py",
+            "Caller supplied durable_" + "ref.",
+            "guide_source_cutover",
+        )
+        self.assertIn(
+            "backend/app/modules/projects/example.py:1: LEGACY_GUIDE_DURABLE_REF",
+            failures,
+        )
+        interface_failures = scan_artifact_text(
+            "backend/app/interfaces/project_agents.py",
+            "Caller supplied durable_" + "ref.",
+            "guide_source_cutover",
+        )
+        self.assertIn(
+            "backend/app/interfaces/project_agents.py:1: LEGACY_GUIDE_DURABLE_REF",
+            interface_failures,
+        )
+
+    def test_stale_artifact_rejects_legacy_guide_content_hash(self) -> None:
+        failures = scan_artifact_text(
+            "backend/app/modules/projects/example.py",
+            "Caller supplied content_" + "hash.",
+            "guide_source_cutover",
+        )
+        self.assertIn(
+            "backend/app/modules/projects/example.py:1: LEGACY_GUIDE_CONTENT_HASH",
+            failures,
+        )
+        interface_failures = scan_artifact_text(
+            "backend/app/interfaces/project_agents.py",
+            "Caller supplied content_" + "hash.",
+            "guide_source_cutover",
+        )
+        self.assertIn(
+            "backend/app/interfaces/project_agents.py:1: LEGACY_GUIDE_CONTENT_HASH",
+            interface_failures,
+        )
+
     def test_stale_artifact_rejects_unknown_phase(self) -> None:
         with self.assertRaises(ValueError):
             phase_index("unknown")
@@ -65,6 +114,10 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("Require every semantic lane", workflow)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
+        self.assertIn(
+            "WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000",
+            workflow,
+        )
         self.assertIn("include-hidden-files: true", workflow)
         self.assertIn("coverage report --precision=2 --fail-under=78", workflow)
         self.assertGreaterEqual(workflow.count("--fail-under=90"), 10)

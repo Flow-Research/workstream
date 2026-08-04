@@ -106,6 +106,7 @@ LANES = (
             "tests/test_external_service_adapters.py",
             "tests/test_guide_artifacts.py",
             "tests/test_guide_bindings.py",
+            "tests/test_guide_setup.py",
             "tests/test_guide_formats.py",
             "tests/test_guide_extraction.py",
             "tests/test_guide_images.py",

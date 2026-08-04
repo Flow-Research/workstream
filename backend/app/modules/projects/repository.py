@@ -504,7 +504,21 @@ class ProjectRepository:
         """Load the sufficiency report bound to a guide-source snapshot."""
         result = await self._session.execute(
             select(GuideSufficiencyReport).where(
-                GuideSufficiencyReport.source_snapshot_id == snapshot_id
+                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_not(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_diagnostic_sufficiency_report_for_snapshot(
+        self,
+        snapshot_id: str,
+    ) -> GuideSufficiencyReport | None:
+        """Load the non-authoritative diagnostic report for policy drafting only."""
+        result = await self._session.execute(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_(None),
             )
         )
         return result.scalar_one_or_none()

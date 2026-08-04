@@ -200,9 +200,7 @@ class GuideMutationService:
         # A concurrent exact replay can miss the optimistic lookup and then wait
         # on this project lock. Re-read the ledger after the lock so the winner's
         # committed response takes precedence over the natural version conflict.
-        existing = await self._existing(
-            resolved, action, key, digest, ProjectGuideResponse
-        )
+        existing = await self._existing(resolved, action, key, digest, ProjectGuideResponse)
         if existing:
             return existing
         if await self._repo.get_guide_by_version(str(project_id), payload.version):
@@ -304,14 +302,16 @@ class GuideMutationService:
         predecessor = await self._repo.lock_latest_guide_source_snapshot(
             str(project_id), guide.id, guide.version
         )
-        manifest, sanitized = build_guide_source_snapshot_manifest(payload, guide)
+        generation = (predecessor.creation_generation or 0) + 1 if predecessor else 1
+        manifest, sanitized = build_guide_source_snapshot_manifest(
+            payload,
+            snapshot_id=str(snapshot_id),
+            generation=generation,
+        )
         try:
             snapshot_hash = canonical_json_hash(manifest)
         except ValueError:
-            raise PolicySetupBlocked(
-                "canonical JSON cannot contain non-finite numbers"
-            ) from None
-        generation = (predecessor.creation_generation or 0) + 1 if predecessor else 1
+            raise PolicySetupBlocked("canonical JSON cannot contain non-finite numbers") from None
         resource = ProjectGuideSourceSnapshotMutationResourceContext(
             resource_type="project_guide_source_snapshot_mutation",
             resource_id=snapshot_id,

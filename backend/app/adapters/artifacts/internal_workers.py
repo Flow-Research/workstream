@@ -8,6 +8,8 @@ from threading import Condition
 from typing import Iterator
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
+
 from app.adapters.artifacts import (
     create_artifact_store_bootstrap,
     require_artifact_runtime_eligible,
@@ -29,11 +31,14 @@ from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 
 
 _runtime_condition = Condition()
-_runtime: tuple[
-    ArtifactStoreBootstrap,
-    ArtifactStore,
-    ArtifactStorageNamespaceSpec,
-] | None = None
+_runtime: (
+    tuple[
+        ArtifactStoreBootstrap,
+        ArtifactStore,
+        ArtifactStorageNamespaceSpec,
+    ]
+    | None
+) = None
 _runtime_active_operations = 0
 _runtime_shutting_down = False
 
@@ -78,9 +83,7 @@ def shutdown_artifact_internal_runtime() -> None:
 
 
 @contextmanager
-def _artifact_internal_runtime() -> Iterator[
-    tuple[ArtifactStore, ArtifactStorageNamespaceSpec]
-]:
+def _artifact_internal_runtime() -> Iterator[tuple[ArtifactStore, ArtifactStorageNamespaceSpec]]:
     """Lease the initialized process store against concurrent shutdown."""
     global _runtime_active_operations
     with _runtime_condition:
@@ -97,7 +100,7 @@ def _artifact_internal_runtime() -> Iterator[
                 _runtime_condition.notify_all()
 
 
-async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> None:
+async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> str:
     """Compose one resolver or verifier operation behind the adapter boundary."""
     identities = {
         "put": ServiceIdentity.ARTIFACT_PUT_RESOLVER,
@@ -127,15 +130,65 @@ async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> None:
             )
             try:
                 if kind == "put":
-                    await orchestrator.resolve_put_attempt(resource_id)
+                    return await orchestrator.resolve_put_attempt(resource_id)
                 elif kind == "verification":
-                    await orchestrator.verify_object(resource_id)
+                    return await orchestrator.verify_object(resource_id)
             except AuthorizationDenied:
                 await session.rollback()
                 await authority.persist_denial()
-                raise ArtifactAuthorityDeniedError(
-                    "artifact internal authority denied"
-                ) from None
+                raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
+    raise AssertionError("artifact internal operation did not return")
+
+
+async def continue_guide_setup_after_verification(verification_job_id: UUID) -> None:
+    """Compose ART capabilities for the project-owned setup continuation."""
+    from app.adapters.artifacts import create_artifact_scratch_manager
+    from app.modules.artifacts.guide_setup import GuideSetupPreparationService
+    from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationJob
+    from app.modules.artifacts.preparation import ArtifactPreparationService
+    from app.modules.projects.models import GuideSourceSnapshotItem
+    from app.modules.projects.guide_setup_continuation import (
+        continue_setup_after_verified_guide_item,
+    )
+
+    settings = get_settings()
+    async with get_session_factory()() as session:
+        source_snapshot_id = await session.scalar(
+            select(GuideSourceSnapshotItem.source_snapshot_id)
+            .join(
+                ArtifactPutAttempt,
+                ArtifactPutAttempt.guide_source_item_id == GuideSourceSnapshotItem.id,
+            )
+            .join(
+                ArtifactVerificationJob,
+                ArtifactVerificationJob.originating_put_attempt_id == ArtifactPutAttempt.id,
+            )
+            .where(
+                ArtifactVerificationJob.id == str(verification_job_id),
+                ArtifactVerificationJob.status == "verified",
+                ArtifactVerificationJob.terminal_result_code == "verified",
+            )
+        )
+    if source_snapshot_id is None:
+        return
+    await initialize_artifact_internal_runtime()
+    manager = create_artifact_scratch_manager(settings)
+    try:
+        with _artifact_internal_runtime() as (store, namespace):
+            preparation_service = GuideSetupPreparationService(
+                get_session_factory(),
+                store,
+                ArtifactPreparationService(manager),
+                namespace,
+            )
+            await continue_setup_after_verified_guide_item(
+                verification_job_id,
+                UUID(source_snapshot_id),
+                session_factory=get_session_factory(),
+                prepare_generation=preparation_service.prepare_generation,
+            )
+    finally:
+        manager.close()
 
 
 async def scan_artifact_pending_work(
@@ -163,6 +216,54 @@ async def scan_artifact_pending_work(
         except AuthorizationDenied:
             await session.rollback()
             await authority.persist_denial()
-            raise ArtifactAuthorityDeniedError(
-                "artifact internal authority denied"
-            ) from None
+            raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
+
+
+async def scan_guide_setup_continuations(
+    publish_continuation: Callable[[str], Awaitable[None]],
+) -> int:
+    """Publish continuations only for verified jobs on retryable snapshots."""
+    from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationJob
+    from app.modules.projects.guide_setup_continuation import (
+        retryable_source_snapshot_ids,
+    )
+    from app.modules.projects.models import GuideSourceSnapshotItem
+
+    settings = get_settings()
+    snapshot_ids = await retryable_source_snapshot_ids(
+        get_session_factory(),
+        page_size=settings.guide_setup_continuation_scan_page_size,
+    )
+    if not snapshot_ids:
+        return 0
+    async with get_session_factory()() as session:
+        job_ids = list(
+            (
+                await session.scalars(
+                    select(ArtifactVerificationJob.id)
+                    .join(
+                        ArtifactPutAttempt,
+                        ArtifactPutAttempt.id == ArtifactVerificationJob.originating_put_attempt_id,
+                    )
+                    .join(
+                        GuideSourceSnapshotItem,
+                        GuideSourceSnapshotItem.id == ArtifactPutAttempt.guide_source_item_id,
+                    )
+                    .where(
+                        ArtifactVerificationJob.status == "verified",
+                        ArtifactVerificationJob.terminal_result_code == "verified",
+                        GuideSourceSnapshotItem.source_snapshot_id.in_(
+                            [str(value) for value in snapshot_ids]
+                        ),
+                    )
+                    .order_by(
+                        ArtifactVerificationJob.terminal_at.asc(),
+                        ArtifactVerificationJob.id.asc(),
+                    )
+                    .limit(settings.guide_setup_continuation_scan_page_size)
+                )
+            ).all()
+        )
+    for job_id in job_ids:
+        await publish_continuation(job_id)
+    return len(job_ids)
