@@ -263,6 +263,8 @@ async def create_verified_report_fixture(
         if setup_run is None:
             snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
             assert snapshot is not None
+            assert snapshot.creation_generation is not None
+            assert snapshot.creation_generation > 0
             setup_run = ProjectSetupRun(
                 id=str(uuid4()),
                 project_id=diagnostic_report.project_id,
