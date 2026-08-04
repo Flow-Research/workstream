@@ -195,8 +195,10 @@ class GuideSufficiencyMutationIdempotencyRecord(Base):
         CheckConstraint("status in ('pending','committed')", name="ck_sufficiency_mutation_status"),
         CheckConstraint(
             "(status='pending' and response_json is null and committed_at is null) or "
-            "(status='committed' and response_json is not null and report_id is not null "
-            "and committed_at is not null)",
+            "(status='committed' and response_json is not null and committed_at is not null "
+            "and ((action_id='project.guide_sufficiency.run' "
+            "and (setup_run_id is not null or report_id is not null)) "
+            "or (action_id<>'project.guide_sufficiency.run' and report_id is not null)))",
             name="ck_sufficiency_mutation_state_shape",
         ),
     )

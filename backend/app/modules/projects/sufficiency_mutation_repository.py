@@ -110,7 +110,7 @@ class GuideSufficiencyMutationReplayRepository:
         record: GuideSufficiencyMutationIdempotencyRecord,
         *,
         response_json: dict,
-        report_id: str,
+        report_id: str | None,
     ) -> None:
         """Complete one pending reservation with stable response custody."""
         completed = await self._session.scalar(

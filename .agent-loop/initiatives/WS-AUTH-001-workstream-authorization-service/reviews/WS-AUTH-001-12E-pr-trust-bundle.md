@@ -21,12 +21,17 @@ the fixed `workstream.project.setup` service only the internal run command.
 - Added the three active catalogue actions and exact human/fixed-service guards.
 - Added prepared authorization and final locked revalidation to all durable
   sufficiency mutations.
-- Added migration 0052 for immutable replay custody and complete authorization
+- Added migration 0054 for immutable replay custody and complete authorization
   provenance.
 - Connected the setup worker through fresh deterministic service authority.
-- Reconciled ART-03C so a human-requested verified report does not advance the
-  setup ledger; the fixed service may adopt that exact report only after fresh
-  authority and complete material/source-usage revalidation.
+- Made the Project Manager recovery route asynchronous: human PREP evidence,
+  stable replay response, and deterministic `dispatch_pending` custody commit
+  atomically before broker publication.
+- Reconciled ART-03C so automatic readiness and authorized human recovery
+  requests converge on one deterministic asynchronous setup task. HTTP returns
+  setup custody only; the fixed service alone creates authoritative reports.
+- Added the exact-generation terminal fence so completed sufficiency or policy
+  output rejects redundant requests before queue, material, or agent work.
 - Kept manual diagnostic reports separate from the single authoritative
   verified-report slot.
 - Added runtime, migration, API, replay, transaction, and coverage proof.
@@ -90,8 +95,11 @@ git diff --check
 ```text
 Ruff: passed
 Project sufficiency selector before hosted review: 31 passed
+Async manual/automatic custody, terminal fence, wrong task identity, and stale
+dispatch recovery: 5 passed
+Stable pre-publish custody exact replay regression: 1 passed after fixture repair
 Authorization selector: 144 passed
-Migration 0052 selector: passed
+Migration 0054 selector: passed
 API contract E2E: passed
 Semantic collection: 2,928 tests across five hosted lanes
 External-review shared-foundation selectors: passed
@@ -137,21 +145,22 @@ Actions; the user's machine is not used for the roughly four-hour local suite.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: `aefec9e3703079744441161ea40356c308cd89fb`
+Reviewed code state: current pre-commit WS-AUTH-001-12E correction diff
 
-Reviewed at: 2026-08-03
+Reviewed at: 2026-08-04
 
 Reviewer run IDs: `12e_arch_final`, `12e_impl_qa`, `12e_impl_senior`,
-`12e_product_final`, `12e_security_final`, `12e_test_delta`, plus recorded CI,
-docs, and reuse tracks.
+`12e_product_final`, `12e_security_final`, `12e_test_delta`, plus the final
+`12e_async_*` architecture, security, product, QA, and CI-integrity correction
+reviews and the recorded docs/reuse tracks.
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
 | Senior engineering | PASS | None | Final implementation review |
-| QA/test | PASS | None | Focused DB proof passed |
-| Security/auth | PASS | None | Replay namespace and custody verified |
-| Product/ops | PASS | None | Mid-flight terminal repair verified |
-| Architecture | PASS WITH LOW RISKS | None | Legacy helper retirement is follow-up |
+| QA/test | PASS | None | Async custody and exact replay proof reviewed |
+| Security/auth | PASS | None | Atomic replay/dispatch lease and immutable lineage verified |
+| Product/ops | PASS | None | Automatic trigger, manual recovery, and terminal token fence verified |
+| Architecture | PASS | None | Human request and fixed-service execution remain separate |
 | CI integrity | PASS | None | No gate weakening |
 | Docs | PASS | None | Canonical surfaces aligned |
 | Reuse/dedup | PASS | None | Shared PREP/service resolver reused |
@@ -164,8 +173,8 @@ docs, and reuse tracks.
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Re-review pending | All actionable first-review findings fixed or explicitly deferred in the external-response record |
-| GitHub checks | Rerun pending | All semantic lanes passed on the prior exact head; focused repair targets the remaining guide-sufficiency per-file gate |
+| CodeRabbit | Re-review pending | Correction will be pushed for exact-head review |
+| GitHub checks | Rerun pending | Hosted full suite and coverage will run on the correction head |
 
 ## CI And Gate Integrity
 
@@ -192,7 +201,7 @@ docs, and reuse tracks.
 ## Human Review Focus
 
 - The three-action activation boundary and human/service separation.
-- Migration 0050 replay/provenance constraints and downgrade refusal.
+- Migration 0054 replay/provenance constraints and downgrade refusal.
 - External-agent transaction break and final locked revalidation.
 - Deterministic task identity, terminal fencing, and atomic evidence.
 

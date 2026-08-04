@@ -490,10 +490,11 @@ the SHA-256 and byte count of the canonical material sent to the agent. Their
 source provenance is normalized into `GuideSufficiencyReportSourceUsage` rows.
 
 Manual sufficiency reports persist `agent_name` and `agent_version` as null.
-Reports created through either the authorized Project Manager agent request or
-the automatic fixed-service continuation persist Workstream-owned agent
-identity; provider-returned names or versions are not trusted as audit
-provenance. The human request does not advance the automatic setup ledger. A
+Only reports created through the automatic fixed-service continuation persist
+Workstream-owned agent identity; provider-returned names or versions are not
+trusted as audit provenance. A Project Manager HTTP request authorizes only
+asynchronous dispatch and converges on the same setup run and deterministic
+task as automatic verified-material readiness. It creates no report inline. A
 source snapshot may have one diagnostic report and one verified agent report.
 Only the verified report, with a complete exact source-usage set, may support
 agent policy derivation or guide activation.

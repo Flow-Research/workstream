@@ -83,6 +83,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     setup_run_id: str,
     setup_generation: int,
     verification_job_id: str | None = None,
+    claimed_task_id: str | None = None,
 ) -> str | None:
     """Dispatch one committed setup intent and record its bounded outcome."""
     from app.modules.projects.repository import ProjectRepository
@@ -93,10 +94,18 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
     if setup_run is None:
         raise ProjectSetupQueueError("project setup run missing before dispatch")
     if setup_run.status == "dispatch_pending" and setup_run.celery_task_id is not None:
-        if setup_run.updated_at > dispatch_stale_before():
+        if setup_run.celery_task_id != expected_task_id:
+            raise ProjectSetupQueueError("project setup task identity is stale before dispatch")
+        if claimed_task_id is not None and claimed_task_id != setup_run.celery_task_id:
+            raise ProjectSetupQueueError("project setup dispatch claim is stale")
+        if claimed_task_id is None and setup_run.updated_at > dispatch_stale_before():
             return setup_run.celery_task_id
         deterministic_task_id = setup_run.celery_task_id
         setup_run.updated_at = datetime.now(UTC)
+    elif setup_run.status == "queued" and setup_run.celery_task_id is not None:
+        if setup_run.celery_task_id != expected_task_id:
+            raise ProjectSetupQueueError("project setup task identity is stale before dispatch")
+        return setup_run.celery_task_id
     elif setup_run.status in {"queued", "enqueue_failed"}:
         deterministic_task_id = expected_task_id
         setup_run.status = "dispatch_pending"

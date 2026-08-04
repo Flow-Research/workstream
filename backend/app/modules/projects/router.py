@@ -63,6 +63,7 @@ from app.modules.projects.authorization_reads import (
     authorize_project_policy_read,
 )
 from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.setup_queue import dispatch_pre_submit_setup_pipeline_after_commit
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.runtime import (
@@ -367,38 +368,39 @@ async def get_submission_artifact_policy(
 
 @router.post(
     "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent",
-    response_model=GuideSufficiencyReportResponse,
-    status_code=201,
-    responses={
-        200: {
-            "model": GuideSufficiencyReportResponse,
-            "description": "Existing guide sufficiency report reused.",
-        }
-    },
+    response_model=ProjectSetupRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value},
 )
 async def run_guide_sufficiency_agent(
     project_id: UUID,
     guide_id: UUID,
     source_snapshot_id: UUID,
-    response: Response,
     authorization: Annotated[
         tuple[UUID, ResolvedActor, PreparedAuthorizationService],
         Depends(sufficiency_authorization),
     ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> GuideSufficiencyReportResponse:
-    """Run Workstream's guide sufficiency agent for a source snapshot."""
+) -> ProjectSetupRunResponse:
+    """Request asynchronous sufficiency processing for a verified source snapshot."""
     key, resolved, prepared = authorization
     try:
-        execution = GuideSufficiencyMutationService(
+        outcome = await GuideSufficiencyMutationService(session).authorize_manual_dispatch(
+            resolved, prepared, key, project_id, guide_id, source_snapshot_id
+        )
+        await session.commit()
+        setup_run = outcome.response
+        await dispatch_pre_submit_setup_pipeline_after_commit(
             session,
-            material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
-        ).run_agent(resolved, prepared, key, project_id, guide_id, source_snapshot_id)
-        async with execution as outcome:
-            await (session.rollback() if outcome.replayed else session.commit())
-        response.status_code = status.HTTP_200_OK if outcome.replayed else status.HTTP_201_CREATED
-        return outcome.response
+            project_id=setup_run.project_id,
+            guide_id=setup_run.guide_id,
+            source_snapshot_id=setup_run.source_snapshot_id,
+            setup_run_id=setup_run.id,
+            setup_generation=setup_run.setup_generation,
+            verification_job_id=setup_run.continuation_verification_job_id,
+            claimed_task_id=(setup_run.celery_task_id if outcome.dispatch_claimed else None),
+        )
+        return setup_run
     except GuideSufficiencyMutationConflict as exc:
         await session.rollback()
         raise mutation_conflict_error(str(exc)) from exc

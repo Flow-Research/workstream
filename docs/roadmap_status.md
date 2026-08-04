@@ -62,9 +62,11 @@ remain outside v0.1.
   fail-closed PREP/read handoff required for hidden REV implementation. These
   foundations merged through PRs #242, #248, #255, and #257 respectively.
   These readiness contracts do not make the review lifecycle available.
-- Project Manager-authorized guide-sufficiency creation, agent-run requests,
-  and warning acknowledgement with UUID replay custody; the fixed project-setup
-  service has only the internal sufficiency-run capability.
+- Project Manager-authorized guide-sufficiency creation, asynchronous agent-run
+  requests, and warning acknowledgement with UUID replay custody; automatic
+  readiness and manual recovery converge on one deterministic setup task, and
+  only the fixed project-setup service executes sufficiency and creates its
+  authoritative report.
 
 ### Project, task, submission, and checker foundations
 

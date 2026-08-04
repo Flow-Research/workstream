@@ -17,12 +17,18 @@ until this chunk merges.
   is not the Project Manager resume/finalize command prohibited by ART-03C.
 - ART-03C remains authoritative for byte ingestion, binding, classification,
   extraction, source-usage lineage, recovery, and automatic continuation.
-- Both human HTTP execution and fixed setup-service execution must use the
-  same canonical same-generation ART material port. Neither path may revive
-  caller excerpts, durable references, hashes, CIDs, or other legacy material.
-- The automatic setup-service path remains independent of the human route and
-  never borrows Project Manager authority. The human route never advances or
-  resumes a setup run merely by invoking the agent.
+- Automatic verified-material continuation is the primary trigger. The human
+  HTTP action is an asynchronous recovery/request trigger; it must converge on
+  the same durable setup run and deterministic Celery task as automatic
+  continuation. The HTTP request must not materialize guide bytes or invoke the
+  agent inline.
+- Only fixed setup-service execution may use the canonical same-generation ART
+  material port. Neither trigger may revive caller excerpts, durable
+  references, hashes, CIDs, or other legacy material.
+- The automatic setup-service path remains independent of human authority and
+  never borrows Project Manager authority. The human route authorizes only a
+  bounded dispatch request; the worker obtains fresh fixed-service authority
+  before execution and protected persistence.
 - A manual report remains diagnostic and cannot satisfy verified setup,
   derivation, or activation evidence. Only an agent report with exact verified
   extraction/source-usage lineage may occupy the authoritative verified slot.
@@ -36,9 +42,9 @@ until this chunk merges.
 
 ## Goal
 
-Activate manual sufficiency creation, the HTTP agent-run request, and warning
-acknowledgement for the covered Project Manager, plus the same run action for
-the fixed setup service only through internal command resolution.
+Activate manual sufficiency creation, asynchronous HTTP agent-run requests,
+and warning acknowledgement for the covered Project Manager, plus agent
+execution for the fixed setup service only through internal command resolution.
 
 ## Why this chunk exists
 
@@ -63,6 +69,7 @@ backend/app/modules/projects/router.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/app/modules/projects/setup_queue.py
+backend/app/modules/projects/guide_setup_continuation.py
 backend/app/modules/projects/sufficiency_mutation_service.py
 backend/app/modules/projects/sufficiency_mutation_repository.py
 backend/app/modules/projects/guide_mutation_router.py
@@ -72,7 +79,7 @@ backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
-backend/app/**/project_setup.py
+backend/app/workers/project_setup.py
 backend/alembic/versions/0054_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
@@ -131,11 +138,41 @@ migration 0046 or introduce a second prepared-authorization protocol.
   Committed replay is reauthorized before response; changed, pending, or
   cross-link reuse conflicts without invoking the agent or mutating product
   state.
-- Cheap preflight occurs before ART materialization/provider access or agent
-  invocation. No prepared handle crosses agent execution, rollback, commit,
-  session, transaction, or Celery. Final persistence obtains fresh prepared
-  authority and rejects stale/replaced source, setup run, generation, material,
-  or output.
+- The HTTP run request returns `202 Accepted` with the canonical setup-run
+  identity/status after durable dispatch custody is committed. It never waits
+  for agent completion and never returns a newly created report inline.
+- Human PREP evidence, the idempotent response, and deterministic
+  `dispatch_pending` custody commit atomically before broker publication.
+  Exact replay returns that same accepted custody; stale delivery claims remain
+  recoverable under the same deterministic task identity.
+- Automatic verified-material continuation and an authorized manual request
+  for the same setup generation converge on the same setup-run row and
+  deterministic Celery task identity. Concurrent triggers publish at most one
+  live logical execution; exact retries return the same custody state.
+- Before manual dispatch, lock the latest guide/source setup generation and its
+  authoritative outputs. Reject with `guide_sufficiency_run_not_needed` before
+  queue, material/provider access, or agent invocation when that exact
+  generation already has any terminal authoritative sufficiency report
+  (`passed`, `passed_with_warnings`, or `blocked`) regardless of whether
+  downstream derivation completed. The same rejection applies when the exact
+  generation has a compiled project pre-submit checker policy bound to its
+  effective project submission artifact policy, source snapshot/hash,
+  and guide/version lineage for the same locked setup-run generation. This does
+  not require a new direct setup-generation column on the checker policy. A
+  newer guide/source setup generation remains eligible even when an older
+  generation has completed outputs.
+- A different idempotency key cannot bypass the current-generation terminal
+  fence. If sufficiency is terminal but downstream policy derivation failed,
+  12E rejects the sufficiency rerun as not needed and returns the current setup
+  state; downstream derivation recovery is owned by a later plan/chunk. It
+  never spends tokens rerunning sufficiency. Explicit future force-rerun
+  semantics are outside 12E.
+- Cheap request authorization and current-generation necessity checks occur
+  before dispatch. Worker preflight occurs before ART materialization/provider
+  access or agent invocation. No prepared handle crosses agent execution,
+  rollback, commit, session, transaction, or Celery. Final persistence obtains
+  fresh prepared authority and rejects stale/replaced source, setup run,
+  generation, material, or output.
 - The route or internal command owns one final successful commit. Product
   services and repositories flush only. Canonical auth, idempotency, and
   preflight denials commit bounded denial evidence from a clean transaction
@@ -150,7 +187,8 @@ migration 0046 or introduce a second prepared-authorization protocol.
   and source-usage row staging. It reuses an AUTH-owned service
   context/revalidation path for `workstream.project.setup`; it must not copy
   ART-private authorization helpers or add a setup-service resolver.
-- Migration 0053, based on ART migration `0052_legacy_intake_removal`, adds one
+- Migration 0054, based on compensation migration
+  `0053_compensation_bindings`, adds one
   immutable replay ledger plus separate complete
   creation and acknowledgement authorization-provenance shapes. It does not
   duplicate ART extraction/source-usage provenance from 0046. Historical rows
@@ -171,6 +209,11 @@ migration 0046 or introduce a second prepared-authorization protocol.
 - OpenAPI/API tests prove the three exact action metadata values, mandatory UUID
   idempotency keys, human-only public admission, and service-token rejection
   before product execution.
+- API tests prove the human run request returns `202`, carries identifiers only,
+  performs no inline material or agent call, rejects a current-generation
+  terminal report (including when policy derivation failed) or compiled policy
+  as not needed, admits a newer generation, and converges with simultaneous
+  automatic continuation on one deterministic task.
 - Route composition reuses or extracts the existing strict UUID
   `Idempotency-Key` parser convention and preserves the guide/policy mutation
   error shape; it does not add a third route-local parser variant.
@@ -184,11 +227,12 @@ migration 0046 or introduce a second prepared-authorization protocol.
   conflict test with zero material/agent calls. ART-03B4 material/provenance
   tests remain unchanged, unskipped, and in their canonical lanes.
 - Manual reports remain distinct diagnostic records. They are never returned
-  as an agent-run replay, treated as fixed-service setup output, accepted as
-  derivation/activation evidence, or allowed to occupy the authoritative
-  verified-report slot. A human or service agent run reuses only an exact
-  run-owned report with matching action, setup/material provenance, source
-  usages, and replay identity.
+  as an HTTP run-request replay, treated as fixed-service setup output,
+  accepted as derivation/activation evidence, or allowed to occupy the
+  authoritative verified-report slot. Human HTTP replay returns only the same
+  setup-run dispatch/custody response. Only `workstream.project.setup` may
+  create, adopt, or replay an authoritative verified agent report with matching
+  action, setup/material provenance, source usages, and service replay identity.
 - PostgreSQL proves constraint closure, concurrent one-effect replay,
   append-only replay completion, populated downgrade refusal where required,
   safe empty downgrade, and re-upgrade. Existing migration 0046 remains
@@ -197,7 +241,8 @@ migration 0046 or introduce a second prepared-authorization protocol.
   final pushed head SHA passes `Backend / test` and `Agent Gates`.
 - The project operating manual documents all three active routes, UUID
   idempotency, Project Manager-only public admission, service-token rejection,
-  and distinct manual versus agent-backed setup paths.
+  and automatic/manual triggers converging on one asynchronous fixed-service
+  execution path.
 - Canonical glossary and data-model wording states that manual sufficiency
   reports are diagnostic only and cannot satisfy verified derivation or guide
   activation. The historical chunk-3 specification is explicitly marked as
@@ -245,8 +290,8 @@ integrity, docs, reuse/dedup, and test delta.
 
 ## Human review focus
 
-External-agent boundary, exact snapshot/generation, and acknowledgement
-provenance.
+External-agent boundary, automatic/manual dispatch convergence, no-unnecessary-
+run fencing, exact snapshot/generation, and acknowledgement provenance.
 
 ## Stop conditions
 

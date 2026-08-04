@@ -41,6 +41,7 @@ from app.modules.projects.schemas import (
     GuideSufficiencyFindingInput,
     GuideSufficiencyReportCreate,
     GuideSufficiencyReportResponse,
+    ProjectSetupRunResponse,
 )
 from app.modules.projects.service import (
     GuideEditBlocked,
@@ -59,6 +60,7 @@ from app.modules.projects.service import (
     validate_sufficiency_report_payload,
     verified_guide_sufficiency_agent_item,
 )
+from app.modules.projects.setup_queue import pre_submit_setup_task_id
 from app.modules.projects.sufficiency_mutation_repository import (
     GuideSufficiencyMutationReplayRepository,
 )
@@ -77,6 +79,15 @@ class GuideSufficiencyMutationOutcome:
     response: GuideSufficiencyReportResponse
     replayed: bool
     created: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSufficiencyDispatchOutcome:
+    """Authorized custody for one asynchronous setup dispatch."""
+
+    response: ProjectSetupRunResponse
+    replayed: bool
+    dispatch_claimed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +162,25 @@ class GuideSufficiencyMutationService:
     def _prove_human(decision, project_id: UUID) -> None:
         GuideSufficiencyMutationService._prove_authority(decision, project_id, "human")
 
+    @staticmethod
+    def _manual_dispatch_lineage(lineage: _Lineage, project_id: UUID, guide_id: UUID) -> _Lineage:
+        """Bind manual replay to immutable setup custody, not queue progress."""
+        return replace(
+            lineage,
+            stale_output_digest=canonical_json_hash(
+                {
+                    "domain": "workstream.project_setup.manual_dispatch.v1",
+                    "project_id": str(project_id),
+                    "guide_id": str(guide_id),
+                    "source_snapshot_id": str(lineage.snapshot_id),
+                    "setup_run_id": (
+                        str(lineage.setup_run_id) if lineage.setup_run_id is not None else None
+                    ),
+                    "setup_generation": lineage.setup_generation,
+                }
+            ),
+        )
+
     async def _lineage(
         self,
         project_id: UUID,
@@ -201,7 +231,9 @@ class GuideSufficiencyMutationService:
             raise PolicySetupConflict("project setup run context mismatch")
         if setup is None and require_setup_run:
             raise PolicySetupConflict("project setup run context mismatch")
-        setup_generation = setup.setup_generation if setup is not None else snapshot.creation_generation
+        setup_generation = (
+            setup.setup_generation if setup is not None else snapshot.creation_generation
+        )
         if setup_generation is None:
             raise PolicySetupConflict("project setup run context mismatch")
         return _Lineage(
@@ -248,9 +280,7 @@ class GuideSufficiencyMutationService:
             "idempotency_key": str(key),
             "project_id": str(project_id),
             "guide_id": str(guide_id),
-            "report_id": (
-                str(report_id) if target_kind == "warning_acknowledgement" else None
-            ),
+            "report_id": (str(report_id) if target_kind == "warning_acknowledgement" else None),
             "source_snapshot_id": str(lineage.snapshot_id),
             "body": body,
             "execution_kind": execution_kind,
@@ -483,17 +513,14 @@ class GuideSufficiencyMutationService:
         try:
             report = await self._projects.add_guide_sufficiency_report(report)
         except IntegrityError:
-            raise GuideSufficiencyMutationConflict(
-                "sufficiency_report_already_exists"
-            ) from None
+            raise GuideSufficiencyMutationConflict("sufficiency_report_already_exists") from None
         response = GuideSufficiencyReportResponse.model_validate(report)
         await self._replay.complete(
             replay, response_json=response.model_dump(mode="json"), report_id=report.id
         )
         return GuideSufficiencyMutationOutcome(response, False, True)
 
-    @asynccontextmanager
-    async def run_agent(
+    async def authorize_manual_dispatch(
         self,
         resolved: ResolvedActor,
         prepared: PreparedAuthorizationService,
@@ -501,22 +528,171 @@ class GuideSufficiencyMutationService:
         project_id: UUID,
         guide_id: UUID,
         source_snapshot_id: UUID,
-    ) -> AsyncIterator[GuideSufficiencyMutationOutcome]:
-        """Run verified ART material for one canonically resolved human."""
-        if self._material is None:
-            raise PolicySetupBlocked("verified guide sufficiency is unavailable")
-        async with self._execution_fence(resolved.profile.id, ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN, key):
-            yield await self._run_agent(
+    ) -> GuideSufficiencyDispatchOutcome:
+        """Authorize a human request to dispatch, never execute, sufficiency work."""
+        action = ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN
+        operation_id = uuid4()
+        initial = await self._lineage(
+            project_id,
+            guide_id,
+            source_snapshot_id,
+            lock=False,
+            require_setup_run=True,
+        )
+        initial = self._manual_dispatch_lineage(initial, project_id, guide_id)
+        if initial.setup_run_id is None:
+            raise GuideSufficiencyMutationConflict("project_setup_run_context_mismatch")
+        caller, digest = self._caller(
+            action=action,
+            route=(
+                "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
+                "source-snapshots/{source_snapshot_id}/run-sufficiency-agent"
+            ),
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            key=key,
+            project_id=project_id,
+            guide_id=guide_id,
+            report_id=None,
+            operation_id=operation_id,
+            lineage=initial,
+            target_kind="run",
+            body={"source_snapshot_id": str(source_snapshot_id)},
+        )
+        existing = await self._replay.find(resolved.profile.id, action.value, key)
+        if existing is not None:
+            if (
+                existing.action_id != action.value
+                or existing.identity_link_id != resolved.identity_link.id
+                or existing.request_digest != digest
+                or existing.project_id != str(project_id)
+                or existing.guide_id != str(guide_id)
+                or existing.source_snapshot_id != str(source_snapshot_id)
+                or existing.setup_run_id != str(initial.setup_run_id)
+                or existing.setup_generation != initial.setup_generation
+            ):
+                raise GuideSufficiencyMutationConflict("idempotency_mismatch")
+            if existing.status != "committed" or existing.response_json is None:
+                raise GuideSufficiencyMutationConflict("idempotency_pending")
+            operation_id = existing.operation_id
+            caller, digest = self._caller(
+                action=action,
+                route=(
+                    "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
+                    "source-snapshots/{source_snapshot_id}/run-sufficiency-agent"
+                ),
                 actor_profile_id=resolved.profile.id,
                 identity_link_id=resolved.identity_link.id,
-                prepared=prepared,
                 key=key,
                 project_id=project_id,
                 guide_id=guide_id,
-                source_snapshot_id=source_snapshot_id,
-                execution_kind="human",
-                setup_service_custody=None,
+                report_id=None,
+                operation_id=operation_id,
+                lineage=initial,
+                target_kind="run",
+                body={"source_snapshot_id": str(source_snapshot_id)},
             )
+        resource = self._resource(
+            project_id=project_id,
+            guide_id=guide_id,
+            report_id=None,
+            operation_id=operation_id,
+            request_digest=digest,
+            lineage=initial,
+            target_kind="run",
+        )
+        handle = await self._prepare(prepared, action, caller, project_id, resource)
+        final = await self._lineage(
+            project_id,
+            guide_id,
+            source_snapshot_id,
+            lock=True,
+            require_setup_run=True,
+        )
+        final = self._manual_dispatch_lineage(final, project_id, guide_id)
+        if final != initial or final.setup_run_id is None:
+            raise GuideSufficiencyMutationConflict("sufficiency_lineage_stale")
+        setup_run = await self._projects.lock_project_setup_run(str(final.setup_run_id))
+        if setup_run is None:
+            raise GuideSufficiencyMutationConflict("project_setup_run_context_mismatch")
+        authoritative_report = await self._projects.get_sufficiency_report_for_snapshot(
+            str(source_snapshot_id)
+        )
+        if existing is not None:
+            decision = await prepared.consume(handle, action, caller, resource)
+            self._prove_human(decision, project_id)
+            if existing.resource_context_digest != decision.resource_context_digest:
+                raise GuideSufficiencyMutationConflict("idempotency_mismatch")
+            return GuideSufficiencyDispatchOutcome(
+                response=ProjectSetupRunResponse.model_validate(existing.response_json),
+                replayed=True,
+            )
+        if (
+            (
+                authoritative_report is not None
+                and authoritative_report.project_setup_run_id == setup_run.id
+                and authoritative_report.setup_generation == setup_run.setup_generation
+            )
+            or setup_run.output_sufficiency_report_id is not None
+            or setup_run.output_submission_artifact_policy_id is not None
+            or setup_run.output_post_submit_checker_policy_id is not None
+            or setup_run.status
+            in {
+                "sufficiency_blocked",
+                "running_policy_derivation_agent",
+                "policy_draft_ready",
+                "running_post_submit_derivation_agent",
+                "post_submit_setup_blocked",
+                "post_submit_policy_compiled",
+            }
+        ):
+            raise GuideSufficiencyMutationConflict("guide_sufficiency_run_not_needed")
+        if setup_run.celery_task_id is None and setup_run.continuation_verification_job_id is None:
+            raise GuideSufficiencyMutationConflict("verified_guide_material_not_ready")
+        expected_task_id = pre_submit_setup_task_id(setup_run.id, setup_run.setup_generation)
+        if setup_run.celery_task_id is not None and setup_run.celery_task_id != expected_task_id:
+            raise GuideSufficiencyMutationConflict("project_setup_task_identity_stale")
+        decision = await prepared.consume(handle, action, caller, resource)
+        self._prove_human(decision, project_id)
+        disposition, replay = await self._replay.reserve(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            action_id=action.value,
+            idempotency_key=key,
+            request_digest=digest,
+            resource_context_digest=decision.resource_context_digest,
+            operation_id=operation_id,
+            project_id=str(project_id),
+            guide_id=str(guide_id),
+            source_snapshot_id=str(source_snapshot_id),
+            report_id=None,
+            setup_run_id=setup_run.id,
+            setup_generation=setup_run.setup_generation,
+        )
+        if disposition != "claimed":
+            raise GuideSufficiencyMutationConflict(f"idempotency_{disposition}")
+        dispatch_claimed = setup_run.celery_task_id is None or setup_run.status in {
+            "enqueue_failed",
+            "setup_blocked",
+            "failed",
+        }
+        if dispatch_claimed:
+            setup_run.status = "dispatch_pending"
+            setup_run.current_step = "dispatch"
+            setup_run.celery_task_id = expected_task_id
+            setup_run.error_code = None
+            setup_run.error_summary = None
+        response = ProjectSetupRunResponse.model_validate(setup_run)
+        await self._replay.complete(
+            replay,
+            response_json=response.model_dump(mode="json"),
+            report_id=None,
+        )
+        return GuideSufficiencyDispatchOutcome(
+            response=response,
+            replayed=False,
+            dispatch_claimed=dispatch_claimed,
+        )
 
     @asynccontextmanager
     async def run_setup_service(
@@ -575,10 +751,7 @@ class GuideSufficiencyMutationService:
             lock=False,
             require_setup_run=True,
         )
-        if (
-            lineage.setup_run_id != setup_run_id
-            or lineage.setup_generation != setup_generation
-        ):
+        if lineage.setup_run_id != setup_run_id or lineage.setup_generation != setup_generation:
             raise GuideSufficiencyMutationConflict("project_setup_run_context_mismatch")
         setup_run = await self._projects.lock_project_setup_run(str(setup_run_id))
         if (
@@ -696,8 +869,8 @@ class GuideSufficiencyMutationService:
         project_id: UUID,
         guide_id: UUID,
         source_snapshot_id: UUID,
-        execution_kind: Literal["human", "setup_service"],
-        setup_service_custody: ProjectSetupServiceCustodyContext | None,
+        execution_kind: Literal["setup_service"],
+        setup_service_custody: ProjectSetupServiceCustodyContext,
     ) -> GuideSufficiencyMutationOutcome:
         """Run verified ART material through one exact human or service authority."""
         if self._material is None:
@@ -713,22 +886,14 @@ class GuideSufficiencyMutationService:
         )
         if initial.setup_run_id is None:
             raise RuntimeError("required setup run was not resolved")
-        if execution_kind == "setup_service":
-            if setup_service_custody is None:
-                raise RuntimeError("setup service custody is required")
-            initial = replace(
-                initial,
-                stale_output_digest=setup_service_custody.stale_output_digest,
-            )
+        initial = replace(
+            initial,
+            stale_output_digest=setup_service_custody.stale_output_digest,
+        )
         body = {"source_snapshot_id": str(source_snapshot_id)}
         caller, digest = self._caller(
             action=action,
-            route=(
-                "internal:workstream.project.setup/guide-sufficiency"
-                if execution_kind == "setup_service"
-                else "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
-                "source-snapshots/{source_snapshot_id}/run-sufficiency-agent"
-            ),
+            route="internal:workstream.project.setup/guide-sufficiency",
             actor_profile_id=actor_profile_id,
             identity_link_id=identity_link_id,
             key=key,
@@ -742,115 +907,9 @@ class GuideSufficiencyMutationService:
             execution_kind=execution_kind,
             setup_service_custody=setup_service_custody,
         )
-        existing_replay = (
-            await self._replay.find(actor_profile_id, action.value, key)
-            if execution_kind == "human"
-            else None
-        )
-        if existing_replay is not None:
-            if (
-                existing_replay.identity_link_id != identity_link_id
-                or existing_replay.request_digest != digest
-                or existing_replay.project_id != str(project_id)
-                or existing_replay.guide_id != str(guide_id)
-                or existing_replay.source_snapshot_id != str(source_snapshot_id)
-                or existing_replay.setup_run_id != str(initial.setup_run_id)
-                or existing_replay.setup_generation != initial.setup_generation
-            ):
-                raise GuideSufficiencyMutationConflict("idempotency_mismatch")
-            if (
-                existing_replay.status != "committed"
-                or existing_replay.response_json is None
-                or existing_replay.report_id is None
-            ):
-                raise GuideSufficiencyMutationConflict("idempotency_pending")
-            operation_id = existing_replay.operation_id
-            report = await self._projects.get_guide_sufficiency_report(existing_replay.report_id)
-            if (
-                report is None
-                or report.creation_action_id != action.value
-                or report.project_setup_run_id != str(initial.setup_run_id)
-                or report.setup_generation != initial.setup_generation
-                or report.agent_material_sha256 is None
-            ):
-                raise GuideSufficiencyMutationConflict("idempotency_mismatch")
-            caller, digest = self._caller(
-                action=action,
-                route=(
-                    "POST /api/v1/projects/{project_id}/guides/{guide_id}/"
-                    "source-snapshots/{source_snapshot_id}/run-sufficiency-agent"
-                ),
-                actor_profile_id=actor_profile_id,
-                identity_link_id=identity_link_id,
-                key=key,
-                project_id=project_id,
-                guide_id=guide_id,
-                report_id=None,
-                operation_id=operation_id,
-                lineage=initial,
-                target_kind="run",
-                body=body,
-                material_digest=report.agent_material_sha256,
-                execution_kind=execution_kind,
-                setup_service_custody=setup_service_custody,
-            )
-            handle = await self._prepare(
-                prepared,
-                action,
-                caller,
-                project_id,
-                self._resource(
-                    project_id=project_id,
-                    guide_id=guide_id,
-                    report_id=None,
-                    operation_id=operation_id,
-                    request_digest=digest,
-                    lineage=initial,
-                    target_kind="run",
-                    material_digest=report.agent_material_sha256,
-                    execution_kind=execution_kind,
-                    setup_service_custody=setup_service_custody,
-                ),
-            )
-            final = await self._lineage(
-                project_id,
-                guide_id,
-                source_snapshot_id,
-                lock=True,
-                require_setup_run=True,
-            )
-            if final != initial:
-                raise GuideSufficiencyMutationConflict("sufficiency_lineage_stale")
-            decision = await prepared.consume(
-                handle,
-                action,
-                caller,
-                self._resource(
-                    project_id=project_id,
-                    guide_id=guide_id,
-                    report_id=None,
-                    operation_id=operation_id,
-                    request_digest=digest,
-                    lineage=final,
-                    target_kind="run",
-                    material_digest=report.agent_material_sha256,
-                    execution_kind=execution_kind,
-                    setup_service_custody=setup_service_custody,
-                ),
-            )
-            self._prove_authority(decision, project_id, execution_kind)
-            if existing_replay.resource_context_digest != decision.resource_context_digest:
-                raise GuideSufficiencyMutationConflict("idempotency_mismatch")
-            return GuideSufficiencyMutationOutcome(
-                GuideSufficiencyReportResponse.model_validate(existing_replay.response_json),
-                True,
-            )
-
         existing_report = await self._projects.get_sufficiency_report_for_snapshot(
             str(source_snapshot_id)
         )
-        if existing_report is not None and execution_kind == "human":
-            raise GuideSufficiencyMutationConflict("sufficiency_report_already_exists")
 
         preflight = await self._prepare(
             prepared,
@@ -1064,9 +1123,7 @@ class GuideSufficiencyMutationService:
                 if existing_replay.resource_context_digest != decision.resource_context_digest:
                     raise GuideSufficiencyMutationConflict("idempotency_mismatch")
                 return GuideSufficiencyMutationOutcome(
-                    GuideSufficiencyReportResponse.model_validate(
-                        existing_replay.response_json
-                    ),
+                    GuideSufficiencyReportResponse.model_validate(existing_replay.response_json),
                     True,
                 )
         if material_error is not None:
@@ -1143,9 +1200,7 @@ class GuideSufficiencyMutationService:
                     AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
                 ),
                 findings=[
-                    GuideSufficiencyFindingInput.model_validate(
-                        finding.model_dump(mode="json")
-                    )
+                    GuideSufficiencyFindingInput.model_validate(finding.model_dump(mode="json"))
                     for finding in result.findings
                 ],
                 summary=result.summary,
@@ -1164,9 +1219,7 @@ class GuideSufficiencyMutationService:
             key=key,
             project_id=project_id,
             guide_id=guide_id,
-            report_id=(
-                UUID(existing_report.id) if adopting_existing and existing_report else None
-            ),
+            report_id=(UUID(existing_report.id) if adopting_existing and existing_report else None),
             operation_id=operation_id,
             lineage=final,
             target_kind="run",
@@ -1184,9 +1237,7 @@ class GuideSufficiencyMutationService:
                 project_id=project_id,
                 guide_id=guide_id,
                 report_id=(
-                    UUID(existing_report.id)
-                    if adopting_existing and existing_report
-                    else None
+                    UUID(existing_report.id) if adopting_existing and existing_report else None
                 ),
                 operation_id=operation_id,
                 request_digest=digest,
@@ -1205,9 +1256,7 @@ class GuideSufficiencyMutationService:
                 project_id=project_id,
                 guide_id=guide_id,
                 report_id=(
-                    UUID(existing_report.id)
-                    if adopting_existing and existing_report
-                    else None
+                    UUID(existing_report.id) if adopting_existing and existing_report else None
                 ),
                 operation_id=operation_id,
                 request_digest=digest,
@@ -1248,11 +1297,9 @@ class GuideSufficiencyMutationService:
                 execution_kind == "setup_service"
                 and (
                     setup_service_custody is None
-                    or setup_run.status
-                    not in {"queued", "running_sufficiency_agent"}
+                    or setup_run.status not in {"queued", "running_sufficiency_agent"}
                     or setup_run.current_step != setup_service_custody.expected_step
-                    or setup_run.celery_task_id
-                    != str(setup_service_custody.task_id)
+                    or setup_run.celery_task_id != str(setup_service_custody.task_id)
                 )
             )
         ):
