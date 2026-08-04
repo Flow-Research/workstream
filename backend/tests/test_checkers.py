@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
+from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 import math
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -18,20 +22,47 @@ from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
 from app.core.hashing import canonical_json_hash
+from app.core.permissions import PermissionDenied
 from app.db import models as db_models
 from app.db import session as db_session
 from app.db.base import Base
 from app.main import create_app
+from app.modules.checkers import compiler as checker_compiler_module
+from app.modules.checkers import service as checker_service_module
 from app.modules.checkers.compiler import (
     PRE_SUBMIT_COMPILER_VERSION,
     PreSubmitCheckerCompilerError,
     build_project_pre_submit_checker_spec,
     compile_effective_project_submission_artifact_policy,
     compile_project_pre_submit_checker_spec,
+    validate_compiled_pre_submit_checker_bundle,
 )
 from app.modules.checkers.models import CheckerResult, CheckerRun
-from app.modules.checkers.runner import canonical_artifact_manifest_hash
+from app.modules.checkers import runner as checker_runner_module
+from app.modules.checkers.runner import (
+    CheckerContext,
+    CheckerNameConflict,
+    CheckerOutcome,
+    CheckerRegistry,
+    FunctionChecker,
+    UnknownChecker,
+    canonical_artifact_manifest_hash,
+)
 from app.modules.checkers.schemas import CheckerRoutingRecommendation
+from app.modules.checkers.service import (
+    PRE_REVIEW_GATE_RUNNING_TIMEOUT,
+    PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+    PRE_REVIEW_GATE_SYSTEM_ISSUER,
+    PRE_REVIEW_GATE_TRIGGER_SOURCE,
+    CheckerConflict,
+    CheckerExecutionBlocked,
+    CheckerPolicyInvalid,
+    CheckerRunNotFound,
+    CheckerService,
+    CheckerSubmissionNotFound,
+    CheckerTaskNotFound,
+    pre_review_gate_system_actor,
+)
 from app.modules.projects.models import PostSubmitCheckerPolicy
 from app.modules.projects.post_submit_policy import (
     DEFAULT_DURABLE_CHECKERS,
@@ -45,6 +76,7 @@ from app.modules.projects.post_submit_policy import (
     parse_locked_post_submit_checker_policy_body,
 )
 from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, WorkstreamTask
+from app.modules.tasks.schemas import SubmissionCreate
 from tests.test_tasks import (
     auth_headers,
     complete_guide_payload,
@@ -1017,6 +1049,1779 @@ def test_pre_submit_compiler_rejects_untraceable_extra_rules() -> None:
 
     with pytest.raises(PreSubmitCheckerCompilerError, match="untraceable primitive"):
         compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_manifest_hash_rejects_incomplete_entries() -> None:
+    for manifest in ([{"artifact": "answer.md"}], [{"hash": "sha256:a"}]):
+        with pytest.raises(ValueError, match="require artifact and hash"):
+            canonical_artifact_manifest_hash(manifest)
+
+
+def test_evidence_integrity_reports_each_untrusted_reference_shape() -> None:
+    traversal = checker_runner_module._evidence_integrity_outcome(
+        [{"artifact": "../secret.txt", "hash": "sha256:a"}],
+        [],
+    )
+    malformed_hash = checker_runner_module._evidence_integrity_outcome(
+        [{"artifact": "answer.md", "hash": "md5:a"}],
+        [],
+    )
+    missing_evidence_hash = checker_runner_module._evidence_integrity_outcome(
+        [{"artifact": "answer.md", "hash": "sha256:a"}],
+        [{"label": "proof", "uri": "s3://bucket/proof", "hash": None}],
+    )
+
+    assert traversal.blocks_review is True
+    assert "integrity_error" in traversal.metadata
+    assert malformed_hash.metadata == {"invalid_artifact_count": 1}
+    assert missing_evidence_hash.metadata == {"missing_evidence_hash_count": 1}
+
+
+def test_required_file_checker_handles_empty_invalid_and_missing_contracts() -> None:
+    no_requirement = checker_runner_module._required_files_outcome([], [])
+    invalid = checker_runner_module._required_files_outcome(["../answer.md"], [])
+    missing = checker_runner_module._required_files_outcome(
+        ["answer.md"],
+        [{"artifact": "notes.md", "hash": "sha256:notes"}],
+    )
+
+    assert no_requirement.status == "passed"
+    assert invalid.blocks_review is True
+    assert "relative artifact paths" in (invalid.worker_suggested_fix or "")
+    assert missing.metadata == {"missing_required_files": ["answer.md"]}
+
+
+def test_forbidden_file_checker_classifies_without_leaking_paths() -> None:
+    outcome = checker_runner_module._forbidden_files_outcome(
+        [
+            {"artifact": "../ignored"},
+            {"artifact": "config/.env"},
+            {"artifact": "keys/client.pem"},
+            {"artifact": "build/debug.tmp"},
+        ],
+        [],
+        ["*.tmp"],
+    )
+
+    assert outcome.blocks_review is True
+    assert outcome.metadata == {
+        "forbidden_categories": [
+            "forbidden_file_suffix",
+            "forbidden_path_segment",
+            "forbidden_policy_pattern",
+        ]
+    }
+    assert "client.pem" not in outcome.message
+
+
+def test_packet_limits_and_packaging_return_actionable_failures() -> None:
+    file_limit = checker_runner_module._size_limit_outcome(
+        [{"artifact": "large.bin", "size_bytes": 11}],
+        {"maximum_file_size_bytes": 10},
+    )
+    package_limit = checker_runner_module._size_limit_outcome(
+        [
+            {"artifact": "one.bin", "size_bytes": 6},
+            {"artifact": "two.bin", "size_bytes": 5},
+        ],
+        {"maximum_package_size_bytes": 10},
+    )
+    payload = SimpleNamespace(package_uri=None)
+    required_package = checker_runner_module._packaging_outcome(
+        cast(Any, payload),
+        {"packaging": {"package_required": True}},
+    )
+    payload.package_uri = "s3://bucket/work.tar"
+    invalid_format = checker_runner_module._packaging_outcome(
+        cast(Any, payload),
+        {"packaging": {"allowed_package_formats": ["zip"]}},
+    )
+
+    assert file_limit is not None
+    assert file_limit.metadata == {"oversized_artifacts": ["large.bin"]}
+    assert package_limit is not None
+    assert package_limit.metadata == {"known_manifest_size_bytes": 11}
+    assert required_package is not None and required_package.blocks_review
+    assert invalid_format is not None
+    assert invalid_format.metadata == {"allowed_package_formats": ["zip"]}
+
+
+def test_packet_shape_reports_all_required_fields_without_echoing_values() -> None:
+    outcome = checker_runner_module._packet_shape_outcome("", "", [])
+
+    assert outcome.blocks_review is True
+    assert outcome.metadata == {
+        "missing_fields": ["summary", "package_hash", "artifact_hash_manifest"]
+    }
+
+
+def test_pre_submit_packet_applies_required_storage_size_and_package_rules() -> None:
+    payload = SimpleNamespace(
+        summary="complete",
+        package_hash="sha256:package",
+        worker_attestation="",
+        package_uri="ftp://bucket/work.zip",
+    )
+    manifest = [{"artifact": "answer.md", "hash": "sha256:a", "size_bytes": 11}]
+
+    missing_base_packet = checker_runner_module._pre_submit_packet_outcome(
+        cast(
+            Any,
+            SimpleNamespace(
+                summary="",
+                package_hash="",
+                worker_attestation="",
+                package_uri=None,
+            ),
+        ),
+        [],
+        [],
+        {},
+    )
+
+    missing_field = checker_runner_module._pre_submit_packet_outcome(
+        cast(Any, payload),
+        manifest,
+        [],
+        {
+            "required_packet_fields": ["worker_attestation"],
+            "allowed_storage_schemes": ["s3"],
+        },
+    )
+    payload.worker_attestation = "original work"
+    invalid_storage = checker_runner_module._pre_submit_packet_outcome(
+        cast(Any, payload),
+        manifest,
+        [],
+        {"allowed_storage_schemes": ["s3"]},
+    )
+    payload.package_uri = "s3://bucket/work.zip"
+    oversized = checker_runner_module._pre_submit_packet_outcome(
+        cast(Any, payload),
+        manifest,
+        [],
+        {
+            "allowed_storage_schemes": ["s3"],
+            "maximum_file_size_bytes": 10,
+        },
+    )
+    wrong_package = checker_runner_module._pre_submit_packet_outcome(
+        cast(Any, payload),
+        [{"artifact": "answer.md", "hash": "sha256:a", "size_bytes": 1}],
+        [],
+        {
+            "allowed_storage_schemes": ["s3"],
+            "packaging": {"allowed_package_formats": ["tar"]},
+        },
+    )
+
+    assert missing_base_packet.metadata == {
+        "missing_fields": ["summary", "package_hash", "artifact_hash_manifest"]
+    }
+    assert missing_field.metadata == {"missing_fields": ["worker_attestation"]}
+    assert invalid_storage.metadata == {"invalid_storage_refs": ["ftp://bucket/work.zip"]}
+    assert oversized.metadata == {"oversized_artifacts": ["answer.md"]}
+    assert wrong_package.metadata == {"allowed_package_formats": ["tar"]}
+
+
+def test_artifact_path_and_pattern_normalization_fail_closed() -> None:
+    assert checker_runner_module._normalize_artifact_path("./folder//answer.md") == (
+        "folder/answer.md"
+    )
+    with pytest.raises(ValueError, match="relative and non-empty"):
+        checker_runner_module._normalize_artifact_path("/absolute.txt")
+    assert not checker_runner_module._path_matches_forbidden_pattern("answer.md", "")
+
+
+@pytest.mark.asyncio
+async def test_policy_context_checker_blocks_incomplete_lock_without_exposing_details() -> None:
+    lock_fields = {
+        "locked_guide_version": "v1",
+        "locked_post_submit_checker_policy_id": "post-1",
+        "locked_post_submit_checker_policy_version": "v1",
+        "locked_post_submit_checker_policy_hash": "sha256:post",
+        "locked_review_policy_id": "review-1",
+        "locked_review_policy_generation": 1,
+        "locked_review_policy_hash": "sha256:review",
+        "locked_revision_policy_id": "revision-1",
+        "locked_revision_policy_generation": 1,
+        "locked_revision_policy_hash": "sha256:revision",
+        "locked_payment_policy_version": "v1",
+        "locked_guide_source_snapshot_id": "snapshot-1",
+        "locked_guide_source_snapshot_hash": "sha256:snapshot",
+        "locked_effective_project_submission_artifact_policy_id": "effective-1",
+        "locked_effective_project_submission_artifact_policy_hash": "sha256:effective",
+        "locked_pre_submit_checker_policy_id": "pre-1",
+        "locked_pre_submit_checker_bundle_hash": None,
+    }
+    context = CheckerContext(
+        task=cast(Any, None),
+        submission=cast(Any, SimpleNamespace(**lock_fields)),
+        required_checker_names=frozenset(),
+        warning_checker_names=frozenset(),
+        blocking_severities=frozenset(),
+    )
+
+    outcome = await checker_runner_module.check_policy_context_present(context)
+
+    assert outcome.blocks_review is True
+    assert outcome.worker_visible is False
+    assert outcome.metadata == {"missing_context": ["locked_pre_submit_checker_bundle_hash"]}
+
+
+@pytest.mark.asyncio
+async def test_pre_submit_feedback_rejects_unsupported_compiled_checker_name() -> None:
+    payload = SubmissionCreate.model_validate(complete_submission_payload())
+
+    with pytest.raises(UnknownChecker, match="unsupported checker names: unknown_checker"):
+        await checker_runner_module.pre_submit_static_feedback(
+            cast(Any, SimpleNamespace()),
+            payload,
+            {},
+            ["unknown_checker"],
+        )
+
+
+def test_attestation_and_policy_projection_helpers_preserve_required_only_rules() -> None:
+    policy = {
+        "required_artifacts": [
+            {"path": "answer.md", "required": True},
+            {"path": "optional.md", "required": False},
+        ],
+        "required_evidence": [
+            {"key": "proof", "required": True},
+            {"key": "optional", "required": False},
+        ],
+        "forbidden_artifacts": [{"pattern": "*.key"}, {"pattern": ""}],
+        "attestation_terms": ["original work", ""],
+    }
+
+    assert checker_runner_module._required_artifact_paths(policy) == ["answer.md"]
+    assert checker_runner_module._required_evidence_keys(policy) == ["proof"]
+    assert checker_runner_module._forbidden_artifact_patterns(policy) == ["*.key"]
+    assert checker_runner_module._required_attestation_terms(policy) == ["original work"]
+    assert checker_runner_module._required_artifact_paths(None) == []
+    assert checker_runner_module._required_evidence_keys(None) == []
+    assert checker_runner_module._forbidden_artifact_patterns(None) == []
+    assert checker_runner_module._required_attestation_terms(None) == []
+    assert checker_runner_module._attestation_term_is_satisfied("anything", "")
+    assert checker_runner_module._attestation_term_is_satisfied(
+        "i_confirm_original_work",
+        "original work",
+    )
+    assert not checker_runner_module._attestation_term_is_satisfied(
+        "i_confirm_original_work",
+        "client confidentiality",
+    )
+
+
+@pytest.mark.asyncio
+async def test_checker_registry_preserves_policy_order_and_rejects_name_drift() -> None:
+    registry = CheckerRegistry()
+
+    async def outcome(name: str) -> CheckerOutcome:
+        return CheckerOutcome(name, "passed", "info", f"{name} passed")
+
+    for name in ("first", "second"):
+        registry.register(FunctionChecker(name, lambda _context, name=name: outcome(name)))
+
+    context = cast(CheckerContext, object())
+    results = await registry.run(context, ["second", "first"])
+
+    assert registry.names() == {"first", "second"}
+    assert [result.checker_name for result in results] == ["second", "first"]
+    with pytest.raises(CheckerNameConflict, match="already registered"):
+        registry.register(FunctionChecker("first", lambda _context: outcome("first")))
+    with pytest.raises(UnknownChecker, match="missing, unknown"):
+        registry.require_registered({"unknown", "missing"})
+
+
+def _valid_effective_checker_policy() -> dict[str, Any]:
+    return {
+        "required_packet_fields": ["summary"],
+        "allowed_storage_schemes": ["s3"],
+        "attestation_terms": ["original_work"],
+        "artifact_hash_algorithm": "sha256",
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "maximum_file_size_bytes": 10,
+        "maximum_package_size_bytes": 20,
+        "packaging": {"package_required": True, "allowed_package_formats": ["zip"]},
+        "required_artifacts": [
+            {"path": "answer.md", "key": "answer", "required": True, "hash_required": True}
+        ],
+        "required_evidence": [{"key": "proof", "label": "Proof", "required": True}],
+        "forbidden_artifacts": [{"pattern": "*.key", "reason": "secret"}],
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("required_packet_fields", "summary"),
+        ("allowed_storage_schemes", [1]),
+        ("attestation_terms", None),
+        ("artifact_hash_algorithm", "md5"),
+        ("manifest_required", "yes"),
+        ("artifact_hash_required", 1),
+        ("maximum_file_size_bytes", True),
+        ("maximum_package_size_bytes", -1),
+        ("packaging", []),
+        ("required_artifacts", "answer.md"),
+        ("required_evidence", [{"key": ""}]),
+        ("forbidden_artifacts", [{"pattern": "*.key", "severity": 1}]),
+    ],
+)
+def test_effective_checker_policy_shape_rejects_non_executable_rules(
+    field: str,
+    invalid_value: Any,
+) -> None:
+    policy = deepcopy(_valid_effective_checker_policy())
+    policy[field] = invalid_value
+
+    assert CheckerService._effective_policy_shape_is_valid(policy) is False
+
+
+def test_effective_checker_policy_shape_accepts_complete_policy() -> None:
+    assert CheckerService._effective_policy_shape_is_valid(_valid_effective_checker_policy())
+    assert CheckerService._effective_policy_shape_is_valid([]) is False
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        ["answer.md"],
+        [{"path": ""}],
+        [{"path": "answer.md", "required": "yes"}],
+        [{"path": "answer.md", "hash_required": 1}],
+        [{"path": "answer.md", "description": 3}],
+    ],
+)
+def test_artifact_rule_validation_rejects_ambiguous_rules(rules: list[Any]) -> None:
+    assert not CheckerService._artifact_rule_list(
+        rules,
+        required_key="path",
+        optional_keys={"description"},
+    )
+
+
+def test_packaging_validation_rejects_ambiguous_rules() -> None:
+    assert not CheckerService._packaging_shape_is_valid([])
+    assert not CheckerService._packaging_shape_is_valid({"package_required": "yes"})
+    assert not CheckerService._packaging_shape_is_valid({"allowed_package_formats": [1]})
+    assert CheckerService._packaging_shape_is_valid(
+        {"package_required": False, "allowed_package_formats": ["zip"]}
+    )
+
+
+def _checker_outcome(
+    name: str,
+    *,
+    status: str = "passed",
+    severity: str = "info",
+    blocks_review: bool = False,
+    routing: str | None = None,
+    worker_visible: bool = True,
+) -> CheckerOutcome:
+    return CheckerOutcome(
+        checker_name=name,
+        status=status,
+        severity=severity,
+        message=f"{name} message",
+        blocks_review=blocks_review,
+        worker_visible=worker_visible,
+        routing_recommendation=routing,
+    )
+
+
+@pytest.mark.parametrize(
+    ("outcomes", "expected"),
+    [
+        ([_checker_outcome("ok")], "allow_review"),
+        ([_checker_outcome("blocked", blocks_review=True)], "needs_revision"),
+        ([_checker_outcome("setup", routing="task_setup_blocked")], "task_setup_blocked"),
+        (
+            [
+                _checker_outcome("setup", routing="task_setup_blocked"),
+                _checker_outcome("retry", routing="checker_retry"),
+            ],
+            "checker_retry",
+        ),
+    ],
+)
+def test_checker_routing_uses_fail_closed_priority(
+    outcomes: list[CheckerOutcome],
+    expected: str,
+) -> None:
+    assert CheckerService._routing_recommendation_for_outcomes(outcomes) == expected
+
+
+def test_blocking_policy_escalates_required_warning_and_preserves_optional_warning() -> None:
+    context = CheckerContext(
+        task=cast(Any, None),
+        submission=cast(Any, None),
+        required_checker_names=frozenset({"required"}),
+        warning_checker_names=frozenset({"optional"}),
+        blocking_severities=frozenset({"critical"}),
+    )
+    outcomes = [
+        _checker_outcome("required", status="warning", severity="medium"),
+        _checker_outcome("optional", status="warning", severity="medium"),
+        _checker_outcome("critical", status="failed", severity="critical"),
+    ]
+
+    required, optional, critical = CheckerService._apply_blocking_policy(outcomes, context)
+
+    assert (required.status, required.severity, required.blocks_review) == (
+        "failed",
+        "high",
+        True,
+    )
+    assert required.worker_suggested_fix == (
+        "Resolve this required checker finding before review can continue."
+    )
+    assert required.metadata == {"required_checker_warning_escalated": True}
+    assert (optional.status, optional.blocks_review) == ("warning", False)
+    assert critical.blocks_review is True
+
+
+def test_blocking_policy_does_not_expose_fix_for_hidden_required_warning() -> None:
+    context = CheckerContext(
+        task=cast(Any, None),
+        submission=cast(Any, None),
+        required_checker_names=frozenset({"hidden"}),
+        warning_checker_names=frozenset(),
+        blocking_severities=frozenset(),
+    )
+
+    [adjusted] = CheckerService._apply_blocking_policy(
+        [_checker_outcome("hidden", status="warning", severity="low", worker_visible=False)],
+        context,
+    )
+
+    assert adjusted.blocks_review is True
+    assert adjusted.worker_suggested_fix is None
+
+
+def test_checker_transition_guard_maps_invalid_transition() -> None:
+    CheckerService._ensure_transition_allowed("submitted", "evaluation_pending")
+    with pytest.raises(CheckerExecutionBlocked):
+        CheckerService._ensure_transition_allowed("draft", "accepted")
+
+
+@pytest.mark.asyncio
+async def test_worker_pre_submit_check_requires_checkable_task_state() -> None:
+    actor = pre_review_gate_system_actor().model_copy(
+        update={
+            "actor_id": "worker-1",
+            "external_subject": "worker-1",
+            "external_issuer": "flow",
+            "roles": ("worker",),
+            "auth_source": "flow",
+        }
+    )
+    service = object.__new__(CheckerService)
+    service._get_task_for_actor = AsyncMock(
+        return_value=SimpleNamespace(id="task-1", status="available")
+    )
+
+    with pytest.raises(CheckerExecutionBlocked, match="must be in progress"):
+        await service.pre_submit_check(actor, "task-1", cast(Any, object()))
+
+
+@pytest.mark.asyncio
+async def test_pre_submit_check_summarizes_blocking_feedback(monkeypatch: pytest.MonkeyPatch) -> None:
+    actor = pre_review_gate_system_actor()
+    task = SimpleNamespace(id="task-1", status="in_progress")
+    service = object.__new__(CheckerService)
+    service._get_task_for_actor = AsyncMock(return_value=task)
+    service._load_locked_pre_submit_context = AsyncMock(
+        return_value=(
+            SimpleNamespace(effective_policy={"manifest_required": True}),
+            SimpleNamespace(checker_names=["required"]),
+        )
+    )
+    monkeypatch.setattr(
+        checker_service_module,
+        "pre_submit_static_feedback",
+        AsyncMock(return_value=[_checker_outcome("required", blocks_review=True)]),
+    )
+
+    response = await service.pre_submit_check(actor, "task-1", cast(Any, object()))
+
+    assert response.status == "failed"
+    assert response.eligible_to_submit is False
+    assert response.results[0].would_block_if_submitted is True
+
+
+@pytest.mark.asyncio
+async def test_pre_submit_check_maps_unregistered_locked_checker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = object.__new__(CheckerService)
+    service._get_task_for_actor = AsyncMock(
+        return_value=SimpleNamespace(id="task-1", status="in_progress")
+    )
+    service._load_locked_pre_submit_context = AsyncMock(
+        return_value=(
+            SimpleNamespace(effective_policy={}),
+            SimpleNamespace(checker_names=["unknown"]),
+        )
+    )
+    monkeypatch.setattr(
+        checker_service_module,
+        "pre_submit_static_feedback",
+        AsyncMock(side_effect=UnknownChecker("unknown")),
+    )
+
+    with pytest.raises(CheckerPolicyInvalid, match="unregistered checker"):
+        await service.pre_submit_check(
+            pre_review_gate_system_actor(),
+            "task-1",
+            cast(Any, object()),
+        )
+
+
+def _locked_post_submit_context() -> tuple[SimpleNamespace, SimpleNamespace]:
+    body = {"schema_version": "invalid"}
+    task = SimpleNamespace(
+        project_id="project-1",
+        locked_post_submit_checker_policy_id="post-1",
+        locked_post_submit_checker_policy_version="v1",
+        locked_post_submit_checker_policy_hash="sha256:post",
+        locked_post_submit_checker_policy_body=body,
+    )
+    submission = SimpleNamespace(
+        locked_post_submit_checker_policy_id="post-1",
+        locked_post_submit_checker_policy_version="v1",
+        locked_post_submit_checker_policy_hash="sha256:post",
+        locked_post_submit_checker_policy_body=body,
+    )
+    return task, submission
+
+
+@pytest.mark.asyncio
+async def test_locked_post_submit_policy_rejects_incomplete_and_mismatched_locks() -> None:
+    service = object.__new__(CheckerService)
+    task, submission = _locked_post_submit_context()
+    submission.locked_post_submit_checker_policy_id = None
+    with pytest.raises(CheckerPolicyInvalid, match="context is incomplete"):
+        await service._load_locked_post_submit_policy(cast(Any, task), cast(Any, submission))
+
+    task, submission = _locked_post_submit_context()
+    task.locked_post_submit_checker_policy_hash = "sha256:other"
+    with pytest.raises(CheckerPolicyInvalid, match="does not match task lock"):
+        await service._load_locked_post_submit_policy(cast(Any, task), cast(Any, submission))
+
+
+@pytest.mark.asyncio
+async def test_locked_post_submit_policy_rejects_missing_row_and_invalid_hash() -> None:
+    service = object.__new__(CheckerService)
+    task, submission = _locked_post_submit_context()
+    service._project_repo = cast(
+        Any,
+        SimpleNamespace(get_post_submit_checker_policy_by_id=AsyncMock(return_value=None)),
+    )
+    with pytest.raises(CheckerPolicyInvalid, match="policy is invalid"):
+        await service._load_locked_post_submit_policy(cast(Any, task), cast(Any, submission))
+
+    policy = SimpleNamespace(
+        project_id="project-1",
+        guide_version="v1",
+        policy_hash="sha256:post",
+    )
+    service._project_repo = cast(
+        Any,
+        SimpleNamespace(get_post_submit_checker_policy_by_id=AsyncMock(return_value=policy)),
+    )
+    with pytest.raises(CheckerPolicyInvalid, match="policy hash is invalid"):
+        await service._load_locked_post_submit_policy(cast(Any, task), cast(Any, submission))
+
+
+def _checker_run_for_redaction(routing: str = "allow_review") -> SimpleNamespace:
+    now = datetime.now(UTC)
+    visible = SimpleNamespace(
+        id="result-visible",
+        checker_run_id="run-1",
+        task_id="task-1",
+        submission_id="submission-1",
+        checker_name="visible",
+        status="passed",
+        severity="info",
+        blocks_review=False,
+        message="internal visible detail",
+        worker_message="safe detail",
+        worker_suggested_fix=None,
+        worker_evidence_refs=[],
+        worker_visible=True,
+        metadata_json={"internal": True},
+        created_at=now,
+    )
+    hidden = SimpleNamespace(**(vars(visible) | {
+        "id": "result-hidden",
+        "checker_name": "hidden",
+        "worker_visible": False,
+    }))
+    return SimpleNamespace(
+        id="run-1",
+        task_id="task-1",
+        submission_id="submission-1",
+        submission_version=1,
+        trigger_source="manual_checker_trigger",
+        status="completed",
+        routing_recommendation=routing,
+        outcome_source="auto_checker" if routing != "allow_review" else "none",
+        triggered_by="actor-1",
+        triggered_by_subject="subject-1",
+        triggered_by_issuer="issuer-1",
+        trigger_auth_source="flow",
+        trigger_reason="verify",
+        audit_event_id="audit-1",
+        attempt_number=1,
+        supersedes_checker_run_id=None,
+        is_current_for_submission=True,
+        locked_guide_version="v1",
+        locked_post_submit_checker_policy_id="post-policy-1",
+        locked_post_submit_checker_policy_version="v1",
+        locked_post_submit_checker_policy_hash="sha256:post",
+        locked_review_policy_id="review-1",
+        locked_review_policy_generation=1,
+        locked_review_policy_hash="sha256:review",
+        locked_revision_policy_id="revision-1",
+        locked_revision_policy_generation=1,
+        locked_revision_policy_hash="sha256:revision",
+        locked_payment_policy_version="v1",
+        package_hash="sha256:package",
+        artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer"}],
+        artifact_manifest_hash="sha256:manifest",
+        passed_count=1,
+        warning_count=0,
+        failed_count=0,
+        blocking_count=0,
+        queued_at=now,
+        started_at=now,
+        completed_at=now,
+        failure_code=None,
+        failure_message=None,
+        created_at=now,
+        results=[visible, hidden],
+    )
+
+
+def test_checker_run_response_redacts_internal_fields_by_actor_access() -> None:
+    service = object.__new__(CheckerService)
+    actor = pre_review_gate_system_actor()
+
+    admin = service._run_response_for_actor(
+        actor,
+        cast(Any, _checker_run_for_redaction()),
+        has_checker_admin_access=True,
+    )
+    worker = service._run_response_for_actor(
+        actor,
+        cast(Any, _checker_run_for_redaction()),
+        has_checker_admin_access=False,
+    )
+    hidden_route = service._run_response_for_actor(
+        actor,
+        cast(Any, _checker_run_for_redaction("checker_retry")),
+        has_checker_admin_access=False,
+    )
+
+    assert len(admin.results) == 2
+    assert admin.results[0].message == "internal visible detail"
+    assert admin.results[0].metadata == {"internal": True}
+    assert admin.triggered_by == "actor-1"
+    assert [result.checker_name for result in worker.results] == ["visible"]
+    assert worker.results[0].message is None
+    assert worker.results[0].metadata == {}
+    assert worker.triggered_by is None
+    assert worker.routing_recommendation is None
+    assert hidden_route.results == []
+    assert hidden_route.passed_count == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "started_at", "expected"),
+    [
+        ("queued", datetime.now(UTC) - timedelta(hours=1), False),
+        ("running", None, False),
+        ("running", datetime.now(UTC), False),
+        (
+            "running",
+            datetime.now(UTC).replace(tzinfo=None)
+            - PRE_REVIEW_GATE_RUNNING_TIMEOUT
+            - timedelta(seconds=1),
+            True,
+        ),
+    ],
+)
+def test_stale_automatic_gate_detection_is_bounded(
+    status: str,
+    started_at: datetime | None,
+    expected: bool,
+) -> None:
+    run = SimpleNamespace(
+        status=status,
+        started_at=started_at,
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    service = object.__new__(CheckerService)
+
+    assert service._is_stale_running_pre_review_gate(cast(Any, run)) is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("succeeded", [False, True])
+async def test_gate_enqueue_failure_commits_only_successful_transition(succeeded: bool) -> None:
+    calls: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            calls.append("commit")
+
+        async def rollback(self) -> None:
+            calls.append("rollback")
+
+    class Repository:
+        async def mark_automatic_gate_enqueue_failed(self, **kwargs: Any) -> bool:
+            assert kwargs["checker_run_id"] == "run-1"
+            assert kwargs["failure_code"] == "pre_review_gate_enqueue_failed"
+            return succeeded
+
+    service = object.__new__(CheckerService)
+    service._session = cast(Any, Session())
+    service._checker_repo = cast(Any, Repository())
+
+    assert await service.mark_pre_review_gate_enqueue_failed("run-1") is succeeded
+    assert calls == ["commit" if succeeded else "rollback"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("claimed", [False, True])
+async def test_gate_repair_dispatch_commits_only_successful_claim(claimed: bool) -> None:
+    calls: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            calls.append("commit")
+
+        async def rollback(self) -> None:
+            calls.append("rollback")
+
+    class Repository:
+        async def claim_queued_automatic_gate_repair_dispatch(self, **kwargs: Any) -> bool:
+            assert kwargs["checker_run_id"] == "run-1"
+            assert kwargs["claimed_trigger_reason"].endswith("repair redispatch claimed")
+            return claimed
+
+    service = object.__new__(CheckerService)
+    service._session = cast(Any, Session())
+    service._checker_repo = cast(Any, Repository())
+
+    assert await service.claim_pre_review_gate_repair_dispatch("run-1") is claimed
+    assert calls == ["commit" if claimed else "rollback"]
+
+
+@pytest.mark.asyncio
+async def test_manual_checker_run_persists_policy_adjusted_outcomes() -> None:
+    actor = pre_review_gate_system_actor()
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        locked_at=datetime.now(UTC),
+        artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer"}],
+    )
+    task = SimpleNamespace(id="task-1", status="submitted")
+    persisted = _checker_run_for_redaction()
+    built_run = SimpleNamespace(id="run-1")
+    captured: dict[str, Any] = {}
+
+    class Session:
+        async def commit(self) -> None:
+            captured["committed"] = True
+
+        async def rollback(self) -> None:
+            raise AssertionError("successful checker run must not roll back")
+
+    class TaskRepository:
+        async def get_latest_submission_for_task(self, task_id: str) -> Any:
+            assert task_id == "task-1"
+            return submission
+
+    class CheckerRepository:
+        async def get_current_run_for_submission(self, submission_id: str) -> None:
+            assert submission_id == "submission-1"
+            return None
+
+        async def add_run(self, checker_run: Any) -> Any:
+            assert checker_run is built_run
+            captured["added"] = checker_run
+            return checker_run
+
+        async def get_run(self, checker_run_id: str) -> Any:
+            assert checker_run_id == "run-1"
+            return persisted
+
+    class Registry:
+        def require_registered(self, names: set[str]) -> None:
+            assert names == {"required"}
+
+        async def run(self, context: CheckerContext, names: list[str]) -> list[CheckerOutcome]:
+            assert names == ["required"]
+            assert context.effective_policy == {"manifest_required": True}
+            return [_checker_outcome("required", status="warning", severity="medium")]
+
+    service = object.__new__(CheckerService)
+    service._session = cast(Any, Session())
+    service._task_repo = cast(Any, TaskRepository())
+    service._checker_repo = cast(Any, CheckerRepository())
+    service._registry = cast(Any, Registry())
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=task)
+    service._ensure_checker_trigger_authorized = lambda *_args: None
+    service._load_locked_post_submit_policy = AsyncMock(
+        return_value=SimpleNamespace(
+            execution_checkers=["required"],
+            required_checkers=["required"],
+            warning_checkers=[],
+            blocking_severities=["high"],
+        )
+    )
+    service._load_locked_pre_submit_context = AsyncMock(
+        return_value=(SimpleNamespace(effective_policy={"manifest_required": True}), object())
+    )
+    service._enter_evaluation_pending = AsyncMock()
+    service._write_checker_audit = AsyncMock(return_value=SimpleNamespace(id="audit-1"))
+
+    def build_run(**kwargs: Any) -> Any:
+        captured["build"] = kwargs
+        return built_run
+
+    service._build_checker_run = build_run
+    service._apply_pre_review_gate_result = AsyncMock()
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    result = await service.run_submission_checkers(
+        actor,
+        "submission-1",
+        "operator verification",
+    )
+
+    assert result is response
+    assert captured["committed"] is True
+    assert captured["added"] is built_run
+    assert captured["build"]["outcomes"][0].status == "failed"
+    assert captured["build"]["outcomes"][0].blocks_review is True
+    assert captured["build"]["attempt_number"] == 1
+    assert captured["build"]["artifact_manifest_hash"].startswith("sha256:")
+    service._enter_evaluation_pending.assert_awaited_once()
+    service._apply_pre_review_gate_result.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_manual_checker_run_blocks_while_automatic_gate_is_unfinished() -> None:
+    actor = pre_review_gate_system_actor()
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        locked_at=datetime.now(UTC),
+    )
+    task = SimpleNamespace(id="task-1", status="submitted")
+    current = SimpleNamespace(
+        status="queued",
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    service = object.__new__(CheckerService)
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=task)
+    service._ensure_checker_trigger_authorized = lambda *_args: None
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(get_latest_submission_for_task=AsyncMock(return_value=submission)),
+    )
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_current_run_for_submission=AsyncMock(return_value=current)),
+    )
+
+    with pytest.raises(CheckerExecutionBlocked, match="must be repaired"):
+        await service.run_submission_checkers(actor, "submission-1", "manual retry")
+
+
+@pytest.mark.asyncio
+async def test_automatic_gate_queue_persists_one_current_claim() -> None:
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        version=3,
+        locked_at=datetime.now(UTC),
+        locked_guide_version="v1",
+        locked_post_submit_checker_policy_id="post-1",
+        locked_post_submit_checker_policy_version="v1",
+        locked_post_submit_checker_policy_hash="sha256:post",
+        locked_post_submit_checker_policy_body={"execution_checkers": []},
+        locked_review_policy_id="review-1",
+        locked_review_policy_generation=1,
+        locked_review_policy_hash="sha256:review",
+        locked_revision_policy_id="revision-1",
+        locked_revision_policy_generation=1,
+        locked_revision_policy_hash="sha256:revision",
+        locked_payment_policy_version="v1",
+        package_hash="sha256:package",
+        artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer"}],
+    )
+    task = SimpleNamespace(id="task-1")
+    stored: dict[str, Any] = {}
+
+    class Session:
+        async def commit(self) -> None:
+            stored["committed"] = True
+
+        async def rollback(self) -> None:
+            raise AssertionError("new automatic gate must not roll back")
+
+    class TaskRepository:
+        async def get_latest_submission_for_task(self, task_id: str) -> Any:
+            assert task_id == "task-1"
+            return submission
+
+    class CheckerRepository:
+        async def get_current_run_for_submission(self, submission_id: str) -> None:
+            assert submission_id == "submission-1"
+            return None
+
+        async def add_run(self, checker_run: Any) -> Any:
+            stored["run"] = checker_run
+            return checker_run
+
+        async def get_run(self, checker_run_id: str) -> Any:
+            assert checker_run_id == stored["run"].id
+            return stored["run"]
+
+    service = object.__new__(CheckerService)
+    service._session = cast(Any, Session())
+    service._task_repo = cast(Any, TaskRepository())
+    service._checker_repo = cast(Any, CheckerRepository())
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=task)
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    result, should_enqueue = await service.ensure_automatic_pre_review_gate_queued(
+        "submission-1"
+    )
+
+    assert result is response
+    assert should_enqueue is True
+    assert stored["committed"] is True
+    assert stored["run"].status == "queued"
+    assert stored["run"].submission_version == 3
+    assert stored["run"].triggered_by == PRE_REVIEW_GATE_SYSTEM_ACTOR_ID
+    assert stored["run"].artifact_manifest_hash.startswith("sha256:")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("force_enqueue", [False, True])
+async def test_automatic_gate_queue_reuses_existing_queued_claim(force_enqueue: bool) -> None:
+    submission = SimpleNamespace(id="submission-1", task_id="task-1", locked_at=datetime.now(UTC))
+    current = SimpleNamespace(
+        status="queued",
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    service = object.__new__(CheckerService)
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=SimpleNamespace(id="task-1"))
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(get_latest_submission_for_task=AsyncMock(return_value=submission)),
+    )
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_current_run_for_submission=AsyncMock(return_value=current)),
+    )
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    result, should_enqueue = await service.ensure_automatic_pre_review_gate_queued(
+        "submission-1",
+        force_enqueue_queued=force_enqueue,
+    )
+
+    assert result is response
+    assert should_enqueue is force_enqueue
+
+
+@pytest.mark.asyncio
+async def test_automatic_gate_queue_requeues_failed_current_claim() -> None:
+    submission = SimpleNamespace(id="submission-1", task_id="task-1", locked_at=datetime.now(UTC))
+    current = SimpleNamespace(id="run-1", status="failed")
+    persisted = SimpleNamespace(id="run-1", status="queued")
+    service = object.__new__(CheckerService)
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=SimpleNamespace(id="task-1"))
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(get_latest_submission_for_task=AsyncMock(return_value=submission)),
+    )
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(
+            get_current_run_for_submission=AsyncMock(return_value=current),
+            get_run=AsyncMock(return_value=persisted),
+        ),
+    )
+    service._replace_stale_running_pre_review_gate = AsyncMock(return_value=None)
+    service._requeue_failed_pre_review_gate_if_needed = AsyncMock(return_value=True)
+    service._session = cast(Any, SimpleNamespace(refresh=AsyncMock()))
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    result, should_enqueue = await service.ensure_automatic_pre_review_gate_queued(
+        "submission-1"
+    )
+
+    assert result is response
+    assert should_enqueue is True
+    service._replace_stale_running_pre_review_gate.assert_awaited_once_with(current)
+    service._requeue_failed_pre_review_gate_if_needed.assert_awaited_once_with(current)
+    service._session.refresh.assert_awaited_once_with(persisted)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("winner_exists", [False, True])
+async def test_automatic_gate_queue_reconciles_concurrent_insert(winner_exists: bool) -> None:
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        version=1,
+        locked_at=datetime.now(UTC),
+        locked_guide_version="v1",
+        locked_post_submit_checker_policy_id="post-1",
+        locked_post_submit_checker_policy_version="v1",
+        locked_post_submit_checker_policy_hash="sha256:post",
+        locked_post_submit_checker_policy_body={},
+        locked_review_policy_id="review-1",
+        locked_review_policy_generation=1,
+        locked_review_policy_hash="sha256:review",
+        locked_revision_policy_id="revision-1",
+        locked_revision_policy_generation=1,
+        locked_revision_policy_hash="sha256:revision",
+        locked_payment_policy_version="v1",
+        package_hash="sha256:package",
+        artifact_hash_manifest=[],
+    )
+    winner = SimpleNamespace(id="winner") if winner_exists else None
+
+    class Repository:
+        def __init__(self) -> None:
+            self.current_calls = 0
+
+        async def get_current_run_for_submission(self, _submission_id: str) -> Any:
+            self.current_calls += 1
+            return None if self.current_calls == 1 else winner
+
+        async def add_run(self, _checker_run: Any) -> Any:
+            raise IntegrityError("insert", {}, Exception("unique current run"))
+
+    service = object.__new__(CheckerService)
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=SimpleNamespace(id="task-1"))
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(get_latest_submission_for_task=AsyncMock(return_value=submission)),
+    )
+    service._checker_repo = cast(Any, Repository())
+    service._session = cast(
+        Any,
+        SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock()),
+    )
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    if winner_exists:
+        assert await service.ensure_automatic_pre_review_gate_queued("submission-1") == (
+            response,
+            False,
+        )
+    else:
+        with pytest.raises(CheckerConflict, match="conflicted with another attempt"):
+            await service.ensure_automatic_pre_review_gate_queued("submission-1")
+    service._session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_rejects_non_system_actor_and_missing_claim() -> None:
+    actor = pre_review_gate_system_actor().model_copy(
+        update={"actor_id": "caller", "auth_source": "flow"}
+    )
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(return_value=None)),
+    )
+
+    with pytest.raises(PermissionDenied, match="only the pre-review gate system actor"):
+        await service.run_queued_pre_review_gate(actor, "run-1", requester_provenance={})
+    with pytest.raises(CheckerRunNotFound, match="checker run not found"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_rejects_non_current_or_foreign_claim() -> None:
+    candidate = SimpleNamespace(
+        is_current_for_submission=False,
+        trigger_source="manual_checker_trigger",
+    )
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(return_value=candidate)),
+    )
+
+    with pytest.raises(CheckerExecutionBlocked, match="not an automatic pre-review gate"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_reports_running_claim_after_atomic_claim_loses() -> None:
+    checker_run = SimpleNamespace(
+        status="running",
+        is_current_for_submission=True,
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(return_value=checker_run)),
+    )
+    service._claim_queued_pre_review_gate = AsyncMock(return_value=False)
+    service._session = cast(Any, SimpleNamespace(refresh=AsyncMock()))
+
+    with pytest.raises(CheckerConflict, match="already running"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_reports_claim_removed_after_atomic_claim() -> None:
+    candidate = SimpleNamespace(
+        is_current_for_submission=True,
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    responses = iter([candidate, None])
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(side_effect=lambda _run_id: next(responses))),
+    )
+    service._claim_queued_pre_review_gate = AsyncMock(return_value=True)
+
+    with pytest.raises(CheckerRunNotFound, match="checker run not found"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance={},
+        )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_executes_locked_policy_and_persists_completion() -> None:
+    actor = pre_review_gate_system_actor()
+    requester = {
+        "requester_actor_id": "requester-1",
+        "requester_external_subject": "subject-1",
+        "requester_external_issuer": "issuer-1",
+        "requester_auth_source": "flow",
+    }
+    checker_run = SimpleNamespace(
+        id="run-1",
+        submission_id="submission-1",
+        attempt_number=2,
+        trigger_reason="automatic gate",
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+        is_current_for_submission=True,
+        status="queued",
+    )
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        locked_at=datetime.now(UTC),
+        artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer"}],
+    )
+    task = SimpleNamespace(id="task-1", status="submitted")
+    calls: list[str] = []
+
+    class Session:
+        async def refresh(self, value: Any) -> None:
+            assert value is checker_run
+            calls.append("refresh")
+
+        async def commit(self) -> None:
+            calls.append("commit")
+
+        async def rollback(self) -> None:
+            raise AssertionError("successful queued gate must not roll back")
+
+    class Repository:
+        async def get_run(self, checker_run_id: str) -> Any:
+            assert checker_run_id == "run-1"
+            return checker_run
+
+    class TaskRepository:
+        async def get_latest_submission_for_task(self, task_id: str) -> Any:
+            assert task_id == "task-1"
+            return submission
+
+    class Registry:
+        def require_registered(self, names: set[str]) -> None:
+            assert names == {"required"}
+
+        async def run(self, context: CheckerContext, names: list[str]) -> list[CheckerOutcome]:
+            assert names == ["required"]
+            assert context.effective_policy == {"manifest_required": True}
+            return [_checker_outcome("required", status="warning", severity="medium")]
+
+    service = object.__new__(CheckerService)
+    service._session = cast(Any, Session())
+    service._checker_repo = cast(Any, Repository())
+    service._task_repo = cast(Any, TaskRepository())
+    service._registry = cast(Any, Registry())
+    service._claim_queued_pre_review_gate = AsyncMock(return_value=True)
+    service._get_submission = AsyncMock(return_value=submission)
+    service._get_task_for_actor = AsyncMock(return_value=task)
+    service._submission_requester_provenance = AsyncMock(return_value=requester)
+    service._assert_pre_review_gate_claim_still_current = AsyncMock()
+    service._enter_evaluation_pending = AsyncMock()
+    service._load_locked_post_submit_policy = AsyncMock(
+        return_value=SimpleNamespace(
+            execution_checkers=["required"],
+            required_checkers=["required"],
+            warning_checkers=[],
+            blocking_severities=["high"],
+        )
+    )
+    service._load_locked_pre_submit_context = AsyncMock(
+        return_value=(SimpleNamespace(effective_policy={"manifest_required": True}), object())
+    )
+    service._write_checker_audit = AsyncMock(return_value=SimpleNamespace(id="audit-1"))
+    service._complete_claimed_checker_run = AsyncMock()
+    service._apply_pre_review_gate_result = AsyncMock()
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    result = await service.run_queued_pre_review_gate(
+        actor,
+        "run-1",
+        requester_provenance=requester,
+    )
+
+    assert result is response
+    assert calls == ["refresh", "commit"]
+    service._enter_evaluation_pending.assert_awaited_once()
+    service._complete_claimed_checker_run.assert_awaited_once()
+    completed = service._complete_claimed_checker_run.await_args.kwargs
+    assert completed["outcomes"][0].status == "failed"
+    assert completed["outcomes"][0].blocks_review is True
+    assert completed["artifact_manifest_hash"].startswith("sha256:")
+    assert service._assert_pre_review_gate_claim_still_current.await_count == 2
+
+
+def _queued_gate_failure_service(
+    *,
+    submission: SimpleNamespace | None = None,
+    task: SimpleNamespace | None = None,
+    latest_submission: SimpleNamespace | None = None,
+) -> tuple[CheckerService, SimpleNamespace, SimpleNamespace, dict[str, str]]:
+    requester = {
+        "requester_actor_id": "requester-1",
+        "requester_external_subject": "subject-1",
+        "requester_external_issuer": "issuer-1",
+        "requester_auth_source": "flow",
+    }
+    checker_run = SimpleNamespace(
+        id="run-1",
+        submission_id="submission-1",
+        attempt_number=1,
+        trigger_reason="automatic gate",
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+        is_current_for_submission=True,
+        status="queued",
+    )
+    resolved_submission = submission or SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        locked_at=datetime.now(UTC),
+        artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer"}],
+    )
+    resolved_task = task or SimpleNamespace(id="task-1", status="submitted")
+    resolved_latest = latest_submission if latest_submission is not None else resolved_submission
+
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(return_value=checker_run)),
+    )
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(
+            get_latest_submission_for_task=AsyncMock(return_value=resolved_latest),
+        ),
+    )
+    service._session = cast(
+        Any,
+        SimpleNamespace(
+            refresh=AsyncMock(),
+            commit=AsyncMock(),
+            rollback=AsyncMock(),
+        ),
+    )
+    service._claim_queued_pre_review_gate = AsyncMock(return_value=True)
+    service._get_submission = AsyncMock(return_value=resolved_submission)
+    service._get_task_for_actor = AsyncMock(return_value=resolved_task)
+    service._fail_claimed_pre_review_gate = AsyncMock()
+    service._submission_requester_provenance = AsyncMock(return_value=requester)
+    service._assert_pre_review_gate_claim_still_current = AsyncMock()
+    service._enter_evaluation_pending = AsyncMock()
+    service._load_locked_post_submit_policy = AsyncMock(
+        return_value=SimpleNamespace(
+            execution_checkers=["required"],
+            required_checkers=["required"],
+            warning_checkers=[],
+            blocking_severities=["high"],
+        )
+    )
+    service._load_locked_pre_submit_context = AsyncMock(
+        return_value=(SimpleNamespace(effective_policy={"manifest_required": True}), object())
+    )
+    service._registry = cast(
+        Any,
+        SimpleNamespace(
+            require_registered=lambda _names: None,
+            run=AsyncMock(return_value=[_checker_outcome("required")]),
+        ),
+    )
+    service._write_checker_audit = AsyncMock(return_value=SimpleNamespace(id="audit-1"))
+    service._complete_claimed_checker_run = AsyncMock()
+    service._apply_pre_review_gate_result = AsyncMock()
+    service._fail_running_pre_review_gate_by_id = AsyncMock()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, object())
+    return service, checker_run, resolved_submission, requester
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("condition", "message", "failure_code"),
+    [
+        ("unlocked", "must be locked", "submission_not_locked"),
+        ("stale", "only latest submission", "stale_submission_version"),
+        ("bad_status", "submitted or in checker gate", "task_status_not_checkable"),
+    ],
+)
+async def test_queued_gate_fails_claim_for_stale_submission_state(
+    condition: str,
+    message: str,
+    failure_code: str,
+) -> None:
+    submission = SimpleNamespace(
+        id="submission-1",
+        task_id="task-1",
+        locked_at=None if condition == "unlocked" else datetime.now(UTC),
+        artifact_hash_manifest=[],
+    )
+    task = SimpleNamespace(
+        id="task-1",
+        status="draft" if condition == "bad_status" else "submitted",
+    )
+    latest = SimpleNamespace(id="newer-submission") if condition == "stale" else submission
+    service, _run, _submission, requester = _queued_gate_failure_service(
+        submission=submission,
+        task=task,
+        latest_submission=latest,
+    )
+
+    with pytest.raises(CheckerExecutionBlocked, match=message):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance=requester,
+        )
+
+    assert service._fail_claimed_pre_review_gate.await_args.kwargs["failure_code"] == failure_code
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_fails_claim_when_locked_audit_provenance_is_missing() -> None:
+    service, _run, _submission, requester = _queued_gate_failure_service()
+    service._submission_requester_provenance = AsyncMock(
+        side_effect=CheckerExecutionBlocked("submission lock audit provenance is missing")
+    )
+
+    with pytest.raises(CheckerExecutionBlocked, match="audit provenance is missing"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance=requester,
+        )
+
+    assert service._fail_claimed_pre_review_gate.await_args.kwargs["failure_code"] == (
+        "submission_lock_audit_missing"
+    )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_rejects_requester_provenance_mismatch() -> None:
+    service, _run, _submission, requester = _queued_gate_failure_service()
+
+    with pytest.raises(CheckerExecutionBlocked, match="did not match"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance=requester | {"requester_actor_id": "attacker"},
+        )
+
+    assert service._fail_claimed_pre_review_gate.await_args.kwargs["failure_code"] == (
+        "requester_provenance_mismatch"
+    )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_records_invalid_locked_policy_failure() -> None:
+    service, _run, _submission, requester = _queued_gate_failure_service()
+    service._load_locked_post_submit_policy = AsyncMock(
+        side_effect=CheckerPolicyInvalid("locked policy invalid")
+    )
+
+    with pytest.raises(CheckerPolicyInvalid, match="locked policy invalid"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance=requester,
+        )
+
+    assert service._fail_claimed_pre_review_gate.await_args.kwargs["failure_code"] == (
+        "pre_review_gate_execution_failed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_maps_unknown_registered_checker_to_policy_failure() -> None:
+    service, _run, _submission, requester = _queued_gate_failure_service()
+
+    def reject(_names: set[str]) -> None:
+        raise UnknownChecker("unregistered checker policy names: required")
+
+    service._registry.require_registered = reject
+
+    with pytest.raises(CheckerPolicyInvalid, match="unregistered checker"):
+        await service.run_queued_pre_review_gate(
+            pre_review_gate_system_actor(),
+            "run-1",
+            requester_provenance=requester,
+        )
+
+    assert service._fail_claimed_pre_review_gate.await_args.kwargs["failure_code"] == (
+        "unknown_checker"
+    )
+
+
+@pytest.mark.asyncio
+async def test_queued_gate_returns_completed_claim_when_atomic_claim_loses() -> None:
+    actor = pre_review_gate_system_actor()
+    checker_run = SimpleNamespace(
+        id="run-1",
+        status="completed",
+        is_current_for_submission=True,
+        trigger_source=PRE_REVIEW_GATE_TRIGGER_SOURCE,
+        triggered_by=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_subject=PRE_REVIEW_GATE_SYSTEM_ACTOR_ID,
+        triggered_by_issuer=PRE_REVIEW_GATE_SYSTEM_ISSUER,
+        trigger_auth_source="workstream_system",
+    )
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_run=AsyncMock(return_value=checker_run)),
+    )
+    service._claim_queued_pre_review_gate = AsyncMock(return_value=False)
+    service._session = cast(Any, SimpleNamespace(refresh=AsyncMock()))
+    response = object()
+    service._run_response_for_actor = lambda *_args, **_kwargs: cast(Any, response)
+
+    assert (
+        await service.run_queued_pre_review_gate(actor, "run-1", requester_provenance={})
+        is response
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing", [False, True])
+async def test_pre_review_gate_repair_snapshot_preserves_previous_state(existing: bool) -> None:
+    started_at = datetime.now(UTC)
+    checker_run = (
+        SimpleNamespace(
+            id="run-1",
+            status="failed",
+            failure_code="broker_error",
+            failure_message="queue unavailable",
+            started_at=started_at,
+        )
+        if existing
+        else None
+    )
+    service = object.__new__(CheckerService)
+    service._checker_repo = cast(
+        Any,
+        SimpleNamespace(get_current_run_for_submission=AsyncMock(return_value=checker_run)),
+    )
+
+    snapshot = await service.pre_review_gate_repair_snapshot("submission-1")
+
+    if existing:
+        assert snapshot == {
+            "previous_checker_run_id": "run-1",
+            "previous_status": "failed",
+            "previous_failure_code": "broker_error",
+            "previous_failure_message": "queue unavailable",
+            "previous_started_at": started_at.isoformat(),
+        }
+    else:
+        assert snapshot == {
+            "previous_checker_run_id": None,
+            "previous_status": None,
+            "previous_failure_code": None,
+            "previous_failure_message": None,
+            "previous_started_at": None,
+        }
+
+
+@pytest.mark.asyncio
+async def test_checker_domain_loaders_hide_missing_resources() -> None:
+    actor = pre_review_gate_system_actor()
+    service = object.__new__(CheckerService)
+    service._task_repo = cast(
+        Any,
+        SimpleNamespace(
+            get_submission=AsyncMock(return_value=None),
+            get_task=AsyncMock(return_value=None),
+        ),
+    )
+
+    with pytest.raises(CheckerSubmissionNotFound, match="submission not found"):
+        await service._get_submission("missing-submission")
+    with pytest.raises(CheckerTaskNotFound, match="task not found"):
+        await service._get_task_for_actor(actor, "missing-task")
+
+
+def test_checker_trigger_authorization_accepts_only_system_or_scoped_manager() -> None:
+    system = pre_review_gate_system_actor()
+    CheckerService._ensure_checker_trigger_authorized(system, cast(Any, object()))
+
+    untrusted = system.model_copy(
+        update={
+            "actor_id": "caller-1",
+            "external_subject": "caller-1",
+            "external_issuer": "flow",
+            "roles": (),
+            "auth_source": "flow",
+        }
+    )
+    with pytest.raises(PermissionDenied, match="not authorized"):
+        CheckerService._ensure_checker_trigger_authorized(
+            untrusted,
+            cast(Any, SimpleNamespace(created_by="someone-else")),
+        )
+
+
+@pytest.mark.asyncio
+async def test_public_checkers_fail_closed_without_effective_policy() -> None:
+    context = CheckerContext(
+        task=cast(Any, SimpleNamespace(acceptance_criteria="")),
+        submission=cast(
+            Any,
+            SimpleNamespace(
+                artifact_hash_manifest=[],
+                evidence_items=[],
+                worker_attestation="",
+            ),
+        ),
+        required_checker_names=frozenset(),
+        warning_checker_names=frozenset(),
+        blocking_severities=frozenset(),
+        effective_policy=None,
+    )
+
+    outcomes = [
+        await checker_runner_module.check_evidence_present(context),
+        await checker_runner_module.check_required_files(context),
+        await checker_runner_module.check_forbidden_files(context),
+        await checker_runner_module.check_confidentiality_attestation(context),
+        await checker_runner_module.check_acceptance_criteria_present(context),
+    ]
+
+    assert all(outcome.blocks_review for outcome in outcomes)
+    assert all(outcome.routing_recommendation == "task_setup_blocked" for outcome in outcomes)
+    assert all(outcome.worker_visible is False for outcome in outcomes)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ({"schema_version": "invalid"}, "schema version"),
+        ({"compiler_version": "invalid"}, "compiler version"),
+        ({"primitives_version": "invalid"}, "primitives version"),
+        ({"effective_policy_hash": "sha256:other"}, "policy hash mismatch"),
+        ({"rules": []}, "requires rules"),
+    ],
+)
+def test_compiled_checker_bundle_rejects_envelope_drift(
+    mutation: dict[str, Any],
+    message: str,
+) -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "d" * 64
+    compiled = compile_effective_project_submission_artifact_policy(
+        effective_policy,
+        effective_policy_hash,
+    )
+    bundle = deepcopy(compiled.compiled_bundle)
+    bundle.update(mutation)
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match=message):
+        validate_compiled_pre_submit_checker_bundle(
+            effective_policy,
+            effective_policy_hash,
+            bundle,
+            compiler_version=compiled.compiler_version,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ({"schema_version": "invalid"}, "schema version"),
+        ({"effective_policy_hash": "sha256:other"}, "policy hash mismatch"),
+        ({"rules": []}, "requires rules"),
+    ],
+)
+def test_checker_spec_rejects_envelope_drift(
+    mutation: dict[str, Any],
+    message: str,
+) -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "e" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    spec.update(mutation)
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match=message):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ({"severity": "low"}, "invalid severity"),
+        ({"policy_fields": []}, "lacks policy trace"),
+        ({"policy_fields": [None]}, "invalid policy trace"),
+        ({"config": []}, "config must be an object"),
+    ],
+)
+def test_checker_spec_rejects_ambiguous_rule_shape(
+    mutation: dict[str, Any],
+    message: str,
+) -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "f" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    spec["rules"][0].update(mutation)
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match=message):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_checker_spec_rejects_duplicate_primitive_and_hash_algorithm_drift() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "1" * 64
+    duplicate = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    duplicate["rules"].append(deepcopy(duplicate["rules"][0]))
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="duplicate primitive"):
+        compile_project_pre_submit_checker_spec(
+            effective_policy,
+            effective_policy_hash,
+            duplicate,
+        )
+
+    hash_drift = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    next(rule for rule in hash_drift["rules"] if rule["primitive"] == "verify_hash")[
+        "config"
+    ]["algorithm"] = "md5"
+    with pytest.raises(PreSubmitCheckerCompilerError, match="hash algorithm"):
+        compile_project_pre_submit_checker_spec(
+            effective_policy,
+            effective_policy_hash,
+            hash_drift,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("packaging", [], "packaging must be an object"),
+        ("required_artifacts", {}, "required_artifacts must be a list"),
+        ("required_evidence", ["proof"], "required_evidence entries are invalid"),
+    ],
+)
+def test_checker_policy_rejects_non_executable_collection_shapes(
+    field: str,
+    value: Any,
+    message: str,
+) -> None:
+    policy = compiler_effective_policy()
+    policy[field] = value
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match=message):
+        checker_compiler_module._expected_primitives(policy)
 
 
 async def get_submission_and_automatic_pre_review_run(

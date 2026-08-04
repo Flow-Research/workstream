@@ -2,6 +2,27 @@
 
 ## Audited baseline
 
+### Current-main refresh for 03R
+
+Backend run `30921410531` on current-main merge commit `5b853d50` completed
+3,068 tests, covered 21,453 of 23,938 statements (89.619016 percent), recorded
+727.166 seconds total hosted wall time, and a 567.994-second slowest lane.
+Reaching 90.25 percent on this denominator requires 21,605 covered statements,
+a net gain of 152. The focused 03R test union covers 168 statements missing
+from this hosted report: checker service 107, runner 45, and compiler 16. That
+projects 21,621 / 23,938, or 90.320829 percent; hosted exact-head fan-in remains
+authoritative.
+
+Checker-owned gaps are sufficient and remain unchanged by ART: service 169,
+runner 45, compiler 26, router 12, repository 11, gate queue 2, and pre-review
+gate 1. Existing checker tests are integration-heavy. Direct fast coverage is
+still missing for observable policy-shape rejection, registry ordering and
+conflicts, routing priority, blocking-policy escalation, role-sensitive result
+redaction, and bounded gate recovery outcomes. These are the preferred 03R
+test seams; unrelated TASK or ART lifecycle paths remain out of scope.
+
+### PLAN2 historical baseline
+
 Hosted Backend run `30854931616` on the final PR #249 tested tree
 `19d48f7ea4bf20cb29f03cbba54f98683ce52661` produced:
 
