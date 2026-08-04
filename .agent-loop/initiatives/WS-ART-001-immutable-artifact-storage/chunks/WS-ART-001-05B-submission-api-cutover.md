@@ -4,13 +4,16 @@ Parent initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after XINT-05B
 
 ## Goal
 
-Make verified admission consumption the only contributor Submission path and
-dispatch post-submit work using immutable identifiers rather than package data.
+Make verified admission consumption the only contributor Submission path,
+dispatch post-submit work using immutable identifiers rather than package data,
+and remove the complete legacy standalone and internal precheck path once and
+for all.
 
 ## Allowed Files
 
-Submission schemas/router/service, exact legacy field migration/removal,
-post-submit dispatch payloads, API examples, focused tests/docs/CI evidence.
+Submission and checker schemas/routers/services, exact legacy field and precheck
+removal, post-submit dispatch payloads, API examples, focused tests/docs/CI
+evidence.
 
 ## Not Allowed Changes
 
@@ -21,14 +24,37 @@ generic artifact download, AUTH catalogue/availability, or compatibility paths.
 
 - the public request accepts an admission identity, not URI/hash/manifest facts;
 - caller-owned package identity fields are unreachable and removed safely;
+- `/api/v1/tasks/{task_id}/submission-precheck`, its OpenAPI schemas, and its
+  public service entry point are absent and return canonical not-found;
+- the legacy internal `TaskService.create_submission` precheck guard is removed
+  in the same cutover because Submission creation can consume only an exact
+  verified ready admission;
+- no alias, redirect, fallback, private compatibility service, caller-owned
+  manifest input, or second checker registry survives;
+- pending, failed, expired, stale, consumed, cross-task, cross-project, and
+  otherwise non-ready admissions cannot create a Submission or dispatch work;
+- mixed admission-plus-legacy package requests fail closed rather than choosing
+  one authority source;
+- concurrent consumption of one ready admission creates exactly one Submission,
+  one binding, one admission transition, and one downstream dispatch;
+- exact idempotent replay returns the original business effect while conflicting
+  replay fails with the stable domain conflict;
 - response exposes immutable Submission/binding identities without provider URLs;
 - Celery payloads contain durable identifiers/version facts only;
 - old and new paths cannot coexist or create duplicate business effects.
 
 ## Verification Commands
 
-Focused API, schema, migration, dispatch, replay, stale-field, coverage, and
-hosted Backend/Agent Gates.
+- focused API/schema tests prove admission-only creation and reject legacy
+  `package_uri`, `package_hash`, `artifact_hash_manifest`, and mixed requests;
+- PostgreSQL state-matrix and concurrency tests prove non-ready/cross-resource
+  rejection, exact replay, one consumption, one Submission, and one dispatch;
+- route/OpenAPI/import-reachability tests prove the removed
+  `/api/v1/tasks/{task_id}/submission-precheck` route, schemas, public service
+  method, aliases, redirects, fallbacks, compatibility path, and second registry
+  are absent;
+- migration, stale-field, focused 90 percent subsystem coverage, repository 78
+  percent coverage, and hosted Backend/Agent Gates pass.
 
 ## Required Reviewers
 
@@ -37,4 +63,6 @@ reuse/dedup, test delta, and docs.
 
 ## Human Review Focus And Stop Conditions
 
-Review the clean cut and API compatibility impact. Stop before checker changes.
+Review the complete clean cut, proof that unchecked Submission creation is
+impossible, and API compatibility impact. Do not change authoritative catalogue
+definitions or checker semantics in this cutover.

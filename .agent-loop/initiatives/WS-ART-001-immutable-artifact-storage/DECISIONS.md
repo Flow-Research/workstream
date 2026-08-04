@@ -577,10 +577,16 @@ must not silently remain universal blocking rules; the implementing chunk must
 classify them as narrowly high-confidence blocking checks, advisory checks, or
 project-specific policy and prove the migration.
 
-## D55 - Legacy Standalone Precheck Is Removed Before Catalogue Execution
+## D55 - Legacy Precheck Is Removed Only With Admission-Backed Submission Cutover
 
 The existing caller-owned `/submission-precheck` request cannot prove the exact
-uploaded ZIP or sealed server manifest and would create a second execution API.
-04A4 removes its route, schemas, service entry point, and OpenAPI surface before
-04B1 installs the authoritative catalogue. Pre-production accepts this clean-cut
-gap; there is no compatibility alias, redirect, or caller-manifest adapter.
+uploaded ZIP or sealed server manifest and must not survive the authoritative
+cutover. Removing its shared service before admission-backed Submission creation
+exists would either permit unchecked legacy Submission creation or preserve a
+hidden compatibility seam. PLAN5 therefore supersedes early chunk 04A4. The
+legacy route and the mandatory internal legacy Submission guard remain frozen
+while 04B1-04C2 and 05A build the replacement. ART-05B removes the route,
+schemas, public service entry point, internal guard, and caller-owned package
+contract together when verified admission consumption becomes the only live
+Submission path. No alias, redirect, fallback, or caller-manifest adapter is
+allowed.

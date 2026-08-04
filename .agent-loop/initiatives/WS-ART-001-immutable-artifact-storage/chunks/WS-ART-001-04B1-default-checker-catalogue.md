@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-04B1 - Default Checker Catalogue
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after PLAN4 approval
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after PLAN5
 
 Artifact contract phase: `upload_admission`
 

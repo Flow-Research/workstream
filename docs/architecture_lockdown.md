@@ -132,8 +132,9 @@ attempt ID, effective-plan hash, terminal status, pass/warning/failure counts,
 and a bounded ordered list of catalogue ID/version plus stable outcome code.
 It excludes filenames, archive paths, scratch/provider references, credentials,
 raw checker output, evidence content, and free-form or unbounded messages. This
-is audit evidence, not a product review decision. No independently invocable
-preflight route exists.
+is audit evidence, not a product review decision. The independently invocable
+legacy preflight route remains frozen until ART-05B removes it together with the
+legacy Submission path; it is never an alternate authority for this flow.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 

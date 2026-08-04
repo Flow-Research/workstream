@@ -253,9 +253,10 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
   structured checker result for project operators
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
-The legacy standalone `/tasks/{id}/submission-precheck` contract is superseded.
-Pre-submit checks now run only inside the continuous submission-bundle
-preparation request against the exact uploaded ZIP in bounded scratch:
+At the ART-05B cutover, the legacy standalone
+`/tasks/{id}/submission-precheck` contract is removed. Pre-submit checks then
+run only inside the continuous submission-bundle preparation request against
+the exact uploaded ZIP in bounded scratch:
 
 ```text
 POST /api/v1/tasks/{id}/submission-bundle-preparations
@@ -266,8 +267,8 @@ POST /api/v1/tasks/{id}/submission-bundle-preparations
 }
 ```
 
-There is no independently invocable precheck route and no reusable client-owned
-manifest input. The bounded result is returned only to the authorized actor in
+After that cutover there is no independently invocable precheck route and no
+reusable client-owned manifest input. The bounded result is returned only to the authorized actor in
 that same request. A passing preparation later returns an admission identity;
 `POST /api/v1/tasks/{id}/submissions` consumes that verified ready admission under its
 separate fresh authority and does not rerun scratch-bound checks.
