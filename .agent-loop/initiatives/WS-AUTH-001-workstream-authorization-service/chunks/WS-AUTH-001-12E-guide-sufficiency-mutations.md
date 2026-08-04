@@ -27,7 +27,7 @@ until this chunk merges.
   references, hashes, CIDs, or other legacy material.
 - The automatic setup-service path remains independent of human authority and
   never borrows Project Manager authority. The human route authorizes only a
-  bounded dispatch request; the worker obtains fresh fixed-service authority
+  bounded dispatch request; the setup service obtains fresh fixed authority
   before execution and protected persistence.
 - A manual report remains diagnostic and cannot satisfy verified setup,
   derivation, or activation evidence. Only an agent report with exact verified
@@ -79,7 +79,7 @@ backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
-backend/app/workers/project_setup.py
+backend/app/ (narrow project-setup execution composition only)
 backend/alembic/versions/0054_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
@@ -168,7 +168,7 @@ migration 0046 or introduce a second prepared-authorization protocol.
   never spends tokens rerunning sufficiency. Explicit future force-rerun
   semantics are outside 12E.
 - Cheap request authorization and current-generation necessity checks occur
-  before dispatch. Worker preflight occurs before ART materialization/provider
+  before dispatch. Setup-service preflight occurs before ART materialization/provider
   access or agent invocation. No prepared handle crosses agent execution,
   rollback, commit, session, transaction, or Celery. Final persistence obtains
   fresh prepared authority and rejects stale/replaced source, setup run,
