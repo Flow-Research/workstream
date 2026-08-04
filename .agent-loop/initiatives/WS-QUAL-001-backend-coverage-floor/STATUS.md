@@ -2,15 +2,18 @@
 
 ## Current state
 
-`WS-QUAL-001-PLAN2` has reconciled the initiative against current `main` after
-the documentation cleanup merged through PR #259. Deterministic documentation
-checks and all required internal plan reviewers pass after scope, ownership,
-contract, runtime, and historical-classification repairs. No QUAL implementation
-chunk is active; PLAN2 awaits GitHub and human review.
+`WS-QUAL-001-PLAN2` merged through PR #260. `WS-QUAL-001-02R` is now at its
+external-review gate with a test-only implementation and passing required
+internal reviews.
 
-The latest complete hosted baseline after ART-03C is 88.575080 percent across
-23,475 statements and 2,925 tests. The global CI floor remains 78 percent. Multiple
-named changed subsystems already have blocking 90-percent checks.
+The latest complete current-main hosted baseline is Backend run `30891776021`
+on `b47a7e64`: 88.603709 percent across 23,455 statements and 2,936 tests.
+02R's first exact-head hosted run passed but measured 21,003 covered
+statements, or 89.545939 percent, one statement below the chunk's 89.55-percent
+target. A meaningful project-agent composition test now covers that remaining
+factory statement and awaits exact-head hosted verification. The global CI
+floor remains 78 percent; named protected subsystem checks remain blocking at
+90 percent.
 
 Historical QUAL work delivered the isolated database runner and test-integrity
 guards through PRs #103, #105, and #108. The many stopped semantic-analysis
@@ -18,9 +21,10 @@ replacements remain historical evidence, not work to resume.
 
 ## Current gate
 
-Merge PLAN2 after GitHub and human review. The first proposed implementation successor is
-`WS-QUAL-001-02R`, limited to meaningful project/setup tests. It must be
-refreshed on the then-current `main` before implementation.
+Require Agent Gates, CodeRabbit, all Backend semantic lanes, final coverage
+fan-in, and human review for `WS-QUAL-001-02R`. Hosted coverage must be at least
+89.55 percent, and an unexplained hosted runtime increase above 10 percent
+stops merge readiness.
 
 ## Stop condition
 
