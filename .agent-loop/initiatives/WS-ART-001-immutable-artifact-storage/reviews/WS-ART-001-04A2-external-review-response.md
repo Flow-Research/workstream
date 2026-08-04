@@ -9,16 +9,21 @@
 - The neutral probe now reserves `multi-disk` for non-zero disk identifiers,
   preserves the existing guide classification order, and retains submission
   exact-record validation separately.
+- CodeRabbit's completed correction-head review identified three valid small
+  fixes: align the ingest activation ledger, enforce inspection deadline below
+  the preparation deadline, and make NFC/NFD test literals explicit. All were
+  applied. Its hosted-status wording comment was also reconciled here.
 
 ## Comments deferred
 
-- CodeRabbit was rate-limited and produced no substantive review comments.
-  No automated finding is being treated as approved evidence.
+- The first-head CodeRabbit attempt was rate-limited. The correction-head
+  review completed; no comment was deferred.
 
 ## Human decisions needed
 
-None for this correction. Human approval and merge remain required after the
-replacement hosted run passes.
+None. Human approval and merge remain required. The first hosted
+`shared_foundations` run completed with the two documented guide failures; the
+replacement Backend run and all five shards remain pending on the latest head.
 
 ## Commands rerun
 

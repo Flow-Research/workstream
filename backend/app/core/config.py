@@ -483,6 +483,13 @@ class Settings(BaseSettings):
                 "artifact submission ZIP entry limit cannot exceed expanded limit"
             )
         if (
+            self.artifact_submission_zip_maximum_inspection_seconds
+            >= self.artifact_preparation_total_deadline_seconds
+        ):
+            raise ValueError(
+                "artifact submission ZIP inspection deadline must fit within preparation"
+            )
+        if (
             self.artifact_preparation_total_deadline_seconds
             + self.artifact_scratch_cleanup_margin_seconds
             >= self.artifact_scratch_reservation_ttl_seconds

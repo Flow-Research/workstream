@@ -6,8 +6,9 @@ ART-03A and every split ART-03B chunk through 03B4 are merged. The complete
 verified guide binding, materialization, classification, extraction, and hidden
 same-generation sufficiency continuation exist on `main`.
 
-AUTH-04B production implementation merged in PR #245 at `6babf81b`. The fixed
-guide binding and guide-reader services are live, and
+AUTH-04A activated `artifact.guide_source.ingest`. AUTH-04B production
+implementation merged in PR #245 at `6babf81b`. The fixed guide binding and
+guide-reader services are live, and
 `artifact.guide_source.binding.create` plus `artifact.guide_source.read` are
 active under `XINT_002_04B`. ART-03C's dependency is satisfied.
 

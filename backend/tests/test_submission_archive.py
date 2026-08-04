@@ -77,7 +77,7 @@ def test_unsafe_paths_fail_with_one_redacted_code(name: str) -> None:
     "entries",
     (
         {"A.txt": b"a", "a.txt": b"b"},
-        {"café.txt": b"a", "café.txt": b"b"},
+        {"caf\u00e9.txt": b"a", "cafe\u0301.txt": b"b"},
         {"node": b"file", "node/child": b"child"},
         {"node/child": b"child", "node": b"file"},
     ),

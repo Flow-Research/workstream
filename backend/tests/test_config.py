@@ -91,6 +91,11 @@ def test_submission_archive_settings_map_to_fixed_validated_limits() -> None:
             artifact_submission_zip_maximum_entry_bytes=2,
             artifact_submission_zip_maximum_expanded_bytes=1,
         )
+    with pytest.raises(ValidationError, match="inspection deadline"):
+        Settings(
+            artifact_submission_zip_maximum_inspection_seconds=1800,
+            artifact_preparation_total_deadline_seconds=1800,
+        )
 
 
 def test_rate_limit_secret_is_canonical_and_redacted() -> None:
