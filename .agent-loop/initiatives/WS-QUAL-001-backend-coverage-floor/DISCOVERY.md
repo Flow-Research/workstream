@@ -1,113 +1,119 @@
-# Discovery: WS-QUAL-001 Current-Main Coverage Closure
+# Discovery: WS-QUAL-001 Behavior And Mutation Assurance
 
-## Audited baseline
+## Current hosted truth
 
-### Current-main refresh for 03R
+Main Backend run `30926337804` on merge `5f2baf90` completed 3,162 tests with
+21,620 / 23,938 statements covered (90.316651 percent), 620.264 seconds total
+hosted wall time, and a 464.471-second slowest lane. The complete suite is above
+90 percent, but `.github/workflows/backend.yml` intentionally blocks globally
+at 78 percent and applies more than ten named 90-percent subsystem/per-file
+checks.
 
-Backend run `30921410531` on current-main merge commit `5b853d50` completed
-3,068 tests, covered 21,453 of 23,938 statements (89.619016 percent), recorded
-727.166 seconds total hosted wall time, and a 567.994-second slowest lane.
-Reaching 90.25 percent on this denominator requires 21,605 covered statements,
-a net gain of 152. The focused 03R test union covers 168 statements missing
-from this hosted report: checker service 107, runner 45, and compiler 16. That
-projects 21,621 / 23,938, or 90.320829 percent; hosted exact-head fan-in remains
-authoritative.
+This means raising the global floor is neither necessary nor sufficient for the
+new human goal. The remaining gap is whether assertions detect behavioral
+changes.
 
-Checker-owned gaps are sufficient and remain unchanged by ART: service 169,
-runner 45, compiler 26, router 12, repository 11, gate queue 2, and pre-review
-gate 1. Existing checker tests are integration-heavy. Direct fast coverage is
-still missing for observable policy-shape rejection, registry ordering and
-conflicts, routing priority, blocking-policy escalation, role-sensitive result
-redaction, and bounded gate recovery outcomes. These are the preferred 03R
-test seams; unrelated TASK or ART lifecycle paths remain out of scope.
+## Existing test-integrity controls
 
-### PLAN2 historical baseline
+| Control | Current implementation | What it proves | What it does not prove |
+|---|---|---|---|
+| Complete semantic lanes | `.github/workflows/backend.yml`, `backend/scripts/run_test_lanes.py` | Five canonical lanes collect and execute under isolated custody | Assertions are sensitive to faults |
+| Evidence validation | `backend/scripts/validate_test_lane_evidence.py`, `merge_test_lane_evidence.py` | No missing lane, skipped node, missing coverage, or invalid bundle | Tests kill plausible defects |
+| Global coverage | `coverage report --fail-under=78` | Complete app execution stays above the permitted baseline | Behavioral correctness |
+| Protected coverage | Named `--fail-under=90` checks | New/material subsystems retain deeper execution | Assertions reject wrong outcomes |
+| Weakening scan | `scripts/workstream_agent_gate.py` | Flags common skip/bypass/threshold suppression tokens | Semantic weakening expressed without those tokens |
+| Internal review | QA, test-delta, CI integrity and other routed reviewers | Human/agent reasoning examines behavior and scope | Deterministic executable fault sensitivity |
 
-Hosted Backend run `30854931616` on the final PR #249 tested tree
-`19d48f7ea4bf20cb29f03cbba54f98683ce52661` produced:
+`backend/tests/test_project_policy_mutations.py` tests project-policy mutation
+behavior; it is not a mutation-testing engine. No `mutmut`, Cosmic Ray, or
+equivalent package/configuration currently exists in backend dependencies or
+GitHub workflows.
 
-- 2,925 collected and completed tests;
-- 20,793 covered statements of 23,475;
-- 2,682 missed statements;
-- 88.575080 percent global statement coverage;
-- 640.284 seconds total backend wall time;
-- 468.506 seconds in the slowest semantic lane.
+## Candidate engine evidence
 
-At the current denominator, 90 percent permits at most 2,347 missed statements.
-The suite therefore needs 335 additional covered statements to reach 90
-percent and 394 to reach the required 90.25-percent pre-switch headroom.
+The current `mutmut` documentation says the tool supports pytest-aware test
+selection, function/module wildcards, incremental results, parallel execution,
+source-path restriction, and optional covered-line filtering. Its current
+project metadata supports Python 3.10 through 3.14, which includes Workstream's
+Python 3.11/3.12 range. It requires fork support, compatible with hosted Linux
+runners. Sources:
 
-## Current CI behavior
+- <https://mutmut.readthedocs.io/en/latest/>
+- <https://github.com/boxed/mutmut/blob/main/pyproject.toml>
 
-`.github/workflows/backend.yml` runs five semantic lanes, combines exactly five
-coverage files, runs the real API contract drill, blocks below 78 percent
-globally, and applies multiple 90-percent subsystem/per-file checks. Lane
-custody, PostgreSQL isolation, and coverage fan-in are already implemented.
+Cosmic Ray is also viable and stores resumable mutation sessions, but its
+configuration centers on explicit module paths and test commands, and its
+official documentation notes that plugin options are not fully documented.
+That creates more wrapper/configuration ownership for the first pilot:
 
-`backend/scripts/coverage_policy.py` and
-`backend/tests/test_coverage_contract.py` are merged historical integrity
-machinery. The current workflow does not invoke that policy script. PLAN2 does
-not wire it into CI or expand its static Python analysis.
+- <https://cosmic-ray.readthedocs.io/en/stable/>
+- <https://cosmic-ray.readthedocs.io/en/stable/tutorials/intro/index.html>
 
-## Largest current gaps
+Planning therefore selects `mutmut` only as the leading candidate. The pilot
+must prove an exact pinned release, async pytest compatibility, deterministic
+results, safe worktree isolation, and bounded hosted runtime before adoption.
 
-The latest hosted coverage JSON identifies these high-value gaps:
+## Selection boundary
 
-| Module | Statements | Missing | Coverage |
-|---|---:|---:|---:|
-| `app/modules/projects/service.py` | 1,451 | 550 | 62.10% |
-| `app/modules/checkers/service.py` | 579 | 169 | 70.81% |
-| `app/modules/authorization/router.py` | 484 | 168 | 65.29% |
-| `app/modules/artifacts/service.py` | 959 | 138 | 85.61% |
-| `app/modules/tasks/service.py` | 682 | 108 | 84.16% |
-| `app/modules/projects/repository.py` | 285 | 96 | 66.32% |
-| `app/modules/artifacts/operator.py` | 204 | 80 | 60.78% |
-| `app/modules/projects/router.py` | 178 | 63 | 64.61% |
-| `app/modules/artifacts/guide_extraction_worker.py` | 237 | 65 | 72.57% |
+Production changes can be derived from `origin/main...HEAD`. Test-only behavior
+changes have no changed production file, so a deterministic behavior-claim
+manifest is required to name the bounded production targets and owning tests.
+Without this second path, a coverage-only test PR could avoid mutation
+assurance entirely.
 
-Smaller gaps exist in checker repository/router/runner/compiler, project setup
-queue and policy replay, authorization read/repository code, auth API/deps/
-schemas, artifact extraction/materialization, background-job modules, and actor
-services.
+The planned canonical boundary is
+`.ci/behavior-claims/<chunk-id>.json` under a repository-owned schema. It is
+immutable PR content, not PR prose or a workflow input. Behavior claims name
+repository-relative targets, qualified callables, owning pytest nodes, and
+typed outcomes. Narrow non-behavioral test maintenance is classified through
+the same schema so “no production diff” cannot become an implicit bypass.
 
-## Existing ownership and test layers
+Eligible pilot targets should begin with pure functions or direct service
+methods that have fast owning tests. Initial discovery candidates live in the
+project/checker policy, compiler, and runner layers already exercised by 02R
+and 03R. The implementation chunk must choose a much smaller representative
+set from current main and record why each target is eligible.
 
-- Project behavior: `backend/tests/test_projects.py` and focused project files.
-- Task behavior: `backend/tests/test_tasks.py`.
-- Checker behavior: `backend/tests/test_checkers.py` and runner tests.
-- Artifact behavior: focused artifact, storage, guide, and recovery tests.
-- Authorization behavior: focused actor/authorization/API tests.
-- Test isolation: `backend/scripts/run_isolated_tests.py`.
-- Semantic execution: `backend/scripts/run_test_lanes.py`.
+Ineligible-by-default categories for the pilot:
 
-The largest services depend directly on `AsyncSession`; this makes broad unit
-extraction an architectural concern outside QUAL. Tests may use small typed
-fakes or existing fixtures where behavior is observable, but QUAL must not
-refactor production services merely to raise coverage.
+- migrations and generated/declarative files;
+- Pydantic/SQLAlchemy schemas whose mutations are primarily framework noise;
+- composition-only modules and adapter wiring;
+- external-effect adapters requiring network or real object storage per mutant;
+- modules whose only truthful proof requires the full PostgreSQL/HTTP suite;
+- unchanged modules not named by an explicit test-only behavior claim.
 
-## Risks discovered
+## Evidence model
 
-- Adding hundreds of database-heavy covered lines could worsen the current
-  10.7-minute hosted wall time.
-- Testing implementation branches without outcomes can manufacture percentage
-  while adding little confidence.
-- Raising the floor in the same PR as broad tests makes failures harder to
-  diagnose and encourages threshold bargaining.
-- Concurrent AUTH, ART, and REV work can increase the denominator; the final
-  floor chunk must remeasure current `main` and retain headroom.
+A useful result must bind:
 
-## Conventions to preserve
+- exact git tree/source digest;
+- mutation engine version and configuration digest;
+- target module/callable and owning test nodes;
+- generated, killed, survived, timeout, suspicious, excluded, and error counts;
+- stable mutant identifiers and classifications;
+- command timeout and elapsed time;
+- whether the result is pilot-only or blocking.
 
-- Complete `backend/app` inventory and combined semantic-lane coverage.
-- Real PostgreSQL for constraints, locks, migrations, transactions, triggers,
-  and concurrency.
-- Real MinIO for the protocol boundary.
-- Global 78-percent floor until the exact 90-percent switch merges.
-- Existing protected 90-percent subsystem gates.
-- Test-delta and CI-integrity review for every QUAL implementation PR.
+A percentage without these facts is insufficient. Cache reuse is allowed only
+when the wrapper proves the cached inputs match the exact current inputs.
 
-## Unknowns resolved per implementation chunk
+## Unknowns the pilot must answer
 
-The exact missing lines and best observable tests must be refreshed from the
-then-current hosted coverage JSON. A contract may not promise a coverage gain
-from stale line numbers or require tests that merely execute code.
+- Whether current mutmut works cleanly with Workstream's async pytest fixtures.
+- How precisely relevant tests are selected without broad incidental execution.
+- Which mutation operators create equivalent/noisy results in Workstream code.
+- Hosted runtime and p95 variability for representative changed targets.
+- Whether fresh execution is cheap enough or authenticated cache reuse is
+  needed.
+- Which narrow classification categories can be machine checked without
+  becoming an exclusion escape hatch.
+
+## Historical reconciliation
+
+PRs #103, #105, #108, #265, and #269 remain completed QUAL evidence. The old
+01B2/milestone ladder remains superseded. `WS-QUAL-001-04R`, which proposed
+raising the global floor to 90 percent, is superseded before implementation by
+the human decision to keep 78 percent and move to behavior/mutation assurance.
+Historical ENG-008 mutation planning is discovery input only; its retired
+signed-loop and machine-scope requirements are not current authority.

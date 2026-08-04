@@ -1,41 +1,31 @@
-# Status: WS-QUAL-001 Backend Coverage Floor
+# Status: WS-QUAL-001 Behavior And Mutation Assurance
 
 ## Current state
 
-`WS-QUAL-001-PLAN2` merged through PR #260. `WS-QUAL-001-02R` merged through
-PR #265 with all 2,996 exact-head tests passing and 21,004 / 23,455 statements
-covered (89.550203 percent).
+Coverage closure through `WS-QUAL-001-03R` is complete. PR #269 merged at
+`5f2baf90`; main Backend run `30926337804` completed all 3,162 tests and
+reported 21,620 / 23,938 statements (90.316651 percent), 620.264 seconds hosted
+wall time, and a 464.471-second slowest lane.
 
-The current-main baseline after ART PR #268 is Backend run `30921410531` on
-`5b853d50`: 3,068 tests completed, 21,453 / 23,938 statements covered
-(89.619016 percent), 727.166 seconds hosted wall time, and a 567.994-second
-slowest lane. The global CI floor remains 78 percent; named protected subsystem
-checks remain blocking at 90 percent.
-
-Historical QUAL work delivered the isolated database runner and test-integrity
-guards through PRs #103, #105, and #108. The many stopped semantic-analysis
-replacements remain historical evidence, not work to resume.
+The global blocking floor remains 78 percent by explicit human decision. Named
+new or materially changed subsystem checks remain blocking at 90 percent.
 
 ## Current gate
 
-`WS-QUAL-001-03R` is the current implementation chunk. It must add meaningful
-checker-owned behavior tests and gain at least 152 covered statements on the
-current-main denominator to reach the 90.25-percent headroom target. The
-focused test union measures
-168 unique previously missing checker statements and projects 21,621 / 23,938,
-or 90.320829 percent. Require Agent
-Gates, CodeRabbit, all Backend semantic lanes, final coverage fan-in, six
-internal reviewer tracks, and human review. An unexplained focused or hosted
-runtime increase above 10 percent stops merge readiness.
+`WS-QUAL-001-PLAN3` is planning only. It replaces the unstarted 04R global-floor
+switch with a two-stage behavior/mutation assurance proposal:
 
-The 94-case focused implementation selection passes in 37.76 seconds with
-narrow checker-module coverage. The isolated full `test_checkers.py` run
-reached the 1,200-second local ceiling after approximately 95 percent completion
-with 163 passing tests and no failure output. It is not a complete pass; hosted
-Backend remains mandatory.
+1. `04M` — bounded, pinned, changed-scope mutation pilot with complete evidence
+   and no blocking score.
+2. Human calibration checkpoint.
+3. `05M` — separately approved blocking survivor policy for eligible changed
+   logic and explicit test-only behavior claims.
+
+No mutation dependency, workflow, policy script, or blocking check has been
+implemented.
 
 ## Stop condition
 
-Planning does not change tests, application code, workflow code, or thresholds.
-Do not raise the global floor until hosted combined coverage is at least 90.25
-percent on the exact candidate head.
+Stop after PLAN3 planning review and PR. Do not start 04M automatically. Do not
+start 05M without accepted exact hosted pilot evidence and a new human
+instruction.

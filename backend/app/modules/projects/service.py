@@ -8,6 +8,7 @@ import hashlib
 import logging
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -125,6 +126,57 @@ def bounded_canonical_guide_material(material: GuideSourceMaterial) -> bytes:
     return payload
 
 
+def verified_guide_sufficiency_agent_item(item: Any) -> GuideSourceItemMaterial:
+    """Map one ART-verified extraction item into bounded agent material."""
+    return GuideSourceItemMaterial(
+        source_kind=item.source_kind,
+        ingestion_adapter=item.ingestion_adapter,
+        media_type=item.media_type,
+        source_item_id=str(item.source_item_id),
+        item_order=item.item_order,
+        binding_id=str(item.binding_id),
+        artifact_content_id=str(item.content_id),
+        artifact_sha256=item.artifact_sha256,
+        artifact_byte_count=item.artifact_byte_count,
+        classification_id=str(item.classification_id),
+        detected_format=item.detected_format,
+        extraction_attempt_id=str(item.extraction_attempt_id),
+        extraction_usage_id=str(item.extraction_usage_id),
+        extracted_content_id=str(item.extracted_content_id),
+        extractor_name=item.extractor_name,
+        extractor_version=item.extractor_version,
+        extraction_policy_version=item.extraction_policy_version,
+        canonical_output_sha256=item.canonical_output_sha256,
+        omission_facts=item.omission_facts,
+        canonical_content=item.canonical_content,
+        structural_metadata=item.structural_metadata,
+        untrusted_data=True,
+        untrusted_data_label="UNTRUSTED_GUIDE_SOURCE_DATA",
+    )
+
+
+def build_verified_guide_sufficiency_material(
+    guide: ProjectGuide,
+    snapshot: GuideSourceSnapshot,
+    source_items: Sequence[Any],
+) -> GuideSourceMaterial:
+    """Compose canonical agent input solely from ART-verified extraction rows."""
+    verified_items = [verified_guide_sufficiency_agent_item(item) for item in source_items]
+    return GuideSourceMaterial(
+        project_id=guide.project_id,
+        guide_id=guide.id,
+        guide_version=guide.version,
+        source_snapshot_id=snapshot.id,
+        source_snapshot_hash=snapshot.bundle_hash,
+        guide_material={
+            field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
+        },
+        verified_artifact_material=True,
+        source_items=verified_items,
+        representative_task_material=RepresentativeTaskMaterialContext(items=[]),
+    )
+
+
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
 ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
@@ -230,6 +282,102 @@ REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS = {
     report_status: agent_status
     for agent_status, report_status in AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS.items()
 }
+
+
+@dataclass(frozen=True, slots=True)
+class SufficiencyCreationAuthority:
+    """Optional exact authorization provenance for one staged agent report."""
+
+    actor_profile_id: str
+    identity_link_id: str
+    admin_role_grant_id: UUID | None
+    service_identity: str | None
+    scope_type: str
+    scope_project_id: str
+    action_id: str
+    decision_event_id: str
+
+
+def validate_sufficiency_report_payload(payload: GuideSufficiencyReportCreate) -> None:
+    """Ensure sufficiency status and finding severities agree."""
+    severities = {finding.severity for finding in payload.findings}
+    if "blocking_gap" in severities and payload.status != "blocked":
+        raise PolicySetupBlocked("blocking guide sufficiency findings require blocked status")
+    if payload.status == "blocked" and "blocking_gap" not in severities:
+        raise PolicySetupBlocked("blocked sufficiency reports require blocking gap findings")
+    if payload.status == "passed" and severities.intersection({"blocking_gap", "warning"}):
+        raise PolicySetupBlocked("passed sufficiency reports cannot contain gaps or warnings")
+    if payload.status == "passed_with_warnings":
+        if "blocking_gap" in severities:
+            raise PolicySetupBlocked("warning sufficiency reports cannot contain blocking gaps")
+        if "warning" not in severities:
+            raise PolicySetupBlocked("warning sufficiency reports require warning findings")
+
+
+def stage_verified_sufficiency_report(
+    session: AsyncSession,
+    *,
+    report_id: str,
+    project_id: str,
+    guide_id: str,
+    guide_version: str,
+    source_snapshot_id: str,
+    source_snapshot_hash: str,
+    payload: GuideSufficiencyReportCreate,
+    setup_run_id: str,
+    setup_generation: int,
+    material_sha256: str,
+    material_byte_count: int,
+    source_provenance: Sequence[Any],
+    created_by: str,
+    authority: SufficiencyCreationAuthority | None = None,
+) -> GuideSufficiencyReport:
+    """Stage one canonical agent report and its exact ART source usages."""
+    report = GuideSufficiencyReport(
+        id=report_id,
+        project_id=project_id,
+        guide_id=guide_id,
+        guide_version=guide_version,
+        source_snapshot_id=source_snapshot_id,
+        source_snapshot_hash=source_snapshot_hash,
+        status=payload.status,
+        findings=[finding.model_dump(mode="json") for finding in payload.findings],
+        summary=payload.summary,
+        agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+        agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+        project_setup_run_id=setup_run_id,
+        setup_generation=setup_generation,
+        agent_material_sha256=material_sha256,
+        agent_material_byte_count=material_byte_count,
+        created_by=created_by,
+        created_by_actor_profile_id=(authority.actor_profile_id if authority else None),
+        created_via_identity_link_id=(authority.identity_link_id if authority else None),
+        created_by_admin_role_grant_id=(authority.admin_role_grant_id if authority else None),
+        created_by_service_identity=(authority.service_identity if authority else None),
+        creation_scope_type=(authority.scope_type if authority else None),
+        creation_scope_project_id=(authority.scope_project_id if authority else None),
+        creation_action_id=(authority.action_id if authority else None),
+        authorization_decision_event_id=(authority.decision_event_id if authority else None),
+    )
+    session.add(report)
+    for item in source_provenance:
+        session.add(
+            GuideSufficiencyReportSourceUsage(
+                id=str(uuid4()),
+                report_id=report.id,
+                item_order=item.item_order,
+                source_item_id=str(item.source_item_id),
+                binding_id=str(item.binding_id),
+                content_id=str(item.content_id),
+                extraction_usage_id=str(item.extraction_usage_id),
+                extraction_attempt_id=str(item.extraction_attempt_id),
+                extracted_content_id=str(item.extracted_content_id),
+                canonical_output_sha256=item.canonical_output_sha256,
+                project_setup_run_id=setup_run_id,
+                setup_generation=setup_generation,
+            )
+        )
+    return report
 PROJECT_SETUP_TERMINAL_STATUSES = {
     "enqueue_failed",
     "sufficiency_blocked",
@@ -694,25 +842,8 @@ class ProjectService:
         )
         guide = await self._get_project_guide(project_id, guide_id)
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
-        guide_version = guide.version
-        source_snapshot_hash = snapshot.bundle_hash
         first = await self._guide_sufficiency_material.load(request)
-
-        material = GuideSourceMaterial(
-            project_id=guide.project_id,
-            guide_id=guide.id,
-            guide_version=guide_version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=source_snapshot_hash,
-            guide_material={
-                field: getattr(guide, field) for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
-            },
-            verified_artifact_material=True,
-            source_items=[self._verified_agent_item(item) for item in first.source_items],
-            # Authoritative items already retain source_kind; do not duplicate
-            # canonical bytes in the legacy representative projection.
-            representative_task_material=RepresentativeTaskMaterialContext(items=[]),
-        )
+        material = build_verified_guide_sufficiency_material(guide, snapshot, first.source_items)
         first_prompt = bounded_canonical_guide_material(material)
         first_prompt_sha256 = f"sha256:{hashlib.sha256(first_prompt).hexdigest()}"
         existing = await self._repo.get_sufficiency_report_for_snapshot(source_snapshot_id)
@@ -744,7 +875,9 @@ class ProjectService:
         second = await self._guide_sufficiency_material.load(request)
         second_material = material.model_copy(
             update={
-                "source_items": [self._verified_agent_item(item) for item in second.source_items]
+                "source_items": [
+                    verified_guide_sufficiency_agent_item(item) for item in second.source_items
+                ]
             }
         )
         second_prompt = bounded_canonical_guide_material(second_material)
@@ -764,42 +897,22 @@ class ProjectService:
                 return response, False
             await self._session.rollback()
             raise PolicySetupConflict("guide sufficiency report provenance mismatch")
-        report = GuideSufficiencyReport(
-            id=str(uuid4()),
+        report = stage_verified_sufficiency_report(
+            self._session,
+            report_id=str(uuid4()),
             project_id=project_id,
             guide_id=guide_id,
-            guide_version=guide_version,
+            guide_version=guide.version,
             source_snapshot_id=source_snapshot_id,
-            source_snapshot_hash=source_snapshot_hash,
-            status=payload.status,
-            findings=[finding.model_dump(mode="json") for finding in payload.findings],
-            summary=payload.summary,
-            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
-            project_setup_run_id=setup_run_id,
+            source_snapshot_hash=snapshot.bundle_hash,
+            payload=payload,
+            setup_run_id=setup_run_id,
             setup_generation=setup_generation,
-            agent_material_sha256=second_prompt_sha256,
-            agent_material_byte_count=len(second_prompt),
+            material_sha256=second_prompt_sha256,
+            material_byte_count=len(second_prompt),
+            source_provenance=second.provenance,
             created_by=actor.actor_id,
         )
-        self._session.add(report)
-        for item in second.provenance:
-            self._session.add(
-                GuideSufficiencyReportSourceUsage(
-                    id=str(uuid4()),
-                    report_id=report.id,
-                    item_order=item.item_order,
-                    source_item_id=str(item.source_item_id),
-                    binding_id=str(item.binding_id),
-                    content_id=str(item.content_id),
-                    extraction_usage_id=str(item.extraction_usage_id),
-                    extraction_attempt_id=str(item.extraction_attempt_id),
-                    extracted_content_id=str(item.extracted_content_id),
-                    canonical_output_sha256=item.canonical_output_sha256,
-                    project_setup_run_id=setup_run_id,
-                    setup_generation=setup_generation,
-                )
-            )
         setup_run = await self._repo.lock_project_setup_run(setup_run_id)
         if setup_run is None or setup_run.setup_generation != setup_generation:
             await self._session.rollback()
@@ -2079,6 +2192,7 @@ class ProjectService:
         guide_id: str,
         source_snapshot_id: str,
         setup_generation: int | None = None,
+        celery_task_id: str | None = None,
     ) -> ProjectSetupRunResponse:
         """Validate that a worker payload matches the setup-run ledger row."""
         setup_run = await self._repo.get_project_setup_run(setup_run_id)
@@ -2089,6 +2203,9 @@ class ProjectService:
             or setup_run.guide_id != guide_id
             or setup_run.source_snapshot_id != source_snapshot_id
             or (setup_generation is not None and setup_run.setup_generation != setup_generation)
+            or setup_run.status not in {"queued", "running_sufficiency_agent"}
+            or setup_run.current_step not in {"queued", "guide_sufficiency"}
+            or (celery_task_id is not None and setup_run.celery_task_id != celery_task_id)
         ):
             raise PolicySetupConflict("project setup run context mismatch")
         return ProjectSetupRunResponse.model_validate(setup_run)
@@ -2948,18 +3065,7 @@ class ProjectService:
         payload: GuideSufficiencyReportCreate,
     ) -> None:
         """Ensure sufficiency status and finding severities agree."""
-        severities = {finding.severity for finding in payload.findings}
-        if "blocking_gap" in severities and payload.status != "blocked":
-            raise PolicySetupBlocked("blocking guide sufficiency findings require blocked status")
-        if payload.status == "blocked" and "blocking_gap" not in severities:
-            raise PolicySetupBlocked("blocked sufficiency reports require blocking gap findings")
-        if payload.status == "passed" and severities.intersection({"blocking_gap", "warning"}):
-            raise PolicySetupBlocked("passed sufficiency reports cannot contain gaps or warnings")
-        if payload.status == "passed_with_warnings":
-            if "blocking_gap" in severities:
-                raise PolicySetupBlocked("warning sufficiency reports cannot contain blocking gaps")
-            if "warning" not in severities:
-                raise PolicySetupBlocked("warning sufficiency reports require warning findings")
+        validate_sufficiency_report_payload(payload)
 
     def _merge_effective_submission_artifact_policy(
         self,

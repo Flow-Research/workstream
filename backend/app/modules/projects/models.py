@@ -169,6 +169,64 @@ class GuideMutationIdempotencyRecord(Base):
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class GuideSufficiencyMutationIdempotencyRecord(Base):
+    """Replay custody for one authorized guide-sufficiency mutation."""
+
+    __tablename__ = "guide_sufficiency_mutation_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "actor_profile_id",
+            "idempotency_key",
+            name="uq_sufficiency_mutation_replay_namespace",
+        ),
+        UniqueConstraint("operation_id", name="uq_sufficiency_mutation_operation_identity"),
+        CheckConstraint(
+            "action_id in ('project.guide_sufficiency_report.create',"
+            "'project.guide_sufficiency.run',"
+            "'project.guide_sufficiency.warnings.acknowledge')",
+            name="ck_sufficiency_mutation_action",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_sufficiency_mutation_digests",
+        ),
+        CheckConstraint("setup_generation > 0", name="ck_sufficiency_mutation_generation"),
+        CheckConstraint("status in ('pending','committed')", name="ck_sufficiency_mutation_status"),
+        CheckConstraint(
+            "(status='pending' and response_json is null and committed_at is null) or "
+            "(status='committed' and response_json is not null and committed_at is not null "
+            "and ((action_id='project.guide_sufficiency.run' "
+            "and (setup_run_id is not null or report_id is not null)) "
+            "or (action_id<>'project.guide_sufficiency.run' and report_id is not null)))",
+            name="ck_sufficiency_mutation_state_shape",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"), nullable=False)
+    identity_link_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_identity_links.id"), nullable=False
+    )
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    resource_context_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"), nullable=False
+    )
+    report_id: Mapped[str | None] = mapped_column(ForeignKey("guide_sufficiency_reports.id"))
+    setup_run_id: Mapped[str | None] = mapped_column(ForeignKey("project_setup_runs.id"))
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    response_json: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class PolicyMutationIdempotencyRecord(Base):
     """Replay custody for one guide-bound policy replacement."""
 
@@ -775,6 +833,7 @@ class ProjectSetupRun(Base):
             "'queued', "
             "'dispatch_pending', "
             "'enqueue_failed', "
+            "'enqueue_identity_mismatch', "
             "'running_sufficiency_agent', "
             "'sufficiency_blocked', "
             "'running_policy_derivation_agent', "
@@ -927,6 +986,43 @@ class GuideSufficiencyReport(Base):
             "and agent_material_sha256 is not null and agent_material_byte_count is not null)",
             name="ck_guide_sufficiency_reports_material_provenance_shape",
         ),
+        CheckConstraint(
+            "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
+            "and created_by_admin_role_grant_id is null and created_by_service_identity is null "
+            "and creation_scope_type is null and creation_scope_project_id is null "
+            "and creation_action_id is null and authorization_decision_event_id is null) or "
+            "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and creation_scope_project_id is not null and creation_action_id in "
+            "('project.guide_sufficiency_report.create','project.guide_sufficiency.run') "
+            "and authorization_decision_event_id is not null and "
+            "((created_by_admin_role_grant_id is not null and created_by_service_identity is null "
+            "and creation_scope_type in ('system','project')) or "
+            "(created_by_admin_role_grant_id is null "
+            "and created_by_service_identity = 'workstream.project.setup' "
+            "and creation_scope_type = 'service' "
+            "and creation_action_id = 'project.guide_sufficiency.run' "
+            "and project_setup_run_id is not null and setup_generation is not null "
+            "and agent_material_sha256 is not null and agent_material_byte_count is not null)))",
+            name="ck_guide_sufficiency_creation_authority_shape",
+        ),
+        CheckConstraint(
+            "(warnings_acknowledged_by_actor_profile_id is null "
+            "and warnings_acknowledged_via_identity_link_id is null "
+            "and warnings_acknowledged_by_admin_role_grant_id is null "
+            "and warning_acknowledgement_scope_type is null "
+            "and warning_acknowledgement_scope_project_id is null "
+            "and warning_acknowledgement_action_id is null "
+            "and warning_acknowledgement_decision_event_id is null) or "
+            "(warnings_acknowledged_by_actor_profile_id is not null "
+            "and warnings_acknowledged_via_identity_link_id is not null "
+            "and warnings_acknowledged_by_admin_role_grant_id is not null "
+            "and warning_acknowledgement_scope_type in ('system','project') "
+            "and warning_acknowledgement_scope_project_id is not null "
+            "and warning_acknowledgement_action_id = "
+            "'project.guide_sufficiency.warnings.acknowledge' "
+            "and warning_acknowledgement_decision_event_id is not null)",
+            name="ck_guide_sufficiency_ack_authority_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -953,11 +1049,42 @@ class GuideSufficiencyReport(Base):
     agent_material_sha256: Mapped[str | None] = mapped_column(String(71))
     agent_material_byte_count: Mapped[int | None] = mapped_column(BigInteger)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    created_by_service_identity: Mapped[str | None] = mapped_column(String(160))
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    authorization_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     warnings_acknowledged_by_role: Mapped[str | None] = mapped_column(String(50))
     warnings_acknowledged_by_actor: Mapped[str | None] = mapped_column(String(100))
     warnings_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     acknowledgement_note: Mapped[str | None] = mapped_column(Text)
+    warnings_acknowledged_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    warnings_acknowledged_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    warnings_acknowledged_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    warning_acknowledgement_scope_type: Mapped[str | None] = mapped_column(String(16))
+    warning_acknowledgement_scope_project_id: Mapped[str | None] = mapped_column(
+        ForeignKey("projects.id")
+    )
+    warning_acknowledgement_action_id: Mapped[str | None] = mapped_column(String(160))
+    warning_acknowledgement_decision_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
 
 
 class GuideSufficiencyReportSourceUsage(Base):

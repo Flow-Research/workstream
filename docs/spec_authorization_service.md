@@ -242,7 +242,8 @@ and 41 planned rows before AUTH-12A. AUTH-12A added eighteen planned
 project-mutation rows, producing the historical 96-row state of 37 active and
 59 planned. Later project-mutation and ART activation chunks advanced the
 pre-02C state to 45 active and 51 planned. WS-XINT-003-02C adds four planned
-REV rows, producing the current 100-row state of 45 active and 55 planned.
+REV rows, and AUTH-12E activates three existing rows, producing the current
+100-row state of 48 active and 52 planned.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -539,8 +540,10 @@ closed:
 | `workstream.review.projection` | `review.projection.rebuild` |
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
-02C expands the current registry to fourteen identities. All four project-setup
-actions and all six REV rows remain planned and unavailable. Registration makes the
+02C expands the current registry to fourteen identities. AUTH-12E activates only
+`project.guide_sufficiency.run` for the exact internal setup-service command;
+the other three project-setup actions and all six REV rows remain planned and
+unavailable. Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
 itself; migration `0043_project_setup_service` only expands the closed database
@@ -1048,6 +1051,15 @@ provenance, and advances only that policy selector. Draft guides may attach the
 two policies in either order; activation still requires both. Active guide
 policy selection remains frozen.
 
+Guide sufficiency has three active mutation actions. Public requests require a
+covered Project Manager, canonical human actor/link resolution, and UUID
+idempotency. PREP binds the draft guide/version, latest source snapshot/hash,
+setup generation, report when applicable, operation/request digest, and final
+material/stale-output facts. Agent execution occurs after cheap preflight and
+outside any prepared handle; persistence obtains fresh authority. The fixed
+`workstream.project.setup` service may resolve only the run action internally
+with exact setup custody and no matched human grant.
+
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
@@ -1056,9 +1068,9 @@ policy selection remains frozen.
 | `project.guide_source_snapshot.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.review_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
-| `project.guide_sufficiency_report.create` | `project.guide.manage` | `WS-AUTH-001-12E` |
-| `project.guide_sufficiency.run` | `project.guide.manage` | `WS-AUTH-001-12E` |
-| `project.guide_sufficiency.warnings.acknowledge` | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
 | `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
 | `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
@@ -1068,6 +1080,13 @@ policy selection remains frozen.
 | `project.post_submit_checker_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
 | `project.setup_run.update` | `project.guide.manage` | `WS-AUTH-001-12B2` |
 | `project.guide.activate` | `project.guide.manage` | `WS-AUTH-001-12H` |
+
+Migration `0054_guide_sufficiency_authority` preserves historical sufficiency
+rows as readable, unattributed records while requiring complete creation or
+acknowledgement authority provenance for new 12E mutations. Its replay ledger
+is append-only, and downgrade is refused after any 12E replay or provenance
+exists. Operators must not delete authority or product evidence to force a
+rollback.
 
 Migration `0041_project_mutation_evidence` extends only the closed audit
 action-to-permission evidence constraint. It follows ART migration

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
@@ -18,6 +18,11 @@ from app.modules.artifacts.models import (
     GuideSourceExtractionAttempt,
     GuideSourceExtractionUsage,
     GuideSourceFormatClassification,
+)
+from app.interfaces.artifact_operations import (
+    GuideSufficiencyExtractionProvenance,
+    GuideSufficiencyMaterialResult,
+    GuideSufficiencySourceItem,
 )
 from app.modules.projects.service import (
     PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
@@ -37,17 +42,12 @@ def sha256_hash(seed: str) -> str:
     return "sha256:" + hashlib.sha256(seed.encode()).hexdigest()
 
 
-async def create_verified_report_fixture(
-    report_id: str,
+async def create_verified_material_fixture(
     source_snapshot_id: str,
-) -> str:
-    """Give broad policy tests exact verified provenance without replaying ART e2e.
-
-    ART binding and extraction integrity is exercised in ``test_guide_bindings``.
-    These project-policy fixtures need only a complete, server-owned usage set.
-    """
+) -> GuideSufficiencyMaterialResult:
+    """Persist exact ART lineage and return material backed by those same rows."""
     async with db_session.get_session_factory()() as session:
-        diagnostic_report = await session.get(GuideSufficiencyReport, report_id)
+        snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
         setup_run = await session.scalar(
             select(ProjectSetupRun)
             .where(ProjectSetupRun.source_snapshot_id == source_snapshot_id)
@@ -63,46 +63,9 @@ async def create_verified_report_fixture(
                 )
             ).all()
         )
-        assert diagnostic_report is not None
+        assert snapshot is not None
+        assert setup_run is not None
         assert items
-        if setup_run is None:
-            snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
-            assert snapshot is not None
-            setup_run = ProjectSetupRun(
-                id=str(uuid4()),
-                project_id=diagnostic_report.project_id,
-                guide_id=diagnostic_report.guide_id,
-                guide_version=diagnostic_report.guide_version,
-                source_snapshot_id=source_snapshot_id,
-                source_snapshot_hash=diagnostic_report.source_snapshot_hash,
-                setup_generation=snapshot.creation_generation,
-                status="queued",
-                current_step="queued",
-                created_by="project-manager-subject",
-            )
-            session.add(setup_run)
-            await session.flush()
-        report = GuideSufficiencyReport(
-            id=str(uuid4()),
-            project_id=diagnostic_report.project_id,
-            guide_id=diagnostic_report.guide_id,
-            guide_version=diagnostic_report.guide_version,
-            source_snapshot_id=diagnostic_report.source_snapshot_id,
-            source_snapshot_hash=diagnostic_report.source_snapshot_hash,
-            status=diagnostic_report.status,
-            findings=diagnostic_report.findings,
-            summary=diagnostic_report.summary,
-            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
-            project_setup_run_id=setup_run.id,
-            setup_generation=setup_run.setup_generation,
-            agent_material_sha256=f"sha256:{'a' * 64}",
-            agent_material_byte_count=1,
-            created_by="workstream-system:project-policy-fixture",
-        )
-        session.add(report)
-        await session.flush()
-
         namespace = await session.get(ArtifactStorageNamespace, "primary")
         if namespace is None:
             namespace = ArtifactStorageNamespace(
@@ -110,27 +73,29 @@ async def create_verified_report_fixture(
                 backend="local",
                 adapter="local",
                 provider_profile="test",
-                namespace_descriptor={"root": "project-policy-fixture"},
-                namespace_fingerprint=f"sha256:{'c' * 64}",
+                namespace_descriptor={"root": "verified-material-fixture"},
+                namespace_fingerprint=sha256_hash("verified-material-namespace"),
             )
             session.add(namespace)
             await session.flush()
+        material_items: list[GuideSufficiencySourceItem] = []
+        provenance: list[GuideSufficiencyExtractionProvenance] = []
         for item in items:
-            canonical_output = f"verified guide source item {item.item_order}"
+            canonical_output = f"Verified content for {item.source_label}."
             source_digest = sha256_hash(f"source:{item.id}")
             output_digest = sha256_hash(canonical_output)
-            content_id = str(uuid4())
-            replica_id = str(uuid4())
-            binding_id = str(uuid4())
-            classification_id = str(uuid4())
-            attempt_id = str(uuid4())
-            extracted_content_id = str(uuid4())
-            extraction_usage_id = str(uuid4())
+            content_id, replica_id, binding_id, classification_id = (
+                str(uuid4()) for _ in range(4)
+            )
+            attempt_id, extracted_content_id, usage_id = (
+                str(uuid4()) for _ in range(3)
+            )
+            byte_count = len(canonical_output.encode())
             session.add(
                 ArtifactContent(
                     id=content_id,
                     sha256=source_digest,
-                    byte_count=len(canonical_output.encode()),
+                    byte_count=byte_count,
                     media_type="text/plain",
                     normalized_display_name=item.source_label,
                 )
@@ -154,8 +119,8 @@ async def create_verified_report_fixture(
             session.add(
                 GuideSourceArtifactBinding(
                     id=binding_id,
-                    project_id=report.project_id,
-                    guide_id=report.guide_id,
+                    project_id=snapshot.project_id,
+                    guide_id=snapshot.guide_id,
                     source_snapshot_id=source_snapshot_id,
                     source_item_id=item.id,
                     project_setup_run_id=setup_run.id,
@@ -163,7 +128,7 @@ async def create_verified_report_fixture(
                     content_id=content_id,
                     verified_replica_id=replica_id,
                     logical_role="guide_source_original",
-                    created_by_service="test.project_policy_fixture",
+                    created_by_service="test.verified_material_fixture",
                 )
             )
             await session.flush()
@@ -175,7 +140,7 @@ async def create_verified_report_fixture(
                     verified_replica_id=replica_id,
                     setup_generation=setup_run.setup_generation,
                     sha256=source_digest,
-                    byte_count=len(canonical_output.encode()),
+                    byte_count=byte_count,
                     media_type="text/plain",
                     detected_format="plain_text",
                     status="classified",
@@ -210,7 +175,7 @@ async def create_verified_report_fixture(
                         extractor_version="1",
                         policy_version=EXTRACTION_POLICY_VERSION,
                         source_sha256=source_digest,
-                        source_byte_count=len(canonical_output.encode()),
+                        source_byte_count=byte_count,
                         status="extracted",
                         output_sha256=output_digest,
                         canonical_output=canonical_output,
@@ -221,7 +186,7 @@ async def create_verified_report_fixture(
             await session.flush()
             session.add(
                 GuideSourceExtractionUsage(
-                    id=extraction_usage_id,
+                    id=usage_id,
                     extracted_content_id=extracted_content_id,
                     extraction_attempt_id=attempt_id,
                     attempt_status="extracted",
@@ -233,20 +198,134 @@ async def create_verified_report_fixture(
                 )
             )
             await session.flush()
+            material_items.append(
+                GuideSufficiencySourceItem(
+                    source_kind=item.source_kind,
+                    ingestion_adapter=item.ingestion_adapter,
+                    source_item_id=UUID(item.id),
+                    item_order=item.item_order,
+                    binding_id=UUID(binding_id),
+                    content_id=UUID(content_id),
+                    artifact_sha256=source_digest,
+                    artifact_byte_count=byte_count,
+                    media_type="text/plain",
+                    classification_id=UUID(classification_id),
+                    detected_format="plain_text",
+                    extraction_attempt_id=UUID(attempt_id),
+                    extraction_usage_id=UUID(usage_id),
+                    extracted_content_id=UUID(extracted_content_id),
+                    extractor_name="workstream.plain_text",
+                    extractor_version="1",
+                    extraction_policy_version=EXTRACTION_POLICY_VERSION,
+                    canonical_output_sha256=output_digest,
+                    omission_facts={},
+                    canonical_content=canonical_output,
+                    structural_metadata={"source_kind": item.source_kind},
+                )
+            )
+            provenance.append(
+                GuideSufficiencyExtractionProvenance(
+                    item_order=item.item_order,
+                    source_item_id=UUID(item.id),
+                    binding_id=UUID(binding_id),
+                    content_id=UUID(content_id),
+                    extraction_usage_id=UUID(usage_id),
+                    extraction_attempt_id=UUID(attempt_id),
+                    extracted_content_id=UUID(extracted_content_id),
+                    canonical_output_sha256=output_digest,
+                )
+            )
+        await session.commit()
+        return GuideSufficiencyMaterialResult(
+            source_items=tuple(material_items),
+            provenance=tuple(provenance),
+        )
+
+
+async def create_verified_report_fixture(
+    report_id: str,
+    source_snapshot_id: str,
+) -> str:
+    """Give broad policy tests exact verified provenance without replaying ART e2e.
+
+    ART binding and extraction integrity is exercised in ``test_guide_bindings``.
+    These project-policy fixtures need only a complete, server-owned usage set.
+    """
+    async with db_session.get_session_factory()() as session:
+        diagnostic_report = await session.get(GuideSufficiencyReport, report_id)
+        setup_run = await session.scalar(
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.source_snapshot_id == source_snapshot_id)
+            .order_by(ProjectSetupRun.setup_generation.desc())
+            .limit(1)
+        )
+        assert diagnostic_report is not None
+        if setup_run is None:
+            snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
+            assert snapshot is not None
+            assert snapshot.creation_generation is not None
+            assert snapshot.creation_generation > 0
+            setup_run = ProjectSetupRun(
+                id=str(uuid4()),
+                project_id=diagnostic_report.project_id,
+                guide_id=diagnostic_report.guide_id,
+                guide_version=diagnostic_report.guide_version,
+                source_snapshot_id=source_snapshot_id,
+                source_snapshot_hash=diagnostic_report.source_snapshot_hash,
+                setup_generation=snapshot.creation_generation,
+                status="queued",
+                current_step="queued",
+                created_by="project-manager-subject",
+            )
+            session.add(setup_run)
+            await session.commit()
+
+    material = await create_verified_material_fixture(source_snapshot_id)
+    async with db_session.get_session_factory()() as session:
+        diagnostic_report = await session.get(GuideSufficiencyReport, report_id)
+        setup_run = await session.scalar(
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.source_snapshot_id == source_snapshot_id)
+            .order_by(ProjectSetupRun.setup_generation.desc())
+            .limit(1)
+        )
+        assert diagnostic_report is not None
+        assert setup_run is not None
+        report = GuideSufficiencyReport(
+            id=str(uuid4()),
+            project_id=diagnostic_report.project_id,
+            guide_id=diagnostic_report.guide_id,
+            guide_version=diagnostic_report.guide_version,
+            source_snapshot_id=diagnostic_report.source_snapshot_id,
+            source_snapshot_hash=diagnostic_report.source_snapshot_hash,
+            status=diagnostic_report.status,
+            findings=diagnostic_report.findings,
+            summary=diagnostic_report.summary,
+            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+            project_setup_run_id=setup_run.id,
+            setup_generation=setup_run.setup_generation,
+            agent_material_sha256=f"sha256:{'a' * 64}",
+            agent_material_byte_count=1,
+            created_by="workstream-system:project-policy-fixture",
+        )
+        session.add(report)
+        await session.flush()
+        for usage in material.provenance:
             session.add(
                 GuideSufficiencyReportSourceUsage(
                     id=str(uuid4()),
                     report_id=report.id,
-                    item_order=item.item_order,
-                    source_item_id=item.id,
-                    binding_id=binding_id,
-                    content_id=content_id,
-                    extraction_usage_id=extraction_usage_id,
-                    extraction_attempt_id=attempt_id,
-                    extracted_content_id=extracted_content_id,
+                    item_order=usage.item_order,
+                    source_item_id=str(usage.source_item_id),
+                    binding_id=str(usage.binding_id),
+                    content_id=str(usage.content_id),
+                    extraction_usage_id=str(usage.extraction_usage_id),
+                    extraction_attempt_id=str(usage.extraction_attempt_id),
+                    extracted_content_id=str(usage.extracted_content_id),
                     project_setup_run_id=setup_run.id,
                     setup_generation=setup_run.setup_generation,
-                    canonical_output_sha256=output_digest,
+                    canonical_output_sha256=usage.canonical_output_sha256,
                 )
             )
         setup_run.output_sufficiency_report_id = report.id
