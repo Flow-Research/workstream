@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
@@ -25,12 +25,9 @@ from app.interfaces.artifacts import (
     ArtifactStoreNamespaceClaim,
     ArtifactStoreUnavailableError,
 )
-from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.models import (
     ArtifactPutAttempt,
     ArtifactRecoveryAttempt,
-    ArtifactUploadItem,
-    ArtifactUploadSession,
     ArtifactVerificationJob,
 )
 from app.modules.artifacts.schemas import (
@@ -39,7 +36,6 @@ from app.modules.artifacts.schemas import (
     ArtifactRecoveryIneligibleError,
     ArtifactAuthorityDeniedError,
     DenyArtifactRecoveryAuthority,
-    ContributorArtifactAdmissionRequest,
     GuideArtifactAdmissionRequest,
 )
 from app.modules.artifacts.service import (
@@ -48,6 +44,8 @@ from app.modules.artifacts.service import (
     ArtifactStorageOrchestrator,
     artifact_storage_namespace_spec,
 )
+from app.modules.checkers.models import CheckerRun
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
@@ -59,12 +57,12 @@ from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.projects.models import (
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
-    Project,
     ProjectGuide,
 )
 from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
-from app.modules.tasks.models import AuditEvent, WorkstreamTask
+from app.modules.tasks.models import AuditEvent
 from tests.artifact_store_helpers import artifact_admission_limit_settings, minted_source
+from tests.test_artifact_admission import _admit_checker_output
 
 
 class _AllowArtifactAuthority:
@@ -152,9 +150,8 @@ def _context() -> HumanAuthorizationContext:
     )
 
 
-async def _seed_contributor(session, context, sha256: str, size: int) -> tuple[str, str, str]:
+async def _seed_recovery_actor(session, context: HumanAuthorizationContext) -> None:
     actor_id = str(context.actor_profile_id)
-    project_id, task_id, upload_id, item_id = (str(uuid4()) for _ in range(4))
     session.add(
         ActorProfile(
             id=actor_id,
@@ -177,107 +174,19 @@ async def _seed_contributor(session, context, sha256: str, size: int) -> tuple[s
             last_verified_at=datetime.now(UTC),
         )
     )
+
+
+async def _seed_guide_owner(session, context: HumanAuthorizationContext) -> str:
+    await _seed_recovery_actor(session, context)
+    project_id = str(uuid4())
     await seed_historical_project(
         session,
         project_id=project_id,
-        name="Recovery project",
-        slug=f"recovery-{project_id}",
+        name="Guide recovery project",
+        slug=f"guide-recovery-{project_id}",
     )
     await session.flush()
-    session.add(
-        WorkstreamTask(
-            id=task_id,
-            project_id=project_id,
-            title="Recovery task",
-            description="Prove recovery.",
-            status="draft",
-            created_by="test",
-        )
-    )
-    await session.flush()
-    session.add(
-        ArtifactUploadSession(
-            id=upload_id,
-            actor_id=actor_id,
-            project_id=project_id,
-            task_id=task_id,
-            permitted_roles=["submission"],
-            state="open",
-            maximum_bytes=size,
-            current_bytes=0,
-            reserved_bytes=size,
-            maximum_items=1,
-            current_items=0,
-            reserved_items=1,
-            expires_at=datetime.now(UTC) + timedelta(minutes=10),
-            cas_version=0,
-        )
-    )
-    await session.flush()
-    session.add(
-        ArtifactUploadItem(
-            id=item_id,
-            session_id=upload_id,
-            logical_role="submission",
-            display_name="result.bin",
-            media_type="application/octet-stream",
-            reserved_bytes=size,
-            expected_sha256=sha256,
-            expected_size=size,
-            idempotency_key=f"put-{item_id}",
-            request_digest=canonical_json_hash({"sha256": sha256, "size": size}),
-            state="reserved",
-            cas_version=0,
-        )
-    )
-    await session.commit()
-    return project_id, task_id, item_id
-
-
-async def _exhausted_job(session, settings, tmp_path, context):
-    namespace = artifact_storage_namespace_spec(
-        settings,
-        LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root)),
-    )
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
-    source_cm = minted_source(tmp_path / "source", b"recover me")
-    source = await source_cm.__aenter__()
-    project_id, task_id, item_id = await _seed_contributor(
-        session, context, source.commitment.sha256, source.commitment.byte_count
-    )
-    admission = await ArtifactAdmissionService(session, settings, namespace).admit(
-        ContributorArtifactAdmissionRequest(
-            authorization_context=context,
-            upload_item_id=UUID(item_id),
-            source=source,
-        )
-    )
-    orchestrator = ArtifactStorageOrchestrator(
-        session, store, namespace, settings, _AllowArtifactAuthority()
-    )
-    await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-    job = await session.scalar(select(ArtifactVerificationJob))
-    assert job is not None
-    job_id = UUID(job.id)
-    await session.rollback()
-    orchestrator._read_complete = AsyncMock(
-        side_effect=ArtifactStoreUnavailableError("unavailable")
-    )
-    await orchestrator.verify_object(job_id)
-    job = await session.get(ArtifactVerificationJob, str(job_id))
-    assert job is not None
-    await session.refresh(job)
-    await session.commit()
-    await source_cm.__aexit__(None, None, None)
-    assert job.terminal_result_code == "provider_unavailable"
-    return project_id, task_id, job, orchestrator, bootstrap
+    return project_id
 
 
 async def _exhausted_guide_job(session, settings, tmp_path, context):
@@ -295,12 +204,7 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
     )
     source_cm = minted_source(tmp_path / "guide-source", b"recover guide")
     source = await source_cm.__aenter__()
-    await _seed_contributor(
-        session, context, source.commitment.sha256, source.commitment.byte_count
-    )
-    project = await session.scalar(select(Project))
-    assert project is not None
-    project_id = project.id
+    project_id = await _seed_guide_owner(session, context)
     guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(3))
     async with suspend_historical_product_custody(
         session,
@@ -397,7 +301,52 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
     await session.refresh(job)
     await session.commit()
     await source_cm.__aexit__(None, None, None)
-    return project_id, job, bootstrap
+    return project_id, job, orchestrator, bootstrap
+
+
+async def _exhausted_job(session, settings, tmp_path, context):
+    await _seed_recovery_actor(session, context)
+    namespace = artifact_storage_namespace_spec(
+        settings,
+        LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root)),
+    )
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    async with minted_source(tmp_path / "checker-output", b"recover checker output") as source:
+        project_id, task_id, checker_run_id, admission = await _admit_checker_output(
+            session, settings, namespace, source
+        )
+        orchestrator = ArtifactStorageOrchestrator(
+            session, store, namespace, settings, _AllowArtifactAuthority()
+        )
+        put_outcome = await orchestrator.execute_committed_put(
+            attempt_id=admission.attempt_id, source=source
+        )
+        assert put_outcome == "stored_pending_verification"
+        job = await session.scalar(
+            select(ArtifactVerificationJob).where(
+                ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)
+            )
+        )
+        assert job is not None
+        job_id = job.id
+        await session.rollback()
+        orchestrator._read_complete = AsyncMock(side_effect=ArtifactStoreUnavailableError("down"))
+        await orchestrator.verify_object(UUID(job_id))
+        job = await session.get(ArtifactVerificationJob, job_id)
+        assert job is not None
+        checker_run = await session.get(CheckerRun, checker_run_id)
+        assert checker_run is not None
+        submission_id = checker_run.submission_id
+        await session.refresh(job)
+        await session.commit()
+    return project_id, task_id, submission_id, job, orchestrator, bootstrap
 
 
 def _request(
@@ -406,6 +355,7 @@ def _request(
     task_id: str | None,
     job: ArtifactVerificationJob,
     *,
+    submission_id: str | None = None,
     reason: str = "provider remained unavailable",
     client_idempotency_key: str = "recovery-1",
 ) -> ArtifactRecoveryRequest:
@@ -413,7 +363,7 @@ def _request(
         authorization_context=context,
         project_id=UUID(project_id),
         task_id=UUID(task_id) if task_id is not None else None,
-        submission_id=None,
+        submission_id=UUID(submission_id) if submission_id is not None else None,
         source_verification_job_id=UUID(job.id),
         reason=reason,
         client_idempotency_key=client_idempotency_key,
@@ -431,11 +381,16 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            request = _request(context, project_id, task_id, source)
+            request = _request(context, project_id, task_id, source, submission_id=submission_id)
             first = await service.create(request)
             replay = await service.create(request)
             assert first.retry_verification_job_id == replay.retry_verification_job_id
@@ -465,7 +420,7 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, source, bootstrap = await _exhausted_guide_job(
+            project_id, source, _orchestrator, bootstrap = await _exhausted_guide_job(
                 session, settings, tmp_path, context
             )
             request = _request(context, project_id, None, source)
@@ -514,11 +469,18 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            created = await service.create(_request(context, project_id, task_id, source))
+            created = await service.create(
+                _request(context, project_id, task_id, source, submission_id=submission_id)
+            )
             with pytest.raises(ArtifactRecoveryConflictError):
                 await service.create(
                     _request(
@@ -526,6 +488,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                         project_id,
                         task_id,
                         source,
+                        submission_id=submission_id,
                         reason="changed",
                     )
                 )
@@ -539,6 +502,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                         project_id,
                         task_id,
                         source,
+                        submission_id=submission_id,
                         client_idempotency_key="different",
                     )
                 )
@@ -553,6 +517,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                 project_id,
                 task_id,
                 retry,
+                submission_id=submission_id,
                 client_idempotency_key="retry-pending",
             )
             await session.rollback()
@@ -573,13 +538,24 @@ async def test_terminal_recovery_authority_change_rolls_back_all_facts(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             authority = _AllowThenDenyRecoveryAuthority()
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(session, settings, authority).create(
-                    _request(context, project_id, task_id, source)
+                    _request(
+                        context,
+                        project_id,
+                        task_id,
+                        source,
+                        submission_id=submission_id,
+                    )
                 )
             assert authority.calls == 2
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
@@ -607,12 +583,17 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
             )
@@ -645,12 +626,17 @@ async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._authority = _DenyTerminalArtifactAuthority()
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
@@ -700,12 +686,17 @@ async def test_every_failed_retry_outcome_terminalizes_recovery_once(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             if isinstance(provider_result, Exception):
                 orchestrator._read_complete = AsyncMock(side_effect=provider_result)
             else:
@@ -744,10 +735,15 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
         async with factory() as setup:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                setup, settings, tmp_path, context
-            )
-            request = _request(context, project_id, task_id, source)
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(setup, settings, tmp_path, context)
+            request = _request(context, project_id, task_id, source, submission_id=submission_id)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
                 ArtifactRecoveryService(first_session, settings, _AllowRecoveryAuthority()).create(
@@ -778,11 +774,18 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            first = await service.create(_request(context, project_id, task_id, source))
+            first = await service.create(
+                _request(context, project_id, task_id, source, submission_id=submission_id)
+            )
             orchestrator._read_complete = AsyncMock(
                 side_effect=ArtifactStoreUnavailableError("still unavailable")
             )
@@ -802,6 +805,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 project_id,
                 task_id,
                 retry,
+                submission_id=submission_id,
                 client_idempotency_key="recovery-2",
             )
             first_attempt_id = first_attempt.id

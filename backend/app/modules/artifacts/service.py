@@ -78,7 +78,6 @@ from app.modules.artifacts.schemas import (
     ArtifactRecoveryNotFoundError,
     DenyArtifactInternalAuthority,
     CheckerOutputArtifactAdmissionRequest,
-    ContributorArtifactAdmissionRequest,
     GuideArtifactAdmissionRequest,
     GuideArtifactIngestAuthorityFacts,
 )
@@ -160,7 +159,6 @@ class _AdmissionFacts:
     task_id: str | None
     guide_source_item_id: str | None
     guide_source_snapshot_id: str | None
-    upload_item_id: str | None
     checker_run_id: str | None
     logical_role: str | None
     operation_identity: str
@@ -849,7 +847,6 @@ class ArtifactStorageOrchestrator:
                     ArtifactOperationReceipt(
                         id=str(uuid4()),
                         put_attempt_id=attempt.id,
-                        upload_item_id=attempt.upload_item_id,
                         guide_source_item_id=attempt.guide_source_item_id,
                         checker_run_id=attempt.checker_run_id,
                         logical_role=attempt.logical_role,
@@ -875,13 +872,6 @@ class ArtifactStorageOrchestrator:
                     maximum_attempts=self._settings.artifact_provider_observation_maximum_attempts,
                 )
             )
-            if attempt.upload_item_id is not None:
-                item = await self._repo.lock_upload_item(attempt.upload_item_id)
-                if item is not None:
-                    item.state = "stored_pending_verification"
-                    item.content_id = content.id
-                    item.provider_object_ref = provider_object_ref
-                    item.cas_version += 1
             attempt.status = "object_confirmed"
             attempt.replica_id = replica.id
             # observation receipts are not acknowledgement receipts; retain the
@@ -992,13 +982,6 @@ class ArtifactStorageOrchestrator:
                     expected_byte_count=attempt.byte_count,
                 )
             )
-            if attempt.upload_item_id is not None:
-                item = await self._repo.lock_upload_item(attempt.upload_item_id)
-                if item is not None:
-                    item.state = "replay_required"
-                    item.content_id = None
-                    item.provider_object_ref = None
-                    item.cas_version += 1
             attempt.status = "absent_replay_required"
             attempt.terminal_result_code = "missing"
             attempt.terminal_at = now
@@ -1128,17 +1111,6 @@ class ArtifactStorageOrchestrator:
                     replica.availability_state = "available"
                     replica.integrity_state = "invalid"
                 attempt.replica_id = replica.id
-                if outcome == "observed_integrity_mismatch" and attempt.upload_item_id is not None:
-                    item = await self._repo.lock_upload_item(attempt.upload_item_id)
-                    binding = await self._repo.lock_binding_for_content(content.id)
-                    if (
-                        item is not None
-                        and binding is None
-                        and item.state in {"reserved", "replay_required"}
-                    ):
-                        item.state = "failed"
-                        item.error_code = "artifact_integrity_failure"
-                        item.cas_version += 1
             await self._repo.add_put_observation_receipt(
                 ArtifactPutObservationReceipt(
                     id=str(uuid4()),
@@ -1296,33 +1268,6 @@ class ArtifactStorageOrchestrator:
                     observed_byte_count=observed_size,
                 )
             )
-            if attempt.upload_item_id is not None:
-                item = await self._repo.lock_upload_item(attempt.upload_item_id)
-                if item is not None:
-                    item_changed = False
-                    if outcome == "verified":
-                        item.state = "ready"
-                        item_changed = True
-                    elif outcome == "missing":
-                        content = await self._repo.lock_content(replica.content_id)
-                        if content is None:
-                            raise ArtifactIngestStateError(
-                                "artifact replica content is unavailable"
-                            )
-                        binding = await self._repo.lock_binding_for_content(replica.content_id)
-                        if binding is None:
-                            item.state = "replay_required"
-                            item.content_id = None
-                            item.provider_object_ref = None
-                            item_changed = True
-                    elif outcome == "integrity_mismatch":
-                        item.state = "failed"
-                        item.content_id = None
-                        item.provider_object_ref = None
-                        item.error_code = "artifact_integrity_failure"
-                        item_changed = True
-                    if item_changed:
-                        item.cas_version += 1
             job.status = outcome
             job.next_run_at = None
             job.terminal_result_code = outcome
@@ -1925,7 +1870,6 @@ class ArtifactAdmissionService:
                     "project_id": facts.project_id,
                     "task_id": facts.task_id,
                     "guide_source_item_id": facts.guide_source_item_id,
-                    "upload_item_id": facts.upload_item_id,
                     "checker_run_id": facts.checker_run_id,
                     "logical_role": facts.logical_role,
                     "sha256": commitment.sha256,
@@ -1980,7 +1924,6 @@ class ArtifactAdmissionService:
                 project_id=facts.project_id,
                 task_id=facts.task_id,
                 guide_source_item_id=facts.guide_source_item_id,
-                upload_item_id=facts.upload_item_id,
                 checker_run_id=facts.checker_run_id,
                 logical_role=facts.logical_role,
                 sha256=commitment.sha256,
@@ -2014,7 +1957,6 @@ class ArtifactAdmissionService:
         """Reject open-ended or forged internal request shapes."""
         if type(request) not in {
             GuideArtifactAdmissionRequest,
-            ContributorArtifactAdmissionRequest,
             CheckerOutputArtifactAdmissionRequest,
         }:
             raise TypeError("invalid artifact admission request")
@@ -2046,8 +1988,6 @@ class ArtifactAdmissionService:
         """Load every product and producer relationship from authoritative rows."""
         if type(request) is GuideArtifactAdmissionRequest:
             return await self._guide_facts(request)
-        if type(request) is ContributorArtifactAdmissionRequest:
-            return await self._contributor_facts(request)
         if type(request) is CheckerOutputArtifactAdmissionRequest:
             return await self._checker_output_facts(request)
         raise TypeError("invalid artifact admission request")
@@ -2078,51 +2018,6 @@ class ArtifactAdmissionService:
             task_id=None,
             guide_source_item_id=item_id,
             guide_source_snapshot_id=row.guide_source_snapshot_id,
-            upload_item_id=None,
-            checker_run_id=None,
-            logical_role=None,
-            operation_identity=operation_identity,
-        )
-
-    async def _contributor_facts(
-        self, request: ContributorArtifactAdmissionRequest
-    ) -> _AdmissionFacts:
-        """Bind committed bytes to one contributor-owned upload item."""
-        context = request.authorization_context
-        if context.actor_kind is not ActorKind.HUMAN:
-            raise ArtifactAdmissionRelationshipError(
-                "contributor artifact producer must be a human actor"
-            )
-        await self._require_active_human_actor(context)
-        item_id = str(request.upload_item_id)
-        row = await self._repo.get_contributor_admission_facts(item_id)
-        commitment = request.source.commitment
-        if (
-            row is None
-            or row.actor_profile_id != str(context.actor_profile_id)
-            or row.task_id is None
-            or row.session_state != "open"
-            or row.item_state not in {"reserved", "replay_required"}
-            or row.expected_sha256 != commitment.sha256
-            or row.expected_size != commitment.byte_count
-            or row.media_type != commitment.media_type
-        ):
-            raise ArtifactAdmissionRelationshipError(
-                "contributor upload item relationship is unavailable"
-            )
-        operation_identity = canonical_json_hash(
-            {"request_type": "contributor", "upload_item_id": item_id}
-        )
-        return _AdmissionFacts(
-            request_type="contributor",
-            producer_type="actor_profile",
-            producer_ref=str(context.actor_profile_id),
-            project_id=row.project_id,
-            guide_id=None,
-            task_id=row.task_id,
-            guide_source_item_id=None,
-            guide_source_snapshot_id=None,
-            upload_item_id=item_id,
             checker_run_id=None,
             logical_role=None,
             operation_identity=operation_identity,
@@ -2174,7 +2069,6 @@ class ArtifactAdmissionService:
             task_id=row.task_id,
             guide_source_item_id=None,
             guide_source_snapshot_id=None,
-            upload_item_id=None,
             checker_run_id=checker_run_id,
             logical_role=logical_role,
             operation_identity=operation_identity,

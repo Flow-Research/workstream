@@ -105,4 +105,5 @@ def test_models_retain_only_v2_provider_evidence_fields() -> None:
     assert "retention_state" not in ArtifactReplica.__table__.columns
     assert "provider_receipt_id" not in ArtifactOperationReceipt.__table__.columns
     assert "retention_reference" not in ArtifactOperationReceipt.__table__.columns
+    assert ArtifactOperationReceipt.__table__.c.put_attempt_id.nullable is False
     assert "namespace_fingerprint" in ArtifactStorageNamespace.__table__.columns

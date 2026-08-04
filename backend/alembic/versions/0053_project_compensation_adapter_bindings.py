@@ -1,7 +1,7 @@
 """add project compensation adapter-binding persistence
 
-Revision ID: 0052_compensation_bindings
-Revises: 0051_review_queue_foundation
+Revision ID: 0053_compensation_bindings
+Revises: 0052_legacy_intake_removal
 Create Date: 2026-08-04
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0052_compensation_bindings"
-down_revision = "0051_review_queue_foundation"
+revision = "0053_compensation_bindings"
+down_revision = "0052_legacy_intake_removal"
 branch_labels = depends_on = None
 
 

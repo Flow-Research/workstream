@@ -59,8 +59,8 @@ credentials, secrets, raw provider refs, dependency or CI weakening
 - [ ] Upgrade/downgrade and duplicate/state races use isolated PostgreSQL.
 - [ ] The migration is allocated from the then-current single head; no fixed
   revision number is reserved until current main is refreshed at chunk start.
-  This start is bound to main `1cd9c519` with single head
-  `0051_review_queue_foundation`, so the migration is `0052`; stop and re-review
+  This start is reconciled to main `b47a7e64` with single head
+  `0052_legacy_intake_removal`, so the migration is `0053`; stop and re-review
   if either fact changes before publication.
 
 ## Verification and reviewers

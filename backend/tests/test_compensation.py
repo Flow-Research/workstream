@@ -12,7 +12,7 @@ from alembic import command
 from alembic.config import Config
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import inspect, select, update
+from sqlalchemy import inspect, select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -272,6 +272,58 @@ async def test_repository_rejects_missing_adapter_identity(
 
 
 @pytest.mark.asyncio
+async def test_repository_refreshes_preloaded_actor_before_validation(
+    compensation_database_env: str,
+) -> None:
+    project_id, actor_id, creator_id = await _seed_binding_facts()
+    async with db_session.get_session_factory()() as stale_session:
+        assert await stale_session.get(ActorProfile, actor_id) is not None
+        assert (
+            await stale_session.scalar(
+                select(ActorIdentityLink).where(
+                    ActorIdentityLink.actor_profile_id == actor_id
+                )
+            )
+            is not None
+        )
+
+        now = datetime.now(UTC)
+        async with db_session.get_session_factory()() as mutator_session:
+            await mutator_session.execute(
+                text(
+                    "alter table actor_profiles disable trigger "
+                    "actor_profile_history_guard"
+                )
+            )
+            await mutator_session.execute(
+                update(ActorProfile)
+                .where(ActorProfile.id == actor_id)
+                .values(
+                    status="deactivated",
+                    deactivated_by=creator_id,
+                    deactivated_at=now,
+                    deactivation_reason="test concurrent deactivation",
+                )
+            )
+            await mutator_session.execute(
+                text(
+                    "alter table actor_profiles enable trigger "
+                    "actor_profile_history_guard"
+                )
+            )
+            await mutator_session.commit()
+
+        with pytest.raises(
+            CompensationAdapterActorInvalid,
+            match="compensation_adapter_actor_invalid",
+        ):
+            await CompensationBindingRepository(stale_session).add_binding(
+                _binding_input(project_id, actor_id, creator_id),
+                expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+            )
+
+
+@pytest.mark.asyncio
 async def test_database_rejects_invalid_lifecycle_shape(
     compensation_database_env: str,
 ) -> None:
@@ -363,7 +415,7 @@ async def test_active_binding_duplicate_race_has_one_winner(
 
 
 @pytest.mark.postgres_schema_contract
-def test_0052_binding_migration_round_trip(
+def test_0053_binding_migration_round_trip(
     compensation_database_env: str,
 ) -> None:
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
@@ -371,7 +423,7 @@ def test_0052_binding_migration_round_trip(
         "script_location",
         str(Path(__file__).resolve().parents[1] / "alembic"),
     )
-    command.downgrade(config, "0051_review_queue_foundation")
+    command.downgrade(config, "0052_legacy_intake_removal")
 
     async def table_names() -> set[str]:
         engine = create_async_engine(compensation_database_env)
@@ -384,5 +436,5 @@ def test_0052_binding_migration_round_trip(
             await engine.dispose()
 
     assert "project_compensation_adapter_bindings" not in asyncio.run(table_names())
-    command.upgrade(config, "0052_compensation_bindings")
+    command.upgrade(config, "0053_compensation_bindings")
     assert "project_compensation_adapter_bindings" in asyncio.run(table_names())

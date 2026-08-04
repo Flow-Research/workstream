@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0052_compensation_bindings"
+HEAD_REVISION = "0053_compensation_bindings"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -228,6 +228,261 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
         )
         assert "ck_project_setup_runs_ck_project_setup_runs_status" in constraint_names
         command.downgrade(config, "base")
+
+
+def test_0051_legacy_intake_safe_empty_round_trip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """The clean cut removes the namespace and recreates only an empty legacy shape."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0050_guide_source_v2")
+            legacy = asyncio.run(_legacy_intake_shape(isolated_database_env))
+            assert legacy["revision"] == "0050_guide_source_v2"
+            assert legacy["tables"] == (True, True)
+            assert legacy["upload_columns"] == (True, True)
+
+            command.upgrade(config, HEAD_REVISION)
+            removed = asyncio.run(_legacy_intake_shape(isolated_database_env))
+            assert removed["revision"] == HEAD_REVISION
+            assert removed["tables"] == (False, False)
+            assert removed["upload_columns"] == (False, False)
+            assert removed["contributor_constraints"] == ()
+
+            command.downgrade(config, "0050_guide_source_v2")
+            restored = asyncio.run(_legacy_intake_shape(isolated_database_env))
+            assert restored == legacy
+            command.upgrade(config, HEAD_REVISION)
+        finally:
+            command.downgrade(config, "base")
+
+
+@pytest.mark.parametrize(
+    "blocker",
+    (
+        "upload_session",
+        "upload_item",
+        "contributor_attempt",
+        "attempt_upload_item",
+        "v1_receipt",
+        "receipt_upload_item",
+    ),
+)
+def test_0051_legacy_intake_refuses_each_populated_condition_atomically(
+    isolated_database_env: str, migration_lock, blocker: str
+) -> None:
+    """Every historical row class preserves the entire predecessor schema on refusal."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0050_guide_source_v2")
+            asyncio.run(_seed_0051_legacy_blocker(isolated_database_env, blocker))
+            before = asyncio.run(_legacy_intake_shape(isolated_database_env))
+            with pytest.raises(
+                RuntimeError, match="legacy contributor artifact intake is populated"
+            ):
+                command.upgrade(config, HEAD_REVISION)
+            assert asyncio.run(_legacy_intake_shape(isolated_database_env)) == before
+        finally:
+            asyncio.run(_reset_0051_test_schema(isolated_database_env))
+
+
+async def _reset_0051_test_schema(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("drop schema public cascade"))
+            await connection.execute(text("create schema public"))
+    finally:
+        await engine.dispose()
+
+
+async def _legacy_intake_shape(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            has_legacy_tables = bool(
+                await connection.scalar(
+                    text("select to_regclass('artifact_upload_sessions') is not null")
+                )
+            )
+            physical_schema = tuple(
+                tuple(row)
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select 'column',table_name,column_name,data_type,udt_name,"
+                            "is_nullable,coalesce(column_default,''),"
+                            "coalesce(character_maximum_length::text,'') "
+                            "from information_schema.columns where table_schema='public' and "
+                            "table_name in ('artifact_upload_sessions','artifact_upload_items',"
+                            "'artifact_put_attempts','artifact_operation_receipts') union all "
+                            "select 'constraint',c.relname,q.conname,q.contype::text,"
+                            "pg_get_constraintdef(q.oid,true),'','','' from pg_constraint q "
+                            "join pg_class c on c.oid=q.conrelid join pg_namespace n "
+                            "on n.oid=c.relnamespace where n.nspname='public' and c.relname in "
+                            "('artifact_upload_sessions','artifact_upload_items',"
+                            "'artifact_put_attempts','artifact_operation_receipts') union all "
+                            "select 'index',tablename,indexname,indexdef,'','','','' "
+                            "from pg_indexes where schemaname='public' and tablename in "
+                            "('artifact_upload_sessions','artifact_upload_items',"
+                            "'artifact_put_attempts','artifact_operation_receipts') "
+                            "order by 1,2,3,4"
+                        )
+                    )
+                ).all()
+            )
+            constraints = tuple(
+                await connection.scalars(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint "
+                        "where conrelid='artifact_put_attempts'::regclass and contype='c' "
+                        "and pg_get_constraintdef(oid) ilike '%contributor%' order by conname"
+                    )
+                )
+            )
+            return {
+                "revision": str(
+                    await connection.scalar(text("select version_num from alembic_version"))
+                ),
+                "tables": (
+                    bool(
+                        await connection.scalar(
+                            text("select to_regclass('artifact_upload_sessions') is not null")
+                        )
+                    ),
+                    bool(
+                        await connection.scalar(
+                            text("select to_regclass('artifact_upload_items') is not null")
+                        )
+                    ),
+                ),
+                "upload_columns": (
+                    bool(
+                        await connection.scalar(
+                            text(
+                                "select exists(select 1 from information_schema.columns where table_name='artifact_put_attempts' and column_name='upload_item_id')"
+                            )
+                        )
+                    ),
+                    bool(
+                        await connection.scalar(
+                            text(
+                                "select exists(select 1 from information_schema.columns where table_name='artifact_operation_receipts' and column_name='upload_item_id')"
+                            )
+                        )
+                    ),
+                ),
+                "contributor_constraints": constraints,
+                "physical_schema": physical_schema,
+                "legacy_rows": tuple(
+                    tuple(row)
+                    for row in (
+                        await connection.execute(
+                            text(
+                                "select 'session',id,state from artifact_upload_sessions "
+                                "union all select 'item',id,state from artifact_upload_items "
+                                "union all select 'attempt',id,producer_request_type "
+                                "from artifact_put_attempts union all "
+                                "select 'receipt',id,contract_version::text "
+                                "from artifact_operation_receipts order by 1,2"
+                            )
+                        )
+                    ).all()
+                )
+                if has_legacy_tables
+                else (),
+                "row_counts": tuple(
+                    (
+                        await connection.execute(
+                            text(
+                                "select (select count(*) from artifact_put_attempts),"
+                                "(select count(*) from artifact_operation_receipts),"
+                                "(select count(*) from artifact_upload_sessions),"
+                                "(select count(*) from artifact_upload_items)"
+                            )
+                        )
+                    ).one()
+                )
+                if has_legacy_tables
+                else (),
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _seed_0051_legacy_blocker(database_url: str, blocker: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            table = {
+                "upload_session": "artifact_upload_sessions",
+                "upload_item": "artifact_upload_items",
+                "contributor_attempt": "artifact_put_attempts",
+                "attempt_upload_item": "artifact_put_attempts",
+                "v1_receipt": "artifact_operation_receipts",
+                "receipt_upload_item": "artifact_operation_receipts",
+            }[blocker]
+            constraint_names = tuple(
+                await connection.scalars(
+                    text(
+                        "select conname from pg_constraint where conrelid=cast(:table as regclass) "
+                        "and contype in ('c','f') order by conname"
+                    ),
+                    {"table": table},
+                )
+            )
+            for name in constraint_names:
+                await connection.execute(text(f'alter table {table} drop constraint "{name}"'))
+            identifier = str(uuid4())
+            if blocker == "upload_session":
+                await connection.execute(
+                    text(
+                        "insert into artifact_upload_sessions (id,actor_id,project_id,permitted_roles,state,maximum_bytes,current_bytes,reserved_bytes,maximum_items,current_items,reserved_items,expires_at,cas_version) values (:id,'actor','project','[]'::json,'open',1,0,0,1,0,0,now(),0)"
+                    ),
+                    {"id": identifier},
+                )
+            elif blocker == "upload_item":
+                await connection.execute(
+                    text(
+                        "insert into artifact_upload_items (id,session_id,logical_role,display_name,reserved_bytes,idempotency_key,request_digest,state,cas_version) values (:id,'session','result','result.zip',1,'key',:digest,'reserved',0)"
+                    ),
+                    {"id": identifier, "digest": "sha256:" + "1" * 64},
+                )
+            elif blocker in {"contributor_attempt", "attempt_upload_item"}:
+                await connection.execute(
+                    text(
+                        "insert into artifact_put_attempts (id,producer_request_type,producer_type,producer_ref,project_id,task_id,upload_item_id,sha256,byte_count,media_type,storage_namespace_id,namespace_fingerprint,canonical_target,operation_identity,request_digest,status,execution_generation,observation_count,maximum_observations,cas_version) values (:id,:request_type,'actor_profile',:actor,'project',:task,:item,:digest,1,'application/zip','primary',:digest,'sha256/11/' || repeat('1',62),:digest,:digest,'prepared',0,0,5,0)"
+                    ),
+                    {
+                        "id": identifier,
+                        "request_type": "contributor"
+                        if blocker == "contributor_attempt"
+                        else "guide",
+                        "actor": str(uuid4()),
+                        "task": "task" if blocker == "contributor_attempt" else None,
+                        "item": None if blocker == "contributor_attempt" else "item",
+                        "digest": "sha256:" + "1" * 64,
+                    },
+                )
+            else:
+                await connection.execute(
+                    text(
+                        "insert into artifact_operation_receipts (id,contract_version,put_attempt_id,upload_item_id,replica_id,operation,idempotency_key,request_digest,provider_object_ref,replayed,outcome,attempt_number,correlation_id,details) values (:id,:version,:attempt,:item,'replica','put','key',:digest,'object',false,'stored_pending_verification',1,'correlation','[]'::json)"
+                    ),
+                    {
+                        "id": identifier,
+                        "version": 1 if blocker == "v1_receipt" else 2,
+                        "attempt": None if blocker == "v1_receipt" else "attempt",
+                        "item": "item",
+                        "digest": "sha256:" + "1" * 64,
+                    },
+                )
+    finally:
+        await engine.dispose()
 
 
 async def _project_setup_run_check_constraint_names(database_url: str) -> set[str]:
@@ -3672,8 +3927,6 @@ def test_current_schema_uses_project_policy_contract(
         "checker_policies.pre_submit_checker_bundle_hash",
         "payment_policies.base_amount",
         "payment_policies.currency",
-        "artifact_upload_sessions.id",
-        "artifact_upload_items.id",
         "artifact_contents.sha256",
         "artifact_bindings.scope_version",
         "artifact_storage_namespaces.namespace_fingerprint",
@@ -3706,6 +3959,8 @@ def test_current_schema_uses_project_policy_contract(
         "workstream_tasks.locked_checker_policy_version",
         "submissions.locked_checker_policy_version",
         "checker_runs.locked_checker_policy_version",
+        "artifact_upload_sessions.id",
+        "artifact_upload_items.id",
         "artifact_replicas.provider_artifact_id",
         "artifact_replicas.provider_manifest_id",
         "artifact_replicas.retention_state",

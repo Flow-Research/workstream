@@ -36,6 +36,7 @@ class CompensationBindingRepository:
             )
             .where(ActorProfile.id == value.adapter_actor_id)
             .with_for_update(of=(ActorProfile, ActorIdentityLink))
+            .execution_options(populate_existing=True)
         )
         row = identity.one_or_none()
         if row is None:

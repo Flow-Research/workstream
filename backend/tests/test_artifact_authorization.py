@@ -189,7 +189,6 @@ async def test_quota_reconciliation_is_configuration_driven_and_rollback_safe() 
         task_id=None,
         guide_source_item_id=str(uuid4()),
         guide_source_snapshot_id=None,
-        upload_item_id=None,
         checker_run_id=None,
         logical_role=None,
         operation_identity="sha256:" + "a" * 64,
