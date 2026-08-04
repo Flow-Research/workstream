@@ -175,7 +175,11 @@ adapter_binding_id
 ```
 
 Every policy, award, and fulfilled quantity uses the same fixed-point
-`NUMERIC(38, 18)` contract. API quantities are canonical decimal strings with
+`NUMERIC(38, 18)` value envelope. PostgreSQL persistence retains the unrounded
+numeric input and checks at most 20 integer and 18 fractional digits explicitly;
+using a `NUMERIC(38,18)` column typemod directly is forbidden because PostgreSQL
+would round excess fractional precision before a check could reject it. API
+quantities are canonical decimal strings with
 at most 20 integer digits and 18 fractional digits; leading plus signs, binary
 floating-point, NaN, infinity, exponent notation, negative values, zero, excess
 precision, and values above the database maximum are rejected rather than
@@ -183,11 +187,24 @@ rounded. Pydantic, application, and PostgreSQL validation MUST enforce
 identical bounds.
 
 For `money`, `unit_code` is an uppercase ISO 4217 code enabled for the project.
-For `project_points`, it is the exact configured project-scoped unit; its
+The immutable ISO code registry is migration-owned from the official current
+SIX ISO 4217 List One; application behavior cannot add arbitrary codes. For
+`project_points`, quantity is a whole number and `unit_code` is the exact
+configured project-scoped unit; its
 identity is `(project_id, unit_code)`, so equal text in another project is a
 different unit. A definition MUST match the rule's project, policy version,
 contribution type, and unit. Its binding MUST match the project and instrument.
 Published definitions are immutable.
+
+### ProjectCompensationUnit
+
+`ProjectCompensationUnit` is the durable project enablement target used by
+award definitions. Its identity is `(project_id, instrument_type, unit_code)`.
+Money rows must reference the migration-owned ISO 4217 registry; project-points
+rows use the project-scoped configured code. Persistence permits only active
+creation and rejects lifecycle mutation until the authorized policy behavior
+chunk installs its transition guard. Definitions reference this identity with
+a composite foreign key, so regex-shaped but unconfigured units cannot publish.
 
 ### ProjectCompensationAdapterBinding
 

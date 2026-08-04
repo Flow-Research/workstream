@@ -15,9 +15,11 @@ ActorProfile
 AuthorityControl
 AuthorityIdempotencyRecord
 AuthorityInvalidationEvent
+Iso4217CurrencyCode
 
 Project
   ProjectCompensationAdapterBinding
+  ProjectCompensationUnit
   ProjectGuide
   GuideSourceSnapshot
   GuideSourceSnapshotItem
@@ -1092,15 +1094,33 @@ Fields:
 - `contribution_type`
 - `instrument_type`: `money | project_points`
 - `unit_code`
-- `quantity` as a `NUMERIC(38, 18)` fixed-point decimal greater than zero
+- `quantity` in the exact `NUMERIC(38, 18)` value envelope, stored unrounded
+  and checked explicitly before persistence
 - `adapter_binding_id`
 
 API quantities are bounded decimal strings; binary floating point, exponent
 notation, non-finite values, zero, negatives, overflow, and excess precision
 are rejected rather than rounded. Money units are uppercase configured ISO 4217
 codes. Project-points units have project-scoped identity
-`(project_id, unit_code)`. Published definitions are immutable and project,
+`(project_id, unit_code)` and whole-number quantities. Published definitions are immutable and project,
 instrument, and unit consistent with the referenced adapter binding.
+
+## ProjectCompensationUnit
+
+Fields:
+
+- `project_id`
+- `instrument_type`: `money | project_points`
+- `unit_code`
+- `iso_currency_code` for money, null for project points
+- `status`: `active | retired`
+- creation and retirement actor/timestamp fields
+
+The identity is `(project_id, instrument_type, unit_code)`. Money units reference
+the migration-owned immutable ISO 4217 List One registry. Project-points units
+are project-scoped. Award definitions reference the unit identity with a
+composite foreign key. Persistence initially allows active creation only and
+defers unit lifecycle mutation to the authorized contribution-policy behavior.
 
 ## ProjectCompensationAdapterBinding
 
