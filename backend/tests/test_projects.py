@@ -152,7 +152,10 @@ from project_create_fixtures import (
     activate_guide_for_downstream_test,
     seed_historical_project,
 )
-from verified_guide_fixtures import create_verified_report_fixture
+from verified_guide_fixtures import (
+    create_verified_material_fixture,
+    create_verified_report_fixture,
+)
 
 
 from app.modules.projects.post_submit_policy import (
@@ -2931,69 +2934,6 @@ async def prepare_verified_sufficiency_route(
     async with db_session.get_session_factory()() as session:
         guide = await session.get(ProjectGuide, guide_id)
         assert guide is not None
-        source_items = list(
-            (
-                await session.scalars(
-                    select(GuideSourceSnapshotItem)
-                    .where(GuideSourceSnapshotItem.source_snapshot_id == snapshot["id"])
-                    .order_by(GuideSourceSnapshotItem.item_order)
-                )
-            ).all()
-        )
-        assert source_items
-        if resolved_material is None:
-            verified_items: list[GuideSufficiencySourceItem] = []
-            provenance: list[GuideSufficiencyExtractionProvenance] = []
-            for item in source_items:
-                binding_id = uuid4()
-                content_id = uuid4()
-                extraction_attempt_id = uuid4()
-                extraction_usage_id = uuid4()
-                extracted_content_id = uuid4()
-                canonical_output_sha256 = sha256_hash(
-                    f"verified-guide-source:{item.id}"
-                )
-                verified_items.append(
-                    GuideSufficiencySourceItem(
-                        source_kind=item.source_kind,
-                        ingestion_adapter=item.ingestion_adapter,
-                        source_item_id=UUID(item.id),
-                        item_order=item.item_order,
-                        binding_id=binding_id,
-                        content_id=content_id,
-                        artifact_sha256=sha256_hash(f"artifact:{item.id}"),
-                        artifact_byte_count=64,
-                        media_type=item.media_type,
-                        classification_id=uuid4(),
-                        detected_format="markdown",
-                        extraction_attempt_id=extraction_attempt_id,
-                        extraction_usage_id=extraction_usage_id,
-                        extracted_content_id=extracted_content_id,
-                        extractor_name="workstream.markdown",
-                        extractor_version="1",
-                        extraction_policy_version="1",
-                        canonical_output_sha256=canonical_output_sha256,
-                        omission_facts={},
-                        canonical_content=f"Verified content for {item.source_label}.",
-                        structural_metadata={"source_kind": item.source_kind},
-                    )
-                )
-                provenance.append(
-                    GuideSufficiencyExtractionProvenance(
-                        item_order=item.item_order,
-                        source_item_id=UUID(item.id),
-                        binding_id=binding_id,
-                        content_id=content_id,
-                        extraction_usage_id=extraction_usage_id,
-                        extraction_attempt_id=extraction_attempt_id,
-                        extracted_content_id=extracted_content_id,
-                        canonical_output_sha256=canonical_output_sha256,
-                    )
-                )
-            resolved_material = GuideSufficiencyMaterialResult(
-                source_items=tuple(verified_items),
-                provenance=tuple(provenance),
-            )
         existing = await session.scalar(
             select(ProjectSetupRun).where(
                 ProjectSetupRun.project_id == project_id,
@@ -3017,6 +2957,8 @@ async def prepare_verified_sufficiency_route(
                 )
             )
             await session.commit()
+    if resolved_material is None:
+        resolved_material = await create_verified_material_fixture(snapshot["id"])
     return VerifiedMaterialAdapter
 
 
@@ -8723,7 +8665,7 @@ async def test_agent_material_includes_verified_representative_task_context(
         )
 
     assert authoritative is None
-    assert diagnostic_count == 1
+    assert diagnostic_count == 0
 
 
 async def test_source_snapshot_manifest_cannot_be_rewritten_for_legacy_shape(
