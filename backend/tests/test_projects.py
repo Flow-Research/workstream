@@ -1429,7 +1429,6 @@ def test_project_setup_queue_normalizes_broker_failure(
 @pytest.mark.parametrize(
     ("setup_run", "expected"),
     [
-        (None, None),
         (SimpleNamespace(status="running", celery_task_id="existing"), "existing"),
         (SimpleNamespace(status="running", celery_task_id=None), None),
     ],
@@ -1467,6 +1466,32 @@ async def test_project_setup_dispatch_returns_terminal_state_without_publish(
     )
 
     assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_project_setup_dispatch_rejects_missing_durable_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Repository:
+        def __init__(self, _session: Any) -> None:
+            pass
+
+        async def lock_project_setup_run(self, _setup_run_id: str) -> None:
+            return None
+
+    monkeypatch.setattr(project_repository_module, "ProjectRepository", Repository)
+
+    with pytest.raises(
+        ProjectSetupQueueError, match="project setup run missing before dispatch"
+    ):
+        await project_setup_queue_module.dispatch_pre_submit_setup_pipeline_after_commit(
+            cast(Any, object()),
+            project_id="project-1",
+            guide_id="guide-1",
+            source_snapshot_id="snapshot-1",
+            setup_run_id="run-1",
+            setup_generation=1,
+        )
 
 
 @pytest.mark.asyncio
