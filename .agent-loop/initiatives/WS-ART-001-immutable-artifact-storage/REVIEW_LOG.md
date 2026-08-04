@@ -299,3 +299,38 @@
   semantic-lane inventory, stale scans, links, and diff checks pass.
 - Architecture, security, QA, product/ops, senior engineering, CI integrity,
   docs, reuse/dedup, and test-delta final reviews pass.
+
+## WS-ART-001-PLAN4
+
+- Replaced combined 04B with a bounded sequence: 04A4 removes the legacy
+  caller-owned standalone precheck, 04B1 installs the sole versioned catalogue,
+  04B2 executes mandatory platform/default checks on one sealed tree, and 04B3
+  executes locked project rules and persists one bounded evidence set.
+- Initial review found conflicting standalone-precheck docs, duplicated registry
+  risk, stale caller package/hash/manifest authority, missing route-removal
+  ownership, weakened coverage commands, and lost executable/crossed-state test
+  obligations. All were repaired in the plan and canonical docs.
+- The v0.1 catalogue gives every entry a stable ID/version, classification,
+  phase/order/dependencies, typed inputs, bounded result, policy trace, and
+  explicit operational state. Mandatory disabled entries fail preparation
+  closed; only advisory entries may be disabled while execution continues.
+- Broad sensitive-name heuristics are no longer silently universal blockers.
+  High-confidence exclusions remain blocking; ambiguous patterns must be
+  advisory or locked project-specific.
+- Canonical flows now distinguish contributor ZIP/summary/attestation input from
+  server-derived archive identity, semantic manifest, pre-submit evidence,
+  verified admission, ArtifactBinding, and post-submit materialization.
+- Architecture, security, QA, product/ops, senior engineering, CI integrity,
+  reuse/dedup, and test-delta reviews pass after repair. Docs review identified
+  and repaired final route-prefix and AUTH owner-table drift; final confirmation
+  is recorded before publication.
+- CodeRabbit then found seven valid specification gaps: namespace mapping,
+  typed result provenance, infrastructure/finding separation, audit redaction,
+  immutable catalogue snapshot locking, stale historical response wording, and
+  residual client-shaped evidence fields. All are repaired after rebasing onto
+  current main; the external response and complete PR trust bundle record the
+  disposition.
+- Focused architecture, security, QA, and docs re-review pass the external
+  repair. Architecture additionally required authority-neutral shared result
+  identity and complete platform/default dispatch mapping; both were repaired
+  before final publication.

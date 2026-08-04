@@ -20,7 +20,7 @@ activation order below.
 
 The remaining AUTH order requires one correction before submission work can go
 live: split XINT-06 into `06A` (pre-submit materializer only, after hidden
-ART-04B and before XINT-05A) and `06B` (post-submit materializer plus checker
+ART-04B1-04B3 and before XINT-05A) and `06B` (post-submit materializer plus checker
 output write/binding, after ART-06A/06B). This prevents contributor preparation
 from activating while its mandatory fixed materializer still denies.
 
@@ -99,7 +99,8 @@ immutable historical records and the deterministic deletion proof. They are
 not an active design, grant, route, compatibility alias, or permission to
 implement a second intake path.
 
-ART-04A1 through 04C2 then implement one hidden continuous surface and publish
+ART-04A1 through 04C2, with 04B split into 04B1-04B3, implement one hidden
+continuous surface and publish
 its exact route/resource/guard manifest. After 04C, a separate reviewed AUTH
 activation contract may integrate the evaluator and change only
 `artifact.submission_bundle.prepare` to active. ART-05 cannot start until that

@@ -3,6 +3,13 @@
 > Historical implementation record. It does not define current sequencing or
 > status; later canonical specifications and merged behavior take precedence.
 
+Current submission-bundle preparation does not revive this document's
+caller-owned precheck surface or standalone registry. WS-ART-001 PLAN4 and
+04B1-04B3 place these constrained policy checks in the single versioned
+pre-submission catalogue after ART-owned outer-ZIP custody gates, using the
+server-derived manifest and sealed workspace. Catalogue availability follows
+the fail-closed mandatory/advisory semantics in ADR 0011.
+
 ## Purpose
 
 Chunk 8 expands the checker registry from the first structural runner into the first policy-aware submission artifact gate.
@@ -222,13 +229,14 @@ WorkstreamDefaultSubmissionArtifactPolicy
 
 Workstream defaults are non-bypassable. Project policy can add required artifacts, evidence requirements, stricter forbidden patterns, and packaging rules, but it cannot remove hash requirements, allow unsafe storage references, require forbidden files, or downgrade blocking defaults.
 
-Blocking pre-submit failures prevent submission creation. Preflight failures
-return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
-results=[...])`. Blocked submission-create attempts return
-`DomainError(code="pre_submission_checker_failed")` with structured
-pass/fail/warning details, create no submission row, no submission version, no
-task transition to `submitted`, and no submission-created audit event. They do
-not return review decision values: `accept`, `needs_revision`, or `reject`.
+Blocking pre-submit failures prevent submission creation. The continuous
+submission-bundle preparation request returns
+`DomainError(code="pre_submission_checker_failed",
+details={status, eligible_to_submit, results})` with bounded, path-redacted
+same-request details. It creates no submission row, submission version, task
+transition to `submitted`, or submission-created audit event. There is no
+independent precheck route or standalone pre-submit registry. Results do not
+use review decision values: `accept`, `needs_revision`, or `reject`.
 
 Durable post-submit checker runs execute the complete `execution_checkers` list
 from the submission-stamped locked `PostSubmitCheckerPolicy` body. That locked
@@ -323,8 +331,9 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 - canonical Chunk 8 checker names are registered
 - stale Chunk 7 temporary checker names are removed from public docs/templates/tests
 - pre-submit feedback executes the task's locked project `PreSubmitCheckerPolicy` and runs without durable checker records
-- preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
-- blocked submission-create attempts return `DomainError(code="pre_submission_checker_failed")`, include structured pass/fail/warning details, create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
+- failed continuous preparation returns `DomainError(code="pre_submission_checker_failed", details={status, eligible_to_submit, results})` with bounded path-redacted same-request details
+- no independent precheck route or standalone pre-submit registry remains
+- blocked preparation creates no submission row, submission version, task transition to `submitted`, or submission-created audit event
 - Workstream default submission artifact rules cannot be weakened by project policy
 - durable checker runs persist Chunk 8 checker results
 - missing required evidence blocks review routing
