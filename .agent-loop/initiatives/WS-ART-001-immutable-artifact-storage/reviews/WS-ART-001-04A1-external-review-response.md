@@ -4,6 +4,37 @@
 
 CodeRabbit completed its review on PR #264 without actionable comments.
 
+CodeRabbit's earlier detailed review still contained one major finding and two
+nitpicks, so the absence of a new summary comment was not treated as closure:
+
+- **Major — resolved:** recovery tests no longer attach or read the unmapped
+  `recovery_submission_id` attribute on `ArtifactVerificationJob`. The fixture
+  now derives the real immutable `Submission.id` from the persisted
+  `CheckerRun` lineage and passes it explicitly in every task-scoped recovery
+  request, including retries.
+- **Receipt nullability — resolved:** migration 0051 now makes
+  `artifact_operation_receipts.put_attempt_id` non-null after its locked
+  populated-legacy preflight. The ORM matches that v2-only invariant, the
+  downgrade restores legacy nullability before recreating the v1 shape, and a
+  model contract assertion protects the mapping.
+- **Test-helper import — documented, no code move:** moving the shared
+  checker-output helper would also move its large project/guide/task/submission
+  relationship fixture across domain test modules. That broad fixture
+  refactor is outside this removal chunk and would increase this PR's coupling
+  and review surface. The import remains test-only and has no runtime effect.
+- **Docstring heuristic — no change:** the repository's hosted docstring gate
+  passed. No repository standard was weakened and no unrelated docstrings were
+  added solely for a standalone reviewer heuristic.
+
+Local correction evidence:
+
+- Ruff on all changed Python files: passed;
+- `git diff --check`: passed;
+- no `recovery_submission_id` references remain under `backend/tests`;
+- focused PostgreSQL rerun was interrupted by the known local Python exit 139
+  before pytest produced a result; hosted sharded Backend and Agent Gates are
+  the authoritative execution evidence for this correction.
+
 ## Hosted CI correction
 
 The first Backend sharded run failed one `shared_foundations` test. Replacing

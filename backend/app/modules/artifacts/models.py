@@ -851,8 +851,8 @@ class ArtifactOperationReceipt(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     contract_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
-    put_attempt_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), index=True
+    put_attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     guide_source_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("guide_source_snapshot_items.id", ondelete="RESTRICT"), index=True

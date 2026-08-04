@@ -325,7 +325,10 @@ async def _exhausted_job(session, settings, tmp_path, context):
         orchestrator = ArtifactStorageOrchestrator(
             session, store, namespace, settings, _AllowArtifactAuthority()
         )
-        await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+        put_outcome = await orchestrator.execute_committed_put(
+            attempt_id=admission.attempt_id, source=source
+        )
+        assert put_outcome == "stored_pending_verification"
         job = await session.scalar(
             select(ArtifactVerificationJob).where(
                 ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)
@@ -340,10 +343,10 @@ async def _exhausted_job(session, settings, tmp_path, context):
         assert job is not None
         checker_run = await session.get(CheckerRun, checker_run_id)
         assert checker_run is not None
-        job.recovery_submission_id = checker_run.submission_id
+        submission_id = checker_run.submission_id
         await session.refresh(job)
         await session.commit()
-    return project_id, task_id, job, orchestrator, bootstrap
+    return project_id, task_id, submission_id, job, orchestrator, bootstrap
 
 
 def _request(
@@ -352,6 +355,7 @@ def _request(
     task_id: str | None,
     job: ArtifactVerificationJob,
     *,
+    submission_id: str | None = None,
     reason: str = "provider remained unavailable",
     client_idempotency_key: str = "recovery-1",
 ) -> ArtifactRecoveryRequest:
@@ -359,11 +363,7 @@ def _request(
         authorization_context=context,
         project_id=UUID(project_id),
         task_id=UUID(task_id) if task_id is not None else None,
-        submission_id=(
-            UUID(job.recovery_submission_id)
-            if getattr(job, "recovery_submission_id", None) is not None
-            else None
-        ),
+        submission_id=UUID(submission_id) if submission_id is not None else None,
         source_verification_job_id=UUID(job.id),
         reason=reason,
         client_idempotency_key=client_idempotency_key,
@@ -381,11 +381,16 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            request = _request(context, project_id, task_id, source)
+            request = _request(context, project_id, task_id, source, submission_id=submission_id)
             first = await service.create(request)
             replay = await service.create(request)
             assert first.retry_verification_job_id == replay.retry_verification_job_id
@@ -464,11 +469,18 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            created = await service.create(_request(context, project_id, task_id, source))
+            created = await service.create(
+                _request(context, project_id, task_id, source, submission_id=submission_id)
+            )
             with pytest.raises(ArtifactRecoveryConflictError):
                 await service.create(
                     _request(
@@ -476,6 +488,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                         project_id,
                         task_id,
                         source,
+                        submission_id=submission_id,
                         reason="changed",
                     )
                 )
@@ -489,6 +502,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                         project_id,
                         task_id,
                         source,
+                        submission_id=submission_id,
                         client_idempotency_key="different",
                     )
                 )
@@ -498,12 +512,12 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                 ArtifactVerificationJob, str(created.retry_verification_job_id)
             )
             assert retry is not None
-            retry.recovery_submission_id = source.recovery_submission_id
             retry_request = _request(
                 context,
                 project_id,
                 task_id,
                 retry,
+                submission_id=submission_id,
                 client_idempotency_key="retry-pending",
             )
             await session.rollback()
@@ -524,13 +538,24 @@ async def test_terminal_recovery_authority_change_rolls_back_all_facts(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             authority = _AllowThenDenyRecoveryAuthority()
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(session, settings, authority).create(
-                    _request(context, project_id, task_id, source)
+                    _request(
+                        context,
+                        project_id,
+                        task_id,
+                        source,
+                        submission_id=submission_id,
+                    )
                 )
             assert authority.calls == 2
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
@@ -558,12 +583,17 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
             )
@@ -596,12 +626,17 @@ async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._authority = _DenyTerminalArtifactAuthority()
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
@@ -651,12 +686,17 @@ async def test_every_failed_retry_outcome_terminalizes_recovery_once(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source))
+            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
             if isinstance(provider_result, Exception):
                 orchestrator._read_complete = AsyncMock(side_effect=provider_result)
             else:
@@ -695,10 +735,15 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
         async with factory() as setup:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
-                setup, settings, tmp_path, context
-            )
-            request = _request(context, project_id, task_id, source)
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(setup, settings, tmp_path, context)
+            request = _request(context, project_id, task_id, source, submission_id=submission_id)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
                 ArtifactRecoveryService(first_session, settings, _AllowRecoveryAuthority()).create(
@@ -729,11 +774,18 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source,
+                orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            first = await service.create(_request(context, project_id, task_id, source))
+            first = await service.create(
+                _request(context, project_id, task_id, source, submission_id=submission_id)
+            )
             orchestrator._read_complete = AsyncMock(
                 side_effect=ArtifactStoreUnavailableError("still unavailable")
             )
@@ -746,7 +798,6 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 ArtifactRecoveryAttempt, str(first.recovery_attempt_id)
             )
             assert retry is not None and first_attempt is not None
-            retry.recovery_submission_id = source.recovery_submission_id
             assert first_attempt.status == "failed"
             assert first_attempt.terminal_result_code == "provider_unavailable"
             second_request = _request(
@@ -754,6 +805,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 project_id,
                 task_id,
                 retry,
+                submission_id=submission_id,
                 client_idempotency_key="recovery-2",
             )
             first_attempt_id = first_attempt.id

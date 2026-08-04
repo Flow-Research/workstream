@@ -113,6 +113,12 @@ def upgrade() -> None:
     )
     op.drop_column("artifact_put_attempts", "upload_item_id")
     op.drop_column("artifact_operation_receipts", "upload_item_id")
+    op.alter_column(
+        "artifact_operation_receipts",
+        "put_attempt_id",
+        existing_type=sa.String(length=36),
+        nullable=False,
+    )
     op.create_check_constraint(
         "producer_request_type",
         "artifact_put_attempts",
@@ -280,6 +286,12 @@ def downgrade() -> None:
     op.drop_constraint("producer_identity", "artifact_put_attempts", type_="check")
     op.drop_constraint("producer_request_type", "artifact_put_attempts", type_="check")
     op.drop_constraint("contract_producer_reference", "artifact_operation_receipts", type_="check")
+    op.alter_column(
+        "artifact_operation_receipts",
+        "put_attempt_id",
+        existing_type=sa.String(length=36),
+        nullable=True,
+    )
     op.add_column(
         "artifact_put_attempts", sa.Column("upload_item_id", sa.String(36), nullable=True)
     )

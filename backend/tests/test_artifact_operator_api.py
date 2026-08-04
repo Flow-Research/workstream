@@ -131,9 +131,14 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, task_id, source_job, _orchestrator, bootstrap = await _exhausted_job(
-                session, settings, tmp_path, context
-            )
+            (
+                project_id,
+                task_id,
+                submission_id,
+                source_job,
+                _orchestrator,
+                bootstrap,
+            ) = await _exhausted_job(session, settings, tmp_path, context)
             assert {scope_type for scope_type, _band in artifact_admission_metrics.snapshot()} == {
                 "deployment",
                 "project",
@@ -151,8 +156,6 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
             content_id = replica.content_id
             source_job_id = source_job.id
             source_job_cas_version = source_job.cas_version
-            submission_id = source_job.recovery_submission_id
-            assert submission_id is not None
             binding_id = "00000000-0000-0000-0000-000000000101"
             second_binding_id = "00000000-0000-0000-0000-000000000102"
             observation_receipt_id = "00000000-0000-0000-0000-000000000201"
