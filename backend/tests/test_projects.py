@@ -8382,15 +8382,6 @@ async def test_setup_service_links_authorized_human_agent_report_without_rerun(
         setup_run_id = setup_run.id
         setup_generation = setup_run.setup_generation
 
-    async def fixture_report_usages(*_: object, **__: object) -> list[object]:
-        """The fake material port declares no source provenance."""
-        return []
-
-    monkeypatch.setattr(
-        ProjectService,
-        "_verified_report_usages",
-        fixture_report_usages,
-    )
     monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", adapter)
     async with db_session.get_session_factory()() as session:
         adopted = await worker._run_authorized_setup_sufficiency(
