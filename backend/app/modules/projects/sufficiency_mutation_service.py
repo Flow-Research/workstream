@@ -1316,7 +1316,7 @@ class GuideSufficiencyMutationService:
             response_json=response.model_dump(mode="json"),
             report_id=report.id,
         )
-        return GuideSufficiencyMutationOutcome(response, False, True)
+        return GuideSufficiencyMutationOutcome(response, False, not adopting_existing)
 
     async def acknowledge_warnings(
         self,
