@@ -1,5 +1,9 @@
 # Chunk Contract: WS-QUAL-001-04R — Global 90 Percent CI Floor
 
+> Superseded before implementation by `WS-QUAL-001-PLAN3`. The human decision
+> retains the 78-percent global floor and moves QUAL to behavior/mutation
+> assurance. This file is historical evidence and must not be started.
+
 Parent initiative: `WS-QUAL-001`
 
 Goal: after exact hosted proof at or above 90.25 percent, change the canonical
