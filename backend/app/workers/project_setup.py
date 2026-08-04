@@ -330,7 +330,6 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                 public_error = "project setup failed; inspect server logs with the setup run id"
                 logger.error(
                     "verified guide sufficiency continuation failed",
-                    exc_info=True,
                     extra={"setup_run_id": setup_run_id},
                 )
                 await service.update_project_setup_run_status(

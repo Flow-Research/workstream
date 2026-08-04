@@ -5812,14 +5812,16 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
         raise_raw_secret_error,
     )
     error_logs: list[dict[str, object]] = []
+    error_log_kwargs: list[dict[str, object]] = []
 
     def capture_error(
         message: str,
         *,
         extra: dict[str, object],
-        **_: object,
+        **kwargs: object,
     ) -> None:
         error_logs.append({"message": message, "extra": extra})
+        error_log_kwargs.append(kwargs)
 
     monkeypatch.setattr(project_setup_worker_module.logger, "error", capture_error)
 
@@ -5851,6 +5853,7 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
             "extra": {"setup_run_id": setup_run_id},
         }
     ]
+    assert error_log_kwargs == [{}]
     logged_payload = json.dumps(error_logs, sort_keys=True)
     assert "raw-token" not in logged_payload
     assert "secret" not in logged_payload
@@ -6720,7 +6723,7 @@ async def test_project_create_rejects_payment_fields(project_client: AsyncClient
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 422
     assert "base_amount" in response.text
     assert "currency" in response.text
 
@@ -6845,7 +6848,7 @@ async def test_sufficiency_agent_route_requires_verified_material_after_cutover(
         headers=auth_headers(),
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 409
 
 
 async def test_project_guide_rejects_unknown_non_contract_fields(
