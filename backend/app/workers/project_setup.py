@@ -326,19 +326,12 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                     "error_code": error_code,
                     "guide_sufficiency_report_id": None,
                 }
-            except Exception as exc:
-                public_error = "unexpected project setup pipeline failure"
+            except Exception:
+                public_error = "project setup failed; inspect server logs with the setup run id"
                 logger.error(
-                    "project setup pipeline failed",
+                    "verified guide sufficiency continuation failed",
                     exc_info=True,
-                    extra={
-                        "project_id": project_id,
-                        "guide_id": guide_id,
-                        "source_snapshot_id": source_snapshot_id,
-                        "setup_run_id": setup_run_id,
-                        "error_code": exc.__class__.__name__,
-                        "error_summary": public_error,
-                    },
+                    extra={"setup_run_id": setup_run_id},
                 )
                 await service.update_project_setup_run_status(
                     setup_run_id,

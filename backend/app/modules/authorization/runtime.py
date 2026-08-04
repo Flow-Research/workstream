@@ -743,7 +743,11 @@ class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
     @model_validator(mode="after")
     def require_sufficiency_identity(self):
         """Require report identity only for report-bound operations."""
-        report_bound = self.target_kind in {"report", "warning_acknowledgement"}
+        report_bound = self.target_kind in {"report", "warning_acknowledgement"} or (
+            self.target_kind == "run"
+            and self.execution_kind == "setup_service"
+            and self.sufficiency_report_id is not None
+        )
         if report_bound != (self.sufficiency_report_id is not None):
             raise ValueError("sufficiency report facts do not match target kind")
         expected = self.sufficiency_report_id or self.source_snapshot_id
