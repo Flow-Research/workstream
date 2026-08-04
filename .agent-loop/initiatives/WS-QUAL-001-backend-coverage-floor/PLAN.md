@@ -1,131 +1,77 @@
-# Plan: WS-QUAL-001 Backend Coverage Floor
+# Plan: WS-QUAL-001 Current-Main Coverage Closure
 
 ## Approach
 
-1. Establish the isolated least-privilege test-database provisioner.
-2. Establish reproducible `pytest-cov` measurement, full `app` inventory proof,
-   machine-readable evidence, and a base-ref-enforced non-decreasing ratchet.
-3. Cover project setup/policy/correction service behavior and reach at least 82%.
-4. Cover project repository/router behavior and reach at least 84%.
-5. Cover task service/repository/router behavior and reach at least 86%.
-6. Cover checker service/runner/repository/router/worker behavior and reach at
-   least 88%.
-7. Close the enumerated adapter/core/worker gaps and set the permanent CI floor
-   to exactly 90 percent or higher.
+Retire the old milestone ladder and close the remaining gap with two declared
+bounded test chunks followed by one floor switch. One additional owner-specific
+test chunk is permitted only when 02R and 03R exhaust their meaningful gaps
+without reaching the required headroom:
 
-Each coverage-raising implementation chunk changes tests and coverage
-configuration only. Chunk 01A is the explicit exception for its isolated
-database runner, API drill guards, CI wiring, and operations runbook. Any
-production defect exposed by a test stops the active chunk and is repaired in a
-separately scoped change rather than hidden inside coverage work.
+1. Add fast project/setup behavior tests for observable service, repository,
+   routing, queue, and replay gaps.
+2. If still needed, add fast checker behavior tests for observable service,
+   repository, runner, compiler, and routing gaps.
+3. On current `main`, prove at least 90.25 percent globally and change only the
+   canonical GitHub global floor from 78 to 90.
 
-## Threshold policy
+Each test chunk starts by reading the current hosted coverage JSON and selecting
+behavioral gaps. It prefers pure functions, typed fakes, direct use-case calls,
+and adapter contracts. PostgreSQL, MinIO, or HTTP is used only when that
+boundary is itself the assertion.
 
-- Coverage JSON supplies exact `covered_lines` and `num_statements`. The first
-  clean main measurement becomes the initial enforced floor, truncated to six
-  decimal places only so the exact suite passes.
-- Every later chunk raises or preserves the floor; no chunk may lower it.
-- A committed evidence summary records tree SHA, Python/coverage/pytest-cov
-  versions, covered statements, total statements, computed percent, configured
-  floor, database name, and Alembic head. It never records a credentialed URL.
-- A policy checker compares the branch configuration and evidence with the
-  merge-base version. The configured percentage cannot decrease. When the
-  application denominator is unchanged, covered statements cannot decrease;
-  denominator changes require explicit evidence and CI-integrity review.
-- The final chunk is incomplete unless `fail_under = 90` and CI passes at 90 or
-  above while measuring every module under `backend/app`.
-- `omit`, `include`, `source`, and coverage pragmas may not exclude application
-  debt to satisfy the target.
+## Coverage target
 
-## Mechanical integrity policy
+The last necessary test chunk must reach at least 90.25 percent before the CI
+switch. This is operational headroom, not a permanent higher policy floor. If
+concurrent main growth moves the measured result below 90.25 percent, the floor
+chunk stops and returns to one owner-specific test plan; it never lowers or
+rounds around the target.
 
-A permanent policy check parses `pyproject.toml`, the backend workflow, and
-coverage JSON. It inventories every `backend/app/**/*.py`, rejects coverage
-`omit`, `include`, `exclude_lines`, or `exclude_also` rules, rejects application
-coverage pragmas, rejects a narrowed `--cov` target, verifies the canonical
-full-suite command, and verifies the threshold against the base ref.
-It also asserts measured coverage is at least the configured six-decimal floor
-and the chunk milestone. The workflow proof preserves install, full Ruff,
-docstring coverage, complete pytest, and API drill steps; it rejects removed
-steps, narrowed test selection, `continue-on-error`, and `|| true`. Coverage
-chunks may only replace the existing pytest invocation with the canonical
-coverage command and raise its threshold.
+## Test-quality rule
 
-Missing base coverage evidence is accepted only when initializing
-`WS-QUAL-001-01` against a base that has no WS-QUAL coverage policy. After that
-initialization, missing or malformed base/branch evidence is fatal.
+Every new test must name and assert one observable contract such as returned
+data, persisted state, emitted audit/outbox fact, queue decision, mapped error,
+authorization denial, idempotent replay, or recovery outcome. A test whose only
+effect is executing previously missed lines is invalid.
 
-## Test quality policy
+No chunk may introduce skips, xfails, coverage pragmas, omit/include narrowing,
+deleted assertions, broad mocking of the behavior under test, or duplicated
+database/HTTP coverage already owned by another layer.
 
-New tests must assert externally meaningful results: returned values, persisted
-state, emitted audit records, queued work, mapped HTTP errors, or fail-closed
-behavior. Pure branch execution without an outcome assertion is insufficient.
-Coverage percentage is a safety signal, not a reason to add a test. Every added
-test must identify the real behavior or safety invariant it protects and assert
-an observable outcome. Tests whose only value is executing previously uncovered
-lines are rejected even when they increase the measured percentage.
-Each chunk records added/modified/deleted/skipped tests and scans its diff for
-`skip`, `xfail`, deleted assertions, selection changes, and coverage pragmas.
-Tests reuse existing domain fixtures in their owning test file; copied database
-reset, actor/project/task factories, HTTP clients, and queue helpers are banned.
+## Boundaries
 
-The default 500-line budget is additions plus deletions from the merge base across
-implementation/config/test/workflow/runbook files. `.agent-loop` planning,
-evidence, status, and trust-bundle lines are reported separately and excluded
-from that implementation-size numerator. The policy checker emits both counts
-and fails above the reviewed per-chunk cap supplied by the contract. Later
-chunks use the default 500 cap.
-
-The combined chunk 01 was split after all L1 reviewer groups rejected a proposed
-1,100-line cap. Chunk 01A retains the reviewed 700-line limit for the database
-lifecycle boundary. Chunk 01B consumes its CLI contract and keeps coverage/CI/
-evidence review independent. Later chunks retain the default 500-line cap.
-
-The blocked 01B1 candidate is further split by responsibility. `01B1A` owns
-read-only coverage arithmetic and config/evidence/metadata parsers. `01B1B`
-then owns repository-delta scope, executable weakening detection, and deleted-
-assertion proof. `01B2` remains the later configuration, evidence publication,
-and CI enforcement boundary. Each replacement chunk has its own review, PR,
-merge-memory, and start checkpoint.
+- QUAL changes tests and, only in the final chunk, the global CI threshold and
+  its lightweight invariant test.
+- A production defect discovered by a stronger test is reported and fixed in a
+  separate owning initiative/chunk.
+- Production service decomposition, repository ports, UnitOfWork design, type
+  checking, mutation testing, and property-test architecture require separate
+  initiatives. They are not hidden inside coverage closure.
+- CI runtime optimization remains WS-CI-owned. QUAL records test-time impact and
+  must avoid obvious regressions but does not redesign lane infrastructure.
 
 ## Alternatives rejected
 
-- Setting 90 immediately without tests: correctly makes every PR red and gives
-  no reviewable repair path.
-- Diff-only coverage: useful as a supplement but does not satisfy the requested
-  repository-wide 90 percent floor.
-- Excluding large services or generated-looking schemas: hides product risk and
-  makes the percentage misleading.
-- One giant coverage PR: crosses project, task, checker, CI, and auth boundaries
-  and fails the repository circuit-breaker.
+- Reviving `01B2` and the complex base-evidence ratchet: unnecessary now that
+  exact lane custody and hosted coverage evidence exist.
+- One large cross-owner coverage PR: crosses project, checker, task, artifact, and
+  authorization ownership and is difficult to review.
+- Raising the floor immediately: current measured coverage is below 90.
+- Excluding low-coverage services or files: makes the global percentage false.
+- More arbitrary shards: changes runtime distribution, not test architecture or
+  coverage quality.
 
-## Isolated database contract
+## Verification strategy
 
-`WORKSTREAM_TEST_DATABASE_URL` is authoritative for tests. A shared runner
-accepts a parent-only admin DSN through `WORKSTREAM_TEST_ADMIN_DATABASE_URL` and
-requires exact scheme `postgresql+asyncpg` plus host `localhost`, `127.0.0.1`, or
-`::1`. It derives a name matching `^workstream_test_[a-f0-9]{12}$` from the
-canonical worktree path plus a nonce. The name must full-match before safely
-quoted identifier use; catalog values are parameterized.
+Every implementation chunk runs focused tests, Ruff for changed tests, complete
+test-delta review, relevant stale-contract checks, and hosted Backend. The final
+floor chunk additionally proves the combined coverage JSON covers the complete
+application inventory at or above 90.25 percent and that every protected
+90-percent check remains blocking.
 
-Ownership begins only after `CREATE DATABASE` succeeds. Collision or create
-failure never attaches to, terminates, or drops an existing database. After
-catalog ownership validation, cleanup terminates sessions for the exact owned
-`datname` and the runner-created unique ephemeral role, including a role session
-on the admin database that would otherwise block `DROP ROLE`. It drops only the
-owned database and role after child success, nonzero exit, timeout, or
-interruption; unrelated database and role sessions survive.
+## Dependency order
 
-The child environment removes `WORKSTREAM_TEST_ADMIN_DATABASE_URL` and
-`WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE`, overwrites both test/runtime database
-URLs with the derived target, and exposes no admin credential. Parent output and
-errors redact both credentialed admin and target URLs. CI's service database is
-already isolated per job. API drill guards accept the strict derived name; the
-runner makes the nonlocal override unavailable to ordinary coverage proof.
-
-## Verification
-
-Every chunk runs focused tests, Ruff, `pip check`, stale-wording and Markdown
-checks, policy/inventory proof, test-delta scan, and an isolated full-suite
-coverage command. The final chunk also runs the real API contract drill and
-proves CI uses the same 90 percent command.
+PLAN2 -> 02R -> optional 03R -> 04R. If those exact owner-scoped chunks do not
+provide enough headroom, stop and plan one additional owner-specific test chunk
+from the refreshed report. Do not create a percentage-driven residual bucket.
+The CI floor change always remains a separate final PR.
