@@ -99,8 +99,10 @@ a UUID `Idempotency-Key` on every request:
   records the Project Manager and exact authorization provenance.
 
 Issuer role claims, contributor grants, and service tokens cannot invoke these
-public routes. A manual report is not an agent-run replay: attempting an agent
-run for an occupied manual snapshot conflicts before material or agent access.
+public routes. A manual report is not an agent-run replay and does not occupy
+the authoritative verified-report slot. A later agent run creates a distinct
+verified report from canonical ART material; the diagnostic row is neither
+reused nor linked as setup output.
 The fixed `workstream.project.setup` service may use only the run action through
 internal command resolution with fresh setup custody; it cannot call the HTTP
 route or create manual reports or acknowledgements.

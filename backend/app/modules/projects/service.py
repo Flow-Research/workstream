@@ -130,9 +130,7 @@ def verified_guide_sufficiency_agent_item(item: Any) -> GuideSourceItemMaterial:
     """Map one ART-verified extraction item into bounded agent material."""
     return GuideSourceItemMaterial(
         source_kind=item.source_kind,
-        durable_ref="",
         ingestion_adapter=item.ingestion_adapter,
-        content_hash=item.artifact_sha256,
         media_type=item.media_type,
         source_item_id=str(item.source_item_id),
         item_order=item.item_order,

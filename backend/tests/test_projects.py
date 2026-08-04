@@ -50,6 +50,7 @@ from app.interfaces.project_agents import (
     canonical_guide_source_material_bytes,
 )
 from app.interfaces.artifact_operations import (
+    GuideSufficiencyExtractionProvenance,
     GuideSufficiencyMaterialResult,
     GuideSufficiencyMaterialUnavailable,
     GuideSufficiencySourceItem,
@@ -2686,16 +2687,6 @@ async def test_create_source_snapshot_does_not_run_agents_before_verified_materi
         )
 
     assert snapshot is not None
-    assert report is not None
-    assert report.status == "passed"
-    assert report.agent_name == PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
-    assert UUID(report.created_by)
-    assert report.created_by_service_identity == ServiceIdentity.PROJECT_SETUP.value
-    assert policy is not None
-    assert policy.lifecycle_status == "draft"
-    assert policy.derivation_source == "agent_derivation"
-    assert policy.derivation_agent_name == SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME
-    assert policy.created_by == "workstream-system:project-setup-pipeline"
     assert report is None
     assert policy is None
     assert effective_policy is None
@@ -2729,7 +2720,7 @@ async def test_thin_guide_snapshot_still_waits_for_verified_material(
     assert policy is None
 
 
-async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
+async def test_create_source_snapshot_autostart_waits_for_verified_material(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2782,10 +2773,6 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
         ).all()
 
     assert len(setup_runs) == 1
-    assert enqueued[0]["setup_run_id"] == setup_runs[0].id
-    assert setup_runs[0].celery_task_id == project_setup_queue_module.pre_submit_setup_task_id(
-        setup_runs[0].id, setup_runs[0].setup_generation
-    )
     assert setup_runs[0].celery_task_id is None
 
 
@@ -5647,9 +5634,7 @@ async def test_verified_setup_enqueue_failure_is_sanitized_and_retryable(
     body = response.json()
     assert body["status"] == "enqueue_failed"
     assert body["current_step"] == "enqueue"
-    assert body["celery_task_id"] == project_setup_queue_module.pre_submit_setup_task_id(
-        body["id"], body["setup_generation"]
-    )
+    assert body["celery_task_id"] is None
     assert body["error_code"] == "ProjectSetupQueueError"
     assert body["error_summary"] == "project setup failed"
     assert "token" not in body["error_summary"]
@@ -5658,7 +5643,7 @@ async def test_verified_setup_enqueue_failure_is_sanitized_and_retryable(
     monkeypatch.setattr(
         project_setup_queue_module,
         "enqueue_pre_submit_setup_pipeline",
-        lambda **_: "recovered-task-id",
+        lambda **facts: cast(str, facts["task_id"]),
     )
     async with db_session.get_session_factory()() as session:
         task_id = await project_setup_queue_module.dispatch_pre_submit_setup_pipeline_after_commit(
@@ -5669,12 +5654,15 @@ async def test_verified_setup_enqueue_failure_is_sanitized_and_retryable(
             setup_run_id=run.id,
             setup_generation=run.setup_generation,
         )
-    assert task_id == "recovered-task-id"
+    expected_task_id = project_setup_queue_module.pre_submit_setup_task_id(
+        run.id, run.setup_generation
+    )
+    assert task_id == expected_task_id
     async with db_session.get_session_factory()() as session:
         recovered = await session.get(ProjectSetupRun, run.id)
         assert recovered is not None
         assert recovered.status == "queued"
-        assert recovered.celery_task_id == "recovered-task-id"
+        assert recovered.celery_task_id == expected_task_id
         assert recovered.error_code is None
 
 
@@ -5707,7 +5695,9 @@ async def test_dispatch_pending_republishes_only_after_stale_cutoff(
         )
         assert run is not None
         run.status = "dispatch_pending"
-        run.celery_task_id = f"guide-setup-{run.id}-g{run.setup_generation}"
+        run.celery_task_id = project_setup_queue_module.pre_submit_setup_task_id(
+            run.id, run.setup_generation
+        )
         run.updated_at = datetime.now(UTC)
         await session.commit()
         fresh = await project_setup_queue_module.dispatch_pre_submit_setup_pipeline_after_commit(
@@ -8347,7 +8337,7 @@ async def test_sufficiency_agent_persists_server_owned_agent_identity(
     assert setup_run.output_sufficiency_report_id is None
 
 
-async def test_setup_service_adopts_exact_human_agent_report_without_rerun(
+async def test_setup_service_links_authorized_human_agent_report_without_rerun(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -8431,31 +8421,108 @@ async def test_setup_service_adopts_exact_human_agent_report_without_rerun(
     assert adapter.calls == 4
 
 
-async def test_sufficiency_agent_conflicts_with_existing_manual_report_before_side_effects(
+async def test_setup_service_adoption_requires_exact_report_and_source_provenance() -> None:
+    """The service rejects stale report facts and incomplete ART usage lineage."""
+    module = sufficiency_mutation_service_module
+    project_id, guide_id, snapshot_id, setup_run_id = (uuid4() for _ in range(4))
+    lineage = module._Lineage(
+        guide_version="v1",
+        snapshot_id=snapshot_id,
+        snapshot_hash=sha256_hash("snapshot"),
+        setup_generation=2,
+        setup_run_id=setup_run_id,
+        stale_output_digest=sha256_hash("stale-output"),
+    )
+    provenance = GuideSufficiencyExtractionProvenance(
+        item_order=0,
+        source_item_id=uuid4(),
+        binding_id=uuid4(),
+        content_id=uuid4(),
+        extraction_usage_id=uuid4(),
+        extraction_attempt_id=uuid4(),
+        extracted_content_id=uuid4(),
+        canonical_output_sha256=sha256_hash("canonical-output"),
+    )
+    usage = SimpleNamespace(
+        item_order=provenance.item_order,
+        source_item_id=str(provenance.source_item_id),
+        binding_id=str(provenance.binding_id),
+        content_id=str(provenance.content_id),
+        extraction_usage_id=str(provenance.extraction_usage_id),
+        extraction_attempt_id=str(provenance.extraction_attempt_id),
+        extracted_content_id=str(provenance.extracted_content_id),
+        canonical_output_sha256=provenance.canonical_output_sha256,
+    )
+
+    class Validation:
+        usages = [usage]
+
+        async def _verified_report_usages(self, _report: object):
+            return self.usages
+
+    service = object.__new__(module.GuideSufficiencyMutationService)
+    service._validation = Validation()
+    material_digest = sha256_hash("material")
+    report = SimpleNamespace(
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        guide_version=lineage.guide_version,
+        source_snapshot_id=str(snapshot_id),
+        source_snapshot_hash=lineage.snapshot_hash,
+        project_setup_run_id=str(setup_run_id),
+        setup_generation=lineage.setup_generation,
+        agent_material_sha256=material_digest,
+        agent_material_byte_count=42,
+        creation_action_id=module.ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value,
+        created_by_admin_role_grant_id=uuid4(),
+        created_by_service_identity=None,
+    )
+
+    await service._validate_adoptable_verified_report(
+        report,
+        lineage,
+        project_id=project_id,
+        guide_id=guide_id,
+        material_digest=material_digest,
+        material_byte_count=42,
+        source_provenance=(provenance,),
+    )
+    report.setup_generation = 3
+    with pytest.raises(
+        module.GuideSufficiencyMutationConflict,
+        match="sufficiency_report_provenance_mismatch",
+    ):
+        await service._validate_adoptable_verified_report(
+            report,
+            lineage,
+            project_id=project_id,
+            guide_id=guide_id,
+            material_digest=material_digest,
+            material_byte_count=42,
+            source_provenance=(provenance,),
+        )
+    report.setup_generation = lineage.setup_generation
+    service._validation.usages = []
+    with pytest.raises(
+        module.GuideSufficiencyMutationConflict,
+        match="sufficiency_report_provenance_mismatch",
+    ):
+        await service._validate_adoptable_verified_report(
+            report,
+            lineage,
+            project_id=project_id,
+            guide_id=guide_id,
+            material_digest=material_digest,
+            material_byte_count=42,
+            source_provenance=(provenance,),
+        )
+
+
+async def test_sufficiency_agent_coexists_with_manual_diagnostic_report(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
 ) -> None:
-    class FailingRuntime:
-        """Runtime that proves the service does not rerun an occupied snapshot."""
-
-        calls = 0
-
-        async def analyze_guide_sufficiency(
-            self,
-            _: GuideSourceMaterial,
-        ) -> GuideSufficiencyAgentResult:
-            """Fail if the agent is invoked after a manual report exists."""
-            type(self).calls += 1
-            raise AssertionError("manual sufficiency report must conflict before agent execution")
-
-        async def derive_submission_artifact_policy(
-            self,
-            _: GuideSourceMaterial,
-            __: GuideSufficiencyAgentResult,
-        ) -> SubmissionArtifactPolicyDerivationResult:
-            """Unused derivation implementation required by the runtime protocol."""
-            raise AssertionError("derivation is not part of this test")
-
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
@@ -8468,22 +8535,36 @@ async def test_sufficiency_agent_conflicts_with_existing_manual_report_before_si
         guide["id"],
         snapshot["id"],
     )
-    monkeypatch.setattr(
-        sufficiency_mutation_service_module,
-        "get_project_guide_agent_runtime",
-        lambda: FailingRuntime(),
-    )
-
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/run-sufficiency-agent",
         headers=auth_headers(),
     )
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "sufficiency_report_already_exists"
-    assert material_adapter.calls == 0
-    assert FailingRuntime.calls == 0
+    async with db_session.get_session_factory()() as session:
+        reports = list(
+            (
+                await session.scalars(
+                    select(GuideSufficiencyReport).where(
+                        GuideSufficiencyReport.source_snapshot_id == snapshot["id"]
+                    )
+                )
+            ).all()
+        )
+        setup_run = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.source_snapshot_id == snapshot["id"]
+            )
+        )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["id"] != manual_report["id"]
+    assert response.json()["agent_name"] == PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
+    assert material_adapter.calls == 2
+    assert len(reports) == 2
+    assert {report.project_setup_run_id is None for report in reports} == {True, False}
+    assert setup_run is not None
+    assert setup_run.output_sufficiency_report_id is None
     assert manual_report["agent_name"] is None
 
 
@@ -8619,7 +8700,7 @@ async def test_agent_material_includes_verified_representative_task_context(
     representative_task = material.representative_task_material.items[0]
     assert representative_task.source_item_id == str(source_item_id)
     assert representative_task.canonical_content == verified_item.canonical_content
-    assert representative_task.durable_ref == ""
+    assert not hasattr(representative_task, "durable_ref")
     assert any(item.source_item_id == str(source_item_id) for item in material.source_items)
     assert material.source_refs == []
     serialized = canonical_guide_source_material_bytes(material)

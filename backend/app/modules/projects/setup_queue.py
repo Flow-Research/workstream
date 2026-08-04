@@ -98,7 +98,7 @@ async def dispatch_pre_submit_setup_pipeline_after_commit(
         deterministic_task_id = setup_run.celery_task_id
         setup_run.updated_at = datetime.now(UTC)
     elif setup_run.status in {"queued", "enqueue_failed"}:
-        deterministic_task_id = f"guide-setup-{setup_run_id}-g{setup_generation}"
+        deterministic_task_id = expected_task_id
         setup_run.status = "dispatch_pending"
         setup_run.current_step = "dispatch"
         setup_run.celery_task_id = deterministic_task_id

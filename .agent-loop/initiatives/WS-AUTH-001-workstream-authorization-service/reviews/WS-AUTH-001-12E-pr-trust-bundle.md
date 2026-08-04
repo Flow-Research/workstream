@@ -21,7 +21,7 @@ the fixed `workstream.project.setup` service only the internal run command.
 - Added the three active catalogue actions and exact human/fixed-service guards.
 - Added prepared authorization and final locked revalidation to all durable
   sufficiency mutations.
-- Added migration 0050 for immutable replay custody and complete authorization
+- Added migration 0051 for immutable replay custody and complete authorization
   provenance.
 - Connected the setup worker through fresh deterministic service authority.
 - Added runtime, migration, API, replay, transaction, and coverage proof.

@@ -3,7 +3,7 @@
 ## Scope reviewed
 
 Guide sufficiency report creation, human and fixed-service agent execution,
-warning acknowledgement, opaque PREP binding, replay custody, migration 0050,
+warning acknowledgement, opaque PREP binding, replay custody, migration 0051,
 and the active project-setup worker cutover.
 
 ## Reviewer results
