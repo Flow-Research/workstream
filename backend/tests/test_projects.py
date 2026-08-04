@@ -277,6 +277,20 @@ async def test_project_resolution_preserves_found_and_missing_outcomes(exists: b
             await service.resolve_project("project-1")
 
 
+@pytest.mark.parametrize(
+    ("left", "right", "expected"),
+    [(None, 20, 20), (10, None, 10), (10, 20, 10)],
+)
+def test_effective_policy_limit_merge_keeps_stricter_non_null_value(
+    left: int | None,
+    right: int | None,
+    expected: int,
+) -> None:
+    service = ProjectService(cast(Any, None))
+
+    assert service._minimum_non_null(left, right) == expected
+
+
 def test_policy_identity_shape_metadata_matches_migration_contract() -> None:
     expected = {
         "ck_review_policies_review_policy_identity_shape": ReviewPolicy,
