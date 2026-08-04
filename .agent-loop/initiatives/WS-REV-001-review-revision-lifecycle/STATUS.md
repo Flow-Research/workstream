@@ -2,9 +2,11 @@
 
 ## Current status
 
-PLAN4 end-to-end planning refresh is complete and internally reviewed from
-current main `3479ee71`. No REV runtime module, table, route, action activation,
-or product behavior exists.
+`WS-REV-001-03A1` implements the hidden queue/admission persistence foundation.
+PR #262 is reconciled with trusted main `2feaf47d`; ART retains migration 0050
+and REV owns its exact 0051 successor. The chunk adds no REV route, action
+activation, checker hook, lease, Review, revision behavior, or contribution
+behavior.
 
 AUTH `WS-XINT-003-02A` through `02D` are merged. REV now has stable policy
 lineage/mutation, complete unavailable action/principal registration, and typed
@@ -40,6 +42,7 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 
 ## Next step
 
-Await human approval. Then refresh and implement only `WS-REV-001-03A1`
-queue/admission-idempotency persistence from then-current main. Stop before
-03A2.
+Publish and review only the `WS-REV-001-03A1` PR. GitHub Actions must provide
+the full-suite and repository-coverage proof. After human merge approval, stop;
+`WS-REV-001-03A2` remains a separate explicit start and still depends on its
+named CON policy-version FK target.
