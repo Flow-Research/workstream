@@ -12,6 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import app.modules.artifacts.authorization as artifact_authorization
+import app.modules.authorization.prepared as prepared_authorization
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.authorization import PreparedArtifactInternalAuthority
@@ -185,7 +186,7 @@ async def test_adapter_fails_closed_for_invalid_state_and_service_principal(
             return None
 
     monkeypatch.setattr(
-        artifact_authorization,
+        prepared_authorization,
         "ActorRepository",
         lambda _session: MissingActors(),
     )
@@ -216,7 +217,7 @@ async def test_adapter_fails_closed_for_invalid_state_and_service_principal(
             )
 
     monkeypatch.setattr(
-        artifact_authorization,
+        prepared_authorization,
         "ActorRepository",
         lambda _session: InvalidActors(),
     )
@@ -315,7 +316,7 @@ def _install_principal(monkeypatch: pytest.MonkeyPatch, *, status: str = "active
             assert str(actor_profile_id) == profile.id
             return link, profile
 
-    monkeypatch.setattr(artifact_authorization, "ActorRepository", lambda _session: Actors())
+    monkeypatch.setattr(prepared_authorization, "ActorRepository", lambda _session: Actors())
     monkeypatch.setattr(artifact_authorization, "AdminAuthorizationRepository", Admin)
 
 

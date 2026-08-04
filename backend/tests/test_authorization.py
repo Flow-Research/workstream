@@ -60,6 +60,7 @@ from app.modules.actors.service import ActorService, ResolvedActor
 from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
 from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
+from app.modules.authorization import prepared as authorization_prepared
 from app.modules.authorization import router as authorization_router
 import app.modules.artifacts.authorization as artifact_authorization
 from app.modules.artifacts.authorization import (
@@ -2008,6 +2009,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
@@ -2106,14 +2110,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 45
+        == 48
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 55
+        == 52
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2221,6 +2225,8 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             ProjectGuideSufficiencyMutationResourceContext(
                 resource_type="project_guide_sufficiency_mutation",
                 resource_id=report_id,
+                operation_id=operation_id,
+                request_digest=DIGEST,
                 scope_project_id=project_id,
                 guide_id=guide_id,
                 guide_version="1",
@@ -2236,6 +2242,8 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             ProjectGuideSufficiencyMutationResourceContext(
                 resource_type="project_guide_sufficiency_mutation",
                 resource_id=snapshot_id,
+                operation_id=operation_id,
+                request_digest=DIGEST,
                 scope_project_id=project_id,
                 guide_id=guide_id,
                 guide_version="1",
@@ -2252,6 +2260,8 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             ProjectGuideSufficiencyMutationResourceContext(
                 resource_type="project_guide_sufficiency_mutation",
                 resource_id=report_id,
+                operation_id=operation_id,
+                request_digest=DIGEST,
                 scope_project_id=project_id,
                 guide_id=guide_id,
                 guide_version="1",
@@ -2405,6 +2415,17 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             human_sufficiency_run.model_dump()
         ),
     )
+    service_report = sufficiency_resources[
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE
+    ].model_dump()
+    service_report["execution_kind"] = "setup_service"
+    service_report["setup_service_custody"] = setup_custody_by_step[
+        "guide_sufficiency"
+    ].model_dump()
+    with pytest.raises(
+        ValidationError, match="only a sufficiency run may use setup-service authority"
+    ):
+        ProjectGuideSufficiencyMutationResourceContext.model_validate(service_report)
     with pytest.raises(ValidationError):
         ProjectGuideMutationResourceContext(
             resource_type="project_guide_mutation",
@@ -2583,7 +2604,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: (
             PermissionId.PROJECT_GUIDE_MANAGE,
             ActionOwner.AUTH_12E,
-            ActionAvailability.PLANNED,
+            ActionAvailability.ACTIVE,
         ),
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
@@ -2607,6 +2628,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
     }
     assert {
         action
@@ -2710,7 +2732,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 100 ActionIds, 45 active actions, and\n55 planned actions" in operations
+        "71 PermissionIds, 100 ActionIds, 48 active actions, and\n52 planned actions" in operations
     )
 
 
@@ -3551,14 +3573,7 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
     )
     project_id = uuid4()
     for action_id in PROJECT_MUTATION_RESOURCE_BY_ACTION:
-        if action_id in {
-            ActionId.PROJECT_CREATE,
-            ActionId.PROJECT_GUIDE_CREATE,
-            ActionId.PROJECT_GUIDE_UPDATE,
-            ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
-            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-            ActionId.PROJECT_REVISION_POLICY_UPDATE,
-        }:
+        if ACTION_BY_ID[action_id].availability is ActionAvailability.ACTIVE:
             continue
         scope = PreparedAuthorityScope(
             kind=PreparedAuthorityScopeKind.PROJECT,
@@ -5461,6 +5476,168 @@ async def test_prepared_guide_service_authority_is_exact_and_single_use(
         await prepared.consume(handle, action_id, caller_input, resource)
 
 
+@pytest.mark.asyncio
+async def test_prepared_sufficiency_run_admits_only_exact_setup_service_custody() -> None:
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=ServiceIdentity.PROJECT_SETUP,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+    session = _PreparedTestSession()
+
+    class LockedServiceFacts:
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind="service",
+                    status="active",
+                    service_identity=ServiceIdentity.PROJECT_SETUP.value,
+                ),
+            )
+
+    facts = LockedServiceFacts()
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=facts,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,
+    )
+    project_id, guide_id, snapshot_id, setup_run_id = (uuid4() for _ in range(4))
+    custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=setup_run_id,
+        expected_step="guide_sufficiency",
+        task_id=uuid4(),
+        correlation_id=uuid4(),
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+    )
+    resource = ProjectGuideSufficiencyMutationResourceContext(
+        resource_type="project_guide_sufficiency_mutation",
+        resource_id=snapshot_id,
+        operation_id=uuid4(),
+        request_digest=DIGEST,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=DIGEST,
+        target_kind="run",
+        execution_kind="setup_service",
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+        setup_service_custody=custody,
+    )
+    request_value = resource.model_dump(mode="json")
+    request_value["project_id"] = str(project_id)
+    request_value["report_id"] = None
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=request_value)
+    handle = await prepared.prepare(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        caller,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
+        ),
+    )
+    wrong_generation = resource.model_copy(
+        update={
+            "setup_generation": 2,
+            "setup_service_custody": custody.model_copy(update={"setup_generation": 2}),
+        }
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            caller,
+            wrong_generation,
+        )
+    decision = await prepared.consume(
+        handle,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        caller,
+        resource,
+    )
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
+    assert decision.matched_grant_id is None
+    assert decision.matched_scope_project_id is None
+    assert len(evidence.events) == 1
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            caller,
+            resource,
+        )
+    assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_prepared_sufficiency_missing_grant_commits_bounded_denial() -> None:
+    """A prepare-time insufficiency is a stable denial, never an internal error."""
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    facts = _GuideMutationAuthorityFacts(context)
+    authorization, evidence = _runtime_service(context, session=session, admin_repository=facts)
+    prepared = PreparedAuthorizationService(session, context, authorization, facts)
+    project_id, guide_id, snapshot_id = (uuid4() for _ in range(3))
+    resource = ProjectGuideSufficiencyMutationResourceContext(
+        resource_type="project_guide_sufficiency_mutation",
+        resource_id=snapshot_id,
+        operation_id=uuid4(),
+        request_digest=DIGEST,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=DIGEST,
+        target_kind="run",
+        execution_kind="human",
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+    )
+    request_value = resource.model_dump(mode="json")
+    request_value.update({"project_id": str(project_id), "report_id": None})
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=request_value)
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.PROJECT,
+        project_id=project_id,
+    )
+
+    with pytest.raises(PreparedAuthorizationUnsupported) as unsupported:
+        await prepared.prepare(ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN, caller, scope)
+    with pytest.raises(AuthorizationDenied) as denied:
+        await prepared.deny_unsupported(
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            caller,
+            resource,
+            unsupported.value,
+        )
+
+    assert (
+        denied.value.decision.denial_code
+        is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    )
+    assert len(evidence.events) == 1
+    assert evidence.events[0].denial_code == AuthorizationDenialCode.PERMISSION_NOT_GRANTED.value
+
+
 @pytest.mark.parametrize("authority_kind", ["binding", "read"])
 @pytest.mark.asyncio
 async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_replay(
@@ -5498,7 +5675,11 @@ async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_
         def close(self) -> None:
             return None
 
-    monkeypatch.setattr(artifact_authorization, "_fixed_service_context", fixed_context)
+    monkeypatch.setattr(
+        artifact_authorization,
+        "fixed_service_authorization_context",
+        fixed_context,
+    )
     monkeypatch.setattr(artifact_authorization, "PreparedAuthorizationService", FakePrepared)
 
     common = {
@@ -5580,12 +5761,12 @@ async def test_fixed_service_context_rejects_mismatched_loaded_identity(
             )
 
     monkeypatch.setattr(
-        artifact_authorization,
+        authorization_prepared,
         "ActorRepository",
         MismatchedActorRepository,
     )
-    with pytest.raises(ArtifactAuthorityDeniedError, match="principal is unavailable"):
-        await artifact_authorization._fixed_service_context(
+    with pytest.raises(PreparedAuthorizationUnsupported):
+        await authorization_prepared.fixed_service_authorization_context(
             _PreparedTestSession(),  # type: ignore[arg-type]
             ServiceIdentity.ARTIFACT_BINDING,
             uuid4(),

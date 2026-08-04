@@ -85,18 +85,72 @@ async def guide_authorization(
     return key, resolved, prepared
 
 
+async def require_sufficiency_human(
+    key: Annotated[UUID, Depends(require_guide_mutation_key)],
+    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
+) -> AuthVerificationResult:
+    """Reject nonhuman public callers before database dependencies resolve."""
+    del key
+    if result.token.subject_kind != "human":
+        raise StructuredHTTPException(
+            status_code=404,
+            detail="Project authorization resource not found",
+            error_code="project_authorization_resource_not_found",
+            error_message="Project authorization resource not found",
+        )
+    return result
+
+
+async def sufficiency_authorization_actor(
+    request: Request,
+    result: Annotated[AuthVerificationResult, Depends(require_sufficiency_human)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
+) -> ResolvedActor:
+    """Resolve the canonical actor only after human-only admission succeeds."""
+    return await resolve_authorization_actor(request, result, session, rate_control)
+
+
+async def get_sufficiency_prepared_authorization_service(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(sufficiency_authorization_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Compose PREP only after the public human-only admission check."""
+    async with prepared_authorization_service(request, resolved, session) as service:
+        yield service
+
+
+async def sufficiency_authorization(
+    key: Annotated[UUID, Depends(require_guide_mutation_key)],
+    resolved: Annotated[ResolvedActor, Depends(sufficiency_authorization_actor)],
+    prepared: Annotated[
+        PreparedAuthorizationService,
+        Depends(get_sufficiency_prepared_authorization_service),
+    ],
+):
+    """Return one exact human actor and request-local sufficiency PREP service."""
+    return key, resolved, prepared
+
+
+def mutation_conflict_error(code: str) -> StructuredHTTPException:
+    """Return the canonical structured mutation-conflict envelope."""
+    messages = {
+        "idempotency_mismatch": "Idempotency key does not match",
+        "idempotency_pending": "Guide mutation is already in progress",
+    }
+    return StructuredHTTPException(
+        status_code=409,
+        detail=code,
+        error_code=code,
+        error_message=messages.get(code, "Guide mutation conflicts with current state"),
+        retryable=code == "idempotency_pending",
+    )
+
+
 def _error(exc: ProjectServiceError):
     if isinstance(exc, GuideMutationIdempotencyConflict):
-        code = str(exc)
-        return StructuredHTTPException(
-            status_code=409,
-            detail=code,
-            error_code=code,
-            error_message="Idempotency key does not match"
-            if code == "idempotency_mismatch"
-            else "Guide mutation is already in progress",
-            retryable=code == "idempotency_pending",
-        )
+        return mutation_conflict_error(str(exc))
     return HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
