@@ -23,19 +23,20 @@ they cross multiple L1 boundaries.
 | Chunk | Goal | Risk | Entry gate/status |
 |---|---|---:|---|
 | `WS-ART-001-PLAN3` | Reconcile the complete remaining v0.1 custody chain and AUTH/REV/CON handoffs. | L1 | Merged planning |
-| `WS-ART-001-PLAN4` | Define the central default pre-submission checker catalogue, disable semantics, and split execution contract. | L1 | Planning complete; internal review passed; PR pending |
+| `WS-ART-001-PLAN4` | Define the central default pre-submission checker catalogue, disable semantics, and split execution contract. | L1 | Merged PR #271 |
+| `WS-ART-001-PLAN5` | Correct legacy-precheck removal sequencing so the old public and internal paths are deleted only with the admission-backed Submission cutover. | L1 | Planning complete; PR pending |
 | `WS-ART-001-03C` | Clean-cut legacy guide identity/excerpts and make the verified same-generation pipeline live. | L1 | Merged PR #249 |
 | `WS-ART-001-04A1` | Remove legacy multi-step contributor intake reachability and schema without adding the replacement route. | L1 | Merged PR #264 |
 | `WS-ART-001-04A2` | Add bounded one-outer-ZIP intake and archive-safety inspection in private scratch. | L1 | Merged PR #266 |
 | `WS-ART-001-04A3` | Add canonical semantic manifest, executable normalization, and unchanged-work gate. | L1 | Merged PR #268 |
-| `WS-ART-001-04A4` | Remove the legacy independently invocable caller-owned submission-precheck route and contract. | L1 | Proposed after PLAN4 |
-| `WS-ART-001-04B1` | Add the single versioned checker catalogue and compile one effective execution plan from platform defaults plus locked project policy. | L1 | Proposed after 04A4 |
+| `WS-ART-001-04A4` | Former early removal of the legacy independently invocable caller-owned submission-precheck route and contract. | L1 | Superseded by PLAN5; complete removal belongs to 05B |
+| `WS-ART-001-04B1` | Add the single versioned checker catalogue and compile one effective execution plan from platform defaults plus locked project policy. | L1 | Proposed after PLAN5 |
 | `WS-ART-001-04B2` | Materialize the sealed manifest tree once and execute the mandatory platform/default catalogue phases. | L1 | Proposed after 04B1 |
 | `WS-ART-001-04B3` | Execute locked project-policy rules through the same plan and persist one bounded immutable evidence set. | L1 | Proposed after 04B2 |
 | `WS-ART-001-04C1` | Reauthorize and atomically persist capacity plus durable put intent, then write the checked ZIP once. | L1 | Proposed after XINT-06A |
 | `WS-ART-001-04C2` | Reuse verification/recovery to publish one capacity-charged ready admission and compose the hidden continuous endpoint. | L1 | Proposed after 04C1 |
 | `WS-ART-001-05A` | Atomically consume ready admission into one immutable Submission and binding under fresh human/service authority. | L1 | Proposed after XINT-05A |
-| `WS-ART-001-05B` | Remove legacy package URI/hash/manifest authority and cut live API/automatic post-submit dispatch to the verified binding. | L1 | Proposed after XINT-05B |
+| `WS-ART-001-05B` | Atomically cut the live Submission API/dispatch to verified admission and remove the complete legacy standalone/internal precheck and caller-owned package contract. | L1 | Proposed after XINT-05B |
 | `WS-ART-001-06A` | Persist post-submit checker input snapshot and integrity-checking materialization. | L1 | Proposed after 05B |
 | `WS-ART-001-06B` | Store/bind checker outputs and preserve checker-owned routing. | L1 | Proposed after 06A |
 | `WS-ART-001-07A` | Add lease-scoped exact-binding reviewer packet materialization without review lifecycle ownership. | L1 | Proposed after 06B plus hidden REV manifest |
@@ -49,7 +50,7 @@ they cross multiple L1 boundaries.
 ```text
 AUTH-04B implementation [merged PR #245]
 -> ART-03C
--> ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> 04A4 -> 04B1 -> 04B2 -> 04B3
+-> ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> 04B1 -> 04B2 -> 04B3
 -> XINT-06A pre-submit materializer activation
 -> ART-04C1 -> 04C2
 -> XINT-05A contributor preparation activation

@@ -714,7 +714,7 @@ AUTH-04B implementation/activation [merged PR #245]
 -> ART-04A1 legacy contributor-intake removal
 -> ART-04A2 bounded outer-ZIP safety/intake
 -> ART-04A3 semantic manifest + unchanged-work gate
--> ART-04A4 legacy standalone precheck clean cut
+-> PLAN5 legacy-precheck clean-cut resequencing
 -> ART-04B1 default-checker catalogue and effective-plan contract
 -> ART-04B2 sealed scratch materialization and platform-default execution
 -> ART-04B3 locked-project execution and immutable bounded evidence
@@ -724,7 +724,7 @@ AUTH-04B implementation/activation [merged PR #245]
 -> XINT-05A contributor preparation activation
 -> ART-05A atomic Submission/binding/admission consumption
 -> XINT-05B Submission/binding activation
--> ART-05B legacy Submission transport/API + automatic dispatch clean cut
+-> ART-05B admission-backed Submission/API/dispatch cutover plus complete legacy precheck removal
 -> ART-06A post-submit checker snapshot/materialization
 -> ART-06B checker output binding and routing
 -> XINT-06B post-submit/output activation
@@ -741,6 +741,15 @@ continuous contributor request.
 No intermediate HTTP route, durable upload session, scratch handle, local path,
 or prepared authorization crosses those PR boundaries. 04C2 alone composes the
 hidden endpoint after every internal dependency exists.
+
+PLAN5 supersedes the former early 04A4 removal. The legacy standalone precheck
+route and its internal `TaskService.create_submission` safety guard remain
+temporary legacy behavior only until the verified-admission Submission path is
+ready. They receive no new features or compatibility adapters. ART-05B then
+deletes the route, public schemas/service entry point, internal guard, and
+caller-owned package/hash/manifest contract in the same clean-cut transaction
+and API migration that makes admission consumption authoritative. There is no
+interval in which unchecked legacy Submission creation is reachable.
 
 XINT-06 must split because live preparation requires the fixed pre-submit
 materializer before XINT-05A can safely activate the human preparation action.

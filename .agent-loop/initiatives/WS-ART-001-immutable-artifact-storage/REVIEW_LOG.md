@@ -334,3 +334,15 @@
   repair. Architecture additionally required authority-neutral shared result
   identity and complete platform/default dispatch mapping; both were repaired
   before final publication.
+
+## WS-ART-001-PLAN5
+
+- Preimplementation discovery found that PLAN4's proposed 04A4 deletion shared
+  its service with the mandatory guard inside live legacy Submission creation.
+- Architecture review passed only with resequencing; security and product/ops
+  reviews blocked the original contract because it could permit unchecked
+  Submission creation, break the live path, or create a private compatibility
+  seam.
+- The correction supersedes 04A4, makes 04B1 the next implementation chunk, and
+  assigns the complete standalone/public/internal/caller-package clean cut to
+  the admission-backed 05B Submission cutover.

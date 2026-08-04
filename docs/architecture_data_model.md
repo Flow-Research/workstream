@@ -782,17 +782,18 @@ The generated checker order is deterministic:
 8. contributor attestation validation
 9. low-quality artifact warnings
 
-The legacy standalone `/tasks/{id}/submission-precheck` path is superseded.
-Pre-submit runs only inside the same process-local preparation request that owns
-the uploaded ZIP and bounded scratch generation:
+At the ART-05B cutover, the legacy standalone
+`/tasks/{id}/submission-precheck` path is removed. Pre-submit then runs only
+inside the same process-local preparation request that owns the uploaded ZIP
+and bounded scratch generation:
 
 ```text
 POST /api/v1/tasks/{id}/submission-bundle-preparations
 422 DomainError(code="pre_submission_checker_failed", details={status, eligible_to_submit, results})
 ```
 
-No independent precheck route or client-owned manifest can reproduce the
-authoritative result. `POST /api/v1/tasks/{id}/submissions` consumes the verified ready
+After that cutover no independent precheck route or client-owned manifest can
+reproduce the authoritative result. `POST /api/v1/tasks/{id}/submissions` consumes the verified ready
 admission and does not receive scratch paths or rerun the pre-submit plan.
 
 Blocking pre-submit failures prevent submission creation, create no submission

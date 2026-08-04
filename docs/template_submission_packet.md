@@ -57,7 +57,9 @@ returns `pre_submission_checker_failed` with bounded same-request structured
 details, creates no
 submission row, no submission version, and no submission-created audit event,
 and does not return review decision values: `accept`, `needs_revision`, or
-`reject`. There is no standalone preflight endpoint.
+`reject`. The frozen legacy standalone preflight endpoint remains temporary
+until ART-05B removes it with the legacy Submission path; it is not an
+authoritative result for this packet.
 
 ## Submission Bundle Manifest
 
