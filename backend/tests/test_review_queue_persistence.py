@@ -562,7 +562,7 @@ async def test_preferred_shape_is_storage_only_and_lease_shape_is_impossible(
 
 @pytest.mark.postgres_schema_contract
 @pytest.mark.asyncio
-async def test_populated_review_queue_foundation_refuses_downgrade(
+async def test_later_authority_preserves_populated_review_admission_on_downgrade(
     review_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     migration_lock,
@@ -582,12 +582,12 @@ async def test_populated_review_queue_foundation_refuses_downgrade(
         with migration_lock():
             command.downgrade(config, "0050_guide_source_v2")
 
-    with pytest.raises(RuntimeError, match="cannot downgrade populated review queue foundation"):
+    with pytest.raises(RuntimeError, match="cannot downgrade guide sufficiency authority"):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0051_review_queue_foundation"
+            "0052_guide_sufficiency_authority"
         )
         assert await session.scalar(
             select(ReviewAdmissionIdempotencyRecord.id).where(
@@ -598,7 +598,7 @@ async def test_populated_review_queue_foundation_refuses_downgrade(
 
 @pytest.mark.postgres_schema_contract
 @pytest.mark.asyncio
-async def test_populated_review_queue_row_alone_refuses_downgrade(
+async def test_later_authority_preserves_populated_review_queue_on_downgrade(
     review_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     migration_lock,
@@ -618,11 +618,11 @@ async def test_populated_review_queue_row_alone_refuses_downgrade(
         with migration_lock():
             command.downgrade(config, "0050_guide_source_v2")
 
-    with pytest.raises(RuntimeError, match="cannot downgrade populated review queue foundation"):
+    with pytest.raises(RuntimeError, match="cannot downgrade guide sufficiency authority"):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0051_review_queue_foundation"
+            "0052_guide_sufficiency_authority"
         )
         assert await session.get(ReviewQueueEntry, queue_value.id) is not None
