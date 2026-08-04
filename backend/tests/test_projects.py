@@ -8347,6 +8347,90 @@ async def test_sufficiency_agent_persists_server_owned_agent_identity(
     assert setup_run.output_sufficiency_report_id is None
 
 
+async def test_setup_service_adopts_exact_human_agent_report_without_rerun(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
+) -> None:
+    """Fresh service authority links one human-created verified result to setup."""
+    from app.workers import project_setup as worker
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    adapter = await prepare_verified_sufficiency_route(
+        monkeypatch, project_id=project["id"], guide_id=guide["id"], snapshot=snapshot
+    )
+    created = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+    assert created.status_code == 201, created.text
+
+    async with db_session.get_session_factory()() as session:
+        setup_run = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.source_snapshot_id == snapshot["id"]
+            )
+        )
+        assert setup_run is not None
+        setup_run.status = "running_sufficiency_agent"
+        setup_run.current_step = "guide_sufficiency"
+        setup_run.celery_task_id = worker.pre_submit_setup_task_id(
+            setup_run.id, setup_run.setup_generation
+        )
+        await session.commit()
+        setup_run_id = setup_run.id
+        setup_generation = setup_run.setup_generation
+
+    async def accept_fixture_provenance(*_: object, **__: object) -> None:
+        """The fake material port has no ART rows; exact lineage has separate tests."""
+
+    monkeypatch.setattr(
+        sufficiency_mutation_service_module.GuideSufficiencyMutationService,
+        "_validate_adoptable_verified_report",
+        accept_fixture_provenance,
+    )
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", adapter)
+    async with db_session.get_session_factory()() as session:
+        adopted = await worker._run_authorized_setup_sufficiency(
+            session,
+            project_id=project["id"],
+            guide_id=guide["id"],
+            source_snapshot_id=snapshot["id"],
+            setup_run_id=setup_run_id,
+            setup_generation=setup_generation,
+        )
+        persisted_run = await session.get(ProjectSetupRun, setup_run_id)
+        report = await session.get(GuideSufficiencyReport, created.json()["id"])
+        setup_profile_id = await session.scalar(
+            select(ActorProfile.id).where(
+                ActorProfile.service_identity == ServiceIdentity.PROJECT_SETUP.value
+            )
+        )
+        assert report is not None
+        service_replay = await session.scalar(
+            select(GuideSufficiencyMutationIdempotencyRecord).where(
+                GuideSufficiencyMutationIdempotencyRecord.actor_profile_id
+                == setup_profile_id,
+                GuideSufficiencyMutationIdempotencyRecord.report_id == report.id,
+            )
+        )
+
+    assert adopted.created is False
+    assert adopted.replayed is False
+    assert adopted.response.id == created.json()["id"]
+    assert persisted_run is not None
+    assert persisted_run.output_sufficiency_report_id == created.json()["id"]
+    assert report is not None
+    assert report.created_by_admin_role_grant_id is not None
+    assert report.created_by_service_identity is None
+    assert service_replay is not None
+    assert service_replay.status == "committed"
+    assert adapter.calls == 4
+
+
 async def test_sufficiency_agent_conflicts_with_existing_manual_report_before_side_effects(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

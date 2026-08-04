@@ -6,7 +6,7 @@ import hashlib
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import AsyncIterator, Literal, cast
+from typing import AsyncIterator, Literal, Sequence, cast
 from uuid import UUID, uuid4
 
 from pydantic import JsonValue
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.core.project_agents import get_project_guide_agent_runtime
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import (
+    GuideSufficiencyExtractionProvenance,
     GuideSufficiencyMaterialPort,
     GuideSufficiencyMaterialRequest,
     GuideSufficiencyMaterialUnavailable,
@@ -628,6 +629,63 @@ class GuideSufficiencyMutationService:
         )
         return UUID(hex=digest.removeprefix("sha256:")[:32])
 
+    async def _validate_adoptable_verified_report(
+        self,
+        report: GuideSufficiencyReport,
+        lineage: _Lineage,
+        *,
+        project_id: UUID,
+        guide_id: UUID,
+        material_digest: str,
+        material_byte_count: int,
+        source_provenance: Sequence[GuideSufficiencyExtractionProvenance],
+    ) -> None:
+        """Require an existing human agent report to match current ART custody exactly."""
+        if (
+            report.project_id != str(project_id)
+            or report.guide_id != str(guide_id)
+            or report.guide_version != lineage.guide_version
+            or report.source_snapshot_id != str(lineage.snapshot_id)
+            or report.source_snapshot_hash != lineage.snapshot_hash
+            or report.project_setup_run_id != str(lineage.setup_run_id)
+            or report.setup_generation != lineage.setup_generation
+            or report.agent_material_sha256 != material_digest
+            or report.agent_material_byte_count != material_byte_count
+            or report.creation_action_id != ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN.value
+            or report.created_by_admin_role_grant_id is None
+            or report.created_by_service_identity is not None
+        ):
+            raise GuideSufficiencyMutationConflict("sufficiency_report_provenance_mismatch")
+        usages = await self._validation._verified_report_usages(report)
+        actual = [
+            (
+                usage.item_order,
+                usage.source_item_id,
+                usage.binding_id,
+                usage.content_id,
+                usage.extraction_usage_id,
+                usage.extraction_attempt_id,
+                usage.extracted_content_id,
+                usage.canonical_output_sha256,
+            )
+            for usage in usages
+        ]
+        expected = [
+            (
+                item.item_order,
+                str(item.source_item_id),
+                str(item.binding_id),
+                str(item.content_id),
+                str(item.extraction_usage_id),
+                str(item.extraction_attempt_id),
+                str(item.extracted_content_id),
+                item.canonical_output_sha256,
+            )
+            for item in source_provenance
+        ]
+        if actual != expected:
+            raise GuideSufficiencyMutationConflict("sufficiency_report_provenance_mismatch")
+
     async def _run_agent(
         self,
         *,
@@ -842,16 +900,11 @@ class GuideSufficiencyMutationService:
             setup_generation=initial.setup_generation,
         )
         material_error: GuideSufficiencyMaterialUnavailable | None = None
-        if execution_kind == "setup_service" and existing_report is not None:
-            if existing_report.agent_material_sha256 is None:
-                raise GuideSufficiencyMutationConflict("sufficiency_report_already_exists")
+        try:
+            first = await self._material.load(material_request)
+        except GuideSufficiencyMaterialUnavailable as exc:
             first = None
-        else:
-            try:
-                first = await self._material.load(material_request)
-            except GuideSufficiencyMaterialUnavailable as exc:
-                first = None
-                material_error = exc
+            material_error = exc
         agent_material = None
         first_prompt = None
         if first is not None:
@@ -864,12 +917,6 @@ class GuideSufficiencyMutationService:
             )
             first_prompt = bounded_canonical_guide_material(agent_material)
             material_digest = f"sha256:{hashlib.sha256(first_prompt).hexdigest()}"
-        elif (
-            execution_kind == "setup_service"
-            and existing_report is not None
-            and existing_report.agent_material_sha256 is not None
-        ):
-            material_digest = existing_report.agent_material_sha256
         elif execution_kind == "setup_service" and material_error is not None:
             raise material_error
         elif material_error is not None:
@@ -879,6 +926,15 @@ class GuideSufficiencyMutationService:
         if execution_kind == "setup_service":
             if setup_service_custody is None:
                 raise RuntimeError("setup service custody is required")
+            adopted_report_id = (
+                UUID(existing_report.id)
+                if (
+                    existing_report is not None
+                    and existing_report.created_by_admin_role_grant_id is not None
+                    and existing_report.created_by_service_identity is None
+                )
+                else None
+            )
             key = self._setup_service_replay_key(
                 actor_profile_id,
                 identity_link_id,
@@ -893,7 +949,7 @@ class GuideSufficiencyMutationService:
                 key=key,
                 project_id=project_id,
                 guide_id=guide_id,
-                report_id=None,
+                report_id=adopted_report_id,
                 operation_id=operation_id,
                 lineage=initial,
                 target_kind="run",
@@ -937,7 +993,7 @@ class GuideSufficiencyMutationService:
                     key=key,
                     project_id=project_id,
                     guide_id=guide_id,
-                    report_id=None,
+                    report_id=adopted_report_id,
                     operation_id=operation_id,
                     lineage=initial,
                     target_kind="run",
@@ -954,7 +1010,7 @@ class GuideSufficiencyMutationService:
                     self._resource(
                         project_id=project_id,
                         guide_id=guide_id,
-                        report_id=None,
+                        report_id=adopted_report_id,
                         operation_id=operation_id,
                         request_digest=digest,
                         lineage=initial,
@@ -984,7 +1040,7 @@ class GuideSufficiencyMutationService:
                     self._resource(
                         project_id=project_id,
                         guide_id=guide_id,
-                        report_id=None,
+                        report_id=adopted_report_id,
                         operation_id=operation_id,
                         request_digest=digest,
                         lineage=final,
@@ -1003,23 +1059,35 @@ class GuideSufficiencyMutationService:
                     ),
                     True,
                 )
-            if existing_report is not None:
-                raise GuideSufficiencyMutationConflict("sufficiency_report_already_exists")
         if material_error is not None:
             if execution_kind == "setup_service":
                 raise material_error
             raise PolicySetupBlocked(material_error.code) from None
         if first is None or agent_material is None or first_prompt is None:
             raise RuntimeError("guide sufficiency material resolution failed")
-        await self._session.rollback()
-        try:
-            result = await get_project_guide_agent_runtime().analyze_guide_sufficiency(
-                agent_material
+        adopting_existing = execution_kind == "setup_service" and existing_report is not None
+        if adopting_existing:
+            assert existing_report is not None
+            await self._validate_adoptable_verified_report(
+                existing_report,
+                initial,
+                project_id=project_id,
+                guide_id=guide_id,
+                material_digest=material_digest,
+                material_byte_count=len(first_prompt),
+                source_provenance=first.provenance,
             )
-        except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable(
-                "project guide agent runtime is unavailable"
-            ) from None
+            result = None
+        else:
+            await self._session.rollback()
+            try:
+                result = await get_project_guide_agent_runtime().analyze_guide_sufficiency(
+                    agent_material
+                )
+            except ProjectAgentRuntimeError:
+                raise AgentRuntimeUnavailable(
+                    "project guide agent runtime is unavailable"
+                ) from None
 
         try:
             second = await self._material.load(material_request)
@@ -1054,19 +1122,23 @@ class GuideSufficiencyMutationService:
             )
         if final != initial:
             raise GuideSufficiencyMutationConflict("sufficiency_lineage_stale")
-        payload = GuideSufficiencyReportCreate(
-            source_snapshot_id=str(source_snapshot_id),
-            status=cast(
-                Literal["passed", "blocked", "passed_with_warnings"],
-                AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
-            ),
-            findings=[
-                GuideSufficiencyFindingInput.model_validate(finding.model_dump(mode="json"))
-                for finding in result.findings
-            ],
-            summary=result.summary,
-        )
-        validate_sufficiency_report_payload(payload)
+        payload = None
+        if result is not None:
+            payload = GuideSufficiencyReportCreate(
+                source_snapshot_id=str(source_snapshot_id),
+                status=cast(
+                    Literal["passed", "blocked", "passed_with_warnings"],
+                    AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
+                ),
+                findings=[
+                    GuideSufficiencyFindingInput.model_validate(
+                        finding.model_dump(mode="json")
+                    )
+                    for finding in result.findings
+                ],
+                summary=result.summary,
+            )
+            validate_sufficiency_report_payload(payload)
         caller, digest = self._caller(
             action=action,
             route=(
@@ -1080,7 +1152,9 @@ class GuideSufficiencyMutationService:
             key=key,
             project_id=project_id,
             guide_id=guide_id,
-            report_id=None,
+            report_id=(
+                UUID(existing_report.id) if adopting_existing and existing_report else None
+            ),
             operation_id=operation_id,
             lineage=final,
             target_kind="run",
@@ -1097,7 +1171,11 @@ class GuideSufficiencyMutationService:
             self._resource(
                 project_id=project_id,
                 guide_id=guide_id,
-                report_id=None,
+                report_id=(
+                    UUID(existing_report.id)
+                    if adopting_existing and existing_report
+                    else None
+                ),
                 operation_id=operation_id,
                 request_digest=digest,
                 lineage=final,
@@ -1114,7 +1192,11 @@ class GuideSufficiencyMutationService:
             self._resource(
                 project_id=project_id,
                 guide_id=guide_id,
-                report_id=None,
+                report_id=(
+                    UUID(existing_report.id)
+                    if adopting_existing and existing_report
+                    else None
+                ),
                 operation_id=operation_id,
                 request_digest=digest,
                 lineage=final,
@@ -1136,7 +1218,7 @@ class GuideSufficiencyMutationService:
             project_id=str(project_id),
             guide_id=str(guide_id),
             source_snapshot_id=str(source_snapshot_id),
-            report_id=None,
+            report_id=(existing_report.id if adopting_existing and existing_report else None),
             setup_run_id=str(final.setup_run_id),
             setup_generation=final.setup_generation,
         )
@@ -1163,42 +1245,56 @@ class GuideSufficiencyMutationService:
             )
         ):
             raise GuideSufficiencyMutationConflict("project_setup_run_context_mismatch")
-        report = stage_verified_sufficiency_report(
-            self._session,
-            report_id=str(uuid4()),
-            project_id=str(project_id),
-            guide_id=str(guide_id),
-            guide_version=final.guide_version,
-            source_snapshot_id=str(source_snapshot_id),
-            source_snapshot_hash=final.snapshot_hash,
-            payload=payload,
-            setup_run_id=str(final.setup_run_id),
-            setup_generation=final.setup_generation,
-            material_sha256=material_digest,
-            material_byte_count=len(second_prompt),
-            source_provenance=second.provenance,
-            created_by=actor_profile_id,
-            authority=SufficiencyCreationAuthority(
-                actor_profile_id=actor_profile_id,
-                identity_link_id=identity_link_id,
-                admin_role_grant_id=(
-                    decision.matched_grant_id if execution_kind == "human" else None
+        if adopting_existing:
+            assert existing_report is not None
+            report = existing_report
+            await self._validate_adoptable_verified_report(
+                report,
+                final,
+                project_id=project_id,
+                guide_id=guide_id,
+                material_digest=material_digest,
+                material_byte_count=len(second_prompt),
+                source_provenance=second.provenance,
+            )
+        else:
+            assert payload is not None
+            report = stage_verified_sufficiency_report(
+                self._session,
+                report_id=str(uuid4()),
+                project_id=str(project_id),
+                guide_id=str(guide_id),
+                guide_version=final.guide_version,
+                source_snapshot_id=str(source_snapshot_id),
+                source_snapshot_hash=final.snapshot_hash,
+                payload=payload,
+                setup_run_id=str(final.setup_run_id),
+                setup_generation=final.setup_generation,
+                material_sha256=material_digest,
+                material_byte_count=len(second_prompt),
+                source_provenance=second.provenance,
+                created_by=actor_profile_id,
+                authority=SufficiencyCreationAuthority(
+                    actor_profile_id=actor_profile_id,
+                    identity_link_id=identity_link_id,
+                    admin_role_grant_id=(
+                        decision.matched_grant_id if execution_kind == "human" else None
+                    ),
+                    service_identity=(
+                        "workstream.project.setup" if execution_kind == "setup_service" else None
+                    ),
+                    scope_type=(
+                        "service"
+                        if execution_kind == "setup_service"
+                        else "system"
+                        if decision.matched_scope_project_id is None
+                        else "project"
+                    ),
+                    scope_project_id=str(project_id),
+                    action_id=action.value,
+                    decision_event_id=str(decision.decision_id),
                 ),
-                service_identity=(
-                    "workstream.project.setup" if execution_kind == "setup_service" else None
-                ),
-                scope_type=(
-                    "service"
-                    if execution_kind == "setup_service"
-                    else "system"
-                    if decision.matched_scope_project_id is None
-                    else "project"
-                ),
-                scope_project_id=str(project_id),
-                action_id=action.value,
-                decision_event_id=str(decision.decision_id),
-            ),
-        )
+            )
         if execution_kind == "setup_service":
             setup_run.output_sufficiency_report_id = report.id
         await self._session.flush()
