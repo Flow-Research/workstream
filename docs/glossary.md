@@ -102,12 +102,6 @@ immutable Submission and binding, while proven task/predecessor/locked-context
 drift may make it stale. No state expires, releases storage capacity, or
 authorizes deletion in v0.1.
 
-## ArtifactUploadItem
-
-Legacy unavailable multi-item staging metadata. ART-04A must remove it or make
-it statically unreachable before submission-bundle preparation activates. It is
-not the v0.1 contributor intake, `ArtifactContent`, or an `ArtifactBinding`.
-
 ## ArtifactBinding
 
 The immutable logical association between `ArtifactContent` and one exact

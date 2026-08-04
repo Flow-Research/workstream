@@ -134,9 +134,9 @@ uploads.
 
 ## Independent Verification
 
-A provider acknowledgement sets the upload item to
-`stored_pending_verification` and creates a pending replica, not a bindable
-artifact. A durable Celery job performs a fresh complete-object read,
+A provider acknowledgement sets the durable put attempt to
+`object_confirmed` and creates a pending replica, not a bindable artifact. A
+durable Celery job performs a fresh complete-object read,
 computes SHA-256 and byte count, and records an immutable verification receipt.
 Only a matching replica becomes bindable.
 
@@ -200,9 +200,10 @@ or human ownership.
 ## Failure Meaning
 
 Storage conditions do not introduce task or review decisions. Stable failures
-include `artifact_storage_unavailable`, `artifact_input_mismatch`,
-`artifact_upload_expired`, `artifact_upload_consumed`, and
-`artifact_integrity_failure`.
+include `artifact_storage_unavailable`, `artifact_input_mismatch`, and
+`artifact_integrity_failure`. The retired upload-session failures
+`artifact_upload_expired` and `artifact_upload_consumed` are historical only and
+are not current runtime outcomes.
 
 Transient post-submit retrieval failure keeps the task in
 `evaluation_pending`. Integrity mismatch quarantines the replica and blocks

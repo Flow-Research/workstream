@@ -37,8 +37,8 @@ capability, browser-to-provider path, or client provider credential.
 
 ## D6 - Verification Before Binding
 
-Provider acknowledgement sets the upload item to
-`stored_pending_verification` and creates a pending replica, never a binding.
+Provider acknowledgement sets the durable put attempt to `object_confirmed`
+and creates a pending replica, never a binding.
 Celery independently reads and hashes the complete object. Only a matching
 object becomes bindable.
 

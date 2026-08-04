@@ -587,7 +587,7 @@ async def test_later_authority_preserves_populated_review_admission_on_downgrade
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0052_guide_sufficiency_authority"
+            "0053_guide_sufficiency_authority"
         )
         assert await session.scalar(
             select(ReviewAdmissionIdempotencyRecord.id).where(
@@ -623,6 +623,6 @@ async def test_later_authority_preserves_populated_review_queue_on_downgrade(
 
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0052_guide_sufficiency_authority"
+            "0053_guide_sufficiency_authority"
         )
         assert await session.get(ReviewQueueEntry, queue_value.id) is not None

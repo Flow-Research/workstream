@@ -471,8 +471,8 @@ need an independently reviewable contract and production-code budget.
   must reuse that behavior and must not create another materialization or
   extraction path.
 - The discovery head was `0049_rev_auth_readiness`; 12E allocates migration
-  `0052_guide_sufficiency_authority` after REV's
-  `0051_review_queue_foundation`, rather
+  `0053_guide_sufficiency_authority` after ART's
+  `0052_legacy_intake_removal`, rather
   than reusing or editing 0046.
 
 ## Exact 12E implementation gap
