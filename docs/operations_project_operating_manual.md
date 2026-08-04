@@ -246,13 +246,14 @@ Before locking a submission packet:
 
 - task is assigned to submitter
 - summary exists
-- output package or reference exists
-- evidence exists
+- exactly one outer ZIP is uploaded through submission-bundle preparation
+- every project-required output/evidence file exists inside that ZIP
+- contributor attestation exists
 - revision replay exists when task was previously `NEEDS_REVISION`
 - effective project submission artifact policy is loaded
 - generated project pre-submit checker policy runs
-- preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
-- blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details
+- failed submission-bundle preparation returns `pre_submission_checker_failed` with bounded same-request status, eligibility, and pass/fail/warning details
+- no standalone preflight endpoint or client-owned manifest can reproduce the authoritative result
 - no submission row is created until blocking pre-submit checks pass
 - successful submission creation stamps the immutable submission boundary and queues the Celery pre-review gate
 - `/finalize` is an Operator repair/requeue endpoint under

@@ -1099,7 +1099,33 @@ only the manager-owned directory write bit after no-follow ownership/type
 validation, then remove the tree; archive-supplied modes are never applied.
 
 Mandatory platform and locked Project Guide checks consume that same read-only
-scratch tree. Infrastructure exhaustion returns:
+scratch tree as one ordered `EffectivePreSubmissionExecutionPlan` assembled from
+the central versioned `PreSubmissionCheckerCatalogue`:
+
+```text
+artifact custody/safety phase
+-> Workstream default policy phase
+-> locked Project Guide policy phase
+-> one bounded result/evidence envelope
+```
+
+The catalogue is the only name/version/dispatch registry. Each entry declares
+its classification, phase/order/dependencies, typed inputs, resource budget,
+stable result, policy provenance, and explicit `enabled|disabled` state.
+Startup validation rejects missing dependencies, duplicate IDs/versions,
+unknown policy primitives, invalid ordering, and any configuration that would
+treat a disabled mandatory entry as passing. A disabled mandatory security,
+integrity, or accountability entry fails preparation closed before durable or
+provider effects. A disabled advisory entry is recorded and skipped. Project
+policy and task parameters cannot toggle catalogue availability.
+
+ART's already implemented ZIP safety, manifest, executable, and change gates
+are registered capabilities in this plan; 04B does not reimplement them. The
+locked project policy consumes the server-derived manifest and sealed workspace
+through the same execution API. It may require `task.toml` or any other
+project-specific file, but no such filename is a Workstream universal default.
+
+Infrastructure exhaustion or mandatory catalogue unavailability returns:
 
 ```text
 HTTP 503
@@ -1617,7 +1643,7 @@ bytes in PostgreSQL.
 ### Remaining v0.1 dependency order
 
 The pre-submit checker materializer is a mandatory part of preparation, so its
-fixed-service AUTH activation must merge after hidden ART-04B and before
+fixed-service AUTH activation must merge after hidden ART-04B1-04B3 and before
 contributor preparation is activated. Post-submit materialization and checker
 output actions remain a later activation after ART-06A/06B. This ordering
 prevents a live contributor route whose mandatory checker read is unavailable.

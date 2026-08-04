@@ -51,13 +51,13 @@ ReviewLease reviewer freeze during contribution creation. Only a prior human
 `needs_revision` preparation may have rebased the assignment selector; project
 publication or submission input cannot change it.
 
-Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating the submission.
-Preflight failures return `PreSubmitCheckResponse` with structured
-pass/fail/warning details. Blocked submission-create attempts return
-`pre_submission_checker_failed` with the same structured details, create no
+Workstream runs the single effective pre-submission plan against the uploaded
+outer ZIP in bounded scratch before creating the submission. Failed preparation
+returns `pre_submission_checker_failed` with bounded same-request structured
+details, creates no
 submission row, no submission version, and no submission-created audit event,
-and do not return review decision values: `accept`, `needs_revision`, or
-`reject`.
+and does not return review decision values: `accept`, `needs_revision`, or
+`reject`. There is no standalone preflight endpoint.
 
 ## Submission Bundle Manifest
 
@@ -69,13 +69,20 @@ archive permission metadata is excluded. Nested archives remain opaque in v0.1.
 
 ## Evidence
 
-| Type | Label | URI Or Reference | Hash | Proves Which Artifact Or Claim |
-| --- | --- | --- | --- | --- |
-| `<type>` | `<label>` | `<Workstream artifact binding ID>` | `sha256:<64 lowercase hex>` | `<claim>` |
+Required evidence files belong inside the same outer ZIP at the paths defined by
+the locked Project Guide. The contributor does not submit a separate evidence
+URI, provider reference, hash, or evidence ID. After inspection, Workstream may
+project server-derived evidence facts:
 
-When relevant, include the command, environment, dataset/version, or generation settings that produced the evidence.
+| Normalized ZIP Path | Server SHA-256 | Byte Count | Locked Requirement |
+| --- | --- | --- | --- |
+| `<server-derived path>` | `sha256:<64 lowercase hex>` | `<server-derived bytes>` | `<locked project rule>` |
 
-Workstream assigns evidence IDs at persistence time. Checker run IDs are created only after post-submit internal checks run.
+When relevant, the evidence file itself should describe the command,
+environment, dataset/version, or generation settings that produced it.
+
+Workstream assigns any evidence identity at persistence time. Checker run IDs
+are created only after post-submit internal checks run.
 
 ## Draft Checker Notes
 

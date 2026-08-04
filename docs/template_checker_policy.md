@@ -71,10 +71,10 @@ PreSubmitCheckerPolicy =
   trusted compiler output from EffectiveProjectSubmissionArtifactPolicy
 ```
 
-Preflight failures return `PreSubmitCheckResponse(status="failed",
-eligible_to_submit=false, results=[...])`. Blocked submission-create attempts
-return `DomainError(code="pre_submission_checker_failed")` with structured
-pass/fail/warning details. Pre-submit failures do not create durable
+Failed continuous submission-bundle preparation returns
+`DomainError(code="pre_submission_checker_failed")` with bounded same-request
+status, eligibility, and pass/fail/warning details. There is no standalone
+preflight route. Pre-submit failures do not create durable
 `CheckerRun` records and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 

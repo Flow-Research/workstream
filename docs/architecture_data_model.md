@@ -779,17 +779,18 @@ The generated checker order is deterministic:
 8. contributor attestation validation
 9. low-quality artifact warnings
 
-Pre-submit has two API paths:
+The legacy standalone `/tasks/{id}/submission-precheck` path is superseded.
+Pre-submit runs only inside the same process-local preparation request that owns
+the uploaded ZIP and bounded scratch generation:
 
 ```text
-POST /tasks/{id}/submission-precheck
-200 PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])
-```
-
-```text
-POST /tasks/{id}/submissions
+POST /api/v1/tasks/{id}/submission-bundle-preparations
 422 DomainError(code="pre_submission_checker_failed", details={status, eligible_to_submit, results})
 ```
+
+No independent precheck route or client-owned manifest can reproduce the
+authoritative result. `POST /api/v1/tasks/{id}/submissions` consumes the verified ready
+admission and does not receive scratch paths or rerun the pre-submit plan.
 
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
@@ -1269,10 +1270,14 @@ Fields:
 - `version`
 - `status`
 - `summary`
-- `package_uri`
-- `package_hash` (legacy caller input, never canonical artifact lineage)
-- `artifact_hash` (server-derived verified lineage)
-- `artifact_hash_manifest`
+- `submission_bundle_admission_id` (target canonical intake identity after ART-05)
+- `artifact_binding_id` (target canonical byte binding after ART-05)
+- `submission_bundle_manifest_id` (target server-generated manifest identity)
+- `pre_submit_evidence_set_id` (target checker evidence identity)
+- `package_uri` (legacy caller transport removed by ART-05B)
+- `package_hash` (legacy caller input removed by ART-05B; never canonical)
+- `artifact_hash` (legacy transitional field replaced by exact binding/content identity)
+- `artifact_hash_manifest` (legacy caller manifest removed by ART-05B)
 - `contributor_attestation`
 - `locked_guide_version`
 - `locked_guide_id`
@@ -1312,18 +1317,23 @@ and active assignment. That transaction participant establishes current
 identity eligibility only; project roles, grants, actions, and resource policy
 remain owned by the authorization service.
 
-The contributor submission packet supplies the task id, summary, outputs,
-artifact hashes, evidence references, and contributor attestation. Workstream assigns the
-submission version, creates evidence ids, and stamps locked guide source,
+The contributor first supplies one outer ZIP, summary, and attestation to
+submission-bundle preparation. Workstream computes the exact archive identity,
+server-generated semantic manifest, required-file/evidence facts, and immutable
+pre-submit evidence set, then stores and verifies the bytes into a ready
+admission. Final Submission creation supplies that admission identity and
+summary/attestation context; Workstream assigns the submission version, creates
+the exact artifact binding, and stamps locked guide source,
 submission artifact, effective project policy, pre-submit checker, post-submit
 checker, review, and revision policy provenance from trusted
 task/project state. The contributor does not provide submission version, evidence
 ids, checker results, checker run ids, guide versions, source snapshots,
 effective project policy ids/hashes, pre-submit checker ids/bundle hashes,
 post-submit checker policy ids/versions/hashes, exact review policy identities,
-or exact revision policy identities. Submitter award eligibility is governed by
-the TaskAssignment-selected `ContributionPolicyVersion` for the exact attempt
-and is not contributor-supplied. Human revision preparation records prior/next
+exact revision policy identities, provider references, package hashes, or
+artifact manifests. Submitter award eligibility is governed by the
+TaskAssignment-selected `ContributionPolicyVersion` for the exact attempt and
+is not contributor-supplied. Human revision preparation records prior/next
 policy lineage before it may update that selector; publication alone cannot.
 
 Version 1 has neither revision-source field. Every later version has exactly one:
@@ -1403,9 +1413,11 @@ Fields:
 - `locked_revision_policy_id`
 - `locked_revision_policy_generation`
 - `locked_revision_policy_hash`
-- `package_hash`
-- `artifact_hash_manifest`
-- `artifact_manifest_hash`
+- `artifact_binding_id` (target after ART-06)
+- `submission_bundle_manifest_id` (target after ART-06)
+- `package_hash` (legacy until ART-06 cutover)
+- `artifact_hash_manifest` (legacy until ART-06 cutover)
+- `artifact_manifest_hash` (legacy until ART-06 cutover)
 - `summary`
 
 Status:
@@ -1436,6 +1448,13 @@ Fields:
 - `id`
 - `checker_run_id`
 - `checker_name`
+- `dispatch_authority`
+- `definition_id` (catalogue ID for pre-submit; registry checker ID for durable)
+- `definition_version` (catalogue or registry version selected by authority)
+- `result_source`
+- `effective_plan_hash`
+- `rule_instance_id` (nullable only for non-policy/default definitions)
+- `locked_policy_hash` (nullable only when no locked policy produced the result)
 - `status`
 - `severity`
 - `message`
@@ -1447,6 +1466,13 @@ Fields:
 - `contributor_visible`
 - `metadata`
 - `created_at`
+
+These authority-neutral provenance fields are explicitly typed and persisted.
+`dispatch_authority` discriminates the identity namespace. The API/result
+envelope serializes them under `definition` and `policy_trace`; they are never
+hidden only in the open-ended `metadata` field. Pre-submit evidence uses the
+same typed envelope without creating a durable `CheckerRun`; its immutable
+evidence rows store these fields directly under the 04B3 schema.
 
 Status:
 
@@ -1502,7 +1528,7 @@ Fields:
 - `id`
 - `submission_id`
 - `checker_run_id`
-- `artifact_hash_manifest`
+- `submission_bundle_manifest_id` (target if this deferred record is ever added)
 - `blocking_failures_count`
 - `warnings_count`
 - `ready_for_review`
@@ -1512,7 +1538,9 @@ Fields:
 
 Purpose:
 
-If added later, the readiness certificate records the exact checker run and artifact hashes that allowed a submission to enter human review.
+If added later, the readiness certificate records the exact checker run and
+server-generated manifest/binding identity that allowed a submission to enter
+human review.
 
 For v0.1, the current `CheckerRun` is the readiness proof. If any submitted artifact changes, a new submission version and checker run are required.
 

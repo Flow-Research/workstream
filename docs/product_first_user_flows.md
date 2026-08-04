@@ -90,13 +90,14 @@ Acceptance:
 ## Flow 3: Contributor Submits Work
 
 1. Contributor opens assigned task.
-2. Contributor attaches output files or links.
-3. Contributor attaches evidence.
-4. Contributor writes submission notes.
-5. Workstream executes the task's locked project `PreSubmitCheckerPolicy`.
-6. Preflight failures return `PreSubmitCheckResponse`; blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission.
-7. When blocking pre-submit checks pass, Contributor submits packet.
-8. Task enters `SUBMITTED`.
+2. Contributor uploads one outer ZIP containing every required output and evidence file.
+3. Contributor writes the required summary and attestation.
+4. Workstream safely inspects and manifests the ZIP in bounded private scratch.
+5. Workstream executes the single effective pre-submission plan: platform defaults plus the task-locked Project Guide policy.
+6. Failure returns bounded same-request `pre_submission_checker_failed` details and creates no submission or durable artifact.
+7. Passing bytes are stored and independently verified, producing a ready admission.
+8. Contributor creates the immutable Submission by consuming that admission under fresh authority.
+9. Task enters `SUBMITTED`.
 
 Acceptance:
 
