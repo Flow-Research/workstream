@@ -26,6 +26,7 @@ stale Workstream wording: passed
 stale authorization documentation: passed
 git diff --check: passed
 semantic-lane integrity tests: 70 passed
+review-queue downgrade rollback proof: 2 passed
 ```
 
 PostgreSQL rejects invalid route keys, non-active initial lifecycle shapes,
@@ -54,6 +55,11 @@ new compensation test module was unassigned. The repair adds it to
 `shared_foundations`; the lane/evidence regression suite passes and independent
 CI-integrity review confirms that no exclusion, skip, bypass, or threshold
 change was introduced.
+
+The next hosted run exposed two REV tests that hard-coded the former 0052 head.
+They now capture the exact pre-downgrade revision and prove the refused
+downgrade restores that same revision while preserving the protected rows.
+Focused isolated PostgreSQL proof, QA review, and CI-integrity re-review pass.
 
 ## Deferred Boundary
 

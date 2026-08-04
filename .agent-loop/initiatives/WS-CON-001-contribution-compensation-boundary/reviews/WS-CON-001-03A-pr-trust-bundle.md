@@ -32,6 +32,8 @@ child. The pre-existing user-owned PDF deletion remains excluded.
   hygiene pass.
 - Semantic-lane integrity/evidence suite: 70 passed; compensation tests are
   assigned to exactly one lane without weakening any gate or threshold.
+- Two REV downgrade-rollback tests pass against the current migration head and
+  no longer encode a stale predecessor as the expected unchanged revision.
 - All nine required internal reviewer tracks pass on exact implementation
   commit `684cad7c87a2ebac9e5ad91c8e2cdbabecd6235a`.
 
