@@ -28,8 +28,8 @@ quality before implementation.
 
 ## Design chosen
 
-Mutation targets are eligible changed production logic or explicit test-only
-behavior claims. Claims use schema-v1
+Mutation selection always includes eligible changed production logic and then
+adds any explicit test-only behavior claims with owning test nodes. Claims use schema-v1
 `.ci/behavior-claims/<chunk-id>.json`; mutable PR prose cannot widen them.
 `04M` runs independently under hard limits and records complete outcomes.
 `05M` is not authorized until pilot evidence is accepted by a human.
@@ -57,9 +57,9 @@ mutation outcomes are engineering evidence and never product decisions.
 
 ## Acceptance criteria proof
 
-- Current main is recorded from Backend run `30926337804`: 3,162 completed
-  tests, 21,620 / 23,938 coverage (90.316651 percent), 620.264 seconds wall,
-  and 464.471 seconds slowest lane.
+- Current main is recorded from Backend run `30926337804` on commit
+  `5f2baf90`: 3,162 completed tests, 21,620 / 23,938 coverage (90.316651
+  percent), 620.264 seconds wall, and 464.471 seconds slowest lane.
 - Global 78 and protected 90 floors are explicitly preserved.
 - Changed-production and test-only behavior paths are both planned.
 - Strong-vs-weak seeded mutant proof, complete outcome evidence, runtime bounds,
