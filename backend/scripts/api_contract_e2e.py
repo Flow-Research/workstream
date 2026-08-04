@@ -928,6 +928,9 @@ async def create_policy_bundle_for_guide(
             SubmissionArtifactPolicyDerivationResult,
         )
         from app.modules.projects import service as project_service_module
+        from app.modules.projects import (
+            sufficiency_mutation_service as sufficiency_mutation_service_module,
+        )
         from app.workers.project_setup import run_pre_submit_setup_pipeline
 
         class E2EProjectGuideAgentRuntime:
@@ -955,8 +958,10 @@ async def create_policy_bundle_for_guide(
                     agent_version="api-contract-e2e-v0.1",
                 )
 
-        project_service_module.get_project_guide_agent_runtime = (
-            lambda: E2EProjectGuideAgentRuntime()
+        agent_runtime = E2EProjectGuideAgentRuntime()
+        project_service_module.get_project_guide_agent_runtime = lambda: agent_runtime
+        sufficiency_mutation_service_module.get_project_guide_agent_runtime = (
+            lambda: agent_runtime
         )
         setup_worker_result = await asyncio.to_thread(
             run_pre_submit_setup_pipeline,
