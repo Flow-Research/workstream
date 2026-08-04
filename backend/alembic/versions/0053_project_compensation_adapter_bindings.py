@@ -112,29 +112,7 @@ def upgrade() -> None:
         create function enforce_compensation_binding_lifecycle() returns trigger
         language plpgsql as $$
         begin
-          if row(new.id, new.project_id, new.instrument_type, new.adapter_actor_id,
-                 new.route_key, new.created_by, new.created_at)
-             is distinct from
-             row(old.id, old.project_id, old.instrument_type, old.adapter_actor_id,
-                 old.route_key, old.created_by, old.created_at) then
-            raise exception 'compensation_binding_identity_immutable';
-          end if;
-          if new.status = old.status then
-            if new.binding_lifecycle_version <> old.binding_lifecycle_version then
-              raise exception 'compensation_binding_version_without_transition';
-            elsif row(new.suspended_by, new.suspended_at, new.retired_by, new.retired_at)
-                  is distinct from
-                  row(old.suspended_by, old.suspended_at, old.retired_by, old.retired_at) then
-              raise exception 'compensation_binding_lifecycle_without_transition';
-            end if;
-          elsif not (
-            (old.status = 'active' and new.status in ('suspended','retired')) or
-            (old.status = 'suspended' and new.status in ('active','retired'))
-          ) then
-            raise exception 'compensation_binding_transition_invalid';
-          elsif new.binding_lifecycle_version <> old.binding_lifecycle_version + 1 then
-            raise exception 'compensation_binding_transition_version_invalid';
-          end if;
+          raise exception 'compensation_binding_updates_deferred';
           return new;
         end;
         $$;
@@ -142,7 +120,7 @@ def upgrade() -> None:
     )
     op.execute(
         """
-        create trigger project_compensation_binding_lifecycle_guard
+        create trigger project_compensation_binding_update_guard
         before update on project_compensation_adapter_bindings
         for each row execute function enforce_compensation_binding_lifecycle();
         """
@@ -151,7 +129,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "drop trigger project_compensation_binding_lifecycle_guard "
+        "drop trigger project_compensation_binding_update_guard "
         "on project_compensation_adapter_bindings"
     )
     op.execute("drop function enforce_compensation_binding_lifecycle()")

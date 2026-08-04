@@ -13,10 +13,11 @@ registration.
 ## Allowed files
 
 ```text
-backend/app/modules/compensation/{__init__,models,schemas,repository}.py
+backend/app/modules/compensation/{__init__,models,schemas}.py
 backend/app/db/models.py
 backend/alembic/versions/<next>_project_compensation_adapter_bindings.py
 backend/tests/{conftest,test_compensation,test_alembic}.py
+docs/{architecture_data_model,spec_contribution_compensation}.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/**
 .agent-loop/merge-intents/WS-CON-001-03A.json
 ```
@@ -40,17 +41,19 @@ credentials, secrets, raw provider refs, dependency or CI weakening
   `^[A-Za-z][A-Za-z0-9._:-]{0,119}$` in Pydantic and PostgreSQL. Whitespace,
   slashes, URL/query syntax, `@`, path traversal, control characters, Unicode,
   empty/oversize values, and extra secret/provider fields are rejected.
-- [ ] Creation locks and validates the exact adapter `ActorProfile` and its
-  identity link: service kind, active profile, active service-kind link, and a
-  non-null closed `ServiceIdentity` equal to a caller-supplied expected identity.
-  Human, suspended/deactivated, revoked/missing-link, null/mismatched, and
-  unrelated service identities fail closed. CON creates no AUTH row or value.
+- [ ] This schema chunk exposes no binding-creation repository or service.
+  `adapter_actor_id` is only a canonical ActorProfile FK at this layer. The
+  04A behavior chunk must wait for AUTH to approve the exact compensation
+  adapter identity/capability contract, then lock and validate its active
+  service profile and link. Existing ART/REV identities are not valid positive
+  compensation-adapter evidence. CON creates no AUTH row or value.
 - [ ] Composite constraints preserve project/instrument ownership and valid
   active/suspended/retired row shapes. `binding_lifecycle_version` is positive
   and starts at 1. Creation is active-only with every suspension/retirement
   field null; all lifecycle actor fields reference `actor_profiles`. Future
   transitions must increment the version exactly once and preserve timestamp
-  ordering, but this chunk exposes no transition primitive.
+  ordering. Until the owning behavior chunks install those guards, PostgreSQL
+  rejects every update to a created binding.
 - [ ] Schema supports callback guards but creates no ActorProfile, identity
   link, ServiceIdentity, static row, adapter, route, or delivery behavior.
 - [ ] Suspend/resume/retire commands are deferred to their owning behavior

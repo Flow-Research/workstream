@@ -1107,10 +1107,16 @@ Fields:
 - `adapter_actor_id`
 - `route_key`
 - `status`: `active | suspended | retired`
+- `binding_lifecycle_version`, starting at 1 and incrementing once per future
+  authorized lifecycle transition
 - creation, suspension, and retirement actor/timestamp fields
 
-Provider endpoints, credentials, and tokens are deployment secrets, not domain
-fields. At most one binding is active per project and instrument.
+`route_key` is a non-secret 1-120 character ASCII identifier matching
+`^[A-Za-z][A-Za-z0-9._:-]{0,119}$`; traversal pairs, whitespace, path/URL/query
+syntax, controls, and Unicode are forbidden. Provider endpoints, credentials,
+and tokens are deployment secrets, not domain fields. At most one binding is
+active per project and instrument. Persistence rejects all updates until the
+owning lifecycle behavior chunks install their authorized transition guards.
 
 ## ProjectLesson
 

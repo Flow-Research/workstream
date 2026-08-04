@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,7 +12,7 @@ from alembic import command
 from alembic.config import Config
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import inspect, select, text, update
+from sqlalchemy import inspect, select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -22,10 +22,6 @@ from app.db.base import Base
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
-from app.modules.compensation.repository import (
-    CompensationAdapterActorInvalid,
-    CompensationBindingRepository,
-)
 from app.modules.compensation.schemas import (
     CompensationInstrumentType,
     ProjectCompensationAdapterBindingInput,
@@ -145,6 +141,18 @@ def _binding_input(
     )
 
 
+def _structural_binding(
+    value: ProjectCompensationAdapterBindingInput,
+) -> ProjectCompensationAdapterBinding:
+    facts = value.model_dump()
+    facts["instrument_type"] = value.instrument_type.value
+    return ProjectCompensationAdapterBinding(
+        **facts,
+        status="active",
+        binding_lifecycle_version=1,
+    )
+
+
 def test_binding_model_is_registered_without_secret_or_provider_columns() -> None:
     """Metadata exposes only canonical non-secret binding facts."""
     table = Base.metadata.tables["project_compensation_adapter_bindings"]
@@ -198,129 +206,6 @@ def test_binding_input_rejects_secret_or_provider_fields() -> None:
 
 
 @pytest.mark.asyncio
-async def test_repository_creates_only_active_exact_service_binding(
-    compensation_database_env: str,
-) -> None:
-    project_id, actor_id, creator_id = await _seed_binding_facts()
-    value = _binding_input(project_id, actor_id, creator_id)
-    async with db_session.get_session_factory()() as session:
-        binding = await CompensationBindingRepository(session).add_binding(
-            value,
-            expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-        )
-        assert binding.status == "active"
-        assert binding.binding_lifecycle_version == 1
-        assert binding.suspended_at is binding.retired_at is None
-        await session.commit()
-
-    async with db_session.get_session_factory()() as session:
-        stored = await session.get(ProjectCompensationAdapterBinding, value.id)
-        assert stored is not None
-        assert stored.route_key == "adapter.primary"
-
-
-@pytest.mark.parametrize(
-    ("profile_status", "link_status", "actor_kind", "expected_identity"),
-    (
-        ("suspended", "active", "service", ServiceIdentity.ARTIFACT_VERIFIER),
-        ("deactivated", "active", "service", ServiceIdentity.ARTIFACT_VERIFIER),
-        ("active", "revoked", "service", ServiceIdentity.ARTIFACT_VERIFIER),
-        ("active", "active", "human", ServiceIdentity.ARTIFACT_VERIFIER),
-        ("active", "active", "service", ServiceIdentity.ARTIFACT_SCHEDULER),
-    ),
-)
-@pytest.mark.asyncio
-async def test_repository_rejects_invalid_or_mismatched_adapter_actor(
-    compensation_database_env: str,
-    profile_status: str,
-    link_status: str,
-    actor_kind: str,
-    expected_identity: ServiceIdentity,
-) -> None:
-    identity = ServiceIdentity.ARTIFACT_VERIFIER.value if actor_kind == "service" else None
-    project_id, actor_id, creator_id = await _seed_binding_facts(
-        profile_status=profile_status,
-        link_status=link_status,
-        actor_kind=actor_kind,
-        service_identity=identity,
-    )
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(
-            CompensationAdapterActorInvalid,
-            match="compensation_adapter_actor_invalid",
-        ):
-            await CompensationBindingRepository(session).add_binding(
-                _binding_input(project_id, actor_id, creator_id),
-                expected_service_identity=expected_identity,
-            )
-
-
-@pytest.mark.asyncio
-async def test_repository_rejects_missing_adapter_identity(
-    compensation_database_env: str,
-) -> None:
-    project_id, _, creator_id = await _seed_binding_facts()
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(
-            CompensationAdapterActorInvalid,
-            match="compensation_adapter_actor_invalid",
-        ):
-            await CompensationBindingRepository(session).add_binding(
-                _binding_input(project_id, str(uuid4()), creator_id),
-                expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-            )
-
-
-@pytest.mark.asyncio
-async def test_repository_refreshes_preloaded_actor_before_validation(
-    compensation_database_env: str,
-) -> None:
-    project_id, actor_id, creator_id = await _seed_binding_facts()
-    async with db_session.get_session_factory()() as stale_session:
-        assert await stale_session.get(ActorProfile, actor_id) is not None
-        assert (
-            await stale_session.scalar(
-                select(ActorIdentityLink).where(ActorIdentityLink.actor_profile_id == actor_id)
-            )
-            is not None
-        )
-
-        now = datetime.now(UTC)
-        async with db_session.get_session_factory()() as mutator_session:
-            await mutator_session.execute(
-                text("alter table actor_profiles disable trigger actor_profile_history_guard")
-            )
-            await mutator_session.execute(
-                update(ActorProfile)
-                .where(ActorProfile.id == actor_id)
-                .values(
-                    status="deactivated",
-                    deactivated_by=creator_id,
-                    deactivated_at=now,
-                    deactivation_reason="test concurrent deactivation",
-                )
-            )
-            await mutator_session.execute(
-                text("set constraints all immediate")
-            )
-            await mutator_session.commit()
-        async with db_session.get_session_factory()() as restore_session:
-            await restore_session.execute(
-                text("alter table actor_profiles enable trigger actor_profile_history_guard")
-            )
-            await restore_session.commit()
-
-        with pytest.raises(
-            CompensationAdapterActorInvalid,
-            match="compensation_adapter_actor_invalid",
-        ):
-            await CompensationBindingRepository(stale_session).add_binding(
-                _binding_input(project_id, actor_id, creator_id),
-                expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-            )
-
-
-@pytest.mark.asyncio
 async def test_database_rejects_invalid_lifecycle_shape(
     compensation_database_env: str,
 ) -> None:
@@ -340,31 +225,27 @@ async def test_database_rejects_invalid_lifecycle_shape(
 
 
 @pytest.mark.asyncio
-async def test_database_enforces_lifecycle_transition_version_and_immutable_identity(
+async def test_database_defers_all_binding_updates_until_behavior_chunks(
     compensation_database_env: str,
 ) -> None:
     project_id, actor_id, creator_id = await _seed_binding_facts()
     value = _binding_input(project_id, actor_id, creator_id)
     async with db_session.get_session_factory()() as session:
-        await CompensationBindingRepository(session).add_binding(
-            value,
-            expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-        )
+        session.add(_structural_binding(value))
         await session.commit()
 
-    now = datetime.now(UTC)
     async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(ProjectCompensationAdapterBinding)
-            .where(ProjectCompensationAdapterBinding.id == value.id)
-            .values(
-                status="suspended",
-                binding_lifecycle_version=2,
-                suspended_by=creator_id,
-                suspended_at=now,
+        with pytest.raises(DBAPIError):
+            await session.execute(
+                update(ProjectCompensationAdapterBinding)
+                .where(ProjectCompensationAdapterBinding.id == value.id)
+                .values(
+                    status="suspended",
+                    binding_lifecycle_version=2,
+                    suspended_by=creator_id,
+                    suspended_at=datetime.now(UTC),
+                )
             )
-        )
-        await session.commit()
 
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError):
@@ -372,14 +253,6 @@ async def test_database_enforces_lifecycle_transition_version_and_immutable_iden
                 update(ProjectCompensationAdapterBinding)
                 .where(ProjectCompensationAdapterBinding.id == value.id)
                 .values(route_key="adapter.changed")
-            )
-
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(DBAPIError):
-            await session.execute(
-                update(ProjectCompensationAdapterBinding)
-                .where(ProjectCompensationAdapterBinding.id == value.id)
-                .values(suspended_at=now + timedelta(seconds=1))
             )
 
 
@@ -392,10 +265,8 @@ async def test_active_binding_duplicate_race_has_one_winner(
     async def create(route_key: str) -> str:
         async with db_session.get_session_factory()() as session:
             try:
-                await CompensationBindingRepository(session).add_binding(
-                    _binding_input(project_id, actor_id, creator_id, route_key=route_key),
-                    expected_service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-                )
+                value = _binding_input(project_id, actor_id, creator_id, route_key=route_key)
+                session.add(_structural_binding(value))
                 await session.commit()
                 return "created"
             except IntegrityError:
