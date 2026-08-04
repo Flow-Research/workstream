@@ -900,11 +900,19 @@ class GuideSufficiencyMutationService:
             setup_generation=initial.setup_generation,
         )
         material_error: GuideSufficiencyMaterialUnavailable | None = None
-        try:
-            first = await self._material.load(material_request)
-        except GuideSufficiencyMaterialUnavailable as exc:
+        service_created_report = (
+            existing_report is not None
+            and existing_report.created_by_service_identity == "workstream.project.setup"
+            and existing_report.created_by_admin_role_grant_id is None
+        )
+        if service_created_report:
             first = None
-            material_error = exc
+        else:
+            try:
+                first = await self._material.load(material_request)
+            except GuideSufficiencyMaterialUnavailable as exc:
+                first = None
+                material_error = exc
         agent_material = None
         first_prompt = None
         if first is not None:
@@ -917,6 +925,8 @@ class GuideSufficiencyMutationService:
             )
             first_prompt = bounded_canonical_guide_material(agent_material)
             material_digest = f"sha256:{hashlib.sha256(first_prompt).hexdigest()}"
+        elif service_created_report and existing_report.agent_material_sha256 is not None:
+            material_digest = existing_report.agent_material_sha256
         elif execution_kind == "setup_service" and material_error is not None:
             raise material_error
         elif material_error is not None:
@@ -1063,6 +1073,8 @@ class GuideSufficiencyMutationService:
             if execution_kind == "setup_service":
                 raise material_error
             raise PolicySetupBlocked(material_error.code) from None
+        if service_created_report:
+            raise GuideSufficiencyMutationConflict("sufficiency_report_provenance_mismatch")
         if first is None or agent_material is None or first_prompt is None:
             raise RuntimeError("guide sufficiency material resolution failed")
         adopting_existing = execution_kind == "setup_service" and existing_report is not None
