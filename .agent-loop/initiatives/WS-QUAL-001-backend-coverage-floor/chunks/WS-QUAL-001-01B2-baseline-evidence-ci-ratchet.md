@@ -1,7 +1,11 @@
+# Historical Superseded Contract — Do Not Implement
+
+PLAN2 supersedes this unimplemented ratchet contract. It remains only as
+historical evidence and cannot authorize current work.
+
 # Chunk Contract: WS-QUAL-001-01B2 Baseline Evidence And CI Ratchet
 
-Status: inactive until B1B-R7 merges, its post-merge memory update is complete,
-and the user gives a separate explicit start signal.
+Status: `historical_superseded_non_executable`.
 
 ## Goal, Risk, And Budget
 
