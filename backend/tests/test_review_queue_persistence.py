@@ -582,9 +582,7 @@ async def test_later_authority_preserves_populated_review_admission_on_downgrade
         with migration_lock():
             command.downgrade(config, "0050_guide_source_v2")
 
-    with pytest.raises(
-        RuntimeError, match="cannot downgrade populated review queue foundation"
-    ):
+    with pytest.raises(RuntimeError, match="cannot downgrade guide sufficiency authority"):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
