@@ -470,10 +470,9 @@ need an independently reviewable contract and production-code budget.
   `0046_guide_sufficiency`. It owns extraction/source-usage provenance. AUTH-12E
   must reuse that behavior and must not create another materialization or
   extraction path.
-- The discovery head was `0049_rev_auth_readiness`; 12E allocates migration
-  `0053_guide_sufficiency_authority` after ART's
-  `0052_legacy_intake_removal`, rather
-  than reusing or editing 0046.
+- The discovery head was `0049_rev_auth_readiness`; after later merged ART and
+  compensation migrations, 12E allocates `0054_guide_sufficiency_authority`
+  after `0053_compensation_bindings`, rather than reusing or editing 0046.
 
 ## Exact 12E implementation gap
 

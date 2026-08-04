@@ -2,8 +2,8 @@
 
 ## Reconciliation baseline
 
-- Current `main`: `2feaf47dd5bb448db076179d96751caa55fb0994`.
-- Current migration head: `0050_guide_source_v2`.
+- Current `main`: `b47a7e64f7d75cda8a0681d1aff3bf0c4a5be4aa`.
+- Current migration head: `0052_legacy_intake_removal`.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and
   `.agent-loop/README.md`. Historical signed-start and merge-intent records are
@@ -36,9 +36,10 @@
   persistence/append only; no dispatcher exists.
 - `backend/app/modules/audit/**`: existing shared audit foundation; no typed
   lifecycle participant yet.
-- No `backend/app/modules/contributions/**` or compensation runtime exists.
-- No live ReviewQueueEntry, ReviewLease, Review, or FinalAcceptance lifecycle
-  implementation exists.
+- `backend/app/modules/compensation/**` and migration `0053` add only the
+  in-review adapter-binding schema; no creation/lifecycle service exists.
+- Review queue persistence now exists; ReviewLease, Review, and FinalAcceptance
+  lifecycle implementation remain absent.
 
 ## Current initiative evidence
 

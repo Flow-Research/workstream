@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0053_guide_sufficiency_authority"
+HEAD_REVISION = "0054_guide_sufficiency_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -101,7 +101,7 @@ _PROJECT_MUTATION_OWNERS = {
 }
 
 
-def test_0053_guide_sufficiency_authority_safe_empty_downgrade_and_reupgrade(
+def test_0054_guide_sufficiency_authority_safe_empty_downgrade_and_reupgrade(
     isolated_database_env: str,
     migration_lock,
 ) -> None:

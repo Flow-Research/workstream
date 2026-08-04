@@ -1,7 +1,7 @@
 """activate durable guide-sufficiency authorization custody
 
-Revision ID: 0053_guide_sufficiency_authority
-Revises: 0052_legacy_intake_removal
+Revision ID: 0054_guide_sufficiency_authority
+Revises: 0053_compensation_bindings
 Create Date: 2026-08-03
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0053_guide_sufficiency_authority"
-down_revision = "0052_legacy_intake_removal"
+revision = "0054_guide_sufficiency_authority"
+down_revision = "0053_compensation_bindings"
 branch_labels = depends_on = None
 
 _CREATION_COLUMNS = (

@@ -26,8 +26,8 @@ until this chunk merges.
 - A manual report remains diagnostic and cannot satisfy verified setup,
   derivation, or activation evidence. Only an agent report with exact verified
   extraction/source-usage lineage may occupy the authoritative verified slot.
-- ART migration `0052_legacy_intake_removal` is now the predecessor. AUTH owns
-  `0053_guide_sufficiency_authority`; no duplicate migration identifier or
+- Compensation migration `0053_compensation_bindings` is now the predecessor. AUTH owns
+  `0054_guide_sufficiency_authority`; no duplicate migration identifier or
   Alembic branch is permitted.
 
 ## Parent initiative
@@ -73,7 +73,7 @@ backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/api/deps/authorization.py
 backend/app/**/project_setup.py
-backend/alembic/versions/0053_guide_sufficiency_authority.py
+backend/alembic/versions/0054_guide_sufficiency_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py

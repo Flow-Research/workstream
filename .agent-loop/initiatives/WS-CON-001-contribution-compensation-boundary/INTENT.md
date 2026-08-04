@@ -1,5 +1,8 @@
 # Intent: WS-CON-001 Contribution And Compensation
 
+> Historical PLAN4 planning baseline. Live 03A implementation state is in
+> `STATUS.md`, `SOURCE_MANIFEST.md`, and the `WS-CON-001-03A` contract.
+
 ## Goal
 
 Complete the backend contribution and conditional-compensation boundary on

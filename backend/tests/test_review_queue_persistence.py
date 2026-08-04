@@ -572,6 +572,7 @@ async def test_later_authority_preserves_populated_review_admission_on_downgrade
     async with db_session.get_session_factory()() as session:
         await ReviewQueueRepository(session).reserve_admission(reservation_value)
         await session.commit()
+        initial_revision = await session.scalar(text("select version_num from alembic_version"))
     await db_session.dispose_engine()
 
     backend_root = Path(__file__).resolve().parents[1]
@@ -586,9 +587,7 @@ async def test_later_authority_preserves_populated_review_admission_on_downgrade
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0053_guide_sufficiency_authority"
-        )
+        assert await session.scalar(text("select version_num from alembic_version")) == initial_revision
         assert await session.scalar(
             select(ReviewAdmissionIdempotencyRecord.id).where(
                 ReviewAdmissionIdempotencyRecord.id == reservation_value.id
@@ -608,6 +607,7 @@ async def test_later_authority_preserves_populated_review_queue_on_downgrade(
     async with db_session.get_session_factory()() as session:
         await ReviewQueueRepository(session).add_queue_entry(queue_value)
         await session.commit()
+        initial_revision = await session.scalar(text("select version_num from alembic_version"))
     await db_session.dispose_engine()
 
     backend_root = Path(__file__).resolve().parents[1]
@@ -622,7 +622,5 @@ async def test_later_authority_preserves_populated_review_queue_on_downgrade(
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0053_guide_sufficiency_authority"
-        )
+        assert await session.scalar(text("select version_num from alembic_version")) == initial_revision
         assert await session.get(ReviewQueueEntry, queue_value.id) is not None
