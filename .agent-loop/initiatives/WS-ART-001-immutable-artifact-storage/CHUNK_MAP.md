@@ -24,8 +24,8 @@ they cross multiple L1 boundaries.
 |---|---|---:|---|
 | `WS-ART-001-PLAN3` | Reconcile the complete remaining v0.1 custody chain and AUTH/REV/CON handoffs. | L1 | Planning only; proposed |
 | `WS-ART-001-03C` | Clean-cut legacy guide identity/excerpts and make the verified same-generation pipeline live. | L1 | Merged PR #249 |
-| `WS-ART-001-04A1` | Remove legacy multi-step contributor intake reachability and schema without adding the replacement route. | L1 | Implemented; internal review passed; external PR gates pending |
-| `WS-ART-001-04A2` | Add bounded one-outer-ZIP intake and archive-safety inspection in private scratch. | L1 | Proposed after 04A1 |
+| `WS-ART-001-04A1` | Remove legacy multi-step contributor intake reachability and schema without adding the replacement route. | L1 | Merged PR #264 |
+| `WS-ART-001-04A2` | Add bounded one-outer-ZIP intake and archive-safety inspection in private scratch. | L1 | Implemented; internal review passed; external PR gates pending |
 | `WS-ART-001-04A3` | Add canonical semantic manifest, executable normalization, and unchanged-work gate. | L1 | Proposed after 04A2 |
 | `WS-ART-001-04B` | Run non-bypassable platform and locked-guide prechecks against that exact scratch tree and persist bounded evidence. | L1 | Proposed after 04A3 |
 | `WS-ART-001-04C1` | Reauthorize and atomically persist capacity plus durable put intent, then write the checked ZIP once. | L1 | Proposed after XINT-06A |

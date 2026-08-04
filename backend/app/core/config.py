@@ -156,6 +156,24 @@ class Settings(BaseSettings):
     artifact_admission_project_maximum_bytes: int | None = Field(default=None, gt=0)
     artifact_admission_deployment_maximum_bytes: int | None = Field(default=None, gt=0)
     artifact_stream_buffer_bytes: int = Field(default=1024 * 1024, gt=0, le=1024 * 1024)
+    artifact_submission_zip_maximum_entries: int = Field(default=2_000, gt=0, le=100_000)
+    artifact_submission_zip_maximum_path_bytes: int = Field(default=1024, gt=0, le=4096)
+    artifact_submission_zip_maximum_path_depth: int = Field(default=32, gt=0, le=256)
+    artifact_submission_zip_maximum_central_directory_bytes: int = Field(
+        default=8 * 1024 * 1024, gt=0, le=64 * 1024 * 1024
+    )
+    artifact_submission_zip_maximum_entry_bytes: int = Field(
+        default=128 * 1024 * 1024, gt=0, le=512 * 1024 * 1024
+    )
+    artifact_submission_zip_maximum_expanded_bytes: int = Field(
+        default=512 * 1024 * 1024, gt=0, le=512 * 1024 * 1024
+    )
+    artifact_submission_zip_maximum_compression_ratio: int = Field(
+        default=100, gt=0, le=10_000
+    )
+    artifact_submission_zip_maximum_inspection_seconds: float = Field(
+        default=300.0, gt=0.0, le=1800.0
+    )
     artifact_operation_lock_timeout_seconds: float = Field(
         default=1800.0,
         gt=0.0,
@@ -457,6 +475,20 @@ class Settings(BaseSettings):
         """
         if self.artifact_scratch_maximum_concurrency > self.artifact_scratch_maximum_files:
             raise ValueError("artifact scratch concurrency cannot exceed its file limit")
+        if (
+            self.artifact_submission_zip_maximum_entry_bytes
+            > self.artifact_submission_zip_maximum_expanded_bytes
+        ):
+            raise ValueError(
+                "artifact submission ZIP entry limit cannot exceed expanded limit"
+            )
+        if (
+            self.artifact_submission_zip_maximum_inspection_seconds
+            >= self.artifact_preparation_total_deadline_seconds
+        ):
+            raise ValueError(
+                "artifact submission ZIP inspection deadline must fit within preparation"
+            )
         if (
             self.artifact_preparation_total_deadline_seconds
             + self.artifact_scratch_cleanup_margin_seconds
