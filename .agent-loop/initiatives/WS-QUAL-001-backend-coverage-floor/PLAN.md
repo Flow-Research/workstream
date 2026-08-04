@@ -2,8 +2,10 @@
 
 ## Approach
 
-Retire the old milestone ladder and close the remaining gap with at most two
-bounded test chunks followed by one floor switch:
+Retire the old milestone ladder and close the remaining gap with two declared
+bounded test chunks followed by one floor switch. One additional owner-specific
+test chunk is permitted only when 02R and 03R exhaust their meaningful gaps
+without reaching the required headroom:
 
 1. Add fast project/setup behavior tests for observable service, repository,
    routing, queue, and replay gaps.
@@ -21,8 +23,9 @@ boundary is itself the assertion.
 
 The last necessary test chunk must reach at least 90.25 percent before the CI
 switch. This is operational headroom, not a permanent higher policy floor. If
-concurrent main growth moves the measured result below 90.25 percent, the floor chunk stops
-and returns to a small test chunk; it never lowers or rounds around the target.
+concurrent main growth moves the measured result below 90.25 percent, the floor
+chunk stops and returns to one owner-specific test plan; it never lowers or
+rounds around the target.
 
 ## Test-quality rule
 

@@ -32,6 +32,7 @@ L1 CI/test-policy planning; P2.
 
 - `python3 scripts/check_stale_workstream_wording.py`
 - `python3 scripts/check_markdown_links.py`
+- `git diff --name-only origin/main...HEAD | awk 'index($0, ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/") != 1 { print; bad=1 } END { exit bad }'`
 - `git diff --check`
 
 ## Required reviewers

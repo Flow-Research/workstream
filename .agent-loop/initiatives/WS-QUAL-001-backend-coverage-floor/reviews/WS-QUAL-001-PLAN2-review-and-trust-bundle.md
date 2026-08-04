@@ -45,8 +45,11 @@ dependency, AUTH, ART, REV, CON, or external contributor change.
 ## Deterministic evidence
 
 - `python3 scripts/check_stale_workstream_wording.py`
+- `python3 scripts/check_stale_authorization_docs.py`
+- `python3 scripts/check_stale_artifact_contracts.py`
 - `python3 scripts/check_markdown_links.py`
 - `PYTHONPATH=. python3 scripts/test_lightweight_agent_gates.py`
+- `git diff --name-only origin/main...HEAD | awk 'index($0, ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/") != 1 { print; bad=1 } END { exit bad }'`
 - `git diff --check`
 
 ## Risks and human focus
@@ -64,8 +67,10 @@ test or workflow implementation by itself.
 
 Hosted Agent Gates found two ambiguous role-like references in changed planning
 lines. They now say background-job modules/ownership, avoiding confusion with a
-product actor class. CodeRabbit produced no actionable finding because its
-review request was temporarily rate-limited.
+product actor class. CodeRabbit's completed review then found six documentation
+gaps: superseded status clarity, exact integer headroom proof, conditional extra
+chunk wording, missing deterministic scanners, stale external-review status,
+and missing closed-path verification. All six are addressed; none is deferred.
 
 After PRs #258 and #249 advanced `main`, PLAN2 merged that trusted head and
 replaced its older PR #259 baseline with the final ART-03C hosted evidence.
