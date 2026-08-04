@@ -14,6 +14,8 @@ from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
 from app.modules.projects.service import (
+    PolicySetupBlocked,
+    PolicySetupConflict,
     ProjectService,
     ProjectServiceError,
     StaleProjectSetupContinuation,
@@ -292,7 +294,14 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                     "guide_sufficiency_report_id": None,
                 }
             except ProjectServiceError as exc:
-                public_error = safe_project_setup_error_summary(str(exc))
+                error_code = (
+                    "guide_source_material_changed"
+                    if isinstance(exc, PolicySetupConflict)
+                    else "verified_guide_sufficiency_unavailable"
+                    if isinstance(exc, PolicySetupBlocked)
+                    else "guide_source_stale"
+                )
+                public_error = "project setup failed; inspect server logs with the setup run id"
                 logger.warning(
                     "project setup pipeline stopped",
                     exc_info=True,
@@ -308,15 +317,14 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                 await service.update_project_setup_run_status(
                     setup_run_id,
                     status="setup_blocked",
-                    current_step="project_setup",
-                    error_code=exc.__class__.__name__,
+                    current_step="guide_sufficiency",
+                    error_code=error_code,
                     error_summary=public_error,
                 )
                 return {
                     "status": "setup_blocked",
-                    "error": public_error,
+                    "error_code": error_code,
                     "guide_sufficiency_report_id": None,
-                    "submission_artifact_policy_id": None,
                 }
             except Exception as exc:
                 public_error = "unexpected project setup pipeline failure"
@@ -334,16 +342,15 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                 )
                 await service.update_project_setup_run_status(
                     setup_run_id,
-                    status="failed",
-                    current_step="project_setup",
-                    error_code=exc.__class__.__name__,
+                    status="setup_blocked",
+                    current_step="guide_sufficiency",
+                    error_code="project_setup_failed",
                     error_summary=public_error,
                 )
                 return {
-                    "status": "failed",
-                    "error": public_error,
+                    "status": "setup_blocked",
+                    "error_code": "project_setup_failed",
                     "guide_sufficiency_report_id": None,
-                    "submission_artifact_policy_id": None,
                 }
     finally:
         await engine.dispose()

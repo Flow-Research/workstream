@@ -44,7 +44,8 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_project_setup_runs_status",
         "project_setup_runs",
-        "status in ('queued','enqueue_failed','enqueue_identity_mismatch',"
+        "status in ('queued','dispatch_pending','enqueue_failed',"
+        "'enqueue_identity_mismatch',"
         "'running_sufficiency_agent','sufficiency_blocked',"
         "'running_policy_derivation_agent','policy_draft_ready',"
         "'running_post_submit_derivation_agent','post_submit_setup_blocked',"
@@ -264,7 +265,8 @@ def downgrade() -> None:
     op.create_check_constraint(
         "ck_project_setup_runs_status",
         "project_setup_runs",
-        "status in ('queued','enqueue_failed','running_sufficiency_agent',"
+        "status in ('queued','dispatch_pending','enqueue_failed',"
+        "'running_sufficiency_agent',"
         "'sufficiency_blocked','running_policy_derivation_agent','policy_draft_ready',"
         "'running_post_submit_derivation_agent','post_submit_setup_blocked',"
         "'post_submit_policy_compiled','setup_blocked','failed')",

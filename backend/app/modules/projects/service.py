@@ -173,7 +173,6 @@ def build_verified_guide_sufficiency_material(
         },
         verified_artifact_material=True,
         source_items=verified_items,
-        source_refs=[],
         representative_task_material=RepresentativeTaskMaterialContext(items=[]),
     )
 
