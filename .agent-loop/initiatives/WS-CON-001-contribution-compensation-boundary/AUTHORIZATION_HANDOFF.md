@@ -2,10 +2,10 @@
 
 ## Current baseline
 
-Current `main` is `2feaf47dd5bb448db076179d96751caa55fb0994` with the AUTH
+Current `main` is `1cd9c5195607a0d1d068f4e36dbea9b5f772e0aa` with the AUTH
 actor, grant, fixed-service, prepared-mutation, project-guide, policy-mutation,
 and REV-readiness foundations plus merged REV PLAN4 and ART foundations. The
-database is at migration `0050_guide_source_v2`. These foundations do
+database is at migration `0051_review_queue_foundation`. These foundations do
 not create CON runtime, activate CON behavior, or give an outbox dispatcher
 feature authority.
 

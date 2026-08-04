@@ -31,6 +31,7 @@ from app.modules.authorization.models import (  # noqa: F401
     ProjectRoleQualificationSnapshot,
 )
 from app.modules.checkers.models import CheckerResult, CheckerRun  # noqa: F401
+from app.modules.compensation.models import ProjectCompensationAdapterBinding  # noqa: F401
 from app.modules.outbox.models import OutboxEvent  # noqa: F401
 from app.modules.projects.models import (  # noqa: F401
     EffectiveProjectSubmissionArtifactPolicy,
