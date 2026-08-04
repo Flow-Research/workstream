@@ -1,4 +1,15 @@
-# Active Documentation Inventory: WS-CON-001-PLAN4
+# Active Documentation Inventory: WS-CON-001
+
+## Current 03A implementation scope
+
+Live implementation state is carried by `STATUS.md`, `SOURCE_MANIFEST.md`, the
+`WS-CON-001-03A` chunk contract, `RUNTIME_VERIFICATION.md`, and the canonical
+schema sections in `docs/spec_contribution_compensation.md` and
+`docs/architecture_data_model.md`.
+
+`INTENT.md`, `DISCOVERY.md`, `PLAN.md`, `JOINT_RELEASE_HANDOFF.md`, and the
+PLAN4 review artifacts are frozen historical planning evidence. Their recorded
+PLAN4 SHA/head and planning-only stop statement are not live 03A status.
 
 ## Direct reconciliation scope
 
@@ -7,7 +18,7 @@ Required Implementation Order in the canonical contribution specification. It
 does not change runtime code, migrations, other specification sections,
 roadmaps, exports, workflows, or another initiative's files.
 
-The active package is:
+The PLAN4 package was:
 
 - `INTENT.md`, `DISCOVERY.md`, `PLAN.md`, `CHUNK_MAP.md`, and `STATUS.md`;
 - `DECISIONS.md`, `RISKS.md`, and `SOURCE_MANIFEST.md`;
@@ -20,10 +31,10 @@ The active package is:
 
 ## Reconciled current-state sources
 
-- current contribution/governance instructions in `AGENTS.md`,
+- contribution/governance instructions at PLAN4 review time in `AGENTS.md`,
   `CONTRIBUTING.md`, and `.agent-loop/README.md`;
 - current capability truth in `docs/roadmap_status.md`;
-- merged AUTH, ART, REV, XINT, and CON history through `2feaf47d`;
+- merged AUTH, ART, REV, XINT, and CON history through the recorded PLAN4 baseline;
 - current backend modules and migration graph;
 - merged ART #249 runtime evidence and merged
   REV PLAN4 PR #258.

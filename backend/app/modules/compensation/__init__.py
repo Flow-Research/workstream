@@ -1,0 +1,1 @@
+"""Contribution compensation persistence foundations."""

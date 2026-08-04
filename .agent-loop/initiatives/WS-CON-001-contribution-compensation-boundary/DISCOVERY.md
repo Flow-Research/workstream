@@ -1,5 +1,8 @@
 # Discovery: WS-CON-001 Current-Main Reconciliation
 
+> Historical PLAN4 discovery snapshot. Live 03A implementation state is in
+> `STATUS.md`, `SOURCE_MANIFEST.md`, and the `WS-CON-001-03A` contract.
+
 ## Baseline
 
 - Protected `main`: `2feaf47dd5bb448db076179d96751caa55fb0994`.
