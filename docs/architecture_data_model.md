@@ -1025,10 +1025,10 @@ Fields:
 - `created_at`
 
 Limit or deadline exhaustion blocks further preparation and submission; it does
-not synthesize a reject Review. Project Guide context selection is deterministic,
-not policy-selected: exact prior Submission identity/activation-sequence match
-keeps context, any different valid active pair rebases forward or backward, and
-missing or unsafe active context blocks for manager repair.
+not synthesize a reject Review. Complete next-attempt context selection is
+deterministic: exact prior component matches keep, every changed valid active
+guide/policy component rebases together, and missing or unsafe active context
+blocks for manager repair.
 
 ## ContributionPolicy
 
@@ -1321,9 +1321,10 @@ task/project state. The contributor does not provide submission version, evidenc
 ids, checker results, checker run ids, guide versions, source snapshots,
 effective project policy ids/hashes, pre-submit checker ids/bundle hashes,
 post-submit checker policy ids/versions/hashes, exact review policy identities,
-or exact revision policy identities. Submitter award eligibility remains governed by the
-immutable TaskAssignment-frozen `ContributionPolicyVersion` and is not restated
-on the submission.
+or exact revision policy identities. Submitter award eligibility is governed by
+the TaskAssignment-selected `ContributionPolicyVersion` for the exact attempt
+and is not contributor-supplied. Human revision preparation records prior/next
+policy lineage before it may update that selector; publication alone cannot.
 
 Version 1 has neither revision-source field. Every later version has exactly one:
 a checker-remediation version stores the server-derived
@@ -1633,17 +1634,25 @@ Fields:
 - `prior_locked_guide_id`
 - `prior_locked_guide_version`
 - `prior_locked_guide_activation_sequence`
+- `prior_locked_guide_source_snapshot_id` and hash
 - `next_locked_guide_id`
 - `next_locked_guide_version`
 - `next_locked_guide_activation_sequence`
+- `next_locked_guide_source_snapshot_id` and hash
+- prior and next locked submission-artifact-policy identity and hash
 - `prior_locked_effective_project_submission_artifact_policy_hash`
 - `next_locked_effective_project_submission_artifact_policy_hash`
+- prior and next locked pre-submit-checker policy identity, version, and hash
 - `prior_locked_pre_submit_checker_bundle_hash`
 - `next_locked_pre_submit_checker_bundle_hash`
+- prior and next locked post-submit-checker policy identity, version, and hash
 - `prior_locked_review_policy_id`, generation, and hash
 - `next_locked_review_policy_id`, generation, and hash
 - `prior_locked_revision_policy_id`, generation, and hash
 - `next_locked_revision_policy_id`, generation, and hash
+- prior and next locked task-template and task-execution policy context
+- `prior_submitter_contribution_policy_version_id`
+- `next_submitter_contribution_policy_version_id`
 - `outcome`: `kept | rebased | blocked`
 - `direction`: `forward | backward | null`
 - `context_digest`
@@ -1659,21 +1668,30 @@ Purpose:
 
 This immutable Review-rooted record is created atomically before a contributor
 can observe human-review-caused revision. Checker remediation retains the Task's
-locked context and creates no preparation. Exact prior Submission guide identity/activation-sequence
-match with the currently active guide keeps context. Any different valid active
-pair rebases forward or backward. Missing, inconsistent, revoked, or unsafe
-context blocks for manager repair. Task Context returns the validated chain
-head. No guide rebase occurs during review; the reviewer reads the context
-stamped on the leased Submission.
+locked context and creates no preparation. Preparation compares the prior
+Submission's complete stamped context with every applicable currently active
+Project Guide and policy selector: guide identity/version/activation sequence,
+source snapshot, submission-artifact policy, effective project policy,
+pre-submit and post-submit checker policies, ReviewPolicy, RevisionPolicy,
+task-template/task-execution context, and the submitter
+ContributionPolicyVersion selected by CON. An exact component match is kept;
+every changed valid component is rebased together for the next attempt. Missing,
+incomplete, inconsistent, crossed-project, revoked, or otherwise unsafe context
+blocks the whole preparation for manager repair. Task Context returns only the
+validated complete chain head. No context rebase occurs during active review;
+the reviewer reads the context stamped on the leased Submission.
 
-Revision preparation never rebases award eligibility. Submitter eligibility
-remains governed by the TaskAssignment-frozen `ContributionPolicyVersion`; each
-new ReviewLease independently freezes the then-current
-`ContributionPolicyVersion` for reviewer contributions.
+Publication never silently rebases award eligibility during an active attempt.
+After a human `needs_revision`, revision preparation records prior and next
+submitter `ContributionPolicyVersion` references and atomically updates the
+continuing TaskAssignment when the complete current next-attempt context
+changes. The completed reviewer contribution retains its ReviewLease-frozen
+version; each new ReviewLease independently freezes the then-current reviewer
+version.
 
-The contributor and reviewer history show prior/next identity, activation
-sequence, direction, reason, and change summary. No ContributionPolicyVersion is
-stored in this preparation.
+The contributor and reviewer history show prior/next guide, policy—including
+ContributionPolicyVersion—identity, activation sequence where applicable,
+direction, reason, and change summary.
 
 ## FinalAcceptance
 

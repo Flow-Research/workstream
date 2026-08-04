@@ -227,7 +227,7 @@ status. Current changes receive review through [CONTRIBUTING.md](CONTRIBUTING.md
 - [ADR 0007: Execution Is Async-First](docs/decision_0007_async_first_execution.md)
 - [ADR 0008: Files Use An Object-Storage Abstraction](docs/decision_0008_object_storage_abstraction.md)
 - [ADR 0009: Review Decisions Are Canonical](docs/decision_0009_review_decisions_are_canonical.md)
-- [ADR 0010: Revision Context Rebase Uses The Active Project Guide](docs/decision_0010_revision_context_rebase.md)
+- [ADR 0010: Human Revision Rebase Uses The Complete Active Project Context](docs/decision_0010_revision_context_rebase.md)
 - [ADR 0011: Submission Artifact Policy Drives Pre-Submit Intake](docs/decision_0011_submission_artifact_policy_drives_pre_submit.md)
 - [ADR 0012: Workstream Owns Product Authorization](docs/decision_0012_workstream_authorization_service.md)
 - [ADR 0013: Immutable Artifact Storage Boundary](docs/decision_0013_immutable_artifact_storage_boundary.md)
@@ -393,16 +393,18 @@ Workstream is built as durable operational infrastructure:
 Governance:
 
 - project rules live in guides and policies, not chat memory
-- guide and policy versions are locked per task so rules do not drift silently
+- guide and policy versions are frozen for each active attempt so rules do not
+  drift silently; only human `needs_revision` preparation atomically rebases
+  changed applicable versions for the next attempt
 - out-of-band guidance is not enforceable until it becomes a guide, policy, template, or checker contract update
 
 Lifecycle and revision:
 
 - status is a ledger, not a loose label
 - revisions append one response and later resolution per required prior finding
-- revision context is prepared from the active Project Guide before
-  resubmission; exact stamped identity/activation-sequence match keeps context,
-  and any different valid active pair rebases forward or backward
+- revision context is prepared from the complete active Project Guide and
+  policy context before resubmission; exact component matches are kept, every
+  changed valid component is rebased together, and unsafe mixed context blocks
 
 Artifacts, evidence, and auditing:
 

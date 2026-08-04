@@ -1,4 +1,4 @@
-# ADR 0010: Revision Context Rebase Uses The Active Project Guide
+# ADR 0010: Human Revision Rebase Uses The Complete Active Project Context
 
 ## Status
 
@@ -13,8 +13,8 @@ If rule changes live only in Slack, chat, or memory, contributors can be punishe
 Workstream needs both fairness and correctness:
 
 - a submitted attempt must remain tied to the exact guide and policy versions it used
-- a revised attempt must use the Project Guide that is active when revision
-  preparation freezes the next-attempt context
+- a revised attempt must use the complete applicable project context active
+  when revision preparation freezes the next attempt
 - the contributor and reviewer must be able to see what changed
 
 ## Decision
@@ -26,18 +26,34 @@ versions stamped on that submission.
 After a human `needs_revision` Review, Workstream runs an immutable revision
 context preparation step before the contributor resumes. The task pipeline owns
 the one Project Guide context used by the submitter and reviewer.
-`TaskAssignment` stores only `task_id`; every Submission stamps the exact guide
-identity, version, and immutable per-project activation sequence used for that
-attempt.
+`TaskAssignment` stores only `task_id` for guide-context linkage, while its
+separate submitter ContributionPolicyVersion selector follows the guarded rule
+below. Every Submission stamps the exact guide identity, version, and immutable
+per-project activation sequence used for that attempt.
 
-Preparation compares the prior Submission's stamped guide identity and
-activation sequence with the project's currently active guide pair:
+Preparation compares the prior Submission's stamped context with the complete
+currently active applicable project context:
 
-- an exact identity and activation-sequence match keeps the prior context;
-- any different internally consistent active pair rebases the next attempt and
-  records forward or backward direction, including an older reactivated guide;
-- a missing, incomplete, internally inconsistent, revoked, or unsafe active
-  pair blocks for covered Project Manager repair.
+- Project Guide identity, version, source snapshot, and activation sequence;
+- effective SubmissionArtifactPolicy;
+- generated pre-submit and approved post-submit checker policies;
+- ReviewPolicy and RevisionPolicy;
+- task-template and task-execution policy context; and
+- the submitter ContributionPolicyVersion selected by CON.
+
+For every component:
+
+- an exact identity/version/activation match keeps the prior value;
+- any changed internally consistent active value rebases the next attempt and
+  records forward or backward direction where chronology applies, including an
+  older intentionally reactivated version;
+- a missing, incomplete, crossed-project, internally inconsistent, revoked,
+  suspended where new freezes are prohibited, or unsafe value blocks the whole
+  preparation for covered Project Manager repair.
+
+Preparation publishes one complete context. It cannot rebase the guide while
+retaining a stale submitter contribution policy or otherwise mix components
+from incompatible contexts.
 
 Version strings are never ordered. RevisionPolicy supplies limit and deadline
 inputs but does not choose a stale guide over the currently active authority.
@@ -49,6 +65,9 @@ Every revision context preparation must record its outcome. When the next attemp
 - prior stamped guide identity, version, and activation sequence
 - next frozen guide identity, version, activation sequence, source snapshot,
   and task-execution policy context
+- prior and next effective submission-artifact, pre-submit checker,
+  post-submit checker, review, revision, task-template/task-execution, and
+  submitter ContributionPolicyVersion references
 - outcome `kept`, `rebased`, or `blocked` and forward/backward direction where applicable
 - rebase reason
 - guide or policy change summary shown to the contributor
@@ -64,6 +83,27 @@ an already prepared attempt.
 No guide rebase occurs during review. The reviewer consumes the guide and policy
 context stamped on the single Submission covered by the active ReviewLease. History
 shows the guide transition without changing any prior Submission.
+
+Publication or activation alone never mutates an active assignment, prepared
+attempt, Submission, or ReviewLease. `accept` and `reject` finish under the
+exact context already frozen for that attempt. Human `needs_revision` is the
+only in-progress synchronization boundary for the complete next-attempt
+context.
+
+The ReviewLease that produced `needs_revision` and its reviewer
+`completed_review` ContributionRecord remain governed by that lease's frozen
+reviewer ContributionPolicyVersion. Revision preparation updates the continuing
+TaskAssignment's submitter ContributionPolicyVersion to the selected current
+version for the next attempt and records the prior/next lineage. The next
+ReviewLease independently freezes the reviewer ContributionPolicyVersion then
+current. Prior Submissions, Reviews, ContributionRecords, and
+CompensationAwards are never rewritten.
+
+The human `needs_revision` Review, reviewer contribution and applicable award,
+task and assignment effects, initial kept/rebased/blocked preparation, audit and
+outbox effects, and contributor-visible state commit once or roll back together.
+Checker-caused remediation remains a separate CheckerRun-rooted path and does
+not perform this human revision rebase.
 
 Out-of-band guidance has no acceptance force until it is encoded in one of:
 
@@ -85,13 +125,15 @@ Positive:
 - guide and policy updates can improve future revisions without mutating prior submissions
 - repeated lessons become durable guide, checker, review, revision, or template changes
 
-Contribution terms never rebase through revision context. Submitter terms
-remain governed by the `ContributionPolicyVersion` frozen on the
-`TaskAssignment`; every `ReviewLease` independently freezes the reviewer
-version active when that lease is created.
+- contributors receive one coherent current context after a human revision
+  boundary instead of new guide requirements paired with stale economic terms
+- completed reviewer and award history remains governed by its original
+  ReviewLease freeze
 
 Tradeoff:
 
 - revision preparation needs an explicit audit record
+- TaskAssignment policy lineage needs an explicit guarded rebase rather than a
+  lifetime immutable selector
 - revision replay must show context changes, immutable responses, and later resolutions
 - services must keep submitted-attempt immutability separate from next-attempt preparation

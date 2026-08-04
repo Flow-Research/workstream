@@ -68,6 +68,11 @@ Default:
   `ContributionPolicyVersion` decides whether it creates an award
 - `needs_revision` and `reject` create no FinalAcceptance, submitter
   contribution, or submitter award
+- the completed needs-revision reviewer record uses its ReviewLease-frozen
+  version; successful complete-context preparation may update the continuing
+  TaskAssignment's submitter version only for the next attempt, while prior
+  records and awards remain immutable
+- each next ReviewLease independently freezes the reviewer version then current
 - fulfillment is recorded only by an authenticated adapter callback bound to the
   award's frozen adapter binding
 - a fulfilled award requires an immutable receipt, exact quantity, and external

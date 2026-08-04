@@ -11,6 +11,10 @@ REV-13 joint release complete. `spec_review_lifecycle.md` is normative.
 The reviewer decides whether one exact leased Submission satisfies the task and
 the Project Guide context stamped on that Submission. No guide rebase occurs
 during review, and the active-at-read-time guide does not replace stamped context.
+The same rule applies to every stamped policy version. A human
+`needs_revision` initiates complete-context preparation only after this Review;
+the current Review and reviewer contribution retain the active lease's frozen
+context.
 
 The reviewer must have an exact active project `reviewer` grant represented by
 canonical human `ActorProfile.id`. Submitter, adjudicator, administrative, or
@@ -98,7 +102,7 @@ AUTH prepared authority and final evaluation
 -> consume ReviewLease and close ReviewQueueEntry
 -> CON reviewer operation
 -> accept: FinalAcceptance + task effects + CON submitter operation
-   needs_revision: task effect only
+   needs_revision: task effect + complete-context preparation
    reject: assignment block + task effect
 -> REV stages shared audit/outbox
 -> commit once
@@ -147,6 +151,11 @@ Each blocking finding must have:
 Recording `needs_revision` sets the Task to `needs_revision`, keeps the same
 TaskAssignment `active`, and creates no FinalAcceptance or submitter
 contribution. The reviewer `completed_review` still commits atomically.
+In that same transaction, task-owned preparation keeps unchanged context or
+rebases every changed applicable guide/policy component—including the
+TaskAssignment submitter ContributionPolicyVersion—for the next attempt. An
+unsafe or incomplete component blocks contributor visibility; no mixed context
+is exposed.
 
 ## Reject
 

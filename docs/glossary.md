@@ -319,10 +319,12 @@ and evidence.
 ## RevisionContextPreparation
 
 The immutable Review-rooted next-attempt context. It records the prior
-Submission, source and target TaskAssignments, active Project Guide identity,
-version and activation sequence, frozen task-execution policies, context digest,
-change summary, and `kept`, `rebased`, or `blocked` result. A rebase records
-forward or backward direction.
+Submission; source and target TaskAssignments; prior and next Project
+Guide/source, submission/checker, review, revision, task-execution, and
+submitter ContributionPolicy versions; context digest; change summary; and
+`kept`, `rebased`, or `blocked` result. A human revision rebase records forward
+or backward direction where applicable and publishes one complete next-attempt
+context without rewriting prior work.
 
 ## FinalAcceptance
 

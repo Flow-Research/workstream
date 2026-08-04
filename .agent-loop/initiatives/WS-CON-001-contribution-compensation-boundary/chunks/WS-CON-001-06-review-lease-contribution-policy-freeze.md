@@ -4,7 +4,8 @@
 
 Deliver the narrow CON policy lookup/freeze participant that REV invokes inside
 the review-claim transaction. Reviewer award eligibility is frozen before
-review work begins.
+review work begins. Each new lease selects the version then current; publication
+and prior task revision preparation never rewrite an existing lease.
 
 ## Risk
 

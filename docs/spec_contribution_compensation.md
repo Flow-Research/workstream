@@ -434,6 +434,15 @@ TaskAssignment.submitter_contribution_policy_version_id
 The participant flushes only and never commits. The task subsystem owns claim
 composition and status effects.
 
+After a human `needs_revision`, the task-owned revision-preparation participant
+locks the complete current next-attempt context and calls CON to select and
+validate the current published submitter ContributionPolicyVersion. An
+unchanged version is kept; a changed valid version atomically replaces the
+TaskAssignment selector for the next attempt and records prior/next lineage in
+the immutable preparation. A missing, incomplete, crossed-project, ambiguous,
+or binding-ineligible version blocks the whole preparation. Publication alone
+never performs this update.
+
 ### Reviewer freeze
 
 During authorized review claim, REV locks its queue and ReviewLease facts
@@ -456,8 +465,12 @@ only the freeze capability.
 - Suspension races MUST be resolved with explicit locks and both-order tests.
 - Missing, draft, ambiguous, crossed-project, or incomplete policy state fails
   before the assignment or lease commits.
-- Revision-context rebase MUST NOT rebase submitter award eligibility. Each new
-  ReviewLease independently freezes the reviewer version then current.
+- Human revision preparation MUST rebase changed submitter award eligibility
+  together with every changed applicable next-attempt context component. The
+  completed Review and reviewer contribution keep the prior ReviewLease freeze;
+  each new ReviewLease independently freezes the reviewer version then current.
+- Accept and reject never rebase. They evaluate the exact assignment and lease
+  versions frozen for the current attempt.
 
 ## Atomic Review-To-Contribution Transaction
 
@@ -522,7 +535,15 @@ Task.status = needs_revision
 TaskAssignment.status remains active
 no FinalAcceptance
 no submitter operation
+task-owned complete-context preparation keeps/rebases/blocks the next attempt
 ```
+
+The Review, reviewer contribution/award, task and assignment effects, initial
+preparation or blocked outcome, audit/outbox rows, and contributor-visible state
+commit once or roll back together. The preparation may update the continuing
+TaskAssignment's submitter policy selector for future work; it never changes
+the completed Review, its reviewer policy, or any prior Submission,
+ContributionRecord, or CompensationAward.
 
 Reject:
 

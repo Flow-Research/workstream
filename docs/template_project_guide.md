@@ -233,8 +233,10 @@ Record only project-owner-supplied business terms and their durable source:
 
 This section is informational. It is not an active contribution award rule. Workstream
 publishes `ContributionPolicyVersion` independently, and `TaskAssignment` and
-`ReviewLease` freeze their applicable versions. Revision context never rebases
-compensation.
+`ReviewLease` freeze their applicable versions for the current attempt. After a
+human `needs_revision`, complete-context preparation records and applies any
+changed submitter ContributionPolicyVersion for the next attempt; each next
+ReviewLease independently freezes the reviewer version then current.
 
 ## Lessons Learned
 

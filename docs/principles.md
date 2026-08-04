@@ -86,10 +86,10 @@ frozen preparation, responds to every unresolved blocking finding, and submits
 a replacement version. The system preserves immutable findings, responses,
 evidence, and later resolutions.
 
-Prior Submissions keep their stamped context. Preparation compares the prior
-guide identity/activation sequence with the currently active guide: exact match
-keeps, any different valid pair rebases forward or backward, and unsafe context
-blocks. Task Context returns the frozen preparation. No guide rebase occurs
+Prior Submissions keep their stamped context. Preparation compares the complete
+prior context with all applicable current guide and policy selectors: exact
+components keep, every changed valid component rebases together, and unsafe
+context blocks. Task Context returns the frozen preparation. No rebase occurs
 during review.
 
 ## 6. Compensation Follows Contribution

@@ -137,12 +137,12 @@ For guide and context resolution, TaskAssignment contributes only its `task_id`;
 it still retains required contributor, assignment, status, and frozen submitter
 contribution-policy attribution. Each immutable Submission stamps the exact
 Project Guide identity, version, and activation sequence used by that attempt.
-After a human `needs_revision` Review, exact stamped identity and
-activation-sequence match with the currently active guide keeps context. Any
-different valid active pair prepares a forward or backward rebase; incomplete,
-inconsistent, revoked, or unsafe context blocks for manager repair. Task Context
-returns the frozen preparation. No guide rebase occurs during review; the
-reviewer uses the context stamped on the leased Submission.
+After a human `needs_revision` Review, preparation compares the complete prior
+stamped context with all applicable current guide and policy selectors. Exact
+component matches keep; every changed valid component rebases together;
+incomplete, inconsistent, revoked, or unsafe context blocks for manager repair.
+Task Context returns the frozen preparation. No rebase occurs during review;
+the reviewer uses the context stamped on the leased Submission.
 
 ### Task Contract
 
@@ -163,10 +163,14 @@ reviewing auditable:
 - deadline or SLA when applicable
 - source type and source reference when imported
 
-Compensation is not task-guide context. TaskAssignment freezes the active
-published submitter `ContributionPolicyVersion`; ReviewLease independently
-freezes the reviewer version. Either rule may be explicitly unpaid and therefore
-create no award.
+Compensation remains an independently owned CON policy, but its selected version
+is part of the complete governing work context. Task claim initially freezes
+the submitter `ContributionPolicyVersion`; ReviewLease independently freezes the
+reviewer version. Publication never silently changes an active attempt. A human
+`needs_revision` atomically rebases every changed applicable next-attempt
+context component, including the submitter version, while the completed lease
+and prior history remain immutable. Either rule may be explicitly unpaid and
+therefore create no award.
 
 ### Human Accountability
 

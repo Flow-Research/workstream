@@ -45,9 +45,11 @@ the task's locked context. The contributor does not
 provide those ids, versions, hashes, or internal policy bodies in the
 submission packet.
 
-Compensation is not submission input. The server uses the immutable
-TaskAssignment submitter ContributionPolicyVersion freeze and the ReviewLease
-reviewer freeze during contribution creation.
+Compensation is not submission input. The server uses the TaskAssignment
+submitter ContributionPolicyVersion selected for this prepared attempt and the
+ReviewLease reviewer freeze during contribution creation. Only a prior human
+`needs_revision` preparation may have rebased the assignment selector; project
+publication or submission input cannot change it.
 
 Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating the submission.
 Preflight failures return `PreSubmitCheckResponse` with structured

@@ -77,8 +77,11 @@ directly.
 ## Assignment Compensation Snapshot
 
 These values are server-owned and appear only after TaskAssignment creation.
-The TaskAssignment freezes the active published ContributionPolicyVersion; task
-creators do not provide award fields directly.
+The TaskAssignment initially freezes the active published
+ContributionPolicyVersion; task creators do not provide award fields directly.
+Publication cannot change an active attempt. A successful human
+`needs_revision` preparation may atomically record and apply a changed current
+version for the next attempt.
 
 - submitter contribution policy version id:
 - contribution type: `accepted_submission`

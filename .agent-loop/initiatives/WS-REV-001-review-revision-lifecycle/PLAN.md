@@ -247,6 +247,13 @@ selection. CON never creates, updates, closes, or authorizes a lease. CON-03C
 may consume merged REV Review/FinalAcceptance/ReviewLease schema, and REV-10
 waits for CON-07's mandatory flush-only participant.
 
+On human `needs_revision`, REV composes the task-owned complete-context
+preparation after the reviewer CON operation in the same transaction. The
+completed reviewer record keeps its lease-frozen policy. Preparation may keep
+or rebase the continuing TaskAssignment's submitter policy for the next
+attempt, and the next ReviewLease independently freezes the reviewer version
+then current. REV owns orchestration and lineage, not CON policy selection.
+
 ## Alternatives rejected
 
 - Waiting for all ART/CON work before any REV persistence.
