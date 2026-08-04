@@ -6876,6 +6876,7 @@ async def test_hidden_verified_worker_persists_stable_material_failure(
 
     incident_id = uuid4() if incident else None
     updates: list[dict[str, object]] = []
+    service_kwargs: list[dict[str, object]] = []
 
     class Session:
         async def rollback(self) -> None:
@@ -6893,8 +6894,8 @@ async def test_hidden_verified_worker_persists_stable_material_failure(
             pass
 
     class Service:
-        def __init__(self, *_: object, **__: object) -> None:
-            pass
+        def __init__(self, *_: object, **kwargs: object) -> None:
+            service_kwargs.append(kwargs)
 
         async def validate_project_setup_run_context(self, *_: object, **__: object) -> None:
             pass
@@ -6927,6 +6928,11 @@ async def test_hidden_verified_worker_persists_stable_material_failure(
     assert result["status"] == "setup_blocked"
     assert result["error_code"] == error_code
     assert result["guide_sufficiency_report_id"] is None
+    assert len(service_kwargs) == 1
+    assert isinstance(
+        service_kwargs[0]["guide_sufficiency_material"],
+        SqlAlchemyGuideSufficiencyMaterialAdapter,
+    )
     assert updates == [
         {
             "status": "running_sufficiency_agent",

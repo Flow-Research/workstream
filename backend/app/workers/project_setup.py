@@ -194,7 +194,10 @@ async def _run_verified_pre_submit_sufficiency_continuation(
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with session_factory() as session:
-            service = ProjectService(session)
+            service = ProjectService(
+                session,
+                guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+            )
             expected_task_id = pre_submit_setup_task_id(setup_run_id, setup_generation)
             try:
                 await service.validate_project_setup_run_context(
