@@ -6,60 +6,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.hashing import canonical_json_hash
-from app.modules.checkers.runner import UnknownChecker, default_checker_registry
+from app.modules.checkers.catalogue import (
+    PreSubmissionCatalogueError,
+    build_pre_submission_checker_catalogue,
+)
 
 PRE_SUBMIT_COMPILER_VERSION = "workstream-pre-submit-compiler-v0.1"
 PRE_SUBMIT_BUNDLE_SCHEMA_VERSION = "pre_submit_checker_bundle.v1"
 PRE_SUBMIT_SPEC_SCHEMA_VERSION = "pre_submit_checker_spec.v1"
 PRIMITIVES_VERSION = "workstream-pre-submit-primitives.v1"
 
-APPROVED_PRIMITIVES = {
-    "forbid_artifact",
-    "limit_file_size",
-    "limit_package_size",
-    "enforce_storage_scheme",
-    "verify_hash",
-    "require_attestation",
-    "require_packaging",
-    "require_file",
-    "require_minimum_evidence",
-    "require_manifest_field",
-    "validate_submission_packet",
-    "warn_low_quality_generated_artifact",
-}
-
 BLOCKING_SEVERITY = "blocking"
 WARNING_SEVERITY = "warning"
-
-PRIMITIVE_CHECKER_NAME_MAP = {
-    "forbid_artifact": "check_forbidden_files",
-    "limit_file_size": "check_submission_packet",
-    "limit_package_size": "check_submission_packet",
-    "enforce_storage_scheme": "check_submission_packet",
-    "verify_hash": "check_evidence_integrity",
-    "require_attestation": "check_confidentiality_attestation",
-    "require_packaging": "check_submission_packet",
-    "require_file": "check_required_files",
-    "require_minimum_evidence": "check_evidence_present",
-    "require_manifest_field": "check_submission_packet",
-    "validate_submission_packet": "check_submission_packet",
-    "warn_low_quality_generated_artifact": "check_low_quality_generated_artifacts",
-}
-
-PRIMITIVE_POLICY_FIELDS = {
-    "forbid_artifact": {"forbidden_artifacts"},
-    "limit_file_size": {"maximum_file_size_bytes"},
-    "limit_package_size": {"maximum_package_size_bytes"},
-    "enforce_storage_scheme": {"allowed_storage_schemes"},
-    "verify_hash": {"artifact_hash_required", "artifact_hash_algorithm"},
-    "require_attestation": {"attestation_terms"},
-    "require_packaging": {"packaging"},
-    "require_file": {"required_artifacts"},
-    "require_minimum_evidence": {"required_evidence"},
-    "require_manifest_field": {"manifest_required"},
-    "validate_submission_packet": {"required_packet_fields"},
-    "warn_low_quality_generated_artifact": {"workstream_default_policy"},
-}
 
 
 class PreSubmitCheckerCompilerError(ValueError):
@@ -217,12 +175,6 @@ def compile_project_pre_submit_checker_spec(
         "rules": rules,
     }
     checker_names = _checker_names_for_rules(rules)
-    try:
-        default_checker_registry().require_registered(set(checker_names))
-    except UnknownChecker as exc:
-        raise PreSubmitCheckerCompilerError(
-            "compiled checker bundle references unknown checkers"
-        ) from exc
     return CompiledPreSubmitCheckerPolicy(
         compiler_version=compiler_version,
         compiled_bundle=bundle,
@@ -275,12 +227,6 @@ def validate_compiled_pre_submit_checker_bundle(
         raise PreSubmitCheckerCompilerError("compiled checker bundle rules are not canonical")
     _validate_rule_coverage(effective_policy, canonical_rules)
     checker_names = _checker_names_for_rules(canonical_rules)
-    try:
-        default_checker_registry().require_registered(set(checker_names))
-    except UnknownChecker as exc:
-        raise PreSubmitCheckerCompilerError(
-            "compiled checker bundle references unknown checkers"
-        ) from exc
     return checker_names
 
 
@@ -316,8 +262,12 @@ def _validate_spec_shape(spec: dict[str, Any], effective_policy_hash: str) -> No
 def _canonical_rule(rule: dict[str, Any]) -> dict[str, Any]:
     """Validate and normalize one checker-spec rule."""
     primitive = rule.get("primitive")
-    if primitive not in APPROVED_PRIMITIVES:
+    if not isinstance(primitive, str):
         raise PreSubmitCheckerCompilerError("checker spec contains unknown primitive")
+    try:
+        definition = build_pre_submission_checker_catalogue().primitive_definition(primitive)
+    except PreSubmissionCatalogueError as exc:
+        raise PreSubmitCheckerCompilerError("checker spec contains unknown primitive") from exc
     severity = rule.get("severity")
     if severity not in {BLOCKING_SEVERITY, WARNING_SEVERITY}:
         raise PreSubmitCheckerCompilerError("checker spec contains invalid severity")
@@ -327,7 +277,7 @@ def _canonical_rule(rule: dict[str, Any]) -> dict[str, Any]:
     if not all(isinstance(field, str) and field for field in policy_fields):
         raise PreSubmitCheckerCompilerError("checker spec rule contains invalid policy trace field")
     actual_policy_fields = set(policy_fields)
-    expected_policy_fields = PRIMITIVE_POLICY_FIELDS[primitive]
+    expected_policy_fields = set(definition.policy_fields)
     if actual_policy_fields != expected_policy_fields:
         raise PreSubmitCheckerCompilerError(
             f"checker spec rule has untraceable policy fields for {primitive}"
@@ -580,9 +530,15 @@ def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[di
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:
     """Build stable checker-name projections from compiled primitive rules."""
+    catalogue = build_pre_submission_checker_catalogue()
     names: list[str] = []
     for rule in rules:
-        name = PRIMITIVE_CHECKER_NAME_MAP[rule["primitive"]]
+        try:
+            name = catalogue.primitive_definition(rule["primitive"]).public_name
+        except PreSubmissionCatalogueError as exc:
+            raise PreSubmitCheckerCompilerError(
+                "compiled checker bundle references unknown catalogue definitions"
+            ) from exc
         if name not in names:
             names.append(name)
     return names

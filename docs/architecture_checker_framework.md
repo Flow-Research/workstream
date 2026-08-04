@@ -69,6 +69,15 @@ implementations may be exposed through typed adapters, but neither the durable
 registry nor the pre-submission catalogue may duplicate IDs, primitive maps, or
 dispatch authority.
 
+The hidden catalogue implementation is process-wide and immutable. Deployment
+configuration may name disabled stable definition IDs only at startup. Unknown
+or duplicate IDs, invalid dependencies/order, unknown capabilities, and unsafe
+disabled behavior fail startup validation. The pure effective-plan compiler
+binds project, guide version, source snapshot, effective policy, pre-submit
+policy, catalogue manifest, availability state, ordered definition/configuration
+hashes, and deterministic rule-instance identities. It does not read artifacts
+or invoke either pre-submit or durable checkers.
+
 Definition fields:
 
 - `checker_id`
