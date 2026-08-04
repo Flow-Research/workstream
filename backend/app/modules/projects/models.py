@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
@@ -27,6 +28,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.modules.contributions.models import ContributionPolicy
 
 
 class Project(Base):
@@ -72,6 +76,9 @@ class Project(Base):
     guides: Mapped[list[ProjectGuide]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
+    )
+    contribution_policies: Mapped[list["ContributionPolicy"]] = relationship(
+        back_populates="project"
     )
 
 

@@ -12,19 +12,20 @@ signed-loop records do not make behavior live.
 | `01` | Canonical specification and ADR 0016 | Merged PR #144 |
 | `02A` | Shared transactional outbox persistence/append | Merged PR #155; migration 0029 |
 | `03A` | Adapter-binding persistence | Merged PR #267; migration 0053 |
+| `PLAN5` | Complete-context human needs-revision rebase reconciliation | Merged PR #270 |
 
 ## Current reconciliation
 
 | Chunk | Goal | Risk | Status |
 |---|---|---:|---|
 | `PLAN4` | Reconcile current main, ART/AUTH/REV changes, open PRs, and end-to-end order | L1 | Merged PR #261 |
-| `PLAN5` | Reconcile complete-context human needs-revision rebase across guide, policy, REV, and CON contracts | L1 | Active specification chunk; no runtime |
+| `PLAN5` | Reconcile complete-context human needs-revision rebase across guide, policy, REV, and CON contracts | L1 | Merged PR #270; no runtime |
 
 ## Core runtime chunks
 
 | Chunk | Goal | Entry gate | Status |
 |---|---|---|---|
-| `03B` | Contribution-policy persistence | 03A | Proposed; unblocks REV-03A2 FK |
+| `03B` | Contribution-policy persistence | 03A | Implemented and internally reviewed; PR checkpoint; unblocks REV-03A2 FK after merge |
 | `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Proposed; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
