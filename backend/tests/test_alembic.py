@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0049_rev_auth_readiness"
+HEAD_REVISION = "0050_guide_source_v2"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -187,7 +187,29 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
     with migration_lock():
         command.downgrade(config, "base")
         command.upgrade(config, "head")
+        constraint_names = asyncio.run(
+            _project_setup_run_check_constraint_names(isolated_database_env)
+        )
+        assert "ck_project_setup_runs_ck_project_setup_runs_status" in constraint_names
         command.downgrade(config, "base")
+
+
+async def _project_setup_run_check_constraint_names(database_url: str) -> set[str]:
+    """Return physical check-constraint names for the setup-run table."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.scalars(
+                text(
+                    "select constraint_name from information_schema.table_constraints "
+                    "where table_schema = current_schema() "
+                    "and table_name = 'project_setup_runs' "
+                    "and constraint_type = 'CHECK'"
+                )
+            )
+            return set(rows.all())
+    finally:
+        await engine.dispose()
 
 
 def test_0034_project_role_issue_evidence_exact_safe_round_trip(
@@ -2433,7 +2455,7 @@ def test_0045_guide_source_metadata_authority_round_trip(
 
 
 def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migration_lock) -> None:
-    """Pre-0045 guide rows remain readable with explicitly null custody."""
+    """0045 preserves historical rows while the later v2 clean cut refuses them."""
     config = _alembic_config()
     project_id, guide_id, snapshot_id, setup_run_id = (str(uuid4()) for _ in range(4))
     snapshot_hash = "sha256:" + "0" * 64
@@ -2532,11 +2554,16 @@ def test_0045_preserves_historical_guide_rows(isolated_database_env: str, migrat
             command.downgrade(config, "base")
             command.upgrade(config, "0044_project_create_authority")
             asyncio.run(seed_and_read(seed=True))
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
             command.downgrade(config, "0044_project_create_authority")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0045_guide_metadata_authority")
             assert asyncio.run(seed_and_read(seed=False)) == (None,) * 9
+            with pytest.raises(
+                RuntimeError,
+                match="guide source v2 requires an empty guide-source namespace",
+            ):
+                command.upgrade(config, "0050_guide_source_v2")
         finally:
             asyncio.run(reset_schema())
 

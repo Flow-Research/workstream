@@ -716,9 +716,8 @@ class GuideSourceSnapshotItem(Base):
     __table_args__ = (
         UniqueConstraint(
             "source_snapshot_id",
-            "source_kind",
-            "durable_ref",
-            name="uq_guide_source_snapshot_items_snapshot_kind_ref",
+            "item_order",
+            name="uq_guide_source_snapshot_items_snapshot_order",
         ),
         UniqueConstraint(
             "id",
@@ -735,10 +734,8 @@ class GuideSourceSnapshotItem(Base):
     )
     item_order: Mapped[int] = mapped_column(Integer, nullable=False)
     source_kind: Mapped[str] = mapped_column(String(50), nullable=False)
-    durable_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    source_label: Mapped[str] = mapped_column(Text, nullable=False)
     ingestion_adapter: Mapped[str] = mapped_column(String(100), nullable=False)
-    content_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    content_cid: Mapped[str | None] = mapped_column(String(200))
     media_type: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -776,6 +773,7 @@ class ProjectSetupRun(Base):
         CheckConstraint(
             "status in ("
             "'queued', "
+            "'dispatch_pending', "
             "'enqueue_failed', "
             "'running_sufficiency_agent', "
             "'sufficiency_blocked', "
@@ -829,6 +827,10 @@ class ProjectSetupRun(Base):
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(155), index=True)
+    continuation_verification_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_verification_jobs.id"), index=True
+    )
+    continuation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     current_step: Mapped[str] = mapped_column(String(100), nullable=False)
     output_sufficiency_report_id: Mapped[str | None] = mapped_column(
@@ -894,9 +896,17 @@ class GuideSufficiencyReport(Base):
             ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
             name="fk_guide_sufficiency_reports_source_snapshot_hash",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_guide_sufficiency_reports_verified_snapshot",
             "source_snapshot_id",
-            name="uq_guide_sufficiency_reports_source_snapshot",
+            unique=True,
+            postgresql_where=text("project_setup_run_id is not null"),
+        ),
+        Index(
+            "uq_guide_sufficiency_reports_diagnostic_snapshot",
+            "source_snapshot_id",
+            unique=True,
+            postgresql_where=text("project_setup_run_id is null"),
         ),
         CheckConstraint(
             "setup_generation is null or setup_generation > 0",

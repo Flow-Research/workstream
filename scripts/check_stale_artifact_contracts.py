@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# ARTIFACT_CONTRACT_PHASE: artifact_store_cutover
-ARTIFACT_CONTRACT_PHASE = "artifact_store_cutover"
+# ARTIFACT_CONTRACT_PHASE: guide_source_cutover
+ARTIFACT_CONTRACT_PHASE = "guide_source_cutover"
 
 PHASES = (
     "foundation",
@@ -235,6 +235,14 @@ LIVE_RULE_PATHS = {
         "backend/app/interfaces/project_agents.py",
         "backend/app/modules/projects/",
     ),
+    "LEGACY_GUIDE_DURABLE_REF": (
+        "backend/app/interfaces/project_agents.py",
+        "backend/app/modules/projects/",
+    ),
+    "LEGACY_GUIDE_CONTENT_HASH": (
+        "backend/app/interfaces/project_agents.py",
+        "backend/app/modules/projects/",
+    ),
     "LEGACY_SUBMISSION_TRANSPORT": (
         "backend/app/modules/tasks/",
         "backend/app/modules/checkers/",
@@ -330,9 +338,7 @@ RULES = (
     Rule(
         "ACTIVE_R2_V01_PLAN",
         "foundation",
-        re.compile(
-            r"(?:\bWS-ART-001-02B[23]\b|\b(?:Cloudflare\s+)?R2\b)", re.IGNORECASE
-        ),
+        re.compile(r"(?:\bWS-ART-001-02B[23]\b|\b(?:Cloudflare\s+)?R2\b)", re.IGNORECASE),
     ),
     Rule(
         "OBSOLETE_FLOW_NODE_PLAN",
@@ -362,11 +368,19 @@ RULES = (
         re.compile(r"\bcontent_cid\b"),
     ),
     Rule(
+        "LEGACY_GUIDE_DURABLE_REF",
+        "guide_source_cutover",
+        re.compile(r"\bdurable_ref\b"),
+    ),
+    Rule(
+        "LEGACY_GUIDE_CONTENT_HASH",
+        "guide_source_cutover",
+        re.compile(r"\bcontent_hash\b"),
+    ),
+    Rule(
         "LEGACY_SUBMISSION_TRANSPORT",
         "submission_cutover",
-        re.compile(
-            r"\b(?:package_uri|package_hash|artifact_hash_manifest|worker_attestation)\b"
-        ),
+        re.compile(r"\b(?:package_uri|package_hash|artifact_hash_manifest|worker_attestation)\b"),
     ),
     Rule(
         "LEGACY_PROJECT_STORAGE_POLICY",
@@ -384,9 +398,7 @@ RULES = (
     Rule(
         "LEGACY_STORAGE_COMPILER_PRIMITIVE",
         "submission_cutover",
-        re.compile(
-            r"\b(?:enforce_storage_scheme|verify_hash|require_manifest_field)\b"
-        ),
+        re.compile(r"\b(?:enforce_storage_scheme|verify_hash|require_manifest_field)\b"),
     ),
     Rule(
         "LEGACY_CHECKER_ARTIFACT_COPY",
@@ -414,8 +426,7 @@ def path_is_scannable(relative_path: str, root: Path = ROOT) -> bool:
     active_prefixes = active_initiative_prefixes(root)
     path = Path(relative_path)
     is_review_history = (
-        relative_path.startswith(AGENT_LOOP_INITIATIVE_PREFIX)
-        and "/reviews/" in relative_path
+        relative_path.startswith(AGENT_LOOP_INITIATIVE_PREFIX) and "/reviews/" in relative_path
     )
     is_text_path = (
         path.suffix.lower() in TEXT_SUFFIXES
@@ -451,9 +462,9 @@ def path_is_active_contract(relative_path: str, root: Path = ROOT) -> bool:
             not relative_path.startswith(HISTORICAL_PREFIXES)
             and relative_path not in HISTORICAL_PATHS
         )
-    return relative_path.startswith(
-        active_initiative_prefixes(root)
-    ) and "/reviews/" not in (relative_path)
+    return relative_path.startswith(active_initiative_prefixes(root)) and "/reviews/" not in (
+        relative_path
+    )
 
 
 def active_work_queue_text(text: str) -> str:
@@ -464,9 +475,7 @@ def active_work_queue_text(text: str) -> str:
     for line in text.splitlines(keepends=True):
         if line.startswith("## "):
             section = line.strip()
-        output.append(
-            line if section in active_headings else "\n" if line.endswith("\n") else ""
-        )
+        output.append(line if section in active_headings else "\n" if line.endswith("\n") else "")
     if not active_headings.issubset(set(text.splitlines())):
         raise ValueError("malformed Work Queue headings")
     return "".join(output)
@@ -484,13 +493,11 @@ def rule_applies_to_path(rule: Rule, relative_path: str, root: Path = ROOT) -> b
         return path_is_active_contract(relative_path, root)
     if rule.code in LIVE_RULE_PATHS:
         return (
-            relative_path.startswith("docs/")
-            and path_is_active_contract(relative_path, root)
+            relative_path.startswith("docs/") and path_is_active_contract(relative_path, root)
         ) or relative_path.startswith(LIVE_RULE_PATHS[rule.code])
     if rule.code == "LEGACY_CALLER_STORAGE_SCHEME":
         return (
-            relative_path.startswith("docs/")
-            and path_is_active_contract(relative_path, root)
+            relative_path.startswith("docs/") and path_is_active_contract(relative_path, root)
         ) or relative_path.startswith(
             (
                 "backend/app/modules/projects/",
@@ -506,9 +513,7 @@ def rule_applies_to_path(rule: Rule, relative_path: str, root: Path = ROOT) -> b
 
 def has_explicit_r2_deferral(line_text: str) -> bool:
     """Accept only clauses that unambiguously keep R2 outside active v0.1."""
-    if R2_ACTIVATION_PATTERN.search(line_text) or R2_DEFERRAL_OVERRIDE_PATTERN.search(
-        line_text
-    ):
+    if R2_ACTIVATION_PATTERN.search(line_text) or R2_DEFERRAL_OVERRIDE_PATTERN.search(line_text):
         return False
     return bool(
         re.search(
@@ -570,16 +575,12 @@ def clause_around(text: str, offset: int) -> str:
     delimiters = re.compile(r"[;!?]|(?<!\d)\.(?!\d)")
     previous_matches = list(delimiters.finditer(before))
     following_match = delimiters.search(after)
-    start = (
-        lower_bound + previous_matches[-1].end() if previous_matches else lower_bound
-    )
+    start = lower_bound + previous_matches[-1].end() if previous_matches else lower_bound
     end = offset + following_match.end() if following_match else upper_bound
     return " ".join(text[start:end].split())
 
 
-def scan_text(
-    relative_path: str, text: str, phase: str, root: Path = ROOT
-) -> list[str]:
+def scan_text(relative_path: str, text: str, phase: str, root: Path = ROOT) -> list[str]:
     """Return deterministic stale-contract failures for one text file."""
     failures: list[str] = []
     if relative_path == ".agent-loop/WORK_QUEUE.md":
@@ -620,8 +621,7 @@ def scan_text(
             line = normalized_text.count("\n", 0, match.start()) + 1
             line_text = text.splitlines()[line - 1].strip()
             if any(
-                phase_index(phase) < phase_index(removal_phase)
-                and line_text == allowed_line
+                phase_index(phase) < phase_index(removal_phase) and line_text == allowed_line
                 for removal_phase, allowed_line in LEGACY_R2_RUNTIME_LINES.get(
                     relative_path,
                     (),
@@ -669,9 +669,7 @@ def scan(root: Path = ROOT, phase: str | None = None) -> list[str]:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             relative_path = path.relative_to(root).as_posix()
-            failures.append(
-                f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})"
-            )
+            failures.append(f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})")
             continue
         failures.extend(scan_text(path.relative_to(root).as_posix(), text, phase, root))
     return failures

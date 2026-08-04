@@ -310,6 +310,7 @@ jobs:
         working-directory: backend
         env:
           WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+          WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
         run: >-
           python scripts/run_isolated_tests.py
           --metadata-json "${RUNNER_TEMP}/api-database.json"

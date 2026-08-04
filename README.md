@@ -355,8 +355,12 @@ WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL=<approved-model> \
 OPENAI_API_KEY=<runtime-secret> \
 WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART=true \
 WORKSTREAM_CELERY_BROKER_URL=redis://localhost:6379/0 \
-.venv/bin/celery -A app.workers.celery_app.celery_app worker --loglevel=INFO
+.venv/bin/celery -A app.workers.celery_app.celery_app worker --beat --loglevel=INFO
 ```
+
+The Beat scheduler must run alongside the Celery execution processes so
+artifact pending-work and verified guide-continuation scans can recover
+publication failures automatically.
 
 ## v0.1 Success Standard
 
