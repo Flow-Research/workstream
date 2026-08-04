@@ -18,6 +18,9 @@ Result: PASS.
 - After hosted CI exposed missing submission lineage in the replacement
   checker-output operator fixture, the corrected operator/recovery pair passed
   all 15 tests.
+- After the schema-contract shard exposed a stale broad-schema expectation, the
+  exact current-schema test passed with the retired intake tables asserted
+  absent instead of present.
 - Stale artifact/auth/wording scans, Markdown links, and `git diff --check`
   passed. No dependency, workflow, coverage-threshold, or package-script change
   was made.

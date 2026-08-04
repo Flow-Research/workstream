@@ -23,3 +23,10 @@ Focused correction evidence:
 - Ruff on the corrected test file: passed.
 
 The correction is pushed for a fresh hosted Backend and Agent Gates run.
+
+The fresh run proved `shared_foundations`, `project_lifecycle`,
+`task_lifecycle`, and `schema_contracts_a`, then exposed one stale assertion in
+`schema_contracts_b`: the broad current-schema contract still required the two
+tables this chunk intentionally removes. The assertion now classifies
+`artifact_upload_sessions.id` and `artifact_upload_items.id` as discarded
+columns. The exact formerly failing schema test passes locally.

@@ -61,8 +61,10 @@ documentation, reuse, and test-delta reviews pass. CodeRabbit completed without
 actionable comments. The first hosted Backend run exposed one stale test request
 that omitted the replacement checker's canonical submission lineage; the test
 was corrected without changing production guards, and the complete operator and
-recovery pair passes 15 tests. Fresh hosted Backend/Agent Gates are required on
-the correction commit.
+recovery pair passes 15 tests. A subsequent schema-contract shard exposed one
+remaining broad assertion that required the intentionally retired tables; it now
+asserts those table columns are discarded, and the exact schema test passes.
+Fresh hosted Backend/Agent Gates are required on the final correction commit.
 
 ## Remaining risks and follow-up
 
