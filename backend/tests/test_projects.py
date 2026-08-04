@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import hashlib
 import inspect
 import json
@@ -9,6 +10,7 @@ import types
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -84,6 +86,7 @@ from app.modules.authorization.models import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import service as project_service_module
+from app.modules.projects import repository as project_repository_module
 from app.modules.projects import guide_mutation_router as guide_mutation_router_module
 from app.modules.projects import guide_mutation_service as guide_mutation_service_module
 from app.modules.projects import setup_queue as project_setup_queue_module
@@ -112,7 +115,11 @@ from app.modules.projects.schemas import (
     ProjectGuideUpdate,
     ProjectResponse,
     ProjectSetupRunResponse,
+    PostSubmitCheckerPolicyCorrectionRequest,
+    SubmissionArtifactPolicyApprove,
+    SubmissionArtifactPolicyInput,
 )
+from app.schemas.auth import ActorContext
 from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     MatchedAuthorityKind,
@@ -170,6 +177,104 @@ async def test_project_policy_lock_queries_lock_only_policy_rows() -> None:
     assert "FOR UPDATE OF project_guides" not in rendered[0]
     assert "FOR UPDATE OF revision_policies" in rendered[1]
     assert "FOR UPDATE OF project_guides" not in rendered[1]
+
+
+@pytest.mark.asyncio
+async def test_payment_policy_upsert_inserts_and_refreshes_new_policy() -> None:
+    calls: list[tuple[str, Any]] = []
+
+    class Session:
+        def add(self, value: Any) -> None:
+            calls.append(("add", value))
+
+        async def flush(self) -> None:
+            calls.append(("flush", None))
+
+        async def refresh(self, value: Any) -> None:
+            calls.append(("refresh", value))
+
+    policy = SimpleNamespace(project_id="project-1", guide_version="v1")
+    repository = ProjectRepository(cast(Any, Session()))
+
+    async def get_missing_policy(*_args: Any) -> None:
+        return None
+
+    repository.get_payment_policy = get_missing_policy
+
+    result = await repository.upsert_payment_policy(cast(Any, policy))
+
+    assert result is policy
+    assert calls == [("add", policy), ("flush", None), ("refresh", policy)]
+
+
+@pytest.mark.asyncio
+async def test_payment_policy_upsert_replaces_mutable_terms_on_existing_policy() -> None:
+    refreshed: list[Any] = []
+
+    class Session:
+        async def flush(self) -> None:
+            return None
+
+        async def refresh(self, value: Any) -> None:
+            refreshed.append(value)
+
+    existing = SimpleNamespace(
+        base_amount=Decimal("1"),
+        currency="USD",
+        payout_type="fixed",
+        revision_payment_rule="old revision",
+        rejection_payment_rule="old rejection",
+        accepted_payment_rule="old acceptance",
+    )
+    replacement = SimpleNamespace(
+        project_id="project-1",
+        guide_version="v1",
+        base_amount=Decimal("25.50"),
+        currency="NGN",
+        payout_type="milestone",
+        revision_payment_rule="hold",
+        rejection_payment_rule="void",
+        accepted_payment_rule="release",
+    )
+    repository = ProjectRepository(cast(Any, Session()))
+
+    async def get_existing_policy(*_args: Any) -> Any:
+        return existing
+
+    repository.get_payment_policy = get_existing_policy
+
+    result = await repository.upsert_payment_policy(cast(Any, replacement))
+
+    assert result is existing
+    assert vars(existing) == {
+        "base_amount": Decimal("25.50"),
+        "currency": "NGN",
+        "payout_type": "milestone",
+        "revision_payment_rule": "hold",
+        "rejection_payment_rule": "void",
+        "accepted_payment_rule": "release",
+    }
+    assert refreshed == [existing]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exists", [False, True])
+async def test_project_resolution_preserves_found_and_missing_outcomes(exists: bool) -> None:
+    project = SimpleNamespace(id="project-1") if exists else None
+
+    class Repository:
+        async def get_project(self, project_id: str) -> Any:
+            assert project_id == "project-1"
+            return project
+
+    service = ProjectService(cast(Any, None))
+    service._repo = cast(Any, Repository())
+
+    if exists:
+        assert await service.resolve_project("project-1") is project
+    else:
+        with pytest.raises(ProjectNotFound, match="project not found"):
+            await service.resolve_project("project-1")
 
 
 def test_policy_identity_shape_metadata_matches_migration_contract() -> None:
@@ -569,6 +674,884 @@ def test_activation_readiness_normalizes_hash_valid_malformed_policy_body() -> N
             None,
             require_payment_policy=False,
         )
+
+
+def _activation_ready_bundle() -> dict[str, Any]:
+    """Build one internally consistent activation bundle for fast boundary tests."""
+    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
+    snapshot_hash = f"sha256:{'a' * 64}"
+    submission_body = {"allowed_extensions": [".zip"]}
+    submission_hash = canonical_json_hash(submission_body)
+    effective_body = {"allowed_extensions": [".zip"], "max_bytes": 10}
+    effective_hash = canonical_json_hash(effective_body)
+    checker_bundle = {"checks": ["archive_safety"]}
+    checker_hash = canonical_json_hash(checker_bundle)
+    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1")
+    snapshot = SimpleNamespace(
+        id=snapshot_id,
+        project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        bundle_hash=snapshot_hash,
+    )
+    sufficiency = SimpleNamespace(
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=snapshot_hash,
+        status="passed",
+        warnings_acknowledged_by_actor=None,
+        warnings_acknowledged_at=None,
+        warnings_acknowledged_by_role=None,
+    )
+    submission = SimpleNamespace(
+        id=str(uuid4()),
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=snapshot_hash,
+        lifecycle_status="approved",
+        derivation_source="manual",
+        policy_body=submission_body,
+        policy_hash=submission_hash,
+        approved_by_actor="actor-1",
+        approved_at=datetime.now(UTC),
+        approved_by_role="project_manager",
+    )
+    effective = SimpleNamespace(
+        id=str(uuid4()),
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=snapshot_hash,
+        lifecycle_status="approved",
+        effective_policy=effective_body,
+        effective_policy_hash=effective_hash,
+        submission_artifact_policy_id=submission.id,
+        submission_artifact_policy_hash=submission_hash,
+    )
+    pre_submit = SimpleNamespace(
+        id=str(uuid4()),
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=snapshot_hash,
+        effective_policy_id=effective.id,
+        effective_policy_hash=effective_hash,
+        lifecycle_status="compiled",
+        compiled_bundle=checker_bundle,
+        compiled_bundle_hash=checker_hash,
+    )
+    post_submit = SimpleNamespace(
+        id=str(uuid4()),
+        project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=snapshot_hash,
+        effective_policy_id=effective.id,
+        effective_policy_hash=effective_hash,
+        pre_submit_checker_policy_id=pre_submit.id,
+        pre_submit_checker_bundle_hash=checker_hash,
+        lifecycle_status="approved",
+        approved_by_role="project_manager",
+        approved_by_actor="actor-1",
+        approved_at=datetime.now(UTC),
+        policy_body={"required_checkers": ["archive_safety"]},
+        policy_hash=f"sha256:{'b' * 64}",
+        required_checkers=["archive_safety"],
+        warning_checkers=[],
+        blocking_severities=["error"],
+    )
+    review = SimpleNamespace(
+        semantics_status="complete",
+        policy_hash=f"sha256:{'c' * 64}",
+        review_preference_window_seconds=60,
+        review_lease_duration_seconds=60,
+        max_active_review_leases_per_reviewer=1,
+        self_review_allowed=False,
+        reject_policy="allowed",
+        finding_evidence_requirement="required",
+        requires_second_review=False,
+        allowed_decisions=["accept", "needs_revision", "reject"],
+        minimum_finding_fields=["summary"],
+    )
+    revision = SimpleNamespace(
+        semantics_status="complete",
+        policy_hash=f"sha256:{'d' * 64}",
+        max_revision_rounds=2,
+        revision_deadline_hours=24,
+        allowed_resubmission_states=["needs_revision"],
+        reviewer_reassignment_rule="same_reviewer",
+    )
+    payment = SimpleNamespace(
+        base_amount=Decimal("1.00"),
+        currency="USD",
+        payout_type="fixed",
+        accepted_payment_rule="pay base amount",
+    )
+    return {
+        "guide": guide,
+        "source_snapshot": snapshot,
+        "sufficiency_report": sufficiency,
+        "submission_artifact_policy": submission,
+        "effective_policy": effective,
+        "pre_submit_checker_policy": pre_submit,
+        "post_submit_checker_policy": post_submit,
+        "review_policy": review,
+        "revision_policy": revision,
+        "payment_policy": payment,
+    }
+
+
+def _set_activation_fact(bundle: dict[str, Any], fact: str, value: Any) -> None:
+    target_name, attribute = fact.split(".", 1)
+    setattr(bundle[target_name], attribute, value)
+
+
+@pytest.mark.parametrize(
+    ("fact", "value", "message"),
+    [
+        ("source_snapshot.project_id", "other", "snapshot project mismatch"),
+        ("source_snapshot.guide_id", "other", "snapshot is not current"),
+        ("sufficiency_report.source_snapshot_id", "other", "stale snapshot"),
+        ("sufficiency_report.source_snapshot_hash", "other", "snapshot hash mismatch"),
+        ("sufficiency_report.status", "blocked", "blocking gaps"),
+        ("submission_artifact_policy.lifecycle_status", "draft", "approved submission artifact policy"),
+        ("submission_artifact_policy.source_snapshot_id", "other", "bound to a stale snapshot"),
+        ("submission_artifact_policy.source_snapshot_hash", "other", "snapshot hash mismatch"),
+        ("submission_artifact_policy.policy_hash", f"sha256:{'e' * 64}", "body hash mismatch"),
+        ("submission_artifact_policy.approved_by_actor", None, "approval provenance"),
+        ("submission_artifact_policy.approved_by_role", "submitter", "approver role is invalid"),
+        ("effective_policy.lifecycle_status", "draft", "effective.*not approved"),
+        ("effective_policy.source_snapshot_id", "other", "effective.*stale snapshot"),
+        ("effective_policy.source_snapshot_hash", "other", "effective.*hash mismatch"),
+        ("effective_policy.effective_policy_hash", f"sha256:{'e' * 64}", "body hash mismatch"),
+        ("effective_policy.submission_artifact_policy_id", "other", "wrong policy"),
+        ("effective_policy.submission_artifact_policy_hash", "other", "hash provenance mismatch"),
+        ("pre_submit_checker_policy.source_snapshot_id", "other", "pre-submit.*stale snapshot"),
+        ("pre_submit_checker_policy.source_snapshot_hash", "other", "pre-submit.*hash mismatch"),
+        ("pre_submit_checker_policy.effective_policy_id", "other", "wrong effective policy"),
+        ("pre_submit_checker_policy.effective_policy_hash", "other", "bundle provenance mismatch"),
+        ("pre_submit_checker_policy.lifecycle_status", "draft", "compiled project pre-submit"),
+        ("pre_submit_checker_policy.compiled_bundle_hash", "", "compiled bundle hash is required"),
+        ("pre_submit_checker_policy.compiled_bundle", {}, "compiled bundle is required"),
+        ("post_submit_checker_policy.guide_id", "other", "post-submit.*guide mismatch"),
+        ("post_submit_checker_policy.source_snapshot_id", "other", "post-submit.*snapshot mismatch"),
+        ("post_submit_checker_policy.effective_policy_id", "other", "wrong effective policy"),
+        ("post_submit_checker_policy.pre_submit_checker_policy_id", "other", "wrong pre-submit"),
+        ("post_submit_checker_policy.pre_submit_checker_bundle_hash", "other", "pre-submit hash mismatch"),
+        ("post_submit_checker_policy.lifecycle_status", "compiled", "approved post-submit"),
+        ("post_submit_checker_policy.approved_by_actor", None, "approval provenance"),
+        ("post_submit_checker_policy.approved_by_role", "submitter", "approval role is invalid"),
+        ("review_policy.allowed_decisions", [], "allowed decisions"),
+        ("review_policy.allowed_decisions", ["maybe"], "invalid decisions"),
+        ("revision_policy.max_revision_rounds", 0, "revision policy is incomplete"),
+        ("revision_policy.allowed_resubmission_states", ["accepted"], "invalid resubmission states"),
+        ("payment_policy.base_amount", Decimal("-1"), "payment policy is incomplete"),
+        ("payment_policy.currency", "", "payment policy is incomplete"),
+    ],
+)
+def test_activation_readiness_rejects_broken_chain_fact(
+    monkeypatch: pytest.MonkeyPatch,
+    fact: str,
+    value: Any,
+    message: str,
+) -> None:
+    bundle = _activation_ready_bundle()
+    _set_activation_fact(bundle, fact, value)
+    service = ProjectService(cast(Any, None))
+    monkeypatch.setattr(
+        service,
+        "_merge_effective_submission_artifact_policy",
+        lambda _body: deepcopy(bundle["effective_policy"].effective_policy),
+    )
+    monkeypatch.setattr(
+        project_service_module,
+        "parse_locked_post_submit_checker_policy_body",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            required_checkers=["archive_safety"],
+            warning_checkers=[],
+            blocking_severities=["error"],
+            execution_checkers=[],
+        ),
+    )
+    monkeypatch.setattr(
+        project_service_module,
+        "require_complete_policy",
+        lambda **_kwargs: None,
+    )
+
+    with pytest.raises(GuideActivationBlocked, match=message):
+        service.validate_activation_ready(**bundle)
+
+
+def test_activation_readiness_accepts_complete_chain_without_payment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bundle = _activation_ready_bundle()
+    service = ProjectService(cast(Any, None))
+    monkeypatch.setattr(
+        service,
+        "_merge_effective_submission_artifact_policy",
+        lambda _body: deepcopy(bundle["effective_policy"].effective_policy),
+    )
+    monkeypatch.setattr(
+        project_service_module,
+        "parse_locked_post_submit_checker_policy_body",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            required_checkers=["archive_safety"],
+            warning_checkers=[],
+            blocking_severities=["error"],
+            execution_checkers=[],
+        ),
+    )
+    monkeypatch.setattr(project_service_module, "require_complete_policy", lambda **_: None)
+
+    bundle["payment_policy"] = None
+    service.validate_activation_ready(**bundle, require_payment_policy=False)
+
+
+def _project_manager_actor() -> ActorContext:
+    return ActorContext(
+        actor_id="actor-1",
+        external_subject="subject-1",
+        external_issuer="https://identity.test",
+        roles=("project_manager",),
+        auth_source="dev_mock",
+    )
+
+
+class _IdentityResponse:
+    @staticmethod
+    def model_validate(value: Any) -> Any:
+        return value
+
+
+class _RecordingSession:
+    def __init__(self) -> None:
+        self.commits = 0
+        self.rollbacks = 0
+        self.refreshed: list[Any] = []
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+    async def flush(self) -> None:
+        return None
+
+    async def refresh(self, value: Any) -> None:
+        self.refreshed.append(value)
+
+
+@pytest.mark.asyncio
+async def test_submission_policy_derivation_persists_verified_agent_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
+    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
+    snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
+    report = SimpleNamespace(
+        status="passed",
+        findings=[],
+        summary="Verified guide is sufficient.",
+    )
+    stored: list[SubmissionArtifactPolicy] = []
+
+    class Repository:
+        async def get_sufficiency_report_for_snapshot(self, _snapshot_id: str) -> Any:
+            return report
+
+        async def get_agent_derived_submission_artifact_policy_for_snapshot(
+            self, *_args: Any
+        ) -> None:
+            return None
+
+        async def add_submission_artifact_policy(
+            self, policy: SubmissionArtifactPolicy
+        ) -> SubmissionArtifactPolicy:
+            stored.append(policy)
+            return policy
+
+    class Runtime:
+        async def derive_submission_artifact_policy(
+            self, material: Any, runtime_report: GuideSufficiencyAgentResult
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            assert material.snapshot_id == snapshot_id
+            assert runtime_report.status == "guide_sufficient"
+            return SubmissionArtifactPolicyDerivationResult(
+                policy_version="ignored-server-derived",
+                policy_body=SubmissionArtifactPolicyInput().model_dump(mode="json"),
+                change_summary="Derived from the verified guide.",
+                agent_version="test-runtime-v1",
+            )
+
+    session = _RecordingSession()
+    service = ProjectService(cast(Any, session), agent_runtime=cast(Any, Runtime()))
+    service._repo = cast(Any, Repository())
+
+    async def get_guide(*_args: Any) -> Any:
+        return guide
+
+    async def get_snapshot(*_args: Any) -> Any:
+        return snapshot
+
+    async def no_op(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def material(*_args: Any) -> Any:
+        return SimpleNamespace(snapshot_id=snapshot_id)
+
+    async def source_refs(*_args: Any) -> list[str]:
+        return [f"snapshot:{snapshot_id}"]
+
+    service._get_project_guide = get_guide
+    service._lock_project_guide_for_setup = get_guide
+    service._get_snapshot_for_guide = get_snapshot
+    service._ensure_snapshot_is_latest = no_op
+    service.validate_source_snapshot_integrity = no_op
+    service._validate_sufficiency_report_allows_policy_derivation = cast(Any, lambda *_: None)
+    service._validate_agent_sufficiency_report_for_derivation = no_op
+    service._verified_guide_source_material = material
+    service._verified_source_material_refs = source_refs
+    service._merge_effective_submission_artifact_policy = cast(Any, lambda body: body)
+    monkeypatch.setattr(
+        project_service_module,
+        "SubmissionArtifactPolicyResponse",
+        _IdentityResponse,
+    )
+
+    policy, created = await service.run_submission_artifact_policy_derivation_agent(
+        _project_manager_actor(), project_id, guide_id, snapshot_id
+    )
+
+    assert created is True
+    assert policy is stored[0]
+    assert policy.derivation_source == "agent_derivation"
+    assert policy.source_material_refs == [f"snapshot:{snapshot_id}"]
+    assert policy.change_summary == "Derived from the verified guide."
+    assert session.rollbacks == 1
+    assert session.commits == 1
+    assert session.refreshed == [policy]
+
+
+@pytest.mark.asyncio
+async def test_submission_policy_derivation_returns_concurrent_winner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
+    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
+    snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
+    report = SimpleNamespace(status="passed", findings=[], summary="Sufficient")
+    winner = SimpleNamespace(id="winner")
+    reads = 0
+
+    class Repository:
+        async def get_sufficiency_report_for_snapshot(self, _snapshot_id: str) -> Any:
+            return report
+
+        async def get_agent_derived_submission_artifact_policy_for_snapshot(
+            self, *_args: Any
+        ) -> Any:
+            nonlocal reads
+            reads += 1
+            return winner if reads == 3 else None
+
+        async def add_submission_artifact_policy(self, _policy: Any) -> Any:
+            raise IntegrityError("insert", {}, RuntimeError("race"))
+
+    class Runtime:
+        async def derive_submission_artifact_policy(
+            self, *_args: Any
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            return SubmissionArtifactPolicyDerivationResult(
+                policy_version="agent-v1",
+                policy_body=SubmissionArtifactPolicyInput().model_dump(mode="json"),
+                change_summary="derived",
+                agent_version="test-runtime-v1",
+            )
+
+    session = _RecordingSession()
+    service = ProjectService(cast(Any, session), agent_runtime=cast(Any, Runtime()))
+    service._repo = cast(Any, Repository())
+
+    async def get_guide(*_args: Any) -> Any:
+        return guide
+
+    async def get_snapshot(*_args: Any) -> Any:
+        return snapshot
+
+    async def no_op(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    service._get_project_guide = get_guide
+    service._lock_project_guide_for_setup = get_guide
+    service._get_snapshot_for_guide = get_snapshot
+    service._ensure_snapshot_is_latest = no_op
+    service.validate_source_snapshot_integrity = no_op
+    service._validate_sufficiency_report_allows_policy_derivation = cast(Any, lambda *_: None)
+    service._validate_agent_sufficiency_report_for_derivation = no_op
+    service._validate_agent_derived_submission_artifact_policy = cast(Any, lambda *_: None)
+    service._verified_guide_source_material = cast(
+        Any, lambda *_: no_op()
+    )
+    service._verified_source_material_refs = cast(Any, lambda *_: no_op())
+    service._merge_effective_submission_artifact_policy = cast(Any, lambda body: body)
+    monkeypatch.setattr(project_service_module, "SubmissionArtifactPolicyResponse", _IdentityResponse)
+
+    policy, created = await service.run_submission_artifact_policy_derivation_agent(
+        _project_manager_actor(), project_id, guide_id, snapshot_id
+    )
+
+    assert (policy, created) == (winner, False)
+    assert session.rollbacks == 2
+
+
+@pytest.mark.asyncio
+async def test_submission_policy_approval_builds_fresh_effective_and_checker_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "false")
+    get_settings.cache_clear()
+    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
+    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
+    snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
+    policy_body = SubmissionArtifactPolicyInput().model_dump(mode="json")
+    policy = SimpleNamespace(
+        id=str(uuid4()), project_id=project_id, guide_id=guide_id,
+        source_snapshot_id=snapshot_id, source_snapshot_hash=snapshot.bundle_hash,
+        lifecycle_status="draft", derivation_source="manual", policy_body=policy_body,
+        policy_hash=canonical_json_hash(policy_body), change_summary="draft summary",
+    )
+    added_effective: list[Any] = []
+    added_checker: list[Any] = []
+
+    class Repository:
+        async def lock_submission_artifact_policy(self, _policy_id: str) -> Any:
+            return policy
+        async def get_diagnostic_sufficiency_report_for_snapshot(self, _id: str) -> Any:
+            return SimpleNamespace(status="passed")
+        async def get_current_approved_submission_artifact_policy(self, *_: Any) -> None:
+            return None
+        async def get_current_pre_submit_checker_policy(self, *_: Any) -> None:
+            return None
+        async def get_post_submit_checker_policy(self, *_: Any) -> None:
+            return None
+        async def add_effective_submission_artifact_policy(self, value: Any) -> Any:
+            added_effective.append(value)
+            return value
+        async def add_pre_submit_checker_policy(self, value: Any) -> Any:
+            added_checker.append(value)
+            return value
+
+    session = _RecordingSession()
+    service = ProjectService(cast(Any, session))
+    service._repo = cast(Any, Repository())
+
+    async def get_guide(*_: Any) -> Any:
+        return guide
+    async def get_snapshot(*_: Any) -> Any:
+        return snapshot
+    async def no_op(*_: Any, **__: Any) -> None:
+        return None
+
+    effective_body = {"effective": "policy"}
+    service._lock_project_guide_for_setup = get_guide
+    service._get_snapshot_for_guide = get_snapshot
+    service._ensure_snapshot_is_latest = no_op
+    service.validate_source_snapshot_integrity = no_op
+    service._validate_sufficiency_report_allows_policy_approval = cast(Any, lambda *_: None)
+    service._merge_effective_submission_artifact_policy = cast(Any, lambda _: effective_body)
+    monkeypatch.setattr(
+        project_service_module, "compile_effective_project_submission_artifact_policy",
+        lambda *_: SimpleNamespace(
+            compiler_version="compiler-v1", compiled_bundle={"checks": ["hash"]},
+            compiled_bundle_hash=f"sha256:{'b' * 64}", checker_names=["hash"],
+            checker_configs={"hash": {}},
+        ),
+    )
+    monkeypatch.setattr(
+        project_service_module, "EffectiveProjectSubmissionArtifactPolicyResponse",
+        _IdentityResponse,
+    )
+
+    result = await service.approve_submission_artifact_policy(
+        _project_manager_actor(), project_id, guide_id, policy.id,
+        SubmissionArtifactPolicyApprove(approval_note="Approved manually."),
+    )
+
+    assert result is added_effective[0]
+    assert policy.lifecycle_status == "approved"
+    assert policy.approved_by_actor == "actor-1"
+    assert policy.approved_by_role == "project_manager"
+    assert policy.change_summary == "Approved manually."
+    assert added_effective[0].submission_artifact_policy_id == policy.id
+    assert added_checker[0].effective_policy_id == added_effective[0].id
+    assert session.commits == 1
+    assert session.refreshed == [added_effective[0], added_checker[0]]
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_post_submit_policy_correction_supersedes_and_restarts_setup() -> None:
+    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
+    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
+    policy = SimpleNamespace(
+        id=str(uuid4()),
+        lifecycle_status="compiled",
+        effective_policy_id="effective-1",
+        pre_submit_checker_policy_id="pre-submit-1",
+    )
+    setup_run = SimpleNamespace(
+        id=str(uuid4()),
+        source_snapshot_id=snapshot_id,
+        output_post_submit_checker_policy_id=policy.id,
+        status="post_submit_policy_compiled",
+        current_step="post_submit_checker_policy_compilation",
+        post_submit_derivation_summary={"status": "compiled"},
+        error_code=None,
+        error_summary=None,
+        finished_at=None,
+    )
+    refreshed_run = SimpleNamespace(id=setup_run.id)
+    refreshed_policy = SimpleNamespace(id="replacement-policy")
+    enqueued: list[dict[str, str]] = []
+
+    class Repository:
+        async def get_latest_project_setup_run(self, *_args: Any) -> Any:
+            return setup_run
+
+        async def lock_post_submit_checker_policy(self, _policy_id: str) -> Any:
+            return policy
+
+        async def get_project_setup_run(self, _setup_run_id: str) -> Any:
+            return refreshed_run
+
+    session = _RecordingSession()
+    service = ProjectService(cast(Any, session))
+    service._repo = cast(Any, Repository())
+
+    async def get_guide(*_args: Any) -> Any:
+        return guide
+
+    async def no_op(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def enqueue(**facts: str) -> None:
+        enqueued.append(facts)
+
+    async def load_policy(_run: Any) -> Any:
+        return refreshed_policy
+
+    async def response(run: Any, current_policy: Any) -> dict[str, Any]:
+        return {"run": run, "policy": current_policy}
+
+    service._lock_project_guide_for_setup = get_guide
+    service._validate_current_post_submit_policy_setup = no_op
+    service._enqueue_post_submit_setup_continuation_after_commit = enqueue
+    service._post_submit_policy_from_setup_run = load_policy
+    service._post_submit_policy_setup_response = response
+
+    result = await service.request_post_submit_checker_policy_correction(
+        _project_manager_actor(),
+        project_id,
+        guide_id,
+        PostSubmitCheckerPolicyCorrectionRequest(correction_reason="Checker policy is too broad."),
+    )
+
+    assert result == {"run": refreshed_run, "policy": refreshed_policy}
+    assert policy.lifecycle_status == "superseded"
+    assert policy.supersession_kind == "correction_requested"
+    assert policy.supersession_reason == "Checker policy is too broad."
+    assert policy.superseded_by_actor == "actor-1"
+    assert policy.superseded_by_role == "project_manager"
+    assert setup_run.status == "post_submit_setup_blocked"
+    assert setup_run.current_step == "post_submit_checker_policy_approval"
+    assert setup_run.output_post_submit_checker_policy_id is None
+    assert setup_run.error_code == "post_submit_policy_correction_requested"
+    assert setup_run.error_summary == "post-submit checker policy correction requested"
+    assert setup_run.post_submit_derivation_summary["reason"] == "Checker policy is too broad."
+    assert session.commits == 1
+    assert session.refreshed == [setup_run]
+    assert enqueued == [
+        {
+            "project_id": project_id,
+            "guide_id": guide_id,
+            "source_snapshot_id": snapshot_id,
+            "setup_run_id": setup_run.id,
+            "effective_policy_id": "effective-1",
+            "pre_submit_checker_policy_id": "pre-submit-1",
+        }
+    ]
+
+
+@pytest.mark.parametrize("continuation", [False, True])
+def test_project_setup_queue_enqueues_exact_task_payload(
+    monkeypatch: pytest.MonkeyPatch,
+    continuation: bool,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    from app.workers import project_setup as worker_module
+
+    captured: dict[str, Any] = {}
+    task = (
+        worker_module.run_post_submit_setup_continuation
+        if continuation
+        else worker_module.run_pre_submit_setup_pipeline
+    )
+
+    def apply_async(*, args: tuple[Any, ...], task_id: str | None = None) -> Any:
+        captured.update(args=args, task_id=task_id)
+        return SimpleNamespace(id="queued-task")
+
+    monkeypatch.setattr(project_setup_queue_module, "sync_task_settings", lambda value: value)
+    monkeypatch.setattr(task, "apply_async", apply_async)
+
+    if continuation:
+        result = project_setup_queue_module.enqueue_post_submit_setup_continuation(
+            project_id="project-1",
+            guide_id="guide-1",
+            source_snapshot_id="snapshot-1",
+            setup_run_id="run-1",
+            effective_policy_id="effective-1",
+            pre_submit_checker_policy_id="checker-1",
+        )
+        assert captured == {
+            "args": (
+                "project-1",
+                "guide-1",
+                "snapshot-1",
+                "run-1",
+                "effective-1",
+                "checker-1",
+            ),
+            "task_id": None,
+        }
+    else:
+        result = project_setup_queue_module.enqueue_pre_submit_setup_pipeline(
+            project_id="project-1",
+            guide_id="guide-1",
+            source_snapshot_id="snapshot-1",
+            setup_run_id="run-1",
+            setup_generation=3,
+            task_id="stable-task",
+        )
+        assert captured == {
+            "args": ("project-1", "guide-1", "snapshot-1", "run-1", 3),
+            "task_id": "stable-task",
+        }
+    assert result == "queued-task"
+
+
+@pytest.mark.parametrize("continuation", [False, True])
+def test_project_setup_queue_normalizes_broker_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    continuation: bool,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    from app.workers import project_setup as worker_module
+
+    task = (
+        worker_module.run_post_submit_setup_continuation
+        if continuation
+        else worker_module.run_pre_submit_setup_pipeline
+    )
+    monkeypatch.setattr(project_setup_queue_module, "sync_task_settings", lambda value: value)
+    monkeypatch.setattr(
+        task,
+        "apply_async",
+        lambda **_kwargs: (_ for _ in ()).throw(OSError("secret broker detail")),
+    )
+
+    with pytest.raises(ProjectSetupQueueError, match="could not be enqueued") as caught:
+        if continuation:
+            project_setup_queue_module.enqueue_post_submit_setup_continuation(
+                project_id="project-1",
+                guide_id="guide-1",
+                source_snapshot_id="snapshot-1",
+                setup_run_id="run-1",
+                effective_policy_id="effective-1",
+                pre_submit_checker_policy_id="checker-1",
+            )
+        else:
+            project_setup_queue_module.enqueue_pre_submit_setup_pipeline(
+                project_id="project-1",
+                guide_id="guide-1",
+                source_snapshot_id="snapshot-1",
+                setup_run_id="run-1",
+                setup_generation=3,
+            )
+    assert "secret broker detail" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("setup_run", "expected"),
+    [
+        (None, None),
+        (SimpleNamespace(status="running", celery_task_id="existing"), "existing"),
+        (SimpleNamespace(status="running", celery_task_id=None), None),
+    ],
+)
+async def test_project_setup_dispatch_returns_terminal_state_without_publish(
+    monkeypatch: pytest.MonkeyPatch,
+    setup_run: Any,
+    expected: str | None,
+) -> None:
+    class Repository:
+        def __init__(self, _session: Any) -> None:
+            pass
+
+        async def lock_project_setup_run(self, _setup_run_id: str) -> Any:
+            return setup_run
+
+    class Session:
+        async def commit(self) -> None:
+            raise AssertionError("terminal state must not be mutated")
+
+    monkeypatch.setattr(project_repository_module, "ProjectRepository", Repository)
+    monkeypatch.setattr(
+        project_setup_queue_module,
+        "enqueue_pre_submit_setup_pipeline",
+        lambda **_: (_ for _ in ()).throw(AssertionError("must not publish")),
+    )
+
+    result = await project_setup_queue_module.dispatch_pre_submit_setup_pipeline_after_commit(
+        cast(Any, Session()),
+        project_id="project-1",
+        guide_id="guide-1",
+        source_snapshot_id="snapshot-1",
+        setup_run_id="run-1",
+        setup_generation=1,
+    )
+
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_post_submit_derivation_summary_projects_verified_setup_inputs() -> None:
+    setup_run = SimpleNamespace(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+        output_sufficiency_report_id="report-1",
+        output_submission_artifact_policy_id="submission-1",
+    )
+    report = SimpleNamespace(status="passed", findings=[{"code": "one"}])
+    effective = SimpleNamespace(
+        id="effective-1",
+        effective_policy_hash=f"sha256:{'b' * 64}",
+        effective_policy={
+            "required_artifacts": [{"name": "packet"}],
+            "required_evidence": [{"name": "proof"}, {"name": "tests"}],
+            "forbidden_artifacts": [{"pattern": "*.key"}],
+        },
+    )
+    pre_submit = SimpleNamespace(
+        id="checker-1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash=setup_run.source_snapshot_hash,
+        compiled_bundle_hash=f"sha256:{'c' * 64}",
+        checker_names=["check_hash", "check_manifest"],
+    )
+    policy = SimpleNamespace(
+        effective_policy_id="effective-from-policy",
+        effective_policy_hash=f"sha256:{'d' * 64}",
+        pre_submit_checker_policy_id="checker-from-policy",
+        pre_submit_checker_bundle_hash=f"sha256:{'e' * 64}",
+    )
+
+    class Repository:
+        async def get_guide_sufficiency_report(self, _id: str) -> Any:
+            return report
+
+        async def get_effective_submission_artifact_policy(self, *_args: Any) -> Any:
+            return effective
+
+        async def get_pre_submit_checker_policy_for_effective_policy(self, _id: str) -> Any:
+            return pre_submit
+
+    service = ProjectService(cast(Any, _RecordingSession()))
+    service._repo = cast(Any, Repository())
+    service._is_project_setup_run_output_match = cast(Any, lambda *_: True)
+
+    summary = await service._post_submit_derivation_input_summary(
+        cast(Any, setup_run), cast(Any, policy)
+    )
+
+    assert summary["source_snapshot_hash_redacted"] is True
+    assert summary["sufficiency_status"] == "passed"
+    assert summary["sufficiency_finding_count"] == 1
+    assert summary["effective_policy_required_artifact_count"] == 1
+    assert summary["effective_policy_required_evidence_count"] == 2
+    assert summary["effective_policy_forbidden_artifact_count"] == 1
+    assert summary["pre_submit_checker_names"] == ["check_hash", "check_manifest"]
+    assert summary["pre_submit_checker_count"] == 2
+    assert summary["effective_policy_id"] == "effective-from-policy"
+    assert summary["pre_submit_checker_policy_id"] == "checker-from-policy"
+
+
+@pytest.mark.asyncio
+async def test_post_submit_correction_history_returns_bounded_attributable_records() -> None:
+    setup_run = SimpleNamespace(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+    )
+    effective = SimpleNamespace(
+        id="effective-1",
+        source_snapshot_hash=setup_run.source_snapshot_hash,
+        effective_policy_hash=f"sha256:{'b' * 64}",
+    )
+    pre_submit = SimpleNamespace(
+        id="checker-1",
+        source_snapshot_id=setup_run.source_snapshot_id,
+        source_snapshot_hash=setup_run.source_snapshot_hash,
+        compiled_bundle_hash=f"sha256:{'c' * 64}",
+    )
+    corrected_at = datetime.now(UTC)
+    corrected = SimpleNamespace(
+        id="post-policy-1",
+        policy_hash=f"sha256:{'d' * 64}",
+        required_checkers=["check_hash"],
+        warning_checkers=["check_metadata"],
+        blocking_severities=["high"],
+        supersession_reason="Policy required correction.",
+        superseded_by_role="project_manager",
+        superseded_by_actor="actor-1",
+        superseded_at=corrected_at,
+    )
+
+    class Repository:
+        async def get_effective_submission_artifact_policy(self, *_args: Any) -> Any:
+            return effective
+
+        async def get_pre_submit_checker_policy_for_effective_policy(self, _id: str) -> Any:
+            return pre_submit
+
+        async def list_superseded_post_submit_checker_policies(
+            self, *_args: Any
+        ) -> list[Any]:
+            return [corrected] * 101
+
+    service = ProjectService(cast(Any, _RecordingSession()))
+    service._repo = cast(Any, Repository())
+
+    history = await service._post_submit_policy_correction_history(cast(Any, setup_run))
+
+    assert len(history) == 100
+    assert history[0].model_dump() == {
+        "policy_id": "post-policy-1",
+        "policy_hash": corrected.policy_hash,
+        "required_checkers": ["check_hash"],
+        "warning_checkers": ["check_metadata"],
+        "blocking_severities": ["high"],
+        "correction_reason": "Policy required correction.",
+        "correction_requested_by_role": "project_manager",
+        "correction_requested_by_actor": "actor-1",
+        "correction_requested_at": corrected_at,
+    }
 
 
 @pytest.mark.asyncio
