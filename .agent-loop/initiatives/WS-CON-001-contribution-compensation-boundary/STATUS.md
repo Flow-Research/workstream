@@ -2,13 +2,13 @@
 
 ## Current baseline
 
-- Reconciled main: `2feaf47dd5bb448db076179d96751caa55fb0994`.
-- Backend CI for that SHA: failing one AUTH actor-profile concurrency test in
-  `shared_foundations`; the planning diff changes no AUTH/runtime/test/CI files.
-- Alembic head on main: `0050_guide_source_v2`.
+- Reconciled main: `b47a7e64f7d75cda8a0681d1aff3bf0c4a5be4aa`.
+- Alembic head on main: `0052_legacy_intake_removal`.
 - CON-01 and CON-02A are merged.
-- No CON runtime chunk is active in this worktree.
-- Runtime contains shared outbox persistence only; contribution, compensation,
+- CON-03A adapter-binding persistence is the active implementation chunk and
+  allocates linear migration `0053_compensation_bindings`.
+- Runtime contains shared outbox persistence and the in-review compensation
+  binding schema only; contribution,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
 - The pre-existing local deletion of the archival reference PDF is user-owned
   and excluded from this planning change.
@@ -64,13 +64,12 @@ schema work. Current dependency analysis yields:
   decision.
 - CON-03C: REV Review/ReviewLease/FinalAcceptance tables are not implemented.
 - CON-06/07: corresponding REV lease/decision caller contracts are future.
-- Migration allocation: refresh after any later migration-bearing merge; do
-  not assume `0051` remains available.
+- CON-03A creation behavior: AUTH has not approved a compensation-adapter
+  service identity/capability; existing ART/REV identities cannot substitute.
 
 ## Immediate next action
 
-Publish the reviewed PLAN4 planning repair without the user-owned PDF deletion
-and obtain a green rerun or upstream AUTH repair for the concurrency failure.
-After PLAN4 merges and the human approves implementation, refresh main and
-implement only CON-03A. Stop at its PR checkpoint; do not start 03B or another
-CON chunk automatically.
+Finish CON-03A schema evidence and review, publish it without the user-owned PDF
+deletion, and stop at its PR checkpoint. Binding creation remains deferred to
+04A after AUTH approves the exact adapter identity/capability contract; do not
+start 03B or another CON chunk automatically.

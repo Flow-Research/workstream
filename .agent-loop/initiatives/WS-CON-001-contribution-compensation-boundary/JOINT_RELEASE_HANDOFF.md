@@ -1,5 +1,8 @@
 # Joint ART/AUTH/REV/CON Release Handoff
 
+> Historical PLAN4 release snapshot. Live 03A implementation state is in
+> `STATUS.md`, `SOURCE_MANIFEST.md`, and the `WS-CON-001-03A` contract.
+
 ## Ownership
 
 - ART owns immutable artifact admission, submission evidence, guide-source

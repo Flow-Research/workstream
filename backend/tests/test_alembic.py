@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0052_legacy_intake_removal"
+HEAD_REVISION = "0053_compensation_bindings"
 
 pytestmark = pytest.mark.postgres_schema_contract
 

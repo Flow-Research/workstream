@@ -1,5 +1,8 @@
 # Plan: WS-CON-001 Contribution And Compensation
 
+> Historical PLAN4 plan. Live 03A implementation state is in `STATUS.md`,
+> `SOURCE_MANIFEST.md`, and the `WS-CON-001-03A` contract.
+
 ## Strategy
 
 Build the canonical PostgreSQL truth first, then integrate it into REV's
