@@ -4,13 +4,13 @@
 
 ### Current-main refresh for 03R
 
-Backend run `30915102589` on current-main merge commit `cda59fc3` completed
-3,056 tests, covered 21,348 of 23,826 statements (89.599597 percent), recorded
-846.531 seconds total hosted wall time, and a 659.823-second slowest lane.
-Reaching 90.25 percent on this denominator requires 21,503 covered statements,
-a net gain of 155. The focused 03R test union covers 168 statements missing
+Backend run `30921410531` on current-main merge commit `5b853d50` completed
+3,068 tests, covered 21,453 of 23,938 statements (89.619016 percent), recorded
+727.166 seconds total hosted wall time, and a 567.994-second slowest lane.
+Reaching 90.25 percent on this denominator requires 21,605 covered statements,
+a net gain of 152. The focused 03R test union covers 168 statements missing
 from this hosted report: checker service 107, runner 45, and compiler 16. That
-projects 21,516 / 23,826, or 90.304709 percent; hosted exact-head fan-in remains
+projects 21,621 / 23,938, or 90.320829 percent; hosted exact-head fan-in remains
 authoritative.
 
 Checker-owned gaps are sufficient and remain unchanged by ART: service 169,
