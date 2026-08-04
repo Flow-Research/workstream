@@ -74,6 +74,106 @@ _FACT_VALUES: dict[str, frozenset[str]] = {
 }
 
 
+class LifecycleAuditEntityType(StrEnum):
+    """Closed product-fact namespaces admitted by the shared participant."""
+
+    TASK = "task"
+    SUBMISSION = "submission"
+    REVIEW = "review"
+    FINAL_ACCEPTANCE = "final_acceptance"
+    CONTRIBUTION = "contribution"
+    COMPENSATION_AWARD = "compensation_award"
+
+
+class LifecycleAuditReason(StrEnum):
+    """Feature-neutral reasons for durable lifecycle evidence."""
+
+    STATE_CHANGED = "lifecycle_state_changed"
+    FACT_RECORDED = "lifecycle_fact_recorded"
+
+
+class LifecycleAuditReferenceKind(StrEnum):
+    """Closed UUID reference keys allowed in lifecycle audit payloads."""
+
+    PROJECT = "project_id"
+    TASK = "task_id"
+    ASSIGNMENT = "assignment_id"
+    SUBMISSION = "submission_id"
+    REVIEW = "review_id"
+    REVIEW_LEASE = "review_lease_id"
+    FINAL_ACCEPTANCE = "final_acceptance_id"
+    CONTRIBUTION_RECORD = "contribution_record_id"
+    COMPENSATION_AWARD = "compensation_award_id"
+
+
+class LifecycleAuditEventInput(BaseModel):
+    """Admit one bounded lifecycle fact without claims or arbitrary metadata."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    event_id: UUID
+    entity_type: LifecycleAuditEntityType
+    entity_id: UUID
+    event_type: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{2,99}$")]
+    actor_id: UUID
+    reason: LifecycleAuditReason
+    from_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
+    to_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
+    references: dict[LifecycleAuditReferenceKind, UUID] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_closed_input(cls, value: object) -> object:
+        """Copy only the closed input shape before Pydantic retains values."""
+        try:
+            if not isinstance(value, Mapping):
+                raise TypeError
+            data = dict(value)
+            if set(data) - cls.model_fields.keys():
+                raise TypeError
+            references = data.get("references", {})
+            if not isinstance(references, Mapping) or len(references) > len(
+                LifecycleAuditReferenceKind
+            ):
+                raise TypeError
+            data["references"] = dict(references)
+            return data
+        except Exception as exc:  # noqa: BLE001 - hostile Mapping methods are untrusted
+            raise TypeError("invalid lifecycle audit input") from exc
+
+    @model_validator(mode="after")
+    def validate_lifecycle_shape(self) -> Self:
+        """Keep state transitions distinct from immutable fact creation."""
+        if self.reason is LifecycleAuditReason.STATE_CHANGED:
+            if self.from_status == self.to_status or (
+                self.from_status is None and self.to_status is None
+            ):
+                raise ValueError("state change requires distinct lifecycle states")
+        elif self.from_status is not None or self.to_status is not None:
+            raise ValueError("fact recording cannot carry lifecycle states")
+        entity_reference = {
+            LifecycleAuditEntityType.TASK: LifecycleAuditReferenceKind.TASK,
+            LifecycleAuditEntityType.SUBMISSION: LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditEntityType.REVIEW: LifecycleAuditReferenceKind.REVIEW,
+            LifecycleAuditEntityType.FINAL_ACCEPTANCE: (
+                LifecycleAuditReferenceKind.FINAL_ACCEPTANCE
+            ),
+            LifecycleAuditEntityType.CONTRIBUTION: (
+                LifecycleAuditReferenceKind.CONTRIBUTION_RECORD
+            ),
+            LifecycleAuditEntityType.COMPENSATION_AWARD: (
+                LifecycleAuditReferenceKind.COMPENSATION_AWARD
+            ),
+        }[self.entity_type]
+        if LifecycleAuditReferenceKind.PROJECT not in self.references:
+            raise ValueError("lifecycle audit requires project reference")
+        if self.references.get(entity_reference) != self.entity_id:
+            raise ValueError("entity reference must match lifecycle entity")
+        if not self.event_type.startswith(f"{self.entity_type.value}_"):
+            raise ValueError("event type must match lifecycle entity")
+        return self
+
+
 class AuthorityEventType(StrEnum):
     """Closed authority event tokens from the adopted specification."""
 

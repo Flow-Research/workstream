@@ -10,6 +10,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.tasks.models import AuditEvent
 
 
+LIFECYCLE_AUTH_SOURCE = "local_lifecycle"
+_LIFECYCLE_REPLAY_FIELDS = (
+    "entity_type",
+    "entity_id",
+    "event_type",
+    "from_status",
+    "to_status",
+    "actor_id",
+    "external_subject",
+    "external_issuer",
+    "actor_roles",
+    "claim_snapshot",
+    "auth_source",
+    "is_dev_auth",
+    "reason",
+    "event_payload",
+    "event_domain",
+    "event_version",
+    "occurred_at",
+)
+
+
+class LifecycleAuditConflict(ValueError):
+    """Signal changed reuse of an immutable lifecycle audit identity."""
+
+
 class AuditRepository:
     """Wraps persistence for audit events independent of domain services."""
 
@@ -32,6 +58,25 @@ class AuditRepository:
         """
         if event.event_domain == "authority":
             raise ValueError("authority events require the typed audit service")
+        if event.auth_source == LIFECYCLE_AUTH_SOURCE:
+            raise ValueError("lifecycle events require the typed audit participant")
+        return await self._persist(event)
+
+    async def _add_validated_lifecycle_event(self, event: AuditEvent) -> AuditEvent:
+        """Return exact replay or flush one participant-validated lifecycle event."""
+        if (
+            event.event_domain != "legacy_lifecycle"
+            or event.auth_source != LIFECYCLE_AUTH_SOURCE
+        ):
+            raise ValueError("expected validated lifecycle audit event")
+        existing = await self._session.get(AuditEvent, event.id)
+        if existing is not None:
+            if existing.event_domain != "legacy_lifecycle" or any(
+                getattr(existing, field) != getattr(event, field)
+                for field in _LIFECYCLE_REPLAY_FIELDS
+            ):
+                raise LifecycleAuditConflict("lifecycle audit identity conflict")
+            return existing
         return await self._persist(event)
 
     async def _add_validated_authority_event(self, event: AuditEvent) -> AuditEvent:

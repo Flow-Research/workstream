@@ -1954,6 +1954,17 @@ before/after facts without raw claims or unnecessary profile data. The shared
 repository participates in its caller's transaction and does not commit or
 open an independent session.
 
+The typed `LifecycleAuditParticipant` is the feature-neutral writer for new
+REV/CON lifecycle evidence. It accepts only closed entity/reason/reference
+types and UUID references, flushes through the caller's `AsyncSession`, and
+uses the existing `legacy_lifecycle` row shape without adding another domain or
+ledger. The participant supplies fixed internal provenance markers required by
+that historical row shape; callers cannot provide external subjects, issuers,
+roles, claims, authorization facts, credentials, provider references, or
+arbitrary payload metadata. Exact event-ID replay returns only an identical
+immutable row, while changed reuse fails closed. Caller rollback removes the
+audit row with the rest of the product transaction.
+
 ## Required Invariants
 
 - a task must belong to a project

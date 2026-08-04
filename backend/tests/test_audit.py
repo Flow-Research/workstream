@@ -18,13 +18,17 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     create_async_engine,
 )
 
-from app.modules.audit.repository import AuditRepository
+from app.modules.audit.repository import AuditRepository, LifecycleAuditConflict
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,
     AuthorityEventType,
+    LifecycleAuditEntityType,
+    LifecycleAuditEventInput,
+    LifecycleAuditReason,
+    LifecycleAuditReferenceKind,
 )
-from app.modules.audit.service import AuditService
+from app.modules.audit.service import AuditService, LifecycleAuditParticipant
 from app.modules.authorization.catalogue import (
     ACTION_DEFINITIONS,
     ActionAvailability,
@@ -1133,6 +1137,7 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
                     text("delete from audit_events where id = :id"),
                     {"id": event_id},
                 )
+
             await session.rollback()
         with pytest.raises(DBAPIError, match="append-only"):
             await session.execute(text("truncate table audit_events cascade"))
@@ -1306,3 +1311,161 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
                 },
             )
         await session.rollback()
+
+
+def _lifecycle_input(**overrides) -> LifecycleAuditEventInput:
+    entity_id = uuid4()
+    values = {
+        "event_id": uuid4(),
+        "entity_type": LifecycleAuditEntityType.REVIEW,
+        "entity_id": entity_id,
+        "event_type": "review_state_changed",
+        "actor_id": uuid4(),
+        "reason": LifecycleAuditReason.STATE_CHANGED,
+        "from_status": "pending",
+        "to_status": "accepted",
+        "references": {
+            LifecycleAuditReferenceKind.PROJECT: uuid4(),
+            LifecycleAuditReferenceKind.REVIEW: entity_id,
+        },
+    }
+    values.update(overrides)
+    return LifecycleAuditEventInput(**values)
+
+
+async def test_lifecycle_participant_boundary_flushes_exact_closed_shape_without_commit(
+    audit_factory,
+) -> None:
+    value = _lifecycle_input()
+    async with audit_factory() as session:
+        stored = await LifecycleAuditParticipant(session).add_event(value)
+        assert await session.get(AuditEvent, str(value.event_id)) is stored
+        assert stored.event_domain == "legacy_lifecycle"
+        assert stored.event_version is None
+        assert stored.occurred_at is None
+        assert stored.auth_source == "local_lifecycle"
+        assert stored.external_subject == "workstream:lifecycle-participant"
+        assert stored.external_issuer == "workstream:internal"
+        assert stored.actor_roles == []
+        assert stored.claim_snapshot == {}
+        assert stored.event_payload == {
+            "references": {
+                "project_id": str(value.references[LifecycleAuditReferenceKind.PROJECT]),
+                "review_id": str(value.references[LifecycleAuditReferenceKind.REVIEW]),
+            }
+        }
+        assert stored.action_id is None
+        assert stored.before_facts is None
+        assert stored.after_facts is None
+        await session.rollback()
+
+
+async def test_lifecycle_participant_rollback_removes_staged_event(audit_factory) -> None:
+    value = _lifecycle_input()
+    async with audit_factory() as session:
+        await LifecycleAuditParticipant(session).add_event(value)
+        await session.rollback()
+    async with audit_factory() as session:
+        assert await session.get(AuditEvent, str(value.event_id)) is None
+
+
+async def test_lifecycle_participant_exact_replay_returns_existing_event(
+    audit_factory,
+) -> None:
+    value = _lifecycle_input()
+    async with audit_factory() as session:
+        first = await LifecycleAuditParticipant(session).add_event(value)
+        await session.commit()
+    async with audit_factory() as session:
+        replay = await LifecycleAuditParticipant(session).add_event(value.model_copy(deep=True))
+        assert replay.id == first.id
+        assert replay.event_payload == first.event_payload
+
+
+async def test_lifecycle_participant_changed_replay_conflicts_without_payload_leak(
+    audit_factory,
+) -> None:
+    value = _lifecycle_input()
+    async with audit_factory() as session:
+        await LifecycleAuditParticipant(session).add_event(value)
+        await session.commit()
+    async with audit_factory() as session:
+        participant = LifecycleAuditParticipant(session)
+        changed = value.model_copy(update={"to_status": "rejected"})
+        with pytest.raises(LifecycleAuditConflict, match="identity conflict") as caught:
+            await participant.add_event(changed)
+        assert "rejected" not in str(caught.value)
+
+
+async def test_lifecycle_participant_boundary_rejects_generic_repository_bypass(
+    audit_factory,
+) -> None:
+    raw = AuditEvent(
+        id=str(uuid4()),
+        entity_type="review",
+        entity_id=str(uuid4()),
+        event_type="review_state_changed",
+        actor_id=str(uuid4()),
+        external_subject="workstream:lifecycle-participant",
+        external_issuer="workstream:internal",
+        actor_roles=[],
+        claim_snapshot={},
+        auth_source="local_lifecycle",
+        is_dev_auth=False,
+        reason="lifecycle_state_changed",
+        event_payload={"references": {}},
+    )
+    async with audit_factory() as session:
+        with pytest.raises(ValueError, match="typed audit participant"):
+            await AuditRepository(session).add_audit_event(raw)
+        assert raw not in session
+
+
+async def test_lifecycle_participant_payload_revalidates_forged_input_without_secret_leak(
+    audit_factory,
+) -> None:
+    secret = "provider-token-must-not-survive"
+    value = _lifecycle_input()
+    value.__dict__["access_token"] = secret
+    async with audit_factory() as session:
+        with pytest.raises(TypeError, match="invalid lifecycle audit input") as caught:
+            await LifecycleAuditParticipant(session).add_event(value)
+        assert_secret_not_retained(caught.value, secret)
+        assert await session.get(AuditEvent, str(value.event_id)) is None
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (
+            {"reason": LifecycleAuditReason.FACT_RECORDED},
+            "fact recording cannot carry lifecycle states",
+        ),
+        (
+            {"from_status": "pending", "to_status": "pending"},
+            "state change requires distinct lifecycle states",
+        ),
+        (
+            {"event_type": "task_state_changed"},
+            "event type must match lifecycle entity",
+        ),
+        (
+            {"references": {LifecycleAuditReferenceKind.PROJECT: uuid4()}},
+            "entity reference must match lifecycle entity",
+        ),
+        (
+            {
+                "references": {
+                    LifecycleAuditReferenceKind.REVIEW: uuid4(),
+                }
+            },
+            "lifecycle audit requires project reference",
+        ),
+    ],
+)
+def test_lifecycle_input_rejects_invalid_reason_state_shapes(
+    overrides: dict,
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        _lifecycle_input(**overrides)
