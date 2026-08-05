@@ -1071,10 +1071,10 @@ with exact setup custody and no matched human grant.
 | `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
-| `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
-| `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
-| `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
-| `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
+| `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
+| `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |
+| `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
+| `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F4` |
 | `project.post_submit_checker_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
 | `project.post_submit_checker_policy.correction.request` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
 | `project.post_submit_checker_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
@@ -1087,6 +1087,13 @@ acknowledgement authority provenance for new 12E mutations. Its replay ledger
 is append-only, and downgrade is refused after any 12E replay or provenance
 exists. Operators must not delete authority or product evidence to force a
 rollback.
+
+`WS-AUTH-001-12F` is a planning-only parent and activates nothing. 12F1 owns
+the zero-activation PREP/replay/provenance foundation; 12F2 owns explicitly
+manual Project Manager drafts; 12F3 owns automatic fixed
+`workstream.project.setup` derivation and removes public inline derivation; and
+12F4 owns Project Manager approval plus the atomic effective/pre-submit chain.
+12G and the final setup-service cutover depend on merged 12F4.
 
 Migration `0041_project_mutation_evidence` extends only the closed audit
 action-to-permission evidence constraint. It follows ART migration

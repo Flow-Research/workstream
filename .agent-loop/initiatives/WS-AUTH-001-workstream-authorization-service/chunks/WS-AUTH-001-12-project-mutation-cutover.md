@@ -45,10 +45,10 @@ P1
 | `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports` / `create_guide_sufficiency_report` | `project.guide_sufficiency_report.create` | `project.guide.manage` | `WS-AUTH-001-12E` | covered Project Manager | 12E |
 | `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent` / `run_guide_sufficiency_agent` | `project.guide_sufficiency.run` | `project.guide.manage` | `WS-AUTH-001-12E` | covered Project Manager over HTTP; `workstream.project.setup` only through internal command resolution | 12E |
 | `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings` / `acknowledge_guide_sufficiency_warnings` | `project.guide_sufficiency.warnings.acknowledge` | `project.guide.manage` | `WS-AUTH-001-12E` | covered Project Manager | 12E |
-| `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` / `create_submission_artifact_policy` | `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F` | covered Project Manager | 12F |
-| `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy` / `run_submission_artifact_policy_derivation_agent` | `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F` | covered Project Manager over HTTP; `workstream.project.setup` only through internal command resolution | 12F |
-| `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` / `update_submission_artifact_policy` | `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F` | covered Project Manager | 12F |
-| `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve` / `approve_submission_artifact_policy` | `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F` | covered Project Manager | 12F |
+| `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` / `create_submission_artifact_policy` | `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F2` | covered Project Manager manual exception | 12F2 |
+| internal `run_submission_artifact_policy_derivation_agent` | `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F3` | `workstream.project.setup` only; public inline derive is removed | 12F3 |
+| `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` / `update_submission_artifact_policy` | `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F2` | covered Project Manager manual exception | 12F2 |
+| `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve` / `approve_submission_artifact_policy` | `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F4` | covered Project Manager | 12F4 |
 | `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/approve` / `approve_current_post_submit_checker_policy` | `project.post_submit_checker_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12G` | covered Project Manager | 12G |
 | `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/request-correction` / `request_post_submit_checker_policy_correction` | `project.post_submit_checker_policy.correction.request` | `project.effective_policy.manage` | `WS-AUTH-001-12G` | covered Project Manager | 12G |
 | internal `run_post_submit_checker_policy_derivation_agent` | `project.post_submit_checker_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12G` | `workstream.project.setup` | 12G |
@@ -71,11 +71,13 @@ provider access, extraction, and later ART activation remain outside AUTH-12.
 5. 12D2 adds separate review and revision policy routes. Retired guide-bound
    economic policy remains removed and CON-owned; AUTH-12 creates no replacement.
 6. 12E cuts over guide-sufficiency mutations.
-7. 12F cuts over submission-artifact policy mutations and their provenance.
+7. 12F is a planning-only parent. 12F1 installs the zero-activation authority
+   foundation; 12F2 cuts over manual drafts; 12F3 cuts over fixed-service
+   derivation; and 12F4 cuts over approval plus the effective/pre-submit chain.
 8. 12G cuts over post-submit checker-policy derivation/approval/correction without
    changing checker execution, visibility, or `WS-POL-002-03` behavior.
 9. 12B2 activates setup-run ledger authority and cuts both Celery entry points
-   only after 12E/12F/12G have activated the exact product actions they call.
+   only after 12E/12F4/12G have activated the exact product actions they call.
 10. 12H cuts over guide activation after every prerequisite family is local
     and the owning CON clean cut has removed the retired economic-policy
     dependency.
@@ -107,7 +109,9 @@ participants roll back and restage that exact denial evidence.
 
 Planning/review artifacts under this initiative plus
 `scripts/check_stale_authorization_docs.py` solely for the exact technical-path
-exemption used by 12B2. No scanner rule or other exception may change.
+exemptions used by 12B2 and 12F3. Both accept only the full literal technical
+Celery module path already listed in those contracts; no scanner rule,
+narrative wording, other path, or other exception may change.
 
 ## Not allowed changes
 
