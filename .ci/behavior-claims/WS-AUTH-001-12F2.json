@@ -3,8 +3,82 @@
   "chunk_id": "WS-AUTH-001-12F2",
   "claims": [
     {
+      "target": "backend/app/modules/authorization/catalogue.py",
+      "callables": ["app.modules.authorization.catalogue._index_actions"],
+      "tests": ["backend/tests/test_authorization.py::test_submission_artifact_policy_create_update_activation_is_12f2_only"],
+      "outcomes": ["return", "denial"],
+      "boundaries": []
+    },
+    {
+      "target": "backend/app/modules/authorization/prepared.py",
+      "callables": [
+        "app.modules.authorization.prepared._submission_policy_binding_matches",
+        "app.modules.authorization.prepared.PreparedAuthorizationService._binding"
+      ],
+      "tests": ["backend/tests/test_authorization.py::test_submission_artifact_policy_create_update_accepts_only_covered_pm_grant"],
+      "outcomes": ["return", "denial"],
+      "boundaries": ["postgresql"]
+    },
+    {
+      "target": "backend/app/modules/authorization/runtime.py",
+      "callables": [
+        "app.modules.authorization.runtime.SubmissionPolicyCompilationContext.validate_catalogue_projection",
+        "app.modules.authorization.runtime.ProjectSubmissionArtifactPolicyMutationResourceContext.require_submission_policy_identity"
+      ],
+      "tests": ["backend/tests/test_authorization.py::test_submission_artifact_policy_create_update_accepts_only_covered_pm_grant"],
+      "outcomes": ["return", "denial"],
+      "boundaries": []
+    },
+    {
+      "target": "backend/app/modules/projects/router.py",
+      "callables": [
+        "app.modules.projects.router.submission_policy_conflict_error",
+        "app.modules.projects.router.require_submission_policy_mutation_key",
+        "app.modules.projects.router.require_submission_policy_human",
+        "app.modules.projects.router.submission_policy_authorization_actor",
+        "app.modules.projects.router.get_submission_policy_prepared_authorization_service",
+        "app.modules.projects.router.submission_policy_authorization",
+        "app.modules.projects.router.create_submission_artifact_policy",
+        "app.modules.projects.router.update_submission_artifact_policy"
+      ],
+      "tests": [
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_update_conceals_service_before_lookup",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_rejects_invalid_idempotency_before_auth",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_update_rejects_invalid_idempotency_before_auth",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_exact_idempotency_replay_is_stable",
+        "backend/tests/test_projects.py::test_draft_submission_artifact_policy_can_be_updated"
+      ],
+      "outcomes": ["return", "persisted_state", "denial", "mapped_error", "idempotent_replay"],
+      "boundaries": ["postgresql", "http"]
+    },
+    {
+      "target": "backend/app/modules/projects/schemas.py",
+      "callables": ["app.modules.projects.schemas.SubmissionArtifactPolicyUpdate.reject_reserved_successor_policy_version"],
+      "tests": [
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_rejects_malformed_snapshot_uuid",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_update_rejects_invalid_preconditions"
+      ],
+      "outcomes": ["return", "denial"],
+      "boundaries": ["http"]
+    },
+    {
+      "target": "backend/app/modules/projects/service.py",
+      "callables": [
+        "app.modules.projects.service.ProjectService.canonical_manual_submission_policy_body",
+        "app.modules.projects.service.ProjectService.verified_source_material_refs"
+      ],
+      "tests": [
+        "backend/tests/test_projects.py::test_manual_submission_artifact_policy_create_rejects_default_weakening",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_rejects_diagnostic_only_sufficiency"
+      ],
+      "outcomes": ["return", "denial"],
+      "boundaries": ["postgresql"]
+    },
+    {
       "target": "backend/app/modules/projects/submission_policy_mutation_service.py",
       "callables": [
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._acknowledgement_digest",
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._lineage",
         "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._require_pm_admission",
         "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._manual_mutation",
         "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._existing_manual_replay",
@@ -12,23 +86,25 @@
         "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService.update_manual"
       ],
       "tests": [
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_rejects_unacknowledged_warning_lineage",
         "backend/tests/test_projects.py::test_submission_artifact_policy_create_exact_idempotency_replay_is_stable",
         "backend/tests/test_projects.py::test_submission_artifact_policy_create_fault_rolls_back_atomic_boundary",
         "backend/tests/test_projects.py::test_draft_submission_artifact_policy_can_be_updated",
         "backend/tests/test_projects.py::test_submission_artifact_policy_update_fault_rolls_back_replacement",
         "backend/tests/test_projects.py::test_submission_artifact_policy_update_concurrent_cas_creates_one_successor"
       ],
-      "outcomes": [
-        "persisted_state",
-        "denial",
-        "idempotent_replay"
+      "outcomes": ["persisted_state", "denial", "idempotent_replay"],
+      "boundaries": ["postgresql", "http", "lock", "concurrency"]
+    },
+    {
+      "target": "backend/scripts/api_contract_e2e.py",
+      "callables": [
+        "scripts.api_contract_e2e.create_policy_bundle_for_guide",
+        "scripts.api_contract_e2e.exercise_api_contract"
       ],
-      "boundaries": [
-        "postgresql",
-        "http",
-        "lock",
-        "concurrency"
-      ]
+      "tests": ["backend/tests/test_api_contract_e2e.py::test_real_api_drill_provisions_exact_guide_artifact_pipeline_services"],
+      "outcomes": ["return", "persisted_state", "denial", "idempotent_replay"],
+      "boundaries": ["postgresql", "minio", "http"]
     }
   ]
 }

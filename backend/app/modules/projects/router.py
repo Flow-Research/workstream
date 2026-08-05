@@ -10,12 +10,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.artifacts import get_guide_artifact_ingest_command
-from app.api.deps.auth import get_registered_actor
+from app.api.deps.auth import get_auth_verification_result, get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
     get_authorization_service,
-    submission_policy_authorization,
+    prepared_authorization_service,
+    resolve_authorization_actor,
 )
+from app.api.deps.rate_controls import get_rate_control_service
 from app.core.permissions import PermissionDenied
 from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
@@ -62,6 +64,7 @@ from app.modules.projects.submission_policy_mutation_service import (
     SubmissionPolicyMutationService,
 )
 from app.modules.actors.service import ResolvedActor
+from app.modules.api_controls.service import RateControlService
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.projects.authorization_reads import (
     authorize_project_active_guide_read,
@@ -78,6 +81,7 @@ from app.modules.authorization.runtime import (
     authorization_resource_selector_id,
 )
 from app.schemas.auth import ActorContext
+from app.interfaces.auth import AuthVerificationResult
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -123,6 +127,76 @@ def submission_policy_conflict_error(code: str) -> StructuredHTTPException:
         error_message=messages.get(code, "Submission policy mutation conflicts with current state"),
         retryable=code == "idempotency_pending",
     )
+
+
+def require_submission_policy_mutation_key(
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> UUID:
+    """Validate manual policy replay custody before actor provisioning."""
+    if idempotency_key is None:
+        raise StructuredHTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be a UUID",
+            error_code="validation_error",
+            error_message="Idempotency-Key must be a UUID",
+        )
+    try:
+        return UUID(idempotency_key)
+    except ValueError as exc:
+        raise StructuredHTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be a UUID",
+            error_code="validation_error",
+            error_message="Idempotency-Key must be a UUID",
+        ) from exc
+
+
+async def require_submission_policy_human(
+    key: Annotated[UUID, Depends(require_submission_policy_mutation_key)],
+    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
+) -> AuthVerificationResult:
+    """Conceal the public manual-policy surface from service principals."""
+    del key
+    if result.token.subject_kind != "human":
+        raise StructuredHTTPException(
+            status_code=404,
+            detail="Project authorization resource not found",
+            error_code="project_authorization_resource_not_found",
+            error_message="Project authorization resource not found",
+        )
+    return result
+
+
+async def submission_policy_authorization_actor(
+    request: Request,
+    result: Annotated[AuthVerificationResult, Depends(require_submission_policy_human)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
+) -> ResolvedActor:
+    """Resolve a human only after the submission-policy key gate succeeds."""
+    return await resolve_authorization_actor(request, result, session, rate_control)
+
+
+async def get_submission_policy_prepared_authorization_service(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(submission_policy_authorization_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Compose submission-policy PREP from its dedicated admitted actor."""
+    async with prepared_authorization_service(request, resolved, session) as service:
+        yield service
+
+
+async def submission_policy_authorization(
+    key: Annotated[UUID, Depends(require_submission_policy_mutation_key)],
+    resolved: Annotated[ResolvedActor, Depends(submission_policy_authorization_actor)],
+    prepared: Annotated[
+        PreparedAuthorizationService,
+        Depends(get_submission_policy_prepared_authorization_service),
+    ],
+):
+    """Return the exact actor, key, and PREP service for manual policy mutation."""
+    return key, resolved, prepared
 
 
 @router.get(
