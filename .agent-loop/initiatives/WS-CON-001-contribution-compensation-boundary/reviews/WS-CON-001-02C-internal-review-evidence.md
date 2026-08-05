@@ -37,7 +37,7 @@ repository replay path with an explicit immutable comparison set, raises a
 non-leaking typed conflict, and prevents the generic repository from
 impersonating it.
 
-Required postimplementation review is complete. Senior engineering, QA,
+Required internal postimplementation review is complete. Senior engineering, QA,
 security, product/ops, architecture, docs, reuse/dedup, and test-delta all
 passed after their valid findings were repaired. Repairs included canonical
 PascalCase REV/CON event ownership, exact source-lineage reference sets,

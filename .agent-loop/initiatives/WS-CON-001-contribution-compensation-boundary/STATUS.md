@@ -9,11 +9,11 @@
   `needs_revision` rebase rule.
 - Runtime on main contains shared outbox persistence, the schema-only
   compensation binding foundation, and contribution-policy persistence. 02C
-  is implementing the shared flush-only lifecycle-audit participant;
-  contribution-record,
+  implementation, deterministic proof, internal review, and external checks
+  are complete; human approval and merge remain pending. Contribution-record,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
 - The pre-existing local deletion of the archival reference PDF is user-owned
-  and excluded from this planning change.
+  and excluded from this runtime change.
 
 ## Current external work inspected
 
