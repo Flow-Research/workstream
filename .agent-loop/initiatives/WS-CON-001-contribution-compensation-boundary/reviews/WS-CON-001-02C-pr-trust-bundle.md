@@ -37,8 +37,8 @@ outbox lifecycle behavior.
 
 Future REV decision and CON contribution/award transactions need audit evidence
 to succeed or roll back atomically with their domain rows. The previous generic
-repository path accepted unbounded compatibility shapes and did not define deterministic
-concurrent replay behavior.
+repository path accepted unbounded compatibility shapes and did not define
+deterministic concurrent replay behavior.
 
 ## Design chosen
 
