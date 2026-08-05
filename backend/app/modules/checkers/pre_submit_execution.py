@@ -580,7 +580,7 @@ def validate_pre_submission_execution_result(
         or len(execution.entries) != len(plan.entries)
     ):
         raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
-    failed = False
+    disqualified = False
     for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
         expected_severity = "warning" if plan_entry.classification == "advisory" else "blocking"
         if (
@@ -599,8 +599,14 @@ def validate_pre_submission_execution_result(
             or result.classification != plan_entry.classification
             or result.severity != expected_severity
             or result.message_code not in _RESULT_MESSAGE_CODES
-            or (result.status is PreSubmissionResultStatus.FAILED)
-            != (result.failure_code == plan_entry.failure_code)
+            or (
+                result.failure_code
+                != (
+                    plan_entry.failure_code
+                    if result.status is PreSubmissionResultStatus.FAILED
+                    else None
+                )
+            )
             or len(result.metadata) != len({key for key, _ in result.metadata})
             or any(
                 key not in _RESULT_METADATA_KEYS
@@ -610,8 +616,11 @@ def validate_pre_submission_execution_result(
             )
         ):
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
-        failed = failed or result.status is PreSubmissionResultStatus.FAILED
-    if execution.eligible == failed:
+        disqualified = disqualified or result.status in {
+            PreSubmissionResultStatus.FAILED,
+            PreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
+        }
+    if execution.eligible == disqualified:
         raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
 
 

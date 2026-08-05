@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.core.hashing import canonical_json_hash
 from app.modules.tasks.pre_submit_context import (
     PreSubmitLockedContextInvalid,
     load_locked_pre_submit_context,
@@ -30,6 +31,8 @@ from app.modules.checkers.pre_submit_execution import (
     PreSubmissionResultDefinition,
     PreSubmissionResultPolicyTrace,
     PreSubmissionResultStatus,
+    PreSubmissionInfrastructureUnavailable,
+    validate_pre_submission_execution_result,
 )
 
 
@@ -53,6 +56,8 @@ def _context() -> PreSubmitEvidenceContext:
         semantic_manifest_sha256=_sha("2"),
         guide_id=uuid4(),
         guide_version="1",
+        source_snapshot_id=uuid4(),
+        source_snapshot_sha256=_sha("8"),
         locked_guide_sha256=_sha("3"),
         effective_policy_id=uuid4(),
         locked_artifact_policy_sha256=_sha("4"),
@@ -149,13 +154,17 @@ def test_compiler_projects_policy_artifact_path_not_contributor_label() -> None:
 @pytest.mark.parametrize("path", [None, "", "../answer.md", "/answer.md", "a\\b"])
 def test_compiler_rejects_unmappable_artifact_paths(path: object) -> None:
     policy = {
-        "workstream_default_policy": {},
+        "workstream_default_policy": {
+            "required_packet_fields": ["summary", "worker_attestation"],
+            "forbidden_artifacts": [{"pattern": ".env"}],
+            "attestation_terms": ["rights_confirmed"],
+        },
         "project_policy": {},
-        "required_packet_fields": [],
+        "required_packet_fields": ["summary", "worker_attestation"],
         "required_artifacts": [{"key": "answer", "path": path, "required": True}],
         "required_evidence": [],
-        "forbidden_artifacts": [],
-        "attestation_terms": [],
+        "forbidden_artifacts": [{"pattern": ".env"}],
+        "attestation_terms": ["rights_confirmed"],
         "manifest_required": False,
         "artifact_hash_required": False,
         "allowed_storage_schemes": ["s3"],
@@ -269,6 +278,9 @@ async def test_locked_context_revalidates_identity_assignment_and_policy_lineage
     assert result.project_id == project_id
     assert result.effective_policy_id == effective_policy_id
     assert result.pre_submit_policy_id == checker_policy_id
+    assert result.guide_version == "1"
+    assert result.source_snapshot_id == source_snapshot_id
+    assert result.source_snapshot_sha256 == _sha("1")
     assert session.scalar.await_count == 8
 
 
@@ -356,6 +368,104 @@ def test_failure_audit_projection_is_bounded_and_path_free() -> None:
     assert payload["event_type"] == "pre_submission_check_failed"
     assert payload["failed_count"] == 1
     serialized = repr(payload)
-    assert "required_file_missing" not in serialized
+    assert payload["result_outcomes"] == [
+        {
+            "definition_id": "policy.file.require",
+            "definition_version": "v1",
+            "status": "failed",
+            "message_code": "required_file_missing",
+        }
+    ]
     assert "finding_count" not in serialized
     assert "/" not in serialized
+
+
+def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
+    from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
+    from app.modules.checkers.effective_plan import (
+        EffectivePreSubmissionPlanLineage,
+        compile_effective_pre_submission_execution_plan,
+    )
+
+    effective_policy = {
+        "workstream_default_policy": {
+            "required_packet_fields": ["summary", "worker_attestation"],
+            "forbidden_artifacts": [{"pattern": ".env"}],
+            "attestation_terms": ["rights_confirmed"],
+        },
+        "project_policy": {},
+        "required_packet_fields": ["summary", "worker_attestation"],
+        "required_artifacts": [],
+        "required_evidence": [],
+        "forbidden_artifacts": [{"pattern": ".env"}],
+        "attestation_terms": ["rights_confirmed"],
+        "manifest_required": False,
+        "artifact_hash_required": False,
+        "allowed_storage_schemes": ["s3"],
+        "maximum_file_size_bytes": None,
+        "maximum_package_size_bytes": None,
+        "packaging": {"package_required": False},
+    }
+    policy_hash = canonical_json_hash(effective_policy)
+    compiled = compile_effective_project_submission_artifact_policy(
+        effective_policy, policy_hash
+    )
+    lineage = EffectivePreSubmissionPlanLineage(
+        project_id=uuid4(),
+        guide_id=uuid4(),
+        guide_version=1,
+        source_snapshot_id=uuid4(),
+        source_snapshot_hash=_sha("a"),
+        effective_policy_id=uuid4(),
+        effective_policy_hash=policy_hash,
+        pre_submit_policy_id=uuid4(),
+        pre_submit_policy_bundle_hash=compiled.compiled_bundle_hash,
+    )
+    plan = compile_effective_pre_submission_execution_plan(
+        lineage=lineage,
+        effective_policy=effective_policy,
+        compiled_bundle=compiled.compiled_bundle,
+        catalogue=build_pre_submission_checker_catalogue(),
+    )
+    forged = PreSubmissionExecutionResult(
+        plan_sha256=plan.plan_sha256,
+        custody=PreSubmissionExecutionCustody(
+            prepared_generation_id=uuid4(),
+            archive_sha256=_sha("b"),
+            archive_byte_count=1,
+            semantic_manifest_sha256=_sha("c"),
+            storage_scheme="s3",
+        ),
+        eligible=True,
+        entries=tuple(
+            PreSubmissionEntryResult(
+                schema_version=entry.result_schema,
+                definition=PreSubmissionResultDefinition(
+                    dispatch_authority="workstream.pre_submission_checker_catalogue",
+                    definition_id=entry.definition_id,
+                    definition_version=entry.definition_version,
+                    public_name=entry.public_name,
+                    source=entry.policy_trace_source,
+                ),
+                policy_trace=PreSubmissionResultPolicyTrace(
+                    effective_plan_sha256=plan.plan_sha256,
+                    rule_instance_id=entry.rule_instance_id,
+                    locked_policy_sha256=lineage.effective_policy_hash,
+                ),
+                phase=entry.phase,
+                order=entry.order,
+                classification=entry.classification,
+                severity="warning" if entry.classification == "advisory" else "blocking",
+                status=PreSubmissionResultStatus.PASSED,
+                failure_code="forged" if index == 0 else None,
+                message_code="passed",
+            )
+            for index, entry in enumerate(plan.entries)
+        ),
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_result_context_invalid",
+    ):
+        validate_pre_submission_execution_result(plan, forged)

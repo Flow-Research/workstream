@@ -6,10 +6,17 @@ from dataclasses import dataclass
 from typing import Protocol, final
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.preparation import ArtifactPreparationService
+from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitEvidencePersistenceRequest,
+    PreSubmitEvidencePersistenceResult,
+    PreSubmitEvidenceService,
+)
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
@@ -153,3 +160,44 @@ class PreparedBundleMaterializationService:
             semantic_manifest_sha256=request.manifest.sha256,
             storage_scheme=self._storage_scheme,
         )
+
+
+class PreparedBundlePreSubmitEvidenceService:
+    """Execute in scratch, then persist exact evidence in a fresh transaction."""
+
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        materialization: PreparedBundleMaterializationService,
+    ) -> None:
+        self._session = session
+        self._materialization = materialization
+
+    async def execute(
+        self,
+        request: PreparedBundleMaterializationRequest,
+        *,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        predecessor_submission_id: UUID | None,
+    ) -> PreSubmitEvidencePersistenceResult:
+        """Persist only after materialization has returned and cleaned its scratch lease."""
+        execution = await self._materialization.materialize_prepared_bundle(request)
+        commitment = request.prepared_artifact.commitment
+        async with self._session.begin():
+            return await PreSubmitEvidenceService(self._session).persist(
+                PreSubmitEvidencePersistenceRequest(
+                    actor_profile_id=actor_profile_id,
+                    identity_link_id=identity_link_id,
+                    task_id=request.task_id,
+                    assignment_id=request.assignment_id,
+                    predecessor_submission_id=predecessor_submission_id,
+                    prepared_generation_id=request.prepared_artifact.generation_id,
+                    archive_sha256=commitment.sha256,
+                    archive_byte_count=commitment.byte_count,
+                    semantic_manifest_sha256=request.manifest.sha256,
+                    plan=request.effective_plan,
+                    execution=execution,
+                )
+            )

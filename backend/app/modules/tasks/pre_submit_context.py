@@ -34,6 +34,8 @@ class LockedPreSubmitContext:
     predecessor_submission_version: int | None
     guide_id: UUID
     guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_sha256: str
     locked_guide_sha256: str
     effective_policy_id: UUID
     effective_policy_sha256: str
@@ -165,6 +167,8 @@ async def load_locked_pre_submit_context(
         ),
         guide_id=UUID(guide.id),
         guide_version=guide.version,
+        source_snapshot_id=UUID(task.locked_guide_source_snapshot_id),
+        source_snapshot_sha256=task.locked_guide_source_snapshot_hash,
         locked_guide_sha256=guide_sha256,
         effective_policy_id=UUID(effective_policy.id),
         effective_policy_sha256=effective_policy.effective_policy_hash,

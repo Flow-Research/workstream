@@ -20,6 +20,8 @@ Submission, or separate contributor route.
   path; it may not change the policy schema, catalogue, or compilation authority;
 - new pre-submit evidence models/repository under
   `backend/app/modules/artifacts/`, plus their schema exports;
+- the narrow actor/task model constraints required to make evidence
+  actor-identity-assignment-task-project lineage database-enforced;
 - one Alembic migration for the closed pre-submit evidence schema;
 - the smallest task-context assembler needed to lock/reload task, assignment,
   predecessor, guide and policy lineage before persistence;
@@ -111,7 +113,7 @@ Submission, or separate contributor route.
 
 ```bash
 docker compose up -d --wait postgres redis
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_effective_pre_submit_execution.py tests/test_submission_precheck_scratch.py -q)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_effective_pre_submit_execution.py tests/test_default_pre_submit_execution.py -q)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 (cd backend && .venv/bin/coverage report --include='app/modules/artifacts/*,app/modules/checkers/*,app/modules/tasks/*' --precision=2 --fail-under=90)
 (cd backend && .venv/bin/ruff check app tests)

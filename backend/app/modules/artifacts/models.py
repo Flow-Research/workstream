@@ -55,9 +55,33 @@ class PreSubmitEvidenceSet(Base):
     __tablename__ = "pre_submit_evidence_sets"
     __table_args__ = (
         ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_pre_submit_evidence_identity_actor",
+        ),
+        ForeignKeyConstraint(
+            ["assignment_id", "task_id", "actor_profile_id"],
+            ["task_assignments.id", "task_assignments.task_id", "task_assignments.contributor_id"],
+            name="fk_pre_submit_evidence_assignment",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "project_id"],
+            ["workstream_tasks.id", "workstream_tasks.project_id"],
+            name="fk_pre_submit_evidence_task_project",
+        ),
+        ForeignKeyConstraint(
             ["task_id", "guide_version"],
             ["workstream_tasks.id", "workstream_tasks.locked_guide_version"],
             name="fk_pre_submit_evidence_task_guide",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "source_snapshot_id", "source_snapshot_sha256"],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_guide_source_snapshot_id",
+                "workstream_tasks.locked_guide_source_snapshot_hash",
+            ],
+            name="fk_pre_submit_evidence_task_source_snapshot",
         ),
         ForeignKeyConstraint(
             ["predecessor_submission_id", "task_id", "predecessor_submission_version"],
@@ -106,6 +130,10 @@ class PreSubmitEvidenceSet(Base):
         CheckConstraint(
             SHA256_CHECK.format(column="locked_guide_sha256"),
             name="ck_pre_submit_evidence_guide_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="source_snapshot_sha256"),
+            name="ck_pre_submit_evidence_source_snapshot_sha256",
         ),
         CheckConstraint(
             SHA256_CHECK.format(column="locked_artifact_policy_sha256"),
@@ -171,6 +199,10 @@ class PreSubmitEvidenceSet(Base):
         ForeignKey("project_guides.id", ondelete="RESTRICT"), nullable=False
     )
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_snapshot_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     locked_guide_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     effective_policy_id: Mapped[str] = mapped_column(
         ForeignKey("effective_project_submission_artifact_policies.id", ondelete="RESTRICT"),

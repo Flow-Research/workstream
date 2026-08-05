@@ -42,6 +42,8 @@ class PreSubmitEvidenceContext:
     semantic_manifest_sha256: str
     guide_id: UUID
     guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_sha256: str
     locked_guide_sha256: str
     effective_policy_id: UUID
     locked_artifact_policy_sha256: str
@@ -62,6 +64,7 @@ class PreSubmitEvidenceContext:
             self.prepared_generation_id,
             self.semantic_manifest_id,
             self.guide_id,
+            self.source_snapshot_id,
             self.effective_policy_id,
             self.pre_submit_policy_id,
         )
@@ -86,6 +89,7 @@ class PreSubmitEvidenceContext:
             self.archive_sha256,
             self.semantic_manifest_sha256,
             self.locked_guide_sha256,
+            self.source_snapshot_sha256,
             self.locked_artifact_policy_sha256,
             self.locked_checker_policy_sha256,
             self.catalogue_manifest_sha256,
@@ -148,6 +152,7 @@ class PreSubmitEvidencePersistenceResult:
 
     evidence: PersistedPreSubmitEvidence
     pass_capability: PreSubmitPassCapability | None
+    failure_audit: dict[str, object] | None
 
 
 def pre_submit_failure_audit_payload(
@@ -167,7 +172,16 @@ def pre_submit_failure_audit_payload(
     counts = {"failed": 0, "warning": 0, "not_run": 0}
     categories: set[str] = set()
     failure_codes: set[str] = set()
+    result_outcomes: list[dict[str, str]] = []
     for result in execution.entries:
+        result_outcomes.append(
+            {
+                "definition_id": result.definition.definition_id,
+                "definition_version": result.definition.definition_version,
+                "status": result.status.value,
+                "message_code": result.message_code,
+            }
+        )
         if result.status.value == "failed":
             counts["failed"] += 1
             categories.add(result.classification)
@@ -193,6 +207,7 @@ def pre_submit_failure_audit_payload(
         "not_run_count": counts["not_run"],
         "failure_categories": sorted(categories),
         "failure_codes": sorted(failure_codes),
+        "result_outcomes": result_outcomes,
         "outcome_code": "pre_submission_checker_failed",
     }
 
@@ -427,6 +442,9 @@ class PreSubmitEvidenceService:
         if (
             locked.project_id != lineage.project_id
             or locked.guide_id != lineage.guide_id
+            or locked.guide_version != str(lineage.guide_version)
+            or locked.source_snapshot_id != lineage.source_snapshot_id
+            or locked.source_snapshot_sha256 != lineage.source_snapshot_hash
             or locked.effective_policy_id != lineage.effective_policy_id
             or locked.effective_policy_sha256 != lineage.effective_policy_hash
             or locked.pre_submit_policy_id != lineage.pre_submit_policy_id
@@ -450,6 +468,8 @@ class PreSubmitEvidenceService:
             semantic_manifest_sha256=request.semantic_manifest_sha256,
             guide_id=locked.guide_id,
             guide_version=locked.guide_version,
+            source_snapshot_id=locked.source_snapshot_id,
+            source_snapshot_sha256=locked.source_snapshot_sha256,
             locked_guide_sha256=locked.locked_guide_sha256,
             effective_policy_id=locked.effective_policy_id,
             locked_artifact_policy_sha256=locked.effective_policy_sha256,
@@ -478,7 +498,22 @@ class PreSubmitEvidenceService:
             if request.execution.eligible
             else None
         )
+        failure_audit = (
+            None
+            if request.execution.eligible
+            else pre_submit_failure_audit_payload(
+                actor_profile_id=request.actor_profile_id,
+                project_id=locked.project_id,
+                task_id=request.task_id,
+                prepared_generation_id=request.prepared_generation_id,
+                evidence=evidence,
+                execution=request.execution,
+                catalogue_id=request.plan.catalogue_id,
+                catalogue_version=request.plan.catalogue_version,
+            )
+        )
         return PreSubmitEvidencePersistenceResult(
             evidence=evidence,
             pass_capability=pass_capability,
+            failure_audit=failure_audit,
         )
