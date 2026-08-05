@@ -25,7 +25,7 @@ docs/architecture_data_model.md only exact shared-audit ownership note
 
 ```text
 AuditEvent schema/migration rewrite
-review, contribution, compensation, task, AUTH or outbox event semantics
+review, contribution, compensation, task, AUTH or outbox product behavior or persistence
 commit ownership, route, background executor, dependency or CI weakening
 ```
 
@@ -38,7 +38,9 @@ commit ownership, route, background executor, dependency or CI weakening
 - [ ] Caller rollback removes audit with all other transaction effects; exact
   replay/idempotency ownership is explicit and no second audit ledger appears.
 - [ ] REV-04 and CON-07 may depend on the merged interface without importing
-  feature services; this chunk implements no feature-specific event.
+  feature services. The shared interface owns only the adopted closed REV/CON
+  audit-event vocabulary, primary-entity pairings, and required immutable
+  source references; it implements no feature lifecycle behavior.
 
 ## Verification and reviewers
 
