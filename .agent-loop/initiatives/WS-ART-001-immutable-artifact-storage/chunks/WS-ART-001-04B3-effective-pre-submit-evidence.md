@@ -26,7 +26,7 @@ Submission, or separate contributor route.
 - the smallest task-context assembler needed to lock/reload task, assignment,
   predecessor, guide and policy lineage before persistence;
 - `backend/tests/test_effective_pre_submit_execution.py`,
-  `backend/tests/test_submission_precheck_scratch.py`, migration tests, semantic
+  `backend/tests/test_default_pre_submit_execution.py`, migration tests, semantic
   lane ownership, docs, review evidence, and exact CI-gate assertions.
 
 ## Not Allowed
