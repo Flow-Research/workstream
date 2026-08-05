@@ -19,21 +19,22 @@ findings.
 `WS-QUAL-001-04P` merged through PR #281 and established the protected, exactly
 pinned, hash-verified mutation dependency authority.
 
-`WS-QUAL-001-04M` is implemented and internally reviewed. Its rebased exact-head
-local pilot at `f8b59eec` completed in 254.672 seconds with 1,091 generated
-mutants fully reconciled: 84 killed, 59 survived, 948 excluded, and zero error,
-timeout, or suspicious outcomes. Strong calibration killed two representative
-mutants and deliberately weak calibration left two alive. The focused policy
-module is at 90.11 percent coverage. Hosted PR-head evidence remains required
-before the human calibration checkpoint.
+`WS-QUAL-001-04M` merged through PR #285 as `7f395d47`. Its final exact-head
+hosted pilot on `0c25acec8fb3326e68169512e829711a0790b190` completed mutation
+execution in 34.886 seconds and the hosted job in 53 seconds. It reconciled
+2,493 generated mutants: 149 killed, 89 survived, 2,255 excluded, and zero
+error, timeout, or suspicious outcomes. Strong calibration killed two
+representative mutants and the deliberately weak calibration left two alive.
+The human accepted this evidence and explicitly started `WS-QUAL-001-05M`.
 
 The corrected proposal remains two-stage:
 
-1. `04M` — bounded, pinned, changed-scope mutation pilot with complete evidence
-   and no blocking score.
-2. Human calibration checkpoint.
-3. `05M` — separately approved blocking survivor policy for eligible changed
-   logic and explicit test-only behavior claims.
+1. `04M` — merged bounded, pinned, changed-scope mutation pilot with complete
+   evidence and no blocking score.
+2. Human calibration checkpoint — accepted.
+3. `05M` — implemented and internally reviewed bounded blocking survivor
+   policy for eligible changed logic and explicit test-only behavior claims;
+   exact-head hosted CI and external review remain before human merge.
 
 The mutation score remains observational. Existing Backend semantic lanes,
 global 78-percent coverage, and protected 90-percent subsystem floors remain
@@ -41,5 +42,4 @@ unchanged and blocking on their existing terms.
 
 ## Stop condition
 
-Stop after the 04M review and PR. Do not start 05M without accepted exact hosted
-pilot evidence, a human calibration checkpoint, and a new human instruction.
+Stop after the 05M PR is merge-ready. Do not start another QUAL chunk.

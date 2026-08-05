@@ -23,8 +23,8 @@ remain stopped historical experiments. Do not resume them.
 | `WS-QUAL-001-PLAN3` | Replace percentage-only closure with behavior/mutation assurance | L1 | Merged PR #272; late review corrected by PLAN3R1 |
 | `WS-QUAL-001-PLAN3R1` | Resolve five valid late CodeRabbit findings from PR #272 | L1 | Merged PR #278 |
 | `WS-QUAL-001-04P` | Establish protected hash-verified mutation dependency authority | L1 | Merged PR #281 |
-| `WS-QUAL-001-04M` | Pilot pinned changed-scope mutation evidence without a score gate | L1 | Implemented and internally reviewed; hosted PR-head evidence pending |
-| `WS-QUAL-001-05M` | Add calibrated blocking behavior-mutation policy | L1 | Proposed only after accepted 04M hosted evidence and explicit instruction |
+| `WS-QUAL-001-04M` | Pilot pinned changed-scope mutation evidence without a score gate | L1 | Merged PR #285 as `7f395d47`; hosted calibration accepted |
+| `WS-QUAL-001-05M` | Add calibrated blocking behavior-mutation policy | L1 | Active by explicit human instruction |
 
 ## Dependency rule
 

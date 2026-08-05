@@ -8,12 +8,14 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 import pytest
 
 from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import _eligible_target
 from scripts.mutation_policy import _main
+from scripts.mutation_policy import _minimal_runtime_environment
 from scripts.mutation_policy import _mutant_filters
 from scripts.mutation_policy import _parse_outcomes
 from scripts.mutation_policy import _reject_disposable_special_files
@@ -22,9 +24,15 @@ from scripts.mutation_policy import _regular_repository_file
 from scripts.mutation_policy import _safe_path
 from scripts.mutation_policy import _strong_calibration
 from scripts.mutation_policy import _weak_calibration
-from scripts.mutation_policy import _verify_mutmut_config
+from scripts.mutation_policy import _validate_calibration
+from scripts.mutation_policy import _write_mutmut_config
 from scripts.mutation_policy import build_selection
+from scripts.mutation_policy import changed_callables
+from scripts.mutation_policy import classify_outcomes
+from scripts.mutation_policy import discover_claim_path
+from scripts.mutation_policy import discover_selection
 from scripts.mutation_policy import execute_pilot
+from scripts.mutation_policy import policy_self_test
 
 
 class TestMutationPolicy:
@@ -50,39 +58,31 @@ class TestMutationPolicy:
                             {
                                 "target": "backend/scripts/changed.py",
                                 "callables": ["scripts.changed.changed"],
-                                "tests": [
-                                    "backend/tests/test_claimed.py::test_claimed"
-                                ],
+                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
                                 "outcomes": ["return"],
                                 "boundaries": [],
                             },
                             {
                                 "target": "backend/scripts/claimed.py",
                                 "callables": ["scripts.claimed.claimed"],
-                                "tests": [
-                                    "backend/tests/test_claimed.py::test_claimed"
-                                ],
+                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
                                 "outcomes": ["return"],
                                 "boundaries": [],
-                            }
+                            },
                         ],
                     }
                 ),
                 encoding="utf-8",
             )
 
-            selection = build_selection(
-                root, self.base, head, "WS-QUAL-001-04M", claim
-            )
+            selection = build_selection(root, self.base, head, "WS-QUAL-001-04M", claim)
 
             assert selection["changed_targets"] == ["backend/scripts/changed.py"]
             assert selection["targets"] == [
                 "backend/scripts/changed.py",
                 "backend/scripts/claimed.py",
             ]
-            assert selection["tests"] == [
-                "backend/tests/test_claimed.py::test_claimed"
-            ]
+            assert selection["tests"] == ["backend/tests/test_claimed.py::test_claimed"]
 
     def test_claim_validation_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -176,15 +176,35 @@ class TestMutationPolicy:
     @pytest.mark.parametrize(
         ("claim", "error"),
         [
-            ({"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": [], "extra": True}, "invalid_behavior_claim_shape"),
-            ({"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": [42]}, "invalid_behavior_claim"),
-            ({"schema_version": 2, "chunk_id": "WS-QUAL-001-04M", "claims": []}, "unsupported_behavior_claim_schema"),
-            ({"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": "bad"}, "invalid_behavior_claim_count"),
+            (
+                {"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": [], "extra": True},
+                "invalid_behavior_claim_shape",
+            ),
+            (
+                {"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": [42]},
+                "invalid_behavior_claim",
+            ),
+            (
+                {"schema_version": 2, "chunk_id": "WS-QUAL-001-04M", "claims": []},
+                "unsupported_behavior_claim_schema",
+            ),
+            (
+                {"schema_version": 1, "chunk_id": "WS-QUAL-001-04M", "claims": "bad"},
+                "invalid_behavior_claim_count",
+            ),
             (
                 {
                     "schema_version": 1,
                     "chunk_id": "WS-QUAL-001-04M",
-                    "claims": [{"target": "docs/no.py", "callables": ["docs.no.no"], "tests": ["backend/tests/test_claimed.py::test_claimed"], "outcomes": ["return"], "boundaries": []}],
+                    "claims": [
+                        {
+                            "target": "docs/no.py",
+                            "callables": ["docs.no.no"],
+                            "tests": ["backend/tests/test_claimed.py::test_claimed"],
+                            "outcomes": ["return"],
+                            "boundaries": [],
+                        }
+                    ],
                 },
                 "ineligible_claim_target",
             ),
@@ -192,7 +212,15 @@ class TestMutationPolicy:
                 {
                     "schema_version": 1,
                     "chunk_id": "WS-QUAL-001-04M",
-                    "claims": [{"target": "backend/scripts/missing.py", "callables": ["scripts.missing.missing"], "tests": ["backend/tests/test_claimed.py::test_claimed"], "outcomes": ["return"], "boundaries": []}],
+                    "claims": [
+                        {
+                            "target": "backend/scripts/missing.py",
+                            "callables": ["scripts.missing.missing"],
+                            "tests": ["backend/tests/test_claimed.py::test_claimed"],
+                            "outcomes": ["return"],
+                            "boundaries": [],
+                        }
+                    ],
                 },
                 "missing_claim_target",
             ),
@@ -200,7 +228,15 @@ class TestMutationPolicy:
                 {
                     "schema_version": 1,
                     "chunk_id": "WS-QUAL-001-04M",
-                    "claims": [{"target": "backend/scripts/claimed.py", "callables": ["scripts.claimed.claimed"], "tests": [], "outcomes": ["return"], "boundaries": []}],
+                    "claims": [
+                        {
+                            "target": "backend/scripts/claimed.py",
+                            "callables": ["scripts.claimed.claimed"],
+                            "tests": [],
+                            "outcomes": ["return"],
+                            "boundaries": [],
+                        }
+                    ],
                 },
                 "invalid_claim_tests",
             ),
@@ -208,7 +244,15 @@ class TestMutationPolicy:
                 {
                     "schema_version": 1,
                     "chunk_id": "WS-QUAL-001-04M",
-                    "claims": [{"target": "backend/scripts/claimed.py", "callables": ["scripts.claimed.claimed"], "tests": ["not-a-node"], "outcomes": ["return"], "boundaries": []}],
+                    "claims": [
+                        {
+                            "target": "backend/scripts/claimed.py",
+                            "callables": ["scripts.claimed.claimed"],
+                            "tests": ["not-a-node"],
+                            "outcomes": ["return"],
+                            "boundaries": [],
+                        }
+                    ],
                 },
                 "invalid_claim_test_node",
             ),
@@ -216,7 +260,15 @@ class TestMutationPolicy:
                 {
                     "schema_version": 1,
                     "chunk_id": "WS-QUAL-001-04M",
-                    "claims": [{"target": "backend/scripts/claimed.py", "callables": ["scripts.claimed.claimed"], "tests": ["backend/tests/test_missing.py::test_missing"], "outcomes": ["return"], "boundaries": []}],
+                    "claims": [
+                        {
+                            "target": "backend/scripts/claimed.py",
+                            "callables": ["scripts.claimed.claimed"],
+                            "tests": ["backend/tests/test_missing.py::test_missing"],
+                            "outcomes": ["return"],
+                            "boundaries": [],
+                        }
+                    ],
                 },
                 "missing_claim_test_module",
             ),
@@ -250,7 +302,10 @@ class TestMutationPolicy:
         ("overrides", "error"),
         [
             ({"callables": []}, "invalid_claim_callables"),
-            ({"tests": ["backend/tests/test_claimed.py::test_claimed"] * 2}, "duplicate_claim_test_node"),
+            (
+                {"tests": ["backend/tests/test_claimed.py::test_claimed"] * 2},
+                "duplicate_claim_test_node",
+            ),
             ({"outcomes": ["unknown"]}, "invalid_claim_outcomes"),
             ({"boundaries": ["unknown"]}, "invalid_claim_boundaries"),
         ],
@@ -330,7 +385,7 @@ class TestMutationPolicy:
             with pytest.raises(MutationPolicyError, match="zero_generated_mutants"):
                 _parse_outcomes(backend)
 
-    def test_mutmut_configuration_parse_and_selection_drift_fail_closed(self) -> None:
+    def test_mutmut_configuration_is_generated_from_selection(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             backend = Path(temporary)
             pyproject = backend / "pyproject.toml"
@@ -340,13 +395,52 @@ class TestMutationPolicy:
             }
             pyproject.write_text("not = [valid", encoding="utf-8")
             with pytest.raises(MutationPolicyError, match="invalid_mutation_config"):
-                _verify_mutmut_config(backend, selection)
+                _write_mutmut_config(backend, selection)
             pyproject.write_text(
+                "[project]\nname = 'example'\nversion = '0.1.0'\n"
                 "[tool.mutmut]\nsource_paths = ['wrong']\n",
                 encoding="utf-8",
             )
-            with pytest.raises(MutationPolicyError, match="mutation_config_selection_mismatch"):
-                _verify_mutmut_config(backend, selection)
+            digest = _write_mutmut_config(backend, selection)
+            document = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            assert document["project"] == {"name": "example", "version": "0.1.0"}
+            rendered = document["tool"]["mutmut"]
+            assert rendered == {
+                "source_paths": ["scripts"],
+                "only_mutate": ["scripts/example.py"],
+                "pytest_add_cli_args_test_selection": ["tests/test_example.py::test_example"],
+                "pytest_add_cli_args": ["-q", "--noconftest"],
+                "use_git_change_detection": False,
+                "debug": True,
+                "timeout_multiplier": 4.0,
+                "timeout_constant": 2.0,
+            }
+            assert len(digest) == 64
+
+    def test_generated_mutmut_parse_failure_is_typed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            backend = Path(temporary)
+            (backend / "pyproject.toml").write_text(
+                "[project]\nname = 'example'\nversion = '0.1.0'\n",
+                encoding="utf-8",
+            )
+            selection = {
+                "targets": ["backend/scripts/example.py"],
+                "tests": ["backend/tests/test_example.py::test_example"],
+            }
+            real_loads = tomllib.loads
+            calls = 0
+
+            def fail_second_parse(value: str) -> dict[str, object]:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise tomllib.TOMLDecodeError("generated failure", value, 0)
+                return real_loads(value)
+
+            monkeypatch.setattr(tomllib, "loads", fail_second_parse)
+            with pytest.raises(MutationPolicyError, match="invalid_generated_mutation_config"):
+                _write_mutmut_config(backend, selection)
 
     def test_disposable_symlinks_and_invalid_result_values_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -384,11 +478,12 @@ class TestMutationPolicy:
         selection = {
             "target_owners": [
                 {
+                    "target": "backend/scripts/example.py",
                     "callables": [
                         "scripts.example.public",
                         "scripts.example._private",
                         "scripts.example.public",
-                    ]
+                    ],
                 }
             ]
         }
@@ -396,6 +491,373 @@ class TestMutationPolicy:
             "scripts.example.x__private__mutmut_*",
             "scripts.example.x_public__mutmut_*",
         ]
+        with pytest.raises(MutationPolicyError, match="missing_owner_target"):
+            _mutant_filters({"target_owners": [{"callables": ["scripts.example.public"]}]})
+
+    def test_no_target_no_claim_is_typed_not_applicable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            (root / "README.md").write_text("docs\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "docs")
+            head = self._git(root, "rev-parse", "HEAD")
+            selection = discover_selection(root, self.base, head)
+            assert selection["applicability"] == "not_applicable"
+            assert "targets" not in selection
+
+    def test_deleted_target_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            (root / "backend/scripts/claimed.py").unlink()
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "delete target")
+            head = self._git(root, "rev-parse", "HEAD")
+
+            with pytest.raises(MutationPolicyError, match="deleted_eligible_target"):
+                discover_selection(root, self.base, head)
+
+    def test_applicable_delta_requires_one_changed_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            changed = root / "backend/scripts/claimed.py"
+            changed.write_text("def claimed():\n    return False\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "behavior")
+            head = self._git(root, "rev-parse", "HEAD")
+            with pytest.raises(MutationPolicyError, match="missing_behavior_claim"):
+                discover_selection(root, self.base, head)
+
+    def test_multiple_changed_claims_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            claims = root / ".ci/behavior-claims"
+            claims.mkdir(parents=True)
+            for name in ("WS-QUAL-001-A.json", "WS-QUAL-001-B.json"):
+                (claims / name).write_text("{}", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "claims")
+            head = self._git(root, "rev-parse", "HEAD")
+            with pytest.raises(MutationPolicyError, match="multiple_behavior_claims"):
+                discover_claim_path(root, self.base, head)
+
+    def test_changed_callable_mapping_covers_decorated_async_and_nested_methods(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            target.write_text(
+                "class Service:\n"
+                "    @staticmethod\n"
+                "    async def claimed():\n"
+                "        return True\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "nested base")
+            self.base = self._git(root, "rev-parse", "HEAD")
+            target.write_text(
+                "class Service:\n"
+                "    @staticmethod\n"
+                "    async def claimed():\n"
+                "        return False\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "nested")
+            head = self._git(root, "rev-parse", "HEAD")
+            assert changed_callables(root, self.base, head, "backend/scripts/claimed.py") == [
+                "scripts.claimed.Service.claimed"
+            ]
+
+    def test_plain_class_header_change_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            target.write_text(
+                "class Service:\n    def claimed(self):\n        return True\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "class base")
+            self.base = self._git(root, "rev-parse", "HEAD")
+            target.write_text(
+                "class RenamedService:\n    def claimed(self):\n        return True\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "rename class")
+            head = self._git(root, "rev-parse", "HEAD")
+            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
+                changed_callables(root, self.base, head, "backend/scripts/claimed.py")
+
+    def test_function_nested_in_function_maps_to_inner_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            body = "def outer():\n    def inner():\n        return {value}\n    return inner\n"
+            target.write_text(body.format(value="True"), encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "nested function base")
+            self.base = self._git(root, "rev-parse", "HEAD")
+            target.write_text(body.format(value="False"), encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "nested function change")
+            head = self._git(root, "rev-parse", "HEAD")
+            assert changed_callables(root, self.base, head, "backend/scripts/claimed.py") == [
+                "scripts.claimed.outer.inner"
+            ]
+
+    def test_module_level_and_deleted_callable_changes_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            target.write_text(
+                "def claimed():\n    return True\n\nSETTING = True\n", encoding="utf-8"
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "module")
+            head = self._git(root, "rev-parse", "HEAD")
+            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
+                changed_callables(root, self.base, head, "backend/scripts/claimed.py")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            target.write_text("", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "remove callable")
+            head = self._git(root, "rev-parse", "HEAD")
+            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
+                changed_callables(root, self.base, head, "backend/scripts/claimed.py")
+
+    def test_callable_mapping_uses_merge_base_not_advanced_main(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            self._git(root, "branch", "feature")
+            target = root / "backend/scripts/claimed.py"
+            target.write_text(
+                "def claimed():\n    return True\n\ndef main_only():\n    return True\n",
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "main moved")
+            advanced_main = self._git(root, "rev-parse", "HEAD")
+            self._git(root, "switch", "feature")
+            target.write_text("def claimed():\n    return False\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "feature behavior")
+            feature = self._git(root, "rev-parse", "HEAD")
+            assert changed_callables(
+                root, advanced_main, feature, "backend/scripts/claimed.py"
+            ) == ["scripts.claimed.claimed"]
+
+    def test_claim_only_callable_must_exist_in_target_ast(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            head = self._git(root, "rev-parse", "HEAD")
+            claim = root / ".ci/behavior-claims/WS-TEST-001-01.json"
+            claim.parent.mkdir(parents=True)
+            claim.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "chunk_id": "WS-TEST-001-01",
+                        "claims": [
+                            {
+                                "target": "backend/scripts/claimed.py",
+                                "callables": ["scripts.claimed.missing"],
+                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
+                                "outcomes": ["return"],
+                                "boundaries": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with pytest.raises(MutationPolicyError, match="missing_claim_callable"):
+                build_selection(root, self.base, head, "WS-TEST-001-01", claim)
+
+    def test_blocking_verdict_allows_only_weak_control_and_unselected_exclusions(self) -> None:
+        filters = ["scripts.example.x_public__mutmut_*"]
+        pass_mutants = [
+            {"name": "scripts.example.x_public__mutmut_1", "outcome": "killed"},
+            {
+                "name": "scripts.mutation_policy.x__weak_calibration__mutmut_1",
+                "outcome": "survived",
+            },
+            {"name": "scripts.example.x_other__mutmut_1", "outcome": "excluded"},
+        ]
+        pass_filters = [*filters, "scripts.mutation_policy.x__weak_calibration__mutmut_*"]
+        counts = {
+            name: 0
+            for name in (
+                "generated",
+                "killed",
+                "survived",
+                "timeout",
+                "suspicious",
+                "excluded",
+                "error",
+            )
+        }
+        counts.update({"generated": 3, "killed": 1, "survived": 1, "excluded": 1})
+        assert classify_outcomes(counts, pass_mutants, pass_filters)["status"] == "pass"
+
+        impostor = [{"name": "app.example.x__weak_calibration__mutmut_1", "outcome": "survived"}]
+        impostor_filters = ["app.example.x__weak_calibration__mutmut_*"]
+        impostor_counts = {name: 0 for name in counts}
+        impostor_counts.update({"generated": 1, "survived": 1})
+        assert classify_outcomes(impostor_counts, impostor, impostor_filters)["status"] == "block"
+
+        for outcome in ("survived", "timeout", "suspicious", "error", "excluded"):
+            mutants = [{"name": "scripts.example.x_public__mutmut_1", "outcome": outcome}]
+            blocked = {name: 0 for name in counts}
+            blocked.update({"generated": 1, outcome: 1})
+            assert classify_outcomes(blocked, mutants, filters)["status"] == "block"
+
+    def test_incomplete_and_unknown_outcomes_fail_closed(self) -> None:
+        with pytest.raises(MutationPolicyError, match="incomplete_mutation_outcomes"):
+            classify_outcomes({"generated": 0}, [], [])
+        counts = {
+            name: 0
+            for name in (
+                "generated",
+                "killed",
+                "survived",
+                "timeout",
+                "suspicious",
+                "excluded",
+                "error",
+            )
+        }
+        counts["generated"] = 1
+        with pytest.raises(MutationPolicyError, match="unknown_mutation_outcome"):
+            classify_outcomes(counts, [{"name": "mutant", "outcome": "unknown"}], [])
+        counts["generated"] = 0
+        counts["killed"] = -1
+        with pytest.raises(MutationPolicyError, match="invalid_mutation_outcomes"):
+            classify_outcomes(counts, [], [])
+
+    def test_policy_self_test_proves_control_and_blocker(self) -> None:
+        policy_self_test()
+
+    def test_calibration_rejects_contributor_named_impostors(self) -> None:
+        impostors = [
+            {"name": "app.example.x__strong_calibration__mutmut_1", "outcome": "killed"},
+            {"name": "app.example.x__weak_calibration__mutmut_1", "outcome": "survived"},
+        ]
+        with pytest.raises(MutationPolicyError, match="strong_calibration_not_killed"):
+            _validate_calibration(impostors)
+        assert _validate_calibration(
+            [
+                {
+                    "name": "scripts.mutation_policy.x__strong_calibration__mutmut_1",
+                    "outcome": "killed",
+                },
+                {
+                    "name": "scripts.mutation_policy.x__weak_calibration__mutmut_1",
+                    "outcome": "survived",
+                },
+            ]
+        ) == {"strong": {"killed": 1}, "weak": {"survived": 1}}
+
+    def test_candidate_runtime_environment_excludes_ci_authority(self) -> None:
+        environment = _minimal_runtime_environment(
+            {
+                "PATH": "/bin",
+                "HOME": "/tmp/home",
+                "GITHUB_ENV": "/tmp/commands",
+                "GITHUB_TOKEN": "secret",
+                "SERVICE_PASSWORD": "secret",
+                "SIGNING_KEY": "secret",
+            }
+        )
+        assert environment == {
+            "PATH": "/bin",
+            "HOME": "/tmp/home",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            "PYTHONHASHSEED": "0",
+        }
+
+    def test_discovery_builds_applicable_exact_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            target = root / "backend/scripts/claimed.py"
+            target.write_text("def claimed():\n    return False\n", encoding="utf-8")
+            claim = root / ".ci/behavior-claims/WS-TEST-001-01.json"
+            claim.parent.mkdir(parents=True)
+            claim.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "chunk_id": "WS-TEST-001-01",
+                        "claims": [
+                            {
+                                "target": "backend/scripts/claimed.py",
+                                "callables": ["scripts.claimed.claimed"],
+                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
+                                "outcomes": ["return"],
+                                "boundaries": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "claimed behavior")
+            head = self._git(root, "rev-parse", "HEAD")
+            selection = discover_selection(root, self.base, head)
+            assert selection["applicability"] == "applicable"
+            assert selection["claim_path"] == ".ci/behavior-claims/WS-TEST-001-01.json"
+            assert selection["changed_callables"] == {
+                "backend/scripts/claimed.py": ["scripts.claimed.claimed"]
+            }
+
+    def test_main_supports_self_test_and_not_applicable_discovery(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["mutation_policy.py", "--self-test"])
+        assert _main() == 0
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._initialize(root)
+            (root / "README.md").write_text("docs\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "docs")
+            head = self._git(root, "rev-parse", "HEAD")
+            output = root / "selection.json"
+            monkeypatch.setattr(
+                sys,
+                "argv",
+                [
+                    "mutation_policy.py",
+                    "--repository-root",
+                    str(root),
+                    "--base-sha",
+                    self.base,
+                    "--head-sha",
+                    head,
+                    "--discover",
+                    "--selection-output",
+                    str(output),
+                ],
+            )
+            assert _main() == 0
+            assert (
+                json.loads(output.read_text(encoding="utf-8"))["applicability"] == "not_applicable"
+            )
 
     def test_zero_targets_and_invalid_revisions_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -470,6 +932,53 @@ path.write_text(json.dumps({'exit_code_by_key': {
             }
             assert self._git(root, "status", "--porcelain", "--untracked-files=no") == ""
 
+    def test_execute_pilot_enforcement_blocks_selected_survivor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "repository"
+            root.mkdir()
+            self._initialize_execution_repository(root)
+            head = self._git(root, "rev-parse", "HEAD")
+            selection = build_selection(
+                root,
+                self.base,
+                head,
+                "WS-QUAL-001-04M",
+                root / ".ci/behavior-claims/WS-QUAL-001-04M.json",
+            )
+            manifest = root / "trusted.txt"
+            manifest.write_text("trusted\n", encoding="utf-8")
+            executable = root / "fake-mutmut"
+            executable.write_text(
+                """#!/usr/bin/env python3
+import json
+from pathlib import Path
+path = Path('mutants/scripts/mutation_policy.py.meta')
+path.parent.mkdir(parents=True)
+path.write_text(json.dumps({'exit_code_by_key': {
+    'scripts.mutation_policy.x__strong_calibration__mutmut_1': 1,
+    'scripts.mutation_policy.x__weak_calibration__mutmut_1': 0,
+    'scripts.mutation_policy.x_policy__mutmut_1': 0,
+}}))
+""",
+                encoding="utf-8",
+            )
+            executable.chmod(0o700)
+            output = root / "evidence.json"
+
+            with pytest.raises(MutationPolicyError, match="blocking_mutation_outcome"):
+                execute_pilot(
+                    root,
+                    selection,
+                    manifest,
+                    hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                    executable,
+                    output,
+                    30,
+                    enforce=True,
+                )
+
+            assert json.loads(output.read_text(encoding="utf-8"))["verdict"]["status"] == "block"
+
     def test_execution_rejects_bad_digest_timeout_and_dirty_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "repository"
@@ -496,7 +1005,9 @@ path.write_text(json.dumps({'exit_code_by_key': {
             with pytest.raises(MutationPolicyError, match="dirty_source_tree"):
                 execute_pilot(root, selection, manifest, digest, executable, output, 30)
 
-    def test_main_reports_policy_errors(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_main_reports_policy_errors(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         monkeypatch.setattr(
             sys,
             "argv",

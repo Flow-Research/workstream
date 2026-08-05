@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import ast
 from collections import Counter
+from fnmatch import fnmatchcase
 import hashlib
 import json
 import os
@@ -17,6 +19,7 @@ import tempfile
 import time
 import tomllib
 from typing import Any
+
 
 def _repository_root() -> Path:
     """Locate the archive root from either original or mutmut-copied code."""
@@ -39,6 +42,7 @@ DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 CHUNK_RE = re.compile(r"^WS-[A-Z]+-[0-9]{3}-[A-Z0-9]+$")
 TEST_NODE_RE = re.compile(r"^backend/tests/test_[A-Za-z0-9_/]+\.py::[^\s]+$")
 CALLABLE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]+$")
+HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 ELIGIBLE_PREFIXES = ("backend/app/", "backend/scripts/")
 OBSERVABLE_OUTCOMES = {
     "return",
@@ -50,6 +54,31 @@ OBSERVABLE_OUTCOMES = {
     "recovery_outcome",
 }
 REAL_BOUNDARIES = {"postgresql", "minio", "http", "lock", "trigger", "concurrency"}
+CALIBRATION_TARGET = "backend/scripts/mutation_policy.py"
+CALIBRATION_CALLABLES = (
+    "scripts.mutation_policy._strong_calibration",
+    "scripts.mutation_policy._weak_calibration",
+)
+CALIBRATION_TESTS = (
+    "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_strong_calibration_asserts_the_exact_boundary",
+    "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_weak_calibration_deliberately_asserts_only_the_result_type",
+)
+WEAK_CALIBRATION_FILTER = "scripts.mutation_policy.x__weak_calibration__mutmut_*"
+STRONG_CALIBRATION_FILTER = "scripts.mutation_policy.x__strong_calibration__mutmut_*"
+# workstream-mutation-capability:discover-v1
+POLICY_CAPABILITY_MARKER = "workstream-mutation-capability:discover-v1"
+RUNTIME_ENV_ALLOWLIST = {
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "PATH",
+    "SSL_CERT_FILE",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "TZ",
+    "VIRTUAL_ENV",
+}
 OUTCOMES = (
     "generated",
     "killed",
@@ -102,6 +131,15 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _minimal_runtime_environment(source: dict[str, str] | None = None) -> dict[str, str]:
+    """Return only non-authority runtime values for untrusted candidate code."""
+    values = os.environ if source is None else source
+    environment = {key: values[key] for key in RUNTIME_ENV_ALLOWLIST if key in values}
+    environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    environment["PYTHONHASHSEED"] = "0"
+    return environment
+
+
 def _git(root: Path, *arguments: str) -> str:
     result = subprocess.run(
         ["git", *arguments],
@@ -119,12 +157,7 @@ def _git(root: Path, *arguments: str) -> str:
 
 def _safe_path(value: str) -> PurePosixPath:
     path = PurePosixPath(value)
-    if (
-        not value
-        or path.is_absolute()
-        or ".." in path.parts
-        or value != path.as_posix()
-    ):
+    if not value or path.is_absolute() or ".." in path.parts or value != path.as_posix():
         raise MutationPolicyError("unsafe_path")
     return path
 
@@ -150,6 +183,115 @@ def _regular_repository_file(root: Path, value: str) -> bool:
         return candidate.is_file()
     except OSError:
         return False
+
+
+def discover_claim_path(root: Path, base_sha: str, head_sha: str) -> Path | None:
+    """Discover one exact changed behavior claim without workflow input."""
+    candidates = sorted(
+        path
+        for path in changed_files(base_sha, head_sha, repository_root=root, include_local=False)
+        if path.startswith(".ci/behavior-claims/")
+        and path.endswith(".json")
+        and path != ".ci/behavior-claims/example.behavior-claim.json"
+    )
+    if len(candidates) > 1:
+        raise MutationPolicyError("multiple_behavior_claims")
+    if not candidates:
+        return None
+    candidate = root / candidates[0]
+    if not _regular_repository_file(root, candidates[0]):
+        raise MutationPolicyError("invalid_behavior_claim_path")
+    return candidate
+
+
+def _diff_lines(root: Path, base_sha: str, head_sha: str, path: str) -> tuple[set[int], set[int]]:
+    """Return exact old/new line numbers touched by a zero-context diff."""
+    output = _git(root, "diff", "--unified=0", "--no-ext-diff", base_sha, head_sha, "--", path)
+    old_lines: set[int] = set()
+    new_lines: set[int] = set()
+    for line in output.splitlines():
+        match = HUNK_RE.match(line)
+        if match is None:
+            continue
+        old_start, old_count, new_start, new_count = match.groups()
+        old_size = int(old_count or "1")
+        new_size = int(new_count or "1")
+        old_lines.update(range(int(old_start), int(old_start) + old_size))
+        new_lines.update(range(int(new_start), int(new_start) + new_size))
+    return old_lines, new_lines
+
+
+def _source_at(root: Path, revision: str, path: str) -> str:
+    return _git(root, "show", f"{revision}:{path}")
+
+
+def _callable_spans(
+    source: str, module: str
+) -> tuple[list[tuple[int, int, str]], list[tuple[int, int]]]:
+    """Return qualified callable spans and module/class executable spans."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise MutationPolicyError("invalid_target_syntax") from exc
+    callables: list[tuple[int, int, str]] = []
+    executable: list[tuple[int, int]] = []
+
+    def visit(nodes: list[ast.stmt], parents: tuple[str, ...] = ()) -> None:
+        for node in nodes:
+            end = getattr(node, "end_lineno", node.lineno)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
+                qualified = ".".join((module, *parents, node.name))
+                callables.append((start, end, qualified))
+                visit(node.body, (*parents, node.name))
+            elif isinstance(node, ast.ClassDef):
+                start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
+                executable.append((start, node.lineno))
+                visit(node.body, (*parents, node.name))
+            else:
+                executable.append((node.lineno, end))
+
+    visit(tree.body)
+    return callables, executable
+
+
+def _map_changed_lines(source: str, module: str, lines: set[int]) -> tuple[set[str], bool]:
+    callables, executable = _callable_spans(source, module)
+    owners: set[str] = set()
+    unmapped = False
+    for line in lines:
+        matches = [item for item in callables if item[0] <= line <= item[1]]
+        if matches:
+            owners.add(min(matches, key=lambda item: item[1] - item[0])[2])
+        elif any(start <= line <= end for start, end in executable):
+            unmapped = True
+    return owners, unmapped
+
+
+def changed_callables(
+    root: Path, base_sha: str, head_sha: str, target: str, *, allow_unmapped: bool = False
+) -> list[str]:
+    """Derive complete current callable ownership for executable target hunks."""
+    module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
+    delta_base = _git(root, "merge-base", base_sha, head_sha)
+    old_lines, new_lines = _diff_lines(root, delta_base, head_sha, target)
+    current_source = _source_at(root, head_sha, target)
+    current, current_unmapped = _map_changed_lines(current_source, module, new_lines)
+    try:
+        base_source = _source_at(root, delta_base, target)
+    except MutationPolicyError:
+        base_source = ""
+    previous: set[str] = set()
+    previous_unmapped = False
+    if base_source:
+        previous, previous_unmapped = _map_changed_lines(base_source, module, old_lines)
+    removed = previous - {item[2] for item in _callable_spans(current_source, module)[0]}
+    if (current_unmapped or previous_unmapped or removed) and not allow_unmapped:
+        raise MutationPolicyError("unmappable_changed_logic")
+    derived = sorted(current | (previous - removed if allow_unmapped else previous))
+    if not derived:
+        raise MutationPolicyError("zero_changed_callables")
+    return derived
 
 
 def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict[str, Any]]:
@@ -194,8 +336,11 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
         if (
             not isinstance(callables, list)
             or not callables
-            or len(callables) > 12
-            or any(not isinstance(item, str) or CALLABLE_RE.fullmatch(item) is None for item in callables)
+            or len(callables) > 24
+            or any(
+                not isinstance(item, str) or CALLABLE_RE.fullmatch(item) is None
+                for item in callables
+            )
             or len(set(callables)) != len(callables)
         ):
             raise MutationPolicyError("invalid_claim_callables")
@@ -217,7 +362,9 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
         if (
             not isinstance(outcomes, list)
             or not outcomes
-            or any(not isinstance(item, str) or item not in OBSERVABLE_OUTCOMES for item in outcomes)
+            or any(
+                not isinstance(item, str) or item not in OBSERVABLE_OUTCOMES for item in outcomes
+            )
             or len(set(outcomes)) != len(outcomes)
         ):
             raise MutationPolicyError("invalid_claim_outcomes")
@@ -260,7 +407,21 @@ def build_selection(
         repository_root=root,
         include_local=False,
     )
-    changed_targets = sorted(path for path in changed if _eligible_target(path))
+    delta_base = _git(root, "merge-base", base_sha, head_sha)
+    deleted = set(
+        filter(
+            None,
+            _git(
+                root, "diff", "--diff-filter=D", "--name-only", delta_base, head_sha, "--"
+            ).splitlines(),
+        )
+    )
+    deleted_targets = sorted(path for path in changed if _eligible_target(path) and path in deleted)
+    if deleted_targets:
+        raise MutationPolicyError("deleted_eligible_target")
+    changed_targets = sorted(
+        path for path in changed if _eligible_target(path) and path not in deleted
+    )
     if claim_path is not None:
         expected_claim = root / ".ci" / "behavior-claims" / f"{chunk_id}.json"
         try:
@@ -274,8 +435,36 @@ def build_selection(
     unowned_targets = sorted(set(changed_targets) - set(claims_by_target))
     if unowned_targets:
         raise MutationPolicyError("changed_target_without_behavior_claim")
+    for target, claim in claims_by_target.items():
+        module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
+        available = {
+            item[2] for item in _callable_spans(_source_at(root, head_sha, target), module)[0]
+        }
+        if not set(claim["callables"]).issubset(available):
+            raise MutationPolicyError("missing_claim_callable")
     targets = sorted(set(changed_targets) | set(claims_by_target))
-    tests = sorted({node for claim in claims for node in claim["tests"]})
+    bootstrap = False
+    blocking_policy = chunk_id == "WS-QUAL-001-05M"
+    try:
+        base_policy = _source_at(root, base_sha, "backend/scripts/mutation_policy.py")
+    except MutationPolicyError:
+        base_policy = ""
+    if chunk_id == "WS-QUAL-001-05M":
+        bootstrap = POLICY_CAPABILITY_MARKER not in base_policy
+    blocking_policy = blocking_policy or POLICY_CAPABILITY_MARKER in base_policy
+    derived_callables = {
+        target: changed_callables(root, base_sha, head_sha, target, allow_unmapped=bootstrap)
+        for target in changed_targets
+    }
+    for target, required in derived_callables.items():
+        if set(required) != set(claims_by_target[target]["callables"]):
+            raise MutationPolicyError("unowned_changed_callable")
+    if blocking_policy:
+        targets = sorted(set(targets) | {CALIBRATION_TARGET})
+    tests = {node for claim in claims for node in claim["tests"]}
+    if blocking_policy:
+        tests.update(CALIBRATION_TESTS)
+    tests = sorted(tests)
     if not targets:
         raise MutationPolicyError("zero_mutation_targets")
     if not tests:
@@ -288,11 +477,47 @@ def build_selection(
         "head_tree": _git(root, "rev-parse", f"{head_sha}^{{tree}}"),
         "changed_paths": changed,
         "changed_targets": changed_targets,
+        "changed_callables": derived_callables,
         "claims": claims,
         "target_owners": [
             {
-                **claims_by_target[target],
-                "selection_reason": "changed" if target in changed_targets else "claim",
+                **(
+                    {
+                        "target": target,
+                        "callables": sorted(
+                            set(claims_by_target.get(target, {}).get("callables", []))
+                            | (
+                                set(CALIBRATION_CALLABLES)
+                                if blocking_policy and target == CALIBRATION_TARGET
+                                else set()
+                            )
+                        ),
+                        "tests": sorted(
+                            set(claims_by_target.get(target, {}).get("tests", []))
+                            | (
+                                set(CALIBRATION_TESTS)
+                                if blocking_policy and target == CALIBRATION_TARGET
+                                else set()
+                            )
+                        ),
+                        "outcomes": sorted(
+                            set(claims_by_target.get(target, {}).get("outcomes", []))
+                            | (
+                                {"return"}
+                                if blocking_policy and target == CALIBRATION_TARGET
+                                else set()
+                            )
+                        ),
+                        "boundaries": claims_by_target.get(target, {}).get("boundaries", []),
+                    }
+                ),
+                "selection_reason": (
+                    "changed"
+                    if target in changed_targets
+                    else "claim"
+                    if target in claims_by_target
+                    else "calibration"
+                ),
             }
             for target in targets
         ],
@@ -301,27 +526,87 @@ def build_selection(
     }
 
 
-def _verify_mutmut_config(backend: Path, selection: dict[str, Any]) -> None:
+def discover_selection(root: Path, base_sha: str, head_sha: str) -> dict[str, Any]:
+    """Discover applicability and the only canonical claim from the git delta."""
+    changed = changed_files(base_sha, head_sha, repository_root=root, include_local=False)
+    delta_base = _git(root, "merge-base", base_sha, head_sha)
+    deleted = set(
+        filter(
+            None,
+            _git(
+                root, "diff", "--diff-filter=D", "--name-only", delta_base, head_sha, "--"
+            ).splitlines(),
+        )
+    )
+    deleted_targets = sorted(path for path in changed if _eligible_target(path) and path in deleted)
+    if deleted_targets:
+        raise MutationPolicyError("deleted_eligible_target")
+    changed_targets = sorted(
+        path for path in changed if _eligible_target(path) and path not in deleted
+    )
+    claim_path = discover_claim_path(root, base_sha, head_sha)
+    if not changed_targets and claim_path is None:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "applicability": "not_applicable",
+            "base_sha": base_sha,
+            "head_sha": head_sha,
+            "changed_paths": changed,
+        }
+    if claim_path is None:
+        raise MutationPolicyError("missing_behavior_claim")
+    try:
+        raw = json.loads(claim_path.read_text(encoding="utf-8"))
+        chunk_id = raw["chunk_id"]
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise MutationPolicyError("invalid_behavior_claim_json") from exc
+    selection = build_selection(root, base_sha, head_sha, chunk_id, claim_path)
+    selection["applicability"] = "applicable"
+    selection["claim_path"] = claim_path.relative_to(root).as_posix()
+    return selection
+
+
+def _write_mutmut_config(backend: Path, selection: dict[str, Any]) -> str:
+    """Replace any static mutmut section with exact policy-derived config."""
     pyproject = backend / "pyproject.toml"
     try:
-        config = tomllib.loads(pyproject.read_text(encoding="utf-8"))["tool"]["mutmut"]
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, KeyError) as exc:
+        original = pyproject.read_text(encoding="utf-8")
+        tomllib.loads(original)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise MutationPolicyError("invalid_mutation_config") from exc
     relative_targets = [target.removeprefix("backend/") for target in selection["targets"]]
     source_paths = sorted({target.split("/", 1)[0] for target in relative_targets})
     test_nodes = [node.removeprefix("backend/") for node in selection["tests"]]
-    expected = {
-        "source_paths": source_paths,
-        "only_mutate": relative_targets,
-        "pytest_add_cli_args_test_selection": test_nodes,
-        "pytest_add_cli_args": ["-q", "--noconftest"],
-        "use_git_change_detection": False,
-        "debug": True,
-        "timeout_multiplier": 4.0,
-        "timeout_constant": 2.0,
-    }
-    if config != expected:
-        raise MutationPolicyError("mutation_config_selection_mismatch")
+    lines = original.splitlines()
+    retained: list[str] = []
+    skipping = False
+    for line in lines:
+        if line.strip() == "[tool.mutmut]":
+            skipping = True
+            continue
+        if skipping and line.startswith("["):
+            skipping = False
+        if not skipping:
+            retained.append(line)
+    config_lines = [
+        "[tool.mutmut]",
+        f"source_paths = {json.dumps(source_paths)}",
+        f"only_mutate = {json.dumps(relative_targets)}",
+        f"pytest_add_cli_args_test_selection = {json.dumps(test_nodes)}",
+        'pytest_add_cli_args = ["-q", "--noconftest"]',
+        "use_git_change_detection = false",
+        "debug = true",
+        "timeout_multiplier = 4.0",
+        "timeout_constant = 2.0",
+    ]
+    rendered = "\n".join([*retained, "", *config_lines, ""])
+    pyproject.write_text(rendered, encoding="utf-8")
+    try:
+        config = tomllib.loads(rendered)["tool"]["mutmut"]
+    except (tomllib.TOMLDecodeError, KeyError, TypeError) as exc:
+        raise MutationPolicyError("invalid_generated_mutation_config") from exc
+    digest = _sha256(_json_bytes(config))
+    return digest
 
 
 def _reject_disposable_special_files(disposable: Path) -> None:
@@ -339,10 +624,78 @@ def _mutant_filters(selection: dict[str, Any]) -> list[str]:
     """Translate reviewed qualified callables into exact mutmut name globs."""
     filters: list[str] = []
     for owner in selection["target_owners"]:
+        target = owner.get("target")
+        if not isinstance(target, str) or not target:
+            raise MutationPolicyError("missing_owner_target")
+        target_module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
         for callable_name in owner["callables"]:
-            module, function = callable_name.rsplit(".", 1)
-            filters.append(f"{module}.x_{function}__mutmut_*")
+            relative = callable_name.removeprefix(f"{target_module}.")
+            filters.append(f"{target_module}.x_{relative.replace('.', '__')}__mutmut_*")
     return sorted(set(filters))
+
+
+def classify_outcomes(
+    counts: dict[str, int], mutants: list[dict[str, str]], filters: list[str]
+) -> dict[str, Any]:
+    """Produce the closed blocking verdict for complete mutation outcomes."""
+    if set(counts) != set(OUTCOMES) or counts["generated"] != len(mutants):
+        raise MutationPolicyError("incomplete_mutation_outcomes")
+    if any(not isinstance(value, int) or value < 0 for value in counts.values()):
+        raise MutationPolicyError("invalid_mutation_outcomes")
+    controls: list[str] = []
+    blockers: list[dict[str, str]] = []
+    for mutant in mutants:
+        name = mutant.get("name")
+        outcome = mutant.get("outcome")
+        if not isinstance(name, str) or outcome not in OUTCOMES[1:]:
+            raise MutationPolicyError("unknown_mutation_outcome")
+        selected = any(fnmatchcase(name, pattern) for pattern in filters)
+        weak_control = fnmatchcase(name, WEAK_CALIBRATION_FILTER)
+        if outcome == "killed":
+            continue
+        if outcome == "survived" and weak_control and selected:
+            controls.append(name)
+            continue
+        if outcome == "excluded" and not selected:
+            continue
+        blockers.append({"name": name, "outcome": outcome})
+    return {
+        "status": "pass" if not blockers else "block",
+        "classification": "calibrated" if controls else "strict",
+        "calibration_controls": sorted(controls),
+        "blockers": sorted(blockers, key=lambda item: (item["outcome"], item["name"])),
+    }
+
+
+def policy_self_test() -> None:
+    """Prove the protected evaluator blocks and permits only closed outcomes."""
+    filters = [WEAK_CALIBRATION_FILTER]
+    outcomes = {name: 0 for name in OUTCOMES}
+    outcomes.update({"generated": 1, "survived": 1})
+    control = [
+        {"name": "scripts.mutation_policy.x__weak_calibration__mutmut_1", "outcome": "survived"}
+    ]
+    if classify_outcomes(outcomes, control, filters)["status"] != "pass":
+        raise MutationPolicyError("self_test_control_failed")
+    blocker = [{"name": "scripts.control.x_changed__mutmut_1", "outcome": "survived"}]
+    if classify_outcomes(outcomes, blocker, filters)["status"] != "block":
+        raise MutationPolicyError("self_test_blocker_failed")
+
+
+def _validate_calibration(mutants: list[dict[str, str]]) -> dict[str, dict[str, int]]:
+    """Validate only the exact repository-owned strong and weak controls."""
+    strong = [
+        mutant for mutant in mutants if fnmatchcase(mutant["name"], STRONG_CALIBRATION_FILTER)
+    ]
+    weak = [mutant for mutant in mutants if fnmatchcase(mutant["name"], WEAK_CALIBRATION_FILTER)]
+    if not any(mutant["outcome"] == "killed" for mutant in strong):
+        raise MutationPolicyError("strong_calibration_not_killed")
+    if not any(mutant["outcome"] == "survived" for mutant in weak):
+        raise MutationPolicyError("weak_calibration_not_survived")
+    return {
+        "strong": dict(Counter(mutant["outcome"] for mutant in strong)),
+        "weak": dict(Counter(mutant["outcome"] for mutant in weak)),
+    }
 
 
 def _parse_outcomes(backend: Path) -> tuple[dict[str, int], list[dict[str, str]]]:
@@ -376,6 +729,8 @@ def execute_pilot(
     mutmut_executable: Path,
     output: Path,
     timeout_seconds: int,
+    *,
+    enforce: bool = False,
 ) -> None:
     """Run mutation testing in an archived disposable tree and emit evidence."""
     if timeout_seconds < 1 or timeout_seconds > 720:
@@ -410,11 +765,8 @@ def execute_pilot(
             raise MutationPolicyError("archive_extract_failed")
         _reject_disposable_special_files(disposable)
         backend = disposable / "backend"
-        _verify_mutmut_config(backend, selection)
-        environment = os.environ.copy()
-        environment.pop("GITHUB_TOKEN", None)
-        environment.pop("GH_TOKEN", None)
-        environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+        generated_config_sha256 = _write_mutmut_config(backend, selection)
+        environment = _minimal_runtime_environment()
         baseline = subprocess.run(
             [
                 sys.executable,
@@ -456,24 +808,8 @@ def execute_pilot(
         if result.returncode != 0:
             raise MutationPolicyError("mutation_engine_error")
         counts, mutants = _parse_outcomes(backend)
-        strong = [
-            mutant
-            for mutant in mutants
-            if ".x__strong_calibration__mutmut_" in mutant["name"]
-        ]
-        weak = [
-            mutant
-            for mutant in mutants
-            if ".x__weak_calibration__mutmut_" in mutant["name"]
-        ]
-        if not any(mutant["outcome"] == "killed" for mutant in strong):
-            raise MutationPolicyError("strong_calibration_not_killed")
-        if not any(mutant["outcome"] == "survived" for mutant in weak):
-            raise MutationPolicyError("weak_calibration_not_survived")
-        calibration = {
-            "strong": dict(Counter(mutant["outcome"] for mutant in strong)),
-            "weak": dict(Counter(mutant["outcome"] for mutant in weak)),
-        }
+        verdict = classify_outcomes(counts, mutants, _mutant_filters(selection))
+        calibration = _validate_calibration(mutants)
         elapsed = round(time.monotonic() - started, 3)
     if (
         _git(root, "status", "--porcelain", "--untracked-files=no")
@@ -495,24 +831,31 @@ def execute_pilot(
             "target_owners": selection["target_owners"],
         },
         "selection_sha256": _sha256(_json_bytes(selection)),
+        "generated_config_sha256": generated_config_sha256,
         "elapsed_seconds": elapsed,
         "outcomes": counts,
         "calibration": calibration,
         "mutants": mutants,
+        "verdict": verdict,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as stream:
         stream.write(_json_bytes(evidence))
+    if enforce and verdict["status"] != "pass":
+        raise MutationPolicyError("blocking_mutation_outcome")
 
 
 def _main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository-root", type=Path, default=ROOT)
-    parser.add_argument("--base-sha", required=True)
-    parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--chunk-id", required=True)
+    parser.add_argument("--base-sha")
+    parser.add_argument("--head-sha")
+    parser.add_argument("--chunk-id")
     parser.add_argument("--claim-file", type=Path)
+    parser.add_argument("--discover", action="store_true")
+    parser.add_argument("--enforce", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--selection-output", type=Path)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--manifest", type=Path)
@@ -522,18 +865,34 @@ def _main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=720)
     args = parser.parse_args()
     try:
+        if args.self_test:
+            policy_self_test()
+            return 0
+        if not args.base_sha or not args.head_sha:
+            raise MutationPolicyError("missing_revision")
         root = args.repository_root.resolve(strict=True)
-        selection = build_selection(
-            root,
-            args.base_sha,
-            args.head_sha,
-            args.chunk_id,
-            args.claim_file,
-        )
+        if args.discover:
+            selection = discover_selection(root, args.base_sha, args.head_sha)
+        else:
+            if args.chunk_id is None:
+                raise MutationPolicyError("missing_chunk_id")
+            selection = build_selection(
+                root,
+                args.base_sha,
+                args.head_sha,
+                args.chunk_id,
+                args.claim_file,
+            )
         if args.selection_output:
             args.selection_output.write_bytes(_json_bytes(selection))
+        if selection.get("applicability") == "not_applicable":
+            if args.execute:
+                raise MutationPolicyError("inapplicable_execution")
+            return 0
         if args.execute:
-            if not all((args.manifest, args.manifest_digest, args.mutmut_executable, args.evidence_output)):
+            if not all(
+                (args.manifest, args.manifest_digest, args.mutmut_executable, args.evidence_output)
+            ):
                 raise MutationPolicyError("missing_execution_argument")
             execute_pilot(
                 root,
@@ -543,6 +902,7 @@ def _main() -> int:
                 args.mutmut_executable,
                 args.evidence_output,
                 args.timeout_seconds,
+                enforce=args.enforce,
             )
     except (MutationPolicyError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"mutation_policy_error:{exc}", file=sys.stderr)

@@ -171,41 +171,56 @@ does not override otherwise passing correctness, custody, service-contract,
 API, and coverage gates. Never lower coverage, skip nodes, or add a silent
 fallback to meet the target.
 
-## Changed-scope mutation pilot
+## Required changed-scope behavior mutation
 
-`Mutation Pilot` is an independent, observational WS-QUAL-001-04M workflow. It
-does not join the required Backend fan-in, alter the 78 percent global floor, or
-alter any protected 90 percent subsystem floor. It runs only when the pilot's
-policy, tests, claim, schema, Git-delta helper, or workflow changes.
+`Behavior Mutation Gate` is an independent required check. It does not join the
+Backend fan-in, alter the 78 percent global floor, or alter any protected 90
+percent subsystem floor. It always emits a stable pull-request result. Internal
+preflight returns typed `not_applicable` before dependency installation when the
+exact delta contains neither an eligible target nor a behavior claim.
 
-The pilot always selects eligible changed Python targets under `backend/app/`
-or `backend/scripts/`. Schema-v1 files under `.ci/behavior-claims/` may add a
-bounded target with qualified callables, exact owning pytest nodes, typed
-observable outcomes, and any essential real boundaries. Every eligible changed
-target requires this ownership mapping; claims cannot remove or replace one.
-Malformed claims, stale chunk identifiers, unsafe paths, symlinks, missing
-targets or tests, empty selection, and configuration drift fail closed.
+The gate selects eligible changed Python targets under `backend/app/` or
+`backend/scripts/`. One changed schema-v1 file under `.ci/behavior-claims/`
+provides qualified callable ownership, exact pytest nodes, typed observable
+outcomes, and essential real boundaries. Exact executable diff hunks must map
+to claimed callables. Missing, multiple, stale, unsafe, symlinked, narrowed, or
+unmappable claims fail closed. Mutmut configuration is generated only inside
+the disposable archive from the validated selection.
 
-For pull requests, the hash-locked mutation toolchain is read only from
-`scripts/mutation-requirements.txt` at the protected base revision and installed
-with `pip --require-hashes`. It does not run PR-controlled packaging hooks or
-install the backend package; the focused tests run with conftest loading
-disabled because they use only the protected mutation-test toolchain. The
-workflow has read-only permissions, disables persisted checkout credentials,
-and receives no secrets. The policy wrapper runs from the exact PR-head
-checkout; it archives that same head and runs baseline tests and mutmut only in
-the disposable extraction with token environment variables removed. Symlinks
-and special archive entries are rejected before test or mutation execution.
-Evidence and the virtual environment live in runner-temporary storage outside
-the PR checkout. The checked-out source tree must stay clean and retain the
-same exact tree hash.
+The hash-locked toolchain is read only from
+`scripts/mutation-requirements.txt` at protected base and installed with
+`pip --require-hashes`. The same protected base supplies `backend/uv.lock` and
+`backend/pyproject.toml`; `uv sync --locked` installs the runtime and test
+dependencies needed by owning backend tests without trusting dependency edits
+from the pull-request head. Ordinary PR selection, classification, and verdict use
+the evaluator and Git-delta helper archived from protected base; PR-head policy
+code is not its own authority. Execution receives no secrets, uses read-only
+permissions and no persisted checkout credentials, removes token environment
+variables, and mutates only an exact-head disposable archive. Special entries,
+source-tree drift, custody drift, and baseline failure block.
 
-The independent job is limited to 15 minutes, with mutation execution bounded
-below 12 minutes. Its seven-day artifact binds base SHA, head SHA and tree,
-manifest digest, exact configuration, selected targets and tests, elapsed time,
-and generated, killed, survived, timeout, suspicious, excluded, and error
-outcomes. Mutation score is not a contributor gate during this pilot. Baseline
-test failure, dependency-custody failure, target escape, engine error, timeout,
-or malformed evidence still fails the workflow. Only separately instructed
-`WS-QUAL-001-05M`, after accepted hosted evidence and a human calibration
-checkpoint, may propose a blocking survivor policy.
+The independent job has a 15-minute cap, 720-second shell limit, and 700-second
+engine limit. Seven-day evidence binds the exact revisions/tree, protected
+manifest, generated configuration, selection, targets, tests, elapsed time,
+every mutant outcome, and the closed verdict. There is no score threshold.
+Killed mutants pass. Meaningful survivors, timeout, suspicious, error, unknown,
+or incomplete outcomes block. Excluded mutants pass only outside the selected
+callable filters. The repository's exact weak calibration survivor is the sole
+allowed control; contributors cannot add classifications, allowlists, free-form
+exemptions, or source mutation pragmas.
+
+For local discovery, run the command documented in
+`.ci/behavior-claims/README.md` and inspect the generated selection before
+publishing. The hosted artifact contains:
+
+- `selection.json`: pre-install applicability and exact claim/target selection;
+- `executed-selection.json`: the selection regenerated immediately before
+  execution;
+- `evidence.json`: exact-head custody, configuration digests, elapsed time,
+  calibration, complete mutant outcomes, and the closed verdict.
+
+For `not_applicable`, only `selection.json` is expected. For an applicable
+failure, first compare both selections, then inspect `verdict.status` and
+`verdict.blockers` in `evidence.json`. A selected survivor must be repaired in
+the owning assertion or production behavior. Missing evidence means the named
+earlier step failed; use its job log rather than manufacturing an artifact.
