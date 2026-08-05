@@ -102,6 +102,7 @@ def artifact_preparation_limits(settings: Settings) -> ArtifactPreparationLimits
         cleanup_margin_seconds=settings.artifact_scratch_cleanup_margin_seconds,
         stream_buffer_bytes=settings.artifact_stream_buffer_bytes,
         maximum_source_bytes=settings.artifact_maximum_bytes,
+        maximum_workspace_entries=settings.artifact_scratch_maximum_workspace_entries,
     )
 
 

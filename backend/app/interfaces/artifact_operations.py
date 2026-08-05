@@ -8,8 +8,18 @@ from typing import Literal, Protocol
 from uuid import UUID
 
 from app.modules.artifacts.sources import ArtifactCommitment, PreparedArtifact
+from app.modules.artifacts.submission_archive import SubmissionArchiveInspectionResult
+from app.modules.artifacts.submission_manifest import (
+    SubmissionChangeGateResult,
+    SubmissionManifest,
+)
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.runtime import AuthorizationContext
+from app.modules.checkers.effective_plan import EffectivePreSubmissionExecutionPlan
+from app.modules.checkers.pre_submit_execution import (
+    DefaultPreSubmissionExecutionResult,
+    SubmissionPacketView,
+)
 
 __all__ = (
     "ArtifactAuditResourceType",
@@ -258,7 +268,7 @@ class SubmissionBundlePreparationRequest:
 
 @dataclass(frozen=True, slots=True)
 class PreparedBundleMaterializationRequest:
-    """Process-local prepared bytes and exact policy selectors."""
+    """Process-local prepared bytes and exact 04A/04B1 execution facts."""
 
     prepared_authorization: PreparedAuthorizationHandle
     task_id: UUID
@@ -266,6 +276,11 @@ class PreparedBundleMaterializationRequest:
     submission_artifact_policy_id: UUID
     checker_policy_id: UUID
     prepared_artifact: PreparedArtifact
+    effective_plan: EffectivePreSubmissionExecutionPlan
+    inspection: SubmissionArchiveInspectionResult
+    manifest: SubmissionManifest
+    change_gate: SubmissionChangeGateResult
+    packet: SubmissionPacketView
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,7 +372,7 @@ class ArtifactMaterializationPort(Protocol):
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
-    ) -> object:
+    ) -> DefaultPreSubmissionExecutionResult:
         """Materialize one process-local prepared bundle generation."""
 
     async def materialize_guide_source(

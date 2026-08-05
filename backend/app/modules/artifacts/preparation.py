@@ -43,7 +43,7 @@ from app.modules.artifacts.sources import (
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
 _InspectionResult = TypeVar("_InspectionResult")
-_LEDGER_VERSION = 2
+_LEDGER_VERSION = 3
 _LEDGER_MAXIMUM_BYTES = 1024 * 1024
 _RESERVATION_ID = re.compile(r"^[0-9a-f]{32}$")
 _WORKSPACE_ID = re.compile(r"^extract_[0-9a-f]{32}$")
@@ -85,6 +85,7 @@ class ArtifactPreparationLimits:
     cleanup_margin_seconds: float = 300.0
     stream_buffer_bytes: int = 1024 * 1024
     maximum_source_bytes: int = HARD_MAXIMUM_ARTIFACT_BYTES
+    maximum_workspace_entries: int = 2_000
 
     def __post_init__(self) -> None:
         """Reject limits that cannot enforce the v0.1 scratch contract."""
@@ -95,6 +96,7 @@ class ArtifactPreparationLimits:
             self.minimum_free_bytes,
             self.stream_buffer_bytes,
             self.maximum_source_bytes,
+            self.maximum_workspace_entries,
         )
         if any(type(value) is not int for value in integer_fields):
             raise ValueError("artifact preparation integer limits are invalid")
@@ -112,6 +114,8 @@ class ArtifactPreparationLimits:
             self.maximum_source_bytes > HARD_MAXIMUM_ARTIFACT_BYTES
         ):
             raise ValueError("artifact preparation source limit exceeds 512 MiB")
+        if self.maximum_workspace_entries <= 0 or self.maximum_workspace_entries > 100_000:
+            raise ValueError("artifact workspace entry limit is invalid")
         durations = (
             self.reservation_ttl_seconds,
             self.total_deadline_seconds,
@@ -376,16 +380,44 @@ class ArtifactScratchManager:
                 self._pending_allocation_releases.pop(reservation_id, None)
             return len(cleaned_reservation_ids) + len(cleaned_workspace_names)
 
-    def _reserve_workspace_sync(self, workspace_name: str) -> None:
+    def _reserve_workspace_sync(
+        self,
+        workspace_name: str,
+        *,
+        reserved_bytes: int = 0,
+        maximum_entries: int | None = None,
+    ) -> None:
         """Publish crash-recovery ownership before creating a workspace."""
+        if maximum_entries is None:
+            maximum_entries = self._limits.maximum_workspace_entries
+        if (
+            type(reserved_bytes) is not int
+            or reserved_bytes < 0
+            or reserved_bytes > HARD_MAXIMUM_ARTIFACT_BYTES
+            or type(maximum_entries) is not int
+            or maximum_entries < 0
+            or maximum_entries > self._limits.maximum_workspace_entries
+        ):
+            raise ValueError("artifact workspace reservation is invalid")
         now = time.time_ns()
         expires_at = now + int(self._limits.reservation_ttl_seconds * 1_000_000_000)
         with self._locked_ledger():
             ledger = self._read_ledger()
             workspaces = list(ledger["workspaces"])
+            current_reserved = sum(
+                entry["reserved_bytes"] for entry in ledger["reservations"] + workspaces
+            )
+            if current_reserved + reserved_bytes > self._limits.aggregate_reserved_bytes:
+                raise ArtifactScratchCapacityError("artifact scratch byte limit reached")
+            filesystem = os.fstatvfs(self._workspaces_fd)
+            available = filesystem.f_bavail * filesystem.f_frsize
+            if available < current_reserved + reserved_bytes + self._limits.minimum_free_bytes:
+                raise ArtifactScratchCapacityError("artifact scratch free-space floor reached")
             workspaces.append(
                 {
                     "workspace_name": workspace_name,
+                    "reserved_bytes": reserved_bytes,
+                    "maximum_entries": maximum_entries,
                     "created_at_unix_ns": now,
                     "expires_at_unix_ns": expires_at,
                     "owner_pid": os.getpid(),
@@ -414,11 +446,20 @@ class ArtifactScratchManager:
             )
 
     @contextmanager
-    def extraction_workspace(self) -> Iterator[Path]:
+    def extraction_workspace(
+        self,
+        *,
+        reserved_bytes: int = 0,
+        maximum_entries: int | None = None,
+    ) -> Iterator[Path]:
         """Own one crash-recoverable private extraction workspace."""
         with self._tracked_operation():
             workspace_name = f"extract_{uuid4().hex}"
-            self._reserve_workspace_sync(workspace_name)
+            self._reserve_workspace_sync(
+                workspace_name,
+                reserved_bytes=reserved_bytes,
+                maximum_entries=maximum_entries,
+            )
             workspace_fd = -1
             try:
                 os.mkdir(workspace_name, mode=0o700, dir_fd=self._workspaces_fd)
@@ -480,13 +521,20 @@ class ArtifactScratchManager:
 
     def _cleanup_workspace_sync(self, workspace_name: str) -> None:
         """Remove bounded workspace residue without following links."""
+        ledger = self._read_ledger()
+        matching = [
+            entry for entry in ledger["workspaces"] if entry["workspace_name"] == workspace_name
+        ]
+        if len(matching) != 1:
+            raise ArtifactScratchIntegrityError("artifact extraction workspace is invalid")
         workspace_fd = os.open(
             workspace_name,
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
             dir_fd=self._workspaces_fd,
         )
         try:
-            remaining_entries = [self._limits.maximum_files]
+            os.fchmod(workspace_fd, 0o700)
+            remaining_entries = [matching[0]["maximum_entries"]]
             self._cleanup_workspace_entries_sync(workspace_fd, remaining_entries)
         finally:
             os.close(workspace_fd)
@@ -499,6 +547,7 @@ class ArtifactScratchManager:
         remaining_entries: list[int],
     ) -> None:
         """Remove a bounded tree bottom-up without following links."""
+        os.fchmod(directory_fd, 0o700)
         for entry in os.listdir(directory_fd):
             remaining_entries[0] -= 1
             if remaining_entries[0] < 0:
@@ -688,7 +737,7 @@ class ArtifactScratchManager:
             os.fsync(self._root_fd)
 
     def _validate_existing_root_marker(self) -> None:
-        """Require the root marker to match this manager's canonical limits."""
+        """Require exact limits, with a safe-empty upgrade from the prior marker."""
         descriptor = os.open(
             _ROOT_MARKER,
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
@@ -696,15 +745,55 @@ class ArtifactScratchManager:
         )
         try:
             self._assert_private_file_descriptor(descriptor, expected_mode=0o600)
-            marker = os.read(descriptor, len(self._root_marker_content) + 1)
-            if marker != self._root_marker_content:
-                raise ValueError("artifact scratch root marker is invalid")
+            marker = os.read(descriptor, max(len(self._root_marker_content), 256) + 1)
         finally:
             os.close(descriptor)
+        if marker == self._root_marker_content:
+            return
+        if marker != self._legacy_marker_content(self._limits):
+            raise ValueError("artifact scratch root marker is invalid")
+        ledger = self._read_ledger_optional()
+        if ledger is None or ledger["reservations"] or ledger["workspaces"]:
+            raise ValueError("artifact scratch root marker cannot migrate while in use")
+        descriptor = os.open(
+            _ROOT_MARKER,
+            os.O_WRONLY | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=self._root_fd,
+        )
+        try:
+            self._assert_private_file_descriptor(descriptor, expected_mode=0o600)
+            self._write_all(descriptor, memoryview(self._root_marker_content))
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.fsync(self._root_fd)
 
     @staticmethod
     def _marker_content(limits: ArtifactPreparationLimits) -> bytes:
         """Bind one scratch root to a single canonical cross-process limit set."""
+        payload = {
+            "aggregate_reserved_bytes": limits.aggregate_reserved_bytes,
+            "cleanup_margin_seconds": float(limits.cleanup_margin_seconds),
+            "maximum_concurrency": limits.maximum_concurrency,
+            "maximum_files": limits.maximum_files,
+            "maximum_source_bytes": limits.maximum_source_bytes,
+            "maximum_workspace_entries": limits.maximum_workspace_entries,
+            "minimum_free_bytes": limits.minimum_free_bytes,
+            "reservation_ttl_seconds": float(limits.reservation_ttl_seconds),
+            "stream_buffer_bytes": limits.stream_buffer_bytes,
+            "total_deadline_seconds": float(limits.total_deadline_seconds),
+        }
+        canonical = json.dumps(
+            payload,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        return _ROOT_MARKER_PREFIX + hashlib.sha256(canonical).hexdigest().encode("ascii") + b"\n"
+
+    @staticmethod
+    def _legacy_marker_content(limits: ArtifactPreparationLimits) -> bytes:
+        """Reconstruct the pre-04B2 marker for one safe-empty local upgrade."""
         payload = {
             "aggregate_reserved_bytes": limits.aggregate_reserved_bytes,
             "cleanup_margin_seconds": float(limits.cleanup_margin_seconds),
@@ -783,7 +872,9 @@ class ArtifactScratchManager:
             ledger = self._read_ledger()
             entries = list(ledger["reservations"])
             previous_entries = list(entries)
-            reserved_bytes = sum(entry["reserved_bytes"] for entry in entries)
+            reserved_bytes = sum(entry["reserved_bytes"] for entry in entries) + sum(
+                entry["reserved_bytes"] for entry in ledger["workspaces"]
+            )
             if len(entries) >= self._limits.maximum_files:
                 raise ArtifactScratchCapacityError("artifact scratch file limit reached")
             if len(entries) >= self._limits.maximum_concurrency:
@@ -963,10 +1054,12 @@ class ArtifactScratchManager:
     def _usage_sync(self) -> ArtifactScratchUsage:
         """Read aggregate ledger usage while holding the cross-process lock."""
         with self._locked_ledger():
-            entries = self._read_ledger()["reservations"]
+            ledger = self._read_ledger()
+            entries = ledger["reservations"]
             return ArtifactScratchUsage(
                 reservation_count=len(entries),
-                reserved_bytes=sum(entry["reserved_bytes"] for entry in entries),
+                reserved_bytes=sum(entry["reserved_bytes"] for entry in entries)
+                + sum(entry["reserved_bytes"] for entry in ledger["workspaces"]),
             )
 
     def _stale_reservation_ids_sync(self, now_unix_ns: int) -> tuple[str, ...]:
@@ -1119,10 +1212,26 @@ class ArtifactScratchManager:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid") from exc
         if (
             isinstance(ledger, dict)
-            and set(ledger) == {"version", "reservations"}
             and ledger.get("version") == _LEDGER_VERSION
+            and set(ledger) == {"version", "reservations"}
         ):
             ledger = {**ledger, "workspaces": []}
+        if isinstance(ledger, dict) and ledger.get("version") == 2:
+            if set(ledger) == {"version", "reservations"}:
+                ledger = {**ledger, "workspaces": []}
+            if set(ledger) == {"version", "reservations", "workspaces"}:
+                ledger = {
+                    **ledger,
+                    "version": _LEDGER_VERSION,
+                    "workspaces": [
+                        {
+                            **entry,
+                            "reserved_bytes": 0,
+                            "maximum_entries": self._limits.maximum_workspace_entries,
+                        }
+                        for entry in ledger["workspaces"]
+                    ],
+                }
         self._validate_ledger(ledger)
         return ledger
 
@@ -1238,6 +1347,8 @@ class ArtifactScratchManager:
         seen_workspaces: set[str] = set()
         expected_workspace = {
             "workspace_name",
+            "reserved_bytes",
+            "maximum_entries",
             "created_at_unix_ns",
             "expires_at_unix_ns",
             "owner_pid",
@@ -1248,6 +1359,8 @@ class ArtifactScratchManager:
                 raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
             workspace_name = entry["workspace_name"]
             integer_values = (
+                entry["reserved_bytes"],
+                entry["maximum_entries"],
                 entry["created_at_unix_ns"],
                 entry["expires_at_unix_ns"],
                 entry["owner_pid"],
@@ -1257,6 +1370,8 @@ class ArtifactScratchManager:
                 or _WORKSPACE_ID.fullmatch(workspace_name) is None
                 or workspace_name in seen_workspaces
                 or any(type(value) is not int or value < 0 for value in integer_values)
+                or entry["reserved_bytes"] > HARD_MAXIMUM_ARTIFACT_BYTES
+                or entry["maximum_entries"] > self._limits.maximum_workspace_entries
                 or entry["expires_at_unix_ns"] <= entry["created_at_unix_ns"]
                 or entry["owner_pid"] <= 0
                 or not isinstance(entry["owner_process_identity"], str)
@@ -1577,6 +1692,54 @@ class ArtifactPreparationService:
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"
             ) from None
+
+    async def _process_prepared_submission(
+        self,
+        prepared: PreparedArtifact,
+        processor: Any,
+        *,
+        reserved_bytes: int,
+        maximum_entries: int,
+    ) -> _InspectionResult:
+        """Serve only the authority-gated hidden submission materializer."""
+        if type(prepared) is not PreparedArtifact or prepared._owner is not self:
+            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+        binding = prepared._binding
+        active = self._active.get(binding)
+        if active is None or not active.handle_issued or active.stream_claimed:
+            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+
+        def process_and_cleanup() -> _InspectionResult:
+            with self._manager.extraction_workspace(
+                reserved_bytes=reserved_bytes,
+                maximum_entries=maximum_entries,
+            ) as workspace:
+                active.reader.seek(0)
+                try:
+                    return processor.process(active.reader, workspace)
+                finally:
+                    active.reader.seek(0)
+
+        operation = asyncio.create_task(self._run_io(process_and_cleanup))
+        try:
+            async with asyncio.timeout_at(active.deadline):
+                return await asyncio.shield(operation)
+        except TimeoutError:
+            processor.abort()
+            try:
+                await await_cancellation_resistant(operation)
+            except BaseException:
+                pass
+            raise ArtifactPreparationDeadlineError(
+                "artifact preparation deadline exceeded"
+            ) from None
+        except asyncio.CancelledError as cancellation:
+            processor.abort()
+            try:
+                await await_cancellation_resistant(operation)
+            except BaseException:
+                pass
+            raise cancellation from None
 
     async def _release_unhanded_preparation(
         self,

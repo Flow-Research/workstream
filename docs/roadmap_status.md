@@ -89,6 +89,11 @@ remain outside v0.1.
 - Guide materialization from persisted artifact-processing evidence.
 - Fixed-service guide-source reads and binding creation with authorization,
   custody, lineage, rate-control, and stale-generation enforcement.
+- Hidden contributor-ZIP default pre-submit execution: fixed-service authority
+  precedes byte access, one manifest-verified callback-scoped scratch tree runs
+  only platform/default catalogue phases, and cleanup precedes bounded
+  non-durable results. Project-policy execution, durable evidence, contributor
+  preparation, admission, and Submission remain unavailable.
 
 ## Integration In Progress
 

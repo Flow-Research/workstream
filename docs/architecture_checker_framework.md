@@ -250,6 +250,16 @@ Workstream default submission artifact rules require:
   advisory or locked project-specific unless an exact generic custody risk is
   proven
 
+The hidden 04B2 executor consumes the exact 04B1 plan identity and only its
+`custody`, `identity`, `materialization`, and `default_policy` phase slice. It
+validates the 04A commitment, inspection, semantic manifest, and change-gate
+facts, projects one callback-scoped sealed tree through ART scratch custody, and
+returns bounded entry results: `passed`, `warning`, `failed`,
+`advisory_disabled`, or `dependency_not_run`. It does not consult the legacy
+checker registry or standalone precheck, does not run `project_policy`
+primitives, and does not persist checker evidence. Fixed materializer authority
+remains planned/unavailable until XINT-06A.
+
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
 The generated project `PreSubmitCheckerPolicy` is persisted with a compiled

@@ -329,6 +329,26 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: Artifact module coverage
+        working-directory: backend
+        run: coverage report --include='app/modules/artifacts/*' --precision=2 --fail-under=90
+
+      - name: Artifact cancellation and lock coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/core/cancellation.py,app/core/file_locks.py'
+          --precision=2
+          --fail-under=90
+
+      - name: Artifact interface coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/interfaces/artifact_operations.py,app/interfaces/artifacts.py'
+          --precision=2
+          --fail-under=90
+
       - name: External service adapter coverage
         working-directory: backend
         run: coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90

@@ -79,6 +79,12 @@ Submission path; it is not part of this effective policy. Pre-submit failures do
 `CheckerRun` records and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 
+The hidden platform/default phase uses `passed`, `warning`, `failed`,
+`advisory_disabled`, and `dependency_not_run`. It authorizes and destroys one
+callback-scoped sealed ART tree before returning these non-durable results.
+Project-policy primitives execute in the later phase of the same effective
+plan.
+
 ## Checker Registry Fields
 
 Each checker definition specifies:

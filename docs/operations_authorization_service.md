@@ -808,7 +808,17 @@ denial, the composition root first rolls back ART state, and AUTH's public
 bounded restage operation commits the same denial in a clean AUTH-only
 transaction. The two guide binding/read adapters do not use that exception.
 Still-planned fixed-service preparation still issues no handle. When a planned
-foundation action enters its ART adapter with an exact resource context, its
+pre-submit materializer request is diagnosed, expect denial before any ZIP read
+or scratch workspace reservation and no ART checker result. The future XINT-06A
+activation must bind task, assignment, project, effective-policy ID,
+pre-submit-policy ID, process-local prepared generation, effective-plan and
+catalogue hashes, archive digest/size, and semantic-manifest hash to
+`workstream.artifact.materializer` plus
+`artifact.pre_submit.checker_input.materialize`. A human contributor grant does
+not substitute for this fixed-service authority, and no prepared handle is
+serialized into a worker or durable record.
+
+When a planned foundation action enters its ART adapter with an exact resource context, its
 bounded `action_unavailable` denial follows the same rollback-then-clean-restage
 path.
 

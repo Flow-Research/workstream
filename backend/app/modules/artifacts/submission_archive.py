@@ -7,10 +7,12 @@ from enum import StrEnum
 import hashlib
 import math
 from pathlib import PurePosixPath
+from pathlib import Path
+import os
 import stat
 import struct
 import time
-from typing import BinaryIO
+from typing import BinaryIO, Callable, Mapping, TypeVar
 import unicodedata
 import zipfile
 import zlib
@@ -19,6 +21,7 @@ from app.modules.artifacts.zip_safety import zip_directory_layout
 
 
 _READ_BYTES = 1024 * 1024
+_ProjectionResult = TypeVar("_ProjectionResult")
 
 
 class SubmissionArchiveFailureCode(StrEnum):
@@ -66,6 +69,121 @@ class SubmissionArchiveInspectionResult:
     file_count: int
     directory_count: int
     total_expanded_bytes: int
+
+
+def _read_projected_file(
+    root_fd: int,
+    entries: tuple[SubmissionArchiveEntry, ...],
+    normalized_path: str,
+    maximum_bytes: int,
+) -> bytes:
+    entry = next(
+        (
+            item
+            for item in entries
+            if item.normalized_path == normalized_path
+            and item.entry_type is SubmissionArchiveEntryType.FILE
+        ),
+        None,
+    )
+    if entry is None or entry.byte_count > maximum_bytes:
+        raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.LIMIT_EXCEEDED)
+    descriptor = _open_beneath(
+        root_fd,
+        normalized_path,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        details = os.fstat(descriptor)
+        expected_mode = 0o500 if entry.executable else 0o400
+        if (
+            not stat.S_ISREG(details.st_mode)
+            or details.st_mode & 0o777 != expected_mode
+            or details.st_size != entry.byte_count
+        ):
+            raise SubmissionArchiveRejectedError(
+                SubmissionArchiveFailureCode.INTEGRITY_FAILURE
+            )
+        content = bytearray()
+        while chunk := os.read(descriptor, min(_READ_BYTES, maximum_bytes + 1)):
+            content.extend(chunk)
+            if len(content) > maximum_bytes:
+                raise SubmissionArchiveRejectedError(
+                    SubmissionArchiveFailureCode.LIMIT_EXCEEDED
+                )
+        if f"sha256:{hashlib.sha256(content).hexdigest()}" != entry.sha256:
+            raise SubmissionArchiveRejectedError(
+                SubmissionArchiveFailureCode.INTEGRITY_FAILURE
+            )
+        return bytes(content)
+    finally:
+        os.close(descriptor)
+
+
+class SealedSubmissionTree:
+    """Callback-scoped read capability over one canonical projected tree."""
+
+    __slots__ = ("_closed", "_content", "_entries")
+
+    def __init__(
+        self,
+        *,
+        entries: tuple[SubmissionArchiveEntry, ...],
+        content: Mapping[str, bytes],
+    ) -> None:
+        self._entries = entries
+        self._content = dict(content)
+        self._closed = False
+
+    @property
+    def entries(self) -> tuple[SubmissionArchiveEntry, ...]:
+        """Return immutable server-owned entry facts, never a local path."""
+        self._assert_open()
+        return self._entries
+
+    def read_file(self, normalized_path: str, *, maximum_bytes: int) -> bytes:
+        """Read one exact regular file through a bounded descriptor-relative operation."""
+        self._assert_open()
+        if type(maximum_bytes) is not int or maximum_bytes < 0:
+            raise ValueError("sealed tree read limit is invalid")
+        content = self._content.get(normalized_path)
+        if content is None or len(content) > maximum_bytes:
+            raise SubmissionArchiveRejectedError(
+                SubmissionArchiveFailureCode.LIMIT_EXCEEDED
+            )
+        entry = next(
+            (
+                item
+                for item in self._entries
+                if item.normalized_path == normalized_path
+                and item.entry_type is SubmissionArchiveEntryType.FILE
+            ),
+            None,
+        )
+        if (
+            entry is None
+            or len(content) != entry.byte_count
+            or f"sha256:{hashlib.sha256(content).hexdigest()}" != entry.sha256
+        ):
+            raise SubmissionArchiveRejectedError(
+                SubmissionArchiveFailureCode.INTEGRITY_FAILURE
+            )
+        return content
+
+    def _close(self) -> None:
+        self._content.clear()
+        self._entries = ()
+        self._closed = True
+
+    def _assert_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("sealed submission tree is closed")
+
+    def __reduce__(self):
+        raise TypeError("sealed submission tree is process-local")
+
+    def __repr__(self) -> str:
+        return f"SealedSubmissionTree(entries={len(self._entries)}, closed={self._closed})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +264,171 @@ class SubmissionArchiveInspector:
             directory_count=directories,
             total_expanded_bytes=total,
         )
+
+    def project_and_run(
+        self,
+        reader: BinaryIO,
+        workspace: Path,
+        *,
+        expected: SubmissionArchiveInspectionResult,
+        callback: Callable[[SealedSubmissionTree], _ProjectionResult],
+    ) -> _ProjectionResult:
+        """Project the exact inspected ZIP and keep the tree inside one callback lifetime."""
+        observed = self.inspect(reader)
+        if observed != expected:
+            self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+        reader.seek(0)
+        root_fd = os.open(
+            workspace,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+        )
+        root_details = os.fstat(root_fd)
+        if not stat.S_ISDIR(root_details.st_mode) or root_details.st_mode & 0o077:
+            os.close(root_fd)
+            self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+        tree: SealedSubmissionTree | None = None
+        callback_started = False
+        projection_started = time.monotonic()
+        try:
+            with zipfile.ZipFile(reader, allowZip64=True) as archive:
+                infos: dict[str, zipfile.ZipInfo] = {}
+                for info in archive.infolist():
+                    normalized_path, entry_type = self._validated_path(info)
+                    if entry_type is SubmissionArchiveEntryType.FILE:
+                        if normalized_path in infos:
+                            self._reject(SubmissionArchiveFailureCode.COLLISION)
+                        infos[normalized_path] = info
+                directories = sorted(
+                    (
+                        entry
+                        for entry in expected.entries
+                        if entry.entry_type is SubmissionArchiveEntryType.DIRECTORY
+                    ),
+                    key=lambda entry: (len(PurePosixPath(entry.normalized_path).parts), entry.normalized_path),
+                )
+                for entry in directories:
+                    _mkdir_beneath(root_fd, entry.normalized_path)
+                for entry in expected.entries:
+                    if entry.entry_type is not SubmissionArchiveEntryType.FILE:
+                        continue
+                    info = infos.pop(entry.normalized_path, None)
+                    if info is None:
+                        self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+                    self._project_file(
+                        archive,
+                        info,
+                        root_fd=root_fd,
+                        expected=entry,
+                        started=projection_started,
+                    )
+                if infos:
+                    self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+            for entry in reversed(directories):
+                directory_fd = _open_beneath(
+                    root_fd,
+                    entry.normalized_path,
+                    os.O_RDONLY
+                    | getattr(os, "O_DIRECTORY", 0)
+                    | getattr(os, "O_NOFOLLOW", 0),
+                )
+                try:
+                    os.fchmod(directory_fd, 0o500)
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            os.fchmod(root_fd, 0o500)
+            os.fsync(root_fd)
+            content = self._seal_projected_content(root_fd, expected.entries)
+            tree = SealedSubmissionTree(
+                entries=expected.entries,
+                content=content,
+            )
+            callback_started = True
+            return callback(tree)
+        except SubmissionArchiveRejectedError:
+            raise
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError):
+            if callback_started:
+                raise
+            self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+        finally:
+            if tree is not None:
+                tree._close()
+            os.close(root_fd)
+
+    def _seal_projected_content(
+        self,
+        root_fd: int,
+        entries: tuple[SubmissionArchiveEntry, ...],
+    ) -> dict[str, bytes]:
+        """Snapshot verified files without exposing filesystem authority."""
+        return {
+            entry.normalized_path: _read_projected_file(
+                root_fd,
+                entries,
+                entry.normalized_path,
+                entry.byte_count,
+            )
+            for entry in entries
+            if entry.entry_type is SubmissionArchiveEntryType.FILE
+        }
+
+    def _project_file(
+        self,
+        archive: zipfile.ZipFile,
+        info: zipfile.ZipInfo,
+        *,
+        root_fd: int,
+        expected: SubmissionArchiveEntry,
+        started: float,
+    ) -> None:
+        parent_fd, filename = _open_parent_beneath(root_fd, expected.normalized_path)
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(
+                filename,
+                os.O_CREAT
+                | os.O_EXCL
+                | os.O_WRONLY
+                | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=parent_fd,
+            )
+            digest = hashlib.sha256()
+            byte_count = 0
+            with archive.open(info, "r") as member:
+                while chunk := member.read(_READ_BYTES):
+                    self._check_deadline(started)
+                    byte_count += len(chunk)
+                    if byte_count > expected.byte_count:
+                        self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+                    digest.update(chunk)
+                    view = memoryview(chunk)
+                    while view:
+                        written = os.write(descriptor, view)
+                        if written <= 0:
+                            raise OSError("submission projection write failed")
+                        view = view[written:]
+            if (
+                byte_count != expected.byte_count
+                or f"sha256:{digest.hexdigest()}" != expected.sha256
+            ):
+                self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+            os.fsync(descriptor)
+            os.fchmod(descriptor, 0o500 if expected.executable else 0o400)
+            details = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(details.st_mode)
+                or details.st_size != expected.byte_count
+                or details.st_mode & 0o777 != (0o500 if expected.executable else 0o400)
+            ):
+                self._reject(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+            os.fsync(descriptor)
+            os.fsync(parent_fd)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            os.close(parent_fd)
 
     def _read_entries(
         self, archive: zipfile.ZipFile, infos: list[zipfile.ZipInfo], *, started: float
@@ -451,3 +734,42 @@ class SubmissionArchiveInspector:
     @staticmethod
     def _reject(code: SubmissionArchiveFailureCode) -> None:
         raise SubmissionArchiveRejectedError(code)
+
+
+def _open_parent_beneath(root_fd: int, normalized_path: str) -> tuple[int, str]:
+    """Open the validated parent chain without following any component."""
+    parts = PurePosixPath(normalized_path).parts
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            child = os.open(
+                part,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = child
+        return descriptor, parts[-1]
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_beneath(root_fd: int, normalized_path: str, flags: int) -> int:
+    parent_fd, filename = _open_parent_beneath(root_fd, normalized_path)
+    try:
+        return os.open(filename, flags, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
+
+
+def _mkdir_beneath(root_fd: int, normalized_path: str) -> None:
+    """Create one exact validated directory under an already-created parent."""
+    parent_fd, filename = _open_parent_beneath(root_fd, normalized_path)
+    try:
+        os.mkdir(filename, mode=0o700, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)

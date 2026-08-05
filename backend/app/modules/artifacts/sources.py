@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Protocol, TypeVar, final
+from uuid import UUID, uuid4
 
 from app.core.cancellation import await_completion_preserving_cancellation
 
@@ -165,7 +166,7 @@ class CommittedArtifactSource:
 class PreparedArtifact:
     """Lifecycle owner for one prepared source and its scratch reservation."""
 
-    __slots__ = ("_binding", "_closed", "_committed_source", "_owner")
+    __slots__ = ("_binding", "_closed", "_committed_source", "_generation_id", "_owner")
 
     def __init__(self, *_: object, **__: object) -> None:
         """Reject all direct construction."""
@@ -188,6 +189,7 @@ class PreparedArtifact:
         prepared._owner = owner
         prepared._binding = binding
         prepared._closed = False
+        prepared._generation_id = uuid4()
         source = object.__new__(CommittedArtifactSource)
         source._owner = owner
         source._binding = binding
@@ -201,6 +203,13 @@ class PreparedArtifact:
     def commitment(self) -> ArtifactCommitment:
         """Return the server-computed commitment."""
         return self._committed_source.commitment
+
+    @property
+    def generation_id(self) -> UUID:
+        """Return the unguessable process-local generation bound to this handle."""
+        if self._closed:
+            raise RuntimeError("prepared artifact is closed")
+        return self._generation_id
 
     @property
     def committed_source(self) -> CommittedArtifactSource:

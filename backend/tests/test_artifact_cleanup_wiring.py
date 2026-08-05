@@ -264,6 +264,7 @@ def test_preparation_limit_mapping_uses_every_canonical_setting(tmp_path: Path) 
         artifact_scratch_aggregate_reserved_bytes=3 * 512 * 1024 * 1024,
         artifact_scratch_maximum_files=7,
         artifact_scratch_maximum_concurrency=3,
+        artifact_scratch_maximum_workspace_entries=4_000,
         artifact_scratch_minimum_free_bytes=123,
         artifact_scratch_reservation_ttl_seconds=3000,
         artifact_preparation_total_deadline_seconds=2000,
@@ -277,6 +278,10 @@ def test_preparation_limit_mapping_uses_every_canonical_setting(tmp_path: Path) 
     assert limits.aggregate_reserved_bytes == settings.artifact_scratch_aggregate_reserved_bytes
     assert limits.maximum_files == settings.artifact_scratch_maximum_files
     assert limits.maximum_concurrency == settings.artifact_scratch_maximum_concurrency
+    assert (
+        limits.maximum_workspace_entries
+        == settings.artifact_scratch_maximum_workspace_entries
+    )
     assert limits.minimum_free_bytes == settings.artifact_scratch_minimum_free_bytes
     assert limits.reservation_ttl_seconds == settings.artifact_scratch_reservation_ttl_seconds
     assert limits.total_deadline_seconds == settings.artifact_preparation_total_deadline_seconds

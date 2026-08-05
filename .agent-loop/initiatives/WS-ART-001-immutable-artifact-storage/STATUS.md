@@ -124,18 +124,14 @@ supersedes 04A4, makes 04B1 the next implementation chunk, and assigns complete
 legacy route/public-service/internal-guard/caller-package removal to the 05B
 admission-backed Submission cutover.
 
-`WS-ART-001-04B1` is active on its bounded worktree. It owns only the immutable
-typed catalogue, startup-fixed availability validation, migration of the
-existing compiler away from parallel primitive maps, and pure composition of
-one lineage-bound effective plan. It performs no ZIP read, scratch
-materialization, checker execution, durable write, route exposure, or AUTH
-activation.
-
-The implementation and deterministic evidence are complete in draft PR #276.
-All required internal reviewer tracks ran successfully after their valid
-findings were repaired. CodeRabbit completed substantive review and its two
-actionable threads were repaired and resolved. The ready PR now waits only for
-the final hosted Backend rerun on the repaired head.
+`WS-ART-001-04B1` merged through PR #276 and supplies the immutable typed
+catalogue plus lineage-bound effective plan. `WS-ART-001-04B2` is implemented
+and internally reviewed on its bounded branch; hosted PR gates and human merge
+remain pending. It owns only fixed-service authorization before byte access,
+quota-reserved callback-scoped sealed ZIP projection, platform/default phase
+execution, bounded non-durable results, and cleanup. It performs no
+project-policy execution, durable evidence/admission/Submission write, route
+exposure, provider I/O, or AUTH activation.
 
 ## Gate
 
