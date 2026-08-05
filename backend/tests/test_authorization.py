@@ -167,6 +167,8 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
     PreparedAuthorizationService,
+    _PreparedAuthorizationBinding,
+    _policy_mutation_denial_binding_matches,
     _submission_policy_binding_matches,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -218,6 +220,7 @@ from app.modules.authorization.runtime import (
     ProjectGuideSourceSnapshotMutationResourceContext,
     ProjectGuideSufficiencyMutationResourceContext,
     ProjectPostSubmitCheckerPolicyMutationResourceContext,
+    ProjectPolicyMutationPrepareDenialResourceContext,
     ProjectReviewPolicyMutationResourceContext,
     ProjectRevisionPolicyMutationResourceContext,
     ProjectSetupServiceCustodyContext,
@@ -6273,6 +6276,39 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
     assert facts.calls == 0
     assert prepared._issued == {}
     assert evidence.events == []
+
+
+def test_policy_mutation_denial_binding_requires_exact_kind_and_selectors() -> None:
+    """A bounded policy denial remains tied to its requested policy kind and selectors."""
+    project_id, guide_id = uuid4(), uuid4()
+    binding = _PreparedAuthorizationBinding(
+        action_id=ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+        actor_ref=uuid4(),
+        scope=PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
+        ),
+        idempotency_key=uuid4(),
+        request_digest=DIGEST,
+        policy_mutation_project_id=project_id,
+        policy_mutation_guide_id=guide_id,
+        policy_mutation_request_digest=DIGEST,
+    )
+    resource = ProjectPolicyMutationPrepareDenialResourceContext(
+        resource_type="project_policy_mutation_request",
+        resource_id=guide_id,
+        scope_project_id=project_id,
+        requested_guide_id=guide_id,
+        requested_policy_kind="review",
+        request_digest=DIGEST,
+    )
+
+    assert _policy_mutation_denial_binding_matches(binding, resource)
+    assert not _policy_mutation_denial_binding_matches(
+        binding,
+        resource.model_copy(update={"requested_policy_kind": "revision"}),
+    )
 
 
 @pytest.mark.asyncio
