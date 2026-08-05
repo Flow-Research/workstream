@@ -25,6 +25,7 @@ backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py
 backend/tests/conftest.py
+backend/tests/test_review_lease_persistence.py
 .github/workflows/backend.yml
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md

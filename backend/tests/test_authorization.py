@@ -475,6 +475,65 @@ def _submission_policy_derive_prepare_inputs() -> tuple[
     )
 
 
+def _submission_policy_human_prepare_inputs(
+    action_id: ActionId, project_id: UUID
+) -> tuple[PreparedAuthorizationInput, PreparedAuthorityScope]:
+    """Build exact human submission-policy input for planned-action tests."""
+    guide_id, snapshot_id, policy_id, operation_id = (uuid4() for _ in range(4))
+    target_kind = {
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE: "create",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE: "update",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE: "approve",
+    }[action_id]
+    values: dict[str, object] = {
+        "resource_type": "project_submission_artifact_policy_mutation",
+        "resource_id": policy_id,
+        "operation_id": operation_id,
+        "request_digest": DIGEST,
+        "scope_project_id": project_id,
+        "guide_id": guide_id,
+        "guide_version": "1",
+        "source_snapshot_id": snapshot_id,
+        "source_snapshot_hash": DIGEST,
+        "target_kind": target_kind,
+        "execution_kind": "human",
+        "policy_id": policy_id,
+        "policy_version": "1",
+        "policy_generation": 1,
+        "setup_generation": 1,
+    }
+    if target_kind in {"update", "approve"}:
+        values.update(policy_status="draft", policy_digest=DIGEST)
+    if target_kind == "approve":
+        values.update(
+            effective_output_digest=DIGEST,
+            compiled_pre_submit_output_digest=DIGEST,
+            compilation=SubmissionPolicyCompilationContext(
+                compiler_version="v1",
+                bundle_schema_version="v1",
+                catalogue_id="workstream.default",
+                catalogue_version="v1",
+                catalogue_schema_version="v1",
+                catalogue_manifest_sha256=DIGEST,
+                ordered_entry_identities=("archive.identity@v1",),
+                ordered_entry_configuration_hashes=(DIGEST,),
+                disabled_catalogue_entry_ids=(),
+                disabled_catalogue_config_digest=DIGEST,
+                compiled_bundle_hash=DIGEST,
+                effective_plan_hash=DIGEST,
+            ),
+        )
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate(values)
+    return (
+        PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+        ),
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     ["", "=", "a===", "*", "a" * 513],
@@ -3652,14 +3711,26 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
     for action_id in PROJECT_MUTATION_RESOURCE_BY_ACTION:
         if ACTION_BY_ID[action_id].availability is ActionAvailability.ACTIVE:
             continue
-        scope = PreparedAuthorityScope(
-            kind=PreparedAuthorityScopeKind.PROJECT,
-            project_id=project_id,
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={}
         )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        )
+        if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+            caller_input, scope = _submission_policy_derive_prepare_inputs()
+        elif action_id in {
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        }:
+            caller_input, scope = _submission_policy_human_prepare_inputs(
+                action_id, project_id
+            )
         with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
             await prepared.prepare(
                 action_id,
-                PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+                caller_input,
                 scope,
             )
         assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
