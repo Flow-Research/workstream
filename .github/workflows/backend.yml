@@ -145,9 +145,10 @@ jobs:
         if: ${{ always() }}
         working-directory: backend
         shell: bash
-        run: >-
-          printf '%s\n' '${{ steps.identity.outputs.job_start_epoch }}'
-          > '.ci/lane-bundle/${{ matrix.lane }}/job-start-epoch.txt'
+        run: |
+          install -d -m 700 '.ci/lane-bundle/${{ matrix.lane }}'
+          printf '%s\n' '${{ steps.identity.outputs.job_start_epoch }}' \
+            > '.ci/lane-bundle/${{ matrix.lane }}/job-start-epoch.txt'
 
       - name: Upload authenticated lane ${{ matrix.lane }}
         if: ${{ always() }}
@@ -326,6 +327,26 @@ jobs:
         run: >-
           coverage report
           --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*'
+          --precision=2
+          --fail-under=90
+
+      - name: Artifact module coverage
+        working-directory: backend
+        run: coverage report --include='app/modules/artifacts/*' --precision=2 --fail-under=90
+
+      - name: Artifact cancellation and lock coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/core/cancellation.py,app/core/file_locks.py'
+          --precision=2
+          --fail-under=90
+
+      - name: Artifact interface coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/interfaces/artifact_operations.py,app/interfaces/artifacts.py'
           --precision=2
           --fail-under=90
 

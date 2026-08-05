@@ -798,6 +798,13 @@ After that cutover no independent precheck route or client-owned manifest can
 reproduce the authoritative result. `POST /api/v1/tasks/{id}/submissions` consumes the verified ready
 admission and does not receive scratch paths or rerun the pre-submit plan.
 
+Before that cutover, hidden ART-04B2 establishes the execution boundary without
+exposing a route. The fixed materializer authorizes before any prepared-byte
+read or workspace reservation. One callback-scoped sealed tree is checked
+against the server commitment and semantic manifest, only Workstream platform
+and default phases execute, and the tree is cleaned before bounded non-durable
+results return. Project-policy execution and immutable evidence remain 04B3.
+
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. Workstream still writes a task audit event named

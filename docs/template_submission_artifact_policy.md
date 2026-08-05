@@ -94,6 +94,11 @@ Default required packet fields:
 - summary
 - contributor attestation
 
+The hidden Workstream-default executor consumes these catalogue-owned semantics
+without reading project-rule configuration. It validates one server-generated
+sealed tree and emits only bounded, path-redacted same-request results. Project
+rules are a later phase of the same effective plan, not a second checker API.
+
 Workstream generates the archive commitment and semantic artifact manifest
 after safely inspecting the submitted outer ZIP. Clients do not supply an
 artifact hash manifest as packet input; later APIs may expose an immutable

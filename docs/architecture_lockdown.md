@@ -136,6 +136,13 @@ is audit evidence, not a product review decision. The independently invocable
 legacy preflight route remains frozen until ART-05B removes it together with the
 legacy Submission path; it is never an alternate authority for this flow.
 
+Hidden ART-04B2 authorizes the fixed materializer before any prepared-byte read,
+reserves the complete expanded workspace budget, verifies one canonical sealed
+tree against the 04A identities, and runs only platform/default catalogue
+entries. The callback-scoped tree and all paths are destroyed before bounded
+non-durable results return. Project-policy execution and durable evidence remain
+separate 04B3 work; AUTH activation remains XINT-06A.
+
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 
 For guide and context resolution, TaskAssignment contributes only its `task_id`;

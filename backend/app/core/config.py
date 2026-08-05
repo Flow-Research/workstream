@@ -187,6 +187,9 @@ class Settings(BaseSettings):
     )
     artifact_scratch_maximum_files: int = Field(default=8, ge=1, le=1024)
     artifact_scratch_maximum_concurrency: int = Field(default=4, ge=1, le=1024)
+    artifact_scratch_maximum_workspace_entries: int = Field(
+        default=2_000, ge=1, le=100_000
+    )
     artifact_scratch_minimum_free_bytes: int = Field(
         default=512 * 1024 * 1024,
         ge=0,
@@ -476,6 +479,13 @@ class Settings(BaseSettings):
         """
         if self.artifact_scratch_maximum_concurrency > self.artifact_scratch_maximum_files:
             raise ValueError("artifact scratch concurrency cannot exceed its file limit")
+        if (
+            self.artifact_scratch_maximum_workspace_entries
+            < self.artifact_submission_zip_maximum_entries
+        ):
+            raise ValueError(
+                "artifact scratch workspace entry limit cannot be below ZIP entry limit"
+            )
         if (
             self.artifact_submission_zip_maximum_entry_bytes
             > self.artifact_submission_zip_maximum_expanded_bytes

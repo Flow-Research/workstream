@@ -144,6 +144,15 @@ Each fixed service action retains its canonical provisioned service identity,
 matrix row, resource facts, terminal reauthorization, and separate activation
 evidence. No human grant supplies fixed service authority.
 
+04B2 defines the pre-submit materializer facts as task, assignment, project,
+effective submission-artifact-policy ID, pre-submit checker-policy ID,
+process-local prepared generation, effective-plan hash, catalogue-manifest hash,
+archive SHA-256/byte count, and semantic-manifest hash. The fixed
+`workstream.artifact.materializer` capability must be consumed before any
+prepared-byte read, ZIP open, workspace reservation, or checker result. ART
+ships only a deny-by-default adapter while the action is planned; XINT-06A owns
+the later activation after 04B3.
+
 ## Fail-Closed Rule
 
 An ART implementation contract stops if its required AUTH registration or

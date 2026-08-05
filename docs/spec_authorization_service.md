@@ -539,6 +539,14 @@ closed:
 | `workstream.review.artifact_reference_reconciliation` | `review.artifact_reference.reconcile` |
 | `workstream.review.projection` | `review.projection.rebuild` |
 
+The hidden 04B2 prepared resource binds task, assignment, project, effective
+submission-artifact-policy ID, pre-submit checker-policy ID, process-local
+prepared generation, plan hash, catalogue-manifest hash, archive SHA-256/byte
+count, and semantic-manifest hash. The fixed materializer consumes the opaque
+prepared handle before any prepared-byte read, ZIP open, workspace reservation,
+or checker fact. `AUTH_ART_04B` remains the catalogue owner; XINT-06A later
+activates the action after hidden 04B3. ART does not activate it.
+
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
 02C expands the current registry to fourteen identities. AUTH-12E activates only
 `project.guide_sufficiency.run` for the exact internal setup-service command;

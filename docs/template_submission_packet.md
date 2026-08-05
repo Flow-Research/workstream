@@ -61,6 +61,14 @@ and does not return review decision values: `accept`, `needs_revision`, or
 until ART-05B removes it with the legacy Submission path; it is not an
 authoritative result for this packet.
 
+The hidden default phase first validates ART's server-generated commitment,
+semantic manifest, change result, and one sealed scratch projection. Its
+path-redacted same-request entries use `passed`, `warning`, `failed`,
+`advisory_disabled`, or `dependency_not_run`; infrastructure, authority,
+integrity, timeout, cancellation, and scratch-capacity failures remain distinct
+from contributor checker failures. Project-specific rules run later through the
+same effective plan, not through a second API or registry.
+
 ## Submission Bundle Manifest
 
 Workstream generates this manifest from normalized directory/file paths, entry

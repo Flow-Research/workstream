@@ -39,6 +39,7 @@ from app.modules.checkers.compiler import (
 )
 from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.checkers import runner as checker_runner_module
+from app.modules.checkers.pre_submit_defaults import attestation_term_is_satisfied
 from app.modules.checkers.runner import (
     CheckerContext,
     CheckerNameConflict,
@@ -1304,12 +1305,12 @@ def test_attestation_and_policy_projection_helpers_preserve_required_only_rules(
     assert checker_runner_module._required_evidence_keys(None) == []
     assert checker_runner_module._forbidden_artifact_patterns(None) == []
     assert checker_runner_module._required_attestation_terms(None) == []
-    assert checker_runner_module._attestation_term_is_satisfied("anything", "")
-    assert checker_runner_module._attestation_term_is_satisfied(
+    assert attestation_term_is_satisfied("anything", "")
+    assert attestation_term_is_satisfied(
         "i_confirm_original_work",
         "original work",
     )
-    assert not checker_runner_module._attestation_term_is_satisfied(
+    assert not attestation_term_is_satisfied(
         "i_confirm_original_work",
         "client confidentiality",
     )

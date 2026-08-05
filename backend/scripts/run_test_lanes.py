@@ -94,6 +94,7 @@ LANES = (
             "tests/test_artifact_authorization.py",
             "tests/test_artifact_internal_authorization.py",
             "tests/test_artifact_cleanup_wiring.py",
+            "tests/test_checker_materialization.py",
             "tests/test_artifact_preparation.py",
             "tests/test_artifact_store_conformance.py",
             "tests/test_artifact_verification.py",
@@ -160,6 +161,7 @@ LANES = (
         (
             "tests/test_checker_catalogue.py",
             "tests/test_checkers.py",
+            "tests/test_default_pre_submit_execution.py",
             "tests/test_review_queue_persistence.py",
             "tests/test_review_lease_persistence.py",
             "tests/test_tasks.py",

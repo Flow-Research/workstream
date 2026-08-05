@@ -843,6 +843,7 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_SCRATCH_AGGREGATE_RESERVED_BYTES` | `2147483648` | Maximum bytes reserved across the shared root. Each active preparation reserves the full 512 MiB hard maximum. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_FILES` | `8` | Maximum live scratch reservations/files. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_CONCURRENCY` | `4` | Maximum concurrent preparations; cannot exceed the file limit. |
+| `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_WORKSPACE_ENTRIES` | `2000` | Maximum entries removable from one private processing workspace; it must be at least the accepted submission-ZIP entry limit. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MINIMUM_FREE_BYTES` | `536870912` | Free-space floor retained in addition to the next full reservation. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_RESERVATION_TTL_SECONDS` | `2400` | Database-independent wall-clock expiry for abandoned reservations. |
 | `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` | `1800` | Total first-pass and provider-consumption deadline. |
@@ -873,6 +874,21 @@ approved operational change.
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_EXPANDED_BYTES` | `536870912` | `536870912` | Actual expanded bytes across the complete outer archive. |
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO` | `100` | `10000` | Maximum expanded-to-compressed ratio for one file. |
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_INSPECTION_SECONDS` | `300` | `1800` | Complete synchronous inspector deadline inside the preparation deadline. |
+
+04B2 uses the same ledger to reserve a submission workspace's complete expanded
+byte count and entry count before projection. Workspace reservations participate
+in aggregate byte/free-space checks but do not become artifact storage. Cleanup
+uses the workspace's own bounded entry reservation rather than the live
+prepared-file limit, so every archive accepted at the configured entry ceiling
+is removable after any terminal outcome.
+
+After fixed-service authorization, the canonical outer-ZIP inspector projects
+the already-inspected manifest into one callback-scoped sealed tree using
+descriptor-relative creation. Regular files use fixed `0400` or normalized
+executable `0500`; directories use `0500`. Checker adapters receive no scratch
+path, shell, subprocess, or execution primitive. The tree is destroyed first;
+only then do bounded, path-redacted platform/default results return. 04B2 neither runs
+project-policy primitives nor persists final checker evidence.
 
 Pre-submission checker catalogue configuration is separate from ZIP inspection
 bounds:

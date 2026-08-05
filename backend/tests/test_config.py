@@ -701,6 +701,7 @@ def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
         artifact_scratch_aggregate_reserved_bytes=2 * 512 * 1024 * 1024,
         artifact_scratch_maximum_files=4,
         artifact_scratch_maximum_concurrency=2,
+        artifact_scratch_maximum_workspace_entries=2_000,
         artifact_scratch_minimum_free_bytes=128 * 1024 * 1024,
         artifact_scratch_reservation_ttl_seconds=2400,
         artifact_preparation_total_deadline_seconds=1800,
@@ -708,6 +709,7 @@ def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
     )
     assert settings.artifact_scratch_root == tmp_path / "scratch"
     assert settings.artifact_scratch_maximum_concurrency == 2
+    assert settings.artifact_scratch_maximum_workspace_entries == 2_000
 
     with pytest.raises(ValidationError, match="concurrency cannot exceed"):
         Settings(
@@ -719,6 +721,11 @@ def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
             artifact_scratch_reservation_ttl_seconds=600,
             artifact_preparation_total_deadline_seconds=500,
             artifact_scratch_cleanup_margin_seconds=100,
+        )
+    with pytest.raises(ValidationError, match="workspace entry limit cannot be below"):
+        Settings(
+            artifact_submission_zip_maximum_entries=9,
+            artifact_scratch_maximum_workspace_entries=8,
         )
     with pytest.raises(ValidationError, match="roots must be separate"):
         Settings(

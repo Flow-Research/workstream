@@ -278,3 +278,90 @@ embedded in the compiled `PreSubmitCheckerPolicy`. The existing task-locked
 compiled-bundle hash therefore commits to the exact default snapshot without a
 second task-lock field; runtime derives and records the effective-plan hash from
 that same snapshot plus the locked project rules.
+
+## 2026-08-05 ART-04B2 Default Checker Execution Discovery
+
+Observations on merged `main` at `bb77ff4a`:
+
+- `ArtifactPreparationService` already owns the one process-local
+  `PreparedArtifact`, its server-computed archive commitment, a read-only
+  anonymous second-pass stream, deadline enforcement, and idempotent release.
+  `PreparedArtifact.inspect()` is therefore the only acceptable outer-ZIP read
+  seam for 04B2.
+- `ArtifactScratchManager.extraction_workspace()` already provides the bounded,
+  private, crash-recoverable workspace required for a projected checker tree.
+  04B2 must extend this existing custody path; it must not create another scratch
+  manager or use direct temporary paths.
+- Its current recursive cleanup incorrectly reuses `maximum_files` (default 8),
+  while archive admission permits 2,000 entries, and workspace expansion is not
+  charged as a separate byte/entry reservation. 04B2 must repair that shared
+  quota contract before projecting any untrusted tree.
+- `SubmissionArchiveInspector` is the canonical 04A2 ZIP implementation and
+  returns normalized paths, entry types, per-file SHA-256/size, and normalized
+  executable intent. `SubmissionManifest` is the sole 04A3 semantic identity.
+  Materialization must reuse those exact facts and reject any projected mismatch
+  before exposing the tree to checker adapters.
+- `PreparedBundleMaterializationRequest` and
+  `ArtifactMaterializationPort.materialize_prepared_bundle()` already reserve
+  the hidden fixed-service seam. The AUTH catalogue maps
+  `artifact.pre_submit.checker_input.materialize` exclusively to
+  `workstream.artifact.materializer`; `AUTH_ART_04B` is its catalogue custodian,
+  while XINT-06A is the later planned activation point after hidden 04B3.
+- ART-04B1 now owns the single immutable catalogue and effective execution plan.
+  No execution module exists yet. The platform/default executor must consume the
+  exact plan identity and ordered entries rather than reconstructing checker
+  names, dependencies, classifications, or enabled state.
+- The legacy checker runner consumes mutable pre-Submission/task ORM objects and
+  caller-shaped packet manifests. Its small pure validation helpers may inform
+  behavior, but its registry/context is not the authoritative 04B2 boundary and
+  must not become a second catalogue or a dependency of the sealed tree.
+- No `SealedSubmissionTree`, bounded catalogue-result type,
+  `test_checker_materialization.py`, or
+  `test_default_pre_submit_execution.py` exists on current main.
+
+Implementation constraints derived from current code:
+
+- Add one canonical projection capability alongside the canonical ZIP inspector,
+  so structural validation and extraction cannot drift into separate ZIP
+  implementations. Projection re-reads each member once, compares the exact 04A
+  entry facts, writes with no-follow/exclusive semantics, and seals fixed modes
+  before returning a process-local capability.
+- A sealed-tree capability may expose bounded trusted reads to checker adapters,
+  but it may not expose a serializable scratch path, execute a submitted file, or
+  outlive its `ArtifactScratchManager` workspace.
+- The implementation uses callback-scoped ownership: the prepared-artifact owner
+  authorizes first, reserves an expanded-byte/entry workspace, projects and seals
+  the tree, dispatches adapters, then cleans the workspace before returning only
+  bounded results. This removes any optional-close or escaped-path lifetime.
+- Execute only custody, identity, materialization, and default-policy entries in
+  04B2. Project-policy entries remain untouched for 04B3, and no result becomes
+  durable in this chunk.
+- Default-policy configuration is not read back from the merged project policy.
+  Each adapter's closed Workstream-default semantics are versioned by the exact
+  catalogue entry ID/version and catalogue-manifest hash already committed into
+  the effective plan. Changing those semantics requires a definition-version and
+  catalogue-version decision rather than an untracked runtime constant change.
+- Custody and identity adapters validate the already-produced 04A typed facts;
+  they do not perform a third archive inspection or compute a competing identity.
+  The materialization entry is the gate after which default-policy adapters may
+  receive the sealed-tree capability.
+- Result envelopes must be fixed-size, path-redacted, plan-bound, and explicit
+  about pass, blocking failure, advisory warning, or advisory-disabled state.
+  Dependency failure stops dependent dispatch; a disabled mandatory definition
+  is infrastructure-unavailable and can never be emitted as success.
+- Prepared authorization is consumed through the existing opaque handle at the
+  hidden fixed-service composition seam before any prepared-byte read, ZIP open,
+  workspace reservation, or checker fact. Until XINT-06A activates the action
+  owned in the catalogue by `AUTH_ART_04B`, production composition remains fail
+  closed. Because AUTH intentionally has not activated this action, tests use a
+  typed, bounded protocol double and opaque handle sentinel; the denial path
+  uses production `DenyPreSubmitMaterializationAuthorization`. Live AUTH proof
+  remains owned by XINT-06A.
+
+Plan-review correction: the canonical projection must be a method of
+`SubmissionArchiveInspector` or use a private traversal shared solely inside
+`submission_archive.py`. The 04B2 executor accepts a closed phase slice and
+rejects or ignores no entries: encountering a project-policy or policy-primitive
+entry in its dispatch set is a caller/plan error, while the normal complete plan
+is sliced deterministically before dispatch. Tests must also prove the legacy
+checker registry and standalone precheck path are not consulted.
