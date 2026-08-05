@@ -49,6 +49,7 @@ from app.modules.checkers.pre_submit_execution import (
     PreSubmissionResultStatus,
     PreSubmissionInfrastructureUnavailable,
     SubmissionPacketView,
+    validate_pre_submission_execution_result,
 )
 
 
@@ -62,8 +63,8 @@ def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes
         archive.writestr(path, b"[task]\nname='proof'\n")
         if extra_path is not None:
             archive.writestr(extra_path, b"blocked\n")
-        if path != "results":
-            archive.writestr("results", b"verified\n")
+        if path != "evidence/results":
+            archive.writestr("evidence/results", b"verified\n")
     return output.getvalue()
 
 
@@ -77,7 +78,9 @@ def _effective_policy() -> dict[str, object]:
         "workstream_default_policy": defaults,
         "project_policy": {},
         "required_packet_fields": defaults["required_packet_fields"],
-        "required_artifacts": [{"key": "task.toml", "required": True}],
+        "required_artifacts": [
+            {"key": "task.toml", "path": "task.toml", "required": True}
+        ],
         "required_evidence": [{"key": "results", "required": True}],
         "forbidden_artifacts": defaults["forbidden_artifacts"],
         "attestation_terms": defaults["attestation_terms"],
@@ -202,7 +205,6 @@ async def _request(
                 "material is included in this submission; rights_confirmed."
             ),
         ),
-        storage_scheme="s3",
     )
     return request, inspector, manager, preparation, selected_catalogue
 
@@ -215,6 +217,7 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(ArtifactAuthorityDeniedError):
@@ -237,6 +240,7 @@ async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(
@@ -264,6 +268,7 @@ async def test_effective_executor_uses_plan_order_and_dispatches_project_rules(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -310,6 +315,7 @@ async def test_blocking_default_stops_later_dependency_without_review_decision(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -343,6 +349,7 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -368,6 +375,7 @@ async def test_quality_warning_emits_only_a_bounded_category_count(tmp_path: Pat
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -392,6 +400,7 @@ async def test_forged_plan_identity_fails_closed_and_cleans_workspace(tmp_path: 
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable, match="plan_identity"):
@@ -459,6 +468,7 @@ async def test_invalid_executor_state_fails_closed_and_cleans_workspace(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=selected_catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable, match=expected_message):
@@ -494,6 +504,7 @@ async def test_disabled_mandatory_executor_state_fails_closed(tmp_path: Path) ->
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable):
@@ -540,6 +551,7 @@ async def test_effective_execution_enforces_project_only_forbidden_rule(tmp_path
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -558,12 +570,12 @@ async def test_effective_execution_enforces_project_only_forbidden_rule(tmp_path
 @pytest.mark.asyncio
 async def test_effective_execution_enforces_server_owned_storage_scheme(tmp_path: Path) -> None:
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
-    request = replace(request, storage_scheme="local")
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="local",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -575,6 +587,38 @@ async def test_effective_execution_enforces_server_owned_storage_scheme(tmp_path
     )
     assert policy_result.status is PreSubmissionResultStatus.FAILED
     assert policy_result.message_code == "storage_scheme_not_allowed"
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_canonical_result_validator_rejects_forged_definition(tmp_path: Path) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    service = PreparedBundleMaterializationService(
+        authorization=_AllowAuthority(),
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+        storage_scheme="s3",
+    )
+    result = await service.materialize_prepared_bundle(request)
+    first = result.entries[0]
+    forged = replace(
+        result,
+        entries=(
+            replace(
+                first,
+                definition=replace(first.definition, public_name="caller-selected"),
+            ),
+            *result.entries[1:],
+        ),
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_result_context_invalid",
+    ):
+        validate_pre_submission_execution_result(request.effective_plan, forged)
     await request.prepared_artifact.close()
     manager.close()
 
@@ -596,6 +640,7 @@ async def test_legacy_precheck_runner_is_not_an_execution_dependency(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -627,6 +672,7 @@ async def test_authorized_cancellation_cleans_before_propagating(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -660,6 +706,7 @@ async def test_cancellation_during_member_projection_cleans_workspace(
         preparation=preparation,
         archive_inspector=_BlockingProjectionInspector(SubmissionArchiveLimits()),
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -700,6 +747,7 @@ async def test_timeout_during_checker_access_cleans_workspace(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -751,11 +799,13 @@ async def test_terminal_event_during_sealing_precedes_checker_access_and_cleans(
         preparation=preparation,
         archive_inspector=_BlockingSealInspector(SubmissionArchiveLimits()),
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
     if terminal == "cancel":
         task.cancel()
+        await asyncio.sleep(0)
     else:
         await asyncio.sleep(0.02)
     release.set()

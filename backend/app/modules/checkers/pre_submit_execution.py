@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 import threading
 from typing import BinaryIO
 from fnmatch import fnmatchcase
+from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.sources import ArtifactCommitment
@@ -51,6 +52,28 @@ _EXECUTED_PHASES = frozenset(
 _FORBIDDEN_EXACT_NAMES = frozenset({".env", "id_rsa", "id_ed25519"})
 _FORBIDDEN_DIRECTORY_NAMES = frozenset({".git"})
 _FORBIDDEN_SUFFIXES = (".pem", ".key")
+_RESULT_MESSAGE_CODES = frozenset(
+    {
+        "advisory_disabled",
+        "attestation_missing",
+        "dependency_not_run",
+        "file_size_limit_exceeded",
+        "forbidden_artifact_present",
+        "package_size_limit_exceeded",
+        "packaging_requirement_failed",
+        "passed",
+        "policy_attestation_missing",
+        "quality_signal_warning",
+        "required_evidence_missing",
+        "required_file_missing",
+        "sensitive_path_forbidden",
+        "storage_scheme_not_allowed",
+        "submission_packet_invalid",
+    }
+)
+_RESULT_METADATA_KEYS = frozenset(
+    {"entry_count", "finding_count", "matched_category_count"}
+)
 
 
 class DefaultPreSubmissionExecutionError(RuntimeError):
@@ -115,6 +138,7 @@ class PreSubmissionEntryResult:
     phase: str
     order: int
     classification: str
+    severity: str
     status: PreSubmissionResultStatus
     failure_code: str | None
     message_code: str
@@ -122,10 +146,22 @@ class PreSubmissionEntryResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PreSubmissionExecutionCustody:
+    """Exact server-owned artifact facts observed by the sealed-tree execution."""
+
+    prepared_generation_id: UUID
+    archive_sha256: str
+    archive_byte_count: int
+    semantic_manifest_sha256: str
+    storage_scheme: str
+
+
+@dataclass(frozen=True, slots=True)
 class PreSubmissionExecutionResult:
     """Complete canonical platform-plus-project result after scratch cleanup."""
 
     plan_sha256: str
+    custody: PreSubmissionExecutionCustody
     eligible: bool
     entries: tuple[PreSubmissionEntryResult, ...]
 
@@ -140,6 +176,7 @@ class DefaultPreSubmissionExecutionInput:
     manifest: SubmissionManifest
     change_gate: SubmissionChangeGateResult
     packet: SubmissionPacketView
+    prepared_generation_id: UUID
     storage_scheme: str
 
 
@@ -259,11 +296,20 @@ class EffectivePreSubmissionProcessor:
             results.append(result)
         if set(statuses) != executed_ids:
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_incomplete")
-        return PreSubmissionExecutionResult(
+        execution = PreSubmissionExecutionResult(
             plan_sha256=self._input.plan.plan_sha256,
+            custody=PreSubmissionExecutionCustody(
+                prepared_generation_id=self._input.prepared_generation_id,
+                archive_sha256=self._input.commitment.sha256,
+                archive_byte_count=self._input.commitment.byte_count,
+                semantic_manifest_sha256=self._input.manifest.sha256,
+                storage_scheme=self._input.storage_scheme,
+            ),
             eligible=not blocked,
             entries=tuple(results),
         )
+        validate_pre_submission_execution_result(self._input.plan, execution)
+        return execution
 
     def _dispatch(
         self,
@@ -355,11 +401,11 @@ class EffectivePreSubmissionProcessor:
         failure_count = 0
         message_code = "passed"
         if primitive is PreSubmissionPolicyPrimitive.REQUIRE_FILE:
-            required = self._canonical_policy_paths(config.get("artifact_keys"))
+            required = self._canonical_policy_paths(config.get("artifact_paths"))
             failure_count = sum(path not in paths for path in required)
             message_code = "required_file_missing"
         elif primitive is PreSubmissionPolicyPrimitive.REQUIRE_MINIMUM_EVIDENCE:
-            required = self._canonical_policy_paths(config.get("evidence_keys"))
+            required = self._canonical_policy_paths(config.get("evidence_paths"))
             failure_count = sum(path not in paths for path in required)
             message_code = "required_evidence_missing"
         elif primitive is PreSubmissionPolicyPrimitive.FORBID_ARTIFACT:
@@ -437,7 +483,9 @@ class EffectivePreSubmissionProcessor:
     def _canonical_policy_paths(cls, value: object) -> tuple[str, ...]:
         paths = cls._string_list(value)
         if len(paths) != len(set(paths)) or any(
-            PurePosixPath(path).is_absolute()
+            path in {".", ".."}
+            or "\\" in path
+            or PurePosixPath(path).is_absolute()
             or path != PurePosixPath(path).as_posix()
             or ".." in PurePosixPath(path).parts
             for path in paths
@@ -502,11 +550,69 @@ class EffectivePreSubmissionProcessor:
             phase=entry.phase,
             order=entry.order,
             classification=entry.classification,
+            severity="warning" if entry.classification == "advisory" else "blocking",
             status=status,
             failure_code=failure_code,
             message_code=message_code,
             metadata=metadata,
         )
+
+
+def validate_pre_submission_execution_result(
+    plan: EffectivePreSubmissionExecutionPlan,
+    execution: PreSubmissionExecutionResult,
+) -> None:
+    """Reject any result envelope not produced by the exact immutable plan."""
+    custody = execution.custody
+    try:
+        ArtifactCommitment.validate_sha256(custody.archive_sha256)
+        ArtifactCommitment.validate_sha256(custody.semantic_manifest_sha256)
+    except ValueError as exc:
+        raise PreSubmissionInfrastructureUnavailable(
+            "pre_submission_result_context_invalid"
+        ) from exc
+    if (
+        type(custody.prepared_generation_id) is not UUID
+        or type(custody.archive_byte_count) is not int
+        or custody.archive_byte_count < 0
+        or custody.storage_scheme not in {"local", "s3"}
+        or execution.plan_sha256 != plan.plan_sha256
+        or len(execution.entries) != len(plan.entries)
+    ):
+        raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
+    failed = False
+    for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
+        expected_severity = "warning" if plan_entry.classification == "advisory" else "blocking"
+        if (
+            result.schema_version != plan_entry.result_schema
+            or result.definition.dispatch_authority
+            != "workstream.pre_submission_checker_catalogue"
+            or result.definition.definition_id != plan_entry.definition_id
+            or result.definition.definition_version != plan_entry.definition_version
+            or result.definition.public_name != plan_entry.public_name
+            or result.definition.source != plan_entry.policy_trace_source
+            or result.policy_trace.effective_plan_sha256 != plan.plan_sha256
+            or result.policy_trace.rule_instance_id != plan_entry.rule_instance_id
+            or result.policy_trace.locked_policy_sha256 != plan.lineage.effective_policy_hash
+            or result.phase != plan_entry.phase
+            or result.order != plan_entry.order
+            or result.classification != plan_entry.classification
+            or result.severity != expected_severity
+            or result.message_code not in _RESULT_MESSAGE_CODES
+            or (result.status is PreSubmissionResultStatus.FAILED)
+            != (result.failure_code == plan_entry.failure_code)
+            or len(result.metadata) != len({key for key, _ in result.metadata})
+            or any(
+                key not in _RESULT_METADATA_KEYS
+                or type(value) is not int
+                or value < 0
+                for key, value in result.metadata
+            )
+        ):
+            raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
+        failed = failed or result.status is PreSubmissionResultStatus.FAILED
+    if execution.eligible == failed:
+        raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
 
 
 def _is_high_confidence_sensitive(normalized_path: str) -> bool:

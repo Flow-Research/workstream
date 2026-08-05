@@ -81,11 +81,15 @@ class PreparedBundleMaterializationService:
         preparation: ArtifactPreparationService,
         archive_inspector: SubmissionArchiveInspector,
         catalogue: PreSubmissionCheckerCatalogue,
+        storage_scheme: str,
     ) -> None:
         self._authorization = authorization
         self._preparation = preparation
         self._archive_inspector = archive_inspector
         self._catalogue = catalogue
+        if storage_scheme not in {"local", "s3"}:
+            raise ValueError("pre-submit materializer storage scheme is invalid")
+        self._storage_scheme = storage_scheme
 
     async def materialize_prepared_bundle(
         self,
@@ -109,7 +113,8 @@ class PreparedBundleMaterializationService:
                 manifest=request.manifest,
                 change_gate=request.change_gate,
                 packet=request.packet,
-                storage_scheme=request.storage_scheme,
+                prepared_generation_id=request.prepared_artifact.generation_id,
+                storage_scheme=self._storage_scheme,
             ),
         )
         # Intentional friend call: this is the sole authority-gated caller, and
@@ -146,5 +151,5 @@ class PreparedBundleMaterializationService:
             archive_sha256=commitment.sha256,
             archive_byte_count=commitment.byte_count,
             semantic_manifest_sha256=request.manifest.sha256,
-            storage_scheme=request.storage_scheme,
+            storage_scheme=self._storage_scheme,
         )

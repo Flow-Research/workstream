@@ -801,15 +801,26 @@ admission and does not receive scratch paths or rerun the pre-submit plan.
 Before that cutover, hidden ART-04B2 establishes the execution boundary without
 exposing a route. The fixed materializer authorizes before any prepared-byte
 read or workspace reservation. One callback-scoped sealed tree is checked
-against the server commitment and semantic manifest, only Workstream platform
-and default phases execute, and the tree is cleaned before bounded non-durable
-results return. Project-policy execution and immutable evidence remain 04B3.
+against the server commitment and semantic manifest. ART-04B3 extends that same
+callback to execute the locked project-policy phase and normalize every
+platform and project result into one typed envelope. The tree is cleaned before
+the transaction-bound evidence service reloads the actor, identity link, task,
+assignment, predecessor, guide and locked policy rows and persists one
+`PreSubmitEvidenceSet` with ordered `PreSubmitEvidenceResult` members. Evidence
+identity is deterministic over the complete custody and locked-policy context;
+exact replay returns the same set and changed facts fail closed. A passing set
+also produces a process-local, generation- and predecessor-bound single-use
+capability for immediate admission continuation. The evidence-set ID alone is
+never that capability.
 
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. Workstream still writes a task audit event named
-`pre_submission_check_failed` with the structured checker result for project
-operators. They do not return review decision values.
+`pre_submission_check_failed` with bounded identifiers, catalogue identity,
+stable codes, counts and categories for project operators. It excludes paths,
+filenames, scratch/provider references, raw output, evidence contents,
+credentials and free-form checker messages. Pre-submit results never return
+review decision values.
 
 ## PostSubmitCheckerPolicy
 

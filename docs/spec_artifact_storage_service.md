@@ -1195,6 +1195,39 @@ durable ambiguity. Submission creation locks and consumes the exact admission;
 post-submit materialization resolves its immutable binding and recomputes
 integrity before checker execution.
 
+### PreSubmitEvidenceSet
+
+The sealed-tree callback returns one canonical ordered result containing both
+platform/default and locked project-policy entries. It performs no database
+write. After scratch cleanup, a separate caller-transaction service locks and
+reloads the active actor and identity link, task, active assignment, immediate
+predecessor, locked guide lineage, effective submission-artifact policy and
+compiled pre-submit policy. Drift fails closed before evidence persistence.
+
+`PreSubmitEvidenceSet` stores the exact actor/task/assignment/predecessor,
+prepared generation, archive digest/size, semantic-manifest identity, locked
+guide and policy hashes, effective-plan identity and catalogue identity.
+Ordered `PreSubmitEvidenceResult` rows store the closed definition, policy
+trace, phase, classification, status and bounded codes directly; required
+provenance is never hidden in generic metadata. A result-manifest digest binds
+the complete canonical envelope.
+
+The operation identity hashes every input custody and locked-policy fact. A
+database uniqueness constraint permits one set for that identity. Exact replay
+returns the existing set, while changed facts or changed deterministic results
+conflict. Set and result rows are inserted in the caller transaction and are
+immutable. Blocking results create evidence only—never an ArtifactContent,
+provider write, admission, Submission or lifecycle effect.
+
+A passing evidence set additionally yields a process-local single-use
+capability bound to the prepared generation, immediate predecessor and
+effective-plan hash. ART-04C must consume that capability immediately; the
+durable evidence-set ID cannot substitute for it. The only failure audit
+projection is `pre_submission_check_failed`, containing bounded IDs, catalogue
+identity, stable codes, counts and categories without submitted paths,
+filenames, scratch/provider references, credentials, raw output or free-form
+messages.
+
 ### SubmissionBundleAdmission
 
 One immutable verified preparation with closed status:

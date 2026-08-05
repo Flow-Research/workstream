@@ -281,7 +281,6 @@ class PreparedBundleMaterializationRequest:
     manifest: SubmissionManifest
     change_gate: SubmissionChangeGateResult
     packet: SubmissionPacketView
-    storage_scheme: str
 
 
 @dataclass(frozen=True, slots=True)

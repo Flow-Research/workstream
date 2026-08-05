@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import PurePosixPath
+from collections.abc import Callable
 from typing import Any
 
 from app.core.hashing import canonical_json_hash
@@ -76,11 +78,18 @@ def build_project_pre_submit_checker_spec(
         if artifact.get("required", True)
     ]
     if required_artifacts:
+        artifact_paths = _project_unique_paths(
+            required_artifacts,
+            projector=_required_artifact_path,
+            field="required_artifacts",
+        )
         rules.append(
             _rule(
                 "require_file",
                 ["required_artifacts"],
-                {"artifact_keys": [_required_path(artifact) for artifact in required_artifacts]},
+                {
+                    "artifact_paths": artifact_paths
+                },
             )
         )
     required_evidence = [
@@ -89,11 +98,18 @@ def build_project_pre_submit_checker_spec(
         if evidence.get("required", True)
     ]
     if required_evidence:
+        evidence_paths = _project_unique_paths(
+            required_evidence,
+            projector=_required_evidence_path,
+            field="required_evidence",
+        )
         rules.append(
             _rule(
                 "require_minimum_evidence",
                 ["required_evidence"],
-                {"evidence_keys": [_required_path(evidence) for evidence in required_evidence]},
+                {
+                    "evidence_paths": evidence_paths
+                },
             )
         )
     forbidden_artifacts = effective_policy.get("forbidden_artifacts", [])
@@ -350,30 +366,38 @@ def _validate_rule_coverage(effective_policy: dict[str, Any], rules: list[dict[s
         "allowed storage schemes",
     )
 
-    required_artifact_keys = [
-        _required_path(artifact)
-        for artifact in effective_policy.get("required_artifacts", [])
-        if artifact.get("required", True)
-    ]
-    if required_artifact_keys:
+    required_artifact_paths = _project_unique_paths(
+        [
+            artifact
+            for artifact in effective_policy.get("required_artifacts", [])
+            if artifact.get("required", True)
+        ],
+        projector=_required_artifact_path,
+        field="required_artifacts",
+    )
+    if required_artifact_paths:
         _require_blocking_rule(by_primitive, "require_file")
         _require_config_values(
             by_primitive["require_file"],
-            "artifact_keys",
-            required_artifact_keys,
+            "artifact_paths",
+            required_artifact_paths,
             "required artifacts",
         )
-    required_evidence_keys = [
-        _required_path(evidence)
-        for evidence in effective_policy.get("required_evidence", [])
-        if evidence.get("required", True)
-    ]
-    if required_evidence_keys:
+    required_evidence_paths = _project_unique_paths(
+        [
+            evidence
+            for evidence in effective_policy.get("required_evidence", [])
+            if evidence.get("required", True)
+        ],
+        projector=_required_evidence_path,
+        field="required_evidence",
+    )
+    if required_evidence_paths:
         _require_blocking_rule(by_primitive, "require_minimum_evidence")
         _require_config_values(
             by_primitive["require_minimum_evidence"],
-            "evidence_keys",
-            required_evidence_keys,
+            "evidence_paths",
+            required_evidence_paths,
             "required evidence",
         )
     forbidden_patterns = [
@@ -538,22 +562,72 @@ def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[di
         raise PreSubmitCheckerCompilerError(
             f"effective project submission artifact policy {field} must be a list"
         )
+    keys: set[str] = set()
     for value in values:
         if not isinstance(value, dict) or not isinstance(value.get("key"), str):
             raise PreSubmitCheckerCompilerError(
                 f"effective project submission artifact policy {field} entries are invalid"
             )
+        key = value["key"]
+        if not key or key in keys:
+            raise PreSubmitCheckerCompilerError(
+                f"effective project submission artifact policy {field} keys are invalid"
+            )
+        keys.add(key)
     return values
 
 
-def _required_path(item: dict[str, Any]) -> str:
-    """Project a policy key to its one server-validated canonical ZIP path."""
-    value = item.get("path", item.get("key"))
-    if not isinstance(value, str) or not value:
+def _required_artifact_path(item: dict[str, Any]) -> str:
+    """Require the explicit server-approved path attached to an artifact key."""
+    value = item.get("path")
+    if not isinstance(value, str) or not _is_canonical_relative_path(value):
         raise PreSubmitCheckerCompilerError(
             "effective project submission artifact policy path is invalid"
         )
     return value
+
+
+def _project_unique_paths(
+    items: list[dict[str, Any]],
+    *,
+    projector: Callable[[dict[str, Any]], str],
+    field: str,
+) -> list[str]:
+    """Project policy identities into unique canonical server-owned paths."""
+    paths = [projector(item) for item in items]
+    if len(paths) != len(set(paths)):
+        raise PreSubmitCheckerCompilerError(
+            f"effective project submission artifact policy {field} paths are ambiguous"
+        )
+    return paths
+
+
+def _is_canonical_relative_path(value: str) -> bool:
+    path = PurePosixPath(value)
+    return (
+        value not in {"", ".", ".."}
+        and "\\" not in value
+        and not path.is_absolute()
+        and value == path.as_posix()
+        and ".." not in path.parts
+    )
+
+
+def _required_evidence_path(item: dict[str, Any]) -> str:
+    """Project an evidence identity into Workstream's closed evidence namespace."""
+    key = item.get("key")
+    if (
+        not isinstance(key, str)
+        or not key
+        or any(
+            not (character.isascii() and (character.isalnum() or character in "._-"))
+            for character in key
+        )
+    ):
+        raise PreSubmitCheckerCompilerError(
+            "effective project submission evidence key is unmappable"
+        )
+    return f"evidence/{key}"
 
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:

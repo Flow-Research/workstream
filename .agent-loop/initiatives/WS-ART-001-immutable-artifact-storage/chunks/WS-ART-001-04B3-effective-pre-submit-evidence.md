@@ -15,6 +15,9 @@ Submission, or separate contributor route.
 
 - `backend/app/modules/checkers/pre_submit_execution.py` and new narrowly named
   pre-submit result/primitive modules under `backend/app/modules/checkers/`;
+- the narrow `backend/app/modules/checkers/compiler.py` projection that binds a
+  locked required-artifact/evidence key to its server-approved canonical ZIP
+  path; it may not change the policy schema, catalogue, or compilation authority;
 - new pre-submit evidence models/repository under
   `backend/app/modules/artifacts/`, plus their schema exports;
 - one Alembic migration for the closed pre-submit evidence schema;
