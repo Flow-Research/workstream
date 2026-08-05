@@ -205,6 +205,7 @@ def _verify_mutmut_config(backend: Path, selection: dict[str, Any]) -> None:
         "pytest_add_cli_args_test_selection": test_nodes,
         "pytest_add_cli_args": ["-q"],
         "use_git_change_detection": False,
+        "debug": True,
         "timeout_multiplier": 4.0,
         "timeout_constant": 2.0,
     }

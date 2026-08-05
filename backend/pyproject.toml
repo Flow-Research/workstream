@@ -63,5 +63,6 @@ pytest_add_cli_args_test_selection = [
 ]
 pytest_add_cli_args = ["-q"]
 use_git_change_detection = false
+debug = true
 timeout_multiplier = 4.0
 timeout_constant = 2.0
