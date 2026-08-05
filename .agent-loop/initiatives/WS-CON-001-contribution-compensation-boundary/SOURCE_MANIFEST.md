@@ -36,8 +36,9 @@
   guide sufficiency, and guide read/binding foundations.
 - `backend/app/modules/outbox/**` and migration `0029`: shared outbox
   persistence/append only; no dispatcher exists.
-- `backend/app/modules/audit/**`: existing shared audit foundation; no typed
-  lifecycle participant yet.
+- `backend/app/modules/audit/**`: existing shared audit foundation plus the 02C
+  branch's typed, flush-only REV/CON lifecycle participant. This branch state
+  remains unpublished until PR review and human merge.
 - `backend/app/modules/compensation/**` and merged migration `0053` add only the
   adapter-binding schema; no creation/lifecycle service exists.
 - Review queue persistence now exists; ReviewLease, Review, and FinalAcceptance

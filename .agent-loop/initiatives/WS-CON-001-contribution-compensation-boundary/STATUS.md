@@ -72,8 +72,9 @@ schema work. Current dependency analysis yields:
 
 ## Immediate next action
 
-Complete deterministic proof and required internal review for CON-02C, then
-publish it for external CI, CodeRabbit, and human review. REV-03A2 may proceed
+Complete required postimplementation internal review for CON-02C, resolve
+valid findings, then move its draft PR through external review and human
+approval. Deterministic proof and hosted CI are complete. REV-03A2 may proceed
 against the merged contribution-policy version FK while REV-04B waits for 02C.
 Binding creation remains deferred to 04A after AUTH approves the exact adapter
 identity/capability contract.

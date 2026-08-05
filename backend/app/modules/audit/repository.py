@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.models import AuditEvent
@@ -64,11 +64,12 @@ class AuditRepository:
 
     async def _add_validated_lifecycle_event(self, event: AuditEvent) -> AuditEvent:
         """Return exact replay or flush one participant-validated lifecycle event."""
-        if (
-            event.event_domain != "legacy_lifecycle"
-            or event.auth_source != LIFECYCLE_AUTH_SOURCE
-        ):
+        if event.event_domain != "legacy_lifecycle" or event.auth_source != LIFECYCLE_AUTH_SOURCE:
             raise ValueError("expected validated lifecycle audit event")
+        await self._session.execute(
+            text("select pg_advisory_xact_lock(hashtextextended(:event_id, 0))"),
+            {"event_id": event.id},
+        )
         existing = await self._session.get(AuditEvent, event.id)
         if existing is not None:
             if existing.event_domain != "legacy_lifecycle" or any(

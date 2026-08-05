@@ -24,7 +24,10 @@ class AuditService:
             raise TypeError("invalid authority audit input")
         value = AuthorityAuditEventInput.model_validate(fields)
         cause_id = value.invalidation_cause_event_id
-        if cause_id is not None and await self._repository.get_authority_event(str(cause_id)) is None:
+        if (
+            cause_id is not None
+            and await self._repository.get_authority_event(str(cause_id)) is None
+        ):
             raise ValueError("invalidation cause must be an existing authority event")
         fields = value.model_dump(mode="json")
         fields["id"] = fields.pop("event_id")
@@ -67,15 +70,13 @@ class LifecycleAuditParticipant:
             raise TypeError("invalid lifecycle audit input") from None
         references = {
             key.value: str(reference)
-            for key, reference in sorted(
-                value.references.items(), key=lambda item: item[0].value
-            )
+            for key, reference in sorted(value.references.items(), key=lambda item: item[0].value)
         }
         event = AuditEvent(
             id=str(value.event_id),
             entity_type=value.entity_type.value,
             entity_id=str(value.entity_id),
-            event_type=value.event_type,
+            event_type=value.event_type.value,
             from_status=value.from_status,
             to_status=value.to_status,
             actor_id=str(value.actor_id),

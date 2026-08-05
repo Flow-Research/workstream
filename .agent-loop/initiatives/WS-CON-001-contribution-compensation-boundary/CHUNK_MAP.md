@@ -27,7 +27,7 @@ signed-loop records do not make behavior live.
 | Chunk | Goal | Entry gate | Status |
 |---|---|---|---|
 | `03B` | Contribution-policy persistence | 03A | Merged PR #274; REV-03A2 FK is unblocked |
-| `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Implementation and deterministic proof in progress; independent of dispatcher; required before REV-04B |
+| `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Implementation and deterministic proof complete; required postimplementation review pending; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `05A` | Legacy semantic cutover + initial TaskAssignment policy freeze and guarded human-revision rebase support | 04B + task/assignment/revision authority contract + row-classification decision | Proposed |

@@ -1,15 +1,15 @@
 # Active Documentation Inventory: WS-CON-001
 
-## Current 03A implementation scope
+## Current 02C implementation scope
 
 Live implementation state is carried by `STATUS.md`, `SOURCE_MANIFEST.md`, the
-`WS-CON-001-03A` chunk contract, `RUNTIME_VERIFICATION.md`, and the canonical
-schema sections in `docs/spec_contribution_compensation.md` and
-`docs/architecture_data_model.md`.
+`WS-CON-001-02C` chunk contract, `RUNTIME_VERIFICATION.md`, the 02C internal
+review evidence and PR trust bundle, and the canonical schema sections in
+`docs/spec_contribution_compensation.md` and `docs/architecture_data_model.md`.
 
 `INTENT.md`, `DISCOVERY.md`, `PLAN.md`, `JOINT_RELEASE_HANDOFF.md`, and the
 PLAN4 review artifacts are frozen historical planning evidence. Their recorded
-PLAN4 SHA/head and planning-only stop statement are not live 03A status.
+PLAN4 SHA/head and planning-only stop statement are not live 02C status.
 
 ## Direct reconciliation scope
 
@@ -46,6 +46,7 @@ rewritten merely to restate this plan. Historical chunk evidence remains histori
 initiatives retain ownership of their own plans and runtime contracts. Local
 roadmap XLSX/CSV exports are not changed because the roadmap is not changed.
 
-The pre-existing deletion of
+The working-tree deletion of
 `docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.pdf`
-is user-owned and remains untouched and unstaged.
+is user-owned, outside 02C scope, and remains untouched and unstaged. It is not
+part of the 02C publication diff or its reference-spec integrity result.
