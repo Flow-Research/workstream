@@ -11,6 +11,8 @@ import pytest
 
 from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import _parse_outcomes
+from scripts.mutation_policy import _strong_calibration
+from scripts.mutation_policy import _weak_calibration
 from scripts.mutation_policy import build_selection
 
 
@@ -97,7 +99,7 @@ class TestMutationPolicy:
                             "survived": 0,
                             "timeout": 36,
                             "suspicious": 35,
-                            "error": 99,
+                            "error": -11,
                         }
                     }
                 ),
@@ -116,6 +118,14 @@ class TestMutationPolicy:
                 "error": 1,
             }
             assert len(mutants) == 5
+
+    def test_strong_calibration_asserts_the_exact_boundary(self) -> None:
+        assert _strong_calibration(1) is True
+        assert _strong_calibration(0) is False
+        assert _strong_calibration(-1) is False
+
+    def test_weak_calibration_deliberately_asserts_only_the_result_type(self) -> None:
+        assert isinstance(_weak_calibration(1), bool)
 
     def _initialize(self, root: Path) -> None:
         self._git(root, "init")

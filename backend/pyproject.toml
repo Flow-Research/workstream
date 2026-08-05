@@ -60,6 +60,8 @@ only_mutate = ["scripts/mutation_policy.py"]
 pytest_add_cli_args_test_selection = [
   "tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
   "tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed",
+  "tests/test_mutation_policy.py::TestMutationPolicy::test_strong_calibration_asserts_the_exact_boundary",
+  "tests/test_mutation_policy.py::TestMutationPolicy::test_weak_calibration_deliberately_asserts_only_the_result_type",
 ]
 pytest_add_cli_args = ["-q"]
 use_git_change_detection = false

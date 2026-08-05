@@ -57,11 +57,29 @@ STATUS_BY_EXIT_CODE: dict[int | None, str] = {
     255: "timeout",
     35: "suspicious",
     36: "timeout",
+    5: "excluded",
+    33: "excluded",
+    34: "excluded",
+    37: "killed",
+    2: "error",
+    -11: "error",
+    -9: "error",
+    None: "error",
 }
 
 
 class MutationPolicyError(RuntimeError):
     """The mutation pilot contract is unsafe, incomplete, or stale."""
+
+
+def _strong_calibration(value: int) -> bool:
+    """Provide a behavior whose boundary is asserted exactly by the pilot."""
+    return value > 0
+
+
+def _weak_calibration(value: int) -> bool:
+    """Provide an intentionally under-asserted behavior for pilot calibration."""
+    return value > 0
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -235,7 +253,7 @@ def _parse_outcomes(backend: Path, selected_count: int) -> tuple[dict[str, int],
         for name, exit_code in sorted(results.items()):
             if not isinstance(name, str) or not (isinstance(exit_code, int) or exit_code is None):
                 raise MutationPolicyError("invalid_mutmut_result")
-            status = STATUS_BY_EXIT_CODE.get(exit_code, "error")
+            status = STATUS_BY_EXIT_CODE.get(exit_code, "suspicious")
             counts[status] += 1
             mutants.append({"name": name, "outcome": status})
     counts["generated"] = len(mutants)
@@ -319,6 +337,24 @@ def execute_pilot(
         if result.returncode != 0:
             raise MutationPolicyError("mutation_engine_error")
         counts, mutants = _parse_outcomes(backend, len(selection["targets"]))
+        strong = [
+            mutant
+            for mutant in mutants
+            if ".x__strong_calibration__mutmut_" in mutant["name"]
+        ]
+        weak = [
+            mutant
+            for mutant in mutants
+            if ".x__weak_calibration__mutmut_" in mutant["name"]
+        ]
+        if not any(mutant["outcome"] == "killed" for mutant in strong):
+            raise MutationPolicyError("strong_calibration_not_killed")
+        if not any(mutant["outcome"] == "survived" for mutant in weak):
+            raise MutationPolicyError("weak_calibration_not_survived")
+        calibration = {
+            "strong": dict(Counter(mutant["outcome"] for mutant in strong)),
+            "weak": dict(Counter(mutant["outcome"] for mutant in weak)),
+        }
         elapsed = round(time.monotonic() - started, 3)
     if (
         _git(root, "status", "--porcelain", "--untracked-files=no")
@@ -341,6 +377,7 @@ def execute_pilot(
         "selection_sha256": _sha256(_json_bytes(selection)),
         "elapsed_seconds": elapsed,
         "outcomes": counts,
+        "calibration": calibration,
         "mutants": mutants,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
