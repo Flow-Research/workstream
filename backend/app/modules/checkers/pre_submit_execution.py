@@ -71,9 +71,7 @@ _RESULT_MESSAGE_CODES = frozenset(
         "submission_packet_invalid",
     }
 )
-_RESULT_METADATA_KEYS = frozenset(
-    {"entry_count", "finding_count", "matched_category_count"}
-)
+_RESULT_METADATA_KEYS = frozenset({"entry_count", "finding_count", "matched_category_count"})
 
 
 class DefaultPreSubmissionExecutionError(RuntimeError):
@@ -200,9 +198,7 @@ class EffectivePreSubmissionProcessor:
         """Prevent checker callback access after caller cancellation or timeout."""
         self._aborted.set()
 
-    def process_blocking(
-        self, reader: BinaryIO, workspace: Path
-    ) -> PreSubmissionExecutionResult:
+    def process_blocking(self, reader: BinaryIO, workspace: Path) -> PreSubmissionExecutionResult:
         """Project and execute inside preparation's bounded blocking adapter."""
         self._validate_input()
         return self._archive_inspector.project_and_run(
@@ -473,7 +469,9 @@ class EffectivePreSubmissionProcessor:
 
     @staticmethod
     def _string_list(value: object) -> tuple[str, ...]:
-        if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item for item in value
+        ):
             raise PreSubmissionInfrastructureUnavailable(
                 "pre_submission_policy_configuration_invalid"
             )
@@ -490,9 +488,7 @@ class EffectivePreSubmissionProcessor:
             or ".." in PurePosixPath(path).parts
             for path in paths
         ):
-            raise PreSubmissionInfrastructureUnavailable(
-                "pre_submission_policy_path_unmappable"
-            )
+            raise PreSubmissionInfrastructureUnavailable("pre_submission_policy_path_unmappable")
         return paths
 
     @staticmethod
@@ -584,9 +580,9 @@ def validate_pre_submission_execution_result(
     for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
         expected_severity = "warning" if plan_entry.classification == "advisory" else "blocking"
         if (
-            result.schema_version != plan_entry.result_schema
-            or result.definition.dispatch_authority
-            != "workstream.pre_submission_checker_catalogue"
+            type(result.status) is not PreSubmissionResultStatus
+            or result.schema_version != plan_entry.result_schema
+            or result.definition.dispatch_authority != "workstream.pre_submission_checker_catalogue"
             or result.definition.definition_id != plan_entry.definition_id
             or result.definition.definition_version != plan_entry.definition_version
             or result.definition.public_name != plan_entry.public_name
@@ -609,9 +605,7 @@ def validate_pre_submission_execution_result(
             )
             or len(result.metadata) != len({key for key, _ in result.metadata})
             or any(
-                key not in _RESULT_METADATA_KEYS
-                or type(value) is not int
-                or value < 0
+                key not in _RESULT_METADATA_KEYS or type(value) is not int or value < 0
                 for key, value in result.metadata
             )
         ):

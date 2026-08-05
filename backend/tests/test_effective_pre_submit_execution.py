@@ -75,9 +75,9 @@ def test_evidence_operation_identity_binds_every_custody_fact() -> None:
     identity = context.operation_identity(effective_plan_sha256=_sha("7"))
 
     assert identity == context.operation_identity(effective_plan_sha256=_sha("7"))
-    assert identity != replace(
-        context, prepared_generation_id=uuid4()
-    ).operation_identity(effective_plan_sha256=_sha("7"))
+    assert identity != replace(context, prepared_generation_id=uuid4()).operation_identity(
+        effective_plan_sha256=_sha("7")
+    )
     assert identity != context.operation_identity(effective_plan_sha256=_sha("8"))
 
 
@@ -99,14 +99,17 @@ def test_pass_capability_is_generation_bound_and_single_use() -> None:
         storage_scheme="s3",
     )
 
-    assert capability.consume(
-        prepared_generation_id=generation_id,
-        predecessor_submission_id=None,
-        effective_plan_sha256=_sha("7"),
-        archive_sha256=_sha("1"),
-        semantic_manifest_sha256=_sha("2"),
-        storage_scheme="s3",
-    ) == evidence_set_id
+    assert (
+        capability.consume(
+            prepared_generation_id=generation_id,
+            predecessor_submission_id=None,
+            effective_plan_sha256=_sha("7"),
+            archive_sha256=_sha("1"),
+            semantic_manifest_sha256=_sha("2"),
+            storage_scheme="s3",
+        )
+        == evidence_set_id
+    )
     with pytest.raises(PreSubmitEvidenceConflict, match="pre_submit_pass_capability_invalid"):
         capability.consume(
             prepared_generation_id=generation_id,
@@ -127,9 +130,7 @@ def test_compiler_projects_policy_artifact_path_not_contributor_label() -> None:
         },
         "project_policy": {},
         "required_packet_fields": [],
-        "required_artifacts": [
-            {"key": "answer", "path": "outputs/final.md", "required": True}
-        ],
+        "required_artifacts": [{"key": "answer", "path": "outputs/final.md", "required": True}],
         "required_evidence": [],
         "forbidden_artifacts": [{"pattern": ".env"}],
         "attestation_terms": ["rights_confirmed"],
@@ -141,9 +142,7 @@ def test_compiler_projects_policy_artifact_path_not_contributor_label() -> None:
         "packaging": {"package_required": False},
     }
 
-    compiled = compile_effective_project_submission_artifact_policy(
-        effective_policy, _sha("9")
-    )
+    compiled = compile_effective_project_submission_artifact_policy(effective_policy, _sha("9"))
     required = next(
         rule for rule in compiled.compiled_bundle["rules"] if rule["primitive"] == "require_file"
     )
@@ -239,9 +238,7 @@ async def test_locked_context_revalidates_identity_assignment_and_policy_lineage
                     locked_guide_version="1",
                     locked_guide_source_snapshot_id=str(source_snapshot_id),
                     locked_guide_source_snapshot_hash=_sha("1"),
-                    locked_effective_project_submission_artifact_policy_id=str(
-                        effective_policy_id
-                    ),
+                    locked_effective_project_submission_artifact_policy_id=str(effective_policy_id),
                     locked_effective_project_submission_artifact_policy_hash=_sha("2"),
                     locked_pre_submit_checker_policy_id=str(checker_policy_id),
                     locked_pre_submit_checker_bundle_hash=_sha("3"),
@@ -253,15 +250,9 @@ async def test_locked_context_revalidates_identity_assignment_and_policy_lineage
                     status="active",
                 ),
                 None,
-                SimpleNamespace(
-                    id=str(guide_id), project_id=str(project_id), version="1"
-                ),
-                SimpleNamespace(
-                    id=str(effective_policy_id), effective_policy_hash=_sha("2")
-                ),
-                SimpleNamespace(
-                    id=str(checker_policy_id), compiled_bundle_hash=_sha("3")
-                ),
+                SimpleNamespace(id=str(guide_id), project_id=str(project_id), version="1"),
+                SimpleNamespace(id=str(effective_policy_id), effective_policy_hash=_sha("2")),
+                SimpleNamespace(id=str(checker_policy_id), compiled_bundle_hash=_sha("3")),
             ]
         )
     )
@@ -407,9 +398,7 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         "packaging": {"package_required": False},
     }
     policy_hash = canonical_json_hash(effective_policy)
-    compiled = compile_effective_project_submission_artifact_policy(
-        effective_policy, policy_hash
-    )
+    compiled = compile_effective_project_submission_artifact_policy(effective_policy, policy_hash)
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=uuid4(),
         guide_id=uuid4(),
@@ -469,3 +458,23 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         match="pre_submission_result_context_invalid",
     ):
         validate_pre_submission_execution_result(plan, forged)
+
+    class _ForgedStatus:
+        value = "failed"
+
+    forged_entry = replace(
+        forged.entries[0],
+        status=_ForgedStatus(),  # type: ignore[arg-type]
+        failure_code=None,
+    )
+    forged_status = replace(
+        forged,
+        eligible=True,
+        entries=(forged_entry, *forged.entries[1:]),
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_result_context_invalid",
+    ):
+        validate_pre_submission_execution_result(plan, forged_status)
