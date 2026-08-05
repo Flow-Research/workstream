@@ -4,6 +4,7 @@ Only these PLAN3 records describe possible current work:
 
 - `WS-QUAL-001-PLAN3-behavior-mutation-assurance.md`
 - `WS-QUAL-001-04M-changed-scope-mutation-pilot.md`
+- `WS-QUAL-001-PLAN3R1-late-external-review-correction.md`
 - `WS-QUAL-001-05M-blocking-behavior-mutation-gate.md`
 
 Every other file in this directory is historical evidence from the original
