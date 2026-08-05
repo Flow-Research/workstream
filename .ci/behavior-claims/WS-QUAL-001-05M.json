@@ -18,7 +18,18 @@
         "scripts.mutation_policy.changed_target_ownership"
       ],
       "tests": [
-        "backend/tests/test_mutation_policy.py::TestMutationPolicy"
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_declaration_only_target_requires_tests_but_is_not_mutated",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_empty_callables_cannot_hide_changed_or_claim_only_behavior",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_mixed_declaration_and_callable_change_remains_mutated",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_mutmut_configuration_is_generated_from_selection",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_callable_mapping_covers_decorated_async_and_nested_methods",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_plain_class_header_change_fails_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_declaration_only_changes_are_owned_without_inventing_a_callable",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_deleted_callable_changes_still_fail_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_module_control_flow_changes_still_fail_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_executable_declaration_expressions_fail_closed"
       ],
       "outcomes": [
         "return",
