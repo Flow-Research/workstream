@@ -8,10 +8,13 @@ from dataclasses import replace
 from pathlib import Path
 import threading
 from typing import cast
+from unittest.mock import AsyncMock
 import zipfile
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
@@ -33,8 +36,10 @@ from app.modules.artifacts.submission_manifest import (
 )
 from app.modules.artifacts.submission_materialization import (
     DenyPreSubmitMaterializationAuthorization,
+    PreparedBundlePreSubmitEvidenceService,
     PreparedBundleMaterializationService,
 )
+from app.modules.tasks.pre_submit_context import LockedPreSubmitContext
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.catalogue import (
     PreSubmissionCheckerPhase,
@@ -78,9 +83,7 @@ def _effective_policy() -> dict[str, object]:
         "workstream_default_policy": defaults,
         "project_policy": {},
         "required_packet_fields": defaults["required_packet_fields"],
-        "required_artifacts": [
-            {"key": "task.toml", "path": "task.toml", "required": True}
-        ],
+        "required_artifacts": [{"key": "task.toml", "path": "task.toml", "required": True}],
         "required_evidence": [{"key": "results", "required": True}],
         "forbidden_artifacts": defaults["forbidden_artifacts"],
         "attestation_terms": defaults["attestation_terms"],
@@ -229,6 +232,251 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
+    tmp_path: Path,
+    isolated_database_env: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    actor_id = uuid4()
+    identity_link_id = uuid4()
+    lineage = request.effective_plan.lineage
+    locked = LockedPreSubmitContext(
+        actor_profile_id=actor_id,
+        project_id=lineage.project_id,
+        task_id=request.task_id,
+        assignment_id=request.assignment_id,
+        predecessor_submission_id=None,
+        predecessor_submission_version=None,
+        guide_id=lineage.guide_id,
+        guide_version=str(lineage.guide_version),
+        source_snapshot_id=lineage.source_snapshot_id,
+        source_snapshot_sha256=lineage.source_snapshot_hash,
+        locked_guide_sha256="sha256:" + "9" * 64,
+        effective_policy_id=lineage.effective_policy_id,
+        effective_policy_sha256=lineage.effective_policy_hash,
+        pre_submit_policy_id=lineage.pre_submit_policy_id,
+        pre_submit_policy_sha256=lineage.pre_submit_policy_bundle_hash,
+    )
+    loader = AsyncMock(return_value=locked)
+    monkeypatch.setattr(
+        "app.modules.tasks.pre_submit_context.load_locked_pre_submit_context", loader
+    )
+    engine = create_async_engine(isolated_database_env)
+    tables = (
+        "artifact_contents",
+        "artifact_replicas",
+        "artifact_put_attempts",
+        "submissions",
+        "checker_runs",
+        "review_queue_entries",
+    )
+    try:
+        async with engine.begin() as connection:
+            params = {
+                "actor": str(actor_id),
+                "link": str(identity_link_id),
+                "project": str(lineage.project_id),
+                "guide": str(lineage.guide_id),
+                "snapshot": str(lineage.source_snapshot_id),
+                "snapshot_hash": lineage.source_snapshot_hash,
+                "submission_policy": str(uuid4()),
+                "effective_policy": str(lineage.effective_policy_id),
+                "effective_hash": lineage.effective_policy_hash,
+                "checker_policy": str(lineage.pre_submit_policy_id),
+                "checker_hash": lineage.pre_submit_policy_bundle_hash,
+                "task": str(request.task_id),
+                "assignment": str(request.assignment_id),
+            }
+            await connection.execute(
+                text(
+                    "insert into actor_profiles "
+                    "(id,actor_kind,status,provisioning_method,created_by) values "
+                    "(:actor,'human','active','automatic_first_access','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                    "last_verified_at) values "
+                    "(:link,:actor,'flow-test',:actor,'human','active','test',now())"
+                ),
+                params,
+            )
+            await connection.execute(
+                text("alter table projects disable trigger project_creation_custody")
+            )
+            await connection.execute(
+                text(
+                    "insert into projects (id,name,slug,status) values "
+                    "(:project,'Evidence project',:project,'draft')"
+                ),
+                params,
+            )
+            for table, trigger in (
+                ("project_guides", "guide_mutation_product_custody"),
+                ("guide_source_snapshots", "source_snapshot_product_custody"),
+                ("submission_artifact_policies", "submission_policy_creation_custody"),
+                (
+                    "effective_project_submission_artifact_policies",
+                    "effective_submission_policy_custody",
+                ),
+                ("pre_submit_checker_policies", "pre_submit_policy_custody"),
+            ):
+                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
+            await connection.execute(
+                text(
+                    "insert into project_guides "
+                    "(id,project_id,version,status,content_markdown,created_by) values "
+                    "(:guide,:project,'1','draft','# Guide','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into guide_source_snapshots "
+                    "(id,project_id,guide_id,guide_version,manifest_schema_version,"
+                    "manifest_json,bundle_hash,captured_by) values "
+                    "(:snapshot,:project,:guide,'1','1','{}'::json,:snapshot_hash,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into submission_artifact_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,policy_version,lifecycle_status,policy_body,"
+                    "policy_hash,derivation_source,source_material_refs,created_by) values "
+                    "(:submission_policy,:project,:guide,'1',:snapshot,:snapshot_hash,'1',"
+                    "'draft','{}'::json,:effective_hash,'test','[]'::json,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into effective_project_submission_artifact_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,submission_artifact_policy_id,"
+                    "submission_artifact_policy_hash,lifecycle_status,merge_algorithm_version,"
+                    "effective_policy,effective_policy_hash,created_by) values "
+                    "(:effective_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":submission_policy,:effective_hash,'approved','1','{}'::json,"
+                    ":effective_hash,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into pre_submit_checker_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
+                    "lifecycle_status,compiler_version,compiled_bundle,compiled_bundle_hash,"
+                    "checker_names,checker_configs,created_by) values "
+                    "(:checker_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":effective_policy,:effective_hash,'compiled','1','{}'::json,"
+                    ":checker_hash,'[]'::json,'{}'::json,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into workstream_tasks "
+                    "(id,project_id,locked_guide_version,locked_guide_source_snapshot_id,"
+                    "locked_guide_source_snapshot_hash,"
+                    "locked_effective_project_submission_artifact_policy_id,"
+                    "locked_effective_project_submission_artifact_policy_hash,"
+                    "locked_pre_submit_checker_policy_id,locked_pre_submit_checker_bundle_hash,"
+                    "source_type,title,description,skill_tags,status,assigned_to,created_by) values "
+                    "(:task,:project,'1',:snapshot,:snapshot_hash,:effective_policy,"
+                    ":effective_hash,:checker_policy,:checker_hash,'manual','Evidence task',"
+                    "'Evidence test task','[]'::json,'draft',:actor,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into task_assignments "
+                    "(id,task_id,contributor_id,assigned_by,status) values "
+                    "(:assignment,:task,:actor,'test','active')"
+                ),
+                params,
+            )
+            before = {
+                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
+                for table in tables
+            }
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as session:
+            workflow = PreparedBundlePreSubmitEvidenceService(
+                session=session,
+                materialization=PreparedBundleMaterializationService(
+                    authorization=_AllowAuthority(),
+                    preparation=preparation,
+                    archive_inspector=inspector,
+                    catalogue=catalogue,
+                    storage_scheme="s3",
+                ),
+            )
+            first = await workflow.execute(
+                request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
+            replay = await workflow.execute(
+                request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
+        async with engine.begin() as connection:
+            for table, trigger in reversed(
+                (
+                    ("projects", "project_creation_custody"),
+                    ("project_guides", "guide_mutation_product_custody"),
+                    ("guide_source_snapshots", "source_snapshot_product_custody"),
+                    (
+                        "submission_artifact_policies",
+                        "submission_policy_creation_custody",
+                    ),
+                    (
+                        "effective_project_submission_artifact_policies",
+                        "effective_submission_policy_custody",
+                    ),
+                    ("pre_submit_checker_policies", "pre_submit_policy_custody"),
+                )
+            ):
+                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
+            evidence_count = int(
+                await connection.scalar(text("select count(*) from pre_submit_evidence_sets")) or 0
+            )
+            result_count = int(
+                await connection.scalar(text("select count(*) from pre_submit_evidence_results"))
+                or 0
+            )
+            after = {
+                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
+                for table in tables
+            }
+    finally:
+        await request.prepared_artifact.close()
+        manager.close()
+        await engine.dispose()
+
+    assert first.evidence.replayed is False
+    assert replay.evidence.replayed is True
+    assert replay.evidence.evidence_set_id == first.evidence.evidence_set_id
+    assert first.pass_capability is not None
+    assert first.failure_audit is None
+    assert evidence_count == 1
+    assert result_count == len(request.effective_plan.entries)
+    assert after == before
+    assert loader.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
     tmp_path: Path,
 ) -> None:
@@ -354,7 +602,9 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
 
     result = await service.materialize_prepared_bundle(request)
     advisory = next(
-        entry for entry in result.entries if entry.definition.definition_id == "artifact.quality.placeholder_signal"
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
     assert advisory.status is PreSubmissionResultStatus.ADVISORY_DISABLED
@@ -380,7 +630,9 @@ async def test_quality_warning_emits_only_a_bounded_category_count(tmp_path: Pat
 
     result = await service.materialize_prepared_bundle(request)
     warning = next(
-        entry for entry in result.entries if entry.definition.definition_id == "artifact.quality.placeholder_signal"
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
     assert warning.status is PreSubmissionResultStatus.WARNING
