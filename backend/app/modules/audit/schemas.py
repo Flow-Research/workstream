@@ -116,7 +116,6 @@ class LifecycleAuditEventType(StrEnum):
     REVIEW_SNAPSHOT_PROJECTION_REQUESTED = "ReviewSnapshotProjectionRequested"
     REVIEWER_CONTRIBUTION_RECORDED = "ReviewerContributionRecorded"
     SUBMITTER_CONTRIBUTION_RECORDED = "SubmitterContributionRecorded"
-    CONTRIBUTION_RECORDED = "ContributionRecorded"
     COMPENSATION_AWARD_CREATED = "CompensationAwardCreated"
 
 
@@ -189,7 +188,6 @@ _LIFECYCLE_EVENT_ENTITY = {
     LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_EVIDENCE_BOUND: LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE,
     LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
     LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
-    LifecycleAuditEventType.CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
     LifecycleAuditEventType.COMPENSATION_AWARD_CREATED: LifecycleAuditEntityType.COMPENSATION_AWARD,
 }
 
@@ -287,8 +285,13 @@ class LifecycleAuditEventInput(BaseModel):
         if _LIFECYCLE_EVENT_ENTITY[self.event_type] is not self.entity_type:
             raise ValueError("event type must match lifecycle entity")
         required_references = _LIFECYCLE_EVENT_REQUIRED_REFERENCES.get(self.event_type, frozenset())
-        if not required_references.issubset(self.references):
-            raise ValueError("lifecycle event requires canonical source references")
+        allowed_references = {
+            LifecycleAuditReferenceKind.PROJECT,
+            entity_reference,
+            *required_references,
+        }
+        if set(self.references) != allowed_references:
+            raise ValueError("lifecycle event requires exact canonical references")
         return self
 
 

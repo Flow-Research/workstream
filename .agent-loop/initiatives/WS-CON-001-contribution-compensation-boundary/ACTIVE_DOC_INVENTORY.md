@@ -11,12 +11,12 @@ review evidence and PR trust bundle, and the canonical schema sections in
 PLAN4 review artifacts are frozen historical planning evidence. Their recorded
 PLAN4 SHA/head and planning-only stop statement are not live 02C status.
 
-## Direct reconciliation scope
+## Direct implementation scope
 
-This planning refresh updates the WS-CON-001 initiative package plus the stale
-Required Implementation Order in the canonical contribution specification. It
-does not change runtime code, migrations, other specification sections,
-roadmaps, exports, workflows, or another initiative's files.
+02C changes only the shared audit participant modules/tests, the exact
+shared-audit note in `docs/architecture_data_model.md`, and WS-CON initiative
+evidence. It adds runtime code but no migration, route, worker, feature-service
+behavior, roadmap/export, workflow, or other initiative change.
 
 The PLAN4 package was:
 

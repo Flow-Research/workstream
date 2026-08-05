@@ -1377,7 +1377,6 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
         LifecycleAuditEntityType.CONTRIBUTION: {
             LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED,
             LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED,
-            LifecycleAuditEventType.CONTRIBUTION_RECORDED,
         },
         LifecycleAuditEntityType.COMPENSATION_AWARD: {
             LifecycleAuditEventType.COMPENSATION_AWARD_CREATED,
@@ -1434,7 +1433,7 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
 
 def test_lifecycle_input_requires_acceptance_and_contribution_source_lineage() -> None:
     review_id = uuid4()
-    with pytest.raises(ValidationError, match="canonical source references"):
+    with pytest.raises(ValidationError, match="exact canonical references"):
         _lifecycle_input(
             references={
                 LifecycleAuditReferenceKind.PROJECT: uuid4(),
@@ -1444,7 +1443,7 @@ def test_lifecycle_input_requires_acceptance_and_contribution_source_lineage() -
         )
 
     contribution_id = uuid4()
-    with pytest.raises(ValidationError, match="canonical source references"):
+    with pytest.raises(ValidationError, match="exact canonical references"):
         _lifecycle_input(
             entity_type=LifecycleAuditEntityType.CONTRIBUTION,
             entity_id=contribution_id,
@@ -1496,7 +1495,7 @@ def test_lifecycle_input_requires_acceptance_and_contribution_source_lineage() -
             (None, None),
         ),
         (
-            LifecycleAuditEventType.CONTRIBUTION_RECORDED,
+            LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED,
             LifecycleAuditEntityType.CONTRIBUTION,
             LifecycleAuditReferenceKind.CONTRIBUTION_RECORD,
             LifecycleAuditReason.FACT_RECORDED,
@@ -1533,6 +1532,16 @@ async def test_lifecycle_participant_persists_canonical_rev_con_event_vocabulary
             **(
                 {LifecycleAuditReferenceKind.CONTRIBUTION_RECORD: uuid4()}
                 if event_type is LifecycleAuditEventType.COMPENSATION_AWARD_CREATED
+                else {}
+            ),
+            **(
+                {
+                    LifecycleAuditReferenceKind.TASK: uuid4(),
+                    LifecycleAuditReferenceKind.SUBMISSION: uuid4(),
+                    LifecycleAuditReferenceKind.REVIEW: uuid4(),
+                    LifecycleAuditReferenceKind.REVIEW_LEASE: uuid4(),
+                }
+                if event_type is LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED
                 else {}
             ),
         },
@@ -1764,6 +1773,10 @@ async def test_lifecycle_participant_payload_revalidates_forged_input_without_se
         (
             {"event_type": LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CLOSED},
             "event type must match lifecycle entity",
+        ),
+        (
+            {"event_type": LifecycleAuditEventType.REVIEW_NEEDS_REVISION},
+            "lifecycle event requires exact canonical references",
         ),
         (
             {"references": {LifecycleAuditReferenceKind.PROJECT: uuid4()}},
