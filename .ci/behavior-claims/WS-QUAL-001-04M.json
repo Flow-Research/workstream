@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "chunk_id": "WS-QUAL-001-04M",
+  "claims": [
+    {
+      "target": "backend/scripts/mutation_policy.py",
+      "tests": [
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed"
+      ]
+    }
+  ]
+}

@@ -170,3 +170,31 @@ a measured target miss at the human merge checkpoint, that performance result
 does not override otherwise passing correctness, custody, service-contract,
 API, and coverage gates. Never lower coverage, skip nodes, or add a silent
 fallback to meet the target.
+
+## Changed-scope mutation pilot
+
+`Mutation Pilot` is an independent, observational WS-QUAL-001-04M workflow. It
+does not join the required Backend fan-in, alter the 78 percent global floor, or
+alter any protected 90 percent subsystem floor. It runs only when the pilot's
+policy, tests, claim, schema, Git-delta helper, or workflow changes.
+
+The pilot always selects eligible changed Python targets under `backend/app/`
+or `backend/scripts/`. Schema-v1 files under `.ci/behavior-claims/` may add a
+bounded target with exact owning pytest nodes; they cannot remove or replace a
+changed target. Malformed claims, stale chunk identifiers, unsafe paths,
+missing targets or tests, empty selection, and configuration drift fail closed.
+
+For pull requests, the hash-locked mutation toolchain is read only from
+`scripts/mutation-requirements.txt` at the protected base revision and installed
+with `pip --require-hashes`. The workflow has read-only permissions, checks out
+without credentials, receives no secrets, and executes the PR head in a Git
+archive extracted to disposable storage. The checked-out source tree must stay
+clean and retain the same exact tree hash.
+
+The independent job is limited to 15 minutes, with mutation execution bounded
+below 12 minutes. Its seven-day artifact binds base SHA, head SHA and tree,
+manifest digest, exact configuration, selected targets and tests, elapsed time,
+and generated, killed, survived, timeout, suspicious, excluded, and error
+outcomes. Mutation score is not a contributor gate during this pilot. Baseline
+test failure, dependency-custody failure, target escape, engine error, timeout,
+or malformed evidence still fails the workflow.

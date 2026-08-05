@@ -53,3 +53,15 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mutmut]
+source_paths = ["scripts"]
+only_mutate = ["scripts/mutation_policy.py"]
+pytest_add_cli_args_test_selection = [
+  "tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
+  "tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed",
+]
+pytest_add_cli_args = ["-q"]
+use_git_change_detection = false
+timeout_multiplier = 4.0
+timeout_constant = 2.0
