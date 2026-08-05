@@ -19,7 +19,7 @@
           "target": {"type": "string", "pattern": "^backend/(app|scripts)/.+\\.py$"},
           "callables": {
             "type": "array",
-            "minItems": 0,
+            "minItems": 1,
             "maxItems": 24,
             "uniqueItems": true,
             "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.]+$"}

@@ -28,7 +28,6 @@ from scripts.mutation_policy import _validate_calibration
 from scripts.mutation_policy import _write_mutmut_config
 from scripts.mutation_policy import build_selection
 from scripts.mutation_policy import changed_callables
-from scripts.mutation_policy import changed_target_ownership
 from scripts.mutation_policy import classify_outcomes
 from scripts.mutation_policy import discover_claim_path
 from scripts.mutation_policy import discover_selection
@@ -83,10 +82,6 @@ class TestMutationPolicy:
                 "backend/scripts/changed.py",
                 "backend/scripts/claimed.py",
             ]
-            assert selection["mutation_targets"] == [
-                "backend/scripts/changed.py",
-                "backend/scripts/claimed.py",
-            ]
             assert selection["tests"] == ["backend/tests/test_claimed.py::test_claimed"]
 
     def test_claim_validation_fails_closed(self) -> None:
@@ -117,129 +112,6 @@ class TestMutationPolicy:
 
             with pytest.raises(MutationPolicyError, match="stale_behavior_claim_chunk"):
                 build_selection(root, self.base, head, "WS-QUAL-001-04M", claim)
-
-    def test_declaration_only_target_requires_tests_but_is_not_mutated(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self._initialize(root)
-            target = root / "backend/scripts/claimed.py"
-            target.write_text(
-                '"""Declaration-owned module."""\n\n'
-                "from typing import Final\n\n"
-                "SETTING: Final = True\n\n"
-                'class Contract:\n    """Declaration-owned class."""\n\n    value = True\n\n'
-                "def claimed():\n    return True\n",
-                encoding="utf-8",
-            )
-            self._git(root, "add", ".")
-            self._git(root, "commit", "-m", "declaration")
-            head = self._git(root, "rev-parse", "HEAD")
-            claim = root / ".ci/behavior-claims/WS-QUAL-001-04M.json"
-            claim.parent.mkdir(parents=True)
-            claim.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "chunk_id": "WS-QUAL-001-04M",
-                        "claims": [
-                            {
-                                "target": "backend/scripts/claimed.py",
-                                "callables": [],
-                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
-                                "outcomes": ["return"],
-                                "boundaries": [],
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            selection = build_selection(root, self.base, head, "WS-QUAL-001-04M", claim)
-
-            assert selection["changed_callables"] == {"backend/scripts/claimed.py": []}
-            assert selection["declaration_targets"] == ["backend/scripts/claimed.py"]
-            assert selection["mutation_targets"] == []
-            assert selection["tests"] == ["backend/tests/test_claimed.py::test_claimed"]
-
-    def test_empty_callables_cannot_hide_changed_or_claim_only_behavior(self) -> None:
-        for change_target in (True, False):
-            with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                self._initialize(root)
-                if change_target:
-                    (root / "backend/scripts/claimed.py").write_text(
-                        "def claimed():\n    return False\n", encoding="utf-8"
-                    )
-                else:
-                    (root / "README.md").write_text("claim only\n", encoding="utf-8")
-                self._git(root, "add", ".")
-                self._git(root, "commit", "-m", "empty callable claim")
-                head = self._git(root, "rev-parse", "HEAD")
-                claim = root / ".ci/behavior-claims/WS-QUAL-001-04M.json"
-                claim.parent.mkdir(parents=True)
-                claim.write_text(
-                    json.dumps(
-                        {
-                            "schema_version": 1,
-                            "chunk_id": "WS-QUAL-001-04M",
-                            "claims": [
-                                {
-                                    "target": "backend/scripts/claimed.py",
-                                    "callables": [],
-                                    "tests": ["backend/tests/test_claimed.py::test_claimed"],
-                                    "outcomes": ["return"],
-                                    "boundaries": [],
-                                }
-                            ],
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-                expected = (
-                    "unowned_changed_callable" if change_target else "empty_claim_only_callables"
-                )
-                with pytest.raises(MutationPolicyError, match=expected):
-                    build_selection(root, self.base, head, "WS-QUAL-001-04M", claim)
-
-    def test_mixed_declaration_and_callable_change_remains_mutated(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self._initialize(root)
-            (root / "backend/scripts/claimed.py").write_text(
-                "SETTING = True\n\ndef claimed():\n    return False\n", encoding="utf-8"
-            )
-            self._git(root, "add", ".")
-            self._git(root, "commit", "-m", "mixed behavior")
-            head = self._git(root, "rev-parse", "HEAD")
-            claim = root / ".ci/behavior-claims/WS-QUAL-001-04M.json"
-            claim.parent.mkdir(parents=True)
-            claim.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "chunk_id": "WS-QUAL-001-04M",
-                        "claims": [
-                            {
-                                "target": "backend/scripts/claimed.py",
-                                "callables": ["scripts.claimed.claimed"],
-                                "tests": ["backend/tests/test_claimed.py::test_claimed"],
-                                "outcomes": ["return"],
-                                "boundaries": [],
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            selection = build_selection(root, self.base, head, "WS-QUAL-001-04M", claim)
-
-            assert selection["declaration_targets"] == ["backend/scripts/claimed.py"]
-            assert selection["mutation_targets"] == ["backend/scripts/claimed.py"]
-            assert selection["changed_callables"] == {
-                "backend/scripts/claimed.py": ["scripts.claimed.claimed"]
-            }
 
     def test_outcomes_include_killed_survived_timeout_suspicious_and_error(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -429,6 +301,7 @@ class TestMutationPolicy:
     @pytest.mark.parametrize(
         ("overrides", "error"),
         [
+            ({"callables": []}, "invalid_claim_callables"),
             (
                 {"tests": ["backend/tests/test_claimed.py::test_claimed"] * 2},
                 "duplicate_claim_test_node",
@@ -517,11 +390,7 @@ class TestMutationPolicy:
             backend = Path(temporary)
             pyproject = backend / "pyproject.toml"
             selection = {
-                "targets": [
-                    "backend/scripts/declaration.py",
-                    "backend/scripts/example.py",
-                ],
-                "mutation_targets": ["backend/scripts/example.py"],
+                "targets": ["backend/scripts/example.py"],
                 "tests": ["backend/tests/test_example.py::test_example"],
             }
             pyproject.write_text("not = [valid", encoding="utf-8")
@@ -744,7 +613,7 @@ class TestMutationPolicy:
                 "scripts.claimed.outer.inner"
             ]
 
-    def test_declaration_only_changes_are_owned_without_inventing_a_callable(self) -> None:
+    def test_module_level_and_deleted_callable_changes_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self._initialize(root)
@@ -755,11 +624,8 @@ class TestMutationPolicy:
             self._git(root, "add", ".")
             self._git(root, "commit", "-m", "module")
             head = self._git(root, "rev-parse", "HEAD")
-            assert changed_target_ownership(
-                root, self.base, head, "backend/scripts/claimed.py"
-            ) == ([], True)
-
-    def test_deleted_callable_changes_still_fail_closed(self) -> None:
+            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
+                changed_callables(root, self.base, head, "backend/scripts/claimed.py")
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self._initialize(root)
@@ -770,52 +636,6 @@ class TestMutationPolicy:
             head = self._git(root, "rev-parse", "HEAD")
             with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
                 changed_callables(root, self.base, head, "backend/scripts/claimed.py")
-
-    def test_module_control_flow_changes_still_fail_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self._initialize(root)
-            target = root / "backend/scripts/claimed.py"
-            target.write_text(
-                "def claimed():\n    return True\n\nif True:\n    SETTING = True\n",
-                encoding="utf-8",
-            )
-            self._git(root, "add", ".")
-            self._git(root, "commit", "-m", "module control flow")
-            head = self._git(root, "rev-parse", "HEAD")
-            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
-                changed_target_ownership(root, self.base, head, "backend/scripts/claimed.py")
-
-    @pytest.mark.parametrize(
-        "body",
-        (
-            "def claimed():\n    return True\n\nSETTING = compute_policy()\n",
-            "class Contract:\n    value = side_effect()\n\ndef claimed():\n    return True\n",
-            "@decorate()\nclass Contract:\n    pass\n\ndef claimed():\n    return True\n",
-            "@decorate\nclass Contract:\n    pass\n\ndef claimed():\n    return True\n",
-            (
-                "from local import relationship\n\n"
-                "class Contract:\n    value = relationship()\n\n"
-                "def claimed():\n    return True\n"
-            ),
-            (
-                "from sqlalchemy.orm import relationship\n\n"
-                "def relationship():\n    return object()\n\n"
-                "class Contract:\n    value = relationship()\n\n"
-                "def claimed():\n    return True\n"
-            ),
-        ),
-    )
-    def test_executable_declaration_expressions_fail_closed(self, body: str) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self._initialize(root)
-            (root / "backend/scripts/claimed.py").write_text(body, encoding="utf-8")
-            self._git(root, "add", ".")
-            self._git(root, "commit", "-m", "executable declaration")
-            head = self._git(root, "rev-parse", "HEAD")
-            with pytest.raises(MutationPolicyError, match="unmappable_changed_logic"):
-                changed_target_ownership(root, self.base, head, "backend/scripts/claimed.py")
 
     def test_callable_mapping_uses_merge_base_not_advanced_main(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -75,12 +75,9 @@ rerun affected checks; unchanged evidence does not need ceremonial repetition.
 Eligible Python changes under `backend/app/` or `backend/scripts/` require one
 schema-v1 claim at `.ci/behavior-claims/<chunk-id>.json`. Start from
 [the copyable example](.ci/behavior-claims/example.behavior-claim.json) and name
-each exact changed callable, its owning pytest node, the observable outcome, and
+the exact changed callable, its owning pytest node, the observable outcome, and
 any essential PostgreSQL, MinIO, HTTP, lock, trigger, or concurrency boundary.
-Import or inert module/class declaration-only deltas use an empty callable list
-but still require exact owning tests. Inspect both `declaration_targets` and
-`mutation_targets` in the generated selection. The
-[claim guide](.ci/behavior-claims/README.md) contains the closed rules.
+The [claim guide](.ci/behavior-claims/README.md) contains the closed rules.
 
 Run `cd backend && .venv/bin/python -m pytest -q <owning-test-node>` before
 opening the PR. From the repository root, validate discovery against the PR
