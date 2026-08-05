@@ -821,6 +821,21 @@ class TestMutationPolicy:
                 "@Field()\nclass Contract:\n    value = True\n\n"
                 "def claimed():\n    return True\n"
             ),
+            (
+                "from dataclasses import dataclass\n\n"
+                "@dataclass(Evil)\nclass Contract:\n    value = True\n\n"
+                "def claimed():\n    return True\n"
+            ),
+            (
+                "from dataclasses import dataclass\n\n"
+                "@dataclass(*ARGS)\nclass Contract:\n    value = True\n\n"
+                "def claimed():\n    return True\n"
+            ),
+            (
+                "from dataclasses import dataclass\n\n"
+                "@dataclass(**OPTIONS)\nclass Contract:\n    value = True\n\n"
+                "def claimed():\n    return True\n"
+            ),
         ),
     )
     def test_executable_declaration_expressions_fail_closed(self, body: str) -> None:
