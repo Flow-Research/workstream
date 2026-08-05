@@ -31,6 +31,7 @@ ran against the repaired PR and all blocking findings were resolved.
 
 ```text
 21 catalogue/effective-plan tests: pass
+42 focused catalogue/compiler tests after external-review repairs: pass
 new-module coverage: above the hosted 90 percent subsystem gate
 focused compiler/catalogue selector: pass
 163 database-free checker tests: pass
@@ -45,5 +46,6 @@ lightweight agent gates: pass
 hosted five-lane Backend plus aggregate coverage at bb04677c: pass
 ```
 
-The final repaired head still requires its hosted Backend rerun and substantive
-CodeRabbit review before the PR leaves draft.
+CodeRabbit completed a substantive review. Its two actionable threads were
+repaired and are resolved; its incremental follow-up was rate-limited. The final
+repaired head still requires its hosted Backend rerun.

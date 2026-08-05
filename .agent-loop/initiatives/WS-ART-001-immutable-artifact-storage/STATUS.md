@@ -133,8 +133,9 @@ activation.
 
 The implementation and deterministic evidence are complete in draft PR #276.
 All required internal reviewer tracks ran successfully after their valid
-findings were repaired. The PR remains draft only until the final hosted Backend
-run passes and substantive CodeRabbit review runs on the ready-for-review head.
+findings were repaired. CodeRabbit completed substantive review and its two
+actionable threads were repaired and resolved. The ready PR now waits only for
+the final hosted Backend rerun on the repaired head.
 
 ## Gate
 

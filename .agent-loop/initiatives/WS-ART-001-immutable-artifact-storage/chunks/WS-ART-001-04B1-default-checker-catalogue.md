@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-04B1 - Default Checker Catalogue
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Draft PR pending final hosted/external checks
+Initiative: `WS-ART-001` | Risk: L1 | Status: Ready PR pending final hosted Backend rerun
 
 Artifact contract phase: `upload_admission`
 

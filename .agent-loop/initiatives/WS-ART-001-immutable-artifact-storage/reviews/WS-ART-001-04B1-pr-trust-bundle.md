@@ -100,14 +100,16 @@ Architecture and CI-integrity found no required fixes.
 
 ## External Review
 
-Agent Gates pass on the repaired tree. The final hosted Backend rerun is in
-progress. CodeRabbit has skipped review while the PR remains draft and must run
-substantively after the PR is marked ready.
+Agent Gates pass on the repaired tree. CodeRabbit completed a substantive
+review; its plan-configuration immutability and configuration-documentation
+threads were repaired and are resolved. Its incremental follow-up was
+rate-limited. The final hosted Backend rerun is in progress.
 
 ## Remaining Risks
 
 - final hosted database tests and aggregate/per-file coverage must pass;
-- CodeRabbit has not yet reviewed the ready-for-review head;
+- CodeRabbit incremental follow-up was rate-limited after both substantive
+  threads were resolved;
 - 04B2 must consume the exact plan without adding another dispatch path.
 
 ## Follow-Up Work
