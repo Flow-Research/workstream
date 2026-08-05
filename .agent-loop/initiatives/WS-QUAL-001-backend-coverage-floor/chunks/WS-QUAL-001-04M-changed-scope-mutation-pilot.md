@@ -37,7 +37,6 @@ backend/pyproject.toml
 backend/scripts/mutation_policy.py
 backend/tests/test_mutation_policy.py
 backend/scripts/run_test_lanes.py
-backend/scripts/coverage_policy.py
 backend/tests/test_ci_test_lanes.py
 scripts/git_delta.py
 scripts/test_git_delta.py

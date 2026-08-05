@@ -65,6 +65,6 @@ replace GitHub Actions.
   `shared_foundations` semantic lane after hosted inventory failed closed with
   `missing_lane_modules`; no lane, runner, workflow, or coverage command was
   otherwise changed.
-- Corrected the existing coverage policy to consume `maybe_run` directly from
-  the extracted `git_delta` owner, preserving collection after the shared
-  helper refactor without changing coverage policy behavior.
+- Preserved the existing coverage-policy compatibility import by re-exporting
+  `maybe_run` from the agent gate after the shared `git_delta` extraction;
+  coverage policy behavior remains unchanged.

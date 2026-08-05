@@ -18,6 +18,23 @@
       ],
       "outcomes": ["return", "mapped_error"],
       "boundaries": []
+    },
+    {
+      "target": "backend/scripts/run_test_lanes.py",
+      "callables": [
+        "scripts.run_test_lanes.discover_test_modules",
+        "scripts.run_test_lanes.validate_lane_inventory"
+      ],
+      "tests": [
+        "backend/tests/test_ci_test_lanes.py::test_committed_lanes_cover_recursive_inventory_exactly_once",
+        "backend/tests/test_ci_test_lanes.py::test_measured_hotspots_have_explicit_semantic_owners",
+        "backend/tests/test_ci_test_lanes.py::test_inventory_fails_closed"
+      ],
+      "outcomes": [
+        "return",
+        "mapped_error"
+      ],
+      "boundaries": []
     }
   ]
 }

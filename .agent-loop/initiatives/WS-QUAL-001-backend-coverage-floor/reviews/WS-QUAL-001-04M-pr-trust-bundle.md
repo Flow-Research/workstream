@@ -60,9 +60,9 @@ No test was removed, skipped, xfailed, deselected, or weakened. The intentional
 weak calibration is isolated and required to leave a representative survivor.
 Existing Backend and its 78-percent global and protected 90-percent floors are
 unchanged. The new focused test is registered in the existing
-`shared_foundations` lane so canonical inventory remains exact. The coverage
-policy now imports Git delta helpers directly from their extracted owner; its
-policy and thresholds are unchanged. The pilot is
+`shared_foundations` lane so canonical inventory remains exact. The agent gate
+re-exports the extracted Git helper needed by the unchanged coverage-policy
+compatibility import; coverage policy and thresholds are unchanged. The pilot is
 independent, read-only, SHA-pinned, credential-safe,
 bounded to a 15-minute job/12-minute command, and uploads seven-day evidence.
 

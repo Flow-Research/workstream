@@ -16,12 +16,14 @@ try:
     from scripts.git_delta import changed_files
     from scripts.git_delta import diff_text
     from scripts.git_delta import first_existing_ref
+    from scripts.git_delta import maybe_run
     from scripts.git_delta import numstat
     from scripts.git_delta import ref_exists
 except ModuleNotFoundError:  # Direct ``python scripts/...`` execution.
     from git_delta import changed_files
     from git_delta import diff_text
     from git_delta import first_existing_ref
+    from git_delta import maybe_run
     from git_delta import numstat
     from git_delta import ref_exists
 
