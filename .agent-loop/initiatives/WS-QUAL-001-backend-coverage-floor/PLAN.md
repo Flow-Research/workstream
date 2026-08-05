@@ -33,8 +33,8 @@ production logic and test-only PRs that claim behavioral improvement. The gate
 uses the pilot's deterministic target and evidence grammar.
 
 There is no repository-wide mutation percentage. The policy must enumerate
-every engine status, including killed, survived, suspicious, timeout, tool
-error, and excluded. Each status either blocks or maps to an independently
+every engine status, including killed, survived, suspicious, timeout, error,
+and excluded. Each status either blocks or maps to an independently
 verified, typed classification accepted by policy (for example, demonstrably
 equivalent or non-behavioral). Missing, stale, broad, free-form, or unrecognized
 classifications fail closed. No status may pass implicitly.
@@ -128,4 +128,9 @@ evidence and a new explicit human instruction.
 ## Stop
 
 Planning does not install a mutation engine, change a workflow, or change a
-coverage threshold. Stop after the PLAN3R1 correction PR and human checkpoint.
+coverage threshold. Stop after the PLAN3R1 correction PR. Do not start `04M`
+without separate explicit human instruction.
+
+After `04M`, stop at the human calibration checkpoint. Do not start `05M`
+without accepted exact hosted pilot evidence and a new explicit human
+instruction.

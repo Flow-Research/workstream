@@ -57,7 +57,7 @@ production behavior, migration, or dependency changes
 - [ ] Eligibility and evidence grammar are unchanged from accepted pilot proof
       unless a separately reviewed correction is explicit.
 - [ ] Policy enumerates every engine status, including killed, survived,
-      suspicious, timeout, tool error, and excluded. Each status blocks or maps
+      suspicious, timeout, error, and excluded. Each status blocks or maps
       to an independently verified, typed policy classification.
 - [ ] Any allowed classification is narrow, typed, evidence-bound, and tested;
       missing, stale, broad, free-form, or unrecognized classifications fail

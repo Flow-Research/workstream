@@ -47,7 +47,7 @@ changed-production mutation, and no engine status passes implicitly.
 
 ## Scope control
 
-Ten changed paths are limited to QUAL planning/review artifacts and one merge
+Twelve changed paths are limited to QUAL planning/review artifacts and one merge
 intent. No executable product, workflow, test, dependency, or coverage file
 changed.
 
