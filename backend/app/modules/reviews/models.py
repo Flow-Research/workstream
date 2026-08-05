@@ -32,7 +32,23 @@ class ReviewQueueEntry(Base):
             ["submissions.id", "submissions.task_id", "submissions.version"],
             name="fk_review_queue_submission_lineage",
         ),
+        ForeignKeyConstraint(
+            ["active_lease_id", "id"],
+            ["review_leases.id", "review_leases.review_queue_entry_id"],
+            name="fk_review_queue_active_lease",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         UniqueConstraint("submission_id", name="uq_review_queue_submission"),
+        UniqueConstraint(
+            "id",
+            "project_id",
+            "task_id",
+            "submission_id",
+            "submission_version",
+            name="uq_review_queue_lease_lineage",
+        ),
         UniqueConstraint(
             "id",
             "project_id",
@@ -43,7 +59,7 @@ class ReviewQueueEntry(Base):
             name="uq_review_queue_admission_identity",
         ),
         CheckConstraint("submission_version > 0", name="submission_version_positive"),
-        CheckConstraint("queue_state in ('pending','closed')", name="queue_state"),
+        CheckConstraint("queue_state in ('pending','leased','closed')", name="queue_state"),
         CheckConstraint(
             "routing_mode in ('open','preferred')",
             name="routing_mode",
@@ -61,8 +77,12 @@ class ReviewQueueEntry(Base):
             name="routing_shape",
         ),
         CheckConstraint(
-            "(queue_state='pending' and closed_at is null and closed_reason is null) or "
+            "(queue_state='pending' and active_lease_id is null "
+            "and closed_at is null and closed_reason is null) or "
+            "(queue_state='leased' and active_lease_id is not null "
+            "and closed_at is null and closed_reason is null) or "
             "(queue_state='closed' and closed_at is not null and "
+            "active_lease_id is null and "
             "closed_reason in ('review_recorded','task_closed','admin_cancelled') "
             "and closed_at >= first_queued_at)",
             name="lifecycle_shape",
@@ -109,6 +129,7 @@ class ReviewQueueEntry(Base):
     queue_state: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text("'pending'")
     )
+    active_lease_id: Mapped[UUID | None] = mapped_column(Uuid())
     routing_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     routing_reason: Mapped[str] = mapped_column(String(32), nullable=False)
     first_queued_at: Mapped[datetime] = mapped_column(
@@ -214,3 +235,99 @@ class ReviewAdmissionIdempotencyRecord(Base):
         DateTime(timezone=True), nullable=False, server_default=text("statement_timestamp()")
     )
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReviewLease(Base):
+    """Immutable identity and terminal provenance for one review claim attempt."""
+
+    __tablename__ = "review_leases"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [
+                "review_queue_entry_id",
+                "project_id",
+                "task_id",
+                "submission_id",
+                "submission_version",
+            ],
+            [
+                "review_queue_entries.id",
+                "review_queue_entries.project_id",
+                "review_queue_entries.task_id",
+                "review_queue_entries.submission_id",
+                "review_queue_entries.submission_version",
+            ],
+            name="fk_review_lease_queue_lineage",
+        ),
+        ForeignKeyConstraint(
+            ["reviewer_contribution_policy_version_id", "project_id"],
+            ["contribution_policy_versions.id", "contribution_policy_versions.project_id"],
+            name="fk_review_lease_policy_version",
+        ),
+        UniqueConstraint(
+            "review_queue_entry_id", "id", name="uq_review_lease_queue_identity"
+        ),
+        UniqueConstraint(
+            "review_queue_entry_id", "attempt_generation", name="uq_review_lease_attempt"
+        ),
+        CheckConstraint("attempt_generation > 0", name="attempt_generation_positive"),
+        CheckConstraint(
+            "status in ('active','consumed','released','expired','revoked')",
+            name="status",
+        ),
+        CheckConstraint("expires_at > claimed_at", name="expiry_after_claim"),
+        CheckConstraint(
+            "(status='active' and closed_at is null and close_reason is null) or "
+            "(status='consumed' and closed_at is not null and close_reason='review_recorded') or "
+            "(status='released' and closed_at is not null and close_reason='manual_release') or "
+            "(status='expired' and closed_at is not null and close_reason='lease_expired') or "
+            "(status='revoked' and closed_at is not null "
+            "and close_reason in ('grant_revoked','admin_override'))",
+            name="lifecycle_shape",
+        ),
+        CheckConstraint(
+            "closed_at is null or closed_at >= claimed_at", name="closure_after_claim"
+        ),
+        Index(
+            "uq_review_lease_active_queue",
+            "review_queue_entry_id",
+            unique=True,
+            postgresql_where=text("status='active'"),
+        ),
+        Index(
+            "uq_review_lease_active_reviewer",
+            "reviewer_id",
+            unique=True,
+            postgresql_where=text("status='active'"),
+        ),
+        Index("ix_review_lease_expiry", "status", "expires_at", "id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    review_queue_entry_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", name="fk_review_lease_project"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id", name="fk_review_lease_task"), nullable=False
+    )
+    submission_id: Mapped[str] = mapped_column(
+        ForeignKey("submissions.id", name="fk_review_lease_submission"), nullable=False
+    )
+    submission_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    reviewer_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", name="fk_review_lease_reviewer"), nullable=False
+    )
+    reviewer_contribution_policy_version_id: Mapped[UUID] = mapped_column(
+        Uuid(), nullable=False
+    )
+    attempt_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'active'")
+    )
+    claimed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("statement_timestamp()")
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    close_reason: Mapped[str | None] = mapped_column(String(32))

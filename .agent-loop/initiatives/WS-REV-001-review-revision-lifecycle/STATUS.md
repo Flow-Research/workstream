@@ -2,6 +2,12 @@
 
 ## Current status
 
+`WS-REV-001-03A2` is the active bounded child from current main `e2057d0f`.
+Merged CON-03B PR #274 supplies the canonical
+`contribution_policy_versions(id, project_id)` foreign-key target. 03A2 owns
+only ReviewLease and preference persistence integrity; it adds no claim,
+transition, policy-selection, route, or external-owner behavior.
+
 WS-CON-001-PLAN5 is the active cross-specification input for revision behavior:
 a human `needs_revision` atomically keeps/rebases/blocks the complete applicable
 next-attempt guide and policy context, including the submitter
@@ -49,7 +55,7 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 
 ## Next step
 
-Publish and review only the `WS-REV-001-03A1` PR. GitHub Actions must provide
-the full-suite and repository-coverage proof. After human merge approval, stop;
-`WS-REV-001-03A2` remains a separate explicit start and still depends on its
-named CON policy-version FK target.
+Implement and review only `WS-REV-001-03A2` from its refreshed exact contract.
+Run focused PostgreSQL and coverage proof locally; GitHub Actions provides the
+full-suite and repository-coverage proof. Stop after its PR and do not begin
+packet persistence or claim behavior automatically.

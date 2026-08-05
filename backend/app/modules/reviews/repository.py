@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.reviews.models import (
     ReviewAdmissionIdempotencyRecord,
+    ReviewLease,
     ReviewQueueEntry,
 )
 from app.modules.reviews.schemas import (
     ReviewAdmissionReservationInput,
+    ReviewLeaseInput,
     ReviewQueueEntryInput,
 )
 
@@ -51,6 +53,27 @@ class ReviewQueueRepository:
             routing_reason=value.routing_reason.value,
             preferred_reviewer_id=value.preferred_reviewer_id,
             preference_expires_at=value.preference_expires_at,
+        )
+        self._session.add(record)
+        await self._session.flush()
+        return record
+
+    async def add_lease(self, value: ReviewLeaseInput) -> ReviewLease:
+        """Flush one active lease attempt without claiming or committing."""
+        record = ReviewLease(
+            id=value.id,
+            review_queue_entry_id=value.review_queue_entry_id,
+            project_id=value.project_id,
+            task_id=value.task_id,
+            submission_id=value.submission_id,
+            submission_version=value.submission_version,
+            reviewer_id=value.reviewer_id,
+            reviewer_contribution_policy_version_id=(
+                value.reviewer_contribution_policy_version_id
+            ),
+            attempt_generation=value.attempt_generation,
+            status="active",
+            expires_at=value.expires_at,
         )
         self._session.add(record)
         await self._session.flush()
