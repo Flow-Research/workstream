@@ -9557,6 +9557,25 @@ async def test_authorization_kernel_allows_only_exact_actor_self_actions() -> No
     assert evidence.events[0].after_facts == {"allowed": True}
 
 
+async def test_authorization_kernel_denies_actor_self_action_to_service_actor() -> None:
+    context = _runtime_context(actor_kind=ActorKind.SERVICE)
+    service, evidence = _runtime_service(context)
+    resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=(),
+    )
+
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.ACTOR_PROFILE_READ_SELF, resource)
+
+    assert (
+        exc_info.value.decision.denial_code
+        is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    )
+    assert evidence.events[0].after_facts == {"allowed": False}
+
+
 @pytest.mark.parametrize(
     ("action", "resource", "expected"),
     [
