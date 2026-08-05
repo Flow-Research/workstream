@@ -168,7 +168,7 @@ class GuideSufficiencyReportCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_snapshot_id: str = Field(max_length=36)
+    source_snapshot_id: UUID
     status: Literal["passed", "blocked", "passed_with_warnings"]
     findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list, max_length=100)
     summary: str | None = Field(default=None, max_length=2000)
@@ -285,7 +285,7 @@ class SubmissionArtifactPolicyCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_snapshot_id: str = Field(max_length=36)
+    source_snapshot_id: UUID
     policy_version: str = Field(max_length=50)
     policy_body: SubmissionArtifactPolicyInput
     change_summary: str | None = Field(default=None, max_length=2000)
@@ -303,12 +303,25 @@ class SubmissionArtifactPolicyCreate(BaseModel):
 
 
 class SubmissionArtifactPolicyUpdate(BaseModel):
-    """Request schema for editing a draft project submission artifact policy."""
+    """Request schema for creating an authorized replacement draft policy."""
 
     model_config = ConfigDict(extra="forbid")
 
+    expected_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    successor_policy_version: str = Field(min_length=1, max_length=50)
     policy_body: SubmissionArtifactPolicyInput | None = None
     change_summary: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("successor_policy_version")
+    @classmethod
+    def reject_reserved_successor_policy_version(cls, value: str) -> str:
+        """Reserve agent-derived policy versions for fixed-service output."""
+        stripped_value = value.strip()
+        if value != stripped_value:
+            raise ValueError("successor_policy_version cannot include surrounding whitespace")
+        if stripped_value.casefold().startswith("agent-"):
+            raise ValueError("successor_policy_version prefix 'agent-' is reserved")
+        return value
 
 
 class SubmissionArtifactPolicyApprove(BaseModel):

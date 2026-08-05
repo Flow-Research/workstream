@@ -17,6 +17,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest  # type: ignore[import-not-found]
+from pydantic import ValidationError
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, func, select, text, update
 from sqlalchemy.dialects import postgresql
@@ -85,6 +86,7 @@ from app.modules.projects.models import (
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
+    SubmissionPolicyMutationIdempotencyRecord,
 )
 from app.modules.projects.guide_mutation_repository import GuideMutationRepository
 from app.modules.projects.sufficiency_mutation_repository import (
@@ -104,6 +106,7 @@ from app.modules.authorization.models import (
     ProjectRoleGrant,
     ProjectRoleQualificationSnapshot,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import repository as project_repository_module
@@ -141,7 +144,9 @@ from app.modules.projects.schemas import (
     ProjectSetupRunResponse,
     PostSubmitCheckerPolicyCorrectionRequest,
     SubmissionArtifactPolicyApprove,
+    SubmissionArtifactPolicyCreate,
     SubmissionArtifactPolicyInput,
+    SubmissionArtifactPolicyUpdate,
 )
 from app.schemas.auth import ActorContext
 from app.modules.authorization.runtime import (
@@ -5196,6 +5201,21 @@ async def create_submission_artifact_policy(
     policy_body: dict | None = None,
     policy_version: str = "v1",
 ) -> dict:
+    async with db_session.get_session_factory()() as session:
+        authoritative = await session.scalar(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_not(None),
+            )
+        )
+        diagnostic = await session.scalar(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_(None),
+            )
+        )
+    if authoritative is None and diagnostic is not None:
+        await create_verified_report_fixture(diagnostic.id, snapshot_id)
     response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
         headers=auth_headers(),
@@ -9347,6 +9367,129 @@ async def test_public_sufficiency_mutation_conceals_service_before_product_looku
     assert lookups == 0
 
 
+@pytest.mark.parametrize("method", ["post", "patch"])
+async def test_submission_artifact_policy_create_update_conceals_service_before_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    """Service principals cannot reach the public manual-policy product boundary."""
+    app = create_app(Settings(environment="test"))
+    lookups = 0
+
+    async def verified_service():
+        return SimpleNamespace(token=SimpleNamespace(subject_kind="service"))
+
+    async def forbidden_lookup(*_: object, **__: object):
+        nonlocal lookups
+        lookups += 1
+        raise AssertionError("service token reached submission-policy lookup")
+
+    app.dependency_overrides[get_auth_verification_result] = verified_service
+    monkeypatch.setattr(ProjectRepository, "get_project", forbidden_lookup)
+    project_id, guide_id, policy_id = (uuid4() for _ in range(3))
+    path = f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
+    payload = {
+        "source_snapshot_id": str(uuid4()),
+        "policy_version": "manual-v1",
+        "policy_body": project_submission_artifact_policy_body(),
+    }
+    if method == "patch":
+        path += f"/{policy_id}"
+        payload = {
+            "expected_policy_hash": sha256_hash("predecessor"),
+            "successor_policy_version": "manual-v2",
+            "change_summary": "must not execute",
+        }
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.request(
+            method.upper(),
+            path,
+            headers={
+                "Authorization": "Bearer fixed-service-token",
+                "Idempotency-Key": str(uuid4()),
+            },
+            json=payload,
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "project_authorization_resource_not_found"
+    assert lookups == 0
+
+
+def test_submission_artifact_policy_create_rejects_malformed_snapshot_uuid() -> None:
+    """Malformed snapshot selectors fail schema validation before actor provisioning."""
+    with pytest.raises(ValidationError):
+        SubmissionArtifactPolicyCreate.model_validate(
+            {
+                "source_snapshot_id": "not-a-uuid",
+                "policy_version": "manual-v1",
+                "policy_body": project_submission_artifact_policy_body(),
+            }
+        )
+
+
+@pytest.mark.parametrize("idempotency_key", [None, "not-a-uuid"])
+async def test_submission_artifact_policy_create_rejects_invalid_idempotency_before_auth(
+    idempotency_key: str | None,
+) -> None:
+    """The dedicated manual-policy key gate precedes authentication/provisioning."""
+    app = create_app(Settings(environment="test"))
+    headers = {} if idempotency_key is None else {"Idempotency-Key": idempotency_key}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.post(
+            f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies",
+            headers=headers,
+            json={
+                "source_snapshot_id": str(uuid4()),
+                "policy_version": "manual-v1",
+                "policy_body": project_submission_artifact_policy_body(),
+            },
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("idempotency_key", [None, "not-a-uuid"])
+async def test_submission_artifact_policy_update_rejects_invalid_idempotency_before_auth(
+    idempotency_key: str | None,
+) -> None:
+    """PATCH uses the same replay-key gate before authentication or product lookup."""
+    app = create_app(Settings(environment="test"))
+    headers = {} if idempotency_key is None else {"Idempotency-Key": idempotency_key}
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.patch(
+            f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies/{uuid4()}",
+            headers=headers,
+            json={
+                "expected_policy_hash": sha256_hash("predecessor"),
+                "successor_policy_version": "v2",
+            },
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"successor_policy_version": "v2"},
+        {"expected_policy_hash": "not-a-digest", "successor_policy_version": "v2"},
+        {"expected_policy_hash": "sha256:" + ("0" * 64)},
+        {"expected_policy_hash": "sha256:" + ("0" * 64), "successor_policy_version": ""},
+    ],
+)
+def test_submission_artifact_policy_update_rejects_invalid_preconditions(
+    payload: dict,
+) -> None:
+    """Missing or malformed CAS selectors cannot enter update execution."""
+    with pytest.raises(ValidationError):
+        SubmissionArtifactPolicyUpdate.model_validate(payload)
+
+
 async def test_sufficiency_replay_repository_impossible_states_fail_closed() -> None:
     """Treat disappeared reservations and double completion as integrity failures."""
 
@@ -9400,7 +9543,9 @@ async def test_sufficiency_replay_repository_impossible_states_fail_closed() -> 
         )
 
 
-async def test_submission_artifact_policy_replay_repository_classifies_exact_states() -> None:
+async def test_submission_artifact_policy_replay_repository_idempotency_classifies_cross_action_states() -> (
+    None
+):
     """Pending, committed, and mismatched reservations remain distinct and fail closed."""
 
     class Session:
@@ -9462,6 +9607,12 @@ async def test_submission_artifact_policy_replay_repository_classifies_exact_sta
     changed_namespace = {**facts, "idempotency_key": uuid4()}
     state, record = await repository.reserve(**changed_namespace)  # type: ignore[arg-type]
     assert (state, record) == ("mismatch", pending)
+    changed_action = {
+        **facts,
+        "action_id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value,
+    }
+    state, record = await repository.reserve(**changed_action)  # type: ignore[arg-type]
+    assert (state, record) == ("mismatch", pending)
 
     claimed_id = uuid4()
     claimed = SimpleNamespace(id=claimed_id, status="pending", **facts)
@@ -9482,8 +9633,8 @@ async def test_submission_artifact_policy_replay_repository_classifies_exact_sta
         return None
 
     session.scalar = capture  # type: ignore[method-assign]
-    repository._find_namespace = (
-        SubmissionPolicyMutationReplayRepository._find_namespace.__get__(repository)
+    repository._find_namespace = SubmissionPolicyMutationReplayRepository._find_namespace.__get__(
+        repository
     )  # type: ignore[method-assign]
     await repository._find_namespace(
         actor_profile_id=facts["actor_profile_id"],
@@ -9588,9 +9739,7 @@ async def test_submission_artifact_policy_authority_service_is_flush_only() -> N
             calls.append(("complete", (value, completion)))
 
     service._replay = Replay()  # type: ignore[assignment]
-    project_id, guide_id, snapshot_id, policy_id, operation_id = (
-        uuid4() for _ in range(5)
-    )
+    project_id, guide_id, snapshot_id, policy_id, operation_id = (uuid4() for _ in range(5))
     request_digest = sha256_hash("request")
     resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
         resource_type="project_submission_artifact_policy_mutation",
@@ -9608,6 +9757,8 @@ async def test_submission_artifact_policy_authority_service_is_flush_only() -> N
         policy_version="1",
         policy_generation=1,
         setup_generation=1,
+        sufficiency_report_id=uuid4(),
+        sufficiency_status="passed",
     )
     facts = SubmissionPolicyReplayFacts(
         actor_profile_id=str(uuid4()),
@@ -11295,7 +11446,11 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{policy['id']}",
         headers=auth_headers(),
-        json={"derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent"},
+        json={
+            "expected_policy_hash": policy["policy_hash"],
+            "successor_policy_version": "v2",
+            "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
+        },
     )
 
     assert update_response.status_code == 422
@@ -11355,7 +11510,7 @@ async def test_derivation_agent_validates_existing_policy_integrity_before_reuse
     assert "policy body hash mismatch" in blocked.json()["detail"]
 
 
-async def test_agent_derived_submission_artifact_policy_body_is_immutable(
+async def test_manual_submission_artifact_policy_update_rejects_agent_derived_row(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -11385,9 +11540,11 @@ async def test_agent_derived_submission_artifact_policy_body_is_immutable(
         f"{derived.json()['id']}",
         headers=auth_headers(),
         json={
+            "expected_policy_hash": derived.json()["policy_hash"],
+            "successor_policy_version": "manual-v2",
             "policy_body": project_submission_artifact_policy_body(
                 artifact_path="adjusted/output.json"
-            )
+            ),
         },
     )
 
@@ -11398,7 +11555,11 @@ async def test_agent_derived_submission_artifact_policy_body_is_immutable(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{derived.json()['id']}",
         headers=auth_headers(),
-        json={"change_summary": "Admin-edited generated summary."},
+        json={
+            "expected_policy_hash": derived.json()["policy_hash"],
+            "successor_policy_version": "manual-v3",
+            "change_summary": "Admin-edited generated summary.",
+        },
     )
 
     assert summary_response.status_code == 409
@@ -11715,7 +11876,11 @@ async def test_approved_submission_artifact_policy_cannot_be_updated(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
         f"submission-artifact-policies/{policy['id']}",
         headers=auth_headers(),
-        json={"change_summary": "Attempt to mutate approved policy."},
+        json={
+            "expected_policy_hash": policy["policy_hash"],
+            "successor_policy_version": "v2",
+            "change_summary": "Attempt to mutate approved policy.",
+        },
     )
 
     assert response.status_code == 409
@@ -11741,6 +11906,196 @@ async def test_submission_artifact_policy_creation_requires_sufficiency_report(
 
     assert response.status_code == 422
     assert "sufficiency report is required" in response.json()["detail"]
+
+
+async def test_submission_artifact_policy_create_rejects_diagnostic_only_sufficiency(
+    project_client: AsyncClient,
+) -> None:
+    """A human diagnostic report cannot substitute for setup-owned sufficiency."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "manual-v1",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+    assert response.status_code == 422
+    assert "authoritative guide sufficiency report is required" in response.json()["detail"]
+
+
+async def test_submission_artifact_policy_create_rejects_unacknowledged_warning_lineage(
+    project_client: AsyncClient,
+) -> None:
+    """An authoritative warning result without exact 12E acknowledgement cannot create policy."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    diagnostic = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        status="passed_with_warnings",
+    )
+    await create_verified_report_fixture(diagnostic["id"], snapshot["id"])
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "manual-v1",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+    assert response.status_code == 422
+    assert "authorized Project Manager acknowledgement" in response.json()["detail"]
+
+
+async def test_submission_artifact_policy_create_exact_idempotency_replay_is_stable(
+    project_client: AsyncClient,
+) -> None:
+    """Exact create replay returns the committed response and creates one row."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    diagnostic = await create_sufficiency_report(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    await create_verified_report_fixture(diagnostic["id"], snapshot["id"])
+    headers = auth_headers()
+    payload = {
+        "source_snapshot_id": snapshot["id"],
+        "policy_version": "manual-v1",
+        "policy_body": project_submission_artifact_policy_body(),
+        "change_summary": "stable replay",
+    }
+    path = f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies"
+    first = await project_client.post(path, headers=headers, json=payload)
+    async with db_session.get_session_factory()() as session:
+        guide_row = await session.get(ProjectGuide, guide["id"])
+        assert guide_row is not None
+        guide_row.status = "active"
+        await session.commit()
+    replay = await project_client.post(path, headers=headers, json=payload)
+    assert first.status_code == replay.status_code == 201
+    assert replay.json() == first.json()
+    async with db_session.get_session_factory()() as session:
+        count = await session.scalar(
+            select(func.count(SubmissionArtifactPolicy.id)).where(
+                SubmissionArtifactPolicy.project_id == project["id"],
+                SubmissionArtifactPolicy.guide_id == guide["id"],
+            )
+        )
+    assert count == 1
+
+
+@pytest.mark.parametrize(
+    "fault_point",
+    ["replay_reserved", "policy_staged", "evidence_staged", "replay_completed"],
+)
+async def test_submission_artifact_policy_create_fault_rolls_back_atomic_boundary(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    fault_point: str,
+) -> None:
+    """Every named post-authorization fault leaves no policy, replay, or allow evidence."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    diagnostic = await create_sufficiency_report(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    await create_verified_report_fixture(diagnostic["id"], snapshot["id"])
+
+    if fault_point == "replay_reserved":
+        original = SubmissionPolicyMutationService.reserve_replay
+
+        async def fail_after_reservation(self, facts):
+            await original(self, facts)
+            raise RuntimeError("fault after replay reservation")
+
+        monkeypatch.setattr(
+            SubmissionPolicyMutationService, "reserve_replay", fail_after_reservation
+        )
+    elif fault_point == "policy_staged":
+        original_add = ProjectRepository.add_submission_artifact_policy
+
+        async def fail_after_policy_staging(self, policy):
+            await original_add(self, policy)
+            raise RuntimeError("fault after policy staging")
+
+        monkeypatch.setattr(
+            ProjectRepository, "add_submission_artifact_policy", fail_after_policy_staging
+        )
+    elif fault_point == "evidence_staged":
+        original_consume = PreparedAuthorizationService.consume
+        consume_count = 0
+
+        async def fail_after_final_evidence(self, *args, **kwargs):
+            nonlocal consume_count
+            decision = await original_consume(self, *args, **kwargs)
+            consume_count += 1
+            if consume_count == 1:
+                raise RuntimeError("fault after authorization evidence staging")
+            return decision
+
+        monkeypatch.setattr(PreparedAuthorizationService, "consume", fail_after_final_evidence)
+    else:
+        original_complete = SubmissionPolicyMutationService.complete_replay
+
+        async def fail_after_replay_completion(self, *args, **kwargs):
+            await original_complete(self, *args, **kwargs)
+            raise RuntimeError("fault after replay completion")
+
+        monkeypatch.setattr(
+            SubmissionPolicyMutationService, "complete_replay", fail_after_replay_completion
+        )
+
+    with pytest.raises(RuntimeError, match="fault after"):
+        await project_client.post(
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+            headers=auth_headers(),
+            json={
+                "source_snapshot_id": snapshot["id"],
+                "policy_version": "manual-v1",
+                "policy_body": project_submission_artifact_policy_body(),
+            },
+        )
+
+    async with db_session.get_session_factory()() as session:
+        policy_count = await session.scalar(
+            select(func.count())
+            .select_from(SubmissionArtifactPolicy)
+            .where(
+                SubmissionArtifactPolicy.project_id == project["id"],
+                SubmissionArtifactPolicy.guide_id == guide["id"],
+            )
+        )
+        replay_count = await session.scalar(
+            select(func.count())
+            .select_from(SubmissionPolicyMutationIdempotencyRecord)
+            .where(
+                SubmissionPolicyMutationIdempotencyRecord.project_id == project["id"],
+                SubmissionPolicyMutationIdempotencyRecord.guide_id == guide["id"],
+            )
+        )
+        allowed_count = await session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(
+                AuditEvent.action_id == ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
+                AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                AuditEvent.target_ref_id == project["id"],
+            )
+        )
+
+    assert policy_count == replay_count == allowed_count == 0
 
 
 async def test_database_enforces_effective_policy_submission_policy_hash(
@@ -11859,7 +12214,11 @@ async def test_approved_submission_artifact_policy_is_immutable(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{policy['id']}",
         headers=auth_headers(),
-        json={"change_summary": "Try to mutate approved policy."},
+        json={
+            "expected_policy_hash": policy["policy_hash"],
+            "successor_policy_version": "v2",
+            "change_summary": "Try to mutate approved policy.",
+        },
     )
 
     assert response.status_code == 409
@@ -11880,25 +12239,199 @@ async def test_draft_submission_artifact_policy_can_be_updated(
         snapshot["id"],
     )
 
+    update_headers = auth_headers()
+    update_payload = {
+        "expected_policy_hash": policy["policy_hash"],
+        "successor_policy_version": "v2",
+        "policy_body": project_submission_artifact_policy_body(
+            artifact_path="outputs/final-answer.md"
+        ),
+        "change_summary": "Use final answer artifact path.",
+    }
+    response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}",
+        headers=update_headers,
+        json=update_payload,
+    )
+
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated["id"] != policy["id"]
+    assert updated["supersedes_policy_id"] == policy["id"]
+    assert updated["lifecycle_status"] == "draft"
+    assert updated["policy_hash"] != policy["policy_hash"]
+    assert updated["policy_body"]["required_artifacts"][0]["path"] == ("outputs/final-answer.md")
+    assert updated["change_summary"] == "Use final answer artifact path."
+    async with db_session.get_session_factory()() as session:
+        guide_row = await session.get(ProjectGuide, guide["id"])
+        assert guide_row is not None
+        guide_row.status = "active"
+        await session.commit()
+    replay = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}",
+        headers=update_headers,
+        json=update_payload,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == updated
+    async with db_session.get_session_factory()() as session:
+        predecessor = await session.get(SubmissionArtifactPolicy, policy["id"])
+        assert predecessor is not None
+        assert predecessor.lifecycle_status == "superseded"
+        assert predecessor.policy_hash == policy["policy_hash"]
+
+
+async def test_submission_artifact_policy_update_rejects_stale_cas_without_successor(
+    project_client: AsyncClient,
+) -> None:
+    """A stale predecessor digest creates no replacement or supersession."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
     response = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{policy['id']}",
         headers=auth_headers(),
         json={
-            "policy_body": project_submission_artifact_policy_body(
-                artifact_path="outputs/final-answer.md"
-            ),
-            "change_summary": "Use final answer artifact path.",
+            "expected_policy_hash": sha256_hash("stale"),
+            "successor_policy_version": "v2",
+            "change_summary": "must not commit",
         },
     )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "submission_policy_precondition_failed"
+    async with db_session.get_session_factory()() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(SubmissionArtifactPolicy).where(
+                        SubmissionArtifactPolicy.project_id == project["id"],
+                        SubmissionArtifactPolicy.guide_id == guide["id"],
+                    )
+                )
+            ).all()
+        )
+    assert len(rows) == 1
+    assert rows[0].lifecycle_status == "draft"
 
-    assert response.status_code == 200, response.text
-    updated = response.json()
-    assert updated["id"] == policy["id"]
-    assert updated["lifecycle_status"] == "draft"
-    assert updated["policy_hash"] != policy["policy_hash"]
-    assert updated["policy_body"]["required_artifacts"][0]["path"] == ("outputs/final-answer.md")
-    assert updated["change_summary"] == "Use final answer artifact path."
+
+async def test_submission_artifact_policy_update_fault_rolls_back_replacement(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-supersession fault restores the draft and all update boundary state."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    original_complete = SubmissionPolicyMutationService.complete_replay
+
+    async def fail_after_update_completion(self, *args, **kwargs):
+        await original_complete(self, *args, **kwargs)
+        raise RuntimeError("fault after update replay completion")
+
+    monkeypatch.setattr(
+        SubmissionPolicyMutationService, "complete_replay", fail_after_update_completion
+    )
+    with pytest.raises(RuntimeError, match="fault after update replay completion"):
+        await project_client.patch(
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+            f"submission-artifact-policies/{policy['id']}",
+            headers=auth_headers(),
+            json={
+                "expected_policy_hash": policy["policy_hash"],
+                "successor_policy_version": "v2",
+                "change_summary": "must roll back",
+            },
+        )
+
+    async with db_session.get_session_factory()() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(SubmissionArtifactPolicy).where(
+                        SubmissionArtifactPolicy.project_id == project["id"],
+                        SubmissionArtifactPolicy.guide_id == guide["id"],
+                    )
+                )
+            ).all()
+        )
+        replay_count = await session.scalar(
+            select(func.count())
+            .select_from(SubmissionPolicyMutationIdempotencyRecord)
+            .where(
+                SubmissionPolicyMutationIdempotencyRecord.action_id
+                == ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value,
+                SubmissionPolicyMutationIdempotencyRecord.project_id == project["id"],
+            )
+        )
+        allowed_count = await session.scalar(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(
+                AuditEvent.action_id == ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value,
+                AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                AuditEvent.target_ref_id == project["id"],
+            )
+        )
+    assert len(rows) == 1
+    assert rows[0].id == policy["id"]
+    assert rows[0].lifecycle_status == "draft"
+    assert replay_count == allowed_count == 0
+
+
+async def test_submission_artifact_policy_update_concurrent_cas_creates_one_successor(
+    project_client: AsyncClient,
+) -> None:
+    """Two replacement attempts against one draft converge on one append-only winner."""
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client, project["id"], guide["id"], snapshot["id"]
+    )
+    path = (
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        f"submission-artifact-policies/{policy['id']}"
+    )
+
+    async def replace(version: str):
+        return await project_client.patch(
+            path,
+            headers=auth_headers(),
+            json={
+                "expected_policy_hash": policy["policy_hash"],
+                "successor_policy_version": version,
+                "change_summary": version,
+            },
+        )
+
+    first, second = await asyncio.gather(replace("concurrent-a"), replace("concurrent-b"))
+    assert sorted((first.status_code, second.status_code)) == [200, 409]
+    async with db_session.get_session_factory()() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(SubmissionArtifactPolicy).where(
+                        SubmissionArtifactPolicy.project_id == project["id"],
+                        SubmissionArtifactPolicy.guide_id == guide["id"],
+                    )
+                )
+            ).all()
+        )
+    assert len(rows) == 2
+    assert sum(row.lifecycle_status == "draft" for row in rows) == 1
+    assert sum(row.lifecycle_status == "superseded" for row in rows) == 1
 
 
 async def test_approving_replacement_policy_supersedes_prior_rows(
@@ -12370,7 +12903,7 @@ async def test_draft_policy_cannot_be_approved_after_guide_activation(
     assert "draft guides" in response.json()["detail"]
 
 
-async def test_submission_artifact_policy_rejects_default_weakening(
+async def test_manual_submission_artifact_policy_create_rejects_default_weakening(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)

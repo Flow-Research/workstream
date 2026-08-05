@@ -14,8 +14,10 @@ from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
     get_authorization_service,
+    submission_policy_authorization,
 )
 from app.core.permissions import PermissionDenied
+from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
@@ -54,6 +56,10 @@ from app.modules.projects.guide_mutation_router import (
 from app.modules.projects.sufficiency_mutation_service import (
     GuideSufficiencyMutationConflict,
     GuideSufficiencyMutationService,
+)
+from app.modules.projects.submission_policy_mutation_service import (
+    SubmissionPolicyMutationConflict,
+    SubmissionPolicyMutationService,
 )
 from app.modules.actors.service import ResolvedActor
 from app.modules.authorization.prepared import PreparedAuthorizationService
@@ -99,6 +105,24 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
         HTTP exception with a forbidden status.
     """
     return HTTPException(status_code=403, detail=str(exc))
+
+
+def submission_policy_conflict_error(code: str) -> StructuredHTTPException:
+    """Return a bounded manual-policy conflict without guide-mutation wording."""
+    messages = {
+        "idempotency_mismatch": "Idempotency key does not match",
+        "idempotency_pending": "Submission policy mutation is already in progress",
+        "submission_policy_precondition_failed": "Submission policy precondition failed",
+        "submission_policy_lineage_stale": "Submission policy lineage is stale",
+        "submission_policy_version_conflict": "Submission policy version already exists",
+    }
+    return StructuredHTTPException(
+        status_code=409,
+        detail=code,
+        error_code=code,
+        error_message=messages.get(code, "Submission policy mutation conflicts with current state"),
+        retryable=code == "idempotency_pending",
+    )
 
 
 @router.get(
@@ -447,25 +471,33 @@ async def acknowledge_guide_sufficiency_warnings(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies",
     response_model=SubmissionArtifactPolicyResponse,
     status_code=201,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value
+    },
 )
 async def create_submission_artifact_policy(
-    project_id: str,
-    guide_id: str,
+    project_id: UUID,
+    guide_id: UUID,
     payload: SubmissionArtifactPolicyCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(submission_policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionArtifactPolicyResponse:
-    """Create a draft Workstream-derived submission artifact policy."""
+    """Create one governed manual submission-policy draft."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).create_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            payload,
+        outcome = await SubmissionPolicyMutationService(session).create_manual(
+            resolved, prepared, key, project_id, guide_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except SubmissionPolicyMutationConflict as exc:
+        await session.rollback()
+        raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 
@@ -510,27 +542,34 @@ async def run_submission_artifact_policy_derivation_agent(
 @router.patch(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
     response_model=SubmissionArtifactPolicyResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value
+    },
 )
 async def update_submission_artifact_policy(
-    project_id: str,
-    guide_id: str,
-    policy_id: str,
+    project_id: UUID,
+    guide_id: UUID,
+    policy_id: UUID,
     payload: SubmissionArtifactPolicyUpdate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(submission_policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionArtifactPolicyResponse:
-    """Update a draft submission artifact policy."""
+    """Append an authorized replacement for one manual draft policy."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).update_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            policy_id,
-            payload,
+        outcome = await SubmissionPolicyMutationService(session).update_manual(
+            resolved, prepared, key, project_id, guide_id, policy_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except SubmissionPolicyMutationConflict as exc:
+        await session.rollback()
+        raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 

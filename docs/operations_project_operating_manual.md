@@ -38,8 +38,10 @@ Before releasing tasks:
 - task source, description, acceptance, and rejection fields listed
 - guide sufficiency report passed or warnings acknowledged by an authorized
   covered Project Manager
-- submission artifact policy derived by Workstream and approved by an
-  authorized covered Project Manager
+- submission artifact policy normally derived by Workstream and approved by an
+  authorized covered Project Manager; an explicitly manual Project Manager
+  draft may use the governed create/update exception, where updates append a
+  successor and never edit agent output or an existing draft body in place
 - effective project submission artifact policy hash persisted
 - generated project pre-submit checker policy is created from the effective project submission artifact policy
 - project pre-submit checker bundle hash persisted

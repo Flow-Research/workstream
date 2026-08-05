@@ -104,9 +104,7 @@ from app.modules.projects.schemas import (
     ReviewPolicyResponse,
     SubmissionArtifactPolicyInput,
     SubmissionArtifactPolicyApprove,
-    SubmissionArtifactPolicyCreate,
     SubmissionArtifactPolicyResponse,
-    SubmissionArtifactPolicyUpdate,
 )
 from app.schemas.auth import ActorContext
 
@@ -378,6 +376,8 @@ def stage_verified_sufficiency_report(
             )
         )
     return report
+
+
 PROJECT_SETUP_TERMINAL_STATUSES = {
     "enqueue_failed",
     "sufficiency_blocked",
@@ -973,70 +973,6 @@ class ProjectService:
         await self._session.refresh(report)
         return GuideSufficiencyReportResponse.model_validate(report)
 
-    async def create_submission_artifact_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        payload: SubmissionArtifactPolicyCreate,
-    ) -> SubmissionArtifactPolicyResponse:
-        """Create a draft Workstream-derived submission artifact policy.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            guide_id: Draft guide receiving the policy.
-            payload: Draft policy content and derivation metadata.
-
-        Returns:
-            Created draft policy response.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can receive submission artifact policies")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
-        self._merge_effective_submission_artifact_policy(policy_body)
-        sufficiency_report = await self._repo.get_diagnostic_sufficiency_report_for_snapshot(
-            snapshot.id
-        )
-        self._validate_sufficiency_report_allows_policy_approval(
-            sufficiency_report,
-            snapshot,
-        )
-        source_material_refs = await self._verified_source_material_refs(sufficiency_report)
-        policy = SubmissionArtifactPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            policy_version=payload.policy_version,
-            lifecycle_status="draft",
-            policy_body=policy_body,
-            policy_hash=self._hash_canonical_json(policy_body),
-            derivation_source=MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
-            source_material_refs=source_material_refs,
-            derivation_agent_name=None,
-            derivation_agent_version=None,
-            created_by=actor.actor_id,
-            change_summary=payload.change_summary,
-        )
-        try:
-            policy = await self._repo.add_submission_artifact_policy(policy)
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise PolicySetupConflict(
-                "submission artifact policy conflicted with concurrent setup; retry"
-            ) from exc
-        await self._session.refresh(policy)
-        return SubmissionArtifactPolicyResponse.model_validate(policy)
-
     async def run_submission_artifact_policy_derivation_agent(
         self,
         actor: ActorContext,
@@ -1451,54 +1387,6 @@ class ProjectService:
             ) from exc
         await self._session.refresh(policy)
         return PostSubmitCheckerPolicyResponse.model_validate(policy), True, summary
-
-    async def update_submission_artifact_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        policy_id: str,
-        payload: SubmissionArtifactPolicyUpdate,
-    ) -> SubmissionArtifactPolicyResponse:
-        """Update mutable fields on a draft submission artifact policy.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the policy.
-            guide_id: Guide that owns the policy.
-            policy_id: Draft policy id to update.
-            payload: Partial policy updates.
-
-        Returns:
-            Updated draft policy response.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can edit submission artifact policies")
-        policy = await self._repo.lock_submission_artifact_policy(policy_id)
-        if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
-            raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
-        if policy.lifecycle_status != "draft":
-            raise PolicyEditBlocked("approved and superseded policies are immutable")
-        if payload.policy_body is not None:
-            if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-                raise PolicyEditBlocked(
-                    "agent-derived policy bodies are immutable; create a manual policy to adjust"
-                )
-            policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
-            self._merge_effective_submission_artifact_policy(policy_body)
-            policy.policy_body = policy_body
-            policy.policy_hash = self._hash_canonical_json(policy_body)
-        if payload.change_summary is not None:
-            if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-                raise PolicyEditBlocked(
-                    "agent-derived policy summaries are immutable; create a manual policy to adjust"
-                )
-            policy.change_summary = payload.change_summary
-        await self._session.commit()
-        await self._session.refresh(policy)
-        return SubmissionArtifactPolicyResponse.model_validate(policy)
 
     async def approve_submission_artifact_policy(
         self,
@@ -3034,6 +2922,14 @@ class ProjectService:
             "packaging": packaging,
         }
 
+    def canonical_manual_submission_policy_body(
+        self, policy_body: dict[str, Any]
+    ) -> tuple[dict[str, Any], str]:
+        """Canonicalize a manual policy and enforce the Workstream default floor."""
+        canonical = self._canonical_policy_body(policy_body)
+        self._merge_effective_submission_artifact_policy(canonical)
+        return canonical, self._hash_canonical_json(canonical)
+
     def _validate_unique_policy_rule_keys(
         self,
         rules: list[dict[str, Any]],
@@ -3442,6 +3338,12 @@ class ProjectService:
             f"artifact-content:{usage.content_id}#extraction-usage:{usage.extraction_usage_id}"
             for usage in usages
         ]
+
+    async def verified_source_material_refs(
+        self, sufficiency_report: GuideSufficiencyReport | None
+    ) -> list[str]:
+        """Return canonical verified source references for authorized policy writes."""
+        return await self._verified_source_material_refs(sufficiency_report)
 
     async def _require_verified_report_sources(
         self,

@@ -69,8 +69,8 @@ stopped.
 | `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |
 | `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Merged through PR #263 |
 | `WS-AUTH-001-12F` | Submission Artifact Policy Planning Parent | L1 | Split after failed L1 pre-start review; zero activation |
-| `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Proposed after 12E; zero activation |
-| `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Proposed after 12F1 |
+| `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Merged through PR #286; zero activation |
+| `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | In progress after passed corrected pre-start review |
 | `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | Proposed after 12F2 |
 | `WS-AUTH-001-12F4` | Submission Policy Approval Chain | L1 | Proposed after 12F3 |
 | `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F4 |
