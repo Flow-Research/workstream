@@ -54,9 +54,7 @@ async def audit_factory(audit_database_env: str):
     async with engine.connect() as connection:
         existing = set(
             (
-                await connection.execute(
-                    text("select id from audit_events where event_domain = 'authority'")
-                )
+                await connection.execute(text("select id from audit_events"))
             ).scalars()
         )
     try:
@@ -67,7 +65,7 @@ async def audit_factory(audit_database_env: str):
                 set(
                     (
                         await connection.execute(
-                            text("select id from audit_events where event_domain = 'authority'")
+                            text("select id from audit_events")
                         )
                     ).scalars()
                 )
