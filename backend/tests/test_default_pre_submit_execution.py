@@ -215,6 +215,34 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
 
 
 @pytest.mark.asyncio
+async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
+    tmp_path: Path,
+) -> None:
+    """Reject caller-selected policy identity before consuming authority."""
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    authority = _AllowAuthority()
+    service = PreparedBundleMaterializationService(
+        authorization=authority,
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_materialization_context_invalid",
+    ):
+        await service.materialize_prepared_bundle(
+            replace(request, submission_artifact_policy_id=uuid4())
+        )
+
+    assert authority.facts is None
+    await request.prepared_artifact.close()
+    await preparation.release_prepared_artifact(request.prepared_artifact._binding)
+    manager.close()
+
+
+@pytest.mark.asyncio
 async def test_default_executor_uses_plan_order_and_never_dispatches_project_rules(
     tmp_path: Path,
 ) -> None:
