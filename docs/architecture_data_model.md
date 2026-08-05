@@ -1473,8 +1473,11 @@ Fields:
 - `checker_run_id`
 - `checker_name`
 - `dispatch_authority`
-- `definition_id` (catalogue ID for pre-submit; registry checker ID for durable)
-- `definition_version` (catalogue or registry version selected by authority)
+- `definition_id` (stable catalogue definition ID for pre-submit; registry
+  checker ID for durable)
+- `definition_version` (catalogue definition or registry checker version
+  selected by authority; the effective plan separately binds the top-level
+  catalogue ID/version and manifest hash)
 - `result_source`
 - `effective_plan_hash`
 - `rule_instance_id` (nullable only for non-policy/default definitions)

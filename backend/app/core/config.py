@@ -174,6 +174,7 @@ class Settings(BaseSettings):
     artifact_submission_zip_maximum_inspection_seconds: float = Field(
         default=300.0, gt=0.0, le=1800.0
     )
+    artifact_pre_submission_checker_disabled_ids: str = ""
     artifact_operation_lock_timeout_seconds: float = Field(
         default=1800.0,
         gt=0.0,
