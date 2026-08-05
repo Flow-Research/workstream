@@ -67,6 +67,25 @@ WEAK_CALIBRATION_FILTER = "scripts.mutation_policy.x__weak_calibration__mutmut_*
 STRONG_CALIBRATION_FILTER = "scripts.mutation_policy.x__strong_calibration__mutmut_*"
 # workstream-mutation-capability:discover-v1
 POLICY_CAPABILITY_MARKER = "workstream-mutation-capability:discover-v1"
+_MODULE_DECLARATION_FACTORIES = frozenset({"frozenset"})
+_DECLARATION_FACTORY_IMPORTS = {
+    "dataclasses": frozenset({"dataclass"}),
+    "pydantic": frozenset({"Field"}),
+    "sqlalchemy": frozenset(
+        {
+            "CheckConstraint",
+            "DateTime",
+            "ForeignKey",
+            "ForeignKeyConstraint",
+            "Index",
+            "String",
+            "UniqueConstraint",
+            "Uuid",
+            "text",
+        }
+    ),
+    "sqlalchemy.orm": frozenset({"mapped_column", "relationship"}),
+}
 RUNTIME_ENV_ALLOWLIST = {
     "HOME",
     "LANG",
@@ -233,25 +252,6 @@ def _callable_spans(
     list[tuple[int, int]],
 ]:
     """Return callable, declaration, and unsupported executable spans."""
-    module_declaration_factories = frozenset({"frozenset"})
-    declaration_factory_imports = {
-        "dataclasses": frozenset({"dataclass"}),
-        "pydantic": frozenset({"Field"}),
-        "sqlalchemy": frozenset(
-            {
-                "CheckConstraint",
-                "DateTime",
-                "ForeignKey",
-                "ForeignKeyConstraint",
-                "Index",
-                "String",
-                "UniqueConstraint",
-                "Uuid",
-                "text",
-            }
-        ),
-        "sqlalchemy.orm": frozenset({"mapped_column", "relationship"}),
-    }
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
@@ -259,52 +259,27 @@ def _callable_spans(
     callables: list[tuple[int, int, str]] = []
     declarations: list[tuple[int, int]] = []
     executable: list[tuple[int, int]] = []
-    import_bindings: dict[str, set[str]] = {}
-    approved_imports: dict[str, str] = {}
-    sqlalchemy_func_imports: dict[str, str] = {}
+    approved_factory_names: set[str] = set()
+    sqlalchemy_func_names: set[str] = set()
     for statement in tree.body:
-        if isinstance(statement, ast.ImportFrom) and statement.module is not None:
-            approved = declaration_factory_imports.get(statement.module, frozenset())
-            for item in statement.names:
-                local_name = item.asname or item.name
-                source_name = f"{statement.module}.{item.name}"
-                import_bindings.setdefault(local_name, set()).add(source_name)
-                if item.name in approved:
-                    approved_imports[local_name] = source_name
-                if statement.module in {"sqlalchemy", "sqlalchemy.sql"} and item.name == "func":
-                    sqlalchemy_func_imports[local_name] = source_name
-        elif isinstance(statement, ast.Import):
-            for item in statement.names:
-                local_name = item.asname or item.name.split(".", 1)[0]
-                import_bindings.setdefault(local_name, set()).add(item.name)
-
-    def bound_names(target: ast.expr) -> set[str]:
-        if isinstance(target, ast.Name):
-            return {target.id}
-        if isinstance(target, (ast.Tuple, ast.List)):
-            return set().union(*(bound_names(item) for item in target.elts))
-        if isinstance(target, ast.Starred):
-            return bound_names(target.value)
-        return set()
-
+        if not isinstance(statement, ast.ImportFrom) or statement.module is None:
+            continue
+        approved = _DECLARATION_FACTORY_IMPORTS.get(statement.module, frozenset())
+        for item in statement.names:
+            local_name = item.asname or item.name
+            if item.name in approved:
+                approved_factory_names.add(local_name)
+            if statement.module in {"sqlalchemy", "sqlalchemy.sql"} and item.name == "func":
+                sqlalchemy_func_names.add(local_name)
     shadowed_names: set[str] = set()
     for statement in tree.body:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             shadowed_names.add(statement.name)
         elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
             targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
-            shadowed_names.update(set().union(*(bound_names(target) for target in targets)))
-    approved_factory_names = {
-        name
-        for name, source in approved_imports.items()
-        if import_bindings.get(name) == {source} and name not in shadowed_names
-    }
-    sqlalchemy_func_names = {
-        name
-        for name, source in sqlalchemy_func_imports.items()
-        if import_bindings.get(name) == {source} and name not in shadowed_names
-    }
-    safe_builtin_factories = module_declaration_factories - set(import_bindings) - shadowed_names
+            shadowed_names.update(target.id for target in targets if isinstance(target, ast.Name))
+    approved_factory_names.difference_update(shadowed_names)
+    sqlalchemy_func_names.difference_update(shadowed_names)
 
     def declaration_value(node: ast.expr | None, *, class_scope: bool) -> bool:
         if node is None:
@@ -324,9 +299,13 @@ def _callable_spans(
         if isinstance(node, ast.Starred):
             return declaration_value(node.value, class_scope=class_scope)
         if isinstance(node, ast.Call):
-            name = node.func.id if isinstance(node.func, ast.Name) else ""
+            name = (
+                node.func.attr
+                if isinstance(node.func, ast.Attribute)
+                else getattr(node.func, "id", "")
+            )
             if (
-                node.func.attr == "split"
+                name == "split"
                 and not class_scope
                 and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Constant)
@@ -334,18 +313,14 @@ def _callable_spans(
             ):
                 return not node.args and not node.keywords
             approved_call = (
-                (isinstance(node.func, ast.Name) and name in approved_factory_names)
+                name in approved_factory_names
                 or (
                     isinstance(node.func, ast.Attribute)
                     and isinstance(node.func.value, ast.Name)
                     and node.func.value.id in sqlalchemy_func_names
-                    and node.func.attr == "now"
+                    and name == "now"
                 )
-                or (
-                    not class_scope
-                    and isinstance(node.func, ast.Name)
-                    and name in safe_builtin_factories
-                )
+                or (not class_scope and name in _MODULE_DECLARATION_FACTORIES)
             )
             return approved_call and all(
                 declaration_value(item, class_scope=class_scope)
