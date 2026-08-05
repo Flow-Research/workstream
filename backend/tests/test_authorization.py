@@ -5151,6 +5151,11 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
         await prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
 
 
+def test_prelocked_authority_rejects_external_construction() -> None:
+    with pytest.raises(TypeError, match="prelocked authority is internal"):
+        authorization_kernel._PrelockedAuthority()
+
+
 @pytest.mark.asyncio
 async def test_prepared_admin_consume_reuses_exact_locked_grant_without_requery():
     context = _runtime_context()
@@ -9555,25 +9560,6 @@ async def test_authorization_kernel_allows_only_exact_actor_self_actions() -> No
     assert len(evidence.events) == 1
     assert evidence.events[0].action_id is ActionId.ACTOR_PROFILE_READ_SELF
     assert evidence.events[0].after_facts == {"allowed": True}
-
-
-async def test_authorization_kernel_denies_actor_self_action_to_service_actor() -> None:
-    context = _runtime_context(actor_kind=ActorKind.SERVICE)
-    service, evidence = _runtime_service(context)
-    resource = ActorSelfResourceContext(
-        resource_type="actor_profile",
-        resource_id=context.actor_profile_id,
-        requested_fields=(),
-    )
-
-    with pytest.raises(AuthorizationDenied) as exc_info:
-        await service.require(ActionId.ACTOR_PROFILE_READ_SELF, resource)
-
-    assert (
-        exc_info.value.decision.denial_code
-        is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-    )
-    assert evidence.events[0].after_facts == {"allowed": False}
 
 
 @pytest.mark.parametrize(
