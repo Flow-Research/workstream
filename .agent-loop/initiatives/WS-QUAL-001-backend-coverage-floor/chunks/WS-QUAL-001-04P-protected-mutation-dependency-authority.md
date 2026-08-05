@@ -52,13 +52,17 @@ automatic start of 04M or 05M
 - [ ] The manifest contains no project production dependency or index override.
 - [ ] 04M may read only the protected base-revision manifest and cannot modify
       either authority file.
-- [ ] No workflow, Backend runtime, test, dependency, lockfile, or coverage gate
-      changes.
+- [ ] Apart from `scripts/mutation-requirements.in` and its compiled manifest,
+      no workflow, Backend runtime, test, production dependency, lockfile, or
+      coverage gate changes.
 
 ## Verification commands
 
 ```bash
-python -m pip install --dry-run --require-hashes -r scripts/mutation-requirements.txt
+mutation_tmp=$(mktemp -d)
+python3.12 -m venv "$mutation_tmp/venv"
+"$mutation_tmp/venv/bin/python" --version
+"$mutation_tmp/venv/bin/python" -m pip install --dry-run --require-hashes -r scripts/mutation-requirements.txt
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py
