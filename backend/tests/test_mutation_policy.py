@@ -125,9 +125,11 @@ class TestMutationPolicy:
             target = root / "backend/scripts/claimed.py"
             target.write_text(
                 '"""Declaration-owned module."""\n\n'
+                "from dataclasses import dataclass\n"
                 "from typing import Final\n\n"
                 "SETTING: Final = True\n\n"
-                'class Contract:\n    """Declaration-owned class."""\n\n    value = True\n\n'
+                '@dataclass(frozen=True)\nclass Contract:\n    """Declaration-owned class."""\n\n'
+                "    value: bool = True\n\n"
                 "def claimed():\n    return True\n",
                 encoding="utf-8",
             )
@@ -802,6 +804,21 @@ class TestMutationPolicy:
                 "from sqlalchemy.orm import relationship\n\n"
                 "def relationship():\n    return object()\n\n"
                 "class Contract:\n    value = relationship()\n\n"
+                "def claimed():\n    return True\n"
+            ),
+            (
+                "from sqlalchemy.orm import relationship\n\n"
+                "@relationship\nclass Contract:\n    value = True\n\n"
+                "def claimed():\n    return True\n"
+            ),
+            (
+                "from sqlalchemy.orm import relationship\n\n"
+                "@relationship()\nclass Contract:\n    value = True\n\n"
+                "def claimed():\n    return True\n"
+            ),
+            (
+                "from pydantic import Field\n\n"
+                "@Field()\nclass Contract:\n    value = True\n\n"
                 "def claimed():\n    return True\n"
             ),
         ),

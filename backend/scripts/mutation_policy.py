@@ -304,6 +304,13 @@ def _callable_spans(
         for name, source in sqlalchemy_func_imports.items()
         if import_bindings.get(name) == {source} and name not in shadowed_names
     }
+    dataclass_decorator_names = {
+        name
+        for name, source in approved_imports.items()
+        if source == "dataclasses.dataclass"
+        and import_bindings.get(name) == {source}
+        and name not in shadowed_names
+    }
     safe_builtin_factories = module_declaration_factories - set(import_bindings) - shadowed_names
 
     def declaration_value(node: ast.expr | None, *, class_scope: bool) -> bool:
@@ -364,8 +371,13 @@ def _callable_spans(
             elif isinstance(node, ast.ClassDef):
                 start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
                 decorators_valid = all(
-                    (isinstance(item, ast.Name) and item.id in approved_factory_names)
-                    or (isinstance(item, ast.Call) and declaration_value(item, class_scope=True))
+                    (isinstance(item, ast.Name) and item.id in dataclass_decorator_names)
+                    or (
+                        isinstance(item, ast.Call)
+                        and isinstance(item.func, ast.Name)
+                        and item.func.id in dataclass_decorator_names
+                        and declaration_value(item, class_scope=True)
+                    )
                     for item in node.decorator_list
                 )
                 bases_valid = all(
