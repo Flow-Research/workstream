@@ -37,13 +37,15 @@ outbox lifecycle behavior.
 
 Future REV decision and CON contribution/award transactions need audit evidence
 to succeed or roll back atomically with their domain rows. The previous generic
-repository path accepted unbounded legacy shapes and did not define deterministic
+repository path accepted unbounded compatibility shapes and did not define deterministic
 concurrent replay behavior.
 
 ## Design chosen
 
-The participant reuses the historical `legacy_lifecycle` `AuditEvent` shape,
-but callers can supply only typed canonical facts. It flushes through the
+The participant reuses the existing lifecycle-compatible `audit_events`
+representation. Its persisted discriminator remains `legacy_lifecycle`, but
+that compatibility token is not exposed as the interface name or product
+boundary. Callers can supply only typed canonical facts. It flushes through the
 caller's session and never commits or creates a session. Exact event-ID replay
 returns the existing immutable row; changed reuse raises a non-leaking
 `LifecycleAuditConflict`. A transaction-scoped advisory lock serializes the
@@ -107,7 +109,7 @@ source shapes. Generic or ambiguous contribution events are not admitted.
 
 Lifecycle audit tests were added; no existing test was removed, skipped,
 weakened, or rewritten to accept broken behavior. Test cleanup now removes all
-audit rows created by the fixture, including `legacy_lifecycle` rows.
+audit rows created by the fixture, including lifecycle compatibility rows.
 
 ## CI integrity
 
@@ -137,7 +139,7 @@ status wording is current.
 
 ## Remaining risks
 
-- The participant uses fixed internal values in historical provenance columns;
+- The participant uses fixed internal values in compatibility provenance columns;
   future audit-schema cleanup may replace that compatibility representation.
 - New lifecycle event tokens require an adopted feature contract, exact primary
   entity, exact source references, and contract tests.

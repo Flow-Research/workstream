@@ -32,7 +32,8 @@ generic repository bypass denial, and forged-input secret non-retention.
 
 Preimplementation architecture review passed with low-risk conditions. Those
 conditions were implemented: the participant uses the existing
-`legacy_lifecycle` row shape, fixes internal provenance itself, has a dedicated
+lifecycle-compatible `audit_events` representation, fixes internal provenance
+itself, has a dedicated
 repository replay path with an explicit immutable comparison set, raises a
 non-leaking typed conflict, and prevents the generic repository from
 impersonating it.

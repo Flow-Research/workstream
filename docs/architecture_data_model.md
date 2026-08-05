@@ -1992,9 +1992,12 @@ open an independent session.
 The typed `LifecycleAuditParticipant` is the feature-neutral writer for new
 REV/CON lifecycle evidence. It accepts only closed entity/reason/reference
 types and UUID references, flushes through the caller's `AsyncSession`, and
-uses the existing `legacy_lifecycle` row shape without adding another domain or
-ledger. The participant supplies fixed internal provenance markers required by
-that historical row shape; callers cannot provide external subjects, issuers,
+uses the existing lifecycle-compatible `audit_events` representation without
+adding another domain or ledger. Its persisted compatibility discriminator is
+`legacy_lifecycle`; that storage token is not the name or ownership boundary of
+the new typed interface. The participant supplies fixed internal provenance
+markers required by the existing representation; callers cannot provide
+external subjects, issuers,
 roles, claims, authorization facts, credentials, provider references, or
 arbitrary payload metadata. Exact event-ID replay returns only an identical
 immutable row, while changed reuse fails closed. Caller rollback removes the
