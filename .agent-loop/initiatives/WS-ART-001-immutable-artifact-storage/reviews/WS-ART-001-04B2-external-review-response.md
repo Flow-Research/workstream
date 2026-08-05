@@ -16,11 +16,17 @@
   existing checker test still referenced a private helper moved into the shared
   pure-semantics module. Both tests now assert the intended 04B2 ownership and
   import boundary directly.
+- CodeRabbit's completed review found fail-closed ordering, dependency taxonomy,
+  attestation semantics, CI timing redirection, compatibility-shape, typing,
+  test-strength, and evidence-ledger issues. The valid findings are corrected
+  on the current head; operational memory-alert sizing remains an explicit
+  pre-activation deployment concern rather than application code in this chunk.
 
 ## Comments deferred
 
-- CodeRabbit reported only review rate limiting. It produced no actionable
-  code comment to defer.
+- The suggested API/worker container memory alert is deferred to deployment
+  activation because 04B2 keeps the route hidden and adds no deployment sizing
+  surface. The existing configured aggregate scratch quota remains the bound.
 
 ## Human decisions needed
 

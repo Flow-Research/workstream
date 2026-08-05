@@ -141,7 +141,7 @@ This chunk must additionally prove or preserve exactly:
 ```bash
 coverage report --include='app/modules/artifacts/*' --precision=2 --fail-under=90
 coverage report --include='app/modules/checkers/*' --precision=2 --fail-under=90
-coverage report --include='app/core/cancellation.py,app/core/file_locks.py' --precision=2 --fail-under=90
+coverage report --include='app/core/cancellation.py,app/core/config.py,app/core/file_locks.py' --precision=2 --fail-under=90
 coverage report --include='app/interfaces/artifact_operations.py,app/interfaces/artifacts.py' --precision=2 --fail-under=90
 ```
 

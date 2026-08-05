@@ -136,9 +136,7 @@ async def test_workspace_expansion_is_charged_before_projection(tmp_path: Path) 
     "drift",
     ("path", "type", "sha256", "byte_count", "executable", "entry_count", "aggregate"),
 )
-def test_projection_rejects_manifest_drift_before_callback(
-    tmp_path: Path, drift: str
-) -> None:
+def test_projection_rejects_manifest_drift_before_callback(tmp_path: Path, drift: str) -> None:
     data = _zip()
     inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
     inspection = inspector.inspect(BytesIO(data))
@@ -171,9 +169,7 @@ def test_projection_rejects_manifest_drift_before_callback(
         inspection,
         entries=tuple(entries),
         entry_count=inspection.entry_count + (1 if drift == "entry_count" else 0),
-        total_expanded_bytes=(
-            inspection.total_expanded_bytes + (1 if drift == "aggregate" else 0)
-        ),
+        total_expanded_bytes=(inspection.total_expanded_bytes + (1 if drift == "aggregate" else 0)),
     )
     with pytest.raises(SubmissionArchiveRejectedError) as caught:
         inspector.project_and_run(
@@ -195,14 +191,20 @@ def test_workspace_cleanup_bound_is_separate_from_prepared_file_limit(tmp_path: 
     with manager.extraction_workspace(reserved_bytes=8, maximum_entries=8) as workspace:
         workspace_fd = os.open(workspace, os.O_RDONLY | os.O_DIRECTORY)
         try:
-            for index in range(8):
+            current_fd = os.dup(workspace_fd)
+            for index in range(4):
+                os.mkdir(f"level-{index}", mode=0o700, dir_fd=current_fd)
+                next_fd = os.open(f"level-{index}", os.O_RDONLY | os.O_DIRECTORY, dir_fd=current_fd)
                 descriptor = os.open(
                     f"entry-{index}",
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
                     0o600,
-                    dir_fd=workspace_fd,
+                    dir_fd=next_fd,
                 )
                 os.close(descriptor)
+                os.close(current_fd)
+                current_fd = next_fd
+            os.close(current_fd)
         finally:
             os.close(workspace_fd)
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []

@@ -353,8 +353,10 @@ Implementation constraints derived from current code:
   hidden fixed-service composition seam before any prepared-byte read, ZIP open,
   workspace reservation, or checker fact. Until XINT-06A activates the action
   owned in the catalogue by `AUTH_ART_04B`, production composition remains fail
-  closed; tests use existing AUTH fixtures/capabilities, never a production
-  ART-local fake protocol.
+  closed. Because AUTH intentionally has not activated this action, tests use a
+  typed, bounded protocol double and opaque handle sentinel; the denial path
+  uses production `DenyPreSubmitMaterializationAuthorization`. Live AUTH proof
+  remains owned by XINT-06A.
 
 Plan-review correction: the canonical projection must be a method of
 `SubmissionArchiveInspector` or use a private traversal shared solely inside

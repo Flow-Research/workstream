@@ -110,6 +110,8 @@ class PreparedBundleMaterializationService:
                 packet=request.packet,
             ),
         )
+        # Intentional friend call: this is the sole authority-gated caller, and
+        # the preparation byte-access surface must remain private.
         return await self._preparation._process_prepared_submission(
             request.prepared_artifact,
             processor,

@@ -886,8 +886,8 @@ After fixed-service authorization, the canonical outer-ZIP inspector projects
 the already-inspected manifest into one callback-scoped sealed tree using
 descriptor-relative creation. Regular files use fixed `0400` or normalized
 executable `0500`; directories use `0500`. Checker adapters receive no scratch
-path, shell, subprocess, or execution primitive. The tree is destroyed before
-only bounded, path-redacted platform/default results return. 04B2 neither runs
+path, shell, subprocess, or execution primitive. The tree is destroyed first;
+only then do bounded, path-redacted platform/default results return. 04B2 neither runs
 project-policy primitives nor persists final checker evidence.
 
 Pre-submission checker catalogue configuration is separate from ZIP inspection

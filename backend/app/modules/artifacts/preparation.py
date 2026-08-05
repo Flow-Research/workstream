@@ -17,7 +17,7 @@ import re
 import stat as stat_module
 import threading
 import time
-from typing import Any, BinaryIO, TypeVar
+from typing import Any, BinaryIO, Protocol, TypeVar
 from uuid import uuid4
 
 from app.interfaces.artifacts import (
@@ -43,6 +43,7 @@ from app.modules.artifacts.sources import (
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
 _InspectionResult = TypeVar("_InspectionResult")
+_InspectionResultCo = TypeVar("_InspectionResultCo", covariant=True)
 _LEDGER_VERSION = 3
 _LEDGER_MAXIMUM_BYTES = 1024 * 1024
 _RESERVATION_ID = re.compile(r"^[0-9a-f]{32}$")
@@ -52,6 +53,16 @@ _LEDGER_TEMP_FILE = re.compile(r"^\.ledger\.[0-9a-f]{32}\.tmp$")
 _PROCESS_IDENTITY = re.compile(r"^[0-9a-f]{64}$")
 _ROOT_MARKER = ".workstream-artifact-scratch-v1"
 _ROOT_MARKER_PREFIX = b"workstream-artifact-scratch-v1:"
+
+
+class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
+    """Project one prepared submission inside a bounded scratch workspace."""
+
+    def process(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
+        """Return bounded results without retaining either capability."""
+
+    def abort(self) -> None:
+        """Deny checker access after cancellation or deadline expiry."""
 
 
 class ArtifactScratchCapacityError(ArtifactStoreUnavailableError):
@@ -1210,12 +1221,6 @@ class ArtifactScratchManager:
             ledger = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid") from exc
-        if (
-            isinstance(ledger, dict)
-            and ledger.get("version") == _LEDGER_VERSION
-            and set(ledger) == {"version", "reservations"}
-        ):
-            ledger = {**ledger, "workspaces": []}
         if isinstance(ledger, dict) and ledger.get("version") == 2:
             if set(ledger) == {"version", "reservations"}:
                 ledger = {**ledger, "workspaces": []}
@@ -1696,7 +1701,7 @@ class ArtifactPreparationService:
     async def _process_prepared_submission(
         self,
         prepared: PreparedArtifact,
-        processor: Any,
+        processor: PreparedSubmissionProcessor[_InspectionResult],
         *,
         reserved_bytes: int,
         maximum_entries: int,

@@ -7,6 +7,7 @@ from io import BytesIO
 from dataclasses import replace
 from pathlib import Path
 import threading
+from typing import cast
 import zipfile
 from uuid import uuid4
 
@@ -140,13 +141,21 @@ def _limits() -> ArtifactPreparationLimits:
 class _AllowAuthority:
     def __init__(self) -> None:
         self.facts = None
+        self.action_id = None
+        self.service_identity = None
 
     async def consume(self, **values):
         self.facts = values["facts"]
+        self.action_id = values["action_id"]
+        self.service_identity = values["service_identity"]
+
+
+class _TestPreparedAuthorizationHandle:
+    """Typed sentinel accepted only by the bounded authorization protocol double."""
 
 
 def _handle() -> PreparedAuthorizationHandle:
-    return object.__new__(PreparedAuthorizationHandle)
+    return cast(PreparedAuthorizationHandle, _TestPreparedAuthorizationHandle())
 
 
 async def _request(tmp_path: Path, *, path: str = "task.toml", catalogue=None):
@@ -236,7 +245,22 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
     assert all(entry.status is DefaultPreSubmissionResultStatus.PASSED for entry in result.entries)
     assert result.eligible is True
     assert authority.facts is not None
+    assert authority.action_id.value == "artifact.pre_submit.checker_input.materialize"
+    assert authority.service_identity.value == "workstream.artifact.materializer"
+    assert authority.facts.task_id == request.task_id
+    assert authority.facts.assignment_id == request.assignment_id
+    assert authority.facts.project_id == request.effective_plan.lineage.project_id
+    assert authority.facts.submission_artifact_policy_id == request.submission_artifact_policy_id
+    assert authority.facts.checker_policy_id == request.checker_policy_id
     assert authority.facts.prepared_generation_id == request.prepared_artifact.generation_id
+    assert authority.facts.plan_sha256 == request.effective_plan.plan_sha256
+    assert (
+        authority.facts.catalogue_manifest_sha256
+        == request.effective_plan.catalogue_manifest_sha256
+    )
+    assert authority.facts.archive_sha256 == request.prepared_artifact.commitment.sha256
+    assert authority.facts.archive_byte_count == request.prepared_artifact.commitment.byte_count
+    assert authority.facts.semantic_manifest_sha256 == request.manifest.sha256
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await request.prepared_artifact.close()
     manager.close()
@@ -246,9 +270,7 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
 async def test_blocking_default_stops_later_dependency_without_review_decision(
     tmp_path: Path,
 ) -> None:
-    request, inspector, manager, preparation, catalogue = await _request(
-        tmp_path, path=".env"
-    )
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path, path=".env")
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
@@ -281,9 +303,7 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
     catalogue = build_pre_submission_checker_catalogue(
         disabled_entry_ids=frozenset({"artifact.quality.placeholder_signal"})
     )
-    request, inspector, manager, preparation, _ = await _request(
-        tmp_path, catalogue=catalogue
-    )
+    request, inspector, manager, preparation, _ = await _request(tmp_path, catalogue=catalogue)
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
@@ -293,9 +313,7 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
 
     result = await service.materialize_prepared_bundle(request)
     advisory = next(
-        entry
-        for entry in result.entries
-        if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
     )
 
     assert advisory.status is DefaultPreSubmissionResultStatus.ADVISORY_DISABLED
@@ -320,9 +338,7 @@ async def test_quality_warning_emits_only_a_bounded_category_count(tmp_path: Pat
 
     result = await service.materialize_prepared_bundle(request)
     warning = next(
-        entry
-        for entry in result.entries
-        if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
     )
 
     assert warning.status is DefaultPreSubmissionResultStatus.WARNING
@@ -353,10 +369,18 @@ async def test_forged_plan_identity_fails_closed_and_cleans_workspace(tmp_path: 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("invalid_state", ("stale_entry", "duplicate", "unknown"))
+@pytest.mark.parametrize(
+    ("invalid_state", "expected_message"),
+    (
+        ("stale_entry", "pre_submission_plan_entry_stale"),
+        ("duplicate", "pre_submission_duplicate_result"),
+        ("unknown", "pre_submission_dispatch_capability_unknown"),
+    ),
+)
 async def test_invalid_executor_state_fails_closed_and_cleans_workspace(
     tmp_path: Path,
     invalid_state: str,
+    expected_message: str,
 ) -> None:
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     entries = list(request.effective_plan.entries)
@@ -403,7 +427,7 @@ async def test_invalid_executor_state_fails_closed_and_cleans_workspace(
         catalogue=selected_catalogue,
     )
 
-    with pytest.raises(PreSubmissionInfrastructureUnavailable):
+    with pytest.raises(PreSubmissionInfrastructureUnavailable, match=expected_message):
         await service.materialize_prepared_bundle(request)
 
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []

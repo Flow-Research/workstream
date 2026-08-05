@@ -89,16 +89,16 @@ remain outside v0.1.
 - Guide materialization from persisted artifact-processing evidence.
 - Fixed-service guide-source reads and binding creation with authorization,
   custody, lineage, rate-control, and stale-generation enforcement.
+## Integration In Progress
+
+The following areas have merged planning, contracts, or partial foundations,
+but are not all complete as one production path:
+
 - Hidden contributor-ZIP default pre-submit execution: fixed-service authority
   precedes byte access, one manifest-verified callback-scoped scratch tree runs
   only platform/default catalogue phases, and cleanup precedes bounded
   non-durable results. Project-policy execution, durable evidence, contributor
   preparation, admission, and Submission remain unavailable.
-
-## Integration In Progress
-
-The following areas have merged planning, contracts, or partial foundations,
-but are not all complete as one production path:
 
 - integration of the merged review/revision policy and authorization readiness
   contracts into hidden REV lifecycle behavior;

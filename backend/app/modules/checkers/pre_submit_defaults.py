@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 
 GENERIC_ATTESTATIONS = frozenset({"ok", "done", "yes", "i agree", "confirmed"})
-IGNORED_ATTESTATION_TERM_WORDS = frozenset(
-    {"a", "an", "and", "for", "of", "the", "exclusion"}
-)
+IGNORED_ATTESTATION_TERM_WORDS = frozenset({"a", "an", "and", "for", "of", "the", "exclusion"})
 CONFIDENTIALITY_TERMS = ("confidential", "private", "client data", "proprietary")
 CREDENTIAL_TERMS = ("credential", "secret", "token", "password", "api key")
 SOURCE_PLATFORM_TERMS = (
@@ -49,31 +48,41 @@ def attestation_term_is_satisfied(normalized_attestation: str, term: str) -> boo
         for word in normalized_term.split("_")
         if word and word not in IGNORED_ATTESTATION_TERM_WORDS
     ]
-    return all(word in attestation_words for word in required_words)
+    return bool(required_words) and all(word in attestation_words for word in required_words)
+
+
+@dataclass(frozen=True, slots=True)
+class AttestationValidationFacts:
+    """Canonical attestation facts shared by both pre-submission paths."""
+
+    has_required_length: bool
+    has_non_generic_text: bool
+    has_confidentiality_term: bool
+    has_credential_term: bool
+    has_source_or_platform_term: bool
+    missing_attestation_terms: tuple[str, ...]
 
 
 def attestation_validation_facts(
     worker_attestation: str,
     *,
     required_terms: Sequence[str] = (),
-) -> dict[str, bool | list[str]]:
+) -> AttestationValidationFacts:
     """Return the canonical facts used by both pre-submission execution paths."""
     normalized = " ".join(worker_attestation.strip().lower().split())
     normalized_for_terms = normalize_policy_token(worker_attestation)
-    return {
-        "has_required_length": len(normalized) >= 40,
-        "has_non_generic_text": normalized not in GENERIC_ATTESTATIONS,
-        "has_confidentiality_term": any(term in normalized for term in CONFIDENTIALITY_TERMS),
-        "has_credential_term": any(term in normalized for term in CREDENTIAL_TERMS),
-        "has_source_or_platform_term": any(
-            term in normalized for term in SOURCE_PLATFORM_TERMS
-        ),
-        "missing_attestation_terms": [
+    return AttestationValidationFacts(
+        has_required_length=len(normalized) >= 40,
+        has_non_generic_text=normalized not in GENERIC_ATTESTATIONS,
+        has_confidentiality_term=any(term in normalized for term in CONFIDENTIALITY_TERMS),
+        has_credential_term=any(term in normalized for term in CREDENTIAL_TERMS),
+        has_source_or_platform_term=any(term in normalized for term in SOURCE_PLATFORM_TERMS),
+        missing_attestation_terms=tuple(
             term
             for term in required_terms
             if not attestation_term_is_satisfied(normalized_for_terms, term)
-        ],
-    }
+        ),
+    )
 
 
 def matched_low_quality_patterns(parts: Iterable[str]) -> tuple[str, ...]:

@@ -15,6 +15,7 @@ from typing import Protocol
 from app.modules.tasks.models import Submission, WorkstreamTask
 from app.modules.tasks.schemas import SubmissionCreate
 from app.modules.checkers.pre_submit_defaults import (
+    LOW_QUALITY_GENERATED_PATTERNS,
     attestation_validation_facts,
     matched_low_quality_patterns,
     normalize_policy_token as _normalize_policy_token,
@@ -727,14 +728,14 @@ def _confidentiality_attestation_outcome(
         worker_attestation,
         required_terms=required_terms or (),
     )
-    missing_terms = facts["missing_attestation_terms"]
+    missing_terms = facts.missing_attestation_terms
     if not all(
         [
-            facts["has_required_length"],
-            facts["has_non_generic_text"],
-            facts["has_confidentiality_term"],
-            facts["has_credential_term"],
-            facts["has_source_or_platform_term"],
+            facts.has_required_length,
+            facts.has_non_generic_text,
+            facts.has_confidentiality_term,
+            facts.has_credential_term,
+            facts.has_source_or_platform_term,
             not missing_terms,
         ]
     ):
@@ -746,10 +747,10 @@ def _confidentiality_attestation_outcome(
                 "and copied source or platform artifacts."
             ),
             metadata={
-                "has_required_length": facts["has_required_length"],
-                "has_confidentiality_term": facts["has_confidentiality_term"],
-                "has_credential_term": facts["has_credential_term"],
-                "has_source_or_platform_term": facts["has_source_or_platform_term"],
+                "has_required_length": facts.has_required_length,
+                "has_confidentiality_term": facts.has_confidentiality_term,
+                "has_credential_term": facts.has_credential_term,
+                "has_source_or_platform_term": facts.has_source_or_platform_term,
                 "missing_attestation_terms": missing_terms,
             },
         )
@@ -776,7 +777,12 @@ def _low_quality_generated_artifacts_outcome(
     return _warning(
         "check_low_quality_generated_artifacts",
         "Submission contains placeholder or generic generated-output signals.",
-        metadata={"matched_pattern_count": len(matched), "matched_categories": matched},
+        metadata={
+            "matched_pattern_count": len(matched),
+            "matched_categories": [
+                pattern for pattern in LOW_QUALITY_GENERATED_PATTERNS if pattern in matched
+            ],
+        },
     )
 
 

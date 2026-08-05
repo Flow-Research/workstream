@@ -99,7 +99,8 @@ that the platform/default slice is derived from the locked full plan.
 The first GitHub run found stale AUTH wording, a docstring-floor regression,
 and a failure-path lane-directory assumption. All three are fixed and recorded
 in the external review response; replacement hosted checks are pending.
-CodeRabbit is externally rate-limited and reported no actionable comment.
+CodeRabbit's earlier review was externally rate-limited and produced no findings;
+its later completed review produced findings tracked in the external-review response.
 
 ## Remaining risks
 

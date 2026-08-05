@@ -147,7 +147,7 @@ jobs:
         shell: bash
         run: |
           install -d -m 700 '.ci/lane-bundle/${{ matrix.lane }}'
-          printf '%s\n' '${{ steps.identity.outputs.job_start_epoch }}'
+          printf '%s\n' '${{ steps.identity.outputs.job_start_epoch }}' \
             > '.ci/lane-bundle/${{ matrix.lane }}/job-start-epoch.txt'
 
       - name: Upload authenticated lane ${{ matrix.lane }}

@@ -178,23 +178,35 @@ class DefaultPreSubmissionProcessor:
         results: list[DefaultPreSubmissionEntryResult] = []
         statuses: dict[str, DefaultPreSubmissionResultStatus] = {}
         blocked = False
+        executed_ids = {
+            entry.definition_id
+            for entry in self._input.plan.entries
+            if entry.phase in _EXECUTED_PHASES
+        }
         for entry in self._input.plan.entries:
             if entry.phase not in _EXECUTED_PHASES:
                 continue
             if entry.dispatch_kind != "platform_capability":
-                raise PreSubmissionInfrastructureUnavailable(
-                    "pre_submission_dispatch_kind_invalid"
-                )
+                raise PreSubmissionInfrastructureUnavailable("pre_submission_dispatch_kind_invalid")
             definition = self._catalogue.definition(entry.definition_id)
+            if entry.definition_id in statuses:
+                raise PreSubmissionInfrastructureUnavailable("pre_submission_duplicate_result")
+            if (
+                entry.state == PreSubmissionCheckerState.DISABLED.value
+                and definition.classification.mandatory
+            ):
+                raise PreSubmissionInfrastructureUnavailable(
+                    "pre_submission_infrastructure_unavailable"
+                )
             if (
                 entry.definition_version != definition.version
                 or entry.dispatch_capability != definition.dispatch_capability
                 or entry.classification != definition.classification.value
                 or entry.state != definition.state.value
             ):
-                raise PreSubmissionInfrastructureUnavailable(
-                    "pre_submission_plan_entry_stale"
-                )
+                raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_entry_stale")
+            if any(dependency not in executed_ids for dependency in entry.dependencies):
+                raise PreSubmissionInfrastructureUnavailable("pre_submission_dependency_invalid")
             unmet = any(
                 statuses.get(dependency)
                 not in {
@@ -211,10 +223,6 @@ class DefaultPreSubmissionProcessor:
                     message_code="dependency_not_run",
                 )
             elif entry.state == PreSubmissionCheckerState.DISABLED.value:
-                if definition.classification.mandatory:
-                    raise PreSubmissionInfrastructureUnavailable(
-                        "pre_submission_infrastructure_unavailable"
-                    )
                 result = self._result(
                     entry,
                     DefaultPreSubmissionResultStatus.ADVISORY_DISABLED,
@@ -224,18 +232,9 @@ class DefaultPreSubmissionProcessor:
                 result = self._dispatch(entry, tree)
                 if result.status is DefaultPreSubmissionResultStatus.FAILED:
                     blocked = True
-            if entry.definition_id in statuses:
-                raise PreSubmissionInfrastructureUnavailable(
-                    "pre_submission_duplicate_result"
-                )
             statuses[entry.definition_id] = result.status
             results.append(result)
-        expected_ids = {
-            entry.definition_id
-            for entry in self._input.plan.entries
-            if entry.phase in _EXECUTED_PHASES
-        }
-        if set(statuses) != expected_ids:
+        if set(statuses) != executed_ids:
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_incomplete")
         return DefaultPreSubmissionExecutionResult(
             plan_sha256=self._input.plan.plan_sha256,
@@ -276,11 +275,9 @@ class DefaultPreSubmissionProcessor:
             )
             return self._blocking_or_pass(entry, missing, "submission_packet_invalid")
         if capability is PreSubmissionPlatformCapability.ATTESTATION:
-            facts = attestation_validation_facts(
-                self._input.packet.contributor_attestation
-            )
+            facts = attestation_validation_facts(self._input.packet.contributor_attestation)
             missing = sum(
-                not bool(facts[key])
+                not getattr(facts, key)
                 for key in (
                     "has_required_length",
                     "has_non_generic_text",
