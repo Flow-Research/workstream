@@ -20,13 +20,14 @@ remain stopped historical experiments. Do not resume them.
 
 | Chunk | Purpose | Risk | State |
 |---|---|---:|---|
-| `WS-QUAL-001-PLAN3` | Replace percentage-only closure with behavior/mutation assurance | L1 | Planning in progress |
-| `WS-QUAL-001-04M` | Pilot pinned changed-scope mutation evidence without a score gate | L1 | Proposed after PLAN3 merge and explicit instruction |
+| `WS-QUAL-001-PLAN3` | Replace percentage-only closure with behavior/mutation assurance | L1 | Merged PR #272; late review corrected by PLAN3R1 |
+| `WS-QUAL-001-PLAN3R1` | Resolve five valid late CodeRabbit findings from PR #272 | L1 | Corrective planning chunk in progress |
+| `WS-QUAL-001-04M` | Pilot pinned changed-scope mutation evidence without a score gate | L1 | Proposed after PLAN3R1 merge and explicit instruction |
 | `WS-QUAL-001-05M` | Add calibrated blocking behavior-mutation policy | L1 | Proposed only after accepted 04M hosted evidence and explicit instruction |
 
 ## Dependency rule
 
-`PLAN3 -> 04M -> human calibration checkpoint -> 05M`.
+`PLAN3 -> PLAN3R1 -> 04M -> human calibration checkpoint -> 05M`.
 
 Each chunk maps to one PR. `04M` may prove that the candidate engine or target
 strategy is unsuitable and stop without `05M`. Planning does not pre-authorize
