@@ -36,7 +36,7 @@ agents = [
 dev = [
   "docstr-coverage>=2.3,<3.0",
   "jsonschema==4.26.0",
-  "pytest>=8.0,<9.0",
+  "pytest>=8.0,<10.0",
   "pytest-asyncio>=0.24,<1.0",
   "pytest-cov==7.1.0",
   "ruff>=0.8,<0.16",
