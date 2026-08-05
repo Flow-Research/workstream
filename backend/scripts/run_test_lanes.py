@@ -161,6 +161,7 @@ LANES = (
             "tests/test_checker_catalogue.py",
             "tests/test_checkers.py",
             "tests/test_review_queue_persistence.py",
+            "tests/test_review_lease_persistence.py",
             "tests/test_tasks.py",
         ),
     ),
