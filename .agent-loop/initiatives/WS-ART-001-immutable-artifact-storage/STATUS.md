@@ -130,9 +130,11 @@ PR #282. It owns only fixed-service authorization before byte access,
 quota-reserved callback-scoped sealed ZIP projection, platform/default phase
 execution, bounded non-durable results, and cleanup. It performs no
 project-policy execution, durable evidence/admission/Submission write, route
-exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` is active after
-its L1 plan correction and owns the project-policy plus immutable evidence
-continuation through that same plan and sealed tree.
+exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` implementation
+and internal L1 review are complete on its bounded branch. It executes the
+project-policy continuation through that same plan and sealed tree and persists
+one immutable platform-plus-project evidence set. Hosted PR gates, CodeRabbit,
+human review, and merge remain pending.
 
 ## Gate
 
