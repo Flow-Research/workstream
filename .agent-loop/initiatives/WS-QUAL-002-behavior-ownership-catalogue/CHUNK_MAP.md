@@ -7,7 +7,7 @@
 | `WS-QUAL-002-03A` | AUTH, actors, API controls, audit ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-03B` | Artifacts, storage, extraction, external adapters ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-03C` | Projects, tasks, checkers, reviews, contribution ownership | 01, 02 | L1 | pending |
-| `WS-QUAL-002-03D` | Core, DB, workers, scripts, remaining shared ownership | 01, 02 | L1 | pending |
+| `WS-QUAL-002-03D` | Core, DB, async execution, scripts, remaining shared ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-04` | Completeness/staleness gate and contributor preparation command | 03A-D | L1 | pending |
 | `WS-QUAL-002-05` | Catalogue-first mutation cutover and AUTH workflow proof | 04 | L1 | pending |
 

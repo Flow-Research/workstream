@@ -5,7 +5,7 @@
 ## Goal
 Review ownership for artifacts, storage, extraction, materialization, and adapters.
 ## Why this chunk exists
-These behaviors span filesystem, S3/MinIO, archive, and worker boundaries.
+These behaviors span filesystem, S3/MinIO, archive, and background-execution boundaries.
 ## Approved plan reference
 - INTENT: `.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/INTENT.md`
 - PLAN: `.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/PLAN.md`
@@ -29,7 +29,7 @@ backend/app/**; provider behavior; workflows; test weakening
 ```
 ## Acceptance criteria
 - [ ] Every target assigned to `artifacts` by the foundation partition is reviewed or structural-only; no other target is changed.
-- [ ] Storage, archive, scratch, and worker boundaries are explicit.
+- [ ] Storage, archive, scratch, and background-execution boundaries are explicit.
 - [ ] Owning nodes remain bounded.
 - [ ] The validator collects and runs every exact pytest node referenced by changed records, including real-provider boundary nodes where declared.
 ## Verification commands

@@ -3,7 +3,7 @@
 ## Parent initiative
 `WS-QUAL-002` — Behavior Ownership Catalogue
 ## Goal
-Review core, DB, interfaces, composition, workers, and remaining scripts.
+Review core, DB, interfaces, composition, async execution, and remaining scripts.
 ## Why this chunk exists
 Completeness requires shared operational ownership without mixing product reviews.
 ## Approved plan reference
@@ -29,7 +29,7 @@ backend/app/**; runtime behavior; DB behavior; workflows; test weakening
 ```
 ## Acceptance criteria
 - [ ] Every target assigned to `shared` by the foundation partition is reviewed or structural-only; no other target is changed.
-- [ ] Composition, DB, lock, worker, and script boundaries are explicit.
+- [ ] Composition, DB, lock, async-execution, and script boundaries are explicit.
 - [ ] No target appears in multiple groups.
 - [ ] The validator collects and runs every exact pytest node referenced by changed records.
 ## Verification commands
@@ -40,6 +40,6 @@ git diff --check origin/main...HEAD
 ## Required reviewers
 Architecture, senior engineering, QA, security, CI integrity, reuse/dedup, and test delta.
 ## Human review focus
-Composition roots, DB/locks, workers, and scripts.
+Composition roots, DB/locks, async execution, and scripts.
 ## Stop conditions
 Stop if structural-only hides executable behavior.

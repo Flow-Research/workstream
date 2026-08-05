@@ -20,7 +20,7 @@
 - 168 eligible implementation/script modules excluding `__init__.py`.
 - 66 top-level backend test modules.
 - High-risk groups include authorization/actors/auth, artifacts/storage,
-  projects/tasks/checkers/reviews, audit/outbox, workers, and CI scripts.
+  projects/tasks/checkers/reviews, audit/outbox, async job runtimes, and CI scripts.
 - Existing behavior claims cover mutation-policy calibration only; they are not
   a repository ownership catalogue.
 
