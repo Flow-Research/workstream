@@ -2,8 +2,8 @@
 
 ## Current baseline
 
-- Reconciled main: `e2057d0f39b47cc84fb733f4381ee674028a9a47`.
-- Alembic head on main: `0055_contribution_policy`.
+- Reconciled main: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
+- Alembic head on main: `0056_review_lease_preference`.
 - CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
 - PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
   `needs_revision` rebase rule.
@@ -37,9 +37,9 @@ of main; their contracts remain ART-owned inputs rather than CON behavior.
 
 ### REV
 
-REV PR #258 is merged planning-only end-to-end evidence. It correctly
-preserves CON ownership and identifies CON-03B as
-the policy FK prerequisite for REV-03A2.
+REV planning evidence remains aligned with CON ownership. REV-03A2 lease and
+preference persistence is merged in PR #280 on top of the merged CON-03B policy
+FK prerequisite; Review and FinalAcceptance behavior remain future REV work.
 
 ## Corrected CON priority
 
@@ -65,7 +65,7 @@ schema work. Current dependency analysis yields:
   registered.
 - CON-05A/05B: deterministic legacy-row classification remains a human data
   decision.
-- CON-03C: REV Review/ReviewLease/FinalAcceptance tables are not implemented.
+- CON-03C: REV Review and FinalAcceptance tables are not implemented.
 - CON-06/07: corresponding REV lease/decision caller contracts are future.
 - CON-03A creation behavior: AUTH has not approved a compensation-adapter
   service identity/capability; existing ART/REV identities cannot substitute.

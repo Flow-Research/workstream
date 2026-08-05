@@ -2,8 +2,8 @@
 
 ## Reconciliation baseline
 
-- Reconciled `main`: `e2057d0f39b47cc84fb733f4381ee674028a9a47`.
-- Current migration head on `main`: `0055_contribution_policy`; 02C adds no
+- Reconciled `main`: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
+- Current migration head on `main`: `0056_review_lease_preference`; 02C adds no
   migration.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and

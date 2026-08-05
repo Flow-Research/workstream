@@ -7,13 +7,13 @@ append-only `audit_events` ledger. It uses the caller's `AsyncSession`, flushes
 without committing, and adds no schema, migration, route, worker, AUTH, REV,
 CON product behavior, or outbox behavior.
 
-Baseline: `e2057d0f39b47cc84fb733f4381ee674028a9a47`.
+Current reconciled main: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
 
 ## Deterministic evidence
 
 ```text
-39 isolated PostgreSQL audit tests passed
-26 focused lifecycle tests passed
+39 isolated PostgreSQL audit tests passed before final main reconciliation
+26 focused lifecycle tests passed again after final main reconciliation
 11 schema-only lifecycle input tests passed
 audit subsystem coverage: 95% (required at least 90%)
 Ruff: passed
