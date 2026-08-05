@@ -12,9 +12,13 @@ new or materially changed subsystem checks remain blocking at 90 percent.
 
 ## Current gate
 
-`WS-QUAL-001-PLAN3` merged through PR #272. `WS-QUAL-001-PLAN3R1` is a
-planning-only correction for five valid CodeRabbit findings that arrived before
-the merge but were not addressed. It must merge before `04M` starts.
+`WS-QUAL-001-PLAN3` merged through PR #272. Its planning-only correction
+`WS-QUAL-001-PLAN3R1` merged through PR #278 after resolving all late CodeRabbit
+findings.
+
+`WS-QUAL-001-04P` is now the active bounded prerequisite. It establishes the
+protected, exactly pinned, hash-verified mutation dependency authority. It does
+not execute mutation testing or start `04M`.
 
 The corrected proposal remains two-stage:
 
@@ -24,11 +28,10 @@ The corrected proposal remains two-stage:
 3. `05M` — separately approved blocking survivor policy for eligible changed
    logic and explicit test-only behavior claims.
 
-No mutation dependency, workflow, policy script, or blocking check has been
+No mutation workflow, policy script, execution, or blocking check has been
 implemented.
 
 ## Stop condition
 
-Stop after the PLAN3R1 correction review and PR. Do not start 04M automatically.
-Do not start 05M without accepted exact hosted pilot evidence and a new human
-instruction.
+Stop after the 04P review and PR. Do not start 04M automatically. Do not start
+05M without accepted exact hosted pilot evidence and a new human instruction.
