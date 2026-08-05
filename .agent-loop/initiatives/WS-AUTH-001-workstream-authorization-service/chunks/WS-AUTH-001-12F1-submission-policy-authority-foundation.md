@@ -24,6 +24,7 @@ backend/alembic/versions/<then-current-next>_submission_policy_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 .github/workflows/backend.yml
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md

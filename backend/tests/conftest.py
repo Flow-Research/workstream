@@ -21,7 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "f89ce8bc78ed5089544b32eeb96489c54f25355a924aecd598a8f15317ec8122"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "562108f0c0bb3f14b319242f843a76935a8a26b6e28ced56f74882ab88208603"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -90,6 +90,7 @@ RESETTABLE_TEST_TABLES = (
     "review_admission_idempotency_records",
     "review_leases",
     "review_queue_entries",
+    "submission_policy_mutation_idempotency_records",
     "submission_artifact_policies",
     "submissions",
     "task_assignments",
@@ -118,6 +119,7 @@ TRUNCATE_GUARDED_TABLES = (
     "review_queue_entries",
     "review_policies",
     "revision_policies",
+    "submission_policy_mutation_idempotency_records",
 )
 TestDatabaseReset = Callable[..., Awaitable[None]]
 DatabaseLock = Callable[[], AbstractContextManager[None]]
