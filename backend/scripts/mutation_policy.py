@@ -312,36 +312,6 @@ def _callable_spans(
         and name not in shadowed_names
     }
     safe_builtin_factories = module_declaration_factories - set(import_bindings) - shadowed_names
-    dataclass_keyword_names = frozenset(
-        {
-            "eq",
-            "frozen",
-            "init",
-            "kw_only",
-            "match_args",
-            "order",
-            "repr",
-            "slots",
-            "unsafe_hash",
-            "weakref_slot",
-        }
-    )
-
-    def valid_dataclass_decorator(node: ast.expr) -> bool:
-        if isinstance(node, ast.Name):
-            return node.id in dataclass_decorator_names
-        if not (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in dataclass_decorator_names
-        ):
-            return False
-        return not node.args and all(
-            item.arg in dataclass_keyword_names
-            and isinstance(item.value, ast.Constant)
-            and isinstance(item.value.value, bool)
-            for item in node.keywords
-        )
 
     def declaration_value(node: ast.expr | None, *, class_scope: bool) -> bool:
         if node is None:
@@ -400,7 +370,16 @@ def _callable_spans(
                 visit(node.body, (*parents, node.name))
             elif isinstance(node, ast.ClassDef):
                 start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
-                decorators_valid = all(valid_dataclass_decorator(item) for item in node.decorator_list)
+                decorators_valid = all(
+                    (isinstance(item, ast.Name) and item.id in dataclass_decorator_names)
+                    or (
+                        isinstance(item, ast.Call)
+                        and isinstance(item.func, ast.Name)
+                        and item.func.id in dataclass_decorator_names
+                        and declaration_value(item, class_scope=True)
+                    )
+                    for item in node.decorator_list
+                )
                 bases_valid = all(
                     declaration_value(item, class_scope=True)
                     for item in (*node.bases, *(item.value for item in node.keywords))
