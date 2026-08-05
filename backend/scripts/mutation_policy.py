@@ -239,7 +239,7 @@ def _verify_mutmut_config(backend: Path, selection: dict[str, Any]) -> None:
         raise MutationPolicyError("mutation_config_selection_mismatch")
 
 
-def _parse_outcomes(backend: Path, selected_count: int) -> tuple[dict[str, int], list[dict[str, str]]]:
+def _parse_outcomes(backend: Path) -> tuple[dict[str, int], list[dict[str, str]]]:
     counts = Counter({outcome: 0 for outcome in OUTCOMES})
     mutants: list[dict[str, str]] = []
     for meta_path in sorted((backend / "mutants").rglob("*.meta")):
@@ -257,7 +257,6 @@ def _parse_outcomes(backend: Path, selected_count: int) -> tuple[dict[str, int],
             counts[status] += 1
             mutants.append({"name": name, "outcome": status})
     counts["generated"] = len(mutants)
-    counts["excluded"] = max(0, selected_count - len(mutants))
     if not mutants:
         raise MutationPolicyError("zero_generated_mutants")
     return dict(counts), mutants
@@ -336,7 +335,7 @@ def execute_pilot(
             raise MutationPolicyError("mutation_timeout") from exc
         if result.returncode != 0:
             raise MutationPolicyError("mutation_engine_error")
-        counts, mutants = _parse_outcomes(backend, len(selection["targets"]))
+        counts, mutants = _parse_outcomes(backend)
         strong = [
             mutant
             for mutant in mutants

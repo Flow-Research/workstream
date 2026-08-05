@@ -99,6 +99,7 @@ class TestMutationPolicy:
                             "survived": 0,
                             "timeout": 36,
                             "suspicious": 35,
+                            "excluded": 34,
                             "error": -11,
                         }
                     }
@@ -106,10 +107,10 @@ class TestMutationPolicy:
                 encoding="utf-8",
             )
 
-            outcomes, mutants = _parse_outcomes(backend, selected_count=6)
+            outcomes, mutants = _parse_outcomes(backend)
 
             assert outcomes == {
-                "generated": 5,
+                "generated": 6,
                 "killed": 1,
                 "survived": 1,
                 "timeout": 1,
@@ -117,7 +118,7 @@ class TestMutationPolicy:
                 "excluded": 1,
                 "error": 1,
             }
-            assert len(mutants) == 5
+            assert len(mutants) == 6
 
     def test_strong_calibration_asserts_the_exact_boundary(self) -> None:
         assert _strong_calibration(1) is True
