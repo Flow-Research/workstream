@@ -70,6 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv .ci/mutation-pilot/venv
+          .ci/mutation-pilot/venv/bin/python -m pip install -e "backend[dev]"
           .ci/mutation-pilot/venv/bin/python -m pip install \
             --disable-pip-version-check \
             --require-hashes \
