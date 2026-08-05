@@ -7,7 +7,13 @@ is selected independently, and a claim cannot remove or replace one.
 The filename and `chunk_id` must match. Targets are repository-relative Python
 files under `backend/app/` or `backend/scripts/`; each target also names its
 qualified callables, exact owning pytest nodes, typed observable outcomes, and
-any essential real boundaries. Unknown fields, unsafe paths, missing files,
+any essential real boundaries. A target whose delta contains only added or
+changed imports, docstrings, or inert module/class declarations uses an empty
+callable list: its owning tests remain
+mandatory, while no unrelated callable is invented for mutation. Mixed targets
+still mutate every changed callable and run the declaration-owning tests.
+Control flow, executable expressions, removed or renamed classes/callables, and
+other unmapped logic continue to fail closed. Unknown fields, unsafe paths, missing files,
 duplicate entries, unowned changed targets, or stale chunk identifiers fail
 closed.
 

@@ -67,6 +67,25 @@ WEAK_CALIBRATION_FILTER = "scripts.mutation_policy.x__weak_calibration__mutmut_*
 STRONG_CALIBRATION_FILTER = "scripts.mutation_policy.x__strong_calibration__mutmut_*"
 # workstream-mutation-capability:discover-v1
 POLICY_CAPABILITY_MARKER = "workstream-mutation-capability:discover-v1"
+_MODULE_DECLARATION_FACTORIES = frozenset({"frozenset"})
+_DECLARATION_FACTORY_IMPORTS = {
+    "dataclasses": frozenset({"dataclass"}),
+    "pydantic": frozenset({"Field"}),
+    "sqlalchemy": frozenset(
+        {
+            "CheckConstraint",
+            "DateTime",
+            "ForeignKey",
+            "ForeignKeyConstraint",
+            "Index",
+            "String",
+            "UniqueConstraint",
+            "Uuid",
+            "text",
+        }
+    ),
+    "sqlalchemy.orm": frozenset({"mapped_column", "relationship"}),
+}
 RUNTIME_ENV_ALLOWLIST = {
     "HOME",
     "LANG",
@@ -227,14 +246,87 @@ def _source_at(root: Path, revision: str, path: str) -> str:
 
 def _callable_spans(
     source: str, module: str
-) -> tuple[list[tuple[int, int, str]], list[tuple[int, int]]]:
-    """Return qualified callable spans and module/class executable spans."""
+) -> tuple[
+    list[tuple[int, int, str]],
+    list[tuple[int, int]],
+    list[tuple[int, int]],
+]:
+    """Return callable, declaration, and unsupported executable spans."""
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
         raise MutationPolicyError("invalid_target_syntax") from exc
     callables: list[tuple[int, int, str]] = []
+    declarations: list[tuple[int, int]] = []
     executable: list[tuple[int, int]] = []
+    approved_factory_names: set[str] = set()
+    sqlalchemy_func_names: set[str] = set()
+    for statement in tree.body:
+        if not isinstance(statement, ast.ImportFrom) or statement.module is None:
+            continue
+        approved = _DECLARATION_FACTORY_IMPORTS.get(statement.module, frozenset())
+        for item in statement.names:
+            local_name = item.asname or item.name
+            if item.name in approved:
+                approved_factory_names.add(local_name)
+            if statement.module in {"sqlalchemy", "sqlalchemy.sql"} and item.name == "func":
+                sqlalchemy_func_names.add(local_name)
+    shadowed_names: set[str] = set()
+    for statement in tree.body:
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            shadowed_names.add(statement.name)
+        elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+            shadowed_names.update(target.id for target in targets if isinstance(target, ast.Name))
+    approved_factory_names.difference_update(shadowed_names)
+    sqlalchemy_func_names.difference_update(shadowed_names)
+
+    def declaration_value(node: ast.expr | None, *, class_scope: bool) -> bool:
+        if node is None:
+            return True
+        if isinstance(node, (ast.Constant, ast.Name, ast.Attribute)):
+            return True
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            return all(declaration_value(item, class_scope=class_scope) for item in node.elts)
+        if isinstance(node, ast.Dict):
+            return all(
+                declaration_value(item, class_scope=class_scope)
+                for item in (*node.keys, *node.values)
+                if item is not None
+            )
+        if isinstance(node, ast.UnaryOp):
+            return declaration_value(node.operand, class_scope=class_scope)
+        if isinstance(node, ast.Starred):
+            return declaration_value(node.value, class_scope=class_scope)
+        if isinstance(node, ast.Call):
+            name = (
+                node.func.attr
+                if isinstance(node.func, ast.Attribute)
+                else getattr(node.func, "id", "")
+            )
+            if (
+                name == "split"
+                and not class_scope
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Constant)
+                and isinstance(node.func.value.value, str)
+            ):
+                return not node.args and not node.keywords
+            approved_call = (
+                name in approved_factory_names
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in sqlalchemy_func_names
+                    and name == "now"
+                )
+                or (not class_scope and name in _MODULE_DECLARATION_FACTORIES)
+            )
+            return approved_call and all(
+                declaration_value(item, class_scope=class_scope)
+                for item in (*node.args, *(item.value for item in node.keywords))
+            )
+        return False
 
     def visit(nodes: list[ast.stmt], parents: tuple[str, ...] = ()) -> None:
         for node in nodes:
@@ -246,52 +338,122 @@ def _callable_spans(
                 visit(node.body, (*parents, node.name))
             elif isinstance(node, ast.ClassDef):
                 start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
-                executable.append((start, node.lineno))
+                decorators_valid = all(
+                    (isinstance(item, ast.Name) and item.id in approved_factory_names)
+                    or (isinstance(item, ast.Call) and declaration_value(item, class_scope=True))
+                    for item in node.decorator_list
+                )
+                bases_valid = all(
+                    declaration_value(item, class_scope=True)
+                    for item in (*node.bases, *(item.value for item in node.keywords))
+                )
+                destination = declarations if decorators_valid and bases_valid else executable
+                destination.append((start, node.lineno))
                 visit(node.body, (*parents, node.name))
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                declarations.append((node.lineno, end))
+            elif isinstance(node, ast.Assign) and declaration_value(
+                node.value, class_scope=bool(parents)
+            ):
+                declarations.append((node.lineno, end))
+            elif isinstance(node, ast.AnnAssign) and declaration_value(
+                node.value, class_scope=bool(parents)
+            ):
+                declarations.append((node.lineno, end))
+            elif (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                declarations.append((node.lineno, end))
             else:
                 executable.append((node.lineno, end))
 
     visit(tree.body)
-    return callables, executable
+    return callables, declarations, executable
 
 
-def _map_changed_lines(source: str, module: str, lines: set[int]) -> tuple[set[str], bool]:
-    callables, executable = _callable_spans(source, module)
+def _map_changed_lines(source: str, module: str, lines: set[int]) -> tuple[set[str], bool, bool]:
+    callables, declarations, executable = _callable_spans(source, module)
     owners: set[str] = set()
     unmapped = False
+    declaration_changed = False
     for line in lines:
         matches = [item for item in callables if item[0] <= line <= item[1]]
         if matches:
             owners.add(min(matches, key=lambda item: item[1] - item[0])[2])
+        elif any(start <= line <= end for start, end in declarations):
+            declaration_changed = True
         elif any(start <= line <= end for start, end in executable):
             unmapped = True
-    return owners, unmapped
+    return owners, declaration_changed, unmapped
+
+
+def changed_target_ownership(
+    root: Path, base_sha: str, head_sha: str, target: str
+) -> tuple[list[str], bool]:
+    """Return exact callable owners and whether declaration evidence is also required."""
+    module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
+    delta_base = _git(root, "merge-base", base_sha, head_sha)
+    old_lines, new_lines = _diff_lines(root, delta_base, head_sha, target)
+    current_source = _source_at(root, head_sha, target)
+    current, current_declarations, current_unmapped = _map_changed_lines(
+        current_source, module, new_lines
+    )
+    try:
+        base_source = _source_at(root, delta_base, target)
+    except MutationPolicyError:
+        base_source = ""
+    previous: set[str] = set()
+    previous_declarations = False
+    previous_unmapped = False
+    if base_source:
+        previous, previous_declarations, previous_unmapped = _map_changed_lines(
+            base_source, module, old_lines
+        )
+        base_classes = {
+            f"{module}.{node.name}"
+            for node in ast.walk(ast.parse(base_source))
+            if isinstance(node, ast.ClassDef)
+        }
+        current_classes = {
+            f"{module}.{node.name}"
+            for node in ast.walk(ast.parse(current_source))
+            if isinstance(node, ast.ClassDef)
+        }
+        if base_classes - current_classes:
+            raise MutationPolicyError("unmappable_changed_logic")
+    available = {item[2] for item in _callable_spans(current_source, module)[0]}
+    removed = previous - available
+    if current_unmapped or previous_unmapped or removed:
+        raise MutationPolicyError("unmappable_changed_logic")
+    derived = sorted(current | previous)
+    declaration_changed = current_declarations or previous_declarations
+    if not derived and not declaration_changed:
+        raise MutationPolicyError("zero_changed_ownership")
+    return derived, declaration_changed
 
 
 def changed_callables(
     root: Path, base_sha: str, head_sha: str, target: str, *, allow_unmapped: bool = False
 ) -> list[str]:
     """Derive complete current callable ownership for executable target hunks."""
-    module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
-    delta_base = _git(root, "merge-base", base_sha, head_sha)
-    old_lines, new_lines = _diff_lines(root, delta_base, head_sha, target)
-    current_source = _source_at(root, head_sha, target)
-    current, current_unmapped = _map_changed_lines(current_source, module, new_lines)
-    try:
-        base_source = _source_at(root, delta_base, target)
-    except MutationPolicyError:
-        base_source = ""
-    previous: set[str] = set()
-    previous_unmapped = False
-    if base_source:
-        previous, previous_unmapped = _map_changed_lines(base_source, module, old_lines)
-    removed = previous - {item[2] for item in _callable_spans(current_source, module)[0]}
-    if (current_unmapped or previous_unmapped or removed) and not allow_unmapped:
-        raise MutationPolicyError("unmappable_changed_logic")
-    derived = sorted(current | (previous - removed if allow_unmapped else previous))
-    if not derived:
-        raise MutationPolicyError("zero_changed_callables")
-    return derived
+    if allow_unmapped:
+        module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
+        delta_base = _git(root, "merge-base", base_sha, head_sha)
+        old_lines, new_lines = _diff_lines(root, delta_base, head_sha, target)
+        current_source = _source_at(root, head_sha, target)
+        current, _, _ = _map_changed_lines(current_source, module, new_lines)
+        try:
+            base_source = _source_at(root, delta_base, target)
+        except MutationPolicyError:
+            base_source = ""
+        previous = _map_changed_lines(base_source, module, old_lines)[0] if base_source else set()
+        derived = sorted(current | previous)
+        if not derived:
+            raise MutationPolicyError("zero_changed_callables")
+        return derived
+    return changed_target_ownership(root, base_sha, head_sha, target)[0]
 
 
 def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict[str, Any]]:
@@ -335,7 +497,6 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
         callables = claim["callables"]
         if (
             not isinstance(callables, list)
-            or not callables
             or len(callables) > 24
             or any(
                 not isinstance(item, str) or CALLABLE_RE.fullmatch(item) is None
@@ -452,15 +613,34 @@ def build_selection(
     if chunk_id == "WS-QUAL-001-05M":
         bootstrap = POLICY_CAPABILITY_MARKER not in base_policy
     blocking_policy = blocking_policy or POLICY_CAPABILITY_MARKER in base_policy
-    derived_callables = {
-        target: changed_callables(root, base_sha, head_sha, target, allow_unmapped=bootstrap)
+    ownership = {
+        target: (
+            (changed_callables(root, base_sha, head_sha, target, allow_unmapped=True), False)
+            if bootstrap
+            else changed_target_ownership(root, base_sha, head_sha, target)
+        )
         for target in changed_targets
     }
+    derived_callables = {target: value[0] for target, value in ownership.items()}
     for target, required in derived_callables.items():
         if set(required) != set(claims_by_target[target]["callables"]):
             raise MutationPolicyError("unowned_changed_callable")
+    if any(
+        not claim["callables"]
+        for target, claim in claims_by_target.items()
+        if target not in changed_targets
+    ):
+        raise MutationPolicyError("empty_claim_only_callables")
     if blocking_policy:
         targets = sorted(set(targets) | {CALIBRATION_TARGET})
+    declaration_targets = sorted(
+        target for target, (_, has_declarations) in ownership.items() if has_declarations
+    )
+    mutation_targets = sorted(
+        target for target, claim in claims_by_target.items() if claim["callables"]
+    )
+    if blocking_policy:
+        mutation_targets = sorted(set(mutation_targets) | {CALIBRATION_TARGET})
     tests = {node for claim in claims for node in claim["tests"]}
     if blocking_policy:
         tests.update(CALIBRATION_TESTS)
@@ -478,6 +658,8 @@ def build_selection(
         "changed_paths": changed,
         "changed_targets": changed_targets,
         "changed_callables": derived_callables,
+        "declaration_targets": declaration_targets,
+        "mutation_targets": mutation_targets,
         "claims": claims,
         "target_owners": [
             {
@@ -574,7 +756,10 @@ def _write_mutmut_config(backend: Path, selection: dict[str, Any]) -> str:
         tomllib.loads(original)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise MutationPolicyError("invalid_mutation_config") from exc
-    relative_targets = [target.removeprefix("backend/") for target in selection["targets"]]
+    relative_targets = [
+        target.removeprefix("backend/")
+        for target in selection.get("mutation_targets", selection["targets"])
+    ]
     source_paths = sorted({target.split("/", 1)[0] for target in relative_targets})
     test_nodes = [node.removeprefix("backend/") for node in selection["tests"]]
     lines = original.splitlines()

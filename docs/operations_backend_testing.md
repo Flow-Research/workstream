@@ -182,10 +182,15 @@ exact delta contains neither an eligible target nor a behavior claim.
 The gate selects eligible changed Python targets under `backend/app/` or
 `backend/scripts/`. One changed schema-v1 file under `.ci/behavior-claims/`
 provides qualified callable ownership, exact pytest nodes, typed observable
-outcomes, and essential real boundaries. Exact executable diff hunks must map
-to claimed callables. Missing, multiple, stale, unsafe, symlinked, narrowed, or
-unmappable claims fail closed. Mutmut configuration is generated only inside
-the disposable archive from the validated selection.
+outcomes, and essential real boundaries. Added or changed imports, docstrings,
+and inert module/class declaration hunks use an empty callable list when no
+callable changed; their exact owning tests remain mandatory, and mixed targets
+still mutate every changed callable.
+Module/class control flow, executable expressions, renamed or removed
+classes/callables, and all other executable diff hunks must map exactly or fail closed.
+Missing, multiple, stale, unsafe, symlinked, narrowed, or unmappable claims also
+fail closed. Mutmut configuration is generated only inside the disposable
+archive from the validated callable selection.
 
 The hash-locked toolchain is read only from
 `scripts/mutation-requirements.txt` at protected base and installed with
