@@ -80,6 +80,9 @@ gate while the replacement is being designed.
 Existing claim, schema, policy, dependency, and evidence files remain as
 historical design input. They do not replace focused tests, hosted Backend
 lanes, coverage floors, internal review, CodeRabbit, or human merge approval.
+Behavior-mutation enforcement must not resume until a fresh changed-line-aware
+plan is approved and proves that unchanged executable lines cannot block a
+declaration-only change.
 
 ## Durable Records
 

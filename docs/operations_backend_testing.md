@@ -183,4 +183,6 @@ Backend semantic lanes, the repository-wide 78 percent coverage floor, named
 internal reviews, CodeRabbit, and human merge approval remain unchanged. The
 mutation policy, claim schema, examples, pinned manifest, and prior evidence
 remain in the repository as design input for a future changed-line-aware gate.
-They are not active contribution requirements.
+They are not active contribution requirements. Behavior-mutation enforcement
+must not resume until a fresh changed-line-aware plan is approved and proves
+that unchanged executable lines cannot block a declaration-only change.
