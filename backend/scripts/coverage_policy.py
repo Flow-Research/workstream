@@ -22,7 +22,7 @@ from run_isolated_tests import NAME_RE
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parent
 sys.path.insert(0, str(REPO / "scripts"))
-from workstream_agent_gate import changed_files, diff_text, maybe_run, numstat  # noqa: E402
+from git_delta import changed_files, diff_text, maybe_run, numstat  # noqa: E402
 
 SHA_RE = re.compile(r"[a-f0-9]{40}")
 DECIMAL_RE = re.compile(r"\d+\.\d{6}")

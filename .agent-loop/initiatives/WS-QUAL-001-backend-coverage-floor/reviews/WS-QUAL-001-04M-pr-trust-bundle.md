@@ -37,8 +37,10 @@ contributor checkout.
 ## Scope and product behavior
 
 No application, migration, product lifecycle, authorization, payment,
-reputation, Backend semantic-lane, coverage-floor, or existing test-inventory
-behavior changes. `backend/uv.lock` and the protected mutation manifest remain
+reputation, coverage-floor, or existing test behavior changes. The only
+Backend lane/inventory change registers the new focused mutation-policy test
+module in `shared_foundations`; lane structure, fan-in, and thresholds remain
+unchanged. `backend/uv.lock` and the protected mutation manifest remain
 unchanged. Workstream product review decisions remain `accept`,
 `needs_revision`, and `reject`; mutation evidence is engineering process proof.
 
@@ -57,7 +59,11 @@ unchanged. Workstream product review decisions remain `accept`,
 No test was removed, skipped, xfailed, deselected, or weakened. The intentional
 weak calibration is isolated and required to leave a representative survivor.
 Existing Backend and its 78-percent global and protected 90-percent floors are
-unchanged. The pilot is independent, read-only, SHA-pinned, credential-safe,
+unchanged. The new focused test is registered in the existing
+`shared_foundations` lane so canonical inventory remains exact. The coverage
+policy now imports Git delta helpers directly from their extracted owner; its
+policy and thresholds are unchanged. The pilot is
+independent, read-only, SHA-pinned, credential-safe,
 bounded to a 15-minute job/12-minute command, and uploads seven-day evidence.
 
 ## Reviewers and external review

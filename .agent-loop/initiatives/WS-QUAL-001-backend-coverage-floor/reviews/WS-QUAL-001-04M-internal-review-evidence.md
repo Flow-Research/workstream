@@ -61,3 +61,10 @@ replace GitHub Actions.
 - Enforced canonical claim path and per-target callable/test/outcome/boundary ownership.
 - Bounded mutation execution to reviewed callable filters after full-file runtime exceeded the hard limit.
 - Added focused 90-percent subsystem coverage.
+- Registered the new focused test module in the canonical
+  `shared_foundations` semantic lane after hosted inventory failed closed with
+  `missing_lane_modules`; no lane, runner, workflow, or coverage command was
+  otherwise changed.
+- Corrected the existing coverage policy to consume `maybe_run` directly from
+  the extracted `git_delta` owner, preserving collection after the shared
+  helper refactor without changing coverage policy behavior.
