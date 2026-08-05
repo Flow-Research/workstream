@@ -272,7 +272,8 @@ class SubmissionPolicyMutationIdempotencyRecord(Base):
         CheckConstraint(
             "(service_identity is null and idempotency_key is not null "
             "and setup_run_id is null and setup_task_id is null and correlation_id is null) or "
-            "(service_identity = 'workstream.project.setup' and idempotency_key is null "
+            "(service_identity is not null "
+            "and service_identity = 'workstream.project.setup' and idempotency_key is null "
             "and action_id = 'project.submission_artifact_policy.derive' "
             "and setup_run_id is not null and setup_task_id is not null "
             "and correlation_id is not null)",
@@ -1292,6 +1293,8 @@ class SubmissionArtifactPolicy(Base):
             "and creation_scope_type is null and creation_scope_project_id is null "
             "and creation_action_id is null and creation_decision_event_id is null) or "
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and creation_scope_type is not null and creation_action_id is not null "
+            "and creation_scope_project_id is not null "
             "and creation_scope_project_id=project_id and creation_decision_event_id is not null "
             "and creation_action_id in ('project.submission_artifact_policy.create',"
             "'project.submission_artifact_policy.derive',"
@@ -1299,6 +1302,7 @@ class SubmissionArtifactPolicy(Base):
             "((created_by_admin_role_grant_id is not null and created_by_service_identity is null "
             "and creation_scope_type in ('system','project')) or "
             "(created_by_admin_role_grant_id is null "
+            "and created_by_service_identity is not null "
             "and created_by_service_identity='workstream.project.setup' "
             "and creation_scope_type='service' "
             "and creation_action_id='project.submission_artifact_policy.derive')))",
@@ -1311,7 +1315,9 @@ class SubmissionArtifactPolicy(Base):
             "and approval_decision_event_id is null) or "
             "(approved_by_actor_profile_id is not null and approved_via_identity_link_id is not null "
             "and approved_by_admin_role_grant_id is not null "
+            "and approval_scope_type is not null and approval_action_id is not null "
             "and approval_scope_type in ('system','project') "
+            "and approval_scope_project_id is not null "
             "and approval_scope_project_id=project_id "
             "and approval_action_id='project.submission_artifact_policy.approve' "
             "and approval_decision_event_id is not null)",
@@ -1421,7 +1427,9 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
             "and creation_decision_event_id is null) or "
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
             "and created_by_admin_role_grant_id is not null "
+            "and creation_scope_type is not null and creation_action_id is not null "
             "and creation_scope_type in ('system','project') "
+            "and creation_scope_project_id is not null "
             "and creation_scope_project_id=project_id "
             "and creation_action_id='project.submission_artifact_policy.approve' "
             "and creation_decision_event_id is not null)",
@@ -1518,7 +1526,9 @@ class PreSubmitCheckerPolicy(Base):
             "and creation_decision_event_id is null) or "
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
             "and created_by_admin_role_grant_id is not null "
+            "and creation_scope_type is not null and creation_action_id is not null "
             "and creation_scope_type in ('system','project') "
+            "and creation_scope_project_id is not null "
             "and creation_scope_project_id=project_id "
             "and creation_action_id='project.submission_artifact_policy.approve' "
             "and creation_decision_event_id is not null)",

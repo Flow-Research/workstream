@@ -124,6 +124,8 @@ def upgrade() -> None:
         "and creation_scope_type is null and creation_scope_project_id is null "
         "and creation_action_id is null and creation_decision_event_id is null) or "
         "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+        "and creation_scope_type is not null and creation_action_id is not null "
+        "and creation_scope_project_id is not null "
         "and creation_scope_project_id=project_id and creation_decision_event_id is not null "
         "and creation_action_id in ('project.submission_artifact_policy.create',"
         "'project.submission_artifact_policy.derive',"
@@ -131,6 +133,7 @@ def upgrade() -> None:
         "((created_by_admin_role_grant_id is not null and created_by_service_identity is null "
         "and creation_scope_type in ('system','project')) or "
         "(created_by_admin_role_grant_id is null "
+        "and created_by_service_identity is not null "
         "and created_by_service_identity='workstream.project.setup' "
         "and creation_scope_type='service' "
         "and creation_action_id='project.submission_artifact_policy.derive')))",
@@ -144,7 +147,9 @@ def upgrade() -> None:
         "and approval_decision_event_id is null) or "
         "(approved_by_actor_profile_id is not null and approved_via_identity_link_id is not null "
         "and approved_by_admin_role_grant_id is not null "
+        "and approval_scope_type is not null and approval_action_id is not null "
         "and approval_scope_type in ('system','project') "
+        "and approval_scope_project_id is not null "
         "and approval_scope_project_id=project_id "
         "and approval_action_id='project.submission_artifact_policy.approve' "
         "and approval_decision_event_id is not null)",
@@ -156,7 +161,9 @@ def upgrade() -> None:
         "and creation_decision_event_id is null) or "
         "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
         "and created_by_admin_role_grant_id is not null "
+        "and creation_scope_type is not null and creation_action_id is not null "
         "and creation_scope_type in ('system','project') "
+        "and creation_scope_project_id is not null "
         "and creation_scope_project_id=project_id "
         "and creation_action_id='project.submission_artifact_policy.approve' "
         "and creation_decision_event_id is not null)"
@@ -228,7 +235,8 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "(service_identity is null and idempotency_key is not null "
             "and setup_run_id is null and setup_task_id is null and correlation_id is null) or "
-            "(service_identity='workstream.project.setup' and idempotency_key is null "
+            "(service_identity is not null "
+            "and service_identity='workstream.project.setup' and idempotency_key is null "
             "and action_id='project.submission_artifact_policy.derive' "
             "and setup_run_id is not null and setup_task_id is not null "
             "and correlation_id is not null)",
@@ -421,7 +429,19 @@ def upgrade() -> None:
         declare reservation submission_policy_mutation_idempotency_records%rowtype;
                 evidence audit_events%rowtype;
         begin
-          if new.creation_action_id is null then return null; end if;
+          if new.creation_action_id is null then
+            if new.created_by_actor_profile_id is not null
+               or new.created_via_identity_link_id is not null
+               or new.created_by_admin_role_grant_id is not null
+               or new.created_by_service_identity is not null
+               or new.creation_scope_type is not null
+               or new.creation_scope_project_id is not null
+               or new.creation_decision_event_id is not null then
+              raise exception 'partial submission-policy creation provenance'
+                using errcode='23514';
+            end if;
+            return null;
+          end if;
           select * into reservation from submission_policy_mutation_idempotency_records
             where committed_policy_id=new.id and action_id=new.creation_action_id
               and status='committed';
@@ -554,6 +574,22 @@ def upgrade() -> None:
             end if;
           elsif tg_table_name='submission_artifact_policies' then
             if new.creation_action_id is null and new.approval_action_id is null then
+              if new.created_by_actor_profile_id is not null
+                 or new.created_via_identity_link_id is not null
+                 or new.created_by_admin_role_grant_id is not null
+                 or new.created_by_service_identity is not null
+                 or new.creation_scope_type is not null
+                 or new.creation_scope_project_id is not null
+                 or new.creation_decision_event_id is not null
+                 or new.approved_by_actor_profile_id is not null
+                 or new.approved_via_identity_link_id is not null
+                 or new.approved_by_admin_role_grant_id is not null
+                 or new.approval_scope_type is not null
+                 or new.approval_scope_project_id is not null
+                 or new.approval_decision_event_id is not null then
+                raise exception 'partial submission-policy provenance'
+                  using errcode='23514';
+              end if;
               return null;
             end if;
             if new.approval_action_id is not null then
@@ -578,7 +614,18 @@ def upgrade() -> None:
             end if;
             product_project:=new.project_id; product_id:=new.id;
           elsif tg_table_name='effective_project_submission_artifact_policies' then
-            if new.creation_action_id is null then return null; end if;
+            if new.creation_action_id is null then
+              if new.created_by_actor_profile_id is not null
+                 or new.created_via_identity_link_id is not null
+                 or new.created_by_admin_role_grant_id is not null
+                 or new.creation_scope_type is not null
+                 or new.creation_scope_project_id is not null
+                 or new.creation_decision_event_id is not null then
+                raise exception 'partial effective-policy provenance'
+                  using errcode='23514';
+              end if;
+              return null;
+            end if;
             select * into reservation from submission_policy_mutation_idempotency_records
               where committed_effective_policy_id=new.id and status='committed';
             actor_id:=new.created_by_actor_profile_id;
@@ -588,7 +635,18 @@ def upgrade() -> None:
             decision_id:=new.creation_decision_event_id;
             product_project:=new.project_id; product_id:=reservation.committed_policy_id;
           else
-            if new.creation_action_id is null then return null; end if;
+            if new.creation_action_id is null then
+              if new.created_by_actor_profile_id is not null
+                 or new.created_via_identity_link_id is not null
+                 or new.created_by_admin_role_grant_id is not null
+                 or new.creation_scope_type is not null
+                 or new.creation_scope_project_id is not null
+                 or new.creation_decision_event_id is not null then
+                raise exception 'partial pre-submit-policy provenance'
+                  using errcode='23514';
+              end if;
+              return null;
+            end if;
             select * into reservation from submission_policy_mutation_idempotency_records
               where committed_pre_submit_policy_id=new.id and status='committed';
             actor_id:=new.created_by_actor_profile_id;

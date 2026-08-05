@@ -21,7 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "317e6cb6bfc0188dc3466f969e9d96e57749fe11f30d5d1e9692ea2a26a70f88"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "923a64584cd1580759012c2303a14146f881ae5e69d021ce99b0648c08fc765b"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
