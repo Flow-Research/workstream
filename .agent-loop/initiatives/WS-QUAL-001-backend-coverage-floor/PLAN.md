@@ -9,9 +9,10 @@ two independently reviewed implementation chunks.
 
 Add one exactly pinned mutation engine and a Workstream-owned policy wrapper.
 The wrapper derives a closed set of eligible production targets from the git
-delta or from an explicit test-only behavior claim. It selects the smallest
-owner test set, runs under a hard timeout, and emits machine-readable exact-head
-evidence.
+delta and always mutates those targets. It then adds any explicit test-only
+behavior claims, each with owning test nodes; a claim cannot replace eligible
+changed-production mutation. The wrapper selects the smallest owner test set,
+runs under a hard timeout, and emits machine-readable exact-head evidence.
 
 The pilot does not block on mutation score. It does block on infrastructure
 failure, malformed evidence, target escape, missing claimed tests, ordinary
@@ -31,11 +32,12 @@ Only after pilot review, add a separate required check for eligible changed
 production logic and test-only PRs that claim behavioral improvement. The gate
 uses the pilot's deterministic target and evidence grammar.
 
-There is no repository-wide mutation percentage. Every eligible survivor
-blocks unless it has a narrow, typed classification accepted by policy (for
-example, demonstrably equivalent or non-behavioral). Missing, stale, broad, or
-free-form exclusions fail closed. Timeout and tool errors do not count as
-killed mutants and cannot silently pass.
+There is no repository-wide mutation percentage. The policy must enumerate
+every engine status, including killed, survived, suspicious, timeout, error,
+and excluded. Each status either blocks or maps to an independently
+verified, typed classification accepted by policy (for example, demonstrably
+equivalent or non-behavioral). Missing, stale, broad, free-form, or unrecognized
+classifications fail closed. No status may pass implicitly.
 
 ## Behavior ownership
 
@@ -57,9 +59,11 @@ observable outcomes. Test-only non-behavioral maintenance uses a narrow typed
 classification defined by policy rather than free-form exemption text.
 
 Test-only changes that claim coverage or stronger behavior must provide this
-mapping. Documentation-only, fixture-only, generated-code, and non-behavioral
-maintenance changes are outside mutation selection but remain subject to
-ordinary tests and review.
+mapping. Fixture-only changes are non-behavioral only when policy evidence
+proves they cannot affect test selection, test inputs, or assertion behavior;
+otherwise they require a bounded behavior claim. Documentation-only,
+generated-code, and independently verified non-behavioral maintenance changes
+remain outside mutation selection but subject to ordinary tests and review.
 
 ## Runtime and isolation strategy
 
@@ -77,9 +81,13 @@ ordinary tests and review.
 
 - Pin the selected engine and its transitive dependency closure with hashes.
 - Do not add the mutation engine to production dependencies.
-- Install the engine only from `scripts/mutation-requirements.txt` with
-  `pip install --require-hashes`; `backend/pyproject.toml` may contain tool
-  configuration but cannot add the engine to ordinary dev extras.
+- Obtain the approved mutation package, version, and hash authority from the
+  protected base revision, an equivalently protected allowlist, or a protected
+  prebuilt runtime—never from a manifest editable by the pull request. If
+  `scripts/mutation-requirements.txt` is used, install only from its trusted
+  base-revision copy with `pip install --require-hashes`;
+  `backend/pyproject.toml` may contain tool configuration but cannot add the
+  engine to ordinary dev extras.
 - Never apply mutants to the contributor worktree in CI.
 - Upload bounded result evidence without source secrets, environment values,
   database contents, or artifact payloads.
@@ -112,11 +120,17 @@ errors, missing evidence, stale evidence, and target escape all stop the gate.
 
 ## Dependency order
 
-`PLAN3 -> 04M pilot -> human calibration checkpoint -> 05M blocking gate`.
+`PLAN3 -> PLAN3R1 -> 04M pilot -> human calibration checkpoint -> 05M blocking
+gate`.
 `05M` cannot begin from planning alone; it requires accepted exact hosted pilot
 evidence and a new explicit human instruction.
 
 ## Stop
 
 Planning does not install a mutation engine, change a workflow, or change a
-coverage threshold. Stop after the PLAN3 PR and human checkpoint.
+coverage threshold. Stop after the PLAN3R1 correction PR. Do not start `04M`
+without separate explicit human instruction.
+
+After `04M`, stop at the human calibration checkpoint. Do not start `05M`
+without accepted exact hosted pilot evidence and a new explicit human
+instruction.
