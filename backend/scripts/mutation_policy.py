@@ -17,7 +17,15 @@ import time
 import tomllib
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+def _repository_root() -> Path:
+    """Locate the archive root from either original or mutmut-copied code."""
+    for candidate in Path(__file__).resolve().parents:
+        if (candidate / "scripts/git_delta.py").is_file():
+            return candidate
+    raise RuntimeError("repository_root_not_found")
+
+
+ROOT = _repository_root()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
