@@ -962,16 +962,10 @@ def test_limits_and_roots_fail_closed(tmp_path: Path) -> None:
     invalid_temp.write_bytes(b"keep")
     for path in invalid_marker_root.iterdir():
         path.chmod(0o600)
-    before = {
-        path.name: path.read_bytes()
-        for path in invalid_marker_root.iterdir()
-    }
+    before = {path.name: path.read_bytes() for path in invalid_marker_root.iterdir()}
     with pytest.raises(ValueError, match="marker is invalid"):
         ArtifactScratchManager(root=invalid_marker_root, limits=preparation_limits())
-    assert {
-        path.name: path.read_bytes()
-        for path in invalid_marker_root.iterdir()
-    } == before
+    assert {path.name: path.read_bytes() for path in invalid_marker_root.iterdir()} == before
 
 
 @pytest.mark.parametrize(
@@ -1240,13 +1234,14 @@ async def test_malformed_ledger_and_layout_fail_closed(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_prior_scratch_ledger_shape_is_normalized_on_reopen(tmp_path: Path) -> None:
-    """Preserve restart compatibility when workspace custody is introduced."""
+async def test_version_two_scratch_ledger_is_normalized_on_reopen(tmp_path: Path) -> None:
+    """Preserve restart compatibility for the genuine version-two ledger."""
     root = tmp_path / "scratch"
     initial = ArtifactScratchManager(root=root, limits=preparation_limits())
     initial.close()
     ledger_path = root / ".ledger.json"
     ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger["version"] = 2
     ledger.pop("workspaces")
     ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
 
@@ -1255,8 +1250,25 @@ async def test_prior_scratch_ledger_shape_is_normalized_on_reopen(tmp_path: Path
     os.close(descriptor)
     await reopened.release(reservation)
 
-    assert json.loads(ledger_path.read_text(encoding="utf-8"))["workspaces"] == []
+    normalized = json.loads(ledger_path.read_text(encoding="utf-8"))
+    assert normalized["version"] == 3
+    assert normalized["workspaces"] == []
     reopened.close()
+
+
+@pytest.mark.asyncio
+async def test_truncated_version_three_scratch_ledger_fails_closed(tmp_path: Path) -> None:
+    """Reject a current-version ledger missing workspace custody state."""
+    root = tmp_path / "scratch"
+    initial = ArtifactScratchManager(root=root, limits=preparation_limits())
+    initial.close()
+    ledger_path = root / ".ledger.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger.pop("workspaces")
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    with pytest.raises(ArtifactScratchIntegrityError, match="ledger is invalid"):
+        ArtifactScratchManager(root=root, limits=preparation_limits())
 
 
 @pytest.mark.asyncio
@@ -1915,9 +1927,7 @@ async def test_stale_cleanup_reclaims_reservation_after_pid_reuse(tmp_path: Path
     cleaner = ArtifactScratchManager(root=tmp_path / "scratch", limits=limits)
     cleaner._read_process_identity = lambda _: "f" * 64
 
-    assert await cleaner.cleanup_stale(
-        now_unix_ns=reservation.expires_at_unix_ns
-    ) == 1
+    assert await cleaner.cleanup_stale(now_unix_ns=reservation.expires_at_unix_ns) == 1
     assert (await cleaner.usage()).reservation_count == 0
     cleaner.close()
     owner._owned_reservations.clear()
