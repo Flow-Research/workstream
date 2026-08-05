@@ -2,8 +2,8 @@
 
 ## Reviewed scope
 
-- Reconciled base: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`
-- Reconciled implementation tree: `8f080be2e61e959930b3b2e5ddbce5261afe319d`
+- Reconciled base: `c7270d1969830f436a8f119c0dc771785ca0c62a`
+- Reviewed implementation head: `275f0d104f95b09329cc96713d94810589193318`
 - Seven changed paths: two dependency-authority files and five QUAL planning
   records.
 - No workflow, Backend runtime, test, pyproject, lockfile, coverage command, or
@@ -28,6 +28,9 @@
   override.
 - Markdown links, stale wording, stale authorization docs, stale artifact
   contracts, diff integrity, and 10 lightweight Agent Gates: passed.
+- CodeRabbit follow-up: unified 04M on the base-revision manifest, corrected the
+  production-dependency scope statement, and proved a disposable Python 3.12
+  verification command.
 
 ## Remaining risk
 

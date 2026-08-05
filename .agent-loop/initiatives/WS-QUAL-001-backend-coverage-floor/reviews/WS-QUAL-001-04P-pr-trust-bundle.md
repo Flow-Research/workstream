@@ -84,7 +84,9 @@ shared transitive mismatch. See `WS-QUAL-001-04P-internal-review-evidence.md`.
 
 ## External review
 
-Pending CodeRabbit and GitHub checks.
+Three valid CodeRabbit findings were fixed and verified. See
+`WS-QUAL-001-04P-external-review-response.md`. Agent Gates passed on the prior
+head; exact rebased-head GitHub checks rerun after push.
 
 ## Remaining risks
 

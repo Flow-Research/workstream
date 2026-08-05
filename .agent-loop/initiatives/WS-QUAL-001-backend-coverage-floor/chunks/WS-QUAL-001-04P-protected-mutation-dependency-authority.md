@@ -26,6 +26,7 @@ scripts/mutation-requirements.txt
 .agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/WS-QUAL-001-04M-changed-scope-mutation-pilot.md
 .agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/chunks/WS-QUAL-001-04P-protected-mutation-dependency-authority.md
 .agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/reviews/WS-QUAL-001-04P-internal-review-evidence.md
+.agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/reviews/WS-QUAL-001-04P-external-review-response.md
 .agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/reviews/WS-QUAL-001-04P-pr-trust-bundle.md
 ```
 
