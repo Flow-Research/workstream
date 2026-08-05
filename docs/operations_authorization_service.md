@@ -814,9 +814,9 @@ activation must bind task, assignment, project, effective-policy ID,
 pre-submit-policy ID, process-local prepared generation, effective-plan and
 catalogue hashes, archive digest/size, and semantic-manifest hash to
 `workstream.artifact.materializer` plus
-`artifact.pre_submit.checker_input.materialize`. A human contributor grant does
-not substitute for this fixed-service authority, and no prepared handle is
-serialized into a worker or durable record.
+`artifact.pre_submit.checker_input.materialize`. The uploader's project role
+grant does not substitute for this fixed-service authority, and no prepared
+handle is serialized into a Celery message or durable record.
 
 When a planned foundation action enters its ART adapter with an exact resource context, its
 bounded `action_unavailable` denial follows the same rollback-then-clean-restage

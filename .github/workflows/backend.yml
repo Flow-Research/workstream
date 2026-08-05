@@ -145,9 +145,10 @@ jobs:
         if: ${{ always() }}
         working-directory: backend
         shell: bash
-        run: >-
+        run: |
+          install -d -m 700 '.ci/lane-bundle/${{ matrix.lane }}'
           printf '%s\n' '${{ steps.identity.outputs.job_start_epoch }}'
-          > '.ci/lane-bundle/${{ matrix.lane }}/job-start-epoch.txt'
+            > '.ci/lane-bundle/${{ matrix.lane }}/job-start-epoch.txt'
 
       - name: Upload authenticated lane ${{ matrix.lane }}
         if: ${{ always() }}

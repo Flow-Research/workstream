@@ -60,6 +60,8 @@ class PreSubmissionInfrastructureUnavailable(DefaultPreSubmissionExecutionError)
 
 
 class DefaultPreSubmissionResultStatus(StrEnum):
+    """Closed non-review status vocabulary for one default checker result."""
+
     PASSED = "passed"
     WARNING = "warning"
     ADVISORY_DISABLED = "advisory_disabled"
@@ -75,6 +77,7 @@ class SubmissionPacketView:
     contributor_attestation: str
 
     def __post_init__(self) -> None:
+        """Reject unbounded or malformed contributor packet text."""
         for value in (self.summary, self.contributor_attestation):
             if type(value) is not str or len(value.encode("utf-8")) > 64 * 1024:
                 raise ValueError("submission packet text is invalid")
@@ -125,6 +128,7 @@ class DefaultPreSubmissionProcessor:
         catalogue: PreSubmissionCheckerCatalogue,
         execution_input: DefaultPreSubmissionExecutionInput,
     ) -> None:
+        """Bind one exact inspector, catalogue, and immutable execution input."""
         self._archive_inspector = archive_inspector
         self._catalogue = catalogue
         self._input = execution_input
@@ -148,11 +152,13 @@ class DefaultPreSubmissionProcessor:
         self,
         tree: SealedSubmissionTree,
     ) -> DefaultPreSubmissionExecutionResult:
+        """Deny checker access after caller cancellation or deadline expiry."""
         if self._aborted.is_set():
             raise DefaultPreSubmissionExecutionError("pre_submission_execution_aborted")
         return self._execute(tree)
 
     def _validate_input(self) -> None:
+        """Fail closed unless every plan, archive, and manifest fact agrees."""
         plan = self._input.plan
         if canonical_json_hash(plan.as_dict()) != plan.plan_sha256:
             raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_identity_invalid")
@@ -168,6 +174,7 @@ class DefaultPreSubmissionProcessor:
             raise PreSubmissionInfrastructureUnavailable("submission_change_identity_invalid")
 
     def _execute(self, tree: SealedSubmissionTree) -> DefaultPreSubmissionExecutionResult:
+        """Run the ordered platform/default phase slice exactly once."""
         results: list[DefaultPreSubmissionEntryResult] = []
         statuses: dict[str, DefaultPreSubmissionResultStatus] = {}
         blocked = False
@@ -241,6 +248,7 @@ class DefaultPreSubmissionProcessor:
         entry: EffectivePreSubmissionPlanEntry,
         tree: SealedSubmissionTree,
     ) -> DefaultPreSubmissionEntryResult:
+        """Dispatch one catalogue-validated platform capability."""
         try:
             capability = PreSubmissionPlatformCapability(entry.dispatch_capability)
         except ValueError as exc:
@@ -313,6 +321,7 @@ class DefaultPreSubmissionProcessor:
         finding_count: int,
         message_code: str,
     ) -> DefaultPreSubmissionEntryResult:
+        """Build one blocking failure or successful bounded result."""
         return self._result(
             entry,
             (
@@ -334,6 +343,7 @@ class DefaultPreSubmissionProcessor:
         message_code: str = "passed",
         metadata: tuple[tuple[str, int | bool | str], ...] = (),
     ) -> DefaultPreSubmissionEntryResult:
+        """Build one result bound to the exact plan and definition version."""
         return DefaultPreSubmissionEntryResult(
             schema_version=PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
             plan_sha256=self._input.plan.plan_sha256,
@@ -347,6 +357,7 @@ class DefaultPreSubmissionProcessor:
 
 
 def _is_high_confidence_sensitive(normalized_path: str) -> bool:
+    """Match only the narrow Workstream-default sensitive-path set."""
     parts = tuple(part.casefold() for part in PurePosixPath(normalized_path).parts)
     if not parts:
         return False

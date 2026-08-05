@@ -1,0 +1,36 @@
+# WS-ART-001-04B2 External Review Response
+
+## Comments addressed
+
+- GitHub Agent Gates reported stale human-worker authorization wording. The
+  planned materializer note now uses the canonical uploader/project-role grant
+  and concrete Celery-message wording; the exact stale-doc gate passes.
+- Hosted docstring coverage reported 79.7 percent after the new executor was
+  added. All ten missing 04B2 executor docstrings were added; the exact hosted
+  command now reports 80.1 percent.
+- Schema lanes emitted secondary missing-evidence errors because the always-run
+  timing step assumed the lane directory existed after an earlier failure. The
+  timing step now creates its exact private lane directory before writing.
+
+## Comments deferred
+
+- CodeRabbit reported only review rate limiting. It produced no actionable
+  code comment to defer.
+
+## Human decisions needed
+
+None. The repository owner explicitly approved repairing both the ART issue and
+the shared CI failure-path defect.
+
+## Commands rerun
+
+- `ruff check backend/app/modules/checkers/pre_submit_execution.py`
+- `docstr-coverage --config backend/.docstr.yaml` — 80.1 percent
+- `python scripts/check_stale_authorization_docs.py`
+- focused CI-lane and default-execution tests
+- `git diff --check`
+
+## Remaining risks
+
+Replacement hosted checks must validate the pushed commit. CodeRabbit remains
+rate-limited unless its external quota becomes available.
