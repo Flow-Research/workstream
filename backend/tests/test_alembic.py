@@ -291,7 +291,7 @@ def test_submission_policy_authority_pending_replay_blocks_downgrade(
         for name in ("profile", "link", "project", "guide", "snapshot", "policy")
     }
     replay_id, operation_id, idempotency_key = uuid4(), uuid4(), uuid4()
-    grant_id, decision_id = uuid4(), str(uuid4())
+    bootstrap_grant_id, grant_id, decision_id = uuid4(), uuid4(), str(uuid4())
     digest = f"sha256:{'c' * 64}"
 
     async def seed_pending() -> None:
@@ -315,12 +315,33 @@ def test_submission_policy_authority_pending_replay_blocks_downgrade(
                 await connection.execute(
                     text(
                         "insert into admin_role_grants("
-                        "id,target_actor_profile_id,role,scope_type,scope_project_id,status,"
-                        "version,granted_by_system_principal,grant_reason) values("
-                        ":grant,:profile,'project_manager','project',:project,'active',1,"
+                        "id,target_actor_profile_id,role,scope_type,status,version,"
+                        "granted_by_system_principal,grant_reason) values("
+                        ":bootstrap_grant,:profile,'access_administrator','system','active',1,"
                         "'workstream:system:bootstrap','0057 custody proof')"
                     ),
-                    {**ids, "grant": grant_id},
+                    {**ids, "bootstrap_grant": bootstrap_grant_id},
+                )
+                await connection.execute(
+                    text(
+                        "update authority_control set bootstrap_completed=true,"
+                        "bootstrap_grant_id=:bootstrap_grant,version=1 where id=1"
+                    ),
+                    {"bootstrap_grant": bootstrap_grant_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into admin_role_grants("
+                        "id,target_actor_profile_id,role,scope_type,scope_project_id,status,"
+                        "version,granted_by_actor_profile_id,granted_by_admin_role_grant_id,"
+                        "grant_reason) values(:grant,:profile,'project_manager','project',"
+                        ":project,'active',1,:profile,:bootstrap_grant,'0057 custody proof')"
+                    ),
+                    {
+                        **ids,
+                        "bootstrap_grant": bootstrap_grant_id,
+                        "grant": grant_id,
+                    },
                 )
                 await connection.execute(
                     text(
@@ -409,6 +430,16 @@ def test_submission_policy_authority_pending_replay_blocks_downgrade(
                             ),
                             {"id": replay_id},
                         )
+                with pytest.raises(DBAPIError, match="invalid submission-policy replay mutation"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "update submission_policy_mutation_idempotency_records set "
+                                "resource_context_json='{\"guide_version\": \"v1\"}'::json "
+                                "where id=:id"
+                            ),
+                            {"id": replay_id},
+                        )
                 with pytest.raises(DBAPIError, match="cannot be deleted"):
                     async with connection.begin_nested():
                         await connection.execute(
@@ -418,11 +449,17 @@ def test_submission_policy_authority_pending_replay_blocks_downgrade(
                             ),
                             {"id": replay_id},
                         )
+                await connection.execute(
+                    text("set constraints submission_policy_replay_custody immediate")
+                )
                 with pytest.raises(DBAPIError, match="cannot be truncated"):
                     async with connection.begin_nested():
                         await connection.execute(
                             text("truncate submission_policy_mutation_idempotency_records")
                         )
+                await connection.execute(
+                    text("set constraints submission_policy_replay_custody deferred")
+                )
                 with pytest.raises(
                     DBAPIError, match="submission-policy creation evidence mismatch"
                 ):
@@ -484,6 +521,9 @@ def test_submission_policy_authority_pending_replay_blocks_downgrade(
                                 "committed_policy_id=:policy,committed_at=now() where id=:id"
                             ),
                             {**ids, "id": replay_id},
+                        )
+                        await connection.execute(
+                            text("set constraints submission_policy_creation_custody immediate")
                         )
         finally:
             await engine.dispose()

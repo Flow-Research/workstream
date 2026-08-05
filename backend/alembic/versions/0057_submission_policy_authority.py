@@ -291,14 +291,14 @@ def upgrade() -> None:
           if old.status <> 'pending' or new.status <> 'committed'
              or (new.id,new.actor_profile_id,new.identity_link_id,new.service_identity,
                  new.action_id,new.idempotency_key,new.request_digest,
-                 new.resource_context_digest,new.resource_context_json,new.operation_id,
+                 new.resource_context_digest,new.resource_context_json::text,new.operation_id,
                  new.project_id,new.guide_id,new.source_snapshot_id,new.policy_id,
                  new.setup_run_id,new.setup_generation,new.setup_task_id,
                  new.correlation_id,new.created_at)
                 is distinct from
                 (old.id,old.actor_profile_id,old.identity_link_id,old.service_identity,
                  old.action_id,old.idempotency_key,old.request_digest,
-                 old.resource_context_digest,old.resource_context_json,old.operation_id,
+                 old.resource_context_digest,old.resource_context_json::text,old.operation_id,
                  old.project_id,old.guide_id,old.source_snapshot_id,old.policy_id,
                  old.setup_run_id,old.setup_generation,old.setup_task_id,
                  old.correlation_id,old.created_at)
