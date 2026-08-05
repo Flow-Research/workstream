@@ -403,7 +403,14 @@ def execute_pilot(
         environment.pop("GH_TOKEN", None)
         environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         baseline = subprocess.run(
-            [sys.executable, "-m", "pytest", "-q", *[node.removeprefix("backend/") for node in selection["tests"]]],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "--noconftest",
+                *[node.removeprefix("backend/") for node in selection["tests"]],
+            ],
             cwd=backend,
             env=environment,
             check=False,
@@ -466,6 +473,7 @@ def execute_pilot(
             "timeout_seconds": timeout_seconds,
             "targets": selection["targets"],
             "tests": selection["tests"],
+            "target_owners": selection["target_owners"],
         },
         "selection_sha256": _sha256(_json_bytes(selection)),
         "elapsed_seconds": elapsed,
