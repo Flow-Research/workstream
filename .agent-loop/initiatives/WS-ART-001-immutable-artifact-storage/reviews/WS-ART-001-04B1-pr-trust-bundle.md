@@ -23,7 +23,8 @@ policy. No second API or registry is allowed.
 - replaced compiler-local primitive/name/policy-field maps and removed the
   durable checker registry as pre-submit compiler authority;
 - added a pure effective-plan compiler with exact lineage, catalogue manifest,
-  definition/configuration hashes, and deterministic rule-instance identity;
+  definition/configuration hashes, locked policy-body validation, complete-rule
+  coverage validation, and catalogue-bound deterministic rule-instance identity;
 - added focused tests and a non-weakening hosted 90 percent checker coverage
   gate;
 - reconciled merged PLAN5 and active 04B1 status.
@@ -77,8 +78,9 @@ plan.
 
 ## Tests And Checks Run
 
-See `WS-ART-001-04B1-internal-review-evidence.md`. Focused tests and 93.85
-percent new-module coverage pass. Database-backed and repository-wide coverage
+See `WS-ART-001-04B1-internal-review-evidence.md`. The 21 focused
+catalogue/effective-plan tests pass, including exact 26-row identity and
+fail-closed policy regressions. Database-backed and repository-wide coverage
 remain hosted-CI responsibilities.
 
 ## Test Delta
@@ -92,18 +94,20 @@ No threshold, lane, workflow, package script, or existing gate is weakened.
 
 ## Reviewer Results
 
-Preimplementation architecture/security/product reviews passed with conditions
-that are incorporated. Final internal reviewers are pending because the
-reviewer service authentication failed twice. This PR remains draft.
+All required final tracks passed after valid security, QA, senior-engineering,
+product/ops, reuse, test-delta, and documentation findings were repaired.
+Architecture and CI-integrity found no required fixes.
 
 ## External Review
 
-GitHub Backend/Agent Gates and CodeRabbit begin after draft publication.
+Agent Gates pass on the repaired tree. The final hosted Backend rerun is in
+progress. CodeRabbit has skipped review while the PR remains draft and must run
+substantively after the PR is marked ready.
 
 ## Remaining Risks
 
-- final internal reviewers may require repairs;
-- hosted database tests and aggregate/per-file coverage must pass;
+- final hosted database tests and aggregate/per-file coverage must pass;
+- CodeRabbit has not yet reviewed the ready-for-review head;
 - 04B2 must consume the exact plan without adding another dispatch path.
 
 ## Follow-Up Work
@@ -118,7 +122,7 @@ After human merge, stop. `04B2` begins only under a separate explicit request.
 
 ## Human Merge Ownership
 
-- [ ] Required final internal reviews pass.
+- [x] Required final internal reviews pass.
 - [ ] Hosted CI and CodeRabbit pass.
 - [ ] I can explain what changed and what could break.
 - [ ] I explicitly approve this PR for merge.

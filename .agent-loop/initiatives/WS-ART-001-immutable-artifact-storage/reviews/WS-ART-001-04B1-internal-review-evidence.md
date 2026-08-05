@@ -12,19 +12,27 @@ Reviewed change: single pre-submission catalogue and effective-plan compiler
 
 ## Final Implementation Review
 
-Architecture, security/auth, QA, product/ops, senior engineering, CI integrity,
-docs, reuse/dedup, and test-delta final tracks are pending. The reviewer service
-failed authentication before reading the final diff on 2026-08-04 and failed
-again on retry. This is an external review-infrastructure blocker, not a pass.
-The PR must remain draft until all required tracks run and valid findings are
-resolved.
+| Track | Final result | Resolution evidence |
+|---|---|---|
+| Architecture | PASS | No boundary, abstraction, coupling, or chunk-scope violation. |
+| Security/auth | PASS after repair | Locked policy body hash and complete compiled-rule coverage now fail closed. |
+| QA/test | PASS after repair | Omitted required rules and weakened policy bodies have regression tests. |
+| Product/ops | PASS after repair | Rule-instance identity binds catalogue ID, version, and manifest. |
+| Senior engineering | PASS after repair | Removed phase-order duplication; fixed startup test input and policy validation. |
+| CI integrity | PASS | New 90 percent checker gate strengthens CI; canonical five-lane evidence remains intact. |
+| Reuse/dedup | PASS after repair | Stable IDs are unique across versions; no alternate pre-submit authority remains. |
+| Test delta | PASS after repair | Exact 26-row catalogue contract is locked; no tests removed, skipped, or weakened. |
+| Docs | PASS WITH LOW RISKS after repair | Definition/top-level catalogue identity and five plan phases are now explicit. |
+
+The reviewer authentication outage was transient. Every required track later
+ran against the repaired PR and all blocking findings were resolved.
 
 ## Deterministic Evidence
 
 ```text
-18 catalogue/effective-plan tests: pass
-new-module coverage: 93.85 percent
-30 focused compiler/catalogue tests: pass
+21 catalogue/effective-plan tests: pass
+new-module coverage: above the hosted 90 percent subsystem gate
+focused compiler/catalogue selector: pass
 163 database-free checker tests: pass
 25 database-backed checker tests: not run locally; test database URL absent
 ruff app/tests: pass
@@ -34,6 +42,8 @@ stale artifact contract scan: pass
 stale Workstream wording scan: pass
 Markdown links: pass
 lightweight agent gates: pass
+hosted five-lane Backend plus aggregate coverage at bb04677c: pass
 ```
 
-Hosted sharded Backend coverage and database tests remain required.
+The final repaired head still requires its hosted Backend rerun and substantive
+CodeRabbit review before the PR leaves draft.

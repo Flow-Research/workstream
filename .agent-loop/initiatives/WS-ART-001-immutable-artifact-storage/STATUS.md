@@ -131,10 +131,10 @@ one lineage-bound effective plan. It performs no ZIP read, scratch
 materialization, checker execution, durable write, route exposure, or AUTH
 activation.
 
-The implementation and deterministic evidence are complete enough for a draft
-PR. Final internal reviewer tracks are pending because the reviewer service
-failed authentication twice; this is recorded as a review-infrastructure
-blocker, and the PR must remain draft until the tracks run successfully.
+The implementation and deterministic evidence are complete in draft PR #276.
+All required internal reviewer tracks ran successfully after their valid
+findings were repaired. The PR remains draft only until the final hosted Backend
+run passes and substantive CodeRabbit review runs on the ready-for-review head.
 
 ## Gate
 
