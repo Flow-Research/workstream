@@ -10,7 +10,7 @@ wall time, and a 464.471-second slowest lane.
 The global blocking floor remains 78 percent by explicit human decision. Named
 new or materially changed subsystem checks remain blocking at 90 percent.
 
-## Current gate
+## Mutation-gate disposition
 
 `WS-QUAL-001-PLAN3` merged through PR #272. Its planning-only correction
 `WS-QUAL-001-PLAN3R1` merged through PR #278 after resolving all late CodeRabbit
@@ -27,19 +27,18 @@ error, timeout, or suspicious outcomes. Strong calibration killed two
 representative mutants and the deliberately weak calibration left two alive.
 The human accepted this evidence and explicitly started `WS-QUAL-001-05M`.
 
-The corrected proposal remains two-stage:
+The subsequent blocking rollout proved unsuitable for ordinary work: its
+callable-wide selection treated unchanged executable lines as part of every
+small changed declaration and produced unresolvable survivor sets. The hosted
+workflow is therefore retired pending a separately reviewed changed-line-aware
+design. Existing policy and evidence files remain historical input, not an
+active PR requirement.
 
-1. `04M` — merged bounded, pinned, changed-scope mutation pilot with complete
-   evidence and no blocking score.
-2. Human calibration checkpoint — accepted.
-3. `05M` — implemented and internally reviewed bounded blocking survivor
-   policy for eligible changed logic and explicit test-only behavior claims;
-   exact-head hosted CI and external review remain before human merge.
-
-The mutation score remains observational. Existing Backend semantic lanes,
-global 78-percent coverage, and protected 90-percent subsystem floors remain
-unchanged and blocking on their existing terms.
+Existing Backend semantic lanes, global 78-percent coverage, protected
+90-percent subsystem floors, lint, and review gates remain unchanged and
+blocking on their existing terms.
 
 ## Stop condition
 
-Stop after the 05M PR is merge-ready. Do not start another QUAL chunk.
+Do not restart mutation enforcement without a fresh bounded plan and proof that
+unchanged executable lines cannot block a declaration-only change.

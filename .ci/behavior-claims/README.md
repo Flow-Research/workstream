@@ -1,5 +1,9 @@
 # Behavior mutation claims
 
+The hosted behavior-mutation workflow is temporarily retired. These files are
+retained as historical design input and are not currently required for pull
+requests. Do not infer a blocking check from the policy or examples below.
+
 Schema-v1 claim files provide bounded owning pytest nodes for mutation targets.
 They are additive: every eligible changed production or CI-runtime Python target
 is selected independently, and a claim cannot remove or replace one.
@@ -11,7 +15,7 @@ any essential real boundaries. Unknown fields, unsafe paths, missing files,
 duplicate entries, unowned changed targets, or stale chunk identifiers fail
 closed.
 
-The required behavior-mutation check discovers the one claim changed by the
+The retired behavior-mutation check discovered the one claim changed by the
 pull request; labels, workflow inputs, environment variables, and PR prose
 cannot select it. Copy `example.behavior-claim.json`, rename it to the bounded
 chunk identifier, and replace every example target, callable, test, outcome,
@@ -19,14 +23,14 @@ and boundary. Eligible production changes without exactly one changed claim
 fail closed. A test-only behavior claim is additive and cannot remove an
 eligible changed target.
 
-The check has no mutation percentage. Killed mutants pass. A meaningful
+The retired check had no mutation percentage. Killed mutants passed. A meaningful
 survivor, timeout, suspicious result, engine error, malformed or stale evidence,
 target escape, or excluded mutant inside the selected callable scope blocks.
 The only surviving control allowed by policy is Workstream's exact deliberately
 weak calibration callable; contributors cannot add survivor allowlists,
 free-form exemptions, or source mutation pragmas.
 
-Changes with no eligible target and no claim produce typed `not_applicable`
+Under the retired design, changes with no eligible target and no claim produced typed `not_applicable`
 evidence before the mutation toolchain is installed. Ordinary PR verdicts are
 calculated by the evaluator and Git-delta helper archived from protected base,
 not by PR-head policy code.

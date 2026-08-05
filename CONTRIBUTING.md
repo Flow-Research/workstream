@@ -72,34 +72,14 @@ rerun affected checks; unchanged evidence does not need ceremonial repetition.
 
 ## Behavior Mutation Claims
 
-Eligible Python changes under `backend/app/` or `backend/scripts/` require one
-schema-v1 claim at `.ci/behavior-claims/<chunk-id>.json`. Start from
-[the copyable example](.ci/behavior-claims/example.behavior-claim.json) and name
-the exact changed callable, its owning pytest node, the observable outcome, and
-any essential PostgreSQL, MinIO, HTTP, lock, trigger, or concurrency boundary.
-The [claim guide](.ci/behavior-claims/README.md) contains the closed rules.
+The hosted behavior-mutation check is temporarily retired because its
+callable-wide survivor policy blocked declaration-only changes by mutating
+unchanged executable lines. Do not treat a behavior claim as a required PR
+gate while the replacement is being designed.
 
-Run `cd backend && .venv/bin/python -m pytest -q <owning-test-node>` before
-opening the PR. From the repository root, validate discovery against the PR
-delta with:
-
-```bash
-backend/.venv/bin/python backend/scripts/mutation_policy.py \
-  --repository-root . \
-  --base-sha "$(git merge-base origin/main HEAD)" \
-  --head-sha "$(git rev-parse HEAD)" \
-  --discover \
-  --selection-output /tmp/workstream-mutation-selection.json
-```
-
-Inspect `applicability`, `changed_targets`, `changed_callables`, `tests`, and
-`target_owners` in that output. The required mutation check derives targets from the exact git
-delta and uses the claim only for bounded callable/test ownership. It does not
-use a global score: meaningful survivors and incomplete or unsafe evidence
-block. Repair a survivor by strengthening the owning behavior assertion or by
-correcting the production behavior; do not add skips, exclusions, allowlists,
-or mutation pragmas. Unrelated changes return `not_applicable` automatically
-and do not install the mutation engine.
+Existing claim, schema, policy, dependency, and evidence files remain as
+historical design input. They do not replace focused tests, hosted Backend
+lanes, coverage floors, internal review, CodeRabbit, or human merge approval.
 
 ## Durable Records
 
