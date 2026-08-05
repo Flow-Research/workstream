@@ -76,7 +76,7 @@ STATUS_BY_EXIT_CODE: dict[int | None, str] = {
     2: "error",
     -11: "error",
     -9: "error",
-    None: "error",
+    None: "excluded",
 }
 
 
@@ -199,6 +199,9 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
             or len(set(callables)) != len(callables)
         ):
             raise MutationPolicyError("invalid_claim_callables")
+        target_module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
+        if any(not item.startswith(f"{target_module}.") for item in callables):
+            raise MutationPolicyError("claim_callable_target_mismatch")
         normalized_tests: list[str] = []
         for node in tests:
             if not isinstance(node, str) or TEST_NODE_RE.fullmatch(node) is None:
@@ -332,6 +335,16 @@ def _reject_disposable_special_files(disposable: Path) -> None:
             raise MutationPolicyError("invalid_disposable_entry")
 
 
+def _mutant_filters(selection: dict[str, Any]) -> list[str]:
+    """Translate reviewed qualified callables into exact mutmut name globs."""
+    filters: list[str] = []
+    for owner in selection["target_owners"]:
+        for callable_name in owner["callables"]:
+            module, function = callable_name.rsplit(".", 1)
+            filters.append(f"{module}.x_{function}__mutmut_*")
+    return sorted(set(filters))
+
+
 def _parse_outcomes(backend: Path) -> tuple[dict[str, int], list[dict[str, str]]]:
     counts = Counter({outcome: 0 for outcome in OUTCOMES})
     mutants: list[dict[str, str]] = []
@@ -423,7 +436,13 @@ def execute_pilot(
             raise MutationPolicyError("baseline_test_failure")
         try:
             result = subprocess.run(
-                [str(mutmut_executable), "run", "--max-children", "2"],
+                [
+                    str(mutmut_executable),
+                    "run",
+                    "--max-children",
+                    "2",
+                    *_mutant_filters(selection),
+                ],
                 cwd=backend,
                 env=environment,
                 check=False,

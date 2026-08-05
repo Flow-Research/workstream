@@ -14,6 +14,7 @@ import pytest
 from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import _eligible_target
 from scripts.mutation_policy import _main
+from scripts.mutation_policy import _mutant_filters
 from scripts.mutation_policy import _parse_outcomes
 from scripts.mutation_policy import _reject_disposable_special_files
 from scripts.mutation_policy import _read_claim
@@ -378,6 +379,23 @@ class TestMutationPolicy:
             link = root / "backend/scripts/link.py"
             link.symlink_to(target)
             assert _regular_repository_file(root, "backend/scripts/link.py") is False
+
+    def test_callable_filters_are_exact_and_deterministic(self) -> None:
+        selection = {
+            "target_owners": [
+                {
+                    "callables": [
+                        "scripts.example.public",
+                        "scripts.example._private",
+                        "scripts.example.public",
+                    ]
+                }
+            ]
+        }
+        assert _mutant_filters(selection) == [
+            "scripts.example.x__private__mutmut_*",
+            "scripts.example.x_public__mutmut_*",
+        ]
 
     def test_zero_targets_and_invalid_revisions_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

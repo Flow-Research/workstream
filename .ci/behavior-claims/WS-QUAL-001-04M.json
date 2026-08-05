@@ -6,7 +6,9 @@
       "target": "backend/scripts/mutation_policy.py",
       "callables": [
         "scripts.mutation_policy.build_selection",
-        "scripts.mutation_policy.execute_pilot"
+        "scripts.mutation_policy.execute_pilot",
+        "scripts.mutation_policy._strong_calibration",
+        "scripts.mutation_policy._weak_calibration"
       ],
       "tests": [
         "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
