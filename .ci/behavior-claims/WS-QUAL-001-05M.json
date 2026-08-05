@@ -18,7 +18,10 @@
         "scripts.mutation_policy.changed_target_ownership"
       ],
       "tests": [
-        "backend/tests/test_mutation_policy.py::TestMutationPolicy"
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_policy_behavior_contract",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_claim_shapes_fail_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_typed_claim_metadata_fails_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_executable_declaration_expressions_fail_closed"
       ],
       "outcomes": [
         "return",
