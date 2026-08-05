@@ -178,13 +178,17 @@ bounded merge.
 | `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
 | `WS-AUTH-001-12A` | Merged | `codex/ws-auth-001-12a-project-mutation-catalogue` | #226 | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; merged as `64dd9c98` with zero activation. |
 | `WS-AUTH-001-12B` | Merged | `codex/ws-auth-001-12b-project-setup-service` | #227 | Fixed project-setup service identity and planned matrix only; zero activation and no actor/link seed. |
-| `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after exact product actions activate. |
+| `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after 12E, 12F4, and 12G activate the exact product actions. |
 | `WS-AUTH-001-12C` | Merged | `codex/ws-auth-001-12c-project-create` | #229 | System-scoped project creation cutover merged as `67f2c14b`. |
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
-| `WS-AUTH-001-12E` | Implementation and proof | `codex/ws-auth-001-12e-guide-sufficiency` | - | Three guide-sufficiency actions plus fixed setup-service run PREP are under review. |
-| `WS-AUTH-001-12F` | Proposed | - | - | Submission artifact policy mutation/provenance cutover. |
-| `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover. |
+| `WS-AUTH-001-12E` | Merged | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Three guide-sufficiency actions plus fixed setup-service run PREP merged as `b510bc4f`. |
+| `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
+| `WS-AUTH-001-12F1` | Proposed | - | - | Submission-policy PREP, replay, and provenance foundation; zero activation. |
+| `WS-AUTH-001-12F2` | Proposed | - | - | Governed Project Manager manual-draft create/update cutover. |
+| `WS-AUTH-001-12F3` | Proposed | - | - | Fixed setup-service derivation and asynchronous executor cutover. |
+| `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
+| `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |
 | `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |

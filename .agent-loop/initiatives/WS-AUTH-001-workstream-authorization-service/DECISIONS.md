@@ -815,3 +815,30 @@ allocates only after merged ART `0040` from trusted main.
 The stale-authorization scanner has one full-line exemption for 12B2's literal
 project-setup Celery module path. It does not exempt narrative text, authority claims,
 any other path, or any other rule.
+
+## D36: Split submission-policy authority before runtime implementation
+
+Status: accepted required L1 preimplementation repair on 2026-08-05.
+
+Architecture, security, QA, and product/operations review rejected the inherited
+combined AUTH-12F contract before application-code edits. It mixed human manual
+drafting, fixed-service agent work, replay/provenance schema, Celery cutover,
+multi-row approval, and downstream continuation without freezing the distinct
+authority, external-work, replay, and transaction boundaries.
+
+AUTH-12F is now a planning-only parent with zero activation. 12F1 owns the typed
+submission-policy PREP/replay/provenance foundation; 12F2 owns governed Project
+Manager manual draft create/update; 12F3 owns fixed
+`workstream.project.setup` derivation and removal of public inline derivation;
+and 12F4 owns Project Manager approval plus the atomic effective/pre-submit
+policy chain. Each child is an L1, separately merged, explicitly started chunk.
+
+Automatic fixed-service derivation is the normal product path. Manual drafts are
+an explicitly manual Project Manager exception and cannot edit or impersonate
+agent-derived output. Prepared handles never cross agent work, Celery,
+serialization, rollback, commit, session, or transaction boundaries. 12F4 alone
+may mark an existing post-submit row superseded and record the exact upstream
+replacement identity in the approval transaction; it may otherwise only stage
+bounded continuation identity. 12G alone owns post-submit checker-policy
+derivation, compilation, correction, approval, or execution. Consequently 12G
+and 12B2 depend on merged 12F4, not the rejected combined 12F contract.
