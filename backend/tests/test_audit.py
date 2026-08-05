@@ -1638,7 +1638,7 @@ async def test_lifecycle_participant_concurrent_exact_replay_is_deterministic(
     async with audit_factory() as first_session:
         first = await LifecycleAuditParticipant(first_session).add_event(value)
         replay_task = asyncio.create_task(persist(value.model_copy(deep=True)))
-        await _wait_for_advisory_lock_waiter(audit_factory)
+        await _wait_for_advisory_lock_waiter(audit_factory, value.event_id)
         await first_session.commit()
     assert first.id == await replay_task == str(value.event_id)
 
@@ -1664,22 +1664,27 @@ async def test_lifecycle_participant_concurrent_changed_replay_conflicts(
     async with audit_factory() as first_session:
         first = await LifecycleAuditParticipant(first_session).add_event(value)
         changed_task = asyncio.create_task(persist(changed))
-        await _wait_for_advisory_lock_waiter(audit_factory)
+        await _wait_for_advisory_lock_waiter(audit_factory, value.event_id)
         await first_session.commit()
     assert first.id == str(value.event_id)
     with pytest.raises(LifecycleAuditConflict, match="identity conflict"):
         await changed_task
 
 
-async def _wait_for_advisory_lock_waiter(audit_factory) -> None:
+async def _wait_for_advisory_lock_waiter(audit_factory, event_id: UUID) -> None:
     """Prove the replay transaction overlaps while the first lock is held."""
     for _ in range(100):
         async with audit_factory() as probe:
             waiting = await probe.scalar(
                 text(
-                    "select exists (select 1 from pg_locks "
-                    "where locktype = 'advisory' and not granted)"
-                )
+                    "with key as (select hashtextextended(:event_id, 0) as value) "
+                    "select exists (select 1 from pg_locks, key "
+                    "where locktype = 'advisory' and not granted "
+                    "and classid = (((key.value >> 32) & 4294967295)::oid) "
+                    "and objid = ((key.value & 4294967295)::oid) "
+                    "and objsubid = 1)"
+                ),
+                {"event_id": str(event_id)},
             )
         if waiting:
             return

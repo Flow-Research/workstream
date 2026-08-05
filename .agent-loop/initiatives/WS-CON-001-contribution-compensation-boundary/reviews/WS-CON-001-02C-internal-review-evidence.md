@@ -15,7 +15,7 @@ Current reconciled main: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
 39 isolated PostgreSQL audit tests passed before final main reconciliation
 26 focused lifecycle tests passed again after final main reconciliation
 11 schema-only lifecycle input tests passed
-audit subsystem coverage: 95% (required at least 90%)
+audit subsystem coverage: 94.64% (required at least 90%)
 Ruff: passed
 git diff --check: passed
 Markdown links: passed

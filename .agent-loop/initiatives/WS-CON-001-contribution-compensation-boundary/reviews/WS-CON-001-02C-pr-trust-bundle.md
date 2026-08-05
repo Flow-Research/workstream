@@ -28,7 +28,7 @@ compensation, task, outbox, dependency, or CI changes.
 - 39 isolated PostgreSQL audit tests passed before final main reconciliation.
 - 26 focused lifecycle tests passed again after final main reconciliation.
 - 11 schema-only lifecycle input tests passed.
-- Audit subsystem coverage is 95%.
+- Audit subsystem coverage is 94.64%.
 - Ruff, diff integrity, Markdown links, and stale wording passed.
 
 ## Risks and human review focus
