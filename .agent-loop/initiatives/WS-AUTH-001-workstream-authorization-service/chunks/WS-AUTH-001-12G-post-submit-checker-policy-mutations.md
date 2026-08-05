@@ -2,7 +2,7 @@
 
 ## Status and prerequisite
 
-Proposed and inactive after 12F.
+Proposed and inactive after 12F4.
 
 ## Parent initiative
 

@@ -63,13 +63,17 @@ stopped.
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
 | `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
 | `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Merged through PR #227; identity/matrix registration only, zero activation |
-| `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F, and 12G |
+| `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F4, and 12G |
 | `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Merged through PR #229 |
 | `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Merged through PR #232 |
 | `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |
-| `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Active contract refresh after merged 12D and XINT-003-02A/02B |
-| `WS-AUTH-001-12F` | Submission Artifact Policy Mutation Cutover | L1 | Proposed after 12E |
-| `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F |
+| `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Merged through PR #263 |
+| `WS-AUTH-001-12F` | Submission Artifact Policy Planning Parent | L1 | Split after failed L1 pre-start review; zero activation |
+| `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Proposed after 12E; zero activation |
+| `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Proposed after 12F1 |
+| `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | Proposed after 12F2 |
+| `WS-AUTH-001-12F4` | Submission Policy Approval Chain | L1 | Proposed after 12F3 |
+| `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F4 |
 | `WS-AUTH-001-12H` | Guide Activation Cutover | L1 | Proposed after 12B2 and the owning CON clean cut |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Submission, Checker, And Audit Visibility Cutover | L1 | Proposed |
@@ -148,6 +152,10 @@ WS-AUTH-001-PLAN
 -> XINT-003-02A/02B (supersedes WS-AUTH-001-12D2)
 -> WS-AUTH-001-12E
 -> WS-AUTH-001-12F
+-> WS-AUTH-001-12F1
+-> WS-AUTH-001-12F2
+-> WS-AUTH-001-12F3
+-> WS-AUTH-001-12F4
 -> WS-AUTH-001-12G
 -> WS-AUTH-001-12B2
 -> WS-AUTH-001-12H

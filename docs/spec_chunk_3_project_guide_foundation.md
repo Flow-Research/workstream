@@ -135,7 +135,7 @@ Adds protected v1 routes:
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy` (legacy until 12F3 removes it)
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/activate`
@@ -157,10 +157,11 @@ automatic setup run. Both paths use the canonical same-generation ART material.
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
 
-`derive-submission-artifact-policy` is an admin/project_manager repair and
-diagnostics endpoint. It returns `201` when it creates a new policy and `200`
-only when it reuses an existing agent-derived policy for the same source
-snapshot.
+The former public `derive-submission-artifact-policy` repair endpoint is legacy
+behavior scheduled for removal by `WS-AUTH-001-12F3`. Automatic derivation is
+owned only by the fixed `workstream.project.setup` service after current
+lineage and sufficiency are revalidated; a Project Manager cannot invoke the
+agent inline.
 Manual policy creation does not accept derivation provenance fields. Manual
 policies persist `manual_admin_derivation`; agent-created policies persist
 `agent_derivation` and use a server-owned `agent-<snapshot-hash>` policy

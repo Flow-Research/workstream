@@ -2,7 +2,7 @@
 
 ## Status and prerequisite
 
-Proposed and inactive. 12B, 12E, 12F, and 12G must be merged.
+Proposed and inactive. 12B, 12E, 12F4, and 12G must be merged.
 
 ## Parent initiative
 
@@ -55,7 +55,7 @@ issuer-claim compatibility.
 
 ## Acceptance criteria
 
-- 12B, 12E, 12F, and 12G must be merged. The fixed identity has active
+- 12B, 12E, 12F4, and 12G must be merged. The fixed identity has active
   sufficiency-run, submission-policy-derive, and post-submit-policy-derive
   memberships before either Celery entry point changes.
 - 12B2 activates `project.setup_run.update` and verifies its fixed-service
@@ -63,8 +63,8 @@ issuer-claim compatibility.
   occurs before that activation.
 - `project.setup_run.update` alone covers setup context validation, task-id and
   status changes, continuation start, output-id persistence, terminal errors,
-  and enqueue-failure persistence. Product rows retain their owning 12E/12F/12G
-  actions and provenance.
+  and enqueue-failure persistence. Product rows retain their owning
+  12E/12F2/12F3/12F4/12G actions and provenance.
 - Celery payloads carry durable IDs/generation facts only. Each product or
   ledger mutation resolves fresh service context and consumes fresh PREP in its
   own root transaction after exact canonical locks.

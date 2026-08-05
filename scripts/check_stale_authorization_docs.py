@@ -286,6 +286,11 @@ MATCH_EXEMPTIONS = {
         "chunks/WS-AUTH-001-12B2-project-setup-service-cutover.md",
         "HUMAN_WORKER_VOCABULARY",
     ): re.compile(r"^backend/app/workers/project_setup\.py$"),
+    (
+        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
+        "chunks/WS-AUTH-001-12F3-submission-policy-service-derivation.md",
+        "HUMAN_WORKER_VOCABULARY",
+    ): re.compile(r"^backend/app/workers/project_setup\.py$"),
 }
 
 
