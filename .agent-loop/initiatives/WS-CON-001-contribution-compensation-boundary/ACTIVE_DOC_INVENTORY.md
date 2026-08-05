@@ -15,8 +15,8 @@ PLAN4 SHA/head and planning-only stop statement are not live 02C status.
 
 02C changes only the shared audit participant modules/tests, the exact
 shared-audit note in `docs/architecture_data_model.md`, and WS-CON initiative
-evidence. It adds runtime code but no migration, route, worker, feature-service
-behavior, roadmap/export, workflow, or other initiative change.
+evidence. It adds runtime code but no migration, route, background executor,
+product lifecycle behavior, roadmap/export, workflow, or other initiative change.
 
 The PLAN4 package was:
 
