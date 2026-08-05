@@ -11,6 +11,11 @@
 - Schema lanes emitted secondary missing-evidence errors because the always-run
   timing step assumed the lane directory existed after an earlier failure. The
   timing step now creates its exact private lane directory before writing.
+- The first complete sharded run exposed two test-contract drifts: the semantic
+  lane ownership assertion omitted the new default-execution module, and an
+  existing checker test still referenced a private helper moved into the shared
+  pure-semantics module. Both tests now assert the intended 04B2 ownership and
+  import boundary directly.
 
 ## Comments deferred
 
@@ -28,6 +33,7 @@ the shared CI failure-path defect.
 - `docstr-coverage --config backend/.docstr.yaml` — 80.1 percent
 - `python scripts/check_stale_authorization_docs.py`
 - focused CI-lane and default-execution tests
+- focused checker, lane-contract, and default-execution tests
 - `git diff --check`
 
 ## Remaining risks
