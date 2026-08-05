@@ -5,6 +5,7 @@ on:
     paths:
       - "backend/scripts/mutation_policy.py"
       - "backend/tests/test_mutation_policy.py"
+      - "backend/pyproject.toml"
       - "scripts/git_delta.py"
       - "scripts/test_git_delta.py"
       - "scripts/behavior-claim.schema.json"
@@ -16,6 +17,7 @@ on:
     paths:
       - "backend/scripts/mutation_policy.py"
       - "backend/tests/test_mutation_policy.py"
+      - "backend/pyproject.toml"
       - "scripts/git_delta.py"
       - "scripts/test_git_delta.py"
       - "scripts/behavior-claim.schema.json"
@@ -36,6 +38,7 @@ jobs:
     env:
       PILOT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PILOT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      PILOT_DIR: ${{ runner.temp }}/workstream-mutation-pilot
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -57,10 +60,10 @@ jobs:
           test -z "$(git status --porcelain)"
           head_tree="$(git rev-parse 'HEAD^{tree}')"
           base_sha="$(git rev-parse "${PILOT_BASE_SHA}^{commit}")"
-          install -d -m 700 .ci/mutation-pilot
+          install -d -m 700 "${PILOT_DIR}"
           git show "${base_sha}:scripts/mutation-requirements.txt" \
-            > .ci/mutation-pilot/protected-requirements.txt
-          manifest_sha256="$(sha256sum .ci/mutation-pilot/protected-requirements.txt | cut -d ' ' -f 1)"
+            > "${PILOT_DIR}/protected-requirements.txt"
+          manifest_sha256="$(sha256sum "${PILOT_DIR}/protected-requirements.txt" | cut -d ' ' -f 1)"
           echo "head_tree=${head_tree}" >> "${GITHUB_OUTPUT}"
           echo "base_sha=${base_sha}" >> "${GITHUB_OUTPUT}"
           echo "manifest_sha256=${manifest_sha256}" >> "${GITHUB_OUTPUT}"
@@ -69,31 +72,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv .ci/mutation-pilot/venv
-          .ci/mutation-pilot/venv/bin/python -m pip install -e "backend[dev]"
-          .ci/mutation-pilot/venv/bin/python -m pip install \
+          python -m venv "${PILOT_DIR}/venv"
+          "${PILOT_DIR}/venv/bin/python" -m pip install \
             --disable-pip-version-check \
             --require-hashes \
-            -r .ci/mutation-pilot/protected-requirements.txt
-          test "$(.ci/mutation-pilot/venv/bin/python -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
+            -r "${PILOT_DIR}/protected-requirements.txt"
+          test "$("${PILOT_DIR}/venv/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
 
       - name: Run bounded changed-scope mutation pilot
         shell: bash
         run: |
           set -euo pipefail
           timeout --signal=TERM --kill-after=15s 720s \
-            .ci/mutation-pilot/venv/bin/python backend/scripts/mutation_policy.py \
+            "${PILOT_DIR}/venv/bin/python" backend/scripts/mutation_policy.py \
               --repository-root . \
               --base-sha "${{ steps.custody.outputs.base_sha }}" \
               --head-sha "${PILOT_HEAD_SHA}" \
               --chunk-id WS-QUAL-001-04M \
               --claim-file .ci/behavior-claims/WS-QUAL-001-04M.json \
-              --selection-output .ci/mutation-pilot/selection.json \
+              --selection-output "${PILOT_DIR}/selection.json" \
               --execute \
-              --manifest .ci/mutation-pilot/protected-requirements.txt \
+              --manifest "${PILOT_DIR}/protected-requirements.txt" \
               --manifest-digest "${{ steps.custody.outputs.manifest_sha256 }}" \
-              --mutmut-executable .ci/mutation-pilot/venv/bin/mutmut \
-              --evidence-output .ci/mutation-pilot/evidence.json \
+              --mutmut-executable "${PILOT_DIR}/venv/bin/mutmut" \
+              --evidence-output "${PILOT_DIR}/evidence.json" \
               --timeout-seconds 700
           test -z "$(git status --porcelain --untracked-files=no)"
           test "$(git rev-parse 'HEAD^{tree}')" = "${{ steps.custody.outputs.head_tree }}"
@@ -104,7 +106,8 @@ jobs:
         with:
           name: mutation-pilot-${{ env.PILOT_HEAD_SHA }}
           path: |
-            .ci/mutation-pilot/selection.json
-            .ci/mutation-pilot/evidence.json
+            ${{ env.PILOT_DIR }}/selection.json
+            ${{ env.PILOT_DIR }}/evidence.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7

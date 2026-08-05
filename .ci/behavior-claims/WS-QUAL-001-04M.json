@@ -4,12 +4,18 @@
   "claims": [
     {
       "target": "backend/scripts/mutation_policy.py",
+      "callables": [
+        "scripts.mutation_policy.build_selection",
+        "scripts.mutation_policy.execute_pilot"
+      ],
       "tests": [
         "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
         "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed",
         "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_strong_calibration_asserts_the_exact_boundary",
         "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_weak_calibration_deliberately_asserts_only_the_result_type"
-      ]
+      ],
+      "outcomes": ["return", "mapped_error"],
+      "boundaries": []
     }
   ]
 }

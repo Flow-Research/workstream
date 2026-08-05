@@ -14,15 +14,35 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["target", "tests"],
+        "required": ["target", "callables", "tests", "outcomes", "boundaries"],
         "properties": {
           "target": {"type": "string", "pattern": "^backend/(app|scripts)/.+\\.py$"},
+          "callables": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.]+$"}
+          },
           "tests": {
             "type": "array",
             "minItems": 1,
             "maxItems": 12,
             "uniqueItems": true,
             "items": {"type": "string", "pattern": "^backend/tests/test_.+\\.py::\\S+$"}
+          },
+          "outcomes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": ["return", "persisted_state", "emitted_fact", "denial", "mapped_error", "idempotent_replay", "recovery_outcome"]
+            }
+          },
+          "boundaries": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"enum": ["postgresql", "minio", "http", "lock", "trigger", "concurrency"]}
           }
         }
       }

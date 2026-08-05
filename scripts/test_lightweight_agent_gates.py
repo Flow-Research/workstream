@@ -135,6 +135,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertNotIn("contents: write", workflow)
         self.assertNotIn("continue-on-error", workflow)
         self.assertIn("timeout-minutes: 15", workflow)
+        self.assertEqual(workflow.count('      - "backend/pyproject.toml"'), 2)
         self.assertIn("timeout --signal=TERM --kill-after=15s 720s", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("--require-hashes", workflow)
@@ -143,6 +144,8 @@ class LightweightAgentGateTests(unittest.TestCase):
         )
         self.assertIn("--timeout-seconds 700", workflow)
         self.assertIn("retention-days: 7", workflow)
+        self.assertIn("include-hidden-files: true", workflow)
+        self.assertNotIn('pip install -e "backend[dev]"', workflow)
         self.assertNotIn("mutation-pilot", backend)
 
 if __name__ == "__main__":

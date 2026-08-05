@@ -63,7 +63,7 @@ pytest_add_cli_args_test_selection = [
   "tests/test_mutation_policy.py::TestMutationPolicy::test_strong_calibration_asserts_the_exact_boundary",
   "tests/test_mutation_policy.py::TestMutationPolicy::test_weak_calibration_deliberately_asserts_only_the_result_type",
 ]
-pytest_add_cli_args = ["-q"]
+pytest_add_cli_args = ["-q", "--noconftest"]
 use_git_change_detection = false
 debug = true
 timeout_multiplier = 4.0

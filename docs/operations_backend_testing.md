@@ -180,16 +180,23 @@ policy, tests, claim, schema, Git-delta helper, or workflow changes.
 
 The pilot always selects eligible changed Python targets under `backend/app/`
 or `backend/scripts/`. Schema-v1 files under `.ci/behavior-claims/` may add a
-bounded target with exact owning pytest nodes; they cannot remove or replace a
-changed target. Malformed claims, stale chunk identifiers, unsafe paths,
-missing targets or tests, empty selection, and configuration drift fail closed.
+bounded target with qualified callables, exact owning pytest nodes, typed
+observable outcomes, and any essential real boundaries. Every eligible changed
+target requires this ownership mapping; claims cannot remove or replace one.
+Malformed claims, stale chunk identifiers, unsafe paths, symlinks, missing
+targets or tests, empty selection, and configuration drift fail closed.
 
 For pull requests, the hash-locked mutation toolchain is read only from
 `scripts/mutation-requirements.txt` at the protected base revision and installed
-with `pip --require-hashes`. The workflow has read-only permissions, checks out
-without credentials, receives no secrets, and executes the PR head in a Git
-archive extracted to disposable storage. The checked-out source tree must stay
-clean and retain the same exact tree hash.
+with `pip --require-hashes`. It does not run PR-controlled packaging hooks or
+install the backend package; the focused tests run with conftest loading
+disabled because they use only the protected mutation-test toolchain. The
+workflow has read-only permissions, checks out without credentials, receives no
+secrets, and executes the PR head in a Git archive extracted to disposable
+storage. Symlinks and special archive entries are rejected before execution.
+Evidence and the virtual environment live in runner-temporary storage outside
+the PR checkout. The checked-out source tree must stay clean and retain the
+same exact tree hash.
 
 The independent job is limited to 15 minutes, with mutation execution bounded
 below 12 minutes. Its seven-day artifact binds base SHA, head SHA and tree,

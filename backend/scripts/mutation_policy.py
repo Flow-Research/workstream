@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -37,7 +38,18 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 CHUNK_RE = re.compile(r"^WS-[A-Z]+-[0-9]{3}-[A-Z0-9]+$")
 TEST_NODE_RE = re.compile(r"^backend/tests/test_[A-Za-z0-9_/]+\.py::[^\s]+$")
+CALLABLE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]+$")
 ELIGIBLE_PREFIXES = ("backend/app/", "backend/scripts/")
+OBSERVABLE_OUTCOMES = {
+    "return",
+    "persisted_state",
+    "emitted_fact",
+    "denial",
+    "mapped_error",
+    "idempotent_replay",
+    "recovery_outcome",
+}
+REAL_BOUNDARIES = {"postgresql", "minio", "http", "lock", "trigger", "concurrency"}
 OUTCOMES = (
     "generated",
     "killed",
@@ -127,6 +139,19 @@ def _eligible_target(path: str) -> bool:
     )
 
 
+def _regular_repository_file(root: Path, value: str) -> bool:
+    """Return whether every component is non-symlink and the leaf is regular."""
+    candidate = root
+    try:
+        for part in _safe_path(value).parts:
+            candidate = candidate / part
+            if candidate.is_symlink():
+                return False
+        return candidate.is_file()
+    except OSError:
+        return False
+
+
 def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict[str, Any]]:
     if path is None:
         return []
@@ -146,7 +171,13 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
     normalized: list[dict[str, Any]] = []
     seen_targets: set[str] = set()
     for claim in claims:
-        if not isinstance(claim, dict) or set(claim) != {"target", "tests"}:
+        if not isinstance(claim, dict) or set(claim) != {
+            "target",
+            "callables",
+            "tests",
+            "outcomes",
+            "boundaries",
+        }:
             raise MutationPolicyError("invalid_behavior_claim")
         target = claim["target"]
         tests = claim["tests"]
@@ -155,22 +186,54 @@ def _read_claim(path: Path | None, root: Path, expected_chunk: str) -> list[dict
         if target in seen_targets:
             raise MutationPolicyError("duplicate_claim_target")
         seen_targets.add(target)
-        if not (root / target).is_file():
+        if not _regular_repository_file(root, target):
             raise MutationPolicyError("missing_claim_target")
         if not isinstance(tests, list) or not tests or len(tests) > 12:
             raise MutationPolicyError("invalid_claim_tests")
+        callables = claim["callables"]
+        if (
+            not isinstance(callables, list)
+            or not callables
+            or len(callables) > 12
+            or any(not isinstance(item, str) or CALLABLE_RE.fullmatch(item) is None for item in callables)
+            or len(set(callables)) != len(callables)
+        ):
+            raise MutationPolicyError("invalid_claim_callables")
         normalized_tests: list[str] = []
         for node in tests:
             if not isinstance(node, str) or TEST_NODE_RE.fullmatch(node) is None:
                 raise MutationPolicyError("invalid_claim_test_node")
             module = node.split("::", 1)[0]
             _safe_path(module)
-            if not (root / module).is_file():
+            if not _regular_repository_file(root, module):
                 raise MutationPolicyError("missing_claim_test_module")
             if node in normalized_tests:
                 raise MutationPolicyError("duplicate_claim_test_node")
             normalized_tests.append(node)
-        normalized.append({"target": target, "tests": sorted(normalized_tests)})
+        outcomes = claim["outcomes"]
+        if (
+            not isinstance(outcomes, list)
+            or not outcomes
+            or any(not isinstance(item, str) or item not in OBSERVABLE_OUTCOMES for item in outcomes)
+            or len(set(outcomes)) != len(outcomes)
+        ):
+            raise MutationPolicyError("invalid_claim_outcomes")
+        boundaries = claim["boundaries"]
+        if (
+            not isinstance(boundaries, list)
+            or any(not isinstance(item, str) or item not in REAL_BOUNDARIES for item in boundaries)
+            or len(set(boundaries)) != len(boundaries)
+        ):
+            raise MutationPolicyError("invalid_claim_boundaries")
+        normalized.append(
+            {
+                "target": target,
+                "callables": sorted(callables),
+                "tests": sorted(normalized_tests),
+                "outcomes": sorted(outcomes),
+                "boundaries": sorted(boundaries),
+            }
+        )
     return sorted(normalized, key=lambda item: item["target"])
 
 
@@ -195,8 +258,20 @@ def build_selection(
         include_local=False,
     )
     changed_targets = sorted(path for path in changed if _eligible_target(path))
+    if claim_path is not None:
+        expected_claim = root / ".ci" / "behavior-claims" / f"{chunk_id}.json"
+        try:
+            resolved_claim = claim_path.resolve(strict=True)
+        except OSError as exc:
+            raise MutationPolicyError("invalid_behavior_claim_path") from exc
+        if resolved_claim != expected_claim.resolve(strict=False) or claim_path.is_symlink():
+            raise MutationPolicyError("invalid_behavior_claim_path")
     claims = _read_claim(claim_path, root, chunk_id)
-    targets = sorted(set(changed_targets) | {claim["target"] for claim in claims})
+    claims_by_target = {claim["target"]: claim for claim in claims}
+    unowned_targets = sorted(set(changed_targets) - set(claims_by_target))
+    if unowned_targets:
+        raise MutationPolicyError("changed_target_without_behavior_claim")
+    targets = sorted(set(changed_targets) | set(claims_by_target))
     tests = sorted({node for claim in claims for node in claim["tests"]})
     if not targets:
         raise MutationPolicyError("zero_mutation_targets")
@@ -211,6 +286,13 @@ def build_selection(
         "changed_paths": changed,
         "changed_targets": changed_targets,
         "claims": claims,
+        "target_owners": [
+            {
+                **claims_by_target[target],
+                "selection_reason": "changed" if target in changed_targets else "claim",
+            }
+            for target in targets
+        ],
         "targets": targets,
         "tests": tests,
     }
@@ -229,7 +311,7 @@ def _verify_mutmut_config(backend: Path, selection: dict[str, Any]) -> None:
         "source_paths": source_paths,
         "only_mutate": relative_targets,
         "pytest_add_cli_args_test_selection": test_nodes,
-        "pytest_add_cli_args": ["-q"],
+        "pytest_add_cli_args": ["-q", "--noconftest"],
         "use_git_change_detection": False,
         "debug": True,
         "timeout_multiplier": 4.0,
@@ -237,6 +319,17 @@ def _verify_mutmut_config(backend: Path, selection: dict[str, Any]) -> None:
     }
     if config != expected:
         raise MutationPolicyError("mutation_config_selection_mismatch")
+
+
+def _reject_disposable_special_files(disposable: Path) -> None:
+    """Reject symlinks and non-regular archive entries before PR code runs."""
+    for candidate in disposable.rglob("*"):
+        try:
+            mode = candidate.lstat().st_mode
+        except OSError as exc:
+            raise MutationPolicyError("invalid_disposable_entry") from exc
+        if not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+            raise MutationPolicyError("invalid_disposable_entry")
 
 
 def _parse_outcomes(backend: Path) -> tuple[dict[str, int], list[dict[str, str]]]:
@@ -302,6 +395,7 @@ def execute_pilot(
         )
         if extract.returncode != 0:
             raise MutationPolicyError("archive_extract_failed")
+        _reject_disposable_special_files(disposable)
         backend = disposable / "backend"
         _verify_mutmut_config(backend, selection)
         environment = os.environ.copy()
