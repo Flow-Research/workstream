@@ -19,10 +19,14 @@ backend/app/modules/projects/repository.py
 backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
+backend/app/modules/audit/schemas.py
 backend/alembic/versions/<then-current-next>_submission_policy_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
+backend/tests/test_review_lease_persistence.py
+.github/workflows/backend.yml
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
@@ -51,14 +55,17 @@ mutation, post-submit behavior, or edits to historical migrations.
   response and exact target IDs once. The append-only authorization decision
   stream remains separate audit evidence. A unique constraint owns the human
   namespace `(actor_profile_id, idempotency_key)`; a second unique constraint
-  owns `(service_actor_profile_id, setup_run_id, setup_generation,
+  owns `(actor_profile_id, setup_run_id, setup_generation,
   setup_task_id, correlation_id, action_id)`. Reserve/find/complete and rollback
   locate the same row by operation UUID, and changed namespace facts never
   attach to an existing reservation.
 - Add nullable local provenance columns and closed constraints for draft
   policy, effective policy, and pre-submit policy. Historical bootstrap rows
-  remain readable and are never backfilled or rewritten. Newly authorized rows
-  require complete actor/link/grant-or-service/scope/action/decision evidence.
+  and rows still written by the uncut legacy routes remain readable in the
+  all-null unattributed shape and are never backfilled or rewritten. Only rows
+  written through the new 12F orchestrator use the complete authorized shape;
+  those rows require complete actor/link/grant-or-service/scope/action/decision
+  evidence. 12F2-12F4 own removal of the unattributed write paths.
 - The new orchestrator is flush-only. Route/Celery owners commit or roll back;
   no wrapper calls a legacy self-committing mutation method.
 - Reuse the merged `PreparedAuthorizationService`/runtime context and the 12E
@@ -67,6 +74,9 @@ mutation, post-submit behavior, or edits to historical migrations.
   second authorization protocol, replay state machine, UUID parser, or locking
   protocol; shared dependencies are extracted when their semantics are exact.
 - The catalogue remains planned and database/runtime parity remains exact.
+  `backend/app/modules/authorization/catalogue.py` is out of scope: 12F1 may
+  neither change action ownership/availability nor make the existing planned
+  fixed-service membership usable.
 
 ## Acceptance and proof
 
@@ -79,8 +89,9 @@ mutation, post-submit behavior, or edits to historical migrations.
 - Fault injection proves product rows, replay completion, allowed decision
   evidence, and local provenance roll back together.
 - Seeded historical rows survive upgrade unchanged; populated authorized
-  evidence blocks downgrade, empty downgrade succeeds, and re-upgrade restores
-  the schema. Migration allocation is taken only from then-current main.
+  evidence or any replay reservation row, including `pending`, blocks
+  downgrade; empty downgrade succeeds, and re-upgrade restores the schema.
+  Migration allocation is taken only from then-current main.
 - No action becomes active and no route behavior changes.
 
 ## Verification commands

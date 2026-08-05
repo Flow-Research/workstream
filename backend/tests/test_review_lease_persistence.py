@@ -529,6 +529,9 @@ async def test_populated_lease_persistence_refuses_downgrade(
             .values(queue_state="leased", active_lease_id=value.id, lifecycle_generation=2)
         )
         await session.commit()
+        starting_revision = await session.scalar(
+            text("select version_num from alembic_version")
+        )
     await db_session.dispose_engine()
 
     backend_root = Path(__file__).resolve().parents[1]
@@ -543,8 +546,9 @@ async def test_populated_lease_persistence_refuses_downgrade(
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("select version_num from alembic_version")) == (
-            "0056_review_lease_preference"
+        assert (
+            await session.scalar(text("select version_num from alembic_version"))
+            == starting_revision
         )
         assert await session.get(ReviewLease, value.id) is not None
 

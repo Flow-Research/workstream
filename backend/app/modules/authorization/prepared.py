@@ -36,6 +36,7 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     AuthorizationDecision,
     AuthorizationResourceContext,
+    authorization_resource_digest,
     IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
@@ -43,9 +44,11 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
     PROJECT_MUTATION_RESOURCE_BY_ACTION,
+    PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION,
     ProjectCreateResourceContext,
     ProjectGuideMutationResourceContext,
     ProjectGuideSufficiencyMutationResourceContext,
+    ProjectSubmissionArtifactPolicyMutationResourceContext,
     ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSourceSnapshotMutationResourceContext,
     ProjectSetupServiceCustodyContext,
@@ -142,6 +145,8 @@ class _PreparedAuthorizationBinding:
     sufficiency_stale_output_digest: str | None = None
     sufficiency_material_digest: str | None = None
     sufficiency_setup_service_custody: dict | None = None
+    submission_policy_context: dict | None = None
+    submission_policy_resource_digest: str | None = None
 
 
 @dataclass(slots=True)
@@ -250,6 +255,18 @@ def _sufficiency_binding_matches(
     )
 
 
+def _submission_policy_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectSubmissionArtifactPolicyMutationResourceContext,
+) -> bool:
+    """Return whether final submission-policy facts exactly match preparation."""
+    return (
+        binding.submission_policy_context == resource.model_dump(mode="json")
+        and binding.submission_policy_resource_digest
+        == authorization_resource_digest(resource)
+    )
+
+
 _CONSUMED = _Consumed()
 
 
@@ -344,6 +361,10 @@ class PreparedAuthorizationService:
             final_resource_context, ProjectGuideSufficiencyMutationResourceContext
         ) and not _sufficiency_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
+        ) and not _submission_policy_binding_matches(issuance.binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
             self._consumer_token,
@@ -377,6 +398,10 @@ class PreparedAuthorizationService:
         if isinstance(
             final_resource_context, ProjectGuideSufficiencyMutationResourceContext
         ) and not _sufficiency_binding_matches(binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
+        ) and not _submission_policy_binding_matches(binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         await self._authorization._complete_prepared_denial(
             self._consumer_token,
@@ -431,6 +456,8 @@ class PreparedAuthorizationService:
         policy_mutation_predecessor_id = None
         policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
+        submission_policy_context: dict | None = None
+        submission_policy_resource_digest: str | None = None
         if action_id is ActionId.PROJECT_CREATE:
             try:
                 operation_id = UUID(str(caller_input.request_value["operation_id"]))
@@ -479,6 +506,48 @@ class PreparedAuthorizationService:
                 )
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if action_id in {
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        }:
+            try:
+                value = dict(caller_input.request_value)
+                for field in (
+                    "resource_id",
+                    "operation_id",
+                    "scope_project_id",
+                    "guide_id",
+                    "source_snapshot_id",
+                    "policy_id",
+                ):
+                    value[field] = UUID(str(value[field]))
+                raw_custody = value.get("setup_service_custody")
+                if raw_custody is not None:
+                    custody = dict(raw_custody)
+                    for field in (
+                        "setup_run_id",
+                        "scope_project_id",
+                        "guide_id",
+                        "source_snapshot_id",
+                        "task_id",
+                        "correlation_id",
+                    ):
+                        custody[field] = UUID(str(custody[field]))
+                    value["setup_service_custody"] = custody
+                resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate(
+                    value
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PreparedAuthorizationHandleInvalid(
+                    "invalid prepared authorization handle"
+                ) from exc
+            expected_target = PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION[action_id]
+            if resource.target_kind != expected_target:
+                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+            submission_policy_context = resource.model_dump(mode="json")
+            submission_policy_resource_digest = authorization_resource_digest(resource)
         if action_id in {
             ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
             ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
@@ -619,6 +688,8 @@ class PreparedAuthorizationService:
                 if sufficiency.get("setup_service_custody") is not None
                 else None
             ),
+            submission_policy_context=submission_policy_context,
+            submission_policy_resource_digest=submission_policy_resource_digest,
         )
 
     @staticmethod

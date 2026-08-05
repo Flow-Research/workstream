@@ -67,6 +67,7 @@ from app.modules.authorization.runtime import (
     ProjectCreateResourceContext,
     ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSufficiencyMutationResourceContext,
+    ProjectSubmissionArtifactPolicyMutationResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
@@ -104,8 +105,12 @@ _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS = frozenset(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
     }
 )
+_SUBMISSION_POLICY_MUTATIONS = frozenset(PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION)
 
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
@@ -399,7 +404,12 @@ class AuthorizationService:
                 and scope.kind is PreparedAuthorityScopeKind.PROJECT
                 and scope.project_id is not None
             )
-            if not project_setup_sufficiency and (
+            project_setup_submission_policy = (
+                action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE
+                and scope.kind is PreparedAuthorityScopeKind.PROJECT
+                and scope.project_id is not None
+            )
+            if not (project_setup_sufficiency or project_setup_submission_policy) and (
                 expected_resource is None
                 or scope.kind is not PreparedAuthorityScopeKind.ARTIFACT_INTERNAL
                 or scope.artifact_resource_type != expected_resource[0]
@@ -420,7 +430,11 @@ class AuthorizationService:
                 transaction=transaction,
                 context=context,
                 action_id=action_id,
-                scope_project_id=(scope.project_id if project_setup_sufficiency else None),
+                scope_project_id=(
+                    scope.project_id
+                    if project_setup_sufficiency or project_setup_submission_policy
+                    else None
+                ),
                 matched_grant_id=None,
                 matched_grant_scope_project_id=None,
                 matched_grant_status=None,
@@ -667,6 +681,13 @@ class AuthorizationService:
                     ActionId.PROJECT_REVISION_POLICY_UPDATE,
                 }
                 and isinstance(resource_context, ProjectPolicyMutationPrepareDenialResourceContext)
+            )
+            or (
+                action_id in _SUBMISSION_POLICY_MUTATIONS
+                and isinstance(
+                    resource_context,
+                    ProjectSubmissionArtifactPolicyMutationResourceContext,
+                )
             )
         )
         if not supported:
@@ -966,6 +987,16 @@ class AuthorizationService:
                     or resource_context.scope_project_id != authority.scope_project_id
                 ):
                     denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            elif action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+                if denial is None and (
+                    not isinstance(
+                        resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
+                    )
+                    or resource_context.execution_kind != "setup_service"
+                    or resource_context.target_kind != "derive"
+                    or resource_context.scope_project_id != authority.scope_project_id
+                ):
+                    denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             elif denial is None and (
                 expected_resource is None
                 or not isinstance(resource_context, expected_resource[1])
@@ -1020,6 +1051,16 @@ class AuthorizationService:
                 and sufficiency_kind is not None
                 and (
                     resource_context.target_kind != sufficiency_kind
+                    or resource_context.execution_kind != "human"
+                )
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            submission_policy_kind = PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION.get(action_id)
+            if (
+                denial is None
+                and submission_policy_kind is not None
+                and (
+                    resource_context.target_kind != submission_policy_kind
                     or resource_context.execution_kind != "human"
                 )
             ):
@@ -1472,6 +1513,14 @@ class AuthorizationService:
             audit_resource_id = str(resource_context.resource_id)
             target_ref_kind = "project"
             target_ref_id = str(resource_context.requested_project_id)
+        elif decision.action_id in _SUBMISSION_POLICY_MUTATIONS and isinstance(
+            resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
+        ):
+            audit_project_id = str(resource_context.scope_project_id)
+            audit_resource_type = resource_context.resource_type
+            audit_resource_id = str(resource_context.resource_id)
+            target_ref_kind = "project"
+            target_ref_id = str(resource_context.scope_project_id)
         elif decision.action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             if resource_context is not None:
                 project_id = self._resource_project_id(resource_context)
@@ -1495,6 +1544,7 @@ class AuthorizationService:
             ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
             ActionId.PROJECT_CREATE,
             *_GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS,
+            *_SUBMISSION_POLICY_MUTATIONS,
         }:
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:

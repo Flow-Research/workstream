@@ -1103,6 +1103,21 @@ manual Project Manager drafts; 12F3 owns automatic fixed
 12F4 owns Project Manager approval plus the atomic effective/pre-submit chain.
 12G and the final setup-service cutover depend on merged 12F4.
 
+The 12F1 foundation binds each future submission-policy handle to the exact
+project/guide/source lineage, mutation target, operation and request digests,
+policy generation, actor/link and grant-or-fixed-service custody, and current
+root transaction. Approval also binds the immutable default-catalogue manifest,
+ordered and disabled entry configuration digests, compiler/bundle schema, and
+compiled/effective output hashes. Its replay reservation distinguishes human
+idempotency from fixed setup-service task custody and permits only
+`pending -> committed`; it does not perform a product mutation or own commit.
+Migration `0057_submission_policy_authority` preserves existing product rows in
+the all-null unattributed shape until the 12F2-12F4 route cutovers. Any replay
+row—including pending—or attributed provenance blocks downgrade. None of this
+makes the four catalogue actions executable. Any submission-policy
+authorization audit event, including denied evidence, also blocks downgrade so
+the admitted evidence vocabulary is never removed while referenced.
+
 Migration `0041_project_mutation_evidence` extends only the closed audit
 action-to-permission evidence constraint. It follows ART migration
 `0040_guide_materialization`, adds no permission, and refuses downgrade after

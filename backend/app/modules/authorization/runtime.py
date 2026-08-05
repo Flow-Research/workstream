@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from types import MappingProxyType
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from app.core.hashing import canonical_json_hash
 from app.modules.actors.service_identities import ServiceIdentity
@@ -772,6 +772,53 @@ class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
         return self
 
 
+class SubmissionPolicyCompilationContext(BaseModel):
+    """Exact server-owned compiler and immutable catalogue facts."""
+
+    model_config = _STRICT_FROZEN
+
+    compiler_version: str
+    bundle_schema_version: str
+    catalogue_id: str
+    catalogue_version: str
+    catalogue_schema_version: str
+    catalogue_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    ordered_entry_identities: tuple[str, ...] = Field(min_length=1)
+    ordered_entry_configuration_hashes: tuple[
+        Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")], ...
+    ] = Field(min_length=1)
+    disabled_catalogue_entry_ids: tuple[str, ...]
+    disabled_catalogue_config_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    compiled_bundle_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_plan_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @field_validator(
+        "ordered_entry_identities",
+        "ordered_entry_configuration_hashes",
+        "disabled_catalogue_entry_ids",
+        mode="before",
+    )
+    @classmethod
+    def canonicalize_json_arrays(cls, value):
+        """Accept canonical JSON arrays while retaining immutable tuple storage."""
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def validate_catalogue_projection(self):
+        """Keep ordered entry identity/configuration and disabled IDs canonical."""
+        if (
+            len(self.ordered_entry_identities)
+            != len(self.ordered_entry_configuration_hashes)
+            or len(self.ordered_entry_identities) != len(set(self.ordered_entry_identities))
+            or self.disabled_catalogue_entry_ids
+            != tuple(sorted(set(self.disabled_catalogue_entry_ids)))
+            or any(not value for value in self.ordered_entry_identities)
+            or any(not value for value in self.disabled_catalogue_entry_ids)
+        ):
+            raise ValueError("submission policy catalogue projection is invalid")
+        return self
+
+
 class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     """Canonical submission-artifact policy lineage for one mutation."""
 
@@ -779,6 +826,8 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
 
     resource_type: Literal["project_submission_artifact_policy_mutation"]
     resource_id: UUID
+    operation_id: UUID
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     scope_project_id: UUID
     guide_id: UUID
     guide_version: str
@@ -787,6 +836,7 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     target_kind: Literal["create", "derive", "update", "approve"]
     execution_kind: Literal["human", "setup_service"]
     policy_id: UUID
+    policy_version: str
     policy_generation: int = Field(ge=1)
     setup_generation: int = Field(ge=1)
     policy_status: str | None = None
@@ -796,6 +846,7 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     compiled_pre_submit_output_digest: str | None = Field(
         default=None, pattern=r"^sha256:[0-9a-f]{64}$"
     )
+    compilation: SubmissionPolicyCompilationContext | None = None
     setup_service_custody: ProjectSetupServiceCustodyContext | None = None
 
     @model_validator(mode="after")
@@ -805,6 +856,25 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
             raise ValueError("submission policy resource must match policy")
         if (self.policy_status is None) != (self.policy_digest is None):
             raise ValueError("submission policy status and digest must be bound together")
+        existing_policy = self.target_kind in {"update", "approve"}
+        if existing_policy != (self.policy_status is not None):
+            raise ValueError("existing submission policy requires status and digest")
+        approval = self.target_kind == "approve"
+        if approval != (
+            self.effective_output_digest is not None
+            and self.compiled_pre_submit_output_digest is not None
+            and self.compilation is not None
+        ):
+            raise ValueError("submission policy approval requires exact compilation outputs")
+        if not approval and any(
+            value is not None
+            for value in (
+                self.effective_output_digest,
+                self.compiled_pre_submit_output_digest,
+                self.compilation,
+            )
+        ):
+            raise ValueError("submission policy compilation facts require approval")
         service_execution = self.execution_kind == "setup_service"
         if service_execution != (self.setup_service_custody is not None):
             raise ValueError("policy service execution requires exact setup custody")
@@ -1468,6 +1538,7 @@ class AuthorizationDecision(BaseModel):
         "project_revision_policy_mutation",
         "project_policy_mutation_request",
         "project_guide_sufficiency_mutation",
+        "project_submission_artifact_policy_mutation",
         "actor_identity_link",
         "system",
         "permission_catalogue",
