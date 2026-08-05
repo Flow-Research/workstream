@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0056_review_lease_preference"
+HEAD_REVISION = "0057_submission_policy_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -99,6 +99,476 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12G,
     ActionOwner.AUTH_12H,
 }
+
+
+async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            columns = int(
+                await connection.scalar(
+                    text(
+                        "select count(*) from information_schema.columns where "
+                        "table_schema=current_schema() and "
+                        "((table_name='submission_artifact_policies' and "
+                        "column_name in ('created_by_actor_profile_id',"
+                        "'approved_by_actor_profile_id')) or "
+                        "(table_name in ('effective_project_submission_artifact_policies',"
+                        "'pre_submit_checker_policies') and "
+                        "column_name='created_by_actor_profile_id'))"
+                    )
+                )
+                or 0
+            )
+            replay_table = bool(
+                await connection.scalar(
+                    text(
+                        "select to_regclass(current_schema() || "
+                        "'.submission_policy_mutation_idempotency_records') is not null"
+                    )
+                )
+            )
+            provenance_triggers = int(
+                await connection.scalar(
+                    text(
+                        "select count(*) from pg_trigger where not tgisinternal and "
+                        "tgname=any(:names)"
+                    ),
+                    {
+                        "names": [
+                            "submission_policy_creation_provenance_immutable",
+                            "submission_policy_approval_provenance_immutable",
+                            "effective_submission_policy_provenance_immutable",
+                            "pre_submit_policy_provenance_immutable",
+                        ]
+                    },
+                )
+                or 0
+            )
+            action_states = tuple(
+                (
+                    definition.action_id.value,
+                    definition.availability.value,
+                )
+                for definition in ACTION_DEFINITIONS
+                if definition.action_id.value.startswith(
+                    "project.submission_artifact_policy."
+                )
+            )
+            return {
+                "columns": columns,
+                "replay_table": replay_table,
+                "provenance_triggers": provenance_triggers,
+                "action_states": action_states,
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _seed_historical_submission_policy(database_url: str, ids: dict[str, str]) -> None:
+    engine = create_async_engine(database_url)
+    digest = f"sha256:{'a' * 64}"
+    policy_digest = f"sha256:{'b' * 64}"
+    try:
+        async with engine.begin() as connection:
+            await insert_historical_project(
+                connection,
+                project_id=ids["project"],
+                name="0057 historical policy",
+                slug=f"submission-policy-{ids['project']}",
+            )
+            for table, trigger in (
+                ("project_guides", "guide_mutation_product_custody"),
+                ("guide_source_snapshots", "source_snapshot_product_custody"),
+            ):
+                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
+            await connection.execute(
+                text(
+                    "insert into project_guides(id,project_id,version,status,content_markdown,"
+                    "created_by) values(:guide,:project,'v1','draft','# guide','migration-test')"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
+                    "manifest_schema_version,manifest_json,bundle_hash,captured_by) values("
+                    ":snapshot,:project,:guide,'v1','1','{}'::json,:digest,'migration-test')"
+                ),
+                {**ids, "digest": digest},
+            )
+            for table, trigger in (
+                ("project_guides", "guide_mutation_product_custody"),
+                ("guide_source_snapshots", "source_snapshot_product_custody"),
+            ):
+                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
+            await connection.execute(
+                text(
+                    "insert into submission_artifact_policies("
+                    "id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,policy_version,lifecycle_status,policy_body,"
+                    "policy_hash,derivation_source,source_material_refs,created_by) values("
+                    ":policy,:project,:guide,'v1',:snapshot,:digest,'v1','draft','{}'::json,"
+                    ":policy_digest,'migration-test','[]'::json,'migration-test')"
+                ),
+                {**ids, "digest": digest, "policy_digest": policy_digest},
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _historical_submission_policy_authority(database_url: str, policy_id: str):
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select policy_hash,created_by_actor_profile_id,"
+                            "created_via_identity_link_id,creation_action_id,"
+                            "approved_by_actor_profile_id,approval_action_id "
+                            "from submission_artifact_policies where id=:id"
+                        ),
+                        {"id": policy_id},
+                    )
+                ).one()
+            )
+    finally:
+        await engine.dispose()
+
+
+def test_submission_policy_authority_safe_empty_roundtrip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """0057 installs only inactive custody and is reversible while unused."""
+    config = _alembic_config()
+    ids = {name: str(uuid4()) for name in ("project", "guide", "snapshot", "policy")}
+    with migration_lock():
+        try:
+            command.downgrade(config, "0056_review_lease_preference")
+            prior = asyncio.run(_submission_policy_authority_shape(isolated_database_env))
+            asyncio.run(_seed_historical_submission_policy(isolated_database_env, ids))
+            command.upgrade(config, HEAD_REVISION)
+            upgraded = asyncio.run(_submission_policy_authority_shape(isolated_database_env))
+            historical = asyncio.run(
+                _historical_submission_policy_authority(
+                    isolated_database_env, ids["policy"]
+                )
+            )
+            command.downgrade(config, "0056_review_lease_preference")
+            restored = asyncio.run(_submission_policy_authority_shape(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            repeated = asyncio.run(_submission_policy_authority_shape(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert prior == restored
+    assert prior["columns"] == 0
+    assert prior["replay_table"] is False
+    assert prior["provenance_triggers"] == 0
+    assert upgraded == repeated
+    assert upgraded["columns"] == 4
+    assert upgraded["replay_table"] is True
+    assert upgraded["provenance_triggers"] == 4
+    assert {state for _, state in upgraded["action_states"]} == {"planned"}
+    assert historical == (f"sha256:{'b' * 64}", None, None, None, None, None)
+
+
+def test_submission_policy_authority_pending_replay_blocks_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Even an uncommitted replay reservation is durable authority custody."""
+    config = _alembic_config()
+    ids = {
+        name: str(uuid4())
+        for name in ("profile", "link", "project", "guide", "snapshot", "policy")
+    }
+    replay_id, operation_id, idempotency_key = uuid4(), uuid4(), uuid4()
+    grant_id, decision_id = uuid4(), str(uuid4())
+    digest = f"sha256:{'c' * 64}"
+
+    async def seed_pending() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await insert_historical_project(
+                    connection,
+                    project_id=ids["project"],
+                    name="0057 pending replay",
+                    slug=f"submission-replay-{ids['project']}",
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_profiles(id,actor_kind,status,provisioning_method,"
+                        "created_by) values(:profile,'human','active','automatic_first_access',"
+                        ":profile)"
+                    ),
+                    ids,
+                )
+                await connection.execute(
+                    text(
+                        "insert into admin_role_grants("
+                        "id,target_actor_profile_id,role,scope_type,scope_project_id,status,"
+                        "version,granted_by_system_principal,grant_reason) values("
+                        ":grant,:profile,'project_manager','project',:project,'active',1,"
+                        "'workstream:system:bootstrap','0057 custody proof')"
+                    ),
+                    {**ids, "grant": grant_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_identity_links(id,actor_profile_id,issuer,subject,"
+                        "subject_kind,status,linked_by,last_verified_at) values(:link,:profile,"
+                        "'https://identity.test',:profile,'human','active',:profile,"
+                        "clock_timestamp())"
+                    ),
+                    ids,
+                )
+                for table, trigger in (
+                    ("project_guides", "guide_mutation_product_custody"),
+                    ("guide_source_snapshots", "source_snapshot_product_custody"),
+                ):
+                    await connection.execute(
+                        text(f"alter table {table} disable trigger {trigger}")
+                    )
+                await connection.execute(
+                    text(
+                        "insert into project_guides(id,project_id,version,status,content_markdown,"
+                        "created_by) values(:guide,:project,'v1','draft','# guide','migration-test')"
+                    ),
+                    ids,
+                )
+                await connection.execute(
+                    text(
+                        "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
+                        "manifest_schema_version,manifest_json,bundle_hash,captured_by) values("
+                        ":snapshot,:project,:guide,'v1','1','{}'::json,:digest,'migration-test')"
+                    ),
+                    {**ids, "digest": digest},
+                )
+                for table, trigger in (
+                    ("project_guides", "guide_mutation_product_custody"),
+                    ("guide_source_snapshots", "source_snapshot_product_custody"),
+                ):
+                    await connection.execute(
+                        text(f"alter table {table} enable trigger {trigger}")
+                    )
+                await connection.execute(
+                    text(
+                        "insert into submission_policy_mutation_idempotency_records("
+                        "id,actor_profile_id,identity_link_id,action_id,idempotency_key,"
+                        "request_digest,resource_context_digest,resource_context_json,"
+                        "operation_id,project_id,guide_id,source_snapshot_id,policy_id,"
+                        "setup_generation,status) values(:id,:profile,:link,"
+                        "'project.submission_artifact_policy.create',:key,:digest,:digest,"
+                        "'{\"guide_version\":\"v1\"}'::json,:operation,:project,:guide,"
+                        ":snapshot,:policy,1,'pending')"
+                    ),
+                    {
+                        **ids,
+                        "id": replay_id,
+                        "key": idempotency_key,
+                        "operation": operation_id,
+                        "digest": digest,
+                    },
+                )
+                with pytest.raises(IntegrityError):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "insert into submission_policy_mutation_idempotency_records("
+                                "id,actor_profile_id,identity_link_id,action_id,idempotency_key,"
+                                "request_digest,resource_context_digest,resource_context_json,"
+                                "operation_id,project_id,guide_id,source_snapshot_id,policy_id,"
+                                "setup_generation,status) values(:id,:profile,:link,"
+                                "'project.submission_artifact_policy.update',:key,:digest,:digest,"
+                                "'{\"guide_version\":\"v1\"}'::json,:operation,:project,"
+                                ":guide,:snapshot,:policy,1,'pending')"
+                            ),
+                            {
+                                **ids,
+                                "id": uuid4(),
+                                "key": idempotency_key,
+                                "operation": uuid4(),
+                                "digest": digest,
+                            },
+                        )
+                with pytest.raises(DBAPIError, match="invalid submission-policy replay mutation"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "update submission_policy_mutation_idempotency_records "
+                                "set setup_generation=2 where id=:id"
+                            ),
+                            {"id": replay_id},
+                        )
+                with pytest.raises(DBAPIError, match="cannot be deleted"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "delete from submission_policy_mutation_idempotency_records "
+                                "where id=:id"
+                            ),
+                            {"id": replay_id},
+                        )
+                with pytest.raises(DBAPIError, match="cannot be truncated"):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text("truncate submission_policy_mutation_idempotency_records")
+                        )
+                with pytest.raises(
+                    DBAPIError, match="submission-policy creation evidence mismatch"
+                ):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            text(
+                                "insert into audit_events("
+                                "id,entity_type,entity_id,event_type,actor_id,actor_roles,"
+                                "claim_snapshot,auth_source,is_dev_auth,event_payload,event_domain,"
+                                "event_version,actor_ref_kind,request_id,correlation_id,"
+                                "matched_grant_id,permission_id,action_id,reason,denial_code,"
+                                "project_id,resource_type,resource_id,after_facts) values("
+                                ":decision,'authorization_decision',:decision,"
+                                "'SensitiveAuthorizationAllowed',:profile,'[]'::json,'{}'::json,"
+                                "'local_authority',false,'{}'::json,'authority',1,'actor_profile',"
+                                ":request,:correlation,:grant_text,"
+                                "'project.effective_policy.manage',"
+                                "'project.submission_artifact_policy.create',"
+                                "'authorization_evaluation',null,:project,"
+                                "'project_submission_artifact_policy_mutation',:policy,"
+                                "cast(:after_facts as json))"
+                            ),
+                            {
+                                **ids,
+                                "decision": decision_id,
+                                "request": str(uuid4()),
+                                "correlation": str(uuid4()),
+                                "grant_text": str(grant_id),
+                                "after_facts": json.dumps(
+                                    {"allowed": True, "resource_context_digest": digest}
+                                ),
+                            },
+                        )
+                        await connection.execute(
+                            text(
+                                "insert into submission_artifact_policies("
+                                "id,project_id,guide_id,guide_version,source_snapshot_id,"
+                                "source_snapshot_hash,policy_version,lifecycle_status,policy_body,"
+                                "policy_hash,derivation_source,source_material_refs,created_by,"
+                                "created_by_actor_profile_id,created_via_identity_link_id,"
+                                "created_by_admin_role_grant_id,creation_scope_type,"
+                                "creation_scope_project_id,creation_action_id,"
+                                "creation_decision_event_id) values(:policy,:project,:guide,'v1',"
+                                ":snapshot,:digest,'v1','draft','{}'::json,:digest,'test',"
+                                "'[]'::json,'test',:profile,:link,:grant,'project',:project,"
+                                "'project.submission_artifact_policy.create',:decision)"
+                            ),
+                            {
+                                **ids,
+                                "grant": grant_id,
+                                "decision": decision_id,
+                                "digest": digest,
+                            },
+                        )
+                        await connection.execute(
+                            text(
+                                "update submission_policy_mutation_idempotency_records set "
+                                "status='committed',response_json='{}'::json,"
+                                "committed_policy_id=:policy,committed_at=now() where id=:id"
+                            ),
+                            {**ids, "id": replay_id},
+                        )
+        finally:
+            await engine.dispose()
+
+    async def reset_schema() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("drop schema public cascade"))
+                await connection.execute(text("create schema public"))
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.upgrade(config, HEAD_REVISION)
+            asyncio.run(seed_pending())
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade submission-policy authority with evidence",
+            ):
+                command.downgrade(config, "0056_review_lease_preference")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            asyncio.run(reset_schema())
+            command.upgrade(config, "head")
+
+
+def test_submission_policy_authority_audit_evidence_blocks_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Exact submission-policy AUTH evidence independently prevents vocabulary loss."""
+    config = _alembic_config()
+    event_id, policy_id, project_id = str(uuid4()), str(uuid4()), str(uuid4())
+
+    async def seed_evidence() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into audit_events("
+                        "id,entity_type,entity_id,event_type,actor_id,actor_roles,claim_snapshot,"
+                        "auth_source,is_dev_auth,event_payload,event_domain,event_version,"
+                        "actor_ref_kind,request_id,correlation_id,permission_id,action_id,reason,"
+                        "denial_code,project_id,resource_type,resource_id,after_facts) values("
+                        ":id,'authorization_decision',:id,'SensitiveAuthorizationDenied',"
+                        "'workstream:system:bootstrap','[]'::json,'{}'::json,'local_authority',"
+                        "false,'{}'::json,'authority',1,'system_principal',:request,:correlation,"
+                        "'project.effective_policy.manage',"
+                        "'project.submission_artifact_policy.create',"
+                        "'authorization_evaluation','permission_not_granted',:project,"
+                        "'project_submission_artifact_policy_mutation',:policy,"
+                        "'{\"allowed\": false}'::json)"
+                    ),
+                    {
+                        "id": event_id,
+                        "request": str(uuid4()),
+                        "correlation": str(uuid4()),
+                        "project": project_id,
+                        "policy": policy_id,
+                    },
+                )
+        finally:
+            await engine.dispose()
+
+    async def reset_schema() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text("drop schema public cascade"))
+                await connection.execute(text("create schema public"))
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.upgrade(config, HEAD_REVISION)
+            asyncio.run(seed_evidence())
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade submission-policy authority with evidence",
+            ):
+                command.downgrade(config, "0056_review_lease_preference")
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
+        finally:
+            asyncio.run(reset_schema())
+            command.upgrade(config, "head")
 
 
 def test_0054_guide_sufficiency_authority_safe_empty_downgrade_and_reupgrade(

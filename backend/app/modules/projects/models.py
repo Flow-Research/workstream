@@ -225,6 +225,108 @@ class GuideSufficiencyMutationIdempotencyRecord(Base):
     committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SubmissionPolicyMutationIdempotencyRecord(Base):
+    """Replay custody for one authorized submission-policy mutation."""
+
+    __tablename__ = "submission_policy_mutation_idempotency_records"
+    __table_args__ = (
+        Index(
+            "uq_submission_policy_human_replay_namespace",
+            "actor_profile_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("service_identity is null"),
+        ),
+        Index(
+            "uq_submission_policy_service_replay_namespace",
+            "actor_profile_id",
+            "setup_run_id",
+            "setup_generation",
+            "setup_task_id",
+            "correlation_id",
+            "action_id",
+            unique=True,
+            postgresql_where=text("service_identity is not null"),
+        ),
+        UniqueConstraint("operation_id", name="uq_submission_policy_operation_identity"),
+        CheckConstraint(
+            "action_id in ('project.submission_artifact_policy.create',"
+            "'project.submission_artifact_policy.derive',"
+            "'project.submission_artifact_policy.update',"
+            "'project.submission_artifact_policy.approve')",
+            name="ck_submission_policy_mutation_action",
+        ),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_submission_policy_mutation_digests",
+        ),
+        CheckConstraint("setup_generation > 0", name="ck_submission_policy_generation"),
+        CheckConstraint(
+            "(service_identity is null and idempotency_key is not null "
+            "and setup_run_id is null and setup_task_id is null and correlation_id is null) or "
+            "(service_identity = 'workstream.project.setup' and idempotency_key is null "
+            "and action_id = 'project.submission_artifact_policy.derive' "
+            "and setup_run_id is not null and setup_task_id is not null "
+            "and correlation_id is not null)",
+            name="ck_submission_policy_replay_principal_shape",
+        ),
+        CheckConstraint(
+            "status in ('pending','committed')", name="ck_submission_policy_replay_status"
+        ),
+        CheckConstraint(
+            "(status='pending' and response_json is null and committed_at is null "
+            "and committed_policy_id is null and committed_effective_policy_id is null "
+            "and committed_pre_submit_policy_id is null) or "
+            "(status='committed' and response_json is not null and committed_at is not null "
+            "and committed_policy_id is not null and "
+            "((action_id='project.submission_artifact_policy.approve' "
+            "and committed_effective_policy_id is not null "
+            "and committed_pre_submit_policy_id is not null) or "
+            "(action_id<>'project.submission_artifact_policy.approve' "
+            "and committed_effective_policy_id is null "
+            "and committed_pre_submit_policy_id is null)))",
+            name="ck_submission_policy_replay_state_shape",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"), nullable=False)
+    identity_link_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_identity_links.id"), nullable=False
+    )
+    service_identity: Mapped[str | None] = mapped_column(String(160))
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    idempotency_key: Mapped[UUID | None] = mapped_column(Uuid())
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    resource_context_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    resource_context_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"), nullable=False
+    )
+    policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    setup_run_id: Mapped[str | None] = mapped_column(ForeignKey("project_setup_runs.id"))
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    setup_task_id: Mapped[UUID | None] = mapped_column(Uuid())
+    correlation_id: Mapped[UUID | None] = mapped_column(Uuid())
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    response_json: Mapped[dict | None] = mapped_column(JSON)
+    committed_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_artifact_policies.id")
+    )
+    committed_effective_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("effective_project_submission_artifact_policies.id")
+    )
+    committed_pre_submit_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("pre_submit_checker_policies.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class PolicyMutationIdempotencyRecord(Base):
     """Replay custody for one guide-bound policy replacement."""
 
@@ -1177,6 +1279,37 @@ class SubmissionArtifactPolicy(Base):
             "policy_version",
             name="uq_submission_artifact_policies_project_version_policy",
         ),
+        CheckConstraint(
+            "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
+            "and created_by_admin_role_grant_id is null and created_by_service_identity is null "
+            "and creation_scope_type is null and creation_scope_project_id is null "
+            "and creation_action_id is null and creation_decision_event_id is null) or "
+            "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and creation_scope_project_id is not null and creation_decision_event_id is not null "
+            "and creation_action_id in ('project.submission_artifact_policy.create',"
+            "'project.submission_artifact_policy.derive',"
+            "'project.submission_artifact_policy.update') and "
+            "((created_by_admin_role_grant_id is not null and created_by_service_identity is null "
+            "and creation_scope_type in ('system','project')) or "
+            "(created_by_admin_role_grant_id is null "
+            "and created_by_service_identity='workstream.project.setup' "
+            "and creation_scope_type='service' "
+            "and creation_action_id='project.submission_artifact_policy.derive')))",
+            name="ck_submission_policy_creation_authority_shape",
+        ),
+        CheckConstraint(
+            "(approved_by_actor_profile_id is null and approved_via_identity_link_id is null "
+            "and approved_by_admin_role_grant_id is null and approval_scope_type is null "
+            "and approval_scope_project_id is null and approval_action_id is null "
+            "and approval_decision_event_id is null) or "
+            "(approved_by_actor_profile_id is not null and approved_via_identity_link_id is not null "
+            "and approved_by_admin_role_grant_id is not null "
+            "and approval_scope_type in ('system','project') "
+            "and approval_scope_project_id is not null "
+            "and approval_action_id='project.submission_artifact_policy.approve' "
+            "and approval_decision_event_id is not null)",
+            name="ck_submission_policy_approval_authority_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -1202,6 +1335,20 @@ class SubmissionArtifactPolicy(Base):
     derivation_agent_name: Mapped[str | None] = mapped_column(String(100))
     derivation_agent_version: Mapped[str | None] = mapped_column(String(50))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    created_by_service_identity: Mapped[str | None] = mapped_column(String(160))
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    creation_decision_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -1210,6 +1357,19 @@ class SubmissionArtifactPolicy(Base):
     )
     approved_by_role: Mapped[str | None] = mapped_column(String(50))
     approved_by_actor: Mapped[str | None] = mapped_column(String(100))
+    approved_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    approved_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    approved_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    approval_scope_type: Mapped[str | None] = mapped_column(String(16))
+    approval_scope_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    approval_action_id: Mapped[str | None] = mapped_column(String(160))
+    approval_decision_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.id"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     supersedes_policy_id: Mapped[str | None] = mapped_column(
         ForeignKey("submission_artifact_policies.id"),
@@ -1247,6 +1407,19 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
             "effective_policy_hash",
             name="uq_effective_project_submission_artifact_policies_id_hash",
         ),
+        CheckConstraint(
+            "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
+            "and created_by_admin_role_grant_id is null and creation_scope_type is null "
+            "and creation_scope_project_id is null and creation_action_id is null "
+            "and creation_decision_event_id is null) or "
+            "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and created_by_admin_role_grant_id is not null "
+            "and creation_scope_type in ('system','project') "
+            "and creation_scope_project_id is not null "
+            "and creation_action_id='project.submission_artifact_policy.approve' "
+            "and creation_decision_event_id is not null)",
+            name="ck_effective_submission_policy_authority_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -1272,6 +1445,19 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
     effective_policy: Mapped[dict] = mapped_column(JSON, nullable=False)
     effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    creation_decision_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     supersedes_effective_policy_id: Mapped[str | None] = mapped_column(
         ForeignKey("effective_project_submission_artifact_policies.id"),
@@ -1318,6 +1504,19 @@ class PreSubmitCheckerPolicy(Base):
             "compiled_bundle_hash",
             name="uq_pre_submit_checker_policies_id_compiled_bundle_hash",
         ),
+        CheckConstraint(
+            "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
+            "and created_by_admin_role_grant_id is null and creation_scope_type is null "
+            "and creation_scope_project_id is null and creation_action_id is null "
+            "and creation_decision_event_id is null) or "
+            "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
+            "and created_by_admin_role_grant_id is not null "
+            "and creation_scope_type in ('system','project') "
+            "and creation_scope_project_id is not null "
+            "and creation_action_id='project.submission_artifact_policy.approve' "
+            "and creation_decision_event_id is not null)",
+            name="ck_pre_submit_policy_authority_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -1346,6 +1545,19 @@ class PreSubmitCheckerPolicy(Base):
     checker_names: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     checker_configs: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_actor_profile_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id")
+    )
+    created_via_identity_link_id: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_identity_links.id")
+    )
+    created_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("admin_role_grants.id")
+    )
+    creation_scope_type: Mapped[str | None] = mapped_column(String(16))
+    creation_scope_project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    creation_action_id: Mapped[str | None] = mapped_column(String(160))
+    creation_decision_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     supersedes_pre_submit_checker_policy_id: Mapped[str | None] = mapped_column(
         ForeignKey("pre_submit_checker_policies.id"),

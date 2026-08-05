@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from dataclasses import replace
 import hashlib
 import inspect
 import json
@@ -20,6 +21,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, func, select, text, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from fastapi import HTTPException
 from sqlalchemy.schema import CreateIndex
 
@@ -88,6 +90,13 @@ from app.modules.projects.guide_mutation_repository import GuideMutationReposito
 from app.modules.projects.sufficiency_mutation_repository import (
     GuideSufficiencyMutationReplayRepository,
 )
+from app.modules.projects.submission_policy_mutation_repository import (
+    SubmissionPolicyMutationReplayRepository,
+)
+from app.modules.projects.submission_policy_mutation_service import (
+    SubmissionPolicyMutationService,
+    SubmissionPolicyReplayFacts,
+)
 from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import (
     AdminRoleGrant,
@@ -139,6 +148,8 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     MatchedAuthorityKind,
     PreparedAuthorizationUnsupported,
+    ProjectSetupServiceCustodyContext,
+    ProjectSubmissionArtifactPolicyMutationResourceContext,
 )
 from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
@@ -9357,7 +9368,7 @@ async def test_sufficiency_replay_repository_impossible_states_fail_closed() -> 
     async def missing(*_: object):
         return None
 
-    repository.find = missing  # type: ignore[method-assign]
+    repository._find_namespace = missing  # type: ignore[method-assign]
     values = {
         "actor_profile_id": str(uuid4()),
         "identity_link_id": str(uuid4()),
@@ -9387,6 +9398,362 @@ async def test_sufficiency_replay_repository_impossible_states_fail_closed() -> 
             response_json={"id": str(uuid4())},
             report_id=str(uuid4()),
         )
+
+
+async def test_submission_artifact_policy_replay_repository_classifies_exact_states() -> None:
+    """Pending, committed, and mismatched reservations remain distinct and fail closed."""
+
+    class Session:
+        scalar_result: object = None
+        get_result: object = None
+
+        async def scalar(self, _: object):
+            return self.scalar_result
+
+        async def get(self, *_: object):
+            return self.get_result
+
+    session = Session()
+    repository = SubmissionPolicyMutationReplayRepository(session)  # type: ignore[arg-type]
+    facts = {
+        "actor_profile_id": str(uuid4()),
+        "identity_link_id": str(uuid4()),
+        "service_identity": None,
+        "action_id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
+        "idempotency_key": uuid4(),
+        "request_digest": sha256_hash("request"),
+        "resource_context_digest": sha256_hash("resource"),
+        "resource_context_json": {"resource_type": "submission-policy"},
+        "operation_id": uuid4(),
+        "project_id": str(uuid4()),
+        "guide_id": str(uuid4()),
+        "source_snapshot_id": str(uuid4()),
+        "policy_id": str(uuid4()),
+        "setup_run_id": None,
+        "setup_generation": 1,
+        "setup_task_id": None,
+        "correlation_id": None,
+    }
+
+    async def missing(**_: object):
+        return None
+
+    repository._find_namespace = missing  # type: ignore[method-assign]
+    with pytest.raises(ProjectRepositoryIntegrityError, match="reservation disappeared"):
+        await repository.reserve(**facts)  # type: ignore[arg-type]
+
+    pending = SimpleNamespace(id=uuid4(), status="pending", **facts)
+
+    async def find_pending(**_: object):
+        return pending
+
+    repository._find_namespace = find_pending  # type: ignore[method-assign]
+    state, record = await repository.reserve(**facts)  # type: ignore[arg-type]
+    assert (state, record) == ("pending", pending)
+
+    pending.status = "committed"
+    state, record = await repository.reserve(**facts)  # type: ignore[arg-type]
+    assert (state, record) == ("replayed", pending)
+
+    pending.request_digest = sha256_hash("different")
+    state, record = await repository.reserve(**facts)  # type: ignore[arg-type]
+    assert (state, record) == ("mismatch", pending)
+    pending.request_digest = facts["request_digest"]
+    changed_namespace = {**facts, "idempotency_key": uuid4()}
+    state, record = await repository.reserve(**changed_namespace)  # type: ignore[arg-type]
+    assert (state, record) == ("mismatch", pending)
+
+    claimed_id = uuid4()
+    claimed = SimpleNamespace(id=claimed_id, status="pending", **facts)
+    session.scalar_result = claimed_id
+    session.get_result = claimed
+    state, record = await repository.reserve(**facts)  # type: ignore[arg-type]
+    assert (state, record) == ("claimed", claimed)
+
+    session.scalar_result = claimed
+    assert await repository.find_by_operation(facts["operation_id"]) is claimed
+
+    session.scalar_result = None
+    with pytest.raises(ProjectRepositoryIntegrityError, match="invalid.*completion"):
+        await repository.complete(
+            facts["operation_id"],
+            actor_profile_id=facts["actor_profile_id"],
+            identity_link_id=facts["identity_link_id"],
+            service_identity=facts["service_identity"],
+            action_id=facts["action_id"],
+            idempotency_key=facts["idempotency_key"],
+            request_digest=facts["request_digest"],
+            resource_context_digest=facts["resource_context_digest"],
+            setup_run_id=facts["setup_run_id"],
+            setup_generation=facts["setup_generation"],
+            setup_task_id=facts["setup_task_id"],
+            correlation_id=facts["correlation_id"],
+            response_json={"id": str(uuid4())},
+            committed_policy_id=facts["policy_id"],
+        )
+    session.scalar_result = facts["operation_id"]
+    await repository.complete(
+        facts["operation_id"],
+        actor_profile_id=facts["actor_profile_id"],
+        identity_link_id=facts["identity_link_id"],
+        service_identity=facts["service_identity"],
+        action_id=facts["action_id"],
+        idempotency_key=facts["idempotency_key"],
+        request_digest=facts["request_digest"],
+        resource_context_digest=facts["resource_context_digest"],
+        setup_run_id=facts["setup_run_id"],
+        setup_generation=facts["setup_generation"],
+        setup_task_id=facts["setup_task_id"],
+        correlation_id=facts["correlation_id"],
+        response_json={"id": facts["policy_id"]},
+        committed_policy_id=facts["policy_id"],
+    )
+
+
+async def test_submission_artifact_policy_authority_service_is_flush_only() -> None:
+    """The foundation delegates within one root transaction and never owns commit."""
+
+    class Transaction:
+        is_active = True
+
+    class SyncSession:
+        transaction: object = Transaction()
+
+        def get_transaction(self):
+            return self.transaction
+
+    class Session:
+        sync_session = SyncSession()
+        nested = False
+        commits = 0
+        rollbacks = 0
+
+        def in_nested_transaction(self):
+            return self.nested
+
+        async def commit(self):
+            self.commits += 1
+
+        async def rollback(self):
+            self.rollbacks += 1
+
+    session = Session()
+    service = SubmissionPolicyMutationService(session)  # type: ignore[arg-type]
+    calls: list[tuple[str, object]] = []
+    record = SimpleNamespace(id=uuid4())
+
+    class Replay:
+        async def reserve(self, **values: object):
+            calls.append(("reserve", values))
+            return "claimed", record
+
+        async def complete(self, value: object, **completion: object):
+            calls.append(("complete", (value, completion)))
+
+    service._replay = Replay()  # type: ignore[assignment]
+    project_id, guide_id, snapshot_id, policy_id, operation_id = (
+        uuid4() for _ in range(5)
+    )
+    request_digest = sha256_hash("request")
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+        resource_type="project_submission_artifact_policy_mutation",
+        resource_id=policy_id,
+        operation_id=operation_id,
+        request_digest=request_digest,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=sha256_hash("snapshot"),
+        target_kind="create",
+        execution_kind="human",
+        policy_id=policy_id,
+        policy_version="1",
+        policy_generation=1,
+        setup_generation=1,
+    )
+    facts = SubmissionPolicyReplayFacts(
+        actor_profile_id=str(uuid4()),
+        identity_link_id=str(uuid4()),
+        service_identity=None,
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
+        idempotency_key=uuid4(),
+        request_digest=request_digest,
+        resource_context=resource,
+        operation_id=operation_id,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        policy_id=str(policy_id),
+        setup_run_id=None,
+        setup_generation=1,
+        setup_task_id=None,
+        correlation_id=None,
+    )
+
+    assert await service.reserve_replay(facts) == ("claimed", record)
+    await service.complete_replay(
+        facts,
+        response_json={"id": "policy"},
+        committed_policy_id=facts.policy_id,
+    )
+    assert [name for name, _ in calls] == ["reserve", "complete"]
+    assert (session.commits, session.rollbacks) == (0, 0)
+
+    mismatched = replace(facts, request_digest=sha256_hash("mismatched-request"))
+    with pytest.raises(ValueError, match="do not match resource context"):
+        await service.reserve_replay(mismatched)
+
+    setup_run_id, task_id, correlation_id = uuid4(), uuid4(), uuid4()
+    custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=setup_run_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        expected_step="submission_artifact_policy",
+        task_id=task_id,
+        correlation_id=correlation_id,
+        stale_output_digest=sha256_hash("stale"),
+    )
+    derive_resource = resource.model_copy(
+        update={
+            "target_kind": "derive",
+            "execution_kind": "setup_service",
+            "stale_output_digest": custody.stale_output_digest,
+            "setup_service_custody": custody,
+        }
+    )
+    service_facts = replace(
+        facts,
+        service_identity="workstream.project.setup",
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value,
+        idempotency_key=None,
+        resource_context=derive_resource,
+        setup_run_id=str(setup_run_id),
+        setup_task_id=task_id,
+        correlation_id=correlation_id,
+    )
+    for changed in (
+        replace(service_facts, setup_run_id=str(uuid4())),
+        replace(service_facts, setup_task_id=uuid4()),
+        replace(service_facts, correlation_id=uuid4()),
+    ):
+        with pytest.raises(ValueError, match="service replay custody is invalid"):
+            await service.reserve_replay(changed)
+
+    session.nested = True
+    with pytest.raises(RuntimeError, match="one root transaction"):
+        await service.reserve_replay(facts)
+    session.nested = False
+    session.sync_session.transaction = None
+    with pytest.raises(RuntimeError, match="one root transaction"):
+        await service.reserve_replay(facts)
+
+
+async def test_submission_artifact_policy_replay_postgres_converges_exact_reservations(
+    isolated_database_env: str,
+) -> None:
+    """The real partial index makes concurrent exact human reservations converge."""
+    engine = create_async_engine(isolated_database_env)
+    ids = {name: str(uuid4()) for name in ("actor", "link", "project", "guide", "snapshot")}
+    digest = sha256_hash("submission-policy-replay")
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("alter table projects disable trigger project_creation_custody")
+            )
+            await connection.execute(
+                text(
+                    "insert into projects(id,name,slug,status) values("
+                    ":project,'Replay project',:slug,'draft')"
+                ),
+                {**ids, "slug": f"replay-{ids['project']}"},
+            )
+            await connection.execute(
+                text("alter table projects enable trigger project_creation_custody")
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_profiles(id,actor_kind,status,provisioning_method,"
+                    "created_by) values(:actor,'human','active','automatic_first_access',:actor)"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links(id,actor_profile_id,issuer,subject,"
+                    "subject_kind,status,linked_by,last_verified_at) values(:link,:actor,"
+                    "'https://identity.test',:actor,'human','active',:actor,clock_timestamp())"
+                ),
+                ids,
+            )
+            for table, trigger in (
+                ("project_guides", "guide_mutation_product_custody"),
+                ("guide_source_snapshots", "source_snapshot_product_custody"),
+            ):
+                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
+            await connection.execute(
+                text(
+                    "insert into project_guides(id,project_id,version,status,content_markdown,"
+                    "created_by) values(:guide,:project,'v1','draft','# guide','test')"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
+                    "manifest_schema_version,manifest_json,bundle_hash,captured_by) values("
+                    ":snapshot,:project,:guide,'v1','1','{}'::json,:digest,'test')"
+                ),
+                {**ids, "digest": digest},
+            )
+            for table, trigger in (
+                ("project_guides", "guide_mutation_product_custody"),
+                ("guide_source_snapshots", "source_snapshot_product_custody"),
+            ):
+                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
+
+        operation_id, policy_id, key = uuid4(), str(uuid4()), uuid4()
+        values = {
+            "actor_profile_id": ids["actor"],
+            "identity_link_id": ids["link"],
+            "service_identity": None,
+            "action_id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
+            "idempotency_key": key,
+            "request_digest": digest,
+            "resource_context_digest": digest,
+            "resource_context_json": {"guide_version": "v1"},
+            "operation_id": operation_id,
+            "project_id": ids["project"],
+            "guide_id": ids["guide"],
+            "source_snapshot_id": ids["snapshot"],
+            "policy_id": policy_id,
+            "setup_run_id": None,
+            "setup_generation": 1,
+            "setup_task_id": None,
+            "correlation_id": None,
+        }
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        first = factory()
+        await first.begin()
+        first_result = await SubmissionPolicyMutationReplayRepository(first).reserve(**values)
+        assert first_result[0] == "claimed"
+
+        async def reserve_second():
+            async with factory() as second:
+                async with second.begin():
+                    return await SubmissionPolicyMutationReplayRepository(second).reserve(**values)
+
+        competing = asyncio.create_task(reserve_second())
+        await asyncio.sleep(0.05)
+        await first.commit()
+        second_result = await asyncio.wait_for(competing, timeout=5)
+        assert second_result[0] == "pending"
+        assert second_result[1].operation_id == operation_id
+        await first.close()
+    finally:
+        await engine.dispose()
 
 
 async def test_sufficiency_lineage_and_target_guards_fail_closed() -> None:

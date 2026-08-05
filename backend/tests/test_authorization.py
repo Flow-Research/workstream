@@ -54,6 +54,7 @@ from app.modules.audit.schemas import (
     AuthorityAuditEventInput,
     AuthorityEventType,
 )
+from app.modules.audit import schemas as audit_schemas_module
 from app.modules.audit.service import AuditService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.service import ActorService, ResolvedActor
@@ -166,6 +167,7 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
     PreparedAuthorizationService,
+    _submission_policy_binding_matches,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.admin_service import (
@@ -221,6 +223,7 @@ from app.modules.authorization.runtime import (
     ProjectSetupServiceCustodyContext,
     ProjectSetupRunMutationResourceContext,
     ProjectSubmissionArtifactPolicyMutationResourceContext,
+    SubmissionPolicyCompilationContext,
     ProjectPolicyReadResourceContext,
     ProjectActiveGuideReadResourceContext,
     ProjectReadResourceContext,
@@ -2278,6 +2281,8 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
         action_id: ProjectSubmissionArtifactPolicyMutationResourceContext(
             resource_type="project_submission_artifact_policy_mutation",
             resource_id=submission_policy_id,
+            operation_id=operation_id,
+            request_digest=DIGEST,
             scope_project_id=project_id,
             guide_id=guide_id,
             guide_version="1",
@@ -2286,9 +2291,34 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             target_kind=target_kind,
             execution_kind="setup_service" if target_kind == "derive" else "human",
             policy_id=submission_policy_id,
+            policy_version="1",
             policy_generation=1,
+            policy_status=("draft" if target_kind in {"update", "approve"} else None),
+            policy_digest=(DIGEST if target_kind in {"update", "approve"} else None),
             setup_generation=1,
             stale_output_digest=DIGEST if target_kind == "derive" else None,
+            effective_output_digest=DIGEST if target_kind == "approve" else None,
+            compiled_pre_submit_output_digest=(
+                DIGEST if target_kind == "approve" else None
+            ),
+            compilation=(
+                SubmissionPolicyCompilationContext(
+                    compiler_version="v1",
+                    bundle_schema_version="v1",
+                    catalogue_id="workstream.default",
+                    catalogue_version="v1",
+                    catalogue_schema_version="v1",
+                    catalogue_manifest_sha256=DIGEST,
+                    ordered_entry_identities=("archive.identity@v1",),
+                    ordered_entry_configuration_hashes=(DIGEST,),
+                    disabled_catalogue_entry_ids=(),
+                    disabled_catalogue_config_digest=DIGEST,
+                    compiled_bundle_hash=DIGEST,
+                    effective_plan_hash=DIGEST,
+                )
+                if target_kind == "approve"
+                else None
+            ),
             setup_service_custody=(
                 setup_custody_by_step["submission_artifact_policy"]
                 if target_kind == "derive"
@@ -5943,16 +5973,160 @@ async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions
         authorization,
         facts,  # type: ignore[arg-type]
     )
+    caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+        project_id, guide_id, snapshot_id, policy_id, operation_id = (
+            uuid4() for _ in range(5)
+        )
+        custody = ProjectSetupServiceCustodyContext(
+            setup_run_id=uuid4(),
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            setup_generation=1,
+            expected_step="submission_artifact_policy",
+            task_id=uuid4(),
+            correlation_id=uuid4(),
+            stale_output_digest=DIGEST,
+        )
+        resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+            resource_type="project_submission_artifact_policy_mutation",
+            resource_id=policy_id,
+            operation_id=operation_id,
+            request_digest=DIGEST,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            guide_version="1",
+            source_snapshot_id=snapshot_id,
+            source_snapshot_hash=DIGEST,
+            target_kind="derive",
+            execution_kind="setup_service",
+            policy_id=policy_id,
+            policy_version="1",
+            policy_generation=1,
+            setup_generation=1,
+            stale_output_digest=DIGEST,
+            setup_service_custody=custody,
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        )
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(
             action_id,
-            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
-            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+            caller_input,
+            scope,
         )
     assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
     assert facts.calls == 0
     assert prepared._issued == {}
     assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_submission_artifact_policy_prepared_binding_requires_exact_final_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 12F1 binding compares the whole canonical context, not selected fields."""
+    project_id, guide_id, snapshot_id, policy_id, operation_id = (
+        uuid4() for _ in range(5)
+    )
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+        resource_type="project_submission_artifact_policy_mutation",
+        resource_id=policy_id,
+        operation_id=operation_id,
+        request_digest=DIGEST,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=DIGEST,
+        target_kind="approve",
+        execution_kind="human",
+        policy_id=policy_id,
+        policy_version="1",
+        policy_generation=1,
+        policy_status="draft",
+        policy_digest=DIGEST,
+        setup_generation=1,
+        effective_output_digest=DIGEST,
+        compiled_pre_submit_output_digest=DIGEST,
+        compilation=SubmissionPolicyCompilationContext(
+            compiler_version="v1",
+            bundle_schema_version="v1",
+            catalogue_id="workstream.default",
+            catalogue_version="v1",
+            catalogue_schema_version="v1",
+            catalogue_manifest_sha256=DIGEST,
+            ordered_entry_identities=("archive.identity@v1",),
+            ordered_entry_configuration_hashes=(DIGEST,),
+            disabled_catalogue_entry_ids=(),
+            disabled_catalogue_config_digest=DIGEST,
+            compiled_bundle_hash=DIGEST,
+            effective_plan_hash=DIGEST,
+        ),
+    )
+    context = _runtime_context()
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context, session=session)
+    repository = _PreparedAdminFacts(context)
+    authorization._admin = repository  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        repository,
+    )
+    binding = prepared._binding(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+        ),
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        ),
+    )
+    assert _submission_policy_binding_matches(binding, resource)
+    changed = resource.model_copy(
+        update={
+            "compilation": resource.compilation.model_copy(
+                update={"catalogue_version": "v2"}
+            )
+        }
+    )
+    assert not _submission_policy_binding_matches(binding, changed)
+    decision = AuthorizationDecision(
+        decision_id=uuid4(),
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        permission_id=PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        allowed=True,
+        denial_code=None,
+        resource_type=resource.resource_type,
+        resource_id=resource.resource_id,
+        resource_context_digest=authorization_resource_digest(resource),
+        matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=project_id,
+        revalidated=True,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    active_actions = dict(ACTION_BY_ID)
+    active_actions[decision.action_id] = replace(
+        active_actions[decision.action_id], availability=ActionAvailability.ACTIVE
+    )
+    monkeypatch.setattr(audit_schemas_module, "ACTION_BY_ID", active_actions)
+    await authorization._stage_decision(decision, context.actor_profile_id, resource)
+    assert evidence.events[0].resource_type == resource.resource_type
+    assert evidence.events[0].resource_id == str(policy_id)
+    assert evidence.events[0].project_id == str(project_id)
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        authorization_resource_digest(resource)
+    )
 
 
 @pytest.mark.parametrize(
@@ -5990,11 +6164,54 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
         facts,
     )
 
+    caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+        project_id, guide_id, snapshot_id, policy_id, operation_id = (
+            uuid4() for _ in range(5)
+        )
+        custody = ProjectSetupServiceCustodyContext(
+            setup_run_id=uuid4(),
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            setup_generation=1,
+            expected_step="submission_artifact_policy",
+            task_id=uuid4(),
+            correlation_id=uuid4(),
+            stale_output_digest=DIGEST,
+        )
+        resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+            resource_type="project_submission_artifact_policy_mutation",
+            resource_id=policy_id,
+            operation_id=operation_id,
+            request_digest=DIGEST,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            guide_version="1",
+            source_snapshot_id=snapshot_id,
+            source_snapshot_hash=DIGEST,
+            target_kind="derive",
+            execution_kind="setup_service",
+            policy_id=policy_id,
+            policy_version="1",
+            policy_generation=1,
+            setup_generation=1,
+            stale_output_digest=DIGEST,
+            setup_service_custody=custody,
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        )
+
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(
             action_id,
-            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
-            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+            caller_input,
+            scope,
         )
 
     assert exc_info.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
