@@ -22,6 +22,7 @@ append-only replacement, PREP evidence, and replay custody.
   without depending on later guide/setup lineage.
 - Removed obsolete self-committing manual create/update service entry points.
 - Expanded focused, fault-injection, OpenAPI, and real API contract coverage.
+- Added the required bounded behavior-mutation claim for the activating writer.
 
 ## Scope and behavior
 

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "chunk_id": "WS-AUTH-001-12F2",
+  "claims": [
+    {
+      "target": "backend/app/modules/projects/submission_policy_mutation_service.py",
+      "callables": [
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._require_pm_admission",
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._manual_mutation",
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService._existing_manual_replay",
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService.create_manual",
+        "app.modules.projects.submission_policy_mutation_service.SubmissionPolicyMutationService.update_manual"
+      ],
+      "tests": [
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_exact_idempotency_replay_is_stable",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_create_fault_rolls_back_atomic_boundary",
+        "backend/tests/test_projects.py::test_draft_submission_artifact_policy_can_be_updated",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_update_fault_rolls_back_replacement",
+        "backend/tests/test_projects.py::test_submission_artifact_policy_update_concurrent_cas_creates_one_successor"
+      ],
+      "outcomes": [
+        "persisted_state",
+        "denial",
+        "idempotent_replay"
+      ],
+      "boundaries": [
+        "postgresql",
+        "http",
+        "lock",
+        "concurrency"
+      ]
+    }
+  ]
+}
