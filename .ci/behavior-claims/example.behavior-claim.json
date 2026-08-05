@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "chunk_id": "WS-EXAMPLE-001-01",
+  "claims": [
+    {
+      "target": "backend/app/modules/example/service.py",
+      "callables": [
+        "app.modules.example.service.ExampleService.create"
+      ],
+      "tests": [
+        "backend/tests/test_example_service.py::test_create_persists_the_result"
+      ],
+      "outcomes": [
+        "persisted_state"
+      ],
+      "boundaries": [
+        "postgresql"
+      ]
+    }
+  ]
+}

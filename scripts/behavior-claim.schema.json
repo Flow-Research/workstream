@@ -20,7 +20,7 @@
           "callables": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 12,
+            "maxItems": 24,
             "uniqueItems": true,
             "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.]+$"}
           },
