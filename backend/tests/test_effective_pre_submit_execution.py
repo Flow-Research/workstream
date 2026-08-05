@@ -478,3 +478,9 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         match="pre_submission_result_context_invalid",
     ):
         validate_pre_submission_execution_result(plan, forged_status)
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_result_context_invalid",
+    ):
+        validate_pre_submission_execution_result(plan, replace(forged, eligible=1))  # type: ignore[arg-type]

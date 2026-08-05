@@ -570,6 +570,7 @@ def validate_pre_submission_execution_result(
     if (
         type(custody.prepared_generation_id) is not UUID
         or type(custody.archive_byte_count) is not int
+        or type(execution.eligible) is not bool
         or custody.archive_byte_count < 0
         or custody.storage_scheme not in {"local", "s3"}
         or execution.plan_sha256 != plan.plan_sha256

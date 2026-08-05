@@ -253,6 +253,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("review_policies", "review_policy_mutation_custody"),
         ("revision_policies", "revision_policy_mutation_custody"),
     )
+    blocked_prepared = None
+    original_prepared_closed = False
     tables = (
         "artifact_contents",
         "artifact_replicas",
@@ -461,6 +463,35 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 identity_link_id=identity_link_id,
                 predecessor_submission_id=None,
             )
+            await request.prepared_artifact.close()
+            original_prepared_closed = True
+            blocked_prepared = await preparation.prepare(
+                _bytes(_archive("task.toml")), media_type="application/zip"
+            )
+            blocked_inspection = await blocked_prepared.inspect(inspector)
+            blocked_manifest = build_submission_manifest(blocked_inspection)
+            blocked_request = replace(
+                request,
+                prepared_artifact=blocked_prepared,
+                inspection=blocked_inspection,
+                manifest=blocked_manifest,
+                change_gate=evaluate_submission_change(
+                    commitment=blocked_prepared.commitment,
+                    manifest=blocked_manifest,
+                    predecessor=None,
+                    predecessor_exists=False,
+                ),
+                packet=SubmissionPacketView(
+                    summary="Completed exact project work.",
+                    contributor_attestation="",
+                ),
+            )
+            blocked = await workflow.execute(
+                blocked_request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
         async with engine.begin() as connection:
             evidence_count = int(
                 await connection.scalar(text("select count(*) from pre_submit_evidence_sets")) or 0
@@ -481,7 +512,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 "delete from pre_submit_evidence_results",
                 "truncate pre_submit_evidence_results",
                 "insert into pre_submit_evidence_results "
-                "select gen_random_uuid()::text,evidence_set_id,result_order+1000,"
+                "select '00000000-0000-0000-0000-000000000001',"
+                "evidence_set_id,result_order+1000,"
                 "schema_version,dispatch_authority,definition_id || '.forged',"
                 "definition_version,public_name,source,phase,classification,severity,status,"
                 "failure_code,message_code,effective_plan_sha256,rule_instance_id,"
@@ -492,7 +524,10 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     async with connection.begin_nested():
                         await connection.execute(text(statement))
     finally:
-        await request.prepared_artifact.close()
+        if blocked_prepared is not None:
+            await blocked_prepared.close()
+        if not original_prepared_closed:
+            await request.prepared_artifact.close()
         manager.close()
         async with engine.begin() as connection:
             for table, trigger in reversed(custody_triggers):
@@ -505,8 +540,14 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     assert first.pass_capability is not None
     assert replay.pass_capability is None
     assert first.failure_audit is None
-    assert evidence_count == 1
-    assert result_count == len(request.effective_plan.entries)
+    assert blocked.pass_capability is None
+    assert blocked.evidence.replayed is False
+    assert blocked.failure_audit is not None
+    assert blocked.failure_audit["event_type"] == "pre_submission_check_failed"
+    assert blocked.failure_audit["failed_count"] >= 1
+    assert "task.toml" not in repr(blocked.failure_audit)
+    assert evidence_count == 2
+    assert result_count == 2 * len(request.effective_plan.entries)
     assert after == before
 
 
