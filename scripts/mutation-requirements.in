@@ -1,0 +1,6 @@
+# Development/CI-only mutation engine. The compiled, hashed manifest is the
+# protected-main authority consumed by WS-QUAL-001-04M.
+mutmut==3.7.0
+# Keep the mutation runner aligned with the backend's tested toolchain.
+coverage==7.15.2
+pytest==8.4.2

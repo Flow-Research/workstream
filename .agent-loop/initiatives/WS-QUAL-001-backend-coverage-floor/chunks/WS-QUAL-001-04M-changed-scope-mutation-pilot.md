@@ -73,6 +73,9 @@ checkout credentials, secrets in mutation execution, or unpinned Actions
 - [ ] That protected dependency authority exists before the 04M branch starts;
       04M cannot introduce or modify it. If no approved authority exists, 04M
       stops for a separate bounded prerequisite rather than installing a tool.
+- [ ] The only dependency authority is the protected base-revision copy of
+      `scripts/mutation-requirements.txt`, introduced by 04P; 04M verifies and
+      installs that exact copy with `pip --require-hashes`.
 - [ ] `backend/pyproject.toml` contains configuration only; the mutation engine
       is absent from production dependencies and ordinary dev extras.
       `backend/uv.lock` remains unchanged and is not a second install path.
