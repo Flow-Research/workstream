@@ -138,8 +138,10 @@ class DefaultPreSubmissionProcessor:
         """Prevent checker callback access after caller cancellation or timeout."""
         self._aborted.set()
 
-    def process(self, reader: BinaryIO, workspace: Path) -> DefaultPreSubmissionExecutionResult:
-        """Project once and execute only the closed platform/default phase slice."""
+    def process_blocking(
+        self, reader: BinaryIO, workspace: Path
+    ) -> DefaultPreSubmissionExecutionResult:
+        """Project and execute inside preparation's bounded blocking adapter."""
         self._validate_input()
         return self._archive_inspector.project_and_run(
             reader,

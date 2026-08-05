@@ -56,10 +56,10 @@ _ROOT_MARKER_PREFIX = b"workstream-artifact-scratch-v1:"
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
-    """Project one prepared submission inside a bounded scratch workspace."""
+    """Blocking projection capability used only by the bounded async adapter."""
 
-    def process(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
-        """Return bounded results without retaining either capability."""
+    def process_blocking(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
+        """Return bounded results while executing outside the event loop."""
 
     def abort(self) -> None:
         """Deny checker access after cancellation or deadline expiry."""
@@ -1721,7 +1721,7 @@ class ArtifactPreparationService:
             ) as workspace:
                 active.reader.seek(0)
                 try:
-                    return processor.process(active.reader, workspace)
+                    return processor.process_blocking(active.reader, workspace)
                 finally:
                     active.reader.seek(0)
 

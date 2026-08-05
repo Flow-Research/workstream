@@ -62,7 +62,7 @@ class _ProjectionProcessor:
         self.escaped_tree = None
         self.retained_content = None
 
-    def process(self, reader, workspace):
+    def process_blocking(self, reader, workspace):
         def verify(tree):
             self.escaped_tree = tree
             self.retained_content = tree._content
@@ -97,7 +97,7 @@ async def test_projection_is_callback_scoped_and_cleanup_is_complete(
         reserved_bytes=inspection.total_expanded_bytes,
         maximum_entries=inspection.entry_count,
     ) as workspace:
-        result = processor.process(BytesIO(data), workspace)
+        result = processor.process_blocking(BytesIO(data), workspace)
 
     assert ("src/run.sh", executable) in result
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []

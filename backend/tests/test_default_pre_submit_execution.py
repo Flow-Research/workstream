@@ -579,14 +579,14 @@ async def test_authorized_cancellation_cleans_before_propagating(
     release = threading.Event()
     from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process
+    original = DefaultPreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process", blocking_process)
+    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
@@ -649,14 +649,14 @@ async def test_timeout_during_checker_access_cleans_workspace(
     release = threading.Event()
     from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process
+    original = DefaultPreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process", blocking_process)
+    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
     preparation._active[request.prepared_artifact._binding].deadline = (
         asyncio.get_running_loop().time() + 0.01
     )

@@ -16,7 +16,7 @@
   existing checker test still referenced a private helper moved into the shared
   pure-semantics module. Both tests now assert the intended 04B2 ownership and
   import boundary directly.
-- CodeRabbit's completed review found fail-closed ordering, dependency taxonomy,
+- CodeRabbit's reported findings identified fail-closed ordering, dependency taxonomy,
   attestation semantics, CI timing redirection, compatibility-shape, typing,
   test-strength, and evidence-ledger issues. The valid findings are corrected
   on the current head; operational memory-alert sizing remains an explicit
@@ -44,5 +44,5 @@ the shared CI failure-path defect.
 
 ## Remaining risks
 
-Replacement hosted checks must validate the pushed commit. CodeRabbit remains
-rate-limited unless its external quota becomes available.
+Hosted checks passed on the repaired implementation head. CodeRabbit's final
+incremental verification remains subject to its external rate limit.
