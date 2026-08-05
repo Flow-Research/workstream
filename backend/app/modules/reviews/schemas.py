@@ -55,3 +55,20 @@ class ReviewAdmissionReservationInput(BaseModel):
     submission_id: str = Field(min_length=36, max_length=36)
     submission_version: int = Field(gt=0)
     admitting_checker_run_id: str = Field(min_length=36, max_length=36)
+
+
+class ReviewLeaseInput(BaseModel):
+    """Exact persistence facts for one later caller-owned claim transaction."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: UUID
+    review_queue_entry_id: UUID
+    project_id: str = Field(min_length=36, max_length=36)
+    task_id: str = Field(min_length=36, max_length=36)
+    submission_id: str = Field(min_length=36, max_length=36)
+    submission_version: int = Field(gt=0)
+    reviewer_id: str = Field(min_length=36, max_length=36)
+    reviewer_contribution_policy_version_id: UUID
+    attempt_generation: int = Field(gt=0)
+    expires_at: datetime

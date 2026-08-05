@@ -12,8 +12,11 @@ new or materially changed subsystem checks remain blocking at 90 percent.
 
 ## Current gate
 
-`WS-QUAL-001-PLAN3` is planning only. It replaces the unstarted 04R global-floor
-switch with a two-stage behavior/mutation assurance proposal:
+`WS-QUAL-001-PLAN3` merged through PR #272. `WS-QUAL-001-PLAN3R1` is a
+planning-only correction for five valid CodeRabbit findings that arrived before
+the merge but were not addressed. It must merge before `04M` starts.
+
+The corrected proposal remains two-stage:
 
 1. `04M` — bounded, pinned, changed-scope mutation pilot with complete evidence
    and no blocking score.
@@ -26,6 +29,6 @@ implemented.
 
 ## Stop condition
 
-Stop after PLAN3 planning review and PR. Do not start 04M automatically. Do not
-start 05M without accepted exact hosted pilot evidence and a new human
+Stop after the PLAN3R1 correction review and PR. Do not start 04M automatically.
+Do not start 05M without accepted exact hosted pilot evidence and a new human
 instruction.

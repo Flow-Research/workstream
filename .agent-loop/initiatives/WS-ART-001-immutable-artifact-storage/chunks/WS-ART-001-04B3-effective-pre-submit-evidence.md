@@ -31,7 +31,8 @@ Submission, or separate contributor route.
 ## Acceptance Criteria
 
 - one ordered result contains both platform/default and locked project entries,
-  each with catalogue ID/version, source, status, severity, bounded code/message,
+  each with stable catalogue definition ID/version, source, status, severity,
+  bounded code/message,
   and policy trace;
 - the canonical typed result envelope nests identity under `definition`
   (`dispatch_authority`, authority-neutral definition ID/version, public name,
@@ -39,7 +40,9 @@ Submission, or separate contributor route.
   under `policy_trace` (effective-plan hash, deterministic rule-instance ID,
   locked-policy hash); immutable evidence persists each member explicitly and
   never relies on open-ended `metadata` for required provenance; for this
-  pre-submit authority, definition ID/version are exactly catalogue ID/version;
+  pre-submit authority, definition ID/version are exactly the stable catalogue
+  definition ID/version; the effective plan separately binds the top-level
+  catalogue ID/version and manifest hash;
 - execution binds actor/task/project/assignment, predecessor, archive identity,
   manifest ID/hash, scratch generation, locked guide/policy/checker hashes, and
   effective plan identity;

@@ -56,10 +56,12 @@ production behavior, migration, or dependency changes
 
 - [ ] Eligibility and evidence grammar are unchanged from accepted pilot proof
       unless a separately reviewed correction is explicit.
-- [ ] Every eligible surviving mutant blocks by default.
+- [ ] Policy enumerates every engine status, including killed, survived,
+      suspicious, timeout, error, and excluded. Each status blocks or maps
+      to an independently verified, typed policy classification.
 - [ ] Any allowed classification is narrow, typed, evidence-bound, and tested;
-      missing, stale, broad, or free-form classifications fail closed.
-- [ ] Timeout, suspicious, and error outcomes never count as killed.
+      missing, stale, broad, free-form, or unrecognized classifications fail
+      closed, and no status passes implicitly.
 - [ ] Test-only behavior/coverage claims cannot bypass target mutation.
 - [ ] `CONTRIBUTING.md` and the canonical claim README/schema/example explain
       when a claim is required, the permitted typed non-behavioral cases, local
