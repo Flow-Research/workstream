@@ -1,31 +1,13 @@
-name: Mutation Pilot
+name: Behavior Mutation Gate
 
 on:
   pull_request:
-    paths:
-      - "backend/scripts/mutation_policy.py"
-      - "backend/tests/test_mutation_policy.py"
-      - "backend/pyproject.toml"
-      - "scripts/git_delta.py"
-      - "scripts/test_git_delta.py"
-      - "scripts/behavior-claim.schema.json"
-      - ".ci/behavior-claims/WS-QUAL-001-04M.json"
-      - ".github/workflows/mutation-pilot.yml"
   push:
     branches:
       - main
-    paths:
-      - "backend/scripts/mutation_policy.py"
-      - "backend/tests/test_mutation_policy.py"
-      - "backend/pyproject.toml"
-      - "scripts/git_delta.py"
-      - "scripts/test_git_delta.py"
-      - "scripts/behavior-claim.schema.json"
-      - ".ci/behavior-claims/WS-QUAL-001-04M.json"
-      - ".github/workflows/mutation-pilot.yml"
 
 concurrency:
-  group: mutation-pilot-${{ github.event.pull_request.number || github.ref }}
+  group: behavior-mutation-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -36,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      PILOT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      PILOT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      MUTATION_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      MUTATION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -51,65 +33,114 @@ jobs:
           python-version: "3.12"
 
       - id: custody
-        name: Bind exact tree and protected dependency authority
+        name: Bind exact tree and protected evaluator authority
         shell: bash
         run: |
           set -euo pipefail
-          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
-          test "$(git rev-parse HEAD)" = "${PILOT_HEAD_SHA}"
+          gate_dir="${RUNNER_TEMP}/workstream-mutation-gate"
+          evaluator_dir="${gate_dir}/protected-evaluator"
+          test "$(git rev-parse HEAD)" = "${MUTATION_HEAD_SHA}"
           test -z "$(git status --porcelain)"
           head_tree="$(git rev-parse 'HEAD^{tree}')"
-          base_sha="$(git rev-parse "${PILOT_BASE_SHA}^{commit}")"
-          install -d -m 700 "${pilot_dir}"
-          git show "${base_sha}:scripts/mutation-requirements.txt" \
-            > "${pilot_dir}/protected-requirements.txt"
-          manifest_sha256="$(sha256sum "${pilot_dir}/protected-requirements.txt" | cut -d ' ' -f 1)"
+          base_sha="$(git rev-parse "${MUTATION_BASE_SHA}^{commit}")"
+          install -d -m 700 "${evaluator_dir}/backend/scripts" "${evaluator_dir}/scripts" "${gate_dir}/protected-backend"
+          git show "${base_sha}:backend/scripts/mutation_policy.py" > "${evaluator_dir}/backend/scripts/mutation_policy.py"
+          git show "${base_sha}:scripts/git_delta.py" > "${evaluator_dir}/scripts/git_delta.py"
+          evaluator="${evaluator_dir}/backend/scripts/mutation_policy.py"
+          bootstrap=false
+          if ! grep -q -- 'workstream-mutation-capability:discover-v1' "${evaluator}"; then
+            bootstrap=true
+            evaluator="${GITHUB_WORKSPACE}/backend/scripts/mutation_policy.py"
+          fi
+          git show "${base_sha}:scripts/mutation-requirements.txt" > "${gate_dir}/protected-requirements.txt"
+          if [[ "${bootstrap}" == "true" ]]; then
+            cp "${GITHUB_WORKSPACE}/scripts/mutation-requirements.txt" "${gate_dir}/protected-requirements.txt"
+          fi
+          git show "${base_sha}:backend/pyproject.toml" > "${gate_dir}/protected-backend/pyproject.toml"
+          git show "${base_sha}:backend/uv.lock" > "${gate_dir}/protected-backend/uv.lock"
+          manifest_sha256="$(sha256sum "${gate_dir}/protected-requirements.txt" | cut -d ' ' -f 1)"
           echo "head_tree=${head_tree}" >> "${GITHUB_OUTPUT}"
           echo "base_sha=${base_sha}" >> "${GITHUB_OUTPUT}"
+          echo "evaluator=${evaluator}" >> "${GITHUB_OUTPUT}"
+          echo "bootstrap=${bootstrap}" >> "${GITHUB_OUTPUT}"
           echo "manifest_sha256=${manifest_sha256}" >> "${GITHUB_OUTPUT}"
 
-      - name: Install protected hash-locked mutation toolchain
+      - id: preflight
+        name: Discover exact mutation applicability before installation
         shell: bash
         run: |
           set -euo pipefail
-          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
-          python -m venv "${pilot_dir}/venv"
-          "${pilot_dir}/venv/bin/python" -m pip install \
+          gate_dir="${RUNNER_TEMP}/workstream-mutation-gate"
+          python "${{ steps.custody.outputs.evaluator }}" \
+            --repository-root . \
+            --base-sha "${{ steps.custody.outputs.base_sha }}" \
+            --head-sha "${MUTATION_HEAD_SHA}" \
+            --discover \
+            --selection-output "${gate_dir}/selection.json"
+          applicability="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["applicability"])' "${gate_dir}/selection.json")"
+          echo "applicability=${applicability}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify protected-main blocking evaluator
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: python "${{ steps.custody.outputs.evaluator }}" --self-test
+
+      - name: Install protected hash-locked mutation toolchain
+        if: ${{ steps.preflight.outputs.applicability == 'applicable' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate_dir="${RUNNER_TEMP}/workstream-mutation-gate"
+          python -m venv "${gate_dir}/venv"
+          "${gate_dir}/venv/bin/python" -m pip install \
             --disable-pip-version-check \
             --require-hashes \
-            -r "${pilot_dir}/protected-requirements.txt"
-          test "$("${pilot_dir}/venv/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
+            -r "${gate_dir}/protected-requirements.txt"
+          test "$("${gate_dir}/venv/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
+          test "$("${gate_dir}/venv/bin/uv" --version)" = "uv 0.11.7 (x86_64-unknown-linux-gnu)"
+          UV_PROJECT_ENVIRONMENT="${gate_dir}/venv" \
+            "${gate_dir}/venv/bin/uv" sync \
+              --project "${gate_dir}/protected-backend" \
+              --locked \
+              --extra dev \
+              --inexact \
+              --no-install-project
 
-      - name: Run bounded changed-scope mutation pilot
+      - name: Run required bounded behavior mutation
+        if: ${{ steps.preflight.outputs.applicability == 'applicable' }}
         shell: bash
         run: |
           set -euo pipefail
-          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
+          gate_dir="${RUNNER_TEMP}/workstream-mutation-gate"
+          enforcement=--enforce
+          if [[ "${{ steps.custody.outputs.bootstrap }}" == "true" ]]; then
+            enforcement=""
+          fi
           timeout --signal=TERM --kill-after=15s 720s \
-            "${pilot_dir}/venv/bin/python" backend/scripts/mutation_policy.py \
+            "${gate_dir}/venv/bin/python" "${{ steps.custody.outputs.evaluator }}" \
               --repository-root . \
               --base-sha "${{ steps.custody.outputs.base_sha }}" \
-              --head-sha "${PILOT_HEAD_SHA}" \
-              --chunk-id WS-QUAL-001-04M \
-              --claim-file .ci/behavior-claims/WS-QUAL-001-04M.json \
-              --selection-output "${pilot_dir}/selection.json" \
-              --execute \
-              --manifest "${pilot_dir}/protected-requirements.txt" \
+              --head-sha "${MUTATION_HEAD_SHA}" \
+              --discover \
+              --selection-output "${gate_dir}/executed-selection.json" \
+              --execute ${enforcement} \
+              --manifest "${gate_dir}/protected-requirements.txt" \
               --manifest-digest "${{ steps.custody.outputs.manifest_sha256 }}" \
-              --mutmut-executable "${pilot_dir}/venv/bin/mutmut" \
-              --evidence-output "${pilot_dir}/evidence.json" \
+              --mutmut-executable "${gate_dir}/venv/bin/mutmut" \
+              --evidence-output "${gate_dir}/evidence.json" \
               --timeout-seconds 700
           test -z "$(git status --porcelain --untracked-files=no)"
           test "$(git rev-parse 'HEAD^{tree}')" = "${{ steps.custody.outputs.head_tree }}"
 
-      - name: Upload exact-head pilot evidence
+      - name: Upload exact-head mutation evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: mutation-pilot-${{ env.PILOT_HEAD_SHA }}
+          name: behavior-mutation-${{ env.MUTATION_HEAD_SHA }}
           path: |
-            ${{ runner.temp }}/workstream-mutation-pilot/selection.json
-            ${{ runner.temp }}/workstream-mutation-pilot/evidence.json
+            ${{ runner.temp }}/workstream-mutation-gate/selection.json
+            ${{ runner.temp }}/workstream-mutation-gate/executed-selection.json
+            ${{ runner.temp }}/workstream-mutation-gate/evidence.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
