@@ -248,6 +248,13 @@ class SubmissionPolicyMutationIdempotencyRecord(Base):
             unique=True,
             postgresql_where=text("service_identity is not null"),
         ),
+        Index(
+            "uq_submission_policy_committed_policy_action",
+            "committed_policy_id",
+            "action_id",
+            unique=True,
+            postgresql_where=text("status='committed'"),
+        ),
         UniqueConstraint("operation_id", name="uq_submission_policy_operation_identity"),
         CheckConstraint(
             "action_id in ('project.submission_artifact_policy.create',"
@@ -1285,7 +1292,7 @@ class SubmissionArtifactPolicy(Base):
             "and creation_scope_type is null and creation_scope_project_id is null "
             "and creation_action_id is null and creation_decision_event_id is null) or "
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
-            "and creation_scope_project_id is not null and creation_decision_event_id is not null "
+            "and creation_scope_project_id=project_id and creation_decision_event_id is not null "
             "and creation_action_id in ('project.submission_artifact_policy.create',"
             "'project.submission_artifact_policy.derive',"
             "'project.submission_artifact_policy.update') and "
@@ -1305,7 +1312,7 @@ class SubmissionArtifactPolicy(Base):
             "(approved_by_actor_profile_id is not null and approved_via_identity_link_id is not null "
             "and approved_by_admin_role_grant_id is not null "
             "and approval_scope_type in ('system','project') "
-            "and approval_scope_project_id is not null "
+            "and approval_scope_project_id=project_id "
             "and approval_action_id='project.submission_artifact_policy.approve' "
             "and approval_decision_event_id is not null)",
             name="ck_submission_policy_approval_authority_shape",
@@ -1415,7 +1422,7 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
             "and created_by_admin_role_grant_id is not null "
             "and creation_scope_type in ('system','project') "
-            "and creation_scope_project_id is not null "
+            "and creation_scope_project_id=project_id "
             "and creation_action_id='project.submission_artifact_policy.approve' "
             "and creation_decision_event_id is not null)",
             name="ck_effective_submission_policy_authority_shape",
@@ -1512,7 +1519,7 @@ class PreSubmitCheckerPolicy(Base):
             "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
             "and created_by_admin_role_grant_id is not null "
             "and creation_scope_type in ('system','project') "
-            "and creation_scope_project_id is not null "
+            "and creation_scope_project_id=project_id "
             "and creation_action_id='project.submission_artifact_policy.approve' "
             "and creation_decision_event_id is not null)",
             name="ck_pre_submit_policy_authority_shape",

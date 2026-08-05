@@ -428,6 +428,53 @@ def test_authorization_read_cursor_round_trip_and_query_binding() -> None:
         codec.decode(cursor, query_digest=replay_digest)
 
 
+def _submission_policy_derive_prepare_inputs() -> tuple[
+    PreparedAuthorizationInput, PreparedAuthorityScope
+]:
+    """Build the exact derive input and scope shared by service-matrix tests."""
+    project_id, guide_id, snapshot_id, policy_id, operation_id = (
+        uuid4() for _ in range(5)
+    )
+    custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=uuid4(),
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        expected_step="submission_artifact_policy",
+        task_id=uuid4(),
+        correlation_id=uuid4(),
+        stale_output_digest=DIGEST,
+    )
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+        resource_type="project_submission_artifact_policy_mutation",
+        resource_id=policy_id,
+        operation_id=operation_id,
+        request_digest=DIGEST,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=DIGEST,
+        target_kind="derive",
+        execution_kind="setup_service",
+        policy_id=policy_id,
+        policy_version="1",
+        policy_generation=1,
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+        setup_service_custody=custody,
+    )
+    return (
+        PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
+        ),
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     ["", "=", "a===", "*", "a" * 513],
@@ -5976,45 +6023,7 @@ async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions
     caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
     scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
     if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
-        project_id, guide_id, snapshot_id, policy_id, operation_id = (
-            uuid4() for _ in range(5)
-        )
-        custody = ProjectSetupServiceCustodyContext(
-            setup_run_id=uuid4(),
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            source_snapshot_id=snapshot_id,
-            setup_generation=1,
-            expected_step="submission_artifact_policy",
-            task_id=uuid4(),
-            correlation_id=uuid4(),
-            stale_output_digest=DIGEST,
-        )
-        resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
-            resource_type="project_submission_artifact_policy_mutation",
-            resource_id=policy_id,
-            operation_id=operation_id,
-            request_digest=DIGEST,
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            guide_version="1",
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=DIGEST,
-            target_kind="derive",
-            execution_kind="setup_service",
-            policy_id=policy_id,
-            policy_version="1",
-            policy_generation=1,
-            setup_generation=1,
-            stale_output_digest=DIGEST,
-            setup_service_custody=custody,
-        )
-        caller_input = PreparedAuthorizationInput(
-            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
-        )
-        scope = PreparedAuthorityScope(
-            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
-        )
+        caller_input, scope = _submission_policy_derive_prepare_inputs()
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(
             action_id,
@@ -6127,6 +6136,14 @@ async def test_submission_artifact_policy_prepared_binding_requires_exact_final_
     assert evidence.events[0].after_facts["resource_context_digest"] == (
         authorization_resource_digest(resource)
     )
+    with pytest.raises(AuthorizationDenied) as denied:
+        await authorization._complete_prepared_denial(
+            prepared._consumer_token,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+            resource,
+            AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+        )
+    assert denied.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
 
 
 @pytest.mark.parametrize(
@@ -6167,45 +6184,7 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
     caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
     scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
     if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
-        project_id, guide_id, snapshot_id, policy_id, operation_id = (
-            uuid4() for _ in range(5)
-        )
-        custody = ProjectSetupServiceCustodyContext(
-            setup_run_id=uuid4(),
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            source_snapshot_id=snapshot_id,
-            setup_generation=1,
-            expected_step="submission_artifact_policy",
-            task_id=uuid4(),
-            correlation_id=uuid4(),
-            stale_output_digest=DIGEST,
-        )
-        resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
-            resource_type="project_submission_artifact_policy_mutation",
-            resource_id=policy_id,
-            operation_id=operation_id,
-            request_digest=DIGEST,
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            guide_version="1",
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=DIGEST,
-            target_kind="derive",
-            execution_kind="setup_service",
-            policy_id=policy_id,
-            policy_version="1",
-            policy_generation=1,
-            setup_generation=1,
-            stale_output_digest=DIGEST,
-            setup_service_custody=custody,
-        )
-        caller_input = PreparedAuthorizationInput(
-            idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
-        )
-        scope = PreparedAuthorityScope(
-            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
-        )
+        caller_input, scope = _submission_policy_derive_prepare_inputs()
 
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(

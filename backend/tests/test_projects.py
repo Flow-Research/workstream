@@ -9368,7 +9368,7 @@ async def test_sufficiency_replay_repository_impossible_states_fail_closed() -> 
     async def missing(*_: object):
         return None
 
-    repository._find_namespace = missing  # type: ignore[method-assign]
+    repository.find = missing  # type: ignore[method-assign]
     values = {
         "actor_profile_id": str(uuid4()),
         "identity_link_id": str(uuid4()),
@@ -9470,6 +9470,43 @@ async def test_submission_artifact_policy_replay_repository_classifies_exact_sta
     state, record = await repository.reserve(**facts)  # type: ignore[arg-type]
     assert (state, record) == ("claimed", claimed)
 
+    session.get_result = None
+    with pytest.raises(ProjectRepositoryIntegrityError, match="reservation disappeared"):
+        await repository.reserve(**facts)  # type: ignore[arg-type]
+    session.get_result = claimed
+
+    captured: list[object] = []
+
+    async def capture(statement: object):
+        captured.append(statement)
+        return None
+
+    session.scalar = capture  # type: ignore[method-assign]
+    repository._find_namespace = (
+        SubmissionPolicyMutationReplayRepository._find_namespace.__get__(repository)
+    )  # type: ignore[method-assign]
+    await repository._find_namespace(
+        actor_profile_id=facts["actor_profile_id"],
+        idempotency_key=None,
+        service_identity="workstream.project.setup",
+        setup_run_id=str(uuid4()),
+        setup_generation=1,
+        setup_task_id=uuid4(),
+        correlation_id=uuid4(),
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value,
+    )
+    service_lookup = str(captured[-1])
+    for column in (
+        "service_identity",
+        "setup_run_id",
+        "setup_generation",
+        "setup_task_id",
+        "correlation_id",
+        "action_id",
+    ):
+        assert column in service_lookup
+
+    session.scalar = Session.scalar.__get__(session)  # type: ignore[method-assign]
     session.scalar_result = claimed
     assert await repository.find_by_operation(facts["operation_id"]) is claimed
 
@@ -9634,6 +9671,7 @@ async def test_submission_artifact_policy_authority_service_is_flush_only() -> N
         setup_task_id=task_id,
         correlation_id=correlation_id,
     )
+    assert await service.reserve_replay(service_facts) == ("claimed", record)
     for changed in (
         replace(service_facts, setup_run_id=str(uuid4())),
         replace(service_facts, setup_task_id=uuid4()),
@@ -9646,6 +9684,9 @@ async def test_submission_artifact_policy_authority_service_is_flush_only() -> N
     with pytest.raises(RuntimeError, match="one root transaction"):
         await service.reserve_replay(facts)
     session.nested = False
+    session.sync_session.transaction = SimpleNamespace(is_active=False)
+    with pytest.raises(RuntimeError, match="one root transaction"):
+        await service.reserve_replay(facts)
     session.sync_session.transaction = None
     with pytest.raises(RuntimeError, match="one root transaction"):
         await service.reserve_replay(facts)
@@ -9746,7 +9787,20 @@ async def test_submission_artifact_policy_replay_postgres_converges_exact_reserv
                     return await SubmissionPolicyMutationReplayRepository(second).reserve(**values)
 
         competing = asyncio.create_task(reserve_second())
-        await asyncio.sleep(0.05)
+        async with engine.connect() as observer:
+            for _ in range(200):
+                waiting = await observer.scalar(
+                    text(
+                        "select count(*) from pg_stat_activity where "
+                        "wait_event_type='Lock' and state='active' and "
+                        "query ilike '%submission_policy_mutation_idempotency_records%'"
+                    )
+                )
+                if waiting:
+                    break
+                await asyncio.sleep(0.05)
+            else:
+                raise AssertionError("competing reservation never blocked")
         await first.commit()
         second_result = await asyncio.wait_for(competing, timeout=5)
         assert second_result[0] == "pending"

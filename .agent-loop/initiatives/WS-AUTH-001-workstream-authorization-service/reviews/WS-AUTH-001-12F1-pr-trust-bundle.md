@@ -56,8 +56,10 @@ delegated to the hosted Backend matrix rather than the user's slow local host.
 - [x] Completion uses operation UUID plus the complete immutable namespace.
 - [x] Product provenance, replay completion, and allowed evidence are linked by
       deferred database custody.
-- [x] Historical null provenance survives upgrade and empty roundtrip.
-- [x] Pending replay and admitted audit evidence block downgrade.
+- [ ] Historical null provenance survives upgrade and empty roundtrip (hosted
+      Backend result pending on the corrected exact head).
+- [ ] Pending replay and admitted audit evidence block downgrade (hosted
+      Backend result pending on the corrected exact head).
 - [x] New subsystem files have a non-weakened hosted 90 percent coverage gate.
 
 ## Internal review

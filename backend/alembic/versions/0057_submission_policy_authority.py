@@ -124,7 +124,7 @@ def upgrade() -> None:
         "and creation_scope_type is null and creation_scope_project_id is null "
         "and creation_action_id is null and creation_decision_event_id is null) or "
         "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
-        "and creation_scope_project_id is not null and creation_decision_event_id is not null "
+        "and creation_scope_project_id=project_id and creation_decision_event_id is not null "
         "and creation_action_id in ('project.submission_artifact_policy.create',"
         "'project.submission_artifact_policy.derive',"
         "'project.submission_artifact_policy.update') and "
@@ -145,7 +145,7 @@ def upgrade() -> None:
         "(approved_by_actor_profile_id is not null and approved_via_identity_link_id is not null "
         "and approved_by_admin_role_grant_id is not null "
         "and approval_scope_type in ('system','project') "
-        "and approval_scope_project_id is not null "
+        "and approval_scope_project_id=project_id "
         "and approval_action_id='project.submission_artifact_policy.approve' "
         "and approval_decision_event_id is not null)",
     )
@@ -157,7 +157,7 @@ def upgrade() -> None:
         "(created_by_actor_profile_id is not null and created_via_identity_link_id is not null "
         "and created_by_admin_role_grant_id is not null "
         "and creation_scope_type in ('system','project') "
-        "and creation_scope_project_id is not null "
+        "and creation_scope_project_id=project_id "
         "and creation_action_id='project.submission_artifact_policy.approve' "
         "and creation_decision_event_id is not null)"
     )
@@ -272,6 +272,13 @@ def upgrade() -> None:
         ],
         unique=True,
         postgresql_where=sa.text("service_identity is not null"),
+    )
+    op.create_index(
+        "uq_submission_policy_committed_policy_action",
+        "submission_policy_mutation_idempotency_records",
+        ["committed_policy_id", "action_id"],
+        unique=True,
+        postgresql_where=sa.text("status='committed'"),
     )
     op.execute(
         """
@@ -641,6 +648,14 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Remove the inactive foundation only when no replay/provenance exists."""
     connection = op.get_bind()
+    connection.execute(sa.text("lock table audit_events in access exclusive mode"))
+    for table in (
+        "submission_policy_mutation_idempotency_records",
+        "submission_artifact_policies",
+        "effective_project_submission_artifact_policies",
+        "pre_submit_checker_policies",
+    ):
+        connection.execute(sa.text(f"lock table {table} in share row exclusive mode"))
     replay_count = connection.execute(
         sa.text("select count(*) from submission_policy_mutation_idempotency_records")
     ).scalar_one()
@@ -717,7 +732,7 @@ def downgrade() -> None:
         ("submission_artifact_policies", "ck_submission_policy_approval_authority_shape"),
         ("submission_artifact_policies", "ck_submission_policy_creation_authority_shape"),
     ):
-        op.drop_constraint(constraint, table, type_="check")
+        op.drop_constraint(op.f(f"ck_{table}_{constraint}"), table, type_="check")
 
     for table, prefix, columns, approval in (
         ("pre_submit_checker_policies", "pre_submit_policy", _APPROVAL_OUTPUT_COLUMNS, False),
@@ -745,5 +760,4 @@ def downgrade() -> None:
             op.drop_constraint(f"fk_{prefix}_{stem}_{suffix}", table, type_="foreignkey")
         for name, _column_type in reversed(columns):
             op.drop_column(table, name)
-    op.execute("lock table audit_events in access exclusive mode")
     _rewrite_audit_resource(add=False)

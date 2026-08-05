@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.runtime import (
     PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION,
     ProjectSubmissionArtifactPolicyMutationResourceContext,
     authorization_resource_digest,
 )
 from app.modules.authorization.catalogue import ActionId
+from app.modules.projects.models import SubmissionPolicyMutationIdempotencyRecord
 from app.modules.projects.submission_policy_mutation_repository import (
     SubmissionPolicyMutationReplayRepository,
 )
@@ -78,7 +81,7 @@ class SubmissionPolicyMutationService:
         custody = resource.setup_service_custody
         if resource.execution_kind == "setup_service":
             if (
-                facts.service_identity != "workstream.project.setup"
+                facts.service_identity != ServiceIdentity.PROJECT_SETUP.value
                 or facts.idempotency_key is not None
                 or custody is None
                 or facts.setup_run_id != str(custody.setup_run_id)
@@ -116,7 +119,12 @@ class SubmissionPolicyMutationService:
             "correlation_id": facts.correlation_id,
         }
 
-    async def reserve_replay(self, facts: SubmissionPolicyReplayFacts):
+    async def reserve_replay(
+        self, facts: SubmissionPolicyReplayFacts
+    ) -> tuple[
+        Literal["claimed", "mismatch", "pending", "replayed"],
+        SubmissionPolicyMutationIdempotencyRecord,
+    ]:
         """Reserve replay custody while leaving transaction ownership to the caller."""
         self._require_root_transaction()
         return await self._replay.reserve(**self._replay_values(facts))

@@ -9,9 +9,18 @@ from uuid import UUID, uuid4
 from sqlalchemy import and_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.projects.models import SubmissionPolicyMutationIdempotencyRecord
 from app.modules.projects.repository import ProjectRepositoryIntegrityError
+
+
+def _matches(
+    column: InstrumentedAttribute, value: object
+) -> ColumnElement[bool]:
+    """Return exact null-safe equality for one nullable mapped column."""
+    return column.is_(None) if value is None else column == value
 
 
 class SubmissionPolicyMutationReplayRepository:
@@ -46,15 +55,24 @@ class SubmissionPolicyMutationReplayRepository:
         namespace = (
             and_(
                 SubmissionPolicyMutationIdempotencyRecord.service_identity.is_(None),
-                SubmissionPolicyMutationIdempotencyRecord.idempotency_key == idempotency_key,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.idempotency_key,
+                    idempotency_key,
+                ),
             )
             if service_identity is None
             else and_(
                 SubmissionPolicyMutationIdempotencyRecord.service_identity == service_identity,
                 SubmissionPolicyMutationIdempotencyRecord.setup_run_id == setup_run_id,
                 SubmissionPolicyMutationIdempotencyRecord.setup_generation == setup_generation,
-                SubmissionPolicyMutationIdempotencyRecord.setup_task_id == setup_task_id,
-                SubmissionPolicyMutationIdempotencyRecord.correlation_id == correlation_id,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.setup_task_id,
+                    setup_task_id,
+                ),
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.correlation_id,
+                    correlation_id,
+                ),
                 SubmissionPolicyMutationIdempotencyRecord.action_id == action_id,
             )
         )
@@ -196,26 +214,31 @@ class SubmissionPolicyMutationReplayRepository:
                 SubmissionPolicyMutationIdempotencyRecord.operation_id == operation_id,
                 SubmissionPolicyMutationIdempotencyRecord.actor_profile_id == actor_profile_id,
                 SubmissionPolicyMutationIdempotencyRecord.identity_link_id == identity_link_id,
-                SubmissionPolicyMutationIdempotencyRecord.service_identity
-                .is_(None) if service_identity is None else
-                SubmissionPolicyMutationIdempotencyRecord.service_identity == service_identity,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.service_identity,
+                    service_identity,
+                ),
                 SubmissionPolicyMutationIdempotencyRecord.action_id == action_id,
-                SubmissionPolicyMutationIdempotencyRecord.idempotency_key
-                .is_(None) if idempotency_key is None else
-                SubmissionPolicyMutationIdempotencyRecord.idempotency_key == idempotency_key,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.idempotency_key,
+                    idempotency_key,
+                ),
                 SubmissionPolicyMutationIdempotencyRecord.request_digest == request_digest,
                 SubmissionPolicyMutationIdempotencyRecord.resource_context_digest
                 == resource_context_digest,
-                SubmissionPolicyMutationIdempotencyRecord.setup_run_id
-                .is_(None) if setup_run_id is None else
-                SubmissionPolicyMutationIdempotencyRecord.setup_run_id == setup_run_id,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.setup_run_id,
+                    setup_run_id,
+                ),
                 SubmissionPolicyMutationIdempotencyRecord.setup_generation == setup_generation,
-                SubmissionPolicyMutationIdempotencyRecord.setup_task_id
-                .is_(None) if setup_task_id is None else
-                SubmissionPolicyMutationIdempotencyRecord.setup_task_id == setup_task_id,
-                SubmissionPolicyMutationIdempotencyRecord.correlation_id
-                .is_(None) if correlation_id is None else
-                SubmissionPolicyMutationIdempotencyRecord.correlation_id == correlation_id,
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.setup_task_id,
+                    setup_task_id,
+                ),
+                _matches(
+                    SubmissionPolicyMutationIdempotencyRecord.correlation_id,
+                    correlation_id,
+                ),
                 SubmissionPolicyMutationIdempotencyRecord.status == "pending",
             )
             .values(

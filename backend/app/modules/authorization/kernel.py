@@ -682,6 +682,13 @@ class AuthorizationService:
                 }
                 and isinstance(resource_context, ProjectPolicyMutationPrepareDenialResourceContext)
             )
+            or (
+                action_id in _SUBMISSION_POLICY_MUTATIONS
+                and isinstance(
+                    resource_context,
+                    ProjectSubmissionArtifactPolicyMutationResourceContext,
+                )
+            )
         )
         if not supported:
             raise TypeError("unsupported prepared denial")
