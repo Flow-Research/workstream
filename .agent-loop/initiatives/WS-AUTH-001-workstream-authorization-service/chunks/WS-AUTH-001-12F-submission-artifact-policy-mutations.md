@@ -1,105 +1,66 @@
-# Chunk Contract: WS-AUTH-001-12F — Submission Artifact Policy Mutation Cutover
+# Chunk Contract: WS-AUTH-001-12F — Submission Policy Planning Parent
 
-## Status and prerequisite
+## Status
 
-Proposed and inactive after 12E.
+Split before runtime implementation after required L1 pre-start review failed
+on 2026-08-05. This parent activates nothing and is not executable.
 
-## Parent initiative
+## Why the inherited contract was rejected
 
-`WS-AUTH-001` — Workstream Authorization Service
+The inherited 12F contract combined four actions, a provenance migration,
+human HTTP idempotency, external agent work, fixed-service custody, Celery
+cutover, multi-row approval, effective/pre-submit compilation, and downstream
+continuation without defining their transaction or replay boundaries. It also
+omitted the dedicated prepared-mutation modules and Celery executor from scope.
 
-## Goal
+Architecture, security, QA, and product/operations reviews all returned
+`FAIL` before application code changed. Their blocking findings were:
 
-Activate draft creation, agent derivation, draft update, and approval for the
-exact submission-artifact policy lineage.
+- no dedicated flush-only mutation orchestrator/replay repository boundary;
+- ambiguous human versus fixed-service derivation authority;
+- no submission-policy-specific PREP binding/final matcher;
+- no exact UUID idempotency/replay and rollback contract;
+- no exact approval lock order or atomic provenance row set;
+- ambiguous Project Manager manual authoring and 12G continuation semantics;
+- placeholder rather than frozen verification commands; and
+- missing Celery/internal-command files in the allowed scope.
 
-## Why this chunk exists
+## Approved product and authority decisions
 
-Approval creates effective and pre-submit checker policy state and needs a
-separate provenance migration and final-chain revalidation.
+- Workstream automatically derives the normal submission-artifact policy.
+  `workstream.project.setup` is the only principal that calls the derivation
+  agent and persists agent-derived policy output.
+- The existing public inline derive endpoint is removed. A Project Manager may
+  request or recover setup only through the existing governed setup dispatch;
+  no human action invokes the agent inline.
+- Project Managers may create and update a manual draft only as a governed
+  exception with explicit manual provenance. They cannot edit an agent-derived
+  draft in place or claim agent provenance.
+- Approval remains Project Manager-only and atomically owns the exact draft,
+  effective policy, and pre-submit compilation chain.
+- 12F4 alone may atomically mark an existing post-submit policy superseded and
+  record its exact upstream replacement identity when approval changes the
+  effective/pre-submit lineage. That bounded invalidation is not derivation,
+  compilation, correction, approval, or execution. 12F may otherwise only
+  stage the setup continuation identity; 12G owns every new post-submit policy
+  behavior.
+- No backward-compatible role-based or public derive path survives.
 
-## Risk class
+## Executable children
 
-L1
+1. `WS-AUTH-001-12F1` — typed PREP/replay/provenance foundation; zero action
+   activation.
+2. `WS-AUTH-001-12F2` — Project Manager manual draft create/update cutover.
+3. `WS-AUTH-001-12F3` — fixed setup-service derivation and Celery cutover.
+4. `WS-AUTH-001-12F4` — Project Manager approval and atomic effective/pre-submit
+   chain cutover.
 
-## SLA
+Children are sequential, L1, one PR each, and require explicit human start.
+12G and 12B2 depend on merged 12F4, not this parent.
 
-P1
+## Parent stop conditions
 
-## Allowed files
-
-```text
-backend/app/modules/projects/models.py
-backend/app/modules/projects/authorization_reads.py
-backend/app/modules/projects/repository.py
-backend/app/modules/projects/router.py
-backend/app/modules/projects/schemas.py
-backend/app/modules/projects/service.py
-backend/app/modules/projects/post_submit_policy.py
-backend/app/modules/projects/setup_queue.py
-backend/app/modules/authorization/kernel.py
-backend/app/modules/authorization/prepared.py
-backend/app/modules/authorization/runtime.py
-backend/app/api/deps/authorization.py
-backend/alembic/versions/<then-current-next>_submission_policy_authority.py
-backend/tests/test_authorization.py
-backend/tests/test_projects.py
-backend/tests/test_alembic.py
-backend/scripts/api_contract_e2e.py
-docs/spec_authorization_service.md
-.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
-```
-
-## Not allowed changes
-
-Post-submit checker behavior, submission intake, ART provider/extraction,
-review/revision/retired-economic/contribution policy, or issuer-claim fallback.
-
-## Acceptance criteria
-
-- Actions bind exact project, draft guide, source snapshot, setup generation,
-  draft policy, effective output, compiled pre-submit output, actor/link, and
-  grant-or-service authority as applicable.
-- Create/update/approve are human Project Manager only. The derive action also
-  admits only `workstream.project.setup` through its closed matrix membership.
-- Service derivation additionally locks and binds the active setup run, expected
-  submission-policy step, task/correlation identity, project, guide, snapshot,
-  generation, and stale-output digest. It records service profile, identity
-  link, and static-matrix membership, never a fabricated matched grant.
-- Agent derivation carries no handle across external work and persists only
-  after fresh authority plus stale-output revalidation.
-- Approval locks the complete current chain and records actor profile, identity
-  link, matched grant, scope project, action, and bounded decision evidence
-  atomically with effective/pre-submit state.
-- Historical bootstrap provenance remains readable; upgrade/downgrade/re-upgrade
-  does not rewrite it.
-- Draft create/update, agent derivation, approval, effective output, and
-  pre-submit compilation each record local actor/link/grant-or-service/scope/action and
-  decision-event provenance. 12F owns these columns; 12G owns its separate
-  post-submit provenance migration.
-- Missing/wrong setup run, wrong setup step or task, direct public service
-  invocation, cross-project/guide/snapshot/generation, replay, stale policy or
-  output, concurrent approval, service or human revocation, wrong
-  handle/session/transaction, and partial-flush failures deny with one or zero
-  business effects as specified.
-- Final pushed head SHA passes `Backend / test` and `Agent Gates`.
-
-## Verification commands
-
-Before start, freeze exact isolated-runner, seeded migration round-trip,
-authorization/project 90% coverage, repository-wide 78% coverage baseline,
-Ruff, API drill, stale-doc, link, and diff commands.
-
-## Required reviewers
-
-Senior engineering, QA/test, security/auth, product/ops, architecture, CI
-integrity, docs, reuse/dedup, and test delta.
-
-## Human review focus
-
-Exact policy chain, approval provenance, stale agent output, and atomicity.
-
-## Stop conditions
-
-Stop if policy records must be collapsed, historical provenance rewritten, or
-submission/checker execution behavior changed.
+Stop if a child would reintroduce public inline derivation, allow a handle to
+cross external work, mutate post-submit policy beyond 12F4's exact atomic
+supersession/invalidation fields, reuse legacy role checks as authority, or
+collapse manual and agent provenance.
