@@ -228,6 +228,9 @@ def compile_effective_pre_submission_execution_plan(
         rule_instance_id = canonical_json_hash(
             {
                 "domain": "workstream.pre_submission_rule_instance.v1",
+                "catalogue_id": catalogue.catalogue_id,
+                "catalogue_version": catalogue.version,
+                "catalogue_manifest_sha256": catalogue.manifest_sha256,
                 "definition_id": definition.stable_id,
                 "definition_version": definition.version,
                 "effective_policy_id": str(lineage.effective_policy_id),

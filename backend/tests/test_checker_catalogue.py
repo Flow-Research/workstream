@@ -107,6 +107,58 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
         assert (definition.stable_id, definition.public_name) == (stable_id, public_name)
 
 
+def test_catalogue_exact_v01_contract_is_locked() -> None:
+    catalogue = build_pre_submission_checker_catalogue()
+    actual = {
+        "|".join(
+            (
+                entry.stable_id,
+                entry.version,
+                entry.public_name,
+                entry.classification.value,
+                entry.phase.value,
+                str(entry.order),
+                entry.dispatch_kind.value,
+                entry.dispatch_capability,
+                entry.primitive or "-",
+                entry.disabled_behavior.value,
+                ",".join(f"{name}={value}" for name, value in entry.resource_budget),
+            )
+        )
+        for entry in catalogue.entries
+    }
+    expected = {
+        "artifact.outer_zip.valid|v1|artifact.outer_zip.valid|mandatory_security|custody|10|platform_capability|submission_archive.outer_zip_valid|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.paths_safe|v1|artifact.archive.paths_safe|mandatory_security|custody|20|platform_capability|submission_archive.paths_safe|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.entries_safe|v1|artifact.archive.entries_safe|mandatory_security|custody|30|platform_capability|submission_archive.entries_safe|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.resources_bounded|v1|artifact.archive.resources_bounded|mandatory_security|custody|40|platform_capability|submission_archive.resources_bounded|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.integrity_verified|v1|artifact.archive.integrity_verified|mandatory_integrity|custody|50|platform_capability|submission_archive.integrity_verified|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.identity_computed|v1|artifact.archive.identity_computed|mandatory_integrity|identity|10|platform_capability|artifact_commitment.identity|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.manifest.semantic_identity_computed|v1|artifact.manifest.semantic_identity_computed|mandatory_integrity|identity|20|platform_capability|submission_manifest.semantic_identity|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.manifest.executable_normalized|v1|artifact.manifest.executable_normalized|mandatory_integrity|identity|30|platform_capability|submission_manifest.executable_normalized|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.revision.content_changed|v1|artifact.revision.content_changed|mandatory_integrity|identity|40|platform_capability|submission_change.changed|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.scratch.sealed_tree_verified|v1|artifact.scratch.sealed_tree_verified|mandatory_integrity|materialization|10|platform_capability|submission_materialization.sealed_tree_verified|-|infrastructure_unavailable|maximum_results=1",
+        "submission.packet.required_fields|v1|check_submission_packet|mandatory_accountability|default_policy|10|platform_capability|validate_submission_packet|-|infrastructure_unavailable|maximum_results=1",
+        "submission.attestation.required_topics|v1|check_confidentiality_attestation|mandatory_accountability|default_policy|20|platform_capability|require_attestation|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.sensitive_paths.high_confidence|v1|check_forbidden_files|mandatory_security|default_policy|30|platform_capability|forbid_high_confidence_sensitive_path|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.quality.placeholder_signal|v1|check_low_quality_generated_artifacts|advisory|default_policy|40|platform_capability|warn_low_quality_generated_artifact|-|record_disabled_and_continue|maximum_results=1",
+        "policy.submission_packet.validate|v1|check_submission_packet|mandatory_accountability|project_policy|10|policy_primitive|validate_submission_packet|validate_submission_packet|infrastructure_unavailable|maximum_results=1",
+        "policy.storage_scheme.enforce|v1|check_evidence_integrity|mandatory_integrity|project_policy|20|policy_primitive|enforce_storage_scheme|enforce_storage_scheme|infrastructure_unavailable|maximum_results=1",
+        "policy.manifest_field.require|v1|check_evidence_integrity|mandatory_integrity|project_policy|30|policy_primitive|require_manifest_field|require_manifest_field|infrastructure_unavailable|maximum_results=1",
+        "policy.hash.verify|v1|check_evidence_integrity|mandatory_integrity|project_policy|40|policy_primitive|verify_hash|verify_hash|infrastructure_unavailable|maximum_results=1",
+        "policy.file.require|v1|check_required_files|mandatory_accountability|project_policy|50|policy_primitive|require_file|require_file|infrastructure_unavailable|maximum_results=1",
+        "policy.evidence.minimum|v1|check_evidence_present|mandatory_accountability|project_policy|60|policy_primitive|require_minimum_evidence|require_minimum_evidence|infrastructure_unavailable|maximum_results=1",
+        "policy.artifact.forbid|v1|check_forbidden_files|mandatory_security|project_policy|70|policy_primitive|forbid_artifact|forbid_artifact|infrastructure_unavailable|maximum_results=1",
+        "policy.attestation.require|v1|check_confidentiality_attestation|mandatory_accountability|project_policy|80|policy_primitive|require_attestation|require_attestation|infrastructure_unavailable|maximum_results=1",
+        "policy.file_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|90|policy_primitive|limit_file_size|limit_file_size|infrastructure_unavailable|maximum_results=1",
+        "policy.package_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|100|policy_primitive|limit_package_size|limit_package_size|infrastructure_unavailable|maximum_results=1",
+        "policy.packaging.require|v1|check_submission_packet|mandatory_accountability|project_policy|110|policy_primitive|require_packaging|require_packaging|infrastructure_unavailable|maximum_results=1",
+        "policy.generated_quality.warn|v1|check_low_quality_generated_artifacts|advisory|project_policy|120|policy_primitive|warn_low_quality_generated_artifact|warn_low_quality_generated_artifact|record_disabled_and_continue|maximum_results=1",
+    }
+
+    assert actual == expected
+
+
 def test_catalogue_manifest_does_not_install_broad_generic_path_heuristics() -> None:
     manifest = json.dumps(dict(build_pre_submission_checker_catalogue().manifest), sort_keys=True)
     for forbidden_heuristic in ("token*", "secret*", "credential*", "node_modules"):
@@ -128,9 +180,20 @@ def test_catalogue_rejects_unknown_duplicate_and_unsafe_dependency_configuration
             (*valid.entries, first), key=lambda entry: (entry.phase, entry.order, entry.stable_id)
         )
     )
-    with pytest.raises(PreSubmissionCatalogueError, match="duplicate identities"):
+    with pytest.raises(PreSubmissionCatalogueError, match="duplicate stable IDs"):
         PreSubmissionCheckerCatalogue(
             valid.catalogue_id, valid.version, valid.schema_version, duplicate
+        )
+
+    version_alias = tuple(
+        sorted(
+            (*valid.entries, replace(first, version="v2")),
+            key=lambda entry: (entry.phase, entry.order, entry.stable_id),
+        )
+    )
+    with pytest.raises(PreSubmissionCatalogueError, match="duplicate stable IDs"):
+        PreSubmissionCheckerCatalogue(
+            valid.catalogue_id, valid.version, valid.schema_version, version_alias
         )
 
     broken = (replace(first, dependencies=("missing.definition",)), *valid.entries[1:])
@@ -277,6 +340,21 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
         catalogue=advisory_disabled,
     )
     assert state_changed.plan_sha256 != first.plan_sha256
+    first_rule_ids = {
+        entry.definition_id: entry.rule_instance_id
+        for entry in first.entries
+        if entry.rule_instance_id is not None
+    }
+    state_changed_rule_ids = {
+        entry.definition_id: entry.rule_instance_id
+        for entry in state_changed.entries
+        if entry.rule_instance_id is not None
+    }
+    assert state_changed_rule_ids.keys() == first_rule_ids.keys()
+    assert all(
+        state_changed_rule_ids[definition_id] != rule_instance_id
+        for definition_id, rule_instance_id in first_rule_ids.items()
+    )
 
 
 def test_effective_plan_rejects_stale_or_non_catalogue_bundle_facts() -> None:

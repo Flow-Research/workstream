@@ -221,9 +221,9 @@ class PreSubmissionCheckerCatalogue:
             raise PreSubmissionCatalogueError("catalogue envelope is invalid")
         if not self.entries:
             raise PreSubmissionCatalogueError("catalogue requires definitions")
-        identities = [(entry.stable_id, entry.version) for entry in self.entries]
-        if len(identities) != len(set(identities)):
-            raise PreSubmissionCatalogueError("catalogue contains duplicate identities")
+        stable_ids = [entry.stable_id for entry in self.entries]
+        if len(stable_ids) != len(set(stable_ids)):
+            raise PreSubmissionCatalogueError("catalogue contains duplicate stable IDs")
         primitives = [entry.primitive for entry in self.entries if entry.primitive is not None]
         if len(primitives) != len(set(primitives)):
             raise PreSubmissionCatalogueError("catalogue contains duplicate primitives")

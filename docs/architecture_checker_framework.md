@@ -15,7 +15,7 @@ Every checker returns:
   "definition": {
     "dispatch_authority": "pre_submission_catalogue",
     "definition_id": "policy.submission_packet.validate",
-    "definition_version": 1,
+    "definition_version": "v1",
     "public_name": "check_submission_packet",
     "source": "locked_project_policy"
   },
@@ -36,8 +36,10 @@ Every checker returns:
 
 `definition` and `policy_trace` are typed provenance, not arbitrary metadata.
 The discriminating `dispatch_authority` gives `definition_id/version` exact
-meaning: for `pre_submission_catalogue` they are the catalogue ID/version; for
-`durable_checker_registry` they are the registered durable checker ID/version.
+meaning: for `pre_submission_catalogue` they are the stable catalogue
+definition ID/version, while the effective plan separately binds the top-level
+catalogue ID/version and manifest hash; for `durable_checker_registry` they are
+the registered durable checker ID/version.
 For Workstream defaults, `source=workstream_default` and policy-only fields may
 be null under the closed schema. Serialization preserves this exact nesting.
 Persistence uses explicit authority-neutral columns or schema-validated typed

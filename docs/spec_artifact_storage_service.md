@@ -1099,12 +1099,18 @@ using the scratch root. Cleanup under an exclusive generation/lease may restore
 only the manager-owned directory write bit after no-follow ownership/type
 validation, then remove the tree; archive-supplied modes are never applied.
 
-Mandatory platform and locked Project Guide checks consume that same read-only
-scratch tree as one ordered `EffectivePreSubmissionExecutionPlan` assembled from
-the central versioned `PreSubmissionCheckerCatalogue`:
+Mandatory platform and locked Project Guide checks form one ordered
+`EffectivePreSubmissionExecutionPlan` assembled from the central versioned
+`PreSubmissionCheckerCatalogue`. Custody and identity phases consume the typed,
+verified results produced by the earlier archive/manifest capabilities;
+materialization and policy phases may consume the same sealed read-only scratch
+tree plus those typed facts. They do not reopen or independently reinterpret
+the uploaded ZIP:
 
 ```text
-artifact custody/safety phase
+artifact custody/safety result phase
+-> artifact and semantic-manifest identity result phase
+-> sealed materialization phase
 -> Workstream default policy phase
 -> locked Project Guide policy phase
 -> one bounded result/evidence envelope
