@@ -108,8 +108,6 @@ class LifecycleAuditEventType(StrEnum):
     REVIEW_FINDING_CREATED = "ReviewFindingCreated"
     FINDING_RESOLUTION_RECORDED = "FindingResolutionRecorded"
     SUBMISSION_FINDING_RESPONSE_CREATED = "SubmissionFindingResponseCreated"
-    REVIEW_AUTHORIZATION_ALLOWED = "ReviewAuthorizationAllowed"
-    REVIEW_AUTHORIZATION_DENIED = "ReviewAuthorizationDenied"
     REVIEW_EVIDENCE_ACCESSED = "ReviewEvidenceAccessed"
     REVIEW_EVIDENCE_UNAVAILABLE = "ReviewEvidenceUnavailable"
     REVIEW_EVIDENCE_INTEGRITY_MISMATCH = "ReviewEvidenceIntegrityMismatch"
@@ -177,8 +175,6 @@ _LIFECYCLE_EVENT_ENTITY = {
             LifecycleAuditEventType.REVIEW_ACCEPTED,
             LifecycleAuditEventType.REVIEW_NEEDS_REVISION,
             LifecycleAuditEventType.REVIEW_REJECTED,
-            LifecycleAuditEventType.REVIEW_AUTHORIZATION_ALLOWED,
-            LifecycleAuditEventType.REVIEW_AUTHORIZATION_DENIED,
             LifecycleAuditEventType.REVIEW_EVIDENCE_ACCESSED,
             LifecycleAuditEventType.REVIEW_EVIDENCE_UNAVAILABLE,
             LifecycleAuditEventType.REVIEW_EVIDENCE_INTEGRITY_MISMATCH,
@@ -195,6 +191,31 @@ _LIFECYCLE_EVENT_ENTITY = {
     LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
     LifecycleAuditEventType.CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
     LifecycleAuditEventType.COMPENSATION_AWARD_CREATED: LifecycleAuditEntityType.COMPENSATION_AWARD,
+}
+
+_LIFECYCLE_EVENT_REQUIRED_REFERENCES = {
+    LifecycleAuditEventType.REVIEW_ACCEPTED: frozenset(
+        {LifecycleAuditReferenceKind.FINAL_ACCEPTANCE}
+    ),
+    LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED: frozenset(
+        {
+            LifecycleAuditReferenceKind.TASK,
+            LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditReferenceKind.REVIEW,
+            LifecycleAuditReferenceKind.REVIEW_LEASE,
+        }
+    ),
+    LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED: frozenset(
+        {
+            LifecycleAuditReferenceKind.TASK,
+            LifecycleAuditReferenceKind.ASSIGNMENT,
+            LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditReferenceKind.FINAL_ACCEPTANCE,
+        }
+    ),
+    LifecycleAuditEventType.COMPENSATION_AWARD_CREATED: frozenset(
+        {LifecycleAuditReferenceKind.CONTRIBUTION_RECORD}
+    ),
 }
 
 
@@ -237,8 +258,10 @@ class LifecycleAuditEventInput(BaseModel):
     def validate_lifecycle_shape(self) -> Self:
         """Keep state transitions distinct from immutable fact creation."""
         if self.reason is LifecycleAuditReason.STATE_CHANGED:
-            if self.from_status == self.to_status or (
-                self.from_status is None and self.to_status is None
+            if (
+                self.from_status is None
+                or self.to_status is None
+                or self.from_status == self.to_status
             ):
                 raise ValueError("state change requires distinct lifecycle states")
         elif self.from_status is not None or self.to_status is not None:
@@ -263,6 +286,9 @@ class LifecycleAuditEventInput(BaseModel):
             raise ValueError("entity reference must match lifecycle entity")
         if _LIFECYCLE_EVENT_ENTITY[self.event_type] is not self.entity_type:
             raise ValueError("event type must match lifecycle entity")
+        required_references = _LIFECYCLE_EVENT_REQUIRED_REFERENCES.get(self.event_type, frozenset())
+        if not required_references.issubset(self.references):
+            raise ValueError("lifecycle event requires canonical source references")
         return self
 
 

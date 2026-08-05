@@ -1334,6 +1334,129 @@ def _lifecycle_input(**overrides) -> LifecycleAuditEventInput:
     return LifecycleAuditEventInput(**values)
 
 
+def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
+    event_groups = {
+        LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: {
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
+            LifecycleAuditEventType.REVIEW_ROUTED_TO_PREFERRED_REVIEWER,
+            LifecycleAuditEventType.REVIEWER_PREFERENCE_EXPIRED,
+            LifecycleAuditEventType.REVIEWER_PREFERENCE_INVALIDATED,
+            LifecycleAuditEventType.REVIEWER_DECLINED_PREFERENCE,
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_OPENED,
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CLOSED,
+        },
+        LifecycleAuditEntityType.REVIEW_LEASE: {
+            LifecycleAuditEventType.REVIEWER_CLAIMED_TASK,
+            LifecycleAuditEventType.REVIEWER_RELEASED_TASK,
+            LifecycleAuditEventType.REVIEWER_LEASE_EXPIRED,
+            LifecycleAuditEventType.REVIEWER_LEASE_REVOKED,
+            LifecycleAuditEventType.REVIEWER_LEASE_CONSUMED,
+            LifecycleAuditEventType.REVIEWER_LEASE_FORCE_RELEASED,
+        },
+        LifecycleAuditEntityType.REVIEW: {
+            LifecycleAuditEventType.REVIEW_RECORDED,
+            LifecycleAuditEventType.REVIEW_ACCEPTED,
+            LifecycleAuditEventType.REVIEW_NEEDS_REVISION,
+            LifecycleAuditEventType.REVIEW_REJECTED,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_ACCESSED,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_UNAVAILABLE,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_INTEGRITY_MISMATCH,
+            LifecycleAuditEventType.REVIEW_SNAPSHOT_PROJECTION_REQUESTED,
+        },
+        LifecycleAuditEntityType.REVIEW_FINDING: {
+            LifecycleAuditEventType.REVIEW_FINDING_CREATED,
+            LifecycleAuditEventType.REVIEW_FINDING_EVIDENCE_BOUND,
+        },
+        LifecycleAuditEntityType.FINDING_RESOLUTION: {
+            LifecycleAuditEventType.FINDING_RESOLUTION_RECORDED,
+        },
+        LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE: {
+            LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_CREATED,
+            LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_EVIDENCE_BOUND,
+        },
+        LifecycleAuditEntityType.CONTRIBUTION: {
+            LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED,
+            LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED,
+            LifecycleAuditEventType.CONTRIBUTION_RECORDED,
+        },
+        LifecycleAuditEntityType.COMPENSATION_AWARD: {
+            LifecycleAuditEventType.COMPENSATION_AWARD_CREATED,
+        },
+    }
+    assert set().union(*event_groups.values()) == set(LifecycleAuditEventType)
+    entity_references = {
+        LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: LifecycleAuditReferenceKind.REVIEW_QUEUE_ENTRY,
+        LifecycleAuditEntityType.REVIEW_LEASE: LifecycleAuditReferenceKind.REVIEW_LEASE,
+        LifecycleAuditEntityType.REVIEW: LifecycleAuditReferenceKind.REVIEW,
+        LifecycleAuditEntityType.REVIEW_FINDING: LifecycleAuditReferenceKind.REVIEW_FINDING,
+        LifecycleAuditEntityType.FINDING_RESOLUTION: LifecycleAuditReferenceKind.FINDING_RESOLUTION,
+        LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE: LifecycleAuditReferenceKind.SUBMISSION_FINDING_RESPONSE,
+        LifecycleAuditEntityType.CONTRIBUTION: LifecycleAuditReferenceKind.CONTRIBUTION_RECORD,
+        LifecycleAuditEntityType.COMPENSATION_AWARD: LifecycleAuditReferenceKind.COMPENSATION_AWARD,
+    }
+    for entity_type, event_types in event_groups.items():
+        for event_type in event_types:
+            entity_id = uuid4()
+            references = {
+                LifecycleAuditReferenceKind.PROJECT: uuid4(),
+                entity_references[entity_type]: entity_id,
+            }
+            if event_type is LifecycleAuditEventType.REVIEW_ACCEPTED:
+                references[LifecycleAuditReferenceKind.FINAL_ACCEPTANCE] = uuid4()
+            elif event_type is LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED:
+                references.update(
+                    {
+                        LifecycleAuditReferenceKind.TASK: uuid4(),
+                        LifecycleAuditReferenceKind.SUBMISSION: uuid4(),
+                        LifecycleAuditReferenceKind.REVIEW: uuid4(),
+                        LifecycleAuditReferenceKind.REVIEW_LEASE: uuid4(),
+                    }
+                )
+            elif event_type is LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED:
+                references.update(
+                    {
+                        LifecycleAuditReferenceKind.TASK: uuid4(),
+                        LifecycleAuditReferenceKind.ASSIGNMENT: uuid4(),
+                        LifecycleAuditReferenceKind.SUBMISSION: uuid4(),
+                        LifecycleAuditReferenceKind.FINAL_ACCEPTANCE: uuid4(),
+                    }
+                )
+            elif event_type is LifecycleAuditEventType.COMPENSATION_AWARD_CREATED:
+                references[LifecycleAuditReferenceKind.CONTRIBUTION_RECORD] = uuid4()
+            value = _lifecycle_input(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                event_type=event_type,
+                references=references,
+            )
+            assert value.event_type is event_type
+
+
+def test_lifecycle_input_requires_acceptance_and_contribution_source_lineage() -> None:
+    review_id = uuid4()
+    with pytest.raises(ValidationError, match="canonical source references"):
+        _lifecycle_input(
+            references={
+                LifecycleAuditReferenceKind.PROJECT: uuid4(),
+                LifecycleAuditReferenceKind.REVIEW: review_id,
+            },
+            entity_id=review_id,
+        )
+
+    contribution_id = uuid4()
+    with pytest.raises(ValidationError, match="canonical source references"):
+        _lifecycle_input(
+            entity_type=LifecycleAuditEntityType.CONTRIBUTION,
+            entity_id=contribution_id,
+            event_type=LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED,
+            references={
+                LifecycleAuditReferenceKind.PROJECT: uuid4(),
+                LifecycleAuditReferenceKind.CONTRIBUTION_RECORD: contribution_id,
+                LifecycleAuditReferenceKind.FINAL_ACCEPTANCE: uuid4(),
+            },
+        )
+
+
 @pytest.mark.parametrize(
     ("event_type", "entity_type", "entity_reference", "reason", "states"),
     [
@@ -1362,6 +1485,13 @@ def _lifecycle_input(**overrides) -> LifecycleAuditEventInput:
             LifecycleAuditEventType.FINDING_RESOLUTION_RECORDED,
             LifecycleAuditEntityType.FINDING_RESOLUTION,
             LifecycleAuditReferenceKind.FINDING_RESOLUTION,
+            LifecycleAuditReason.FACT_RECORDED,
+            (None, None),
+        ),
+        (
+            LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_CREATED,
+            LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE,
+            LifecycleAuditReferenceKind.SUBMISSION_FINDING_RESPONSE,
             LifecycleAuditReason.FACT_RECORDED,
             (None, None),
         ),
@@ -1400,6 +1530,11 @@ async def test_lifecycle_participant_persists_canonical_rev_con_event_vocabulary
         references={
             LifecycleAuditReferenceKind.PROJECT: uuid4(),
             entity_reference: entity_id,
+            **(
+                {LifecycleAuditReferenceKind.CONTRIBUTION_RECORD: uuid4()}
+                if event_type is LifecycleAuditEventType.COMPENSATION_AWARD_CREATED
+                else {}
+            ),
         },
     )
     async with audit_factory() as session:
@@ -1493,10 +1628,12 @@ async def test_lifecycle_participant_concurrent_exact_replay_is_deterministic(
             await session.commit()
             return stored.id
 
-    assert await asyncio.gather(persist(value), persist(value.model_copy(deep=True))) == [
-        str(value.event_id),
-        str(value.event_id),
-    ]
+    async with audit_factory() as first_session:
+        first = await LifecycleAuditParticipant(first_session).add_event(value)
+        replay_task = asyncio.create_task(persist(value.model_copy(deep=True)))
+        await _wait_for_advisory_lock_waiter(audit_factory)
+        await first_session.commit()
+    assert first.id == await replay_task == str(value.event_id)
 
 
 async def test_lifecycle_participant_concurrent_changed_replay_conflicts(
@@ -1517,9 +1654,30 @@ async def test_lifecycle_participant_concurrent_changed_replay_conflicts(
                 await session.rollback()
                 raise
 
-    results = await asyncio.gather(persist(value), persist(changed), return_exceptions=True)
-    assert sum(result == str(value.event_id) for result in results) == 1
-    assert sum(isinstance(result, LifecycleAuditConflict) for result in results) == 1
+    async with audit_factory() as first_session:
+        first = await LifecycleAuditParticipant(first_session).add_event(value)
+        changed_task = asyncio.create_task(persist(changed))
+        await _wait_for_advisory_lock_waiter(audit_factory)
+        await first_session.commit()
+    assert first.id == str(value.event_id)
+    with pytest.raises(LifecycleAuditConflict, match="identity conflict"):
+        await changed_task
+
+
+async def _wait_for_advisory_lock_waiter(audit_factory) -> None:
+    """Prove the replay transaction overlaps while the first lock is held."""
+    for _ in range(100):
+        async with audit_factory() as probe:
+            waiting = await probe.scalar(
+                text(
+                    "select exists (select 1 from pg_locks "
+                    "where locktype = 'advisory' and not granted)"
+                )
+            )
+        if waiting:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("concurrent replay did not wait on lifecycle event lock")
 
 
 async def test_lifecycle_participant_boundary_rejects_generic_repository_bypass(
@@ -1577,6 +1735,31 @@ async def test_lifecycle_participant_payload_revalidates_forged_input_without_se
                 "to_status": "pending",
             },
             "state change requires distinct lifecycle states",
+        ),
+        (
+            {
+                "reason": LifecycleAuditReason.STATE_CHANGED,
+                "from_status": None,
+                "to_status": "accepted",
+            },
+            "state change requires distinct lifecycle states",
+        ),
+        (
+            {
+                "reason": LifecycleAuditReason.STATE_CHANGED,
+                "from_status": "pending",
+                "to_status": None,
+            },
+            "state change requires distinct lifecycle states",
+        ),
+        (
+            {
+                "references": {
+                    LifecycleAuditReferenceKind.PROJECT: uuid4(),
+                    LifecycleAuditReferenceKind.REVIEW: uuid4(),
+                }
+            },
+            "entity reference must match lifecycle entity",
         ),
         (
             {"event_type": LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CLOSED},
