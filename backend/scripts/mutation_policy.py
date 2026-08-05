@@ -326,9 +326,9 @@ def _callable_spans(
         if isinstance(node, ast.Call):
             name = node.func.id if isinstance(node.func, ast.Name) else ""
             if (
-                node.func.attr == "split"
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "split"
                 and not class_scope
-                and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Constant)
                 and isinstance(node.func.value.value, str)
             ):
