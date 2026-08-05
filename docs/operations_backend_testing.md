@@ -191,9 +191,11 @@ For pull requests, the hash-locked mutation toolchain is read only from
 with `pip --require-hashes`. It does not run PR-controlled packaging hooks or
 install the backend package; the focused tests run with conftest loading
 disabled because they use only the protected mutation-test toolchain. The
-workflow has read-only permissions, checks out without credentials, receives no
-secrets, and executes the PR head in a Git archive extracted to disposable
-storage. Symlinks and special archive entries are rejected before execution.
+workflow has read-only permissions, disables persisted checkout credentials,
+and receives no secrets. The policy wrapper runs from the exact PR-head
+checkout; it archives that same head and runs baseline tests and mutmut only in
+the disposable extraction with token environment variables removed. Symlinks
+and special archive entries are rejected before test or mutation execution.
 Evidence and the virtual environment live in runner-temporary storage outside
 the PR checkout. The checked-out source tree must stay clean and retain the
 same exact tree hash.
@@ -204,4 +206,6 @@ manifest digest, exact configuration, selected targets and tests, elapsed time,
 and generated, killed, survived, timeout, suspicious, excluded, and error
 outcomes. Mutation score is not a contributor gate during this pilot. Baseline
 test failure, dependency-custody failure, target escape, engine error, timeout,
-or malformed evidence still fails the workflow.
+or malformed evidence still fails the workflow. Only separately instructed
+`WS-QUAL-001-05M`, after accepted hosted evidence and a human calibration
+checkpoint, may propose a blocking survivor policy.
