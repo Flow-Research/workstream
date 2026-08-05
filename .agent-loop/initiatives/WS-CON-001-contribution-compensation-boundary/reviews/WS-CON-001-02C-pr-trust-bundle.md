@@ -4,7 +4,8 @@
 
 Add the shared flush-only lifecycle-audit participant required by future REV
 and CON caller transactions. `LifecycleAuditEventInput` admits only closed
-entity, reason, and UUID-reference shapes. `LifecycleAuditParticipant` builds
+canonical event, entity, reason, and exact event-specific UUID-reference
+shapes. `LifecycleAuditParticipant` builds
 the historical `legacy_lifecycle` row using fixed internal provenance and asks
 `AuditRepository` to return an exact replay or flush the new row without
 committing.
@@ -24,10 +25,10 @@ compensation, task, outbox, dependency, or CI changes.
 
 ## Verification
 
-- 24 isolated PostgreSQL audit tests passed.
-- 11 focused lifecycle tests passed.
-- 6 contract-selector rollback/privacy/boundary/replay tests passed.
-- Audit subsystem coverage is 94.04%.
+- 39 isolated PostgreSQL audit tests passed.
+- 26 focused lifecycle tests passed.
+- 11 schema-only lifecycle input tests passed.
+- Audit subsystem coverage is 95%.
 - Ruff, diff integrity, Markdown links, and stale wording passed.
 
 ## Risks and human review focus
@@ -43,7 +44,7 @@ compensation, task, outbox, dependency, or CI changes.
 
 ## Review state
 
-Preimplementation architecture review passed with conditions that are now
-implemented. Required postimplementation internal reviews are pending because
-the reviewer service could not refresh its access token. Keep the PR draft
-until those reviews run and valid findings are addressed.
+Preimplementation architecture conditions and all valid postimplementation
+findings are implemented. Senior engineering, QA, security, product/ops,
+architecture, docs, reuse/dedup, and test-delta passed. The PR is ready for
+external checks and human review.

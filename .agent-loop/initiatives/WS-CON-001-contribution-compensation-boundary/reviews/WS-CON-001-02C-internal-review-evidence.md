@@ -12,10 +12,10 @@ Baseline: `e2057d0f39b47cc84fb733f4381ee674028a9a47`.
 ## Deterministic evidence
 
 ```text
-24 isolated PostgreSQL audit tests passed
-11 focused lifecycle tests passed
-6 exact contract-selector tests passed
-audit subsystem coverage: 94.04% (required at least 90%)
+39 isolated PostgreSQL audit tests passed
+26 focused lifecycle tests passed
+11 schema-only lifecycle input tests passed
+audit subsystem coverage: 95% (required at least 90%)
 Ruff: passed
 git diff --check: passed
 Markdown links: passed
@@ -23,9 +23,10 @@ stale Workstream wording: passed
 ```
 
 The proof covers caller rollback, exact persisted replay, changed replay
-conflict, fixed internal provenance, closed project/entity UUID references,
-entity/event consistency, reason/status consistency, generic repository bypass
-denial, and forged-input secret non-retention.
+conflict, deterministic concurrent replay through an observed PostgreSQL
+advisory-lock waiter, fixed internal provenance, complete canonical event/entity
+mapping, exact event-specific UUID references, reason/status consistency,
+generic repository bypass denial, and forged-input secret non-retention.
 
 ## Review state
 
@@ -36,8 +37,9 @@ repository replay path with an explicit immutable comparison set, raises a
 non-leaking typed conflict, and prevents the generic repository from
 impersonating it.
 
-Required postimplementation reviewer tracks are pending. Repeated reviewer
-launches failed before reading the diff because the reviewer service could not
-refresh its access token. This is an external review-infrastructure blocker,
-not a passing review result. The PR must remain draft until the required tracks
-run and every valid finding is resolved.
+Required postimplementation review is complete. Senior engineering, QA,
+security, product/ops, architecture, docs, reuse/dedup, and test-delta all
+passed after their valid findings were repaired. Repairs included canonical
+PascalCase REV/CON event ownership, exact source-lineage reference sets,
+removal of ambiguous authority/generic contribution tokens, complete state
+endpoints, deterministic concurrent replay proof, and current initiative docs.
