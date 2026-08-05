@@ -119,12 +119,23 @@ normalization, and fail-closed unchanged-work comparison.
 `WS-ART-001-PLAN4` merged through PR #271. Discovery for its proposed 04A4
 implementation proved the early clean cut unsafe because live legacy Submission
 creation still calls the shared precheck service and the verified-admission
-replacement is not yet available. PLAN5 is the active planning correction: it
+replacement is not yet available. PLAN5 merged through PR #273: it
 supersedes 04A4, makes 04B1 the next implementation chunk, and assigns complete
 legacy route/public-service/internal-guard/caller-package removal to the 05B
-admission-backed Submission cutover. All required internal L1 reviews pass after
-repair; local documentation and agent gates pass. No runtime behavior or AUTH
-availability changes in PLAN5; hosted PR review remains pending.
+admission-backed Submission cutover.
+
+`WS-ART-001-04B1` is active on its bounded worktree. It owns only the immutable
+typed catalogue, startup-fixed availability validation, migration of the
+existing compiler away from parallel primitive maps, and pure composition of
+one lineage-bound effective plan. It performs no ZIP read, scratch
+materialization, checker execution, durable write, route exposure, or AUTH
+activation.
+
+The implementation and deterministic evidence are complete in draft PR #276.
+All required internal reviewer tracks ran successfully after their valid
+findings were repaired. CodeRabbit completed substantive review and its two
+actionable threads were repaired and resolved. The ready PR now waits only for
+the final hosted Backend rerun on the repaired head.
 
 ## Gate
 

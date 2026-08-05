@@ -24,13 +24,13 @@ they cross multiple L1 boundaries.
 |---|---|---:|---|
 | `WS-ART-001-PLAN3` | Reconcile the complete remaining v0.1 custody chain and AUTH/REV/CON handoffs. | L1 | Merged planning |
 | `WS-ART-001-PLAN4` | Define the central default pre-submission checker catalogue, disable semantics, and split execution contract. | L1 | Merged PR #271 |
-| `WS-ART-001-PLAN5` | Correct legacy-precheck removal sequencing so the old public and internal paths are deleted only with the admission-backed Submission cutover. | L1 | Planning complete; PR pending |
+| `WS-ART-001-PLAN5` | Correct legacy-precheck removal sequencing so the old public and internal paths are deleted only with the admission-backed Submission cutover. | L1 | Merged PR #273 |
 | `WS-ART-001-03C` | Clean-cut legacy guide identity/excerpts and make the verified same-generation pipeline live. | L1 | Merged PR #249 |
 | `WS-ART-001-04A1` | Remove legacy multi-step contributor intake reachability and schema without adding the replacement route. | L1 | Merged PR #264 |
 | `WS-ART-001-04A2` | Add bounded one-outer-ZIP intake and archive-safety inspection in private scratch. | L1 | Merged PR #266 |
 | `WS-ART-001-04A3` | Add canonical semantic manifest, executable normalization, and unchanged-work gate. | L1 | Merged PR #268 |
 | `WS-ART-001-04A4` | Former early removal of the legacy independently invocable caller-owned submission-precheck route and contract. | L1 | Superseded by PLAN5; complete removal belongs to 05B |
-| `WS-ART-001-04B1` | Add the single versioned checker catalogue and compile one effective execution plan from platform defaults plus locked project policy. | L1 | Proposed after PLAN5 |
+| `WS-ART-001-04B1` | Add the single versioned checker catalogue and compile one effective execution plan from platform defaults plus locked project policy. | L1 | Active implementation |
 | `WS-ART-001-04B2` | Materialize the sealed manifest tree once and execute the mandatory platform/default catalogue phases. | L1 | Proposed after 04B1 |
 | `WS-ART-001-04B3` | Execute locked project-policy rules through the same plan and persist one bounded immutable evidence set. | L1 | Proposed after 04B2 |
 | `WS-ART-001-04C1` | Reauthorize and atomically persist capacity plus durable put intent, then write the checked ZIP once. | L1 | Proposed after XINT-06A |

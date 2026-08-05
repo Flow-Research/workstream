@@ -874,6 +874,13 @@ approved operational change.
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO` | `100` | `10000` | Maximum expanded-to-compressed ratio for one file. |
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_INSPECTION_SECONDS` | `300` | `1800` | Complete synchronous inspector deadline inside the preparation deadline. |
 
+Pre-submission checker catalogue configuration is separate from ZIP inspection
+bounds:
+
+| Environment variable | Default | Format | Contract |
+|---|---:|---|---|
+| `WORKSTREAM_ARTIFACT_PRE_SUBMISSION_CHECKER_DISABLED_IDS` | empty | closed catalogue IDs | Startup-fixed comma-separated stable IDs. Unknown or duplicate IDs fail startup. Any disabled mandatory definition makes preparation infrastructure-unavailable; disabled advisory definitions remain visible in the effective plan and do not block remaining execution. |
+
 Enabled artifact storage also requires an explicit durable-byte policy. None
 of these limits has a default, and startup fails unless all four are positive:
 
@@ -1098,12 +1105,18 @@ using the scratch root. Cleanup under an exclusive generation/lease may restore
 only the manager-owned directory write bit after no-follow ownership/type
 validation, then remove the tree; archive-supplied modes are never applied.
 
-Mandatory platform and locked Project Guide checks consume that same read-only
-scratch tree as one ordered `EffectivePreSubmissionExecutionPlan` assembled from
-the central versioned `PreSubmissionCheckerCatalogue`:
+Mandatory platform and locked Project Guide checks form one ordered
+`EffectivePreSubmissionExecutionPlan` assembled from the central versioned
+`PreSubmissionCheckerCatalogue`. Custody and identity phases consume the typed,
+verified results produced by the earlier archive/manifest capabilities;
+materialization and policy phases may consume the same sealed read-only scratch
+tree plus those typed facts. They do not reopen or independently reinterpret
+the uploaded ZIP:
 
 ```text
-artifact custody/safety phase
+artifact custody/safety result phase
+-> artifact and semantic-manifest identity result phase
+-> sealed materialization phase
 -> Workstream default policy phase
 -> locked Project Guide policy phase
 -> one bounded result/evidence envelope
