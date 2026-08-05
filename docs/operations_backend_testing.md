@@ -170,3 +170,42 @@ a measured target miss at the human merge checkpoint, that performance result
 does not override otherwise passing correctness, custody, service-contract,
 API, and coverage gates. Never lower coverage, skip nodes, or add a silent
 fallback to meet the target.
+
+## Changed-scope mutation pilot
+
+`Mutation Pilot` is an independent, observational WS-QUAL-001-04M workflow. It
+does not join the required Backend fan-in, alter the 78 percent global floor, or
+alter any protected 90 percent subsystem floor. It runs only when the pilot's
+policy, tests, claim, schema, Git-delta helper, or workflow changes.
+
+The pilot always selects eligible changed Python targets under `backend/app/`
+or `backend/scripts/`. Schema-v1 files under `.ci/behavior-claims/` may add a
+bounded target with qualified callables, exact owning pytest nodes, typed
+observable outcomes, and any essential real boundaries. Every eligible changed
+target requires this ownership mapping; claims cannot remove or replace one.
+Malformed claims, stale chunk identifiers, unsafe paths, symlinks, missing
+targets or tests, empty selection, and configuration drift fail closed.
+
+For pull requests, the hash-locked mutation toolchain is read only from
+`scripts/mutation-requirements.txt` at the protected base revision and installed
+with `pip --require-hashes`. It does not run PR-controlled packaging hooks or
+install the backend package; the focused tests run with conftest loading
+disabled because they use only the protected mutation-test toolchain. The
+workflow has read-only permissions, disables persisted checkout credentials,
+and receives no secrets. The policy wrapper runs from the exact PR-head
+checkout; it archives that same head and runs baseline tests and mutmut only in
+the disposable extraction with token environment variables removed. Symlinks
+and special archive entries are rejected before test or mutation execution.
+Evidence and the virtual environment live in runner-temporary storage outside
+the PR checkout. The checked-out source tree must stay clean and retain the
+same exact tree hash.
+
+The independent job is limited to 15 minutes, with mutation execution bounded
+below 12 minutes. Its seven-day artifact binds base SHA, head SHA and tree,
+manifest digest, exact configuration, selected targets and tests, elapsed time,
+and generated, killed, survived, timeout, suspicious, excluded, and error
+outcomes. Mutation score is not a contributor gate during this pilot. Baseline
+test failure, dependency-custody failure, target escape, engine error, timeout,
+or malformed evidence still fails the workflow. Only separately instructed
+`WS-QUAL-001-05M`, after accepted hosted evidence and a human calibration
+checkpoint, may propose a blocking survivor policy.

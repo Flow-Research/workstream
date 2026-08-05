@@ -10,9 +10,22 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 from dataclasses import asdict, dataclass
-from pathlib import Path
+
+try:
+    from scripts.git_delta import changed_files
+    from scripts.git_delta import diff_text
+    from scripts.git_delta import first_existing_ref
+    from scripts.git_delta import maybe_run
+    from scripts.git_delta import numstat
+    from scripts.git_delta import ref_exists
+except ModuleNotFoundError:  # Direct ``python scripts/...`` execution.
+    from git_delta import changed_files
+    from git_delta import diff_text
+    from git_delta import first_existing_ref
+    from git_delta import maybe_run
+    from git_delta import numstat
+    from git_delta import ref_exists
 
 
 RISKY_PATTERNS = re.compile(
@@ -45,122 +58,6 @@ class Finding:
     severity: str
     code: str
     message: str
-
-
-def run(cmd: list[str]) -> str:
-    """Run a command and return trimmed stdout."""
-    return subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT).strip()
-
-
-def maybe_run(cmd: list[str]) -> str:
-    """Run a command and return stdout, or an empty string on failure."""
-    result = subprocess.run(
-        cmd,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode != 0:
-        return ""
-    return result.stdout.strip()
-
-
-def add_unique(paths: list[str], output: str) -> None:
-    """Append unique paths from command output."""
-    for path in output.splitlines():
-        if path and path not in paths:
-            paths.append(path)
-
-
-def ref_exists(ref: str) -> bool:
-    """Return whether a git ref exists."""
-    return bool(maybe_run(["git", "rev-parse", "--verify", ref]))
-
-
-def first_existing_ref(*refs: str) -> str | None:
-    """Return the first git ref that exists."""
-    for ref in refs:
-        if ref_exists(ref):
-            return ref
-    return None
-
-
-def changed_files(base: str, head: str) -> list[str]:
-    """Return changed file paths, including local dirty-tree paths."""
-    paths: list[str] = []
-    add_unique(paths, maybe_run(["git", "diff", "--name-only", f"{base}...{head}"]))
-    add_unique(paths, maybe_run(["git", "diff", "--name-only", "--cached"]))
-    add_unique(paths, maybe_run(["git", "diff", "--name-only"]))
-    add_unique(paths, maybe_run(["git", "ls-files", "--others", "--exclude-standard"]))
-    return paths
-
-
-def numstat(base: str, head: str) -> tuple[int, int, list[tuple[str, int, int]]]:
-    """Return added/deleted line totals and per-file rows, including dirty files."""
-    outputs = [
-        maybe_run(["git", "diff", "--numstat", f"{base}...{head}"]),
-        maybe_run(["git", "diff", "--numstat", "--cached"]),
-        maybe_run(["git", "diff", "--numstat"]),
-    ]
-    rows_by_path: dict[str, tuple[int, int]] = {}
-    for output in outputs:
-        for line in output.splitlines():
-            parts = line.split("\t")
-            if len(parts) != 3:
-                continue
-            add, delete, path = parts
-            try:
-                a = int(add)
-            except ValueError:
-                a = 0
-            try:
-                d = int(delete)
-            except ValueError:
-                d = 0
-            previous_add, previous_del = rows_by_path.get(path, (0, 0))
-            rows_by_path[path] = (previous_add + a, previous_del + d)
-
-    for path in maybe_run(["git", "ls-files", "--others", "--exclude-standard"]).splitlines():
-        if not path or path in rows_by_path:
-            continue
-        added = count_text_lines(path)
-        rows_by_path[path] = (added, 0)
-    rows = [(path, added, deleted) for path, (added, deleted) in rows_by_path.items()]
-    total_add = sum(added for _, added, _ in rows)
-    total_del = sum(deleted for _, _, deleted in rows)
-    return total_add, total_del, rows
-
-
-def count_text_lines(path: str) -> int:
-    """Return a line count for text files and zero for binary/unreadable files."""
-    try:
-        data = Path(path).read_bytes()
-    except OSError:
-        return 0
-    if b"\x00" in data:
-        return 0
-    return len(data.splitlines())
-
-
-def diff_text(base: str, head: str, paths: list[str] | None = None) -> str:
-    """Return zero-context diff text, including local dirty changes."""
-    path_args = ["--", *paths] if paths else []
-    parts = [
-        maybe_run(["git", "diff", "--unified=0", f"{base}...{head}", *path_args]),
-        maybe_run(["git", "diff", "--unified=0", "--cached", *path_args]),
-        maybe_run(["git", "diff", "--unified=0", *path_args]),
-    ]
-    path_filter = set(paths or [])
-    for path in maybe_run(["git", "ls-files", "--others", "--exclude-standard"]).splitlines():
-        if path_filter and path not in path_filter:
-            continue
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        parts.append(f"--- /dev/null\n+++ b/{path}\n{text}")
-    return "\n".join(part for part in parts if part)
 
 
 def analyze(base: str, head: str, max_l1_lines: int = 500) -> dict:

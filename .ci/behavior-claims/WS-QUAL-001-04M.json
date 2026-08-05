@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "chunk_id": "WS-QUAL-001-04M",
+  "claims": [
+    {
+      "target": "backend/scripts/mutation_policy.py",
+      "callables": [
+        "scripts.mutation_policy.build_selection",
+        "scripts.mutation_policy.execute_pilot",
+        "scripts.mutation_policy._strong_calibration",
+        "scripts.mutation_policy._weak_calibration"
+      ],
+      "tests": [
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_changed_targets_are_mandatory_and_claims_are_additive",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_claim_validation_fails_closed",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_strong_calibration_asserts_the_exact_boundary",
+        "backend/tests/test_mutation_policy.py::TestMutationPolicy::test_weak_calibration_deliberately_asserts_only_the_result_type"
+      ],
+      "outcomes": ["return", "mapped_error"],
+      "boundaries": []
+    },
+    {
+      "target": "backend/scripts/run_test_lanes.py",
+      "callables": [
+        "scripts.run_test_lanes.discover_test_modules",
+        "scripts.run_test_lanes.validate_lane_inventory"
+      ],
+      "tests": [
+        "backend/tests/test_ci_test_lanes.py::test_committed_lanes_cover_recursive_inventory_exactly_once",
+        "backend/tests/test_ci_test_lanes.py::test_measured_hotspots_have_explicit_semantic_owners",
+        "backend/tests/test_ci_test_lanes.py::test_inventory_fails_closed"
+      ],
+      "outcomes": [
+        "return",
+        "mapped_error"
+      ],
+      "boundaries": []
+    }
+  ]
+}

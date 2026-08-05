@@ -124,5 +124,29 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("pull_request_review:", agent_gates)
         self.assertIn("--require-pr-approval", agent_gates)
 
+    def test_mutation_pilot_is_bounded_read_only_and_independent(self) -> None:
+        workflow = Path(".github/workflows/mutation-pilot.yml").read_text(encoding="utf-8")
+        backend = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
+
+        self.assertIn("  pull_request:\n", workflow)
+        self.assertIn("  push:\n", workflow)
+        self.assertNotIn("pull_request_target", workflow)
+        self.assertIn("permissions:\n  contents: read", workflow)
+        self.assertNotIn("contents: write", workflow)
+        self.assertNotIn("continue-on-error", workflow)
+        self.assertIn("timeout-minutes: 15", workflow)
+        self.assertEqual(workflow.count('      - "backend/pyproject.toml"'), 2)
+        self.assertIn("timeout --signal=TERM --kill-after=15s 720s", workflow)
+        self.assertIn("persist-credentials: false", workflow)
+        self.assertIn("--require-hashes", workflow)
+        self.assertIn(
+            'git show "${base_sha}:scripts/mutation-requirements.txt"', workflow
+        )
+        self.assertIn("--timeout-seconds 700", workflow)
+        self.assertIn("retention-days: 7", workflow)
+        self.assertIn("include-hidden-files: true", workflow)
+        self.assertNotIn('pip install -e "backend[dev]"', workflow)
+        self.assertNotIn("mutation-pilot", backend)
+
 if __name__ == "__main__":
     unittest.main()
