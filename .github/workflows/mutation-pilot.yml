@@ -38,7 +38,6 @@ jobs:
     env:
       PILOT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PILOT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      PILOT_DIR: ${{ runner.temp }}/workstream-mutation-pilot
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -56,14 +55,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
           test "$(git rev-parse HEAD)" = "${PILOT_HEAD_SHA}"
           test -z "$(git status --porcelain)"
           head_tree="$(git rev-parse 'HEAD^{tree}')"
           base_sha="$(git rev-parse "${PILOT_BASE_SHA}^{commit}")"
-          install -d -m 700 "${PILOT_DIR}"
+          install -d -m 700 "${pilot_dir}"
           git show "${base_sha}:scripts/mutation-requirements.txt" \
-            > "${PILOT_DIR}/protected-requirements.txt"
-          manifest_sha256="$(sha256sum "${PILOT_DIR}/protected-requirements.txt" | cut -d ' ' -f 1)"
+            > "${pilot_dir}/protected-requirements.txt"
+          manifest_sha256="$(sha256sum "${pilot_dir}/protected-requirements.txt" | cut -d ' ' -f 1)"
           echo "head_tree=${head_tree}" >> "${GITHUB_OUTPUT}"
           echo "base_sha=${base_sha}" >> "${GITHUB_OUTPUT}"
           echo "manifest_sha256=${manifest_sha256}" >> "${GITHUB_OUTPUT}"
@@ -72,30 +72,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m venv "${PILOT_DIR}/venv"
-          "${PILOT_DIR}/venv/bin/python" -m pip install \
+          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
+          python -m venv "${pilot_dir}/venv"
+          "${pilot_dir}/venv/bin/python" -m pip install \
             --disable-pip-version-check \
             --require-hashes \
-            -r "${PILOT_DIR}/protected-requirements.txt"
-          test "$("${PILOT_DIR}/venv/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
+            -r "${pilot_dir}/protected-requirements.txt"
+          test "$("${pilot_dir}/venv/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("mutmut"))')" = "3.7.0"
 
       - name: Run bounded changed-scope mutation pilot
         shell: bash
         run: |
           set -euo pipefail
+          pilot_dir="${RUNNER_TEMP}/workstream-mutation-pilot"
           timeout --signal=TERM --kill-after=15s 720s \
-            "${PILOT_DIR}/venv/bin/python" backend/scripts/mutation_policy.py \
+            "${pilot_dir}/venv/bin/python" backend/scripts/mutation_policy.py \
               --repository-root . \
               --base-sha "${{ steps.custody.outputs.base_sha }}" \
               --head-sha "${PILOT_HEAD_SHA}" \
               --chunk-id WS-QUAL-001-04M \
               --claim-file .ci/behavior-claims/WS-QUAL-001-04M.json \
-              --selection-output "${PILOT_DIR}/selection.json" \
+              --selection-output "${pilot_dir}/selection.json" \
               --execute \
-              --manifest "${PILOT_DIR}/protected-requirements.txt" \
+              --manifest "${pilot_dir}/protected-requirements.txt" \
               --manifest-digest "${{ steps.custody.outputs.manifest_sha256 }}" \
-              --mutmut-executable "${PILOT_DIR}/venv/bin/mutmut" \
-              --evidence-output "${PILOT_DIR}/evidence.json" \
+              --mutmut-executable "${pilot_dir}/venv/bin/mutmut" \
+              --evidence-output "${pilot_dir}/evidence.json" \
               --timeout-seconds 700
           test -z "$(git status --porcelain --untracked-files=no)"
           test "$(git rev-parse 'HEAD^{tree}')" = "${{ steps.custody.outputs.head_tree }}"
@@ -106,8 +108,8 @@ jobs:
         with:
           name: mutation-pilot-${{ env.PILOT_HEAD_SHA }}
           path: |
-            ${{ env.PILOT_DIR }}/selection.json
-            ${{ env.PILOT_DIR }}/evidence.json
+            ${{ runner.temp }}/workstream-mutation-pilot/selection.json
+            ${{ runner.temp }}/workstream-mutation-pilot/evidence.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
