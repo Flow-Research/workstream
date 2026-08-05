@@ -32,6 +32,10 @@ from app.core.config import (
     get_settings,
 )
 from app.interfaces.artifacts import ArtifactStoreBootstrap, ArtifactStoreNamespaceClaim
+from app.modules.checkers.catalogue import (
+    build_pre_submission_checker_catalogue,
+    parse_disabled_pre_submission_checker_ids,
+)
 
 PRODUCTION_LIKE_ENVIRONMENTS = {"staging", "preview", "prod", "production"}
 MAX_VALIDATION_ERRORS = 20
@@ -64,6 +68,11 @@ DEFAULT_ERROR_RESPONSES = {
 async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Reject invalid production authentication configuration before serving."""
     settings: Settings = app.state.settings
+    app.state.pre_submission_checker_catalogue = build_pre_submission_checker_catalogue(
+        disabled_entry_ids=parse_disabled_pre_submission_checker_ids(
+            settings.artifact_pre_submission_checker_disabled_ids
+        )
+    )
     if settings.pagination_cursor_hmac_secret is None:
         raise RuntimeError("pagination cursor HMAC secret is required")
     decode_pagination_cursor_hmac_secret(settings.pagination_cursor_hmac_secret)

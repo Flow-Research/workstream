@@ -1473,8 +1473,11 @@ Fields:
 - `checker_run_id`
 - `checker_name`
 - `dispatch_authority`
-- `definition_id` (catalogue ID for pre-submit; registry checker ID for durable)
-- `definition_version` (catalogue or registry version selected by authority)
+- `definition_id` (stable catalogue definition ID for pre-submit; registry
+  checker ID for durable)
+- `definition_version` (catalogue definition or registry checker version
+  selected by authority; the effective plan separately binds the top-level
+  catalogue ID/version and manifest hash)
 - `result_source`
 - `effective_plan_hash`
 - `rule_instance_id` (nullable only for non-policy/default definitions)
@@ -1592,7 +1595,39 @@ offer, or none; it never exposes the full backlog.
 canonical human reviewer ActorProfile ID, queue/Submission lineage, database
 lease times, disposition, and the independently frozen reviewer
 ContributionPolicyVersion. PostgreSQL enforces one active lease per reviewer and
-queue entry. `ReviewLease` is not part of the 03A1 foundation.
+queue entry. The queue's deferred `active_lease_id` relationship must agree
+with the single active lease at transaction commit, allowing later claim and
+close commands to stage both sides atomically without exposing behavior in the
+persistence chunk.
+
+Fields:
+
+- `id`
+- `review_queue_entry_id`
+- `project_id`
+- `task_id`
+- `submission_id`
+- `submission_version`
+- `reviewer_id`
+- `reviewer_contribution_policy_version_id`
+- `attempt_generation`
+- `status`
+- `claimed_at`
+- `expires_at`
+- `closed_at`
+- `close_reason`
+
+Status is `active`, `consumed`, `released`, `expired`, or `revoked`. An active
+attempt has no close fields. Terminal close provenance is exact:
+`review_recorded`, `manual_release`, `lease_expired`, `grant_revoked`, or
+`admin_override`. Identity, queue/Submission lineage, reviewer, frozen policy,
+generation, and lease times never change; terminal attempts are wholly
+immutable. The reviewer policy FK is non-null and same-project through CON's
+canonical `ContributionPolicyVersion(id, project_id)` identity, and a new lease
+may freeze only a currently published version. CON owns claim-time selection;
+REV's database guard prevents a mutable draft or already-retired identity from
+being recorded as the new attempt's freeze. Reviewer and preferred-reviewer FKs
+accept only canonical human ActorProfiles.
 
 `ReviewPacketManifest` is an immutable REV semantic projection over the exact
 lease, Submission, admitting CheckerRun/results, stamped context, response

@@ -167,8 +167,7 @@ def test_review_models_are_registered_without_routes() -> None:
     """Alembic sees the tables while the application exposes no REV router."""
     assert "review_queue_entries" in Base.metadata.tables
     assert "review_admission_idempotency_records" in Base.metadata.tables
-    assert "active_lease_id" not in Base.metadata.tables["review_queue_entries"].columns
-    assert "review_lease_id" not in Base.metadata.tables["review_queue_entries"].columns
+    assert "active_lease_id" in Base.metadata.tables["review_queue_entries"].columns
     assert {
         "queue_state",
         "closed_at",

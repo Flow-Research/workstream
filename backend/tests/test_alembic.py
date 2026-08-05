@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0055_contribution_policy"
+HEAD_REVISION = "0056_review_lease_preference"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -365,6 +365,47 @@ async def _review_queue_foundation_state(database_url: str) -> dict[str, object]
             "admission_truncate_guard": (
                 "review_admission_idempotency_records_reject_truncate" in triggers
             ),
+        }
+    finally:
+        await engine.dispose()
+
+
+async def _review_lease_preference_state(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            revision = await connection.scalar(text("select version_num from alembic_version"))
+            lease_count = await connection.scalar(text("select count(*) from review_leases"))
+            queue_columns = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select column_name from information_schema.columns "
+                            "where table_schema=current_schema() "
+                            "and table_name='review_queue_entries'"
+                        )
+                    )
+                ).all()
+            )
+            triggers = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select tgname from pg_trigger where tgrelid in "
+                            "('review_queue_entries'::regclass,'review_leases'::regclass) "
+                            "and not tgisinternal"
+                        )
+                    )
+                ).all()
+            )
+        return {
+            "revision": str(revision),
+            "lease_count": int(lease_count or 0),
+            "active_lease_column": "active_lease_id" in queue_columns,
+            "lease_guard": "review_leases_guard" in triggers,
+            "queue_graph_guard": "review_queue_entries_active_lease_guard" in triggers,
+            "lease_graph_guard": "review_leases_active_lease_guard" in triggers,
+            "truncate_guard": "review_leases_reject_truncate" in triggers,
         }
     finally:
         await engine.dispose()
@@ -749,6 +790,28 @@ def test_0051_review_queue_foundation_empty_round_trip(
             "admission_truncate_guard": True,
         }
         command.downgrade(config, "0050_guide_source_v2")
+        command.upgrade(config, "head")
+
+
+def test_0056_review_lease_preference_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """0056 installs no attempts and reverses exactly while unused."""
+    config = _alembic_config()
+    with migration_lock():
+        command.downgrade(config, "0055_contribution_policy")
+        command.upgrade(config, "0056_review_lease_preference")
+        assert asyncio.run(_review_lease_preference_state(isolated_database_env)) == {
+            "revision": "0056_review_lease_preference",
+            "lease_count": 0,
+            "active_lease_column": True,
+            "lease_guard": True,
+            "queue_graph_guard": True,
+            "lease_graph_guard": True,
+            "truncate_guard": True,
+        }
+        command.downgrade(config, "0055_contribution_policy")
         command.upgrade(config, "head")
 
 

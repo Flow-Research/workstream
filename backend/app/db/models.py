@@ -56,6 +56,7 @@ from app.modules.projects.models import (  # noqa: F401
 )
 from app.modules.reviews.models import (  # noqa: F401
     ReviewAdmissionIdempotencyRecord,
+    ReviewLease,
     ReviewQueueEntry,
 )
 from app.modules.tasks.models import (  # noqa: F401
