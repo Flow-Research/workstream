@@ -873,6 +873,12 @@ approved operational change.
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_EXPANDED_BYTES` | `536870912` | `536870912` | Actual expanded bytes across the complete outer archive. |
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO` | `100` | `10000` | Maximum expanded-to-compressed ratio for one file. |
 | `WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_INSPECTION_SECONDS` | `300` | `1800` | Complete synchronous inspector deadline inside the preparation deadline. |
+
+Pre-submission checker catalogue configuration is separate from ZIP inspection
+bounds:
+
+| Environment variable | Default | Format | Contract |
+|---|---:|---|---|
 | `WORKSTREAM_ARTIFACT_PRE_SUBMISSION_CHECKER_DISABLED_IDS` | empty | closed catalogue IDs | Startup-fixed comma-separated stable IDs. Unknown or duplicate IDs fail startup. Any disabled mandatory definition makes preparation infrastructure-unavailable; disabled advisory definitions remain visible in the effective plan and do not block remaining execution. |
 
 Enabled artifact storage also requires an explicit durable-byte policy. None

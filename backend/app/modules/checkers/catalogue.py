@@ -45,17 +45,13 @@ class PreSubmissionCheckerPhase(StrEnum):
 
 
 _PHASE_ORDER = {
-    phase: index
-    for index, phase in enumerate(
-        (
-            PreSubmissionCheckerPhase.CUSTODY,
-            PreSubmissionCheckerPhase.IDENTITY,
-            PreSubmissionCheckerPhase.MATERIALIZATION,
-            PreSubmissionCheckerPhase.DEFAULT_POLICY,
-            PreSubmissionCheckerPhase.PROJECT_POLICY,
-        )
-    )
+    phase: index for index, phase in enumerate(PreSubmissionCheckerPhase)
 }
+
+
+def pre_submission_phase_order(phase: PreSubmissionCheckerPhase) -> int:
+    """Return the canonical ordinal for one pre-submission phase."""
+    return _PHASE_ORDER[phase]
 
 
 class PreSubmissionCheckerState(StrEnum):

@@ -12,6 +12,7 @@ from app.modules.checkers.catalogue import (
     PreSubmissionCheckerDefinition,
     PreSubmissionCheckerPhase,
     PreSubmissionCheckerState,
+    pre_submission_phase_order,
 )
 from app.modules.checkers.compiler import (
     PRE_SUBMIT_BUNDLE_SCHEMA_VERSION,
@@ -104,7 +105,7 @@ class EffectivePreSubmissionPlanEntry:
     resource_budget: tuple[tuple[str, int], ...]
     policy_trace_source: str
     rule_instance_id: str | None
-    configuration: dict[str, Any]
+    configuration: FrozenJsonObject
     configuration_sha256: str
 
     def as_dict(self) -> dict[str, Any]:
@@ -126,7 +127,7 @@ class EffectivePreSubmissionPlanEntry:
             "resource_budget": dict(self.resource_budget),
             "policy_trace_source": self.policy_trace_source,
             "rule_instance_id": self.rule_instance_id,
-            "configuration": self.configuration,
+            "configuration": self.configuration.as_dict(),
             "configuration_sha256": self.configuration_sha256,
         }
 
@@ -152,6 +153,17 @@ class EffectivePreSubmissionExecutionPlan:
             self.catalogue_manifest_sha256,
             self.entries,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenJsonObject:
+    """Hashable deeply immutable projection of one canonical JSON object."""
+
+    items: tuple[tuple[str, Any], ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a detached mutable JSON projection for serialization."""
+        return {key: _thaw_json(value) for key, value in self.items}
 
 
 def compile_effective_pre_submission_execution_plan(
@@ -201,6 +213,7 @@ def compile_effective_pre_submission_execution_plan(
         if definition.primitive is None
     ]
     seen_primitives: set[str] = set()
+    catalogue_manifest_sha256 = catalogue.manifest_sha256
     for rule in rules:
         if not isinstance(rule, dict):
             raise EffectivePreSubmissionPlanError("compiled checker rule is invalid")
@@ -230,7 +243,7 @@ def compile_effective_pre_submission_execution_plan(
                 "domain": "workstream.pre_submission_rule_instance.v1",
                 "catalogue_id": catalogue.catalogue_id,
                 "catalogue_version": catalogue.version,
-                "catalogue_manifest_sha256": catalogue.manifest_sha256,
+                "catalogue_manifest_sha256": catalogue_manifest_sha256,
                 "definition_id": definition.stable_id,
                 "definition_version": definition.version,
                 "effective_policy_id": str(lineage.effective_policy_id),
@@ -256,7 +269,7 @@ def compile_effective_pre_submission_execution_plan(
         catalogue.catalogue_id,
         catalogue.version,
         catalogue.schema_version,
-        catalogue.manifest_sha256,
+        catalogue_manifest_sha256,
         ordered_entries,
     )
     return EffectivePreSubmissionExecutionPlan(
@@ -264,7 +277,7 @@ def compile_effective_pre_submission_execution_plan(
         catalogue_id=catalogue.catalogue_id,
         catalogue_version=catalogue.version,
         catalogue_schema_version=catalogue.schema_version,
-        catalogue_manifest_sha256=catalogue.manifest_sha256,
+        catalogue_manifest_sha256=catalogue_manifest_sha256,
         entries=ordered_entries,
         plan_sha256=canonical_json_hash(body),
     )
@@ -277,6 +290,9 @@ def _entry_from_definition(
     rule_instance_id: str | None,
 ) -> EffectivePreSubmissionPlanEntry:
     configuration_sha256 = canonical_json_hash(configuration)
+    frozen_configuration = FrozenJsonObject(
+        tuple((key, _freeze_json(value)) for key, value in sorted(configuration.items()))
+    )
     return EffectivePreSubmissionPlanEntry(
         definition_id=definition.stable_id,
         definition_version=definition.version,
@@ -295,7 +311,7 @@ def _entry_from_definition(
         resource_budget=definition.resource_budget,
         policy_trace_source=definition.policy_trace_source,
         rule_instance_id=rule_instance_id,
-        configuration=configuration,
+        configuration=frozen_configuration,
         configuration_sha256=configuration_sha256,
     )
 
@@ -323,7 +339,25 @@ def _plan_body(
 
 
 def _phase_order(phase: str) -> int:
-    return list(PreSubmissionCheckerPhase).index(PreSubmissionCheckerPhase(phase))
+    return pre_submission_phase_order(PreSubmissionCheckerPhase(phase))
+
+
+def _freeze_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return FrozenJsonObject(
+            tuple((key, _freeze_json(item)) for key, item in sorted(value.items()))
+        )
+    if isinstance(value, list):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+def _thaw_json(value: Any) -> Any:
+    if isinstance(value, FrozenJsonObject):
+        return value.as_dict()
+    if isinstance(value, tuple):
+        return [_thaw_json(item) for item in value]
+    return value
 
 
 def _validate_sha256(value: str) -> None:

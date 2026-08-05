@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 from app.core.hashing import canonical_json_hash
 from app.modules.checkers.catalogue import (
     PreSubmissionCatalogueError,
+    PreSubmissionCheckerCatalogue,
     build_pre_submission_checker_catalogue,
 )
 
@@ -33,6 +35,12 @@ class CompiledPreSubmitCheckerPolicy:
     compiled_bundle_hash: str
     checker_names: list[str]
     checker_configs: dict[str, Any]
+
+
+@lru_cache(maxsize=1)
+def _compiler_catalogue() -> PreSubmissionCheckerCatalogue:
+    """Return the immutable base catalogue used for policy compilation."""
+    return build_pre_submission_checker_catalogue()
 
 
 def build_project_pre_submit_checker_spec(
@@ -265,12 +273,22 @@ def _canonical_rule(rule: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(primitive, str):
         raise PreSubmitCheckerCompilerError("checker spec contains unknown primitive")
     try:
-        definition = build_pre_submission_checker_catalogue().primitive_definition(primitive)
+        definition = _compiler_catalogue().primitive_definition(primitive)
     except PreSubmissionCatalogueError as exc:
         raise PreSubmitCheckerCompilerError("checker spec contains unknown primitive") from exc
     severity = rule.get("severity")
     if severity not in {BLOCKING_SEVERITY, WARNING_SEVERITY}:
         raise PreSubmitCheckerCompilerError("checker spec contains invalid severity")
+    expected_severity = (
+        BLOCKING_SEVERITY if definition.classification.mandatory else WARNING_SEVERITY
+    )
+    if severity != expected_severity:
+        message = (
+            "checker spec weakens severity"
+            if definition.classification.mandatory
+            else "checker spec escalates warning-only rule"
+        )
+        raise PreSubmitCheckerCompilerError(message)
     policy_fields = rule.get("policy_fields")
     if not isinstance(policy_fields, list) or not policy_fields:
         raise PreSubmitCheckerCompilerError("checker spec rule lacks policy trace fields")
@@ -530,7 +548,7 @@ def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[di
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:
     """Build stable checker-name projections from compiled primitive rules."""
-    catalogue = build_pre_submission_checker_catalogue()
+    catalogue = _compiler_catalogue()
     names: list[str] = []
     for rule in rules:
         try:

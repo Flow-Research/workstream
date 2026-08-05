@@ -320,6 +320,14 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
         }
     )
     assert all(entry.configuration_sha256 for entry in first.entries)
+    required_file = next(
+        entry for entry in first.entries if entry.definition_id == "policy.file.require"
+    )
+    exported = required_file.as_dict()
+    exported["configuration"]["artifact_keys"].append("mutated-after-hash")
+    assert required_file.as_dict()["configuration"]["artifact_keys"] == ["task.toml"]
+    assert hash(required_file)
+    assert first.plan_sha256 == canonical_json_hash(first.as_dict())
 
     changed_lineage = replace(lineage, project_id=uuid4())
     changed = compile_effective_pre_submission_execution_plan(
