@@ -2,9 +2,9 @@
 
 ## Reconciliation baseline
 
-- Reconciled `main`: `9550b3cdb8ac12dea72931277cf46ac1b8ffda7f`.
-- Current migration head on `main`: `0054_guide_sufficiency_authority`;
-  this branch advances it to `0055_contribution_policy`.
+- Reconciled `main`: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
+- Current migration head on `main`: `0056_review_lease_preference`; 02C adds no
+  migration.
 - Current capability ledger: `docs/roadmap_status.md`.
 - Current contribution process: `AGENTS.md`, `CONTRIBUTING.md`, and
   `.agent-loop/README.md`. Historical signed-start and merge-intent records are
@@ -36,8 +36,9 @@
   guide sufficiency, and guide read/binding foundations.
 - `backend/app/modules/outbox/**` and migration `0029`: shared outbox
   persistence/append only; no dispatcher exists.
-- `backend/app/modules/audit/**`: existing shared audit foundation; no typed
-  lifecycle participant yet.
+- `backend/app/modules/audit/**`: existing shared audit foundation plus the 02C
+  branch's typed, flush-only REV/CON lifecycle participant. This branch state
+  remains unpublished until PR review and human merge.
 - `backend/app/modules/compensation/**` and merged migration `0053` add only the
   adapter-binding schema; no creation/lifecycle service exists.
 - Review queue persistence now exists; ReviewLease, Review, and FinalAcceptance

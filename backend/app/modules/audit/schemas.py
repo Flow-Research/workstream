@@ -68,10 +68,231 @@ _FACT_VALUES: dict[str, frozenset[str]] = {
     "provisioning_method": frozenset({"automatic_first_access", "manual_service_provisioning"}),
     "role": _ADMIN_ROLES | _PROJECT_ROLES,
     "scope_type": frozenset({"system", "project"}),
-    "future_obligation": frozenset(
-        {"auth13_assignment", "rev_reviewer_obligation", "none"}
+    "future_obligation": frozenset({"auth13_assignment", "rev_reviewer_obligation", "none"}),
+}
+
+
+class LifecycleAuditEntityType(StrEnum):
+    """Closed product-fact namespaces admitted by the shared participant."""
+
+    REVIEW_QUEUE_ENTRY = "review_queue_entry"
+    REVIEW_LEASE = "review_lease"
+    REVIEW = "review"
+    REVIEW_FINDING = "review_finding"
+    FINDING_RESOLUTION = "finding_resolution"
+    SUBMISSION_FINDING_RESPONSE = "submission_finding_response"
+    CONTRIBUTION = "contribution"
+    COMPENSATION_AWARD = "compensation_award"
+
+
+class LifecycleAuditEventType(StrEnum):
+    """Canonical REV/CON lifecycle facts admitted by the shared participant."""
+
+    REVIEW_QUEUE_ENTRY_CREATED = "ReviewQueueEntryCreated"
+    REVIEW_ROUTED_TO_PREFERRED_REVIEWER = "ReviewRoutedToPreferredReviewer"
+    REVIEWER_PREFERENCE_EXPIRED = "ReviewerPreferenceExpired"
+    REVIEWER_PREFERENCE_INVALIDATED = "ReviewerPreferenceInvalidated"
+    REVIEWER_DECLINED_PREFERENCE = "ReviewerDeclinedPreference"
+    REVIEW_QUEUE_ENTRY_OPENED = "ReviewQueueEntryOpened"
+    REVIEW_QUEUE_ENTRY_CLOSED = "ReviewQueueEntryClosed"
+    REVIEWER_CLAIMED_TASK = "ReviewerClaimedTask"
+    REVIEWER_RELEASED_TASK = "ReviewerReleasedTask"
+    REVIEWER_LEASE_EXPIRED = "ReviewerLeaseExpired"
+    REVIEWER_LEASE_REVOKED = "ReviewerLeaseRevoked"
+    REVIEWER_LEASE_CONSUMED = "ReviewerLeaseConsumed"
+    REVIEWER_LEASE_FORCE_RELEASED = "ReviewerLeaseForceReleased"
+    REVIEW_RECORDED = "ReviewRecorded"
+    REVIEW_ACCEPTED = "ReviewAccepted"
+    REVIEW_NEEDS_REVISION = "ReviewNeedsRevision"
+    REVIEW_REJECTED = "ReviewRejected"
+    REVIEW_FINDING_CREATED = "ReviewFindingCreated"
+    FINDING_RESOLUTION_RECORDED = "FindingResolutionRecorded"
+    SUBMISSION_FINDING_RESPONSE_CREATED = "SubmissionFindingResponseCreated"
+    REVIEW_EVIDENCE_ACCESSED = "ReviewEvidenceAccessed"
+    REVIEW_EVIDENCE_UNAVAILABLE = "ReviewEvidenceUnavailable"
+    REVIEW_EVIDENCE_INTEGRITY_MISMATCH = "ReviewEvidenceIntegrityMismatch"
+    REVIEW_FINDING_EVIDENCE_BOUND = "ReviewFindingEvidenceBound"
+    SUBMISSION_FINDING_RESPONSE_EVIDENCE_BOUND = "SubmissionFindingResponseEvidenceBound"
+    REVIEW_SNAPSHOT_PROJECTION_REQUESTED = "ReviewSnapshotProjectionRequested"
+    REVIEWER_CONTRIBUTION_RECORDED = "ReviewerContributionRecorded"
+    SUBMITTER_CONTRIBUTION_RECORDED = "SubmitterContributionRecorded"
+    COMPENSATION_AWARD_CREATED = "CompensationAwardCreated"
+
+
+class LifecycleAuditReason(StrEnum):
+    """Feature-neutral reasons for durable lifecycle evidence."""
+
+    STATE_CHANGED = "lifecycle_state_changed"
+    FACT_RECORDED = "lifecycle_fact_recorded"
+
+
+class LifecycleAuditReferenceKind(StrEnum):
+    """Closed UUID reference keys allowed in lifecycle audit payloads."""
+
+    PROJECT = "project_id"
+    TASK = "task_id"
+    ASSIGNMENT = "assignment_id"
+    SUBMISSION = "submission_id"
+    REVIEW = "review_id"
+    REVIEW_QUEUE_ENTRY = "review_queue_entry_id"
+    REVIEW_LEASE = "review_lease_id"
+    REVIEW_FINDING = "review_finding_id"
+    FINDING_RESOLUTION = "finding_resolution_id"
+    SUBMISSION_FINDING_RESPONSE = "submission_finding_response_id"
+    FINAL_ACCEPTANCE = "final_acceptance_id"
+    CONTRIBUTION_RECORD = "contribution_record_id"
+    COMPENSATION_AWARD = "compensation_award_id"
+
+
+_LIFECYCLE_EVENT_ENTITY = {
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
+            LifecycleAuditEventType.REVIEW_ROUTED_TO_PREFERRED_REVIEWER,
+            LifecycleAuditEventType.REVIEWER_PREFERENCE_EXPIRED,
+            LifecycleAuditEventType.REVIEWER_PREFERENCE_INVALIDATED,
+            LifecycleAuditEventType.REVIEWER_DECLINED_PREFERENCE,
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_OPENED,
+            LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CLOSED,
+        ),
+        LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY,
+    ),
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.REVIEWER_CLAIMED_TASK,
+            LifecycleAuditEventType.REVIEWER_RELEASED_TASK,
+            LifecycleAuditEventType.REVIEWER_LEASE_EXPIRED,
+            LifecycleAuditEventType.REVIEWER_LEASE_REVOKED,
+            LifecycleAuditEventType.REVIEWER_LEASE_CONSUMED,
+            LifecycleAuditEventType.REVIEWER_LEASE_FORCE_RELEASED,
+        ),
+        LifecycleAuditEntityType.REVIEW_LEASE,
+    ),
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.REVIEW_RECORDED,
+            LifecycleAuditEventType.REVIEW_ACCEPTED,
+            LifecycleAuditEventType.REVIEW_NEEDS_REVISION,
+            LifecycleAuditEventType.REVIEW_REJECTED,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_ACCESSED,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_UNAVAILABLE,
+            LifecycleAuditEventType.REVIEW_EVIDENCE_INTEGRITY_MISMATCH,
+            LifecycleAuditEventType.REVIEW_SNAPSHOT_PROJECTION_REQUESTED,
+        ),
+        LifecycleAuditEntityType.REVIEW,
+    ),
+    LifecycleAuditEventType.REVIEW_FINDING_CREATED: LifecycleAuditEntityType.REVIEW_FINDING,
+    LifecycleAuditEventType.REVIEW_FINDING_EVIDENCE_BOUND: LifecycleAuditEntityType.REVIEW_FINDING,
+    LifecycleAuditEventType.FINDING_RESOLUTION_RECORDED: LifecycleAuditEntityType.FINDING_RESOLUTION,
+    LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_CREATED: LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE,
+    LifecycleAuditEventType.SUBMISSION_FINDING_RESPONSE_EVIDENCE_BOUND: LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE,
+    LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
+    LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED: LifecycleAuditEntityType.CONTRIBUTION,
+    LifecycleAuditEventType.COMPENSATION_AWARD_CREATED: LifecycleAuditEntityType.COMPENSATION_AWARD,
+}
+
+_LIFECYCLE_EVENT_REQUIRED_REFERENCES = {
+    LifecycleAuditEventType.REVIEW_ACCEPTED: frozenset(
+        {LifecycleAuditReferenceKind.FINAL_ACCEPTANCE}
+    ),
+    LifecycleAuditEventType.REVIEWER_CONTRIBUTION_RECORDED: frozenset(
+        {
+            LifecycleAuditReferenceKind.TASK,
+            LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditReferenceKind.REVIEW,
+            LifecycleAuditReferenceKind.REVIEW_LEASE,
+        }
+    ),
+    LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED: frozenset(
+        {
+            LifecycleAuditReferenceKind.TASK,
+            LifecycleAuditReferenceKind.ASSIGNMENT,
+            LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditReferenceKind.FINAL_ACCEPTANCE,
+        }
+    ),
+    LifecycleAuditEventType.COMPENSATION_AWARD_CREATED: frozenset(
+        {LifecycleAuditReferenceKind.CONTRIBUTION_RECORD}
     ),
 }
+
+
+class LifecycleAuditEventInput(BaseModel):
+    """Admit one bounded lifecycle fact without claims or arbitrary metadata."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    event_id: UUID
+    entity_type: LifecycleAuditEntityType
+    entity_id: UUID
+    event_type: LifecycleAuditEventType
+    actor_id: UUID
+    reason: LifecycleAuditReason
+    from_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
+    to_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
+    references: dict[LifecycleAuditReferenceKind, UUID] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_closed_input(cls, value: object) -> object:
+        """Copy only the closed input shape before Pydantic retains values."""
+        try:
+            if not isinstance(value, Mapping):
+                raise TypeError
+            data = dict(value)
+            if set(data) - cls.model_fields.keys():
+                raise TypeError
+            references = data.get("references", {})
+            if not isinstance(references, Mapping) or len(references) > len(
+                LifecycleAuditReferenceKind
+            ):
+                raise TypeError
+            data["references"] = dict(references)
+            return data
+        except Exception as exc:  # noqa: BLE001 - hostile Mapping methods are untrusted
+            raise TypeError("invalid lifecycle audit input") from exc
+
+    @model_validator(mode="after")
+    def validate_lifecycle_shape(self) -> Self:
+        """Keep state transitions distinct from immutable fact creation."""
+        if self.reason is LifecycleAuditReason.STATE_CHANGED:
+            if (
+                self.from_status is None
+                or self.to_status is None
+                or self.from_status == self.to_status
+            ):
+                raise ValueError("state change requires distinct lifecycle states")
+        elif self.from_status is not None or self.to_status is not None:
+            raise ValueError("fact recording cannot carry lifecycle states")
+        entity_reference = {
+            LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: LifecycleAuditReferenceKind.REVIEW_QUEUE_ENTRY,
+            LifecycleAuditEntityType.REVIEW_LEASE: LifecycleAuditReferenceKind.REVIEW_LEASE,
+            LifecycleAuditEntityType.REVIEW: LifecycleAuditReferenceKind.REVIEW,
+            LifecycleAuditEntityType.REVIEW_FINDING: LifecycleAuditReferenceKind.REVIEW_FINDING,
+            LifecycleAuditEntityType.FINDING_RESOLUTION: LifecycleAuditReferenceKind.FINDING_RESOLUTION,
+            LifecycleAuditEntityType.SUBMISSION_FINDING_RESPONSE: LifecycleAuditReferenceKind.SUBMISSION_FINDING_RESPONSE,
+            LifecycleAuditEntityType.CONTRIBUTION: (
+                LifecycleAuditReferenceKind.CONTRIBUTION_RECORD
+            ),
+            LifecycleAuditEntityType.COMPENSATION_AWARD: (
+                LifecycleAuditReferenceKind.COMPENSATION_AWARD
+            ),
+        }[self.entity_type]
+        if LifecycleAuditReferenceKind.PROJECT not in self.references:
+            raise ValueError("lifecycle audit requires project reference")
+        if self.references.get(entity_reference) != self.entity_id:
+            raise ValueError("entity reference must match lifecycle entity")
+        if _LIFECYCLE_EVENT_ENTITY[self.event_type] is not self.entity_type:
+            raise ValueError("event type must match lifecycle entity")
+        required_references = _LIFECYCLE_EVENT_REQUIRED_REFERENCES.get(self.event_type, frozenset())
+        allowed_references = {
+            LifecycleAuditReferenceKind.PROJECT,
+            entity_reference,
+            *required_references,
+        }
+        if set(self.references) != allowed_references:
+            raise ValueError("lifecycle event requires exact canonical references")
+        return self
 
 
 class AuthorityEventType(StrEnum):
@@ -119,7 +340,10 @@ _REASONS = {
     ),
     AuthorityEventType.ACTOR_PROFILE_SUSPENDED: {"security_response", "administrative_correction"},
     AuthorityEventType.ACTOR_PROFILE_REACTIVATED: {"administrative_correction"},
-    AuthorityEventType.ACTOR_PROFILE_DEACTIVATED: {"security_response", "administrative_correction"},
+    AuthorityEventType.ACTOR_PROFILE_DEACTIVATED: {
+        "security_response",
+        "administrative_correction",
+    },
     AuthorityEventType.INITIAL_ACCESS_ADMIN_BOOTSTRAPPED: {"initial_access_bootstrap"},
     AuthorityEventType.ADMIN_ROLE_GRANT_ISSUED: {"authority_assignment"},
     AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED: {"authority_revocation"},
@@ -165,8 +389,7 @@ def _facts(value: object) -> dict[str, object] | None:
         return None
     data = dict(value)
     if len(data) > 8 or not set(data).issubset(
-        frozenset(_FACT_VALUES)
-        | {"effective", "allowed", "resource_context_digest", "scope_id"}
+        frozenset(_FACT_VALUES) | {"effective", "allowed", "resource_context_digest", "scope_id"}
     ):
         return None
     for key, item in data.items():
@@ -175,8 +398,7 @@ def _facts(value: object) -> dict[str, object] | None:
         if key == "scope_id" and _uuid(item) is None:
             return None
         if key == "resource_context_digest" and (
-            not isinstance(item, str)
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", item) is None
+            not isinstance(item, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", item) is None
         ):
             return None
         if key in _FACT_VALUES and (not isinstance(item, str) or item not in _FACT_VALUES[key]):
@@ -186,11 +408,15 @@ def _facts(value: object) -> dict[str, object] | None:
     return data
 
 
-def _grant_facts(facts: dict[str, object] | None, roles: frozenset[str], status: str, effective: bool) -> bool:
+def _grant_facts(
+    facts: dict[str, object] | None, roles: frozenset[str], status: str, effective: bool
+) -> bool:
     if facts is None or facts.get("role") not in roles:
         return False
     scope = facts.get("scope_type")
-    expected = {"status", "role", "scope_type", "effective"} | ({"scope_id"} if scope == "project" else set())
+    expected = {"status", "role", "scope_type", "effective"} | (
+        {"scope_id"} if scope == "project" else set()
+    )
     return (
         set(facts) == expected
         and facts["status"] == status
@@ -201,7 +427,9 @@ def _grant_facts(facts: dict[str, object] | None, roles: frozenset[str], status:
     )
 
 
-def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | None, after: dict[str, object] | None) -> bool:
+def _event_facts_valid(
+    event: AuthorityEventType, before: dict[str, object] | None, after: dict[str, object] | None
+) -> bool:
     if event in {
         AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
         AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
@@ -211,18 +439,42 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
             before is None
             and after is not None
             and after.get("allowed") is expected_allowed
-            and set(after) in (
+            and set(after)
+            in (
                 {"allowed"},
                 {"allowed", "resource_context_digest"},
             )
         )
     exact = {
-        AuthorityEventType.ACTOR_PROFILE_PROVISIONED: (None, {"status": "active", "subject_kind": "human", "provisioning_method": "automatic_first_access"}),
-        AuthorityEventType.SERVICE_ACTOR_PROVISIONED: (None, {"status": "active", "subject_kind": "service", "provisioning_method": "manual_service_provisioning"}),
-        AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED: ({"status": "active"}, {"status": "revoked"}),
-        AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED: ({"status": "revoked"}, {"status": "active"}),
+        AuthorityEventType.ACTOR_PROFILE_PROVISIONED: (
+            None,
+            {
+                "status": "active",
+                "subject_kind": "human",
+                "provisioning_method": "automatic_first_access",
+            },
+        ),
+        AuthorityEventType.SERVICE_ACTOR_PROVISIONED: (
+            None,
+            {
+                "status": "active",
+                "subject_kind": "service",
+                "provisioning_method": "manual_service_provisioning",
+            },
+        ),
+        AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED: (
+            {"status": "active"},
+            {"status": "revoked"},
+        ),
+        AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED: (
+            {"status": "revoked"},
+            {"status": "active"},
+        ),
         AuthorityEventType.ACTOR_PROFILE_SUSPENDED: ({"status": "active"}, {"status": "suspended"}),
-        AuthorityEventType.ACTOR_PROFILE_REACTIVATED: ({"status": "suspended"}, {"status": "active"}),
+        AuthorityEventType.ACTOR_PROFILE_REACTIVATED: (
+            {"status": "suspended"},
+            {"status": "active"},
+        ),
         AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED: (None, {"status": "captured"}),
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUE_DENIED: (None, None),
         AuthorityEventType.LAST_ACCESS_ADMIN_OPERATION_DENIED: (None, None),
@@ -251,16 +503,23 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
             and before["scope_type"] == after["scope_type"] == "project"
             and before["role"] == after["role"]
             and before["scope_id"] == after["scope_id"]
-            and before["future_obligation"]
-            == after["future_obligation"]
-            == expected_obligation
+            and before["future_obligation"] == after["future_obligation"] == expected_obligation
         )
     if event == AuthorityEventType.ACTOR_IDENTITY_LINKED:
-        return before is None and after in ({"status": "active", "subject_kind": "human"}, {"status": "active", "subject_kind": "service"})
+        return before is None and after in (
+            {"status": "active", "subject_kind": "human"},
+            {"status": "active", "subject_kind": "service"},
+        )
     if event == AuthorityEventType.ACTOR_PROFILE_DEACTIVATED:
-        return before in ({"status": "active"}, {"status": "suspended"}) and after == {"status": "deactivated"}
+        return before in ({"status": "active"}, {"status": "suspended"}) and after == {
+            "status": "deactivated"
+        }
     if event == AuthorityEventType.INITIAL_ACCESS_ADMIN_BOOTSTRAPPED:
-        return before is None and _grant_facts(after, _ADMIN_ROLES, "active", True) and after["role"] == "access_administrator"
+        return (
+            before is None
+            and _grant_facts(after, _ADMIN_ROLES, "active", True)
+            and after["role"] == "access_administrator"
+        )
     roles, action = {
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUED: (_ADMIN_ROLES, "issued"),
         AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED: (_ADMIN_ROLES, "revoked"),
@@ -276,7 +535,9 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
             and (before["role"], before["scope_type"], before.get("scope_id"))
             == (after["role"], after["scope_type"], after.get("scope_id"))
         )
-    return _grant_facts(before, roles, "active", True) and _grant_facts(after, roles, "active", True)
+    return _grant_facts(before, roles, "active", True) and _grant_facts(
+        after, roles, "active", True
+    )
 
 
 class AuthorityAuditEventInput(BaseModel):
@@ -337,8 +598,15 @@ class AuthorityAuditEventInput(BaseModel):
         before_facts = _facts(data.get("before_facts"))
         after_facts = _facts(data.get("after_facts"))
         uuid_fields = (
-            "event_id", "entity_id", "request_id", "correlation_id", "matched_grant_id",
-            "project_id", "resource_id", "idempotency_reference", "invalidation_cause_event_id",
+            "event_id",
+            "entity_id",
+            "request_id",
+            "correlation_id",
+            "matched_grant_id",
+            "project_id",
+            "resource_id",
+            "idempotency_reference",
+            "invalidation_cause_event_id",
         )
         invalid = (
             event is None
@@ -347,17 +615,28 @@ class AuthorityAuditEventInput(BaseModel):
             or kind is None
             or (kind == "system_principal" and actor_ref != "workstream:system:bootstrap")
             or (kind != "system_principal" and _uuid(actor_ref) is None)
-            or data.get("permission_id") is not None and not _registered(data["permission_id"], PERMISSION_IDS)
-            or data.get("action_id") is not None and not _registered(data["action_id"], ACTION_IDS)
-            or data.get("denial_code") is not None and not _registered(data["denial_code"], _DENIAL_CODES)
-            or data.get("resource_type") is not None and not _registered(data["resource_type"], _RESOURCE_TYPES)
+            or data.get("permission_id") is not None
+            and not _registered(data["permission_id"], PERMISSION_IDS)
+            or data.get("action_id") is not None
+            and not _registered(data["action_id"], ACTION_IDS)
+            or data.get("denial_code") is not None
+            and not _registered(data["denial_code"], _DENIAL_CODES)
+            or data.get("resource_type") is not None
+            and not _registered(data["resource_type"], _RESOURCE_TYPES)
             or data.get("target_ref_kind") is not None
-            and not _registered(data["target_ref_kind"], _TARGET_REF_KINDS | {"permission_registry"})
+            and not _registered(
+                data["target_ref_kind"], _TARGET_REF_KINDS | {"permission_registry"}
+            )
             or data.get("invalidation_target_kind") is not None
-            and not _registered(data["invalidation_target_kind"], _UUID_TARGET_KINDS | {"permission_registry"})
-            or event is not None and not _registered(data.get("reason"), _REASONS[event])
-            or before_facts is None and data.get("before_facts") is not None
-            or after_facts is None and data.get("after_facts") is not None
+            and not _registered(
+                data["invalidation_target_kind"], _UUID_TARGET_KINDS | {"permission_registry"}
+            )
+            or event is not None
+            and not _registered(data.get("reason"), _REASONS[event])
+            or before_facts is None
+            and data.get("before_facts") is not None
+            or after_facts is None
+            and data.get("after_facts") is not None
         )
         for prefix in ("target_ref", "invalidation_target"):
             ref_kind = data.get(f"{prefix}_kind")
@@ -366,12 +645,15 @@ class AuthorityAuditEventInput(BaseModel):
             valid_uuid_kinds = (
                 _UUID_TARGET_KINDS if prefix == "invalidation_target" else _TARGET_REF_KINDS
             )
-            invalid |= _registered(ref_kind, valid_uuid_kinds) and ref is not None and _uuid(ref) is None
+            invalid |= (
+                _registered(ref_kind, valid_uuid_kinds) and ref is not None and _uuid(ref) is None
+            )
             invalid |= ref_kind == "permission_registry" and not _registered(ref, PERMISSION_IDS)
         target_kind, target_ref = data.get("target_actor_ref_kind"), data.get("target_actor_ref")
         invalid |= (target_kind is None) != (target_ref is None)
         invalid |= target_kind is not None and (
-            _enum_value(target_kind, ActorReferenceKind) != "actor_profile" or _uuid(target_ref) is None
+            _enum_value(target_kind, ActorReferenceKind) != "actor_profile"
+            or _uuid(target_ref) is None
         )
         if invalid:
             return None
@@ -404,9 +686,16 @@ class AuthorityAuditEventInput(BaseModel):
         """Enforce event, reference, fact, and project-scope integrity."""
         if self.resource_id is not None and self.resource_type is None:
             raise ValueError("resource ID requires resource type")
-        if self.entity_type in {"authorization_decision", "authority_invalidation"} and self.entity_id != str(self.event_id):
+        if self.entity_type in {
+            "authorization_decision",
+            "authority_invalidation",
+        } and self.entity_id != str(self.event_id):
             raise ValueError("decision entity ID must equal event ID")
-        if self.resource_type == "project" and self.resource_id is not None and self.resource_id != self.project_id:
+        if (
+            self.resource_type == "project"
+            and self.resource_id is not None
+            and self.resource_id != self.project_id
+        ):
             raise ValueError("project resource must match project scope")
         before, after = _facts(self.before_facts), _facts(self.after_facts)
         if not _event_facts_valid(self.event_type, before, after):
@@ -417,7 +706,12 @@ class AuthorityAuditEventInput(BaseModel):
                     raise ValueError("system grant cannot carry project scope")
                 if facts["scope_type"] == "project" and facts.get("scope_id") != self.project_id:
                     raise ValueError("grant facts must match project scope")
-        if before and after and "scope_id" in before and before.get("scope_id") != after.get("scope_id"):
+        if (
+            before
+            and after
+            and "scope_id" in before
+            and before.get("scope_id") != after.get("scope_id")
+        ):
             raise ValueError("replacement cannot change project scope")
         invalidation = self.invalidation_cause_event_id is not None or self.invalidation_target_kind
         action = ACTION_BY_ID.get(self.action_id) if self.action_id is not None else None
@@ -436,7 +730,12 @@ class AuthorityAuditEventInput(BaseModel):
             if action is not None and action.availability is ActionAvailability.PLANNED:
                 raise ValueError("planned action cannot produce allowed evidence")
         elif self.event_type == AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED:
-            if self.permission_id is None or self.denial_code is None or invalidation or self.idempotency_reference:
+            if (
+                self.permission_id is None
+                or self.denial_code is None
+                or invalidation
+                or self.idempotency_reference
+            ):
                 raise ValueError("invalid denied authorization evidence")
         elif self.event_type in {
             AuthorityEventType.ADMIN_ROLE_GRANT_ISSUE_DENIED,
@@ -445,7 +744,11 @@ class AuthorityAuditEventInput(BaseModel):
             if self.denial_code is None:
                 raise ValueError("denied authority operation requires denial code")
         elif self.event_type == AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED:
-            if self.invalidation_cause_event_id is None or self.invalidation_target_kind is None or self.denial_code:
+            if (
+                self.invalidation_cause_event_id is None
+                or self.invalidation_target_kind is None
+                or self.denial_code
+            ):
                 raise ValueError("invalid authority invalidation evidence")
             restoration = self.permission_id in {
                 PermissionId.ADMIN_ROLE_GRANT,
@@ -465,8 +768,7 @@ class AuthorityAuditEventInput(BaseModel):
                 and after.get("effective") is False
                 and before.get("role") in _PROJECT_ROLES
                 and before.get("role") == after.get("role")
-                and before.get("future_obligation")
-                == after.get("future_obligation")
+                and before.get("future_obligation") == after.get("future_obligation")
             )
             if (before, after) != expected_direction and not projected_project_role:
                 raise ValueError("invalid authority invalidation direction")

@@ -12,6 +12,7 @@ signed-loop records do not make behavior live.
 | `01` | Canonical specification and ADR 0016 | Merged PR #144 |
 | `02A` | Shared transactional outbox persistence/append | Merged PR #155; migration 0029 |
 | `03A` | Adapter-binding persistence | Merged PR #267; migration 0053 |
+| `03B` | Contribution-policy persistence | Merged PR #274; migration 0055 |
 | `PLAN5` | Complete-context human needs-revision rebase reconciliation | Merged PR #270 |
 
 ## Current reconciliation
@@ -25,8 +26,8 @@ signed-loop records do not make behavior live.
 
 | Chunk | Goal | Entry gate | Status |
 |---|---|---|---|
-| `03B` | Contribution-policy persistence | 03A | Implemented and internally reviewed; PR checkpoint; unblocks REV-03A2 FK after merge |
-| `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Proposed; independent of dispatcher; required before REV-04B |
+| `03B` | Contribution-policy persistence | 03A | Merged PR #274; REV-03A2 FK is unblocked |
+| `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Implementation, deterministic proof, and required internal review complete; PR/external review pending; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `05A` | Legacy semantic cutover + initial TaskAssignment policy freeze and guarded human-revision rebase support | 04B + task/assignment/revision authority contract + row-classification decision | Proposed |
@@ -80,7 +81,7 @@ distributed-lane changes.
 
 ## Stop
 
-CON-03B stops at this PR checkpoint. No later chunk starts until 03B passes its
-external checks and receives human merge approval. Binding creation/lifecycle
-behavior remains deferred and existing ART/REV identities do not substitute
-for the future AUTH-approved compensation adapter contract.
+CON-02C stops at its PR checkpoint. Do not begin another CON chunk
+automatically. Binding creation/lifecycle behavior remains deferred and
+existing ART/REV identities do not substitute for the future AUTH-approved
+compensation adapter contract.
