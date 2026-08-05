@@ -3,7 +3,7 @@
 | Risk | Severity | Mitigation |
 |---|---|---|
 | Unified model result is trusted as policy | Critical | Strict schemas, canonical registry lookup, trusted validation, separate approvals, and final locked revalidation. |
-| Worker borrows PM/admin authority | Critical | Finish AUTH-12F/12G/12B2/12H; use fresh fixed-service PREP per protected transaction. |
+| Setup service borrows PM/admin authority | Critical | Finish AUTH-12F/12G/12B2/12H; use fresh fixed-service PREP per protected transaction. |
 | Pre-submit capability dispatch is duplicated | Critical | Consume ART-04B1's complete platform-plus-project catalogue read-only; add no POL pre-submit registry or primitive map. |
 | Manual correction breaks compilation provenance | Critical | Immutable agent projections; new generation or independent manual replacement provenance. |
 | Model echoes secrets or injected guide instructions | High | Closed evidence references, safe-text validation/redaction, strict limits, no tools/network, and prompt-injection tests. |

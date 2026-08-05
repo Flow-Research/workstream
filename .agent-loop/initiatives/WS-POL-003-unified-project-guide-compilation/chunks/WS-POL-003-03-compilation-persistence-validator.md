@@ -20,7 +20,7 @@ Alembic migration, focused tests, and WS-POL-003/AUTH specification docs.
 
 ## Not allowed
 
-Worker cutover, approval behavior, checker execution, broad compilation
+Celery call-graph cutover, approval behavior, checker execution, broad compilation
 permission, synthetic human authority, compatibility path, or ART semantics.
 
 ## Acceptance

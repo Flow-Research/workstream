@@ -6,7 +6,7 @@ Status: Proposed after 01. Risk: L1.
 
 Implement one bounded `compile_project_guide` adapter call with untrusted-data
 instructions, strict structured output, cancellation, timeout, and sanitized
-failures. Do not rewire production workers.
+failures. Do not rewire production Celery orchestration.
 
 ## Allowed files
 
@@ -15,7 +15,7 @@ fake adapter tests, and WS-POL-003 docs.
 
 ## Not allowed
 
-Database, authorization, worker, policy approval, registry, or checker runtime
+Database, authorization, Celery orchestration, policy approval, registry, or checker runtime
 changes; no provider trace persistence or tool/network capability.
 
 ## Acceptance

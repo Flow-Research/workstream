@@ -15,7 +15,7 @@ projection interfaces/composition only, focused tests, and WS-POL-003 docs.
 
 ## Not allowed
 
-ART/CHECKER catalogue changes, duplicate project registry, database/model/worker
+ART/CHECKER catalogue changes, duplicate project registry, database/model/Celery
 changes, action activation, or checker execution.
 
 ## Acceptance

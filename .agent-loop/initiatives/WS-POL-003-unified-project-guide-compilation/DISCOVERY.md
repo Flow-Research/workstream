@@ -14,7 +14,7 @@ on 2026-08-05.
   sufficiency execution only as the fixed setup service over ART-verified
   material. The Project Manager route is an asynchronous dispatch/recovery
   request.
-- `backend/app/workers/project_setup.py` still sequences sufficiency,
+- `project_setup.py` still sequences sufficiency,
   submission-policy derivation, approval/compilation continuation, and later
   post-submit derivation.
 - `backend/app/modules/checkers/compiler.py` is the current legacy pre-submit
@@ -61,7 +61,7 @@ on 2026-08-05.
 
 - A manually edited agent projection would invalidate unified result
   provenance. Agent projections must be immutable.
-- Unified worker execution needs explicit fresh fixed-service PREP custody for
+- Unified fixed-service execution needs explicit fresh PREP custody for
   each protected durable boundary; no synthetic human context is acceptable.
 - Free-text model output can echo secrets, raw guide excerpts, paths, URLs, or
   prompt injection. Evidence references require a closed structured grammar
