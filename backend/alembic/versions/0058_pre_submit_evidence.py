@@ -126,9 +126,7 @@ def upgrade() -> None:
             f"result_manifest_sha256 ~ '{_SHA256}'",
             name="ck_pre_submit_evidence_result_manifest_sha256",
         ),
-        sa.CheckConstraint(
-            "archive_byte_count >= 0", name="ck_pre_submit_evidence_archive_size"
-        ),
+        sa.CheckConstraint("archive_byte_count >= 0", name="ck_pre_submit_evidence_archive_size"),
         sa.CheckConstraint("result_count > 0", name="ck_pre_submit_evidence_result_count"),
         sa.CheckConstraint(
             "(predecessor_submission_id is null and predecessor_submission_version is null) "
@@ -148,17 +146,13 @@ def upgrade() -> None:
             "(terminal_status='blocked' and not eligible)",
             name="ck_pre_submit_evidence_status_eligibility",
         ),
-        sa.ForeignKeyConstraint(
-            ["actor_profile_id"], ["actor_profiles.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["actor_profile_id"], ["actor_profiles.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["identity_link_id"], ["actor_identity_links.id"], ondelete="RESTRICT"
         ),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["task_id"], ["workstream_tasks.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(
-            ["assignment_id"], ["task_assignments.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["assignment_id"], ["task_assignments.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["predecessor_submission_id"], ["submissions.id"], ondelete="RESTRICT"
         ),
@@ -235,9 +229,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_pre_submit_evidence_sets_project_id", "pre_submit_evidence_sets", ["project_id"]
     )
-    op.create_index(
-        "ix_pre_submit_evidence_sets_task_id", "pre_submit_evidence_sets", ["task_id"]
-    )
+    op.create_index("ix_pre_submit_evidence_sets_task_id", "pre_submit_evidence_sets", ["task_id"])
     op.create_table(
         "pre_submit_evidence_results",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -261,9 +253,7 @@ def upgrade() -> None:
         sa.Column(
             "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),
-        sa.UniqueConstraint(
-            "evidence_set_id", "result_order", name="uq_pre_submit_result_order"
-        ),
+        sa.UniqueConstraint("evidence_set_id", "result_order", name="uq_pre_submit_result_order"),
         sa.UniqueConstraint(
             "evidence_set_id", "definition_id", name="uq_pre_submit_result_definition"
         ),
@@ -310,6 +300,32 @@ def upgrade() -> None:
         "pre_submit_evidence_results",
         ["evidence_set_id"],
     )
+    op.execute(
+        """
+        create function guard_pre_submit_evidence_result_membership() returns trigger
+        language plpgsql as $$
+        declare parent_created_at timestamptz; expected_count integer; current_count integer;
+        begin
+          select created_at, result_count into parent_created_at, expected_count
+            from pre_submit_evidence_sets where id=new.evidence_set_id for key share;
+          select count(*) into current_count from pre_submit_evidence_results
+            where evidence_set_id=new.evidence_set_id;
+          if parent_created_at is null
+             or parent_created_at <> transaction_timestamp()
+             or current_count >= expected_count then
+            raise exception 'pre-submit evidence result membership is closed'
+              using errcode='55000';
+          end if;
+          return new;
+        end;
+        $$
+        """
+    )
+    op.execute(
+        "create trigger pre_submit_evidence_results_membership before insert "
+        "on pre_submit_evidence_results for each row execute function "
+        "guard_pre_submit_evidence_result_membership()"
+    )
     _immutable_guard("pre_submit_evidence_results")
     _immutable_guard("pre_submit_evidence_sets")
 
@@ -318,6 +334,8 @@ def downgrade() -> None:
     bind = op.get_bind()
     if bind.execute(sa.text("select count(*) from pre_submit_evidence_sets")).scalar_one():
         raise RuntimeError("cannot downgrade populated immutable pre-submit evidence")
+    op.execute("drop trigger pre_submit_evidence_results_membership on pre_submit_evidence_results")
+    op.execute("drop function guard_pre_submit_evidence_result_membership()")
     for table in ("pre_submit_evidence_sets", "pre_submit_evidence_results"):
         op.execute(f"drop trigger {table}_no_truncate on {table}")
         op.execute(f"drop trigger {table}_immutable on {table}")
@@ -338,6 +356,4 @@ def downgrade() -> None:
         "uq_task_assignments_id_task_contributor", "task_assignments", type_="unique"
     )
     op.drop_constraint("uq_workstream_tasks_id_project", "workstream_tasks", type_="unique")
-    op.drop_constraint(
-        "uq_actor_identity_links_id_profile", "actor_identity_links", type_="unique"
-    )
+    op.drop_constraint("uq_actor_identity_links_id_profile", "actor_identity_links", type_="unique")

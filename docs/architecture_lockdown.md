@@ -140,8 +140,11 @@ Hidden ART-04B2 authorizes the fixed materializer before any prepared-byte read,
 reserves the complete expanded workspace budget, verifies one canonical sealed
 tree against the 04A identities, and runs only platform/default catalogue
 entries. The callback-scoped tree and all paths are destroyed before bounded
-non-durable results return. Project-policy execution and durable evidence remain
-separate 04B3 work; AUTH activation remains XINT-06A.
+results return. Hidden ART-04B3 extends that same plan and sealed-tree callback
+to the locked project-policy entries, then reloads the exact task context and
+persists one immutable platform-plus-project evidence set after scratch cleanup.
+It creates no provider object, admission, Submission, or lifecycle effect;
+AUTH activation remains XINT-06A.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 

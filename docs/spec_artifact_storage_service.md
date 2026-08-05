@@ -1215,8 +1215,13 @@ the complete canonical envelope.
 The operation identity hashes every input custody and locked-policy fact. A
 database uniqueness constraint permits one set for that identity. Exact replay
 returns the existing set, while changed facts or changed deterministic results
-conflict. Set and result rows are inserted in the caller transaction and are
-immutable. Blocking results create evidence only—never an ArtifactContent,
+conflict. Migration `0058_pre_submit_evidence` installs the normalized set and
+result tables plus composite identity-link, assignment, task/project, locked
+guide/policy and predecessor lineage constraints. Set and result rows reject
+update, delete and truncate; result membership closes with the creating
+transaction, and populated evidence prevents destructive downgrade. Replay
+revalidates every ordered result member before trusting the set. Blocking
+results create evidence only—never an ArtifactContent,
 provider write, admission, Submission or lifecycle effect.
 
 A passing evidence set additionally yields a process-local single-use

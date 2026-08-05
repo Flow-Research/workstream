@@ -184,6 +184,7 @@ def test_0058_pre_submit_evidence_empty_round_trip(
         "pre_submit_evidence_sets_immutable",
         "pre_submit_evidence_sets_no_truncate",
         "pre_submit_evidence_results_immutable",
+        "pre_submit_evidence_results_membership",
         "pre_submit_evidence_results_no_truncate",
     }
 

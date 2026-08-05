@@ -14,6 +14,7 @@ from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.models import PreSubmitEvidenceResult, PreSubmitEvidenceSet
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.checkers.pre_submit_execution import (
+    PreSubmissionEntryResult,
     PreSubmissionExecutionResult,
     validate_pre_submission_execution_result,
 )
@@ -304,9 +305,7 @@ class _PreSubmitEvidenceRepository:
         ):
             raise RuntimeError("pre-submit evidence requires one root transaction")
         validate_pre_submission_execution_result(plan, execution)
-        operation_identity = context.operation_identity(
-            effective_plan_sha256=execution.plan_sha256
-        )
+        operation_identity = context.operation_identity(effective_plan_sha256=execution.plan_sha256)
         values = self._set_values(context, execution, operation_identity)
         evidence_set_id = uuid4()
         inserted_id = await self._session.scalar(
@@ -325,6 +324,24 @@ class _PreSubmitEvidenceRepository:
                 getattr(existing, key) != value for key, value in values.items()
             ):
                 raise PreSubmitEvidenceConflict("pre_submit_evidence_operation_conflict")
+            persisted_results = tuple(
+                (
+                    await self._session.scalars(
+                        select(PreSubmitEvidenceResult)
+                        .where(PreSubmitEvidenceResult.evidence_set_id == existing.id)
+                        .order_by(PreSubmitEvidenceResult.result_order)
+                    )
+                ).all()
+            )
+            expected_results = tuple(
+                self._result_values(result_order, result)
+                for result_order, result in enumerate(execution.entries)
+            )
+            if len(persisted_results) != len(expected_results) or any(
+                any(getattr(persisted, key) != value for key, value in expected.items())
+                for persisted, expected in zip(persisted_results, expected_results, strict=True)
+            ):
+                raise PreSubmitEvidenceConflict("pre_submit_evidence_result_conflict")
             return PersistedPreSubmitEvidence(
                 evidence_set_id=UUID(existing.id),
                 operation_identity=operation_identity,
@@ -335,22 +352,7 @@ class _PreSubmitEvidenceRepository:
                 PreSubmitEvidenceResult(
                     id=str(uuid4()),
                     evidence_set_id=str(evidence_set_id),
-                    result_order=result_order,
-                    schema_version=result.schema_version,
-                    dispatch_authority=result.definition.dispatch_authority,
-                    definition_id=result.definition.definition_id,
-                    definition_version=result.definition.definition_version,
-                    public_name=result.definition.public_name,
-                    source=result.definition.source,
-                    phase=result.phase,
-                    classification=result.classification,
-                    severity=result.severity,
-                    status=result.status.value,
-                    failure_code=result.failure_code,
-                    message_code=result.message_code,
-                    effective_plan_sha256=result.policy_trace.effective_plan_sha256,
-                    rule_instance_id=result.policy_trace.rule_instance_id,
-                    locked_policy_sha256=result.policy_trace.locked_policy_sha256,
+                    **self._result_values(result_order, result),
                 )
             )
         await self._session.flush()
@@ -359,6 +361,27 @@ class _PreSubmitEvidenceRepository:
             operation_identity=operation_identity,
             replayed=False,
         )
+
+    @staticmethod
+    def _result_values(result_order: int, result: PreSubmissionEntryResult) -> dict[str, object]:
+        return {
+            "result_order": result_order,
+            "schema_version": result.schema_version,
+            "dispatch_authority": result.definition.dispatch_authority,
+            "definition_id": result.definition.definition_id,
+            "definition_version": result.definition.definition_version,
+            "public_name": result.definition.public_name,
+            "source": result.definition.source,
+            "phase": result.phase,
+            "classification": result.classification,
+            "severity": result.severity,
+            "status": result.status.value,
+            "failure_code": result.failure_code,
+            "message_code": result.message_code,
+            "effective_plan_sha256": result.policy_trace.effective_plan_sha256,
+            "rule_instance_id": result.policy_trace.rule_instance_id,
+            "locked_policy_sha256": result.policy_trace.locked_policy_sha256,
+        }
 
     @staticmethod
     def _set_values(
@@ -462,9 +485,7 @@ class PreSubmitEvidenceService:
             prepared_generation_id=request.prepared_generation_id,
             archive_sha256=request.archive_sha256,
             archive_byte_count=request.archive_byte_count,
-            semantic_manifest_id=semantic_manifest_identity(
-                request.semantic_manifest_sha256
-            ),
+            semantic_manifest_id=semantic_manifest_identity(request.semantic_manifest_sha256),
             semantic_manifest_sha256=request.semantic_manifest_sha256,
             guide_id=locked.guide_id,
             guide_version=locked.guide_version,
@@ -495,7 +516,7 @@ class PreSubmitEvidenceService:
                 semantic_manifest_sha256=custody.semantic_manifest_sha256,
                 storage_scheme=custody.storage_scheme,
             )
-            if request.execution.eligible
+            if request.execution.eligible and not evidence.replayed
             else None
         )
         failure_audit = (

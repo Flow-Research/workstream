@@ -8,12 +8,12 @@ from dataclasses import replace
 from pathlib import Path
 import threading
 from typing import cast
-from unittest.mock import AsyncMock
 import zipfile
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
@@ -39,7 +39,6 @@ from app.modules.artifacts.submission_materialization import (
     PreparedBundlePreSubmitEvidenceService,
     PreparedBundleMaterializationService,
 )
-from app.modules.tasks.pre_submit_context import LockedPreSubmitContext
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.catalogue import (
     PreSubmissionCheckerPhase,
@@ -235,34 +234,25 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
 async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     tmp_path: Path,
     isolated_database_env: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     actor_id = uuid4()
     identity_link_id = uuid4()
     lineage = request.effective_plan.lineage
-    locked = LockedPreSubmitContext(
-        actor_profile_id=actor_id,
-        project_id=lineage.project_id,
-        task_id=request.task_id,
-        assignment_id=request.assignment_id,
-        predecessor_submission_id=None,
-        predecessor_submission_version=None,
-        guide_id=lineage.guide_id,
-        guide_version=str(lineage.guide_version),
-        source_snapshot_id=lineage.source_snapshot_id,
-        source_snapshot_sha256=lineage.source_snapshot_hash,
-        locked_guide_sha256="sha256:" + "9" * 64,
-        effective_policy_id=lineage.effective_policy_id,
-        effective_policy_sha256=lineage.effective_policy_hash,
-        pre_submit_policy_id=lineage.pre_submit_policy_id,
-        pre_submit_policy_sha256=lineage.pre_submit_policy_bundle_hash,
-    )
-    loader = AsyncMock(return_value=locked)
-    monkeypatch.setattr(
-        "app.modules.tasks.pre_submit_context.load_locked_pre_submit_context", loader
-    )
     engine = create_async_engine(isolated_database_env)
+    custody_triggers = (
+        ("projects", "project_creation_custody"),
+        ("project_guides", "guide_mutation_product_custody"),
+        ("guide_source_snapshots", "source_snapshot_product_custody"),
+        ("submission_artifact_policies", "submission_policy_creation_custody"),
+        (
+            "effective_project_submission_artifact_policies",
+            "effective_submission_policy_custody",
+        ),
+        ("pre_submit_checker_policies", "pre_submit_policy_custody"),
+        ("review_policies", "review_policy_mutation_custody"),
+        ("revision_policies", "revision_policy_mutation_custody"),
+    )
     tables = (
         "artifact_contents",
         "artifact_replicas",
@@ -285,6 +275,12 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 "effective_hash": lineage.effective_policy_hash,
                 "checker_policy": str(lineage.pre_submit_policy_id),
                 "checker_hash": lineage.pre_submit_policy_bundle_hash,
+                "post_policy": str(uuid4()),
+                "post_policy_hash": "sha256:" + "8" * 64,
+                "review_policy": str(uuid4()),
+                "review_policy_hash": "sha256:" + "7" * 64,
+                "revision_policy": str(uuid4()),
+                "revision_policy_hash": "sha256:" + "6" * 64,
                 "task": str(request.task_id),
                 "assignment": str(request.assignment_id),
             }
@@ -305,9 +301,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            await connection.execute(
-                text("alter table projects disable trigger project_creation_custody")
-            )
+            for table, trigger in custody_triggers:
+                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
             await connection.execute(
                 text(
                     "insert into projects (id,name,slug,status) values "
@@ -315,17 +310,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            for table, trigger in (
-                ("project_guides", "guide_mutation_product_custody"),
-                ("guide_source_snapshots", "source_snapshot_product_custody"),
-                ("submission_artifact_policies", "submission_policy_creation_custody"),
-                (
-                    "effective_project_submission_artifact_policies",
-                    "effective_submission_policy_custody",
-                ),
-                ("pre_submit_checker_policies", "pre_submit_policy_custody"),
-            ):
-                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
             await connection.execute(
                 text(
                     "insert into project_guides "
@@ -382,16 +366,62 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             )
             await connection.execute(
                 text(
+                    "insert into checker_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
+                    "pre_submit_checker_policy_id,pre_submit_checker_bundle_hash,"
+                    "required_checkers,warning_checkers,blocking_severities,policy_hash,"
+                    "policy_body,lifecycle_status,created_by) values "
+                    "(:post_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":effective_policy,:effective_hash,:checker_policy,:checker_hash,"
+                    "'[]'::json,'[]'::json,'[]'::json,:post_policy_hash,'{}'::json,"
+                    "'compiled','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,policy_generation,policy_hash,"
+                    "semantics_status,requires_second_review,allowed_decisions,"
+                    "minimum_finding_fields) values "
+                    "(:review_policy,:project,'1',1,:review_policy_hash,"
+                    "'legacy_incomplete',false,'[]'::json,'[]'::json)"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,policy_generation,policy_hash,"
+                    "semantics_status,max_revision_rounds,revision_deadline_hours,"
+                    "allowed_resubmission_states) values "
+                    "(:revision_policy,:project,'1',1,:revision_policy_hash,"
+                    "'legacy_incomplete',1,24,'[]'::json)"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
                     "insert into workstream_tasks "
                     "(id,project_id,locked_guide_version,locked_guide_source_snapshot_id,"
                     "locked_guide_source_snapshot_hash,"
                     "locked_effective_project_submission_artifact_policy_id,"
                     "locked_effective_project_submission_artifact_policy_hash,"
                     "locked_pre_submit_checker_policy_id,locked_pre_submit_checker_bundle_hash,"
+                    "locked_post_submit_checker_policy_id,"
+                    "locked_post_submit_checker_policy_version,"
+                    "locked_post_submit_checker_policy_hash,"
+                    "locked_post_submit_checker_policy_body,"
+                    "locked_review_policy_id,locked_review_policy_generation,"
+                    "locked_review_policy_hash,locked_revision_policy_id,"
+                    "locked_revision_policy_generation,locked_revision_policy_hash,"
                     "source_type,title,description,skill_tags,status,assigned_to,created_by) values "
                     "(:task,:project,'1',:snapshot,:snapshot_hash,:effective_policy,"
-                    ":effective_hash,:checker_policy,:checker_hash,'manual','Evidence task',"
-                    "'Evidence test task','[]'::json,'draft',:actor,'test')"
+                    ":effective_hash,:checker_policy,:checker_hash,:post_policy,'1',"
+                    ":post_policy_hash,'{}'::json,:review_policy,1,:review_policy_hash,"
+                    ":revision_policy,1,:revision_policy_hash,'manual','Evidence task',"
+                    "'Evidence test task','[]'::json,'in_progress',:actor,'test')"
                 ),
                 params,
             )
@@ -432,23 +462,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 predecessor_submission_id=None,
             )
         async with engine.begin() as connection:
-            for table, trigger in reversed(
-                (
-                    ("projects", "project_creation_custody"),
-                    ("project_guides", "guide_mutation_product_custody"),
-                    ("guide_source_snapshots", "source_snapshot_product_custody"),
-                    (
-                        "submission_artifact_policies",
-                        "submission_policy_creation_custody",
-                    ),
-                    (
-                        "effective_project_submission_artifact_policies",
-                        "effective_submission_policy_custody",
-                    ),
-                    ("pre_submit_checker_policies", "pre_submit_policy_custody"),
-                )
-            ):
-                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
             evidence_count = int(
                 await connection.scalar(text("select count(*) from pre_submit_evidence_sets")) or 0
             )
@@ -460,20 +473,41 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
                 for table in tables
             }
+            immutable_statements = (
+                "update pre_submit_evidence_sets set terminal_status='blocked'",
+                "delete from pre_submit_evidence_sets",
+                "truncate pre_submit_evidence_sets",
+                "update pre_submit_evidence_results set status='failed'",
+                "delete from pre_submit_evidence_results",
+                "truncate pre_submit_evidence_results",
+                "insert into pre_submit_evidence_results "
+                "select gen_random_uuid()::text,evidence_set_id,result_order+1000,"
+                "schema_version,dispatch_authority,definition_id || '.forged',"
+                "definition_version,public_name,source,phase,classification,severity,status,"
+                "failure_code,message_code,effective_plan_sha256,rule_instance_id,"
+                "locked_policy_sha256,now() from pre_submit_evidence_results limit 1",
+            )
+            for statement in immutable_statements:
+                with pytest.raises(DBAPIError):
+                    async with connection.begin_nested():
+                        await connection.execute(text(statement))
     finally:
         await request.prepared_artifact.close()
         manager.close()
+        async with engine.begin() as connection:
+            for table, trigger in reversed(custody_triggers):
+                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
         await engine.dispose()
 
     assert first.evidence.replayed is False
     assert replay.evidence.replayed is True
     assert replay.evidence.evidence_set_id == first.evidence.evidence_set_id
     assert first.pass_capability is not None
+    assert replay.pass_capability is None
     assert first.failure_audit is None
     assert evidence_count == 1
     assert result_count == len(request.effective_plan.entries)
     assert after == before
-    assert loader.await_count == 2
 
 
 @pytest.mark.asyncio
