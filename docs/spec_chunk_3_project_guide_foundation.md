@@ -157,11 +157,12 @@ automatic setup run. Both paths use the canonical same-generation ART material.
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
 
-The former public `derive-submission-artifact-policy` repair endpoint is legacy
-behavior scheduled for removal by `WS-AUTH-001-12F3`. Automatic derivation is
-owned only by the fixed `workstream.project.setup` service after current
-lineage and sufficiency are revalidated; a Project Manager cannot invoke the
-agent inline.
+Until `WS-AUTH-001-12F3` merges, the public
+`derive-submission-artifact-policy` repair endpoint remains legacy behavior
+using its current actor and setup-role checks. After that merge, automatic
+derivation is owned only by the fixed `workstream.project.setup` service after
+current lineage and sufficiency are revalidated; a Project Manager cannot
+invoke the agent inline.
 Manual policy creation does not accept derivation provenance fields. Manual
 policies persist `manual_admin_derivation`; agent-created policies persist
 `agent_derivation` and use a server-owned `agent-<snapshot-hash>` policy

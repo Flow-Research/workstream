@@ -30,6 +30,9 @@ approval-chain, or 12G ownership boundaries.
 - Rebased onto current main with migration `0056`; no REV/CI files are changed.
 - Added one exact-line stale-vocabulary exemption for the unavoidable technical
   path `backend/app/workers/project_setup.py`; no narrative wording is exempt.
+- External review clarified the mutable replay reservation versus append-only
+  decision stream, the cross-chunk total lock order, merged prerequisites,
+  current legacy-route timing, and complete provenance dependency chain.
 
 ## Final reviewer results
 

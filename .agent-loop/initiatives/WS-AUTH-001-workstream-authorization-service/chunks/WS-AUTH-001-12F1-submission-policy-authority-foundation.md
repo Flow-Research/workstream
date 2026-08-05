@@ -46,11 +46,15 @@ mutation, post-submit behavior, or edits to historical migrations.
   entry identity/configuration hashes, disabled-catalogue startup-config digest
   and IDs, compiled bundle hash, and downstream effective-plan hash when one is
   produced. Replay and local provenance preserve the same canonical facts.
-- Add one append-only replay ledger with UUID key, actor/link, action, request
-  and resource digests, operation, lineage selectors, pending/committed state,
-  bounded response, and exact target IDs. Human replay namespace is
-  `(actor_profile_id, idempotency_key)`; service derivation uses the fixed
-  service profile plus deterministic setup task/correlation identity.
+- Add one mutable replay reservation row with an immutable operation UUID. The
+  only state transition is `pending -> committed`; completion fills the bounded
+  response and exact target IDs once. The append-only authorization decision
+  stream remains separate audit evidence. A unique constraint owns the human
+  namespace `(actor_profile_id, idempotency_key)`; a second unique constraint
+  owns `(service_actor_profile_id, setup_run_id, setup_generation,
+  setup_task_id, correlation_id, action_id)`. Reserve/find/complete and rollback
+  locate the same row by operation UUID, and changed namespace facts never
+  attach to an existing reservation.
 - Add nullable local provenance columns and closed constraints for draft
   policy, effective policy, and pre-submit policy. Historical bootstrap rows
   remain readable and are never backfilled or rewritten. Newly authorized rows
@@ -69,7 +73,9 @@ mutation, post-submit behavior, or edits to historical migrations.
 - Wrong action/link/session/transaction/resource/execution kind and copied or
   replayed handles deny.
 - Replay constraints reject changed, pending, cross-action, and identity-link
-  substitution; committed replay requires fresh reauthorization.
+  substitution; committed replay requires fresh reauthorization. Concurrent
+  exact reservations converge on one operation UUID and cannot duplicate a
+  product mutation or return different committed responses.
 - Fault injection proves product rows, replay completion, allowed decision
   evidence, and local provenance roll back together.
 - Seeded historical rows survive upgrade unchanged; populated authorized
@@ -103,4 +109,5 @@ head must pass Agent Gates and the full hosted Backend matrix/aggregate coverage
 ## Required reviewers and human focus
 
 All L1 tracks. Human focus: zero activation, exact binding equality, nullable
-historical provenance, append-only replay, and flush-only transaction ownership.
+historical provenance, mutable replay reservation, append-only decision
+evidence, and flush-only transaction ownership.

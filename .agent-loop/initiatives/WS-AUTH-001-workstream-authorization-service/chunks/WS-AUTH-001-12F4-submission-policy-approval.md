@@ -57,7 +57,10 @@ Celery cutover, ART, submission intake, or legacy self-committing approval.
   sufficiency report, target draft policy, current approved submission policy,
   current effective policy, current pre-submit policy, and any existing
   post-submit policy whose upstream lineage must be invalidated. All rows are
-  revalidated against exact IDs/statuses/hashes/generation before consume.
+  revalidated against exact IDs/statuses/hashes/generation before consume. This
+  is one total order: 12F3's post-agent relock, 12F4 approval, 12G derivation,
+  approval/correction, and every overlapping mutation must acquire their shared
+  lineage rows in this relative order with no alternate acquisition order.
 - The authoritative sufficiency report must be for the exact snapshot and
   generation and be `passed`, or `passed_with_warnings` with that report's
   warnings acknowledged. Missing, blocked, stale, diagnostic-only, or

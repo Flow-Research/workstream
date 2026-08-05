@@ -109,7 +109,9 @@ participants roll back and restage that exact denial evidence.
 
 Planning/review artifacts under this initiative plus
 `scripts/check_stale_authorization_docs.py` solely for the exact technical-path
-exemption used by 12B2. No scanner rule or other exception may change.
+exemptions used by 12B2 and 12F3. Both accept only the full literal technical
+Celery module path already listed in those contracts; no scanner rule,
+narrative wording, other path, or other exception may change.
 
 ## Not allowed changes
 

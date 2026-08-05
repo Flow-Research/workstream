@@ -65,6 +65,13 @@ mutation, post-submit policy, generic service authority, or ART behavior.
   consumes fresh transaction-bound PREP, validates canonical output digest, and
   atomically persists one agent-derived draft plus replay/decision/provenance
   evidence and the bounded setup output transition to `policy_draft_ready`.
+- Its post-agent transaction uses the shared total order for every applicable
+  row: project, draft guide, latest source snapshot, setup run, sufficiency
+  report, target draft policy, current approved submission policy, current
+  effective policy, current pre-submit policy, then existing post-submit policy.
+  Missing optional rows are checked in that sequence; no alternate acquisition
+  order is allowed. Concurrency tests overlap derivation with 12F4 approval and
+  12G mutations and prove convergence or stable denial without deadlock.
 - Exact completed replay returns the canonical draft with zero material/agent
   calls. Pending, stale, revoked, wrong-step/task/correlation/service, changed
   output, cross-lineage and concurrent calls deny or converge with no duplicate.

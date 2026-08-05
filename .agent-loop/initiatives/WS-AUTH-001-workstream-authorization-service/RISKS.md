@@ -17,7 +17,8 @@ merge and activate their exact actions.
   runtime children require fresh terminal authorization.
 - The Celery setup service currently fabricates human roles. 12B provisions one
   exact fixed identity with four planned memberships; 12B2 performs the runtime
-  cut only after 12E/12F4/12G own the product actions and provenance.
+  cut only after 12E/12F2/12F3/12F4/12G own the complete manual and
+  fixed-service product actions and provenance.
 - ART-03B2 migration `0040` is merged on trusted main. AUTH-12 must allocate
   the next revision from that exact head and must not reuse `0040`.
 

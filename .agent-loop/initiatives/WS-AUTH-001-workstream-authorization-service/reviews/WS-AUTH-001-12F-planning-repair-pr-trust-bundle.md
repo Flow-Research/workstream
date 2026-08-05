@@ -44,6 +44,11 @@ unrelated REV/CI rollback against origin/main: none
 all nine required L1 planning reviewer tracks: pass or pass with low risks
 ```
 
+CodeRabbit's first full review produced five actionable comments and one lock-
+order nit. All were addressed; none were deferred. The response is recorded in
+`WS-AUTH-001-12F-planning-repair-external-review-response.md`. Correction-head
+review and hosted checks remain required.
+
 The roughly four-hour repository-wide backend suite is intentionally delegated
 to GitHub Actions. Exact-head Agent Gates and the full hosted Backend matrix are
 required before this planning PR is merge-ready.

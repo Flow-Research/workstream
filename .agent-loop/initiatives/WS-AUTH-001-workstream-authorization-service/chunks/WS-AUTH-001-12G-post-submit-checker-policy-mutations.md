@@ -2,7 +2,7 @@
 
 ## Status and prerequisite
 
-Proposed and inactive after 12F4.
+Proposed and inactive until 12F4 is merged.
 
 ## Parent initiative
 
@@ -67,6 +67,12 @@ Checker run/trigger/retry/read behavior, submission/review lifecycle,
   generation, compiled-policy/output digest, and lifecycle status. It records
   the service profile, identity link, and static-matrix membership, never a
   fabricated human grant.
+- Every derivation, approval, and correction transaction uses the shared total
+  order for applicable rows: project, draft guide, latest source snapshot,
+  setup run, sufficiency report, target draft submission policy, current
+  approved submission policy, current effective policy, current pre-submit
+  policy, then the existing/target post-submit policy. Missing optional rows are
+  checked in that sequence; no alternate acquisition order is allowed.
 - Derivation/approval/correction record local actor/link/grant-or-service,
   scope/action provenance and
   commit with decision evidence atomically.
@@ -81,6 +87,9 @@ Checker run/trigger/retry/read behavior, submission/review lifecycle,
   historical rows remain nullable/readable.
 - Changed authorization/project modules remain at least 90 percent covered and
   final pushed head SHA passes `Backend / test` and `Agent Gates`.
+- Concurrency proof overlaps 12F3 derivation, 12F4 approval, and each 12G
+  mutation and shows one canonical outcome or stable denial with no deadlock,
+  partial provenance, duplicate continuation, or split policy chain.
 
 ## Verification commands
 
