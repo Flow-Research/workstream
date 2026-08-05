@@ -151,9 +151,13 @@ async def _submission_policy_authority_shape(database_url: str) -> dict[str, obj
                     definition.availability.value,
                 )
                 for definition in ACTION_DEFINITIONS
-                if definition.action_id.value.startswith(
-                    "project.submission_artifact_policy."
-                )
+                if definition.action_id
+                in {
+                    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+                    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+                    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+                    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+                }
             )
             return {
                 "columns": columns,
