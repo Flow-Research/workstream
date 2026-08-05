@@ -8,6 +8,7 @@
         "scripts.mutation_policy._callable_spans",
         "scripts.mutation_policy._callable_spans.bound_names",
         "scripts.mutation_policy._callable_spans.declaration_value",
+        "scripts.mutation_policy._callable_spans.valid_dataclass_decorator",
         "scripts.mutation_policy._callable_spans.visit",
         "scripts.mutation_policy._map_changed_lines",
         "scripts.mutation_policy._read_claim",
