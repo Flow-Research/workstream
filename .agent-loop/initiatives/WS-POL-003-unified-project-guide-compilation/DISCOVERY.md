@@ -1,6 +1,6 @@
 # Discovery: WS-POL-003 - Unified Project Guide Compilation
 
-Baseline inspected: `origin/main` `e2057d0f39b47cc84fb733f4381ee674028a9a47`
+Baseline inspected: `origin/main` `bb77ff4a0ab61120b94d6d4763934b444c39207d`
 on 2026-08-05.
 
 ## Current behavior
@@ -18,15 +18,22 @@ on 2026-08-05.
   submission-policy derivation, approval/compilation continuation, and later
   post-submit derivation.
 - `backend/app/modules/checkers/compiler.py` is the current legacy pre-submit
-  primitive compiler. ART-04B1 through 04B3 are planned, not implemented.
+  policy compiler now integrated with ART-04B1 catalogue definitions.
+- `backend/app/modules/checkers/catalogue.py` implements the immutable
+  `PreSubmissionCheckerCatalogue`, exact `v0.1` definition manifest,
+  startup-fixed disabled state, and canonical manifest hash.
+- `backend/app/modules/checkers/effective_plan.py` implements the pure
+  `EffectivePreSubmissionExecutionPlan` compiler and exact locked lineage,
+  rule-instance, configuration, catalogue, and plan hashes. It performs no
+  checker execution or durable write.
 - `backend/app/modules/checkers/runner.py` registers the current durable
   checker implementations. `check_acceptance_criteria_present` is the only
   current non-default project-selectable post-submit checker.
-- ART-04A4 has removed the obsolete
-  `POST /tasks/{task_id}/submission-precheck` route. The checker router still
-  exposes a direct `POST /submissions/{submission_id}/checker-runs` trigger;
-  later AUTH-14/cleanup must constrain ordinary execution to the single typed
-  post command and preserve only bounded same-attempt repair where required.
+- The obsolete `POST /tasks/{task_id}/submission-precheck` route and direct
+  `POST /submissions/{submission_id}/checker-runs` trigger remain reachable.
+  ART PLAN5 superseded 04A4 and moved the standalone precheck clean cut to
+  ART-05B. Later AUTH-14/cleanup must constrain ordinary post execution to the
+  single typed command and preserve only bounded same-attempt repair.
 - `backend/app/modules/projects/service.py` deliberately prevents mutation of
   agent-derived policy bodies; that immutability must be preserved.
 
@@ -36,8 +43,11 @@ on 2026-08-05.
 - AUTH-12G: post-submit policy mutation/provenance authority.
 - AUTH-12B2: fixed setup-service worker call-graph cutover.
 - AUTH-12H: terminal guide activation authority.
-- ART-04B1: complete pre-submit catalogue/effective-plan contract containing
-  mandatory platform entries and a closed selectable project-rule namespace.
+- ART-04B1: merged PR #276. The immutable catalogue is exactly
+  `workstream.pre_submission_checkers` `v0.1` with schema
+  `pre_submission_checker_catalogue.v1`; the pure effective plan is
+  `effective_pre_submission_plan.v1` and binds its manifest hash plus locked
+  source/effective/pre-submit policy lineage.
 - ART-04B2/04B3: sealed scratch/default execution facts consumed through a
   typed boundary; WS-POL-003 does not change those ART behaviors.
 - CHECKER/POL: canonical durable post-submit defaults/selectable rules and one
@@ -51,6 +61,9 @@ on 2026-08-05.
 - `backend/tests/test_projects.py`: setup generation, agent failure,
   idempotency, policy derivation/approval, correction, Celery, and provenance.
 - `backend/tests/test_checkers.py`: pre/post compiler and checker registry.
+- `backend/tests/test_checker_catalogue.py`: exact 26-entry ART-04B1 catalogue,
+  availability, immutable manifest, effective-plan lineage, policy coverage,
+  default weakening, and stale/invalid plan proof.
 - `backend/tests/test_authorization.py`: action/catalogue/PREP/fixed-service
   isolation.
 - `backend/tests/test_tasks.py`: task-locked guide and policy context.
@@ -66,8 +79,9 @@ on 2026-08-05.
 - Free-text model output can echo secrets, raw guide excerpts, paths, URLs, or
   prompt injection. Evidence references require a closed structured grammar
   and all persisted text requires bounded sanitization.
-- ART-04B1 is not live. WS-POL-003 must consume its complete pre-submit
-  platform-plus-project catalogue rather than creating an interim registry.
+- ART-04B1 is merged but intentionally performs no checker execution or durable
+  write. WS-POL-003 must consume its exact immutable manifest/effective-plan
+  contracts rather than creating an interim registry or assuming 04B2/04B3.
 - A post-submit proposal produced early becomes stale if its compilation,
   artifact-policy projection, pre-submit proposal, catalogue snapshot, or
   setup generation changes.

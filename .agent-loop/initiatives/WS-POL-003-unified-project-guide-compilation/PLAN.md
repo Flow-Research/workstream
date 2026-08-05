@@ -32,6 +32,21 @@ compiler: mandatory/non-selectable platform coverage plus its closed selectable
 project-rule namespace. ART-04B2/04B3 retain ART scratch/default execution.
 WS-POL-003 consumes those typed projections and does not change ART ownership.
 
+The merged pre-submit projection is consumed exactly as implemented:
+
+- catalogue ID `workstream.pre_submission_checkers`, version `v0.1`, schema
+  `pre_submission_checker_catalogue.v1`;
+- immutable canonical manifest and `manifest_sha256`;
+- stable definition ID/version, owner, phase/order/dependencies,
+  classification, typed inputs, result schema, failure code, resource budget,
+  state/disabled behavior, policy trace, and dispatch identity;
+- pure `effective_pre_submission_plan.v1` bound to exact project, guide/source,
+  effective policy, pre-submit policy, catalogue manifest, ordered entries,
+  rule-instance identities/configuration hashes, and `plan_sha256`.
+
+WS-POL-003 does not infer missing catalogue fields, mutate availability, or
+reconstruct plan identity independently.
+
 Durable CHECKER/POL ownership supplies post-submit defaults and registered
 selectable project rules. WS-POL-003 creates no pre-submit or post-submit
 dispatch registry; the unified agent sees read-only projections from both
@@ -115,19 +130,20 @@ and raw duplicate source text are not persisted.
 ## Project capability and stage contract
 
 Both canonical phase catalogues are closed, typed, versioned, and registered
-explicitly at their composition roots. Each selectable entry declares stable
-ID/version, stage, public name, parameter schema, required input facts,
-deterministic and side-effect-free flags, timeout/budget reservation, policy
-trace type, and implementation identity. Catalogue mutation requires code,
-tests, deployment, and startup parity validation; projects and model output
-cannot register it.
+explicitly at their composition roots. The pre-submit projection uses only the
+fields in merged ART-04B1; it does not invent per-entry timeout or safety
+metadata absent from `v0.1`. Catalogue mutation requires code, tests,
+deployment, and startup parity validation; projects and model output cannot
+register it.
 
-A project capability is eligible for pre-submit only when it is registered for
-that stage, consumes only sealed scratch/server-owned locked facts, is
-deterministic, side-effect free, offline, credential-free, non-executable, has
-a hard timeout no greater than 60 seconds, and fits the server-owned 60-second
-aggregate project-rule budget. Sixty seconds is a ceiling, not permission.
-Mandatory ART work retains its separate platform budgets.
+A project capability is eligible for pre-submit only when ART-04B1 registers
+it as an enabled `policy_primitive` in `project_policy`, its exact trusted
+implementation satisfies the closed primitive contract, and its compiled
+configuration matches the definition's policy fields. The later executor owns
+the server-side 60-second aggregate project-rule ceiling; the model cannot
+change stage, order, resource budget, disabled behavior, or timeout. Sixty
+seconds is a ceiling, not permission. Mandatory ART work retains its separate
+platform budgets.
 
 Deterministic work outside that contract is post-submit. Expert judgment is
 human review. Claiming, assignment, deadlines, routing, revision, acceptance,
@@ -214,7 +230,9 @@ Validation must, in order:
 6. reject platform/default selection or repetition;
 7. reject unknown, disabled, stale-version, or wrong-stage capabilities;
 8. validate typed configuration, deterministic/side-effect-free constraints,
-   individual timeout, and aggregate pre-submit budget;
+   and phase-owned resource controls exactly as exposed: ART `resource_budget`
+   plus executor gates and the aggregate pre-submit ceiling, or post-submit
+   timeout/budget fields only when their canonical source defines them;
 9. sanitize every persisted text field;
 10. canonicalize and hash the result and each projection; and
 11. persist the immutable compilation/projections atomically under fresh

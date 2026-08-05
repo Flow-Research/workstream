@@ -31,8 +31,8 @@ aliases.
 - Three retired runtime methods/prompts and the second post-submit model call
   are deleted; the canonical ART-04B1 pre-submit catalogue, canonical
   CHECKER/POL post-submit catalogue, and one checker service port remain.
-- OpenAPI/import/reachability tests prove the ART-owned standalone
-  `/submission-precheck` route is already absent and remove the ordinary
+- OpenAPI/import/reachability tests prove ART-05B has removed the standalone
+  `/submission-precheck` route and remove the ordinary
   caller-triggered `POST /submissions/{id}/checker-runs` execution path. A
   bounded repair command may remain only by Submission/run identity and must
   use the same deterministic attempt contract.

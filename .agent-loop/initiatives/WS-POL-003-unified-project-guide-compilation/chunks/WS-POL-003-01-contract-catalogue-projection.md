@@ -24,6 +24,12 @@ changes, action activation, or checker execution.
 - ART platform coverage is non-selectable. Pre-submit project capabilities come
   only from ART-04B1; post-submit project capabilities come only from the
   canonical durable CHECKER/POL source.
+- Pre-submit input preserves the exact full 26-entry ART-04B1 manifest,
+  including enabled and disabled advisory entries, catalogue ID/version/schema,
+  `manifest_sha256`, definition identities and states, dispatch kinds,
+  classifications, phases, policy fields, resource budgets, and disabled
+  behavior. Selection remains limited to enabled policy primitives. POL invents
+  no missing timeout/safety fields and cannot mutate catalogue state.
 - `GuideEvidenceRef` is closed and raw excerpts/URLs/paths cannot enter it.
 - Optional representative task context does not gate compilation.
 - Unknown/default/wrong-stage bindings fail closed.

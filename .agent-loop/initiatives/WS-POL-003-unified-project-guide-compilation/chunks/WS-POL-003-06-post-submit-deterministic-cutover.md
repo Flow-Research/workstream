@@ -10,8 +10,8 @@ approval without rereading the guide or invoking a second model.
 ## Allowed files
 
 Project post-submit policy/compiler/Celery/repository surfaces, exact AUTH-12G
-composition, the one CHECKER/POL project capability catalogue, focused tests,
-and WS-POL-003 docs.
+composition, the canonical durable CHECKER/POL post-submit capability source,
+focused tests, and WS-POL-003 docs.
 
 ## Not allowed
 

@@ -18,8 +18,9 @@ verified storage/binding. No caller selects or invokes individual checkers.
 
 - Added the complete WS-POL-003 intent, discovery, plan, decisions, risks,
   status, and eight bounded implementation contracts.
-- Preserved ART-04B1-04B3 as the sole pre-submit catalogue/executor/evidence
-  writer and durable CHECKER/POL as the post-submit owner.
+- Consumed merged ART-04B1's exact catalogue/effective-plan contract and
+  preserved future ART-04B2/04B3 as the sole pre-submit executor/evidence
+  writer, with durable CHECKER/POL as the post-submit owner.
 - Added exact future XINT/AUTH compilation request/execute custody before
   persistence can start.
 - Made unified agent projections immutable, safe-text bounded, capability
@@ -60,7 +61,8 @@ on the PR head.
   any action or chunk.
 - Exact XINT/AUTH compilation request/execute activation must merge before
   WS-POL-003-03.
-- ART-04B1-04B3 must be callable before the checker facade chunk.
+- ART-04B2/04B3 must merge and be callable behind merged ART-04B1 before the
+  checker facade chunk.
 - Each implementation chunk requires separate human start, evidence, review,
   PR, and human merge.
 
