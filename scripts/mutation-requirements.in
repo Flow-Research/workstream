@@ -3,4 +3,5 @@
 mutmut==3.7.0
 # Keep the mutation runner aligned with the backend's tested toolchain.
 coverage==7.15.2
+packaging==26.2
 pytest==8.4.2

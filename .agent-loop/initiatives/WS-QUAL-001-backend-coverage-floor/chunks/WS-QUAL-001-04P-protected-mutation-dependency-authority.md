@@ -45,7 +45,8 @@ automatic start of 04M or 05M
 - [ ] The complete transitive closure is exactly pinned and every requirement
       carries one or more SHA-256 hashes.
 - [ ] The mutation runner uses the backend-aligned `pytest==8.4.2` and
-      `coverage==7.15.2` versions.
+      `coverage==7.15.2` versions, and every other overlapping package matches
+      `backend/uv.lock`.
 - [ ] A clean Python 3.12 `pip --require-hashes` dry run accepts the manifest,
       and Python 3.11 resolves a complete compatible hashed wheel set.
 - [ ] The manifest contains no project production dependency or index override.
