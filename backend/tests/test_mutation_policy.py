@@ -1236,34 +1236,6 @@ path.write_text(json.dumps({'exit_code_by_key': {
         assert _main() == 1
         assert "mutation_policy_error:invalid_revision" in capsys.readouterr().err
 
-    def test_changed_policy_behavior_contract(self) -> None:
-        """Exercise the complete non-parameterized contract owned by this correction."""
-        scenarios = (
-            self.test_changed_targets_are_mandatory_and_claims_are_additive,
-            self.test_claim_validation_fails_closed,
-            self.test_declaration_only_target_requires_tests_but_is_not_mutated,
-            self.test_empty_callables_cannot_hide_changed_or_claim_only_behavior,
-            self.test_mixed_declaration_and_callable_change_remains_mutated,
-            self.test_claim_path_must_match_the_chunk_contract,
-            self.test_malformed_and_duplicate_claims_fail_closed,
-            self.test_mutmut_configuration_is_generated_from_selection,
-            self.test_callable_filters_are_exact_and_deterministic,
-            self.test_no_target_no_claim_is_typed_not_applicable,
-            self.test_deleted_target_fails_closed,
-            self.test_applicable_delta_requires_one_changed_claim,
-            self.test_multiple_changed_claims_fail_closed,
-            self.test_changed_callable_mapping_covers_decorated_async_and_nested_methods,
-            self.test_plain_class_header_change_fails_closed,
-            self.test_function_nested_in_function_maps_to_inner_owner,
-            self.test_declaration_only_changes_are_owned_without_inventing_a_callable,
-            self.test_deleted_callable_changes_still_fail_closed,
-            self.test_module_control_flow_changes_still_fail_closed,
-            self.test_callable_mapping_uses_merge_base_not_advanced_main,
-            self.test_claim_only_callable_must_exist_in_target_ast,
-        )
-        for scenario in scenarios:
-            scenario()
-
     def _initialize(self, root: Path) -> None:
         self._git(root, "init")
         self._git(root, "config", "user.email", "test@example.com")
