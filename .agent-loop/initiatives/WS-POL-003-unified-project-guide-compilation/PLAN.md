@@ -3,8 +3,10 @@
 ## Objective
 
 Replace the current three complete project-guide inference passes with one
-bounded `ProjectGuideCompilationAgent` invocation for each exact immutable
-guide source, capability-catalogue snapshot, and setup generation.
+bounded logical `ProjectGuideCompilationAgent` attempt for each exact immutable
+guide source, capability-catalogue snapshot, and setup generation. A durable
+attempt identity and provider idempotency key enforce that cardinality across
+dispatch, timeout, reconciliation, and retry.
 
 The invocation proposes:
 
@@ -235,8 +237,11 @@ Validation must, in order:
    timeout/budget fields only when their canonical source defines them;
 9. sanitize every persisted text field;
 10. canonicalize and hash the result and each projection; and
-11. persist the immutable compilation/projections atomically under fresh
-    action-specific fixed-service PREP.
+11. prepare every required action-specific fixed-service PREP, consume all of
+    them inside the one root database transaction owning compilation and
+    projection persistence, then commit mutations and authorization evidence
+    together; any validation, consumption, or write failure rolls back the
+    entire unit without borrowing authority between actions.
 
 The agent cannot order platform execution. Catalogue phases, dependencies, and
 the trusted compiler determine order.
@@ -274,9 +279,14 @@ ART verified extraction
 ```
 
 Blocked compilation creates no policy projections. A required capability gap
-blocks activation with an exact operator-visible setup status/error. Timeout,
-cancellation, or infrastructure failure is retryable platform state and never
-contributor failure or negative contribution evidence.
+blocks activation with an exact operator-visible setup status/error. The setup
+generation has one durable model-attempt row and provider idempotency key. A
+timeout, cancellation, or infrastructure failure before known acceptance may
+retry or reconcile only that key; an unknown outcome must be retrieved or
+replayed idempotently, never redispatched with a new key. Once an accepted
+result is persisted, retry reuses it. Invalid or unsafe output terminally
+consumes the attempt and requires a new setup generation for correction. None
+of these states is contributor failure or negative contribution evidence.
 
 ## Alternatives rejected
 
@@ -301,7 +311,10 @@ contributor failure or negative contribution evidence.
 - Fixed-service identity, PREP replay/session/transaction/resource tests.
 - Postgres migration, append-only supersession, concurrent idempotency, and
   rollback tests.
-- Exactly-one-model-call lifecycle tests and zero-call post-submit continuation.
+- Single-logical-attempt lifecycle tests covering concurrent dispatch,
+  timeout-after-provider-acceptance recovery under the same idempotency key,
+  accepted-result reuse, terminal invalid/unsafe output, and zero-call
+  post-submit continuation.
 - Stale source/catalogue/setup/policy invalidation tests.
 - Task-lock and activation-chain regression tests.
 - OpenAPI/import/reachability tests proving standalone precheck is absent,

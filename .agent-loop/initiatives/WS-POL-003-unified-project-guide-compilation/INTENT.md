@@ -3,8 +3,8 @@
 ## Human goal
 
 Compile one immutable Project Guide source snapshot into one coherent,
-reviewable setup proposal with a single bounded model invocation per setup
-generation. The result must cover guide sufficiency, submission-artifact
+reviewable setup proposal with one logical, idempotency-keyed model attempt per
+setup generation. The result must cover guide sufficiency, submission-artifact
 policy, atomic guide requirements, supported project-specific pre-submit and
 post-submit checker bindings, human-review/lifecycle dispositions, and visible
 capability gaps.
@@ -15,8 +15,13 @@ approval authority.
 
 ## Success state
 
-- One verified guide snapshot and setup generation causes at most one
-  successful `ProjectGuideCompilationAgent` invocation.
+- One verified guide snapshot and setup generation owns one durable model-attempt
+  identity and one provider idempotency key. Retries recover that same attempt;
+  they cannot issue a second provider request under a different key.
+- A structurally invalid or unsafe provider result consumes and terminally
+  blocks that generation. Correction or another genuine evaluation requires a
+  new setup generation; transport uncertainty is reconciled under the original
+  key and can only reuse an already accepted result.
 - Trusted server validation projects the immutable result into the existing
   canonical policy objects; `ProjectGuideCompilation` does not replace them.
 - Platform checks remain mandatory and non-selectable.

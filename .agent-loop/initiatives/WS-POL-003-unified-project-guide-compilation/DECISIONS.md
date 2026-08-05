@@ -1,7 +1,10 @@
 # Decisions: WS-POL-003 - Unified Project Guide Compilation
 
-1. One structured model invocation is used per immutable source snapshot,
-   catalogue snapshot, and setup generation.
+1. One logical structured model attempt is used per immutable source snapshot,
+   catalogue snapshot, and setup generation. A durable attempt row and provider
+   idempotency key serialize dispatch. Retry/recovery uses that exact key and
+   retrieves or reuses its accepted result; it never creates another call.
+   Invalid or unsafe output consumes the attempt and blocks that generation.
 2. `ProjectGuideCompilation` is immutable provenance/proposal evidence, not a
    canonical policy replacement.
 3. Existing policy objects and Project Manager approval gates remain separate.
@@ -35,10 +38,14 @@
 14. Post-submit normal execution is automatically dispatched once from the
     successful Submission creation/finalization boundary. Callers cannot
     select or separately invoke platform, project, or individual checkers.
-15. An authorized repair/requeue command may exist only when it accepts a
-    Submission/run identity, revalidates locked context, and converges on the
-    same deterministic run with at most one business effect. It is not an
-    alternative checker execution API.
+15. An authorized checker repair/requeue command may exist only when it accepts
+    a Submission/run identity and atomically claims the canonical phase-attempt
+    row under the phase owner's repository transaction. The idempotency key is
+    the phase, exact locked material/plan lineage, and attempt ID. Concurrent
+    repair/requeue calls either observe the existing terminal result or one
+    caller resumes the same non-terminal run; they cannot rerun completed
+    members or create a second business effect. A genuinely new evaluation
+    requires a new attempt identity. This is not an alternative checker API.
 16. Setup approval/correction-request APIs configure policy, and read APIs
     expose bounded evidence; neither is a checker execution path.
 17. AUTH must activate two narrow compilation actions before runtime cutover:

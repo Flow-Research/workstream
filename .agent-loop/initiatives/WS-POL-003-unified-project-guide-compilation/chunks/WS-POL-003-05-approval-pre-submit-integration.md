@@ -17,7 +17,10 @@ authorization resource composition, focused tests, and specifications.
 ## Not allowed
 
 Second registry/compiler, platform-default selection, checker execution,
-post-submit compilation, task/review/payment behavior, or in-place agent edits.
+post-submit compilation, unrelated approval semantics, task/review/payment
+behavior, or in-place agent edits. This chunk does own Project Manager approval
+binding to the exact compilation, including hash binding, stale invalidation,
+and activation blocking.
 
 ## Acceptance
 

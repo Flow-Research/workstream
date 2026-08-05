@@ -21,7 +21,14 @@ serialized handles/material, or fallback to legacy guide excerpts.
 ## Acceptance
 
 - Automatic and manual recovery converge on one deterministic setup run/task.
-- Exactly one model invocation occurs per successful generation.
+- Each generation persists one model-attempt row and provider idempotency key
+  derived from the exact setup run/generation and compilation input identity.
+  Dispatch and recovery atomically claim that row; retries use the same key.
+- Provider acceptance must be recoverable by idempotent replay/result lookup,
+  and the accepted result is persisted before downstream continuation. A
+  timeout-after-acceptance retry reuses that result without another invocation.
+- Invalid or unsafe output terminally consumes the generation's attempt;
+  another evaluation requires a new setup generation.
 - Blocked output creates no policy projection.
 - Ready output atomically links sufficiency and draft artifact policy to one
   compilation.
@@ -29,5 +36,6 @@ serialized handles/material, or fallback to legacy guide excerpts.
 
 ## Verification and review
 
-Celery retry/replay/stale-generation/provider-failure/rollback tests and hosted
-full coverage. Required reviewers: all L1 tracks.
+Celery concurrent-claim, retry/replay, timeout-after-acceptance, accepted-result
+reuse, terminal-invalid-output, stale-generation, provider-failure, and rollback
+tests plus hosted full coverage. Required reviewers: all L1 tracks.

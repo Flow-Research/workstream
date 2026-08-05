@@ -28,6 +28,14 @@ the same non-blocking precision issue: preserve disabled advisory entries in
 the full manifest and consume phase-owned resource controls without inventing
 a pre-submit per-entry timeout. Both corrections are incorporated.
 
+CodeRabbit then identified eight concurrency, idempotency, approval-binding,
+and transaction-boundary gaps. The plan now defines database uniqueness and
+compare-and-swap, one durable provider attempt/key per setup generation,
+timeout-after-acceptance recovery, exact approval identity, phase-owned checker
+attempt claims, and one root transaction consuming all separate PREPs. Fresh
+architecture, security, QA, and product/operations rereviews all passed with no
+remaining findings.
+
 No blocking finding remains. All reviewer sessions completed.
 
 ## Checks

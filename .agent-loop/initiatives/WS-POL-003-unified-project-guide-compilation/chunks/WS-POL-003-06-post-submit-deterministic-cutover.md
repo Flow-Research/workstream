@@ -21,15 +21,19 @@ checker repetition, manual reuse of agent provenance, or ART changes.
 ## Acceptance
 
 - Continuation performs zero model invocations.
-- Exact compilation, effective policy, pre-submit plan, catalogue, and setup
-  generation are locked and revalidated.
-- Any correction/replacement/catalogue change invalidates the proposal.
+- Exact compilation, effective policy, pre-submit plan, catalogue, setup
+  generation, approval record ID, approval actor identity, and approval hash are
+  locked and revalidated.
+- Any correction, replacement, catalogue change, or change to the stored
+  approval record/actor/hash invalidates the proposal.
 - Platform-default repetition and unknown/wrong-stage checkers fail closed.
 - Only registered project entries from the canonical durable CHECKER/POL
   post-submit source are selectable; ART pre-submit entries cannot be selected.
 - Tests explicitly reject current legacy behavior that repeats any durable
   default in either required or warning project bindings.
-- Compiled post-submit policy retains separate PM approval.
+- Compiled post-submit policy retains separate PM approval; that later approver
+  may differ, but cannot substitute for or alter the exact approval identity
+  authorizing selection of the stored proposal.
 
 ## Verification and review
 

@@ -7,11 +7,12 @@ Status: Proposed after 06. Risk: L1.
 Provide one internal typed checker service port with exactly two complete
 phase commands:
 
-- `evaluate_pre_submission(...)`, invoked once by artifact-flow orchestration
-  while exact material is sealed in `ArtifactScratchManager` custody;
-- `evaluate_post_submission(...)`, invoked once by artifact-flow orchestration
-  after exact verified content is durably stored, bound, and attached to the
-  Submission lineage.
+- `evaluate_pre_submission(...)`, one logical attempt initiated by artifact-flow
+  orchestration while exact material is sealed in `ArtifactScratchManager`
+  custody;
+- `evaluate_post_submission(...)`, one logical attempt initiated by
+  artifact-flow orchestration after exact verified content is durably stored,
+  bound, and attached to the Submission lineage.
 
 Each command invokes the complete canonical phase executor and returns one
 typed result. The pre command is a facade over ART-04B1-04B3's existing
@@ -43,13 +44,17 @@ plugins, arbitrary code/network execution, or prepared handles in payloads.
 - Both commands bind exact project/task/assignment, guide/policy, artifact,
   manifest, generation, attempt, action, service identity, and transaction
   facts; stale/replay/cross-phase/cross-resource calls fail closed.
-- The port requires a deterministic attempt identity and idempotent replay
-  semantics so later ART/XINT orchestration and bounded repair can converge;
-  this chunk does not alter or claim those external call sites.
+- The port requires a deterministic attempt identity. Bounded retry/repair may
+  call the command again for that same logical attempt, but replay returns the
+  existing canonical result without rerunning completed members. A genuinely
+  new evaluation requires a new attempt identity; this chunk does not alter or
+  claim the external call sites.
 - ART's pre-submit attempt/result/evidence repository is the only pre writer;
   CHECKER's durable repository is the only post writer. The facade returns the
   canonical result/reference and cannot persist partial or duplicate member
-  results.
+  results. Each phase-owner repository transaction atomically claims its
+  attempt and commits the canonical member set, phase result, and authorization
+  evidence; concurrent callers observe or resume that same row.
 - One bounded phase result contains every platform/project member with exact
   definition/version/policy trace; infrastructure failure is never contributor
   blame or a review decision.

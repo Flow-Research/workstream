@@ -25,18 +25,27 @@ permission, synthetic human authority, compatibility path, or ART semantics.
 
 ## Acceptance
 
-- One immutable current compilation per exact source/catalogue/setup generation.
+- A database `UNIQUE` constraint covers exact `project_id`, `guide_id`, source
+  snapshot ID, pre- and post-catalogue snapshot hashes, setup run ID, and setup
+  generation. The setup-run current-compilation pointer advances only by
+  compare-and-swap against its locked expected generation/current ID. Concurrent
+  requests therefore converge on one immutable compilation rather than two
+  current rows.
 - Strict validation and sanitization precede atomic persistence.
 - Existing policy projections bind exact compilation/component hashes.
-- Fresh fixed-service PREP is consumed per protected transaction; replay,
-  copied/wrong handle, stale context, or partial failure creates no effect.
+- Fresh action-specific fixed-service PREPs are prepared separately, but all
+  required handles are consumed in the single root database transaction that
+  owns compilation, projection links, and authorization evidence. Replay,
+  copied/wrong handle, stale context, or any partial failure rolls back the
+  whole unit and creates no durable effect.
 - Agent-derived projections cannot be updated in place.
 - Compilation creation/supersession consumes the exact fixed-service execute
-  action; PM recovery consumes the exact request action. Projection writes
-  separately consume their 12E/12F/12G PREP and cannot borrow compilation
-  authority.
+  action; PM recovery consumes the exact request action. Projection writes each
+  consume their separate 12E/12F/12G PREP in that same root transaction and
+  cannot borrow compilation authority.
 
 ## Verification and review
 
-Postgres migration/constraint/concurrency/rollback tests plus AUTH all-pairs
-denials and 90% changed-subsystem coverage. Required reviewers: all L1 tracks.
+Postgres unique-key, compare-and-swap, concurrent-insert, PREP atomicity, and
+rollback tests plus AUTH all-pairs denials and 90% changed-subsystem coverage.
+Required reviewers: all L1 tracks.
