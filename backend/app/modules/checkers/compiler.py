@@ -80,7 +80,7 @@ def build_project_pre_submit_checker_spec(
             _rule(
                 "require_file",
                 ["required_artifacts"],
-                {"artifact_keys": [artifact["key"] for artifact in required_artifacts]},
+                {"artifact_keys": [_required_path(artifact) for artifact in required_artifacts]},
             )
         )
     required_evidence = [
@@ -93,7 +93,7 @@ def build_project_pre_submit_checker_spec(
             _rule(
                 "require_minimum_evidence",
                 ["required_evidence"],
-                {"evidence_keys": [evidence["key"] for evidence in required_evidence]},
+                {"evidence_keys": [_required_path(evidence) for evidence in required_evidence]},
             )
         )
     forbidden_artifacts = effective_policy.get("forbidden_artifacts", [])
@@ -351,7 +351,7 @@ def _validate_rule_coverage(effective_policy: dict[str, Any], rules: list[dict[s
     )
 
     required_artifact_keys = [
-        artifact["key"]
+        _required_path(artifact)
         for artifact in effective_policy.get("required_artifacts", [])
         if artifact.get("required", True)
     ]
@@ -364,7 +364,7 @@ def _validate_rule_coverage(effective_policy: dict[str, Any], rules: list[dict[s
             "required artifacts",
         )
     required_evidence_keys = [
-        evidence["key"]
+        _required_path(evidence)
         for evidence in effective_policy.get("required_evidence", [])
         if evidence.get("required", True)
     ]
@@ -544,6 +544,16 @@ def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[di
                 f"effective project submission artifact policy {field} entries are invalid"
             )
     return values
+
+
+def _required_path(item: dict[str, Any]) -> str:
+    """Project a policy key to its one server-validated canonical ZIP path."""
+    value = item.get("path", item.get("key"))
+    if not isinstance(value, str) or not value:
+        raise PreSubmitCheckerCompilerError(
+            "effective project submission artifact policy path is invalid"
+        )
+    return value
 
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:

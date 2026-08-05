@@ -46,7 +46,7 @@ from app.modules.checkers.effective_plan import (
     compile_effective_pre_submission_execution_plan,
 )
 from app.modules.checkers.pre_submit_execution import (
-    DefaultPreSubmissionResultStatus,
+    PreSubmissionResultStatus,
     PreSubmissionInfrastructureUnavailable,
     SubmissionPacketView,
 )
@@ -56,10 +56,14 @@ async def _bytes(value: bytes):
     yield value
 
 
-def _archive(path: str = "task.toml") -> bytes:
+def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes:
     output = BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
         archive.writestr(path, b"[task]\nname='proof'\n")
+        if extra_path is not None:
+            archive.writestr(extra_path, b"blocked\n")
+        if path != "results":
+            archive.writestr("results", b"verified\n")
     return output.getvalue()
 
 
@@ -158,10 +162,16 @@ def _handle() -> PreparedAuthorizationHandle:
     return cast(PreparedAuthorizationHandle, _TestPreparedAuthorizationHandle())
 
 
-async def _request(tmp_path: Path, *, path: str = "task.toml", catalogue=None):
+async def _request(
+    tmp_path: Path,
+    *,
+    path: str = "task.toml",
+    extra_path: str | None = None,
+    catalogue=None,
+):
     selected_catalogue = catalogue or build_pre_submission_checker_catalogue()
     plan = _plan(selected_catalogue)
-    data = _archive(path)
+    data = _archive(path, extra_path=extra_path)
     inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=_limits())
     preparation = ArtifactPreparationService(manager)
@@ -189,9 +199,10 @@ async def _request(tmp_path: Path, *, path: str = "task.toml", catalogue=None):
             summary="Completed exact project work.",
             contributor_attestation=(
                 "I confirm no confidential client data, credentials, or copied source "
-                "material is included in this submission."
+                "material is included in this submission; rights_confirmed."
             ),
         ),
+        storage_scheme="s3",
     )
     return request, inspector, manager, preparation, selected_catalogue
 
@@ -243,7 +254,7 @@ async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
 
 
 @pytest.mark.asyncio
-async def test_default_executor_uses_plan_order_and_never_dispatches_project_rules(
+async def test_effective_executor_uses_plan_order_and_dispatches_project_rules(
     tmp_path: Path,
 ) -> None:
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
@@ -260,17 +271,11 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
     expected = [
         entry.definition_id
         for entry in request.effective_plan.entries
-        if entry.phase
-        in {
-            PreSubmissionCheckerPhase.CUSTODY.value,
-            PreSubmissionCheckerPhase.IDENTITY.value,
-            PreSubmissionCheckerPhase.MATERIALIZATION.value,
-            PreSubmissionCheckerPhase.DEFAULT_POLICY.value,
-        }
+        if entry.phase in set(PreSubmissionCheckerPhase)
     ]
-    assert [entry.entry_id for entry in result.entries] == expected
-    assert all(not entry.entry_id.startswith("policy.") for entry in result.entries)
-    assert all(entry.status is DefaultPreSubmissionResultStatus.PASSED for entry in result.entries)
+    assert [entry.definition.definition_id for entry in result.entries] == expected
+    assert any(entry.definition.definition_id.startswith("policy.") for entry in result.entries)
+    assert all(entry.status is PreSubmissionResultStatus.PASSED for entry in result.entries)
     assert result.eligible is True
     assert authority.facts is not None
     assert authority.action_id.value == "artifact.pre_submit.checker_input.materialize"
@@ -289,6 +294,7 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
     assert authority.facts.archive_sha256 == request.prepared_artifact.commitment.sha256
     assert authority.facts.archive_byte_count == request.prepared_artifact.commitment.byte_count
     assert authority.facts.semantic_manifest_sha256 == request.manifest.sha256
+    assert authority.facts.storage_scheme == "s3"
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await request.prepared_artifact.close()
     manager.close()
@@ -307,13 +313,13 @@ async def test_blocking_default_stops_later_dependency_without_review_decision(
     )
 
     result = await service.materialize_prepared_bundle(request)
-    by_id = {entry.entry_id: entry for entry in result.entries}
+    by_id = {entry.definition.definition_id: entry for entry in result.entries}
 
     assert by_id["artifact.sensitive_paths.high_confidence"].status is (
-        DefaultPreSubmissionResultStatus.FAILED
+        PreSubmissionResultStatus.FAILED
     )
     assert by_id["artifact.quality.placeholder_signal"].status is (
-        DefaultPreSubmissionResultStatus.DEPENDENCY_NOT_RUN
+        PreSubmissionResultStatus.DEPENDENCY_NOT_RUN
     )
     assert result.eligible is False
     assert all(
@@ -341,10 +347,10 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
 
     result = await service.materialize_prepared_bundle(request)
     advisory = next(
-        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry for entry in result.entries if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
-    assert advisory.status is DefaultPreSubmissionResultStatus.ADVISORY_DISABLED
+    assert advisory.status is PreSubmissionResultStatus.ADVISORY_DISABLED
     assert result.eligible is True
     await request.prepared_artifact.close()
     manager.close()
@@ -366,10 +372,10 @@ async def test_quality_warning_emits_only_a_bounded_category_count(tmp_path: Pat
 
     result = await service.materialize_prepared_bundle(request)
     warning = next(
-        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry for entry in result.entries if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
-    assert warning.status is DefaultPreSubmissionResultStatus.WARNING
+    assert warning.status is PreSubmissionResultStatus.WARNING
     assert warning.metadata == (("matched_category_count", 2),)
     assert result.eligible is True
     await request.prepared_artifact.close()
@@ -499,7 +505,7 @@ async def test_disabled_mandatory_executor_state_fails_closed(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: Path) -> None:
+async def test_effective_execution_enforces_project_only_forbidden_rule(tmp_path: Path) -> None:
     catalogue = build_pre_submission_checker_catalogue()
     policy = _effective_policy()
     project_rule = {"pattern": "project-only.blocked"}
@@ -520,7 +526,7 @@ async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: P
     )
     request, inspector, manager, preparation, _ = await _request(
         tmp_path,
-        path="project-only.blocked",
+        extra_path="project-only.blocked",
         catalogue=catalogue,
     )
     request = replace(
@@ -538,8 +544,37 @@ async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: P
 
     result = await service.materialize_prepared_bundle(request)
 
-    assert result.eligible is True
-    assert all(not entry.entry_id.startswith("policy.") for entry in result.entries)
+    assert result.eligible is False
+    project_result = next(
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "policy.artifact.forbid"
+    )
+    assert project_result.status is PreSubmissionResultStatus.FAILED
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_effective_execution_enforces_server_owned_storage_scheme(tmp_path: Path) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    request = replace(request, storage_scheme="local")
+    service = PreparedBundleMaterializationService(
+        authorization=_AllowAuthority(),
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+    )
+
+    result = await service.materialize_prepared_bundle(request)
+
+    policy_result = next(
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "policy.storage_scheme.enforce"
+    )
+    assert policy_result.status is PreSubmissionResultStatus.FAILED
+    assert policy_result.message_code == "storage_scheme_not_allowed"
     await request.prepared_artifact.close()
     manager.close()
 
@@ -577,16 +612,16 @@ async def test_authorized_cancellation_cleans_before_propagating(
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     entered = threading.Event()
     release = threading.Event()
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process_blocking
+    original = EffectivePreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "process_blocking", blocking_process)
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
@@ -647,16 +682,16 @@ async def test_timeout_during_checker_access_cleans_workspace(
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     entered = threading.Event()
     release = threading.Event()
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process_blocking
+    original = EffectivePreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "process_blocking", blocking_process)
     preparation._active[request.prepared_artifact._binding].deadline = (
         asyncio.get_running_loop().time() + 0.01
     )
@@ -696,16 +731,16 @@ async def test_terminal_event_during_sealing_precedes_checker_access_and_cleans(
             assert release.wait(timeout=5)
             return super()._seal_projected_content(root_fd, entries)
 
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
     checker_called = threading.Event()
-    original_execute = DefaultPreSubmissionProcessor._execute
+    original_execute = EffectivePreSubmissionProcessor._execute
 
     def observed_execute(self, tree):
         checker_called.set()
         return original_execute(self, tree)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "_execute", observed_execute)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "_execute", observed_execute)
 
     if terminal == "timeout":
         preparation._active[request.prepared_artifact._binding].deadline = (

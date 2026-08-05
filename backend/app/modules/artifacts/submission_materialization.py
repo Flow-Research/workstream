@@ -16,8 +16,8 @@ from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
 from app.modules.checkers.pre_submit_execution import (
     DefaultPreSubmissionExecutionInput,
-    DefaultPreSubmissionExecutionResult,
-    DefaultPreSubmissionProcessor,
+    EffectivePreSubmissionProcessor,
+    PreSubmissionExecutionResult,
     PreSubmissionInfrastructureUnavailable,
 )
 
@@ -38,6 +38,7 @@ class PreSubmitMaterializationAuthorityFacts:
     archive_sha256: str
     archive_byte_count: int
     semantic_manifest_sha256: str
+    storage_scheme: str
 
 
 class PreSubmitMaterializationAuthorization(Protocol):
@@ -89,7 +90,7 @@ class PreparedBundleMaterializationService:
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
-    ) -> DefaultPreSubmissionExecutionResult:
+    ) -> PreSubmissionExecutionResult:
         """Consume fixed-service authority before any byte or workspace access."""
         facts = self._authority_facts(request)
         await self._authorization.consume(
@@ -98,7 +99,7 @@ class PreparedBundleMaterializationService:
             prepared_authorization=request.prepared_authorization,
             facts=facts,
         )
-        processor = DefaultPreSubmissionProcessor(
+        processor = EffectivePreSubmissionProcessor(
             archive_inspector=self._archive_inspector,
             catalogue=self._catalogue,
             execution_input=DefaultPreSubmissionExecutionInput(
@@ -108,6 +109,7 @@ class PreparedBundleMaterializationService:
                 manifest=request.manifest,
                 change_gate=request.change_gate,
                 packet=request.packet,
+                storage_scheme=request.storage_scheme,
             ),
         )
         # Intentional friend call: this is the sole authority-gated caller, and
@@ -144,4 +146,5 @@ class PreparedBundleMaterializationService:
             archive_sha256=commitment.sha256,
             archive_byte_count=commitment.byte_count,
             semantic_manifest_sha256=request.manifest.sha256,
+            storage_scheme=request.storage_scheme,
         )

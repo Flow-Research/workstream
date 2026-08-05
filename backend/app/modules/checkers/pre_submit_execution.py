@@ -8,6 +8,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import threading
 from typing import BinaryIO
+from fnmatch import fnmatchcase
 
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.sources import ArtifactCommitment
@@ -27,6 +28,7 @@ from app.modules.checkers.catalogue import (
     PreSubmissionCheckerPhase,
     PreSubmissionCheckerState,
     PreSubmissionPlatformCapability,
+    PreSubmissionPolicyPrimitive,
 )
 from app.modules.checkers.effective_plan import (
     EffectivePreSubmissionExecutionPlan,
@@ -59,8 +61,8 @@ class PreSubmissionInfrastructureUnavailable(DefaultPreSubmissionExecutionError)
     """Fail closed for an impossible or disabled mandatory execution state."""
 
 
-class DefaultPreSubmissionResultStatus(StrEnum):
-    """Closed non-review status vocabulary for one default checker result."""
+class PreSubmissionResultStatus(StrEnum):
+    """Closed non-review status vocabulary for every pre-submit result."""
 
     PASSED = "passed"
     WARNING = "warning"
@@ -84,26 +86,48 @@ class SubmissionPacketView:
 
 
 @dataclass(frozen=True, slots=True)
-class DefaultPreSubmissionEntryResult:
-    """One bounded path-redacted result bound to its exact plan entry."""
+class PreSubmissionResultDefinition:
+    """Authority-neutral identity for one catalogue-owned definition."""
+
+    dispatch_authority: str
+    definition_id: str
+    definition_version: str
+    public_name: str
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class PreSubmissionResultPolicyTrace:
+    """Exact locked policy trace for one result."""
+
+    effective_plan_sha256: str
+    rule_instance_id: str | None
+    locked_policy_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class PreSubmissionEntryResult:
+    """One canonical bounded and path-redacted pre-submit result."""
 
     schema_version: str
-    plan_sha256: str
-    entry_id: str
-    entry_version: str
-    status: DefaultPreSubmissionResultStatus
+    definition: PreSubmissionResultDefinition
+    policy_trace: PreSubmissionResultPolicyTrace
+    phase: str
+    order: int
+    classification: str
+    status: PreSubmissionResultStatus
     failure_code: str | None
     message_code: str
     metadata: tuple[tuple[str, int | bool | str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class DefaultPreSubmissionExecutionResult:
-    """Complete non-durable 04B2 phase result returned after scratch cleanup."""
+class PreSubmissionExecutionResult:
+    """Complete canonical platform-plus-project result after scratch cleanup."""
 
     plan_sha256: str
     eligible: bool
-    entries: tuple[DefaultPreSubmissionEntryResult, ...]
+    entries: tuple[PreSubmissionEntryResult, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,10 +140,11 @@ class DefaultPreSubmissionExecutionInput:
     manifest: SubmissionManifest
     change_gate: SubmissionChangeGateResult
     packet: SubmissionPacketView
+    storage_scheme: str
 
 
-class DefaultPreSubmissionProcessor:
-    """Prepared-artifact processor that owns projection and default dispatch."""
+class EffectivePreSubmissionProcessor:
+    """Prepared-artifact processor owning the sole effective-plan dispatch."""
 
     def __init__(
         self,
@@ -140,7 +165,7 @@ class DefaultPreSubmissionProcessor:
 
     def process_blocking(
         self, reader: BinaryIO, workspace: Path
-    ) -> DefaultPreSubmissionExecutionResult:
+    ) -> PreSubmissionExecutionResult:
         """Project and execute inside preparation's bounded blocking adapter."""
         self._validate_input()
         return self._archive_inspector.project_and_run(
@@ -153,7 +178,7 @@ class DefaultPreSubmissionProcessor:
     def _execute_unless_aborted(
         self,
         tree: SealedSubmissionTree,
-    ) -> DefaultPreSubmissionExecutionResult:
+    ) -> PreSubmissionExecutionResult:
         """Deny checker access after caller cancellation or deadline expiry."""
         if self._aborted.is_set():
             raise DefaultPreSubmissionExecutionError("pre_submission_execution_aborted")
@@ -175,21 +200,17 @@ class DefaultPreSubmissionProcessor:
         ):
             raise PreSubmissionInfrastructureUnavailable("submission_change_identity_invalid")
 
-    def _execute(self, tree: SealedSubmissionTree) -> DefaultPreSubmissionExecutionResult:
-        """Run the ordered platform/default phase slice exactly once."""
-        results: list[DefaultPreSubmissionEntryResult] = []
-        statuses: dict[str, DefaultPreSubmissionResultStatus] = {}
+    def _execute(self, tree: SealedSubmissionTree) -> PreSubmissionExecutionResult:
+        """Run the complete ordered platform-plus-project plan exactly once."""
+        results: list[PreSubmissionEntryResult] = []
+        statuses: dict[str, PreSubmissionResultStatus] = {}
         blocked = False
         executed_ids = {
             entry.definition_id
             for entry in self._input.plan.entries
-            if entry.phase in _EXECUTED_PHASES
+            if entry.phase in _EXECUTED_PHASES | {PreSubmissionCheckerPhase.PROJECT_POLICY.value}
         }
         for entry in self._input.plan.entries:
-            if entry.phase not in _EXECUTED_PHASES:
-                continue
-            if entry.dispatch_kind != "platform_capability":
-                raise PreSubmissionInfrastructureUnavailable("pre_submission_dispatch_kind_invalid")
             definition = self._catalogue.definition(entry.definition_id)
             if entry.definition_id in statuses:
                 raise PreSubmissionInfrastructureUnavailable("pre_submission_duplicate_result")
@@ -212,33 +233,33 @@ class DefaultPreSubmissionProcessor:
             unmet = any(
                 statuses.get(dependency)
                 not in {
-                    DefaultPreSubmissionResultStatus.PASSED,
-                    DefaultPreSubmissionResultStatus.WARNING,
-                    DefaultPreSubmissionResultStatus.ADVISORY_DISABLED,
+                    PreSubmissionResultStatus.PASSED,
+                    PreSubmissionResultStatus.WARNING,
+                    PreSubmissionResultStatus.ADVISORY_DISABLED,
                 }
                 for dependency in entry.dependencies
             )
             if blocked or unmet:
                 result = self._result(
                     entry,
-                    DefaultPreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
+                    PreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
                     message_code="dependency_not_run",
                 )
             elif entry.state == PreSubmissionCheckerState.DISABLED.value:
                 result = self._result(
                     entry,
-                    DefaultPreSubmissionResultStatus.ADVISORY_DISABLED,
+                    PreSubmissionResultStatus.ADVISORY_DISABLED,
                     message_code="advisory_disabled",
                 )
             else:
                 result = self._dispatch(entry, tree)
-                if result.status is DefaultPreSubmissionResultStatus.FAILED:
+                if result.status is PreSubmissionResultStatus.FAILED:
                     blocked = True
             statuses[entry.definition_id] = result.status
             results.append(result)
         if set(statuses) != executed_ids:
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_incomplete")
-        return DefaultPreSubmissionExecutionResult(
+        return PreSubmissionExecutionResult(
             plan_sha256=self._input.plan.plan_sha256,
             eligible=not blocked,
             entries=tuple(results),
@@ -248,8 +269,12 @@ class DefaultPreSubmissionProcessor:
         self,
         entry: EffectivePreSubmissionPlanEntry,
         tree: SealedSubmissionTree,
-    ) -> DefaultPreSubmissionEntryResult:
-        """Dispatch one catalogue-validated platform capability."""
+    ) -> PreSubmissionEntryResult:
+        """Dispatch one catalogue-validated platform capability or policy primitive."""
+        if entry.dispatch_kind == "policy_primitive":
+            return self._dispatch_policy(entry, tree)
+        if entry.dispatch_kind != "platform_capability":
+            raise PreSubmissionInfrastructureUnavailable("pre_submission_dispatch_kind_invalid")
         try:
             capability = PreSubmissionPlatformCapability(entry.dispatch_capability)
         except ValueError as exc:
@@ -260,7 +285,7 @@ class DefaultPreSubmissionProcessor:
             PreSubmissionCheckerPhase.CUSTODY.value,
             PreSubmissionCheckerPhase.IDENTITY.value,
         }:
-            return self._result(entry, DefaultPreSubmissionResultStatus.PASSED)
+            return self._result(entry, PreSubmissionResultStatus.PASSED)
         if entry.phase == PreSubmissionCheckerPhase.MATERIALIZATION.value:
             if tree.entries != self._input.manifest.entries:
                 raise PreSubmissionInfrastructureUnavailable(
@@ -268,7 +293,7 @@ class DefaultPreSubmissionProcessor:
                 )
             return self._result(
                 entry,
-                DefaultPreSubmissionResultStatus.PASSED,
+                PreSubmissionResultStatus.PASSED,
                 metadata=(("entry_count", len(tree.entries)),),
             )
         if capability is PreSubmissionPlatformCapability.SUBMISSION_PACKET:
@@ -308,25 +333,142 @@ class DefaultPreSubmissionProcessor:
         if matches:
             return self._result(
                 entry,
-                DefaultPreSubmissionResultStatus.WARNING,
+                PreSubmissionResultStatus.WARNING,
                 message_code="quality_signal_warning",
                 metadata=(("matched_category_count", len(matches)),),
             )
-        return self._result(entry, DefaultPreSubmissionResultStatus.PASSED)
+        return self._result(entry, PreSubmissionResultStatus.PASSED)
+
+    def _dispatch_policy(
+        self, entry: EffectivePreSubmissionPlanEntry, tree: SealedSubmissionTree
+    ) -> PreSubmissionEntryResult:
+        """Evaluate one closed project-policy primitive using server-owned facts only."""
+        try:
+            primitive = PreSubmissionPolicyPrimitive(entry.dispatch_capability)
+        except ValueError as exc:
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_policy_primitive_unknown"
+            ) from exc
+        config = entry.configuration.as_dict()
+        file_entries = tuple(item for item in tree.entries if item.sha256 is not None)
+        paths = {item.normalized_path for item in file_entries}
+        failure_count = 0
+        message_code = "passed"
+        if primitive is PreSubmissionPolicyPrimitive.REQUIRE_FILE:
+            required = self._canonical_policy_paths(config.get("artifact_keys"))
+            failure_count = sum(path not in paths for path in required)
+            message_code = "required_file_missing"
+        elif primitive is PreSubmissionPolicyPrimitive.REQUIRE_MINIMUM_EVIDENCE:
+            required = self._canonical_policy_paths(config.get("evidence_keys"))
+            failure_count = sum(path not in paths for path in required)
+            message_code = "required_evidence_missing"
+        elif primitive is PreSubmissionPolicyPrimitive.FORBID_ARTIFACT:
+            patterns = self._string_list(config.get("patterns"))
+            failure_count = sum(
+                any(fnmatchcase(path, pattern) for pattern in patterns) for path in paths
+            )
+            message_code = "forbidden_artifact_present"
+        elif primitive is PreSubmissionPolicyPrimitive.LIMIT_FILE_SIZE:
+            maximum = self._positive_limit(config, "maximum_file_size_bytes")
+            failure_count = sum(item.byte_count > maximum for item in file_entries)
+            message_code = "file_size_limit_exceeded"
+        elif primitive is PreSubmissionPolicyPrimitive.LIMIT_PACKAGE_SIZE:
+            maximum = self._positive_limit(config, "maximum_package_size_bytes")
+            failure_count = int(self._input.manifest.total_expanded_bytes > maximum)
+            message_code = "package_size_limit_exceeded"
+        elif primitive is PreSubmissionPolicyPrimitive.REQUIRE_ATTESTATION:
+            terms = self._string_list(config.get("terms"))
+            attestation = self._input.packet.contributor_attestation.casefold()
+            failure_count = sum(term.casefold() not in attestation for term in terms)
+            message_code = "policy_attestation_missing"
+        elif primitive is PreSubmissionPolicyPrimitive.VALIDATE_SUBMISSION_PACKET:
+            fields = set(self._string_list(config.get("fields")))
+            known = {"summary", "worker_attestation", "contributor_attestation"}
+            if not fields.issubset(known):
+                raise PreSubmissionInfrastructureUnavailable(
+                    "pre_submission_policy_field_unmappable"
+                )
+            failure_count = int("summary" in fields and not self._input.packet.summary.strip())
+            failure_count += int(
+                bool(fields & {"worker_attestation", "contributor_attestation"})
+                and not self._input.packet.contributor_attestation.strip()
+            )
+            message_code = "submission_packet_invalid"
+        elif primitive is PreSubmissionPolicyPrimitive.REQUIRE_MANIFEST_FIELD:
+            failure_count = 0
+        elif primitive is PreSubmissionPolicyPrimitive.VERIFY_HASH:
+            if config.get("algorithm") != "sha256":
+                raise PreSubmissionInfrastructureUnavailable(
+                    "pre_submission_policy_hash_algorithm_invalid"
+                )
+        elif primitive is PreSubmissionPolicyPrimitive.REQUIRE_PACKAGING:
+            allowed = config.get("allowed_package_formats", [])
+            if not isinstance(allowed, list) or any(not isinstance(item, str) for item in allowed):
+                raise PreSubmissionInfrastructureUnavailable(
+                    "pre_submission_policy_configuration_invalid"
+                )
+            failure_count = int(bool(allowed) and "zip" not in allowed)
+            message_code = "packaging_requirement_failed"
+        elif primitive is PreSubmissionPolicyPrimitive.ENFORCE_STORAGE_SCHEME:
+            schemes = self._string_list(config.get("schemes"))
+            failure_count = int(self._input.storage_scheme not in schemes)
+            message_code = "storage_scheme_not_allowed"
+        elif primitive is PreSubmissionPolicyPrimitive.WARN_LOW_QUALITY_GENERATED_ARTIFACT:
+            matches = matched_low_quality_patterns(
+                (self._input.packet.summary, self._input.packet.contributor_attestation, *paths)
+            )
+            return self._result(
+                entry,
+                PreSubmissionResultStatus.WARNING if matches else PreSubmissionResultStatus.PASSED,
+                message_code="quality_signal_warning" if matches else "passed",
+                metadata=(("matched_category_count", len(matches)),) if matches else (),
+            )
+        return self._blocking_or_pass(entry, failure_count, message_code)
+
+    @staticmethod
+    def _string_list(value: object) -> tuple[str, ...]:
+        if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_policy_configuration_invalid"
+            )
+        return tuple(value)
+
+    @classmethod
+    def _canonical_policy_paths(cls, value: object) -> tuple[str, ...]:
+        paths = cls._string_list(value)
+        if len(paths) != len(set(paths)) or any(
+            PurePosixPath(path).is_absolute()
+            or path != PurePosixPath(path).as_posix()
+            or ".." in PurePosixPath(path).parts
+            for path in paths
+        ):
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_policy_path_unmappable"
+            )
+        return paths
+
+    @staticmethod
+    def _positive_limit(config: dict[str, object], key: str) -> int:
+        value = config.get(key)
+        if type(value) is not int or value < 0:
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_policy_configuration_invalid"
+            )
+        return value
 
     def _blocking_or_pass(
         self,
         entry: EffectivePreSubmissionPlanEntry,
         finding_count: int,
         message_code: str,
-    ) -> DefaultPreSubmissionEntryResult:
+    ) -> PreSubmissionEntryResult:
         """Build one blocking failure or successful bounded result."""
         return self._result(
             entry,
             (
-                DefaultPreSubmissionResultStatus.FAILED
+                PreSubmissionResultStatus.FAILED
                 if finding_count
-                else DefaultPreSubmissionResultStatus.PASSED
+                else PreSubmissionResultStatus.PASSED
             ),
             failure_code=entry.failure_code if finding_count else None,
             message_code=message_code if finding_count else "passed",
@@ -336,18 +478,30 @@ class DefaultPreSubmissionProcessor:
     def _result(
         self,
         entry: EffectivePreSubmissionPlanEntry,
-        status: DefaultPreSubmissionResultStatus,
+        status: PreSubmissionResultStatus,
         *,
         failure_code: str | None = None,
         message_code: str = "passed",
         metadata: tuple[tuple[str, int | bool | str], ...] = (),
-    ) -> DefaultPreSubmissionEntryResult:
+    ) -> PreSubmissionEntryResult:
         """Build one result bound to the exact plan and definition version."""
-        return DefaultPreSubmissionEntryResult(
+        return PreSubmissionEntryResult(
             schema_version=PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
-            plan_sha256=self._input.plan.plan_sha256,
-            entry_id=entry.definition_id,
-            entry_version=entry.definition_version,
+            definition=PreSubmissionResultDefinition(
+                dispatch_authority="workstream.pre_submission_checker_catalogue",
+                definition_id=entry.definition_id,
+                definition_version=entry.definition_version,
+                public_name=entry.public_name,
+                source=entry.policy_trace_source,
+            ),
+            policy_trace=PreSubmissionResultPolicyTrace(
+                effective_plan_sha256=self._input.plan.plan_sha256,
+                rule_instance_id=entry.rule_instance_id,
+                locked_policy_sha256=self._input.plan.lineage.effective_policy_hash,
+            ),
+            phase=entry.phase,
+            order=entry.order,
+            classification=entry.classification,
             status=status,
             failure_code=failure_code,
             message_code=message_code,
