@@ -459,6 +459,23 @@ jobs:
             coverage report --include="${source}" --precision=2 --fail-under=90
           done
 
+      - name: Submission policy authority foundation per-file coverage
+        working-directory: backend
+        shell: bash
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: |
+          set -euo pipefail
+          coverage run --append -m pytest -q -p pytest_asyncio.plugin \
+            tests/test_projects.py \
+            -k 'submission_artifact_policy_replay_repository or submission_artifact_policy_authority_service'
+          for source in \
+            app/modules/projects/submission_policy_mutation_repository.py \
+            app/modules/projects/submission_policy_mutation_service.py
+          do
+            coverage report --include="${source}" --precision=2 --fail-under=90
+          done
+
       - name: API controls coverage
         working-directory: backend
         run: >-
