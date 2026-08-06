@@ -1356,7 +1356,7 @@ complete creation or acknowledgement provenance and use the append-only
 refused after any 12E replay or attributed sufficiency provenance exists; do
 not delete replay, product, or authority evidence to force rollback.
 
-Migration `0057_submission_policy_authority` installs inactive submission-policy
+Migration `0057_submission_policy_authority` installs submission-policy
 PREP, replay, and nullable provenance custody only. Existing submission,
 effective, and pre-submit policy rows remain readable with all authority fields
 null; do not backfill invented authority. The replay reservation is mutable only
@@ -1364,10 +1364,11 @@ for its single `pending -> committed` completion, remains in the caller's root
 transaction, and must not be committed or rolled back by the AUTH helper. A
 pending reservation is still authority evidence and intentionally blocks
 downgrade. Any audit event using the submission-policy mutation resource type,
-including denied evidence, blocks downgrade independently. Until 12F2-12F4 cut
-over their respective paths, the four submission-
-policy mutation actions remain planned and operators must not treat the schema
-as activation.
+including denied evidence, blocks downgrade independently. 12F2 activates only
+manual human create/update. Each update appends a separately authorized
+successor and supersedes its exact hash-selected predecessor atomically; derive
+and approve remain planned. Operators must not treat the shared schema as wider
+activation.
 
 ## Draft review and revision policy authorization
 

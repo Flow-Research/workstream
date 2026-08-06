@@ -125,13 +125,16 @@ legacy route/public-service/internal-guard/caller-package removal to the 05B
 admission-backed Submission cutover.
 
 `WS-ART-001-04B1` merged through PR #276 and supplies the immutable typed
-catalogue plus lineage-bound effective plan. `WS-ART-001-04B2` is implemented
-and internally reviewed on its bounded branch; hosted PR gates and human merge
-remain pending. It owns only fixed-service authorization before byte access,
+catalogue plus lineage-bound effective plan. `WS-ART-001-04B2` merged through
+PR #282. It owns only fixed-service authorization before byte access,
 quota-reserved callback-scoped sealed ZIP projection, platform/default phase
 execution, bounded non-durable results, and cleanup. It performs no
 project-policy execution, durable evidence/admission/Submission write, route
-exposure, provider I/O, or AUTH activation.
+exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` implementation
+and internal L1 review are complete on its bounded branch. It executes the
+project-policy continuation through that same plan and sealed tree and persists
+one immutable platform-plus-project evidence set. Hosted PR gates, CodeRabbit,
+human review, and merge remain pending.
 
 ## Gate
 

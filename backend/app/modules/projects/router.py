@@ -13,9 +13,12 @@ from app.adapters.artifacts import get_guide_artifact_ingest_command
 from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
+    get_authorization_actor,
     get_authorization_service,
+    prepared_authorization_service,
 )
 from app.core.permissions import PermissionDenied
+from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
@@ -54,6 +57,10 @@ from app.modules.projects.guide_mutation_router import (
 from app.modules.projects.sufficiency_mutation_service import (
     GuideSufficiencyMutationConflict,
     GuideSufficiencyMutationService,
+)
+from app.modules.projects.submission_policy_mutation_service import (
+    SubmissionPolicyMutationConflict,
+    SubmissionPolicyMutationService,
 )
 from app.modules.actors.service import ResolvedActor
 from app.modules.authorization.prepared import PreparedAuthorizationService
@@ -99,6 +106,84 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
         HTTP exception with a forbidden status.
     """
     return HTTPException(status_code=403, detail=str(exc))
+
+
+def submission_policy_conflict_error(code: str) -> StructuredHTTPException:
+    """Return a bounded manual-policy conflict without guide-mutation wording."""
+    messages = {
+        "idempotency_mismatch": "Idempotency key does not match",
+        "idempotency_pending": "Submission policy mutation is already in progress",
+        "submission_policy_precondition_failed": "Submission policy precondition failed",
+        "submission_policy_lineage_stale": "Submission policy lineage is stale",
+        "submission_policy_version_conflict": "Submission policy version already exists",
+    }
+    return StructuredHTTPException(
+        status_code=409,
+        detail=code,
+        error_code=code,
+        error_message=messages.get(code, "Submission policy mutation conflicts with current state"),
+        retryable=code == "idempotency_pending",
+    )
+
+
+def require_submission_policy_mutation_key(
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> UUID:
+    """Validate manual policy replay custody before actor provisioning."""
+    if idempotency_key is None:
+        raise StructuredHTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be a UUID",
+            error_code="validation_error",
+            error_message="Idempotency-Key must be a UUID",
+        )
+    try:
+        return UUID(idempotency_key)
+    except ValueError as exc:
+        raise StructuredHTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be a UUID",
+            error_code="validation_error",
+            error_message="Idempotency-Key must be a UUID",
+        ) from exc
+
+
+async def require_submission_policy_human(
+    key: Annotated[UUID, Depends(require_submission_policy_mutation_key)],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+) -> ResolvedActor:
+    """Conceal the public manual-policy surface from service principals."""
+    del key
+    if resolved.profile.actor_kind != "human":
+        raise StructuredHTTPException(
+            status_code=404,
+            detail="Project authorization resource not found",
+            error_code="project_authorization_resource_not_found",
+            error_message="Project authorization resource not found",
+        )
+    return resolved
+
+
+async def get_submission_policy_prepared_authorization_service(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(require_submission_policy_human)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+):
+    """Compose submission-policy PREP from its dedicated admitted actor."""
+    async with prepared_authorization_service(request, resolved, session) as service:
+        yield service
+
+
+async def submission_policy_authorization(
+    key: Annotated[UUID, Depends(require_submission_policy_mutation_key)],
+    resolved: Annotated[ResolvedActor, Depends(require_submission_policy_human)],
+    prepared: Annotated[
+        PreparedAuthorizationService,
+        Depends(get_submission_policy_prepared_authorization_service),
+    ],
+):
+    """Return the exact actor, key, and PREP service for manual policy mutation."""
+    return key, resolved, prepared
 
 
 @router.get(
@@ -447,25 +532,33 @@ async def acknowledge_guide_sufficiency_warnings(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies",
     response_model=SubmissionArtifactPolicyResponse,
     status_code=201,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value
+    },
 )
 async def create_submission_artifact_policy(
-    project_id: str,
-    guide_id: str,
+    project_id: UUID,
+    guide_id: UUID,
     payload: SubmissionArtifactPolicyCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(submission_policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionArtifactPolicyResponse:
-    """Create a draft Workstream-derived submission artifact policy."""
+    """Create one governed manual submission-policy draft."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).create_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            payload,
+        outcome = await SubmissionPolicyMutationService(session).create_manual(
+            resolved, prepared, key, project_id, guide_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except SubmissionPolicyMutationConflict as exc:
+        await session.rollback()
+        raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 
@@ -510,27 +603,34 @@ async def run_submission_artifact_policy_derivation_agent(
 @router.patch(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
     response_model=SubmissionArtifactPolicyResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value
+    },
 )
 async def update_submission_artifact_policy(
-    project_id: str,
-    guide_id: str,
-    policy_id: str,
+    project_id: UUID,
+    guide_id: UUID,
+    policy_id: UUID,
     payload: SubmissionArtifactPolicyUpdate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[
+        tuple[UUID, ResolvedActor, PreparedAuthorizationService],
+        Depends(submission_policy_authorization),
+    ],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionArtifactPolicyResponse:
-    """Update a draft submission artifact policy."""
+    """Append an authorized replacement for one manual draft policy."""
+    key, resolved, prepared = authorization
     try:
-        return await ProjectService(session).update_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            policy_id,
-            payload,
+        outcome = await SubmissionPolicyMutationService(session).update_manual(
+            resolved, prepared, key, project_id, guide_id, policy_id, payload
         )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        await (session.rollback() if outcome.replayed else session.commit())
+        return outcome.response
+    except SubmissionPolicyMutationConflict as exc:
+        await session.rollback()
+        raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
+        await session.rollback()
         raise project_http_error(exc) from exc
 
 

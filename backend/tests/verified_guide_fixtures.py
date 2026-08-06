@@ -260,6 +260,14 @@ async def create_verified_report_fixture(
             .limit(1)
         )
         assert diagnostic_report is not None
+        authoritative_report = await session.scalar(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == source_snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_not(None),
+            )
+        )
+        if authoritative_report is not None:
+            return authoritative_report.id
         if setup_run is None:
             snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
             assert snapshot is not None

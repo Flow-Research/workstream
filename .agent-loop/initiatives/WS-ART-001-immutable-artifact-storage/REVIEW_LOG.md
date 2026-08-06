@@ -346,3 +346,19 @@
 - The correction supersedes 04A4, makes 04B1 the next implementation chunk, and
   assigns the complete standalone/public/internal/caller-package clean cut to
   the admission-backed 05B Submission cutover.
+
+## WS-ART-001-04B3
+
+- Initial review found missing migration/persistence reachability, incomplete
+  composite lineage, stale guide/source comparison, forged result-envelope
+  acceptance, replay capability duplication, and open result membership.
+- The implementation now uses the real locked-context loader, database-enforced
+  actor/identity/assignment/task/project/policy lineage, immutable normalized
+  evidence, exact member-verifying replay, and one non-replayable process-local
+  continuation capability.
+- A real isolated-PostgreSQL workflow proves passing, replay, blocked evidence,
+  bounded audit, scratch-safe cleanup, aggregate immutability, and absence of
+  artifact/admission/Submission/checker/review-queue side effects.
+- Architecture, security, QA, product/ops, senior engineering, CI integrity,
+  docs, reuse/dedup, and test-delta final reviews pass. Full crossed-state
+  durable-consumption proof remains explicitly owned by ART-04C.

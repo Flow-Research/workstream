@@ -398,6 +398,9 @@ class ProjectGuide(Base):
     __tablename__ = "project_guides"
     __table_args__ = (
         UniqueConstraint("project_id", "version", name="uq_project_guides_project_version"),
+        UniqueConstraint(
+            "id", "project_id", "version", name="uq_project_guides_id_project_version"
+        ),
         CheckConstraint(
             "((selected_review_policy_id is null and "
             "selected_review_policy_generation is null and selected_review_policy_hash is null "

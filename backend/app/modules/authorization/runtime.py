@@ -807,8 +807,7 @@ class SubmissionPolicyCompilationContext(BaseModel):
     def validate_catalogue_projection(self):
         """Keep ordered entry identity/configuration and disabled IDs canonical."""
         if (
-            len(self.ordered_entry_identities)
-            != len(self.ordered_entry_configuration_hashes)
+            len(self.ordered_entry_identities) != len(self.ordered_entry_configuration_hashes)
             or len(self.ordered_entry_identities) != len(set(self.ordered_entry_identities))
             or self.disabled_catalogue_entry_ids
             != tuple(sorted(set(self.disabled_catalogue_entry_ids)))
@@ -839,8 +838,15 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     policy_version: str
     policy_generation: int = Field(ge=1)
     setup_generation: int = Field(ge=1)
+    sufficiency_report_id: UUID
+    sufficiency_status: Literal["passed", "passed_with_warnings"]
+    sufficiency_acknowledgement_digest: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
     policy_status: str | None = None
     policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    successor_policy_id: UUID | None = None
+    successor_policy_version: str | None = None
     stale_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     effective_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     compiled_pre_submit_output_digest: str | None = Field(
@@ -852,13 +858,27 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     @model_validator(mode="after")
     def require_submission_policy_identity(self):
         """Reject cross-policy selectors and partial current-policy facts."""
-        if self.resource_id != self.policy_id:
+        protected_policy_id = (
+            self.successor_policy_id if self.target_kind == "update" else self.policy_id
+        )
+        if self.resource_id != protected_policy_id:
             raise ValueError("submission policy resource must match policy")
         if (self.policy_status is None) != (self.policy_digest is None):
             raise ValueError("submission policy status and digest must be bound together")
         existing_policy = self.target_kind in {"update", "approve"}
         if existing_policy != (self.policy_status is not None):
             raise ValueError("existing submission policy requires status and digest")
+        replacement = self.target_kind == "update"
+        if replacement != (
+            self.successor_policy_id is not None and self.successor_policy_version is not None
+        ):
+            raise ValueError("policy update requires an exact successor identity")
+        if replacement and self.successor_policy_id == self.policy_id:
+            raise ValueError("policy successor must differ from its predecessor")
+        if (self.sufficiency_status == "passed_with_warnings") != (
+            self.sufficiency_acknowledgement_digest is not None
+        ):
+            raise ValueError("warning sufficiency requires exact acknowledgement custody")
         approval = self.target_kind == "approve"
         if approval != (
             self.effective_output_digest is not None

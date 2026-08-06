@@ -221,6 +221,7 @@ class ActionOwner(StrEnum):
     XINT_003_02B = "WS-XINT-003-02B"
     AUTH_12E = "WS-AUTH-001-12E"
     AUTH_12F = "WS-AUTH-001-12F"
+    AUTH_12F2 = "WS-AUTH-001-12F2"
     AUTH_12G = "WS-AUTH-001-12G"
     AUTH_12H = "WS-AUTH-001-12H"
     AUTH_13 = "WS-AUTH-001-13"
@@ -481,20 +482,20 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12E,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F2,
     ),
     _planned(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
         ActionOwner.AUTH_12F,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F2,
     ),
     _planned(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
@@ -837,6 +838,8 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,

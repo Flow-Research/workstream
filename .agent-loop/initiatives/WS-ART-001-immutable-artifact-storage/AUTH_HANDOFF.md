@@ -147,7 +147,8 @@ evidence. No human grant supplies fixed service authority.
 04B2 defines the pre-submit materializer facts as task, assignment, project,
 effective submission-artifact-policy ID, pre-submit checker-policy ID,
 process-local prepared generation, effective-plan hash, catalogue-manifest hash,
-archive SHA-256/byte count, and semantic-manifest hash. The fixed
+archive SHA-256/byte count, semantic-manifest hash, and the server-selected
+ArtifactStore storage scheme evaluated by the locked policy. The fixed
 `workstream.artifact.materializer` capability must be consumed before any
 prepared-byte read, ZIP open, workspace reservation, or checker result. ART
 ships only a deny-by-default adapter while the action is planned; XINT-06A owns
