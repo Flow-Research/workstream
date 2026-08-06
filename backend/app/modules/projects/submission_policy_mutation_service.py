@@ -599,7 +599,6 @@ class SubmissionPolicyMutationService:
         self,
         *,
         resolved: ResolvedActor,
-        prepared: PreparedAuthorizationService,
         key: UUID,
         action: ActionId,
         project_id: UUID,
