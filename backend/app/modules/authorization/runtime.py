@@ -858,7 +858,10 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
     @model_validator(mode="after")
     def require_submission_policy_identity(self):
         """Reject cross-policy selectors and partial current-policy facts."""
-        if self.resource_id != self.policy_id:
+        protected_policy_id = (
+            self.successor_policy_id if self.target_kind == "update" else self.policy_id
+        )
+        if self.resource_id != protected_policy_id:
             raise ValueError("submission policy resource must match policy")
         if (self.policy_status is None) != (self.policy_digest is None):
             raise ValueError("submission policy status and digest must be bound together")

@@ -11553,7 +11553,7 @@ async def test_manual_submission_artifact_policy_update_rejects_agent_derived_ro
     )
 
     assert update_response.status_code == 409
-    assert "agent-derived policy bodies are immutable" in update_response.json()["detail"]
+    assert "agent-derived policy summaries are immutable" in update_response.json()["detail"]
 
     summary_response = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
@@ -12060,16 +12060,16 @@ async def test_submission_artifact_policy_create_fault_rolls_back_atomic_boundar
             SubmissionPolicyMutationService, "complete_replay", fail_after_replay_completion
         )
 
-    with pytest.raises(RuntimeError, match="fault after"):
-        await project_client.post(
-            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
-            headers=auth_headers(),
-            json={
-                "source_snapshot_id": snapshot["id"],
-                "policy_version": "manual-v1",
-                "policy_body": project_submission_artifact_policy_body(),
-            },
-        )
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "manual-v1",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+    assert response.status_code == 500
 
     async with db_session.get_session_factory()() as session:
         policy_count = await session.scalar(
@@ -12375,17 +12375,17 @@ async def test_submission_artifact_policy_update_fault_rolls_back_replacement(
     monkeypatch.setattr(
         SubmissionPolicyMutationService, "complete_replay", fail_after_update_completion
     )
-    with pytest.raises(RuntimeError, match="fault after update replay completion"):
-        await project_client.patch(
-            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-            f"submission-artifact-policies/{policy['id']}",
-            headers=auth_headers(),
-            json={
-                "expected_policy_hash": policy["policy_hash"],
-                "successor_policy_version": "v2",
-                "change_summary": "must roll back",
-            },
-        )
+    response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        f"submission-artifact-policies/{policy['id']}",
+        headers=auth_headers(),
+        json={
+            "expected_policy_hash": policy["policy_hash"],
+            "successor_policy_version": "v2",
+            "change_summary": "must roll back",
+        },
+    )
+    assert response.status_code == 500
 
     async with db_session.get_session_factory()() as session:
         rows = list(

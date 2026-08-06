@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
@@ -638,8 +639,8 @@ class SubmissionPolicyMutationService:
             or replay.guide_id != str(guide_id)
         ):
             raise SubmissionPolicyMutationConflict("idempotency_mismatch")
-        resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate(
-            replay.resource_context_json
+        resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate_json(
+            json.dumps(replay.resource_context_json)
         )
         response = (
             SubmissionArtifactPolicyResponse.model_validate(replay.response_json)
