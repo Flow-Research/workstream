@@ -5241,7 +5241,7 @@ async def approve_submission_artifact_policy(
         )
         assert setup_response.status_code == 200, setup_response.text
         setup_run = setup_response.json()
-        report = await create_sufficiency_report(
+        await create_sufficiency_report(
             client,
             project_id,
             guide_id,
@@ -5253,15 +5253,20 @@ async def approve_submission_artifact_policy(
             guide_id,
             setup_run["source_snapshot_id"],
         )
-        verified_report_id = await create_verified_report_fixture(
-            report["id"], setup_run["source_snapshot_id"]
-        )
         async with db_session.get_session_factory()() as session:
+            authoritative_report = await session.scalar(
+                select(GuideSufficiencyReport).where(
+                    GuideSufficiencyReport.source_snapshot_id
+                    == setup_run["source_snapshot_id"],
+                    GuideSufficiencyReport.project_setup_run_id.is_not(None),
+                )
+            )
+            assert authoritative_report is not None
             persisted_run = await session.get(ProjectSetupRun, setup_run["id"])
             assert persisted_run is not None
             persisted_run.status = "policy_draft_ready"
             persisted_run.current_step = "submission_artifact_policy_derivation"
-            persisted_run.output_sufficiency_report_id = verified_report_id
+            persisted_run.output_sufficiency_report_id = authoritative_report.id
             persisted_run.output_submission_artifact_policy_id = policy["id"]
             await session.commit()
         policy_id = policy["id"]
@@ -9333,15 +9338,17 @@ async def test_public_sufficiency_mutation_conceals_service_before_product_looku
     app = create_app(Settings(environment="test"))
     lookups = 0
 
-    async def resolved_service():
-        return SimpleNamespace(profile=SimpleNamespace(actor_kind="service"))
+    async def verified_service():
+        return SimpleNamespace(token=SimpleNamespace(subject_kind="service"))
 
     async def forbidden_lookup(*_: object, **__: object):
         nonlocal lookups
         lookups += 1
         raise AssertionError("service token reached project lookup")
 
-    app.dependency_overrides[get_authorization_actor] = resolved_service
+    app.dependency_overrides[
+        guide_mutation_router_module.get_auth_verification_result
+    ] = verified_service
     monkeypatch.setattr(ProjectRepository, "get_guide", forbidden_lookup)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
@@ -11804,7 +11811,11 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert persisted_policy.approved_by_actor == policy["created_by"]
     assert persisted_policy.approved_at is not None
     assert persisted_policy.derivation_source == "manual_admin_derivation"
-    assert persisted_policy.source_material_refs == []
+    assert len(persisted_policy.source_material_refs) == len(snapshot["items"])
+    assert all(
+        ref.startswith("artifact-content:") and "#extraction-usage:" in ref
+        for ref in persisted_policy.source_material_refs
+    )
     assert pre_submit_checker_policy is not None
     assert pre_submit_checker_policy.lifecycle_status == "compiled"
     assert pre_submit_checker_policy.effective_policy_hash == effective["effective_policy_hash"]
@@ -13375,7 +13386,7 @@ async def test_blocking_sufficiency_report_prevents_policy_creation(
     )
 
     assert response.status_code == 422
-    assert "blocking gaps" in response.json()["detail"]
+    assert "authoritative guide sufficiency report is required" in response.json()["detail"]
 
 
 async def test_sufficiency_warnings_require_acknowledgement(
@@ -13408,7 +13419,7 @@ async def test_sufficiency_warnings_require_acknowledgement(
         },
     )
     assert blocked.status_code == 422
-    assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
+    assert "authorized Project Manager acknowledgement" in blocked.json()["detail"]
 
     acknowledgement_headers = auth_headers()
     acknowledgement = await project_client.post(
@@ -13510,7 +13521,7 @@ async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_polic
     )
 
     assert response.status_code == 422
-    assert "warnings require admin/project_manager acknowledgement" in response.json()["detail"]
+    assert "authorized Project Manager acknowledgement" in response.json()["detail"]
 
 
 async def test_activation_revalidates_sufficiency_warning_acknowledgement_provenance(

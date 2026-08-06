@@ -258,9 +258,13 @@ class SubmissionPolicyMutationService:
             ):
                 raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
             if predecessor.lifecycle_status != "draft":
+                if predecessor.lifecycle_status == "approved":
+                    raise PolicyEditBlocked(
+                        "approved submission artifact policies are immutable"
+                    )
                 raise PolicyEditBlocked("only a current draft policy can be replaced")
             if predecessor.derivation_source != MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-                raise PolicyEditBlocked("agent-derived policies are immutable through this path")
+                raise PolicyEditBlocked("agent-derived policy bodies are immutable")
         return _ManualPolicyLineage(
             guide_version=guide.version,
             snapshot_id=snapshot_id,
