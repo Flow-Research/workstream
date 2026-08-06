@@ -1058,7 +1058,7 @@ async def create_policy_bundle_for_guide(
         manual_path,
         contributor_token,
         manual_payload,
-        expected_status=403,
+        expected_status=404,
         idempotency_key=str(uuid4()),
     )
     await request_json(
