@@ -1048,7 +1048,7 @@ async def create_policy_bundle_for_guide(
     manual_payload = {
         "source_snapshot_id": snapshot["id"],
         "policy_version": "e2e-manual-v1",
-        "policy_body": policy["policy_body"],
+        "policy_body": submission_artifact_policy_body(),
         "change_summary": "Manual policy authorization E2E.",
     }
     manual_path = f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
