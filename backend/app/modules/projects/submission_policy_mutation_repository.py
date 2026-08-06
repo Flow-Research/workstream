@@ -27,6 +27,7 @@ class SubmissionPolicyMutationReplayRepository:
     """Own submission-policy replay rows in the caller transaction only."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind replay persistence to the caller-owned database session."""
         self._session = session
 
     async def find_by_operation(

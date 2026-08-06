@@ -96,6 +96,7 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.XINT_003_02B,
     ActionOwner.AUTH_12E,
     ActionOwner.AUTH_12F,
+    ActionOwner.AUTH_12F2,
     ActionOwner.AUTH_12G,
     ActionOwner.AUTH_12H,
 }
@@ -367,7 +368,12 @@ def test_submission_policy_authority_safe_empty_roundtrip(
     assert upgraded["columns"] == 4
     assert upgraded["replay_table"] is True
     assert upgraded["provenance_triggers"] == 4
-    assert {state for _, state in upgraded["action_states"]} == {"planned"}
+    assert dict(upgraded["action_states"]) == {
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value: "active",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value: "planned",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value: "active",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE.value: "planned",
+    }
     assert historical == (f"sha256:{'b' * 64}", None, None, None, None, None)
 
 

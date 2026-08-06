@@ -64,7 +64,9 @@ async def review_lease_client(
 ) -> AsyncIterator[AsyncClient]:
     """Create only canonical upstream facts through existing test helpers."""
     app = create_app()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         response = await client.get("/api/v1/auth/me", headers=auth_headers())
         assert response.status_code == 200, response.text
         async with db_session.get_session_factory()() as session:
@@ -270,8 +272,7 @@ def test_review_lease_metadata_is_hidden_and_exact() -> None:
         "expires_at",
     }
     assert not any(
-        getattr(route, "path", "").startswith("/api/v1/reviews")
-        for route in create_app().routes
+        getattr(route, "path", "").startswith("/api/v1/reviews") for route in create_app().routes
     )
 
 
@@ -375,9 +376,7 @@ async def test_queue_lineage_policy_project_and_published_status_are_enforced(
     assert response.status_code == 201, response.text
     other_project_id = response.json()["id"]
     async with db_session.get_session_factory()() as session:
-        other_policy = await _published_reviewer_policy(
-            session, other_project_id, reviewer_id
-        )
+        other_policy = await _published_reviewer_policy(session, other_project_id, reviewer_id)
         await session.commit()
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError, match="policy version must be published"):
@@ -529,9 +528,7 @@ async def test_populated_lease_persistence_refuses_downgrade(
             .values(queue_state="leased", active_lease_id=value.id, lifecycle_generation=2)
         )
         await session.commit()
-        starting_revision = await session.scalar(
-            text("select version_num from alembic_version")
-        )
+        starting_revision = await session.scalar(text("select version_num from alembic_version"))
     await db_session.dispose_engine()
 
     backend_root = Path(__file__).resolve().parents[1]
@@ -542,7 +539,11 @@ async def test_populated_lease_persistence_refuses_downgrade(
         with migration_lock():
             command.downgrade(config, "0055_contribution_policy")
 
-    with pytest.raises(RuntimeError, match="cannot downgrade populated review lease"):
+    # The newest irreversible authority boundary must stop the multi-revision
+    # downgrade before Alembic reaches the older review-lease guard.
+    with pytest.raises(
+        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
+    ):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
@@ -555,7 +556,7 @@ async def test_populated_lease_persistence_refuses_downgrade(
 
 @pytest.mark.postgres_schema_contract
 @pytest.mark.asyncio
-async def test_upgrade_refuses_preexisting_nonhuman_preference(
+async def test_newer_submission_policy_authority_precedes_preference_downgrade(
     review_lease_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     migration_lock,
@@ -564,54 +565,26 @@ async def test_upgrade_refuses_preexisting_nonhuman_preference(
     async with db_session.get_session_factory()() as session:
         service_id = await _service_actor(session)
         await session.commit()
+        starting_revision = await session.scalar(text("select version_num from alembic_version"))
     await db_session.dispose_engine()
 
     backend_root = Path(__file__).resolve().parents[1]
     config = Config(str(backend_root / "alembic.ini"))
     config.set_main_option("script_location", str(backend_root / "alembic"))
 
-    def migrate(revision: str) -> None:
+    def downgrade() -> None:
         with migration_lock():
-            if revision == "0055_contribution_policy":
-                command.downgrade(config, revision)
-            else:
-                command.upgrade(config, revision)
+            command.downgrade(config, "0055_contribution_policy")
 
-    await asyncio.to_thread(migrate, "0055_contribution_policy")
+    with pytest.raises(
+        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
+    ):
+        await asyncio.to_thread(downgrade)
+
     async with db_session.get_session_factory()() as session:
-        await session.execute(
-            text(
-                "update review_queue_entries set routing_mode='preferred',"
-                "routing_reason='revision_return',preferred_reviewer_id=:reviewer,"
-                "preference_expires_at=statement_timestamp()+interval '1 hour',"
-                "routing_generation=routing_generation+1 where id=:queue"
-            ),
-            {"reviewer": service_id, "queue": queue.id},
+        assert (
+            await session.scalar(text("select version_num from alembic_version"))
+            == starting_revision
         )
-        await session.commit()
-    await db_session.dispose_engine()
-
-    try:
-        with pytest.raises(
-            RuntimeError, match="cannot add lease persistence with nonhuman reviewer preference"
-        ):
-            await asyncio.to_thread(migrate, "head")
-        async with db_session.get_session_factory()() as session:
-            assert await session.scalar(text("select version_num from alembic_version")) == (
-                "0055_contribution_policy"
-            )
-    finally:
-        await db_session.dispose_engine()
-        async with db_session.get_session_factory()() as session:
-            await session.execute(
-                text(
-                    "update review_queue_entries set routing_mode='open',"
-                    "routing_reason='first_submission',preferred_reviewer_id=null,"
-                    "preference_expires_at=null,routing_generation=routing_generation+1 "
-                    "where id=:queue"
-                ),
-                {"queue": queue.id},
-            )
-            await session.commit()
-        await db_session.dispose_engine()
-        await asyncio.to_thread(migrate, "head")
+        assert await session.get(ActorProfile, service_id) is not None
+        assert await session.get(ReviewQueueEntry, queue.id) is not None

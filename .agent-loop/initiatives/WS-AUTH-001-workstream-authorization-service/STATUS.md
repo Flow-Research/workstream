@@ -184,8 +184,8 @@ bounded merge.
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
 | `WS-AUTH-001-12E` | Merged | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Three guide-sufficiency actions plus fixed setup-service run PREP merged as `b510bc4f`. |
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
-| `WS-AUTH-001-12F1` | External review | `codex/ws-auth-001-12f1-submission-policy-foundation` | - | Submission-policy PREP, replay, provenance, and audit custody foundation complete; zero activation; hosted CI and CodeRabbit pending. |
-| `WS-AUTH-001-12F2` | Proposed | - | - | Governed Project Manager manual-draft create/update cutover. |
+| `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
+| `WS-AUTH-001-12F2` | In progress | `codex/ws-auth-001-12f2-manual-submission-policy` | - | Corrected contract passed all required L1 pre-start reviews; governed Project Manager append-only manual-draft create/update cutover is active. |
 | `WS-AUTH-001-12F3` | Proposed | - | - | Fixed setup-service derivation and asynchronous executor cutover. |
 | `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |

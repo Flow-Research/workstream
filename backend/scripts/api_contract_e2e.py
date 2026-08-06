@@ -828,6 +828,10 @@ async def create_policy_bundle_for_guide(
     client: httpx.AsyncClient,
     manager_token: str,
     diagnostic_reader_token: str,
+    contributor_token: str,
+    service_token: str,
+    role_claim_only_token: str,
+    wrong_project_manager_token: str,
     manager_subject: str,
     project_id: str,
     guide_id: str,
@@ -843,6 +847,10 @@ async def create_policy_bundle_for_guide(
         client: HTTP client pointed at the running API.
         manager_token: Flow token with project manager role.
         diagnostic_reader_token: Token bound to the local Project Manager grant.
+        contributor_token: Human token without Project Manager authority.
+        service_token: Service token concealed from the public human boundary.
+        role_claim_only_token: Human PM role claim without a local grant.
+        wrong_project_manager_token: Human with a PM grant for another project.
         project_id: Project id that owns the guide.
         guide_id: Guide id to bind.
         run_id: Unique run id used for deterministic source hashes.
@@ -947,8 +955,7 @@ async def create_policy_bundle_for_guide(
             async def derive_submission_artifact_policy(self, material, sufficiency_report):
                 return SubmissionArtifactPolicyDerivationResult(
                     policy_version=(
-                        "agent-"
-                        f"{material.source_snapshot_hash.removeprefix('sha256:')[:12]}"
+                        f"agent-{material.source_snapshot_hash.removeprefix('sha256:')[:12]}"
                     ),
                     policy_body=submission_artifact_policy_body(),
                     change_summary=(
@@ -960,9 +967,7 @@ async def create_policy_bundle_for_guide(
 
         agent_runtime = E2EProjectGuideAgentRuntime()
         project_service_module.get_project_guide_agent_runtime = lambda: agent_runtime
-        sufficiency_mutation_service_module.get_project_guide_agent_runtime = (
-            lambda: agent_runtime
-        )
+        sufficiency_mutation_service_module.get_project_guide_agent_runtime = lambda: agent_runtime
         setup_worker_result = await asyncio.to_thread(
             run_pre_submit_setup_pipeline,
             project_id,
@@ -1038,6 +1043,147 @@ async def create_policy_bundle_for_guide(
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy['id']}",
         diagnostic_reader_token,
+    )
+    manual_create_key = str(uuid4())
+    manual_payload = {
+        "source_snapshot_id": snapshot["id"],
+        "policy_version": "e2e-manual-v1",
+        "policy_body": submission_artifact_policy_body(),
+        "change_summary": "Manual policy authorization E2E.",
+    }
+    manual_path = f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
+    manual_manager_token = diagnostic_reader_token
+    await request_json(
+        client,
+        "POST",
+        manual_path,
+        contributor_token,
+        manual_payload,
+        expected_status=404,
+        idempotency_key=str(uuid4()),
+    )
+    await request_json(
+        client,
+        "POST",
+        manual_path,
+        service_token,
+        manual_payload,
+        expected_status=403,
+        idempotency_key=str(uuid4()),
+    )
+    for denied_token in (role_claim_only_token, wrong_project_manager_token):
+        await request_json(
+            client,
+            "POST",
+            manual_path,
+            denied_token,
+            manual_payload,
+            expected_status=404,
+            idempotency_key=str(uuid4()),
+        )
+    missing_key = await client.post(
+        manual_path,
+        headers=auth_headers(manual_manager_token),
+        json=manual_payload,
+    )
+    ensure(missing_key.status_code == 422, "missing manual policy key was not rejected")
+    invalid_key = await client.post(
+        manual_path,
+        headers=auth_headers(manual_manager_token) | {"Idempotency-Key": "not-a-uuid"},
+        json=manual_payload,
+    )
+    ensure(invalid_key.status_code == 422, "invalid manual policy key was not rejected")
+    manual_policy = await request_json(
+        client,
+        "POST",
+        manual_path,
+        manual_manager_token,
+        manual_payload,
+        expected_status=201,
+        idempotency_key=manual_create_key,
+    )
+    manual_replay = await request_json(
+        client,
+        "POST",
+        manual_path,
+        manual_manager_token,
+        manual_payload,
+        expected_status=201,
+        idempotency_key=manual_create_key,
+    )
+    ensure(manual_replay == manual_policy, "manual policy create replay drifted")
+    manual_update_key = str(uuid4())
+    manual_update_payload = {
+        "expected_policy_hash": manual_policy["policy_hash"],
+        "successor_policy_version": "e2e-manual-v2",
+        "policy_body": submission_artifact_policy_body(),
+        "change_summary": "Manual policy replacement authorization E2E.",
+    }
+    manual_update_path = f"{manual_path}/{manual_policy['id']}"
+    for invalid_headers, invalid_payload in (
+        (auth_headers(manual_manager_token), manual_update_payload),
+        (
+            auth_headers(manual_manager_token) | {"Idempotency-Key": "not-a-uuid"},
+            manual_update_payload,
+        ),
+        (
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
+            {"successor_policy_version": "e2e-manual-v2"},
+        ),
+        (
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
+            {
+                "expected_policy_hash": "not-a-digest",
+                "successor_policy_version": "e2e-manual-v2",
+            },
+        ),
+        (
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
+            {"expected_policy_hash": manual_policy["policy_hash"]},
+        ),
+    ):
+        invalid_update = await client.patch(
+            manual_update_path,
+            headers=invalid_headers,
+            json=invalid_payload,
+        )
+        ensure(
+            invalid_update.status_code == 422,
+            f"invalid manual policy update precondition was not rejected: {invalid_update.text}",
+        )
+    manual_successor = await request_json(
+        client,
+        "PATCH",
+        manual_update_path,
+        manual_manager_token,
+        manual_update_payload,
+        idempotency_key=manual_update_key,
+    )
+    manual_update_replay = await request_json(
+        client,
+        "PATCH",
+        manual_update_path,
+        manual_manager_token,
+        manual_update_payload,
+        idempotency_key=manual_update_key,
+    )
+    ensure(manual_update_replay == manual_successor, "manual policy update replay drifted")
+    ensure(
+        manual_successor["supersedes_policy_id"] == manual_policy["id"],
+        "manual policy replacement lost predecessor custody",
+    )
+    await request_json(
+        client,
+        "PATCH",
+        f"{manual_path}/{manual_successor['id']}",
+        manual_manager_token,
+        {
+            **manual_update_payload,
+            "expected_policy_hash": "sha256:" + ("0" * 64),
+            "successor_policy_version": "e2e-manual-v3",
+        },
+        expected_status=409,
+        idempotency_key=str(uuid4()),
     )
     effective_policy = await request_json(
         client,
@@ -1207,6 +1353,28 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         audience=flow_audience,
         secret=flow_secret,
     )
+    untrusted_service_token = issue_flow_token(
+        f"real-api-untrusted-service-{run_id}",
+        [],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+        subject_kind="service",
+    )
+    role_claim_only_token = issue_flow_token(
+        f"real-api-role-claim-only-{run_id}",
+        ["project_manager"],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
+    wrong_project_manager_token = issue_flow_token(
+        f"real-api-wrong-project-manager-{run_id}",
+        [],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
     unassigned_worker_token = issue_flow_token(
         f"real-api-unassigned-worker-{run_id}",
         ["worker"],
@@ -1315,10 +1483,20 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/"
             "{source_snapshot_id}/run-sufficiency-agent": "project.guide_sufficiency.run",
             "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/"
-            "{report_id}/acknowledge-warnings": (
-                "project.guide_sufficiency.warnings.acknowledge"
-            ),
+            "{report_id}/acknowledge-warnings": ("project.guide_sufficiency.warnings.acknowledge"),
         }
+        submission_policy_path = (
+            "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
+        )
+        submission_policy_item_path = submission_policy_path + "/{policy_id}"
+        assert (
+            openapi["paths"][submission_policy_path]["post"]["x-workstream-action-id"]
+            == "project.submission_artifact_policy.create"
+        )
+        assert (
+            openapi["paths"][submission_policy_item_path]["patch"]["x-workstream-action-id"]
+            == "project.submission_artifact_policy.update"
+        )
         assert (
             openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
                 "x-workstream-action-id"
@@ -1575,6 +1753,37 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert project_response.status_code == 201, project_response.text
         project = project_response.json()
+        wrong_scope_project = await request_json(
+            client,
+            "POST",
+            "/api/v1/projects",
+            project_reader_token,
+            {
+                "name": f"Wrong Scope Project {run_id}",
+                "slug": f"wrong-scope-project-{run_id}",
+                "description": "Exact-project authorization isolation proof",
+            },
+            expected_status=201,
+            idempotency_key=str(uuid4()),
+        )
+        wrong_scope_profile = await request_json(
+            client,
+            "GET",
+            "/api/v1/actors/me",
+            wrong_project_manager_token,
+        )
+        wrong_scope_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": wrong_scope_profile["actor_profile_id"],
+                "role": "project_manager",
+                "scope_type": "project",
+                "scope_project_id": wrong_scope_project["id"],
+                "reason": "Real API wrong-project PM isolation proof",
+            },
+        )
+        assert wrong_scope_grant.status_code == 201, wrong_scope_grant.text
         creator_revoke = await client.post(
             f"/api/v1/admin-role-grants/{creator_system_grant.json()['resource_id']}/revoke",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
@@ -1690,6 +1899,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client,
             manager_token,
             project_reader_token,
+            worker_token,
+            untrusted_service_token,
+            role_claim_only_token,
+            wrong_project_manager_token,
             manager_subject,
             project["id"],
             guide["id"],

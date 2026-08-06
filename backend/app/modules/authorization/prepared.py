@@ -260,11 +260,9 @@ def _submission_policy_binding_matches(
     resource: ProjectSubmissionArtifactPolicyMutationResourceContext,
 ) -> bool:
     """Return whether final submission-policy facts exactly match preparation."""
-    return (
-        binding.submission_policy_context == resource.model_dump(mode="json")
-        and binding.submission_policy_resource_digest
-        == authorization_resource_digest(resource)
-    )
+    return binding.submission_policy_context == resource.model_dump(
+        mode="json"
+    ) and binding.submission_policy_resource_digest == authorization_resource_digest(resource)
 
 
 _CONSUMED = _Consumed()
@@ -521,8 +519,12 @@ class PreparedAuthorizationService:
                     "guide_id",
                     "source_snapshot_id",
                     "policy_id",
+                    "sufficiency_report_id",
                 ):
                     value[field] = UUID(str(value[field]))
+                raw_successor_policy_id = value.get("successor_policy_id")
+                if raw_successor_policy_id is not None:
+                    value["successor_policy_id"] = UUID(str(raw_successor_policy_id))
                 raw_custody = value.get("setup_service_custody")
                 if raw_custody is not None:
                     custody = dict(raw_custody)

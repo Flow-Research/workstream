@@ -842,3 +842,22 @@ replacement identity in the approval transaction; it may otherwise only stage
 bounded continuation identity. 12G alone owns post-submit checker-policy
 derivation, compilation, correction, approval, or execution. Consequently 12G
 and 12B2 depend on merged 12F4, not the rejected combined 12F contract.
+
+## D37: Manual policy updates are append-only authorized replacements
+
+Status: accepted preimplementation correction on 2026-08-05.
+
+12F2 does not mutate a draft policy body in place. A manual update requires the
+predecessor's expected hash and a new successor policy version, derives a stable
+actor/link-bound successor identity from the protected operation, and binds predecessor and
+successor facts separately through PREP and replay. The successor records fresh
+update-action authority provenance while the predecessor is superseded in the
+same root transaction. This preserves exact authorship and CAS evidence without
+adding ambiguous update columns to an old row.
+
+Both system-scoped and exact-project-scoped active Project Manager grants cover
+the project; wrong-project grants and role/token assertions do not. A warning
+result is usable only when its acknowledgement has the complete merged 12E
+actor, identity-link, grant, action, decision, scope, report, snapshot, and
+setup-generation custody. The legacy role-string acknowledgement is not
+authority.

@@ -548,6 +548,12 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}": (
             "project.submission_artifact_policy.read"
         ),
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies": (
+            "project.submission_artifact_policy.create"
+        ),
+        "PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}": (
+            "project.submission_artifact_policy.update"
+        ),
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup": (
             "project.post_submit_checker_policy_setup.read"
         ),

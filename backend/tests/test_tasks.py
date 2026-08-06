@@ -1046,6 +1046,10 @@ async def create_policy_bundle_for_guide(
         },
     )
     assert report_response.status_code == 201, report_response.text
+    verified_report_id = await create_verified_report_fixture(
+        report_response.json()["id"], snapshot["id"]
+    )
+    verified_report = {**report_response.json(), "id": verified_report_id}
 
     policy_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
@@ -1058,10 +1062,6 @@ async def create_policy_bundle_for_guide(
     )
     assert policy_response.status_code == 201, policy_response.text
     policy = policy_response.json()
-    verified_report_id = await create_verified_report_fixture(
-        report_response.json()["id"], snapshot["id"]
-    )
-    verified_report = {**report_response.json(), "id": verified_report_id}
 
     effective_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
