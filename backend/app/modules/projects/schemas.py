@@ -168,7 +168,7 @@ class GuideSufficiencyReportCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_snapshot_id: UUID
+    source_snapshot_id: str = Field(max_length=36)
     status: Literal["passed", "blocked", "passed_with_warnings"]
     findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list, max_length=100)
     summary: str | None = Field(default=None, max_length=2000)

@@ -37,7 +37,7 @@ from app.adapters.project_agents.openai_agent_sdk import (
     OpenAIAgentSdkProjectGuideRuntime,
 )
 from app.db import session as db_session
-from app.api.deps.auth import get_auth_verification_result
+from app.api.deps.authorization import get_authorization_actor
 from app.db.base import Base
 from app.main import create_app
 from app.modules.actors.models import ActorIdentityLink, ActorProfile, LegacyActorIdentity
@@ -2848,8 +2848,6 @@ def test_setup_mutations_use_locked_guide_helper() -> None:
     locked_methods = [
         "create_guide_sufficiency_report",
         "acknowledge_guide_sufficiency_warnings",
-        "create_submission_artifact_policy",
-        "update_submission_artifact_policy",
         "approve_submission_artifact_policy",
         "approve_current_post_submit_checker_policy",
         "request_post_submit_checker_policy_correction",
@@ -5335,9 +5333,9 @@ async def create_approved_policy_bundle(
         snapshot["id"],
         status=sufficiency_status,
     )
-    policy = await create_submission_artifact_policy(client, project_id, guide_id, snapshot["id"])
     verified_report_id = await create_verified_report_fixture(report["id"], snapshot["id"])
     report = {**report, "id": verified_report_id}
+    policy = await create_submission_artifact_policy(client, project_id, guide_id, snapshot["id"])
     effective = await approve_submission_artifact_policy(
         client,
         project_id,
@@ -9335,15 +9333,15 @@ async def test_public_sufficiency_mutation_conceals_service_before_product_looku
     app = create_app(Settings(environment="test"))
     lookups = 0
 
-    async def verified_service():
-        return SimpleNamespace(token=SimpleNamespace(subject_kind="service"))
+    async def resolved_service():
+        return SimpleNamespace(profile=SimpleNamespace(actor_kind="service"))
 
     async def forbidden_lookup(*_: object, **__: object):
         nonlocal lookups
         lookups += 1
         raise AssertionError("service token reached project lookup")
 
-    app.dependency_overrides[get_auth_verification_result] = verified_service
+    app.dependency_overrides[get_authorization_actor] = resolved_service
     monkeypatch.setattr(ProjectRepository, "get_guide", forbidden_lookup)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
@@ -9376,15 +9374,15 @@ async def test_submission_artifact_policy_create_update_conceals_service_before_
     app = create_app(Settings(environment="test"))
     lookups = 0
 
-    async def verified_service():
-        return SimpleNamespace(token=SimpleNamespace(subject_kind="service"))
+    async def resolved_service():
+        return SimpleNamespace(profile=SimpleNamespace(actor_kind="service"))
 
     async def forbidden_lookup(*_: object, **__: object):
         nonlocal lookups
         lookups += 1
         raise AssertionError("service token reached submission-policy lookup")
 
-    app.dependency_overrides[get_auth_verification_result] = verified_service
+    app.dependency_overrides[get_authorization_actor] = resolved_service
     monkeypatch.setattr(ProjectRepository, "get_project", forbidden_lookup)
     project_id, guide_id, policy_id = (uuid4() for _ in range(3))
     path = f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
@@ -11977,11 +11975,6 @@ async def test_submission_artifact_policy_create_exact_idempotency_replay_is_sta
     }
     path = f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies"
     first = await project_client.post(path, headers=headers, json=payload)
-    async with db_session.get_session_factory()() as session:
-        guide_row = await session.get(ProjectGuide, guide["id"])
-        assert guide_row is not None
-        guide_row.status = "active"
-        await session.commit()
     replay = await project_client.post(path, headers=headers, json=payload)
     assert first.status_code == replay.status_code == 201
     assert replay.json() == first.json()

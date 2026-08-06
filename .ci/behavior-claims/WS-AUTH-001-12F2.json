@@ -35,7 +35,6 @@
         "app.modules.projects.router.submission_policy_conflict_error",
         "app.modules.projects.router.require_submission_policy_mutation_key",
         "app.modules.projects.router.require_submission_policy_human",
-        "app.modules.projects.router.submission_policy_authorization_actor",
         "app.modules.projects.router.get_submission_policy_prepared_authorization_service",
         "app.modules.projects.router.submission_policy_authorization",
         "app.modules.projects.router.create_submission_artifact_policy",

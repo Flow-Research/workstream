@@ -218,9 +218,10 @@ class SubmissionPolicyMutationService:
             if lock
             else await self._projects.get_latest_project_setup_run(str(project_id), str(guide_id))
         )
+        if setup is None:
+            raise PolicySetupBlocked("authoritative guide sufficiency report is required")
         if (
-            setup is None
-            or setup.guide_version != guide.version
+            setup.guide_version != guide.version
             or setup.source_snapshot_id != snapshot.id
             or setup.source_snapshot_hash != snapshot.bundle_hash
         ):
@@ -424,6 +425,9 @@ class SubmissionPolicyMutationService:
         )
         operation_id = self._stable_uuid("operation", *stable_parts)
         committed_policy_id = self._stable_uuid("policy", *stable_parts)
+        canonical_body, policy_hash = self._validation.canonical_manual_submission_policy_body(
+            policy_body
+        )
         initial = await self._lineage(
             project_id,
             guide_id,
@@ -433,9 +437,6 @@ class SubmissionPolicyMutationService:
         )
         if predecessor_id is not None and initial.predecessor_hash != expected_policy_hash:
             raise SubmissionPolicyMutationConflict("submission_policy_precondition_failed")
-        canonical_body, policy_hash = self._validation.canonical_manual_submission_policy_body(
-            policy_body
-        )
         body = {
             "source_snapshot_id": str(source_snapshot_id),
             "policy_version": policy_version,
@@ -640,6 +641,9 @@ class SubmissionPolicyMutationService:
         )
         if effective_policy_body is None:
             raise SubmissionPolicyMutationConflict("idempotency_mismatch")
+        canonical_body, policy_hash = self._validation.canonical_manual_submission_policy_body(
+            effective_policy_body
+        )
         effective_change_summary = (
             change_summary
             if change_summary is not None
@@ -653,7 +657,7 @@ class SubmissionPolicyMutationService:
             "source_snapshot_id": str(snapshot_id),
             "policy_version": successor_policy_version,
             "expected_policy_hash": expected_policy_hash,
-            "policy_body": effective_policy_body,
+            "policy_body": canonical_body,
             "change_summary": effective_change_summary,
         }
         route = (
@@ -673,9 +677,6 @@ class SubmissionPolicyMutationService:
             successor_version=successor_policy_version,
             source_snapshot_id=snapshot_id,
             body=body,
-        )
-        canonical_body, policy_hash = self._validation.canonical_manual_submission_policy_body(
-            effective_policy_body
         )
         expected_target = (
             "update" if action is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE else "create"
