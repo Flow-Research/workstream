@@ -96,6 +96,7 @@ from app.modules.projects.submission_policy_mutation_repository import (
     SubmissionPolicyMutationReplayRepository,
 )
 from app.modules.projects.submission_policy_mutation_service import (
+    SubmissionPolicyMutationConflict,
     SubmissionPolicyMutationService,
     SubmissionPolicyReplayFacts,
 )
@@ -155,6 +156,7 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationUnsupported,
     ProjectSetupServiceCustodyContext,
     ProjectSubmissionArtifactPolicyMutationResourceContext,
+    authorization_resource_digest,
 )
 from app.core.permissions import PermissionDenied
 from app.modules.projects.service import (
@@ -9845,6 +9847,551 @@ async def test_submission_artifact_policy_authority_service_is_flush_only() -> N
     session.sync_session.transaction = None
     with pytest.raises(RuntimeError, match="one root transaction"):
         await service.reserve_replay(facts)
+
+
+async def test_submission_artifact_policy_manual_service_executes_authorized_create_and_update() -> (
+    None
+):
+    """Exercise the real manual mutation orchestration without an HTTP or database fixture."""
+
+    class Session:
+        flushes = 0
+
+        async def flush(self):
+            self.flushes += 1
+
+    class Projects:
+        policies: list[SubmissionArtifactPolicy] = []
+        predecessor: SubmissionArtifactPolicy | None = None
+
+        async def add_submission_artifact_policy(self, policy):
+            policy.created_at = policy.updated_at = datetime.now(UTC)
+            self.policies.append(policy)
+
+        async def get_submission_artifact_policy(self, policy_id: str):
+            if self.predecessor is not None and self.predecessor.id == policy_id:
+                return self.predecessor
+            return next((policy for policy in self.policies if policy.id == policy_id), None)
+
+        async def supersede_draft_submission_artifact_policy(self, policy_id: str):
+            assert self.predecessor is not None and self.predecessor.id == policy_id
+            return True
+
+    class Prepared:
+        def __init__(self) -> None:
+            self.handle = object()
+            self.calls: list[tuple[str, ActionId, object]] = []
+
+        async def prepare(self, *_: object):
+            action, caller, scope = _
+            self.calls.append(("prepare", cast(ActionId, action), caller))
+            assert scope.project_id == project_id
+            return self.handle
+
+        async def consume(self, *_: object):
+            handle, action, caller, resource = _
+            assert handle is self.handle
+            assert caller.request_value == resource.model_dump(mode="json")
+            self.calls.append(("consume", cast(ActionId, action), resource))
+            return SimpleNamespace(
+                matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                matched_grant_id=uuid4(),
+                matched_scope_project_id=None,
+                decision_id=uuid4(),
+            )
+
+    session = Session()
+    service = SubmissionPolicyMutationService(session)  # type: ignore[arg-type]
+    projects = Projects()
+    service._projects = projects  # type: ignore[assignment]
+
+    async def admitted(**_: object) -> None:
+        return None
+
+    async def no_replay(**_: object):
+        return None
+
+    replay_state: dict[str, object] = {}
+
+    async def reserve(facts: SubmissionPolicyReplayFacts):
+        replay_state["facts"] = facts
+        return "claimed", SimpleNamespace()
+
+    async def complete(
+        facts: SubmissionPolicyReplayFacts,
+        *,
+        response_json: dict,
+        committed_policy_id: str,
+    ) -> None:
+        replay_state.update(
+            facts=facts,
+            response_json=response_json,
+            committed_policy_id=committed_policy_id,
+        )
+
+    project_id, guide_id, snapshot_id, setup_run_id, report_id = (uuid4() for _ in range(5))
+    snapshot_hash = sha256_hash("manual-policy-snapshot")
+    lineage = SimpleNamespace(
+        guide_version="v1",
+        snapshot_id=snapshot_id,
+        snapshot_hash=snapshot_hash,
+        setup_run_id=setup_run_id,
+        setup_generation=4,
+        report_id=report_id,
+        report_status="passed",
+        acknowledgement_digest=None,
+        source_material_refs=("guide-source:item",),
+        predecessor_id=None,
+        predecessor_version=None,
+        predecessor_status=None,
+        predecessor_hash=None,
+    )
+
+    async def locked_lineage(*_: object, predecessor_id=None, **__: object):
+        if predecessor_id is None:
+            return lineage
+        predecessor = projects.predecessor
+        assert predecessor is not None
+        return SimpleNamespace(
+            **{
+                **lineage.__dict__,
+                "predecessor_id": UUID(predecessor.id),
+                "predecessor_version": predecessor.policy_version,
+                "predecessor_status": predecessor.lifecycle_status,
+                "predecessor_hash": predecessor.policy_hash,
+            }
+        )
+
+    service._require_pm_admission = admitted  # type: ignore[method-assign]
+    service._existing_manual_replay = no_replay  # type: ignore[method-assign]
+    service._lineage = locked_lineage  # type: ignore[method-assign]
+    service.reserve_replay = reserve  # type: ignore[method-assign]
+    service.complete_replay = complete  # type: ignore[method-assign]
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(uuid4())),
+        identity_link=SimpleNamespace(id=str(uuid4())),
+    )
+    body = project_submission_artifact_policy_body()
+    create_prepared = Prepared()
+    created = await service.create_manual(
+        resolved,
+        create_prepared,  # type: ignore[arg-type]
+        uuid4(),
+        project_id,
+        guide_id,
+        SubmissionArtifactPolicyCreate.model_validate(
+            {
+                "source_snapshot_id": snapshot_id,
+                "policy_version": "manual-v1",
+                "policy_body": body,
+                "change_summary": "initial manual policy",
+            }
+        ),
+    )
+    assert created.replayed is False
+    assert projects.policies[-1].creation_action_id == (
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value
+    )
+    assert [call[:2] for call in create_prepared.calls] == [
+        ("prepare", ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE),
+        ("consume", ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE),
+    ]
+
+    create_facts = cast(SubmissionPolicyReplayFacts, replay_state["facts"])
+    replay_record = SimpleNamespace(
+        actor_profile_id=create_facts.actor_profile_id,
+        identity_link_id=create_facts.identity_link_id,
+        action_id=create_facts.action_id,
+        idempotency_key=create_facts.idempotency_key,
+        project_id=create_facts.project_id,
+        guide_id=create_facts.guide_id,
+        request_digest=create_facts.request_digest,
+        resource_context_digest=authorization_resource_digest(create_facts.resource_context),
+        resource_context_json=create_facts.resource_context.model_dump(mode="json"),
+        status="committed",
+        response_json=replay_state["response_json"],
+        committed_policy_id=replay_state["committed_policy_id"],
+    )
+
+    async def find_replay(_: UUID):
+        return replay_record
+
+    service._replay = SimpleNamespace(find_by_operation=find_replay)  # type: ignore[assignment]
+    exact_replay = await SubmissionPolicyMutationService._existing_manual_replay(
+        service,
+        resolved=resolved,
+        key=cast(UUID, create_facts.idempotency_key),
+        action=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        project_id=project_id,
+        guide_id=guide_id,
+        selected_policy_id=UUID(create_facts.policy_id),
+        successor_policy_id=None,
+        successor_policy_version="manual-v1",
+        expected_policy_hash=None,
+        source_snapshot_id=snapshot_id,
+        policy_body=created.response.policy_body,
+        change_summary=created.response.change_summary,
+    )
+    assert exact_replay is not None and exact_replay.replayed is True
+
+    async def existing_replay(**_: object):
+        return exact_replay
+
+    service._existing_manual_replay = existing_replay  # type: ignore[method-assign]
+    replayed_create = await service.create_manual(
+        resolved,
+        Prepared(),  # type: ignore[arg-type]
+        cast(UUID, create_facts.idempotency_key),
+        project_id,
+        guide_id,
+        SubmissionArtifactPolicyCreate.model_validate(
+            {
+                "source_snapshot_id": snapshot_id,
+                "policy_version": "manual-v1",
+                "policy_body": body,
+                "change_summary": "initial manual policy",
+            }
+        ),
+    )
+    assert replayed_create.replayed is True
+
+    with pytest.raises(SubmissionPolicyMutationConflict, match="idempotency_mismatch"):
+        await SubmissionPolicyMutationService._existing_manual_replay(
+            service,
+            resolved=resolved,
+            key=cast(UUID, create_facts.idempotency_key),
+            action=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            project_id=project_id,
+            guide_id=guide_id,
+            selected_policy_id=uuid4(),
+            successor_policy_id=None,
+            successor_policy_version="manual-v1",
+            expected_policy_hash=None,
+            source_snapshot_id=snapshot_id,
+            policy_body=body,
+            change_summary="initial manual policy",
+        )
+
+    async def find_no_replay(_: UUID):
+        return None
+
+    service._replay = SimpleNamespace(find_by_operation=find_no_replay)  # type: ignore[assignment]
+    assert (
+        await SubmissionPolicyMutationService._existing_manual_replay(
+            service,
+            resolved=resolved,
+            key=cast(UUID, create_facts.idempotency_key),
+            action=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            project_id=project_id,
+            guide_id=guide_id,
+            selected_policy_id=UUID(create_facts.policy_id),
+            successor_policy_id=None,
+            successor_policy_version="manual-v1",
+            expected_policy_hash=None,
+            source_snapshot_id=snapshot_id,
+            policy_body=body,
+            change_summary="initial manual policy",
+        )
+        is None
+    )
+
+    projects.predecessor = projects.policies[-1]
+    service._existing_manual_replay = no_replay  # type: ignore[method-assign]
+    update_prepared = Prepared()
+    updated = await service.update_manual(
+        resolved,
+        update_prepared,  # type: ignore[arg-type]
+        uuid4(),
+        project_id,
+        guide_id,
+        UUID(projects.predecessor.id),
+        SubmissionArtifactPolicyUpdate.model_validate(
+            {
+                "expected_policy_hash": projects.predecessor.policy_hash,
+                "successor_policy_version": "manual-v2",
+                "change_summary": "replace manual policy",
+            }
+        ),
+    )
+    assert updated.replayed is False
+    assert updated.response.supersedes_policy_id == projects.predecessor.id
+    assert session.flushes == 1
+    assert [call[:2] for call in update_prepared.calls] == [
+        ("prepare", ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE),
+        ("consume", ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE),
+    ]
+
+
+async def test_submission_artifact_policy_manual_lineage_loads_exact_locked_context() -> None:
+    """Load the same authoritative lineage before and after acquiring mutation locks."""
+    project_id, guide_id, snapshot_id, setup_id, report_id, predecessor_id = (
+        uuid4() for _ in range(6)
+    )
+    snapshot_hash = sha256_hash("authoritative-source-snapshot")
+    project = SimpleNamespace(id=str(project_id))
+    guide = SimpleNamespace(
+        id=str(guide_id), project_id=str(project_id), version="v1", status="draft"
+    )
+    snapshot = SimpleNamespace(id=str(snapshot_id), bundle_hash=snapshot_hash)
+    setup = SimpleNamespace(
+        id=str(setup_id),
+        guide_version="v1",
+        source_snapshot_id=str(snapshot_id),
+        source_snapshot_hash=snapshot_hash,
+        setup_generation=7,
+    )
+    report = SimpleNamespace(
+        id=str(report_id),
+        project_setup_run_id=str(setup_id),
+        setup_generation=7,
+        source_snapshot_hash=snapshot_hash,
+        status="passed",
+    )
+    predecessor = SimpleNamespace(
+        id=str(predecessor_id),
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        lifecycle_status="draft",
+        derivation_source="manual_admin_derivation",
+        policy_version="manual-v1",
+        policy_hash=sha256_hash("manual-v1"),
+    )
+
+    lock_calls: list[str] = []
+    project_lock_modes: list[bool] = []
+
+    class Projects:
+        async def get_project(self, *_: object, **kwargs: object):
+            project_lock_modes.append(bool(kwargs.get("for_update")))
+            return project
+
+        async def get_guide(self, *_: object):
+            return guide
+
+        async def lock_project_guide(self, *_: object):
+            lock_calls.append("guide")
+            return guide
+
+        async def get_latest_guide_source_snapshot(self, *_: object):
+            return snapshot
+
+        async def lock_latest_guide_source_snapshot(self, *_: object):
+            lock_calls.append("snapshot")
+            return snapshot
+
+        async def get_latest_project_setup_run(self, *_: object):
+            return setup
+
+        async def lock_latest_project_setup_run(self, *_: object):
+            lock_calls.append("setup")
+            return setup
+
+        async def get_sufficiency_report_for_snapshot(self, *_: object):
+            return report
+
+        async def lock_guide_sufficiency_report(self, *_: object):
+            lock_calls.append("report")
+            return report
+
+        async def get_submission_artifact_policy(self, *_: object):
+            return predecessor
+
+        async def lock_submission_artifact_policy(self, *_: object):
+            lock_calls.append("predecessor")
+            return predecessor
+
+    class Validation:
+        async def validate_source_snapshot_integrity(self, *_: object):
+            return None
+
+        async def verified_source_material_refs(self, *_: object):
+            return ["guide-source:item"]
+
+    service = SubmissionPolicyMutationService(SimpleNamespace())  # type: ignore[arg-type]
+    service._projects = Projects()  # type: ignore[assignment]
+    service._validation = Validation()  # type: ignore[assignment]
+
+    unlocked = await service._lineage(
+        project_id,
+        guide_id,
+        snapshot_id,
+        lock=False,
+        predecessor_id=predecessor_id,
+    )
+    assert lock_calls == []
+    locked = await service._lineage(
+        project_id,
+        guide_id,
+        snapshot_id,
+        lock=True,
+        predecessor_id=predecessor_id,
+    )
+    assert locked == unlocked
+    assert locked.predecessor_id == predecessor_id
+    assert locked.setup_run_id == setup_id
+    assert locked.source_material_refs == ("guide-source:item",)
+    assert project_lock_modes == [False, True]
+    assert lock_calls == ["guide", "snapshot", "setup", "report", "predecessor"]
+
+    warning_report = SimpleNamespace(
+        id=str(report_id),
+        status="passed_with_warnings",
+        warnings_acknowledged_by_actor_profile_id=str(uuid4()),
+        warnings_acknowledged_via_identity_link_id=str(uuid4()),
+        warnings_acknowledged_by_admin_role_grant_id=uuid4(),
+        warning_acknowledgement_scope_type="project",
+        warning_acknowledgement_scope_project_id=str(project_id),
+        warning_acknowledgement_action_id=(
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE.value
+        ),
+        warning_acknowledgement_decision_event_id=str(uuid4()),
+        warnings_acknowledged_at=datetime.now(UTC),
+    )
+    acknowledgement = service._acknowledgement_digest(warning_report, project_id)
+    assert acknowledgement is not None and acknowledgement.startswith("sha256:")
+
+    projects = cast(Any, service._projects)
+    original_get_project = projects.get_project
+
+    async def missing(*_: object, **__: object):
+        return None
+
+    projects.get_project = missing
+    with pytest.raises(ProjectServiceError, match="project not found"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    projects.get_project = original_get_project
+
+    original_get_guide = projects.get_guide
+    projects.get_guide = missing
+    with pytest.raises(ProjectServiceError, match="guide not found"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    projects.get_guide = original_get_guide
+
+    guide.status = "active"
+    with pytest.raises(ProjectServiceError, match="only draft guides"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    guide.status = "draft"
+
+    original_get_snapshot = projects.get_latest_guide_source_snapshot
+
+    async def stale_snapshot(*_: object):
+        return SimpleNamespace(id=str(uuid4()), bundle_hash=snapshot_hash)
+
+    projects.get_latest_guide_source_snapshot = stale_snapshot
+    with pytest.raises(ProjectServiceError, match="lineage_stale"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    projects.get_latest_guide_source_snapshot = original_get_snapshot
+
+    original_get_setup = projects.get_latest_project_setup_run
+    projects.get_latest_project_setup_run = missing
+    with pytest.raises(ProjectServiceError, match="sufficiency report is required"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    projects.get_latest_project_setup_run = original_get_setup
+
+    original_get_report = projects.get_sufficiency_report_for_snapshot
+    projects.get_sufficiency_report_for_snapshot = missing
+    with pytest.raises(ProjectServiceError, match="sufficiency report is required"):
+        await service._lineage(project_id, guide_id, snapshot_id, lock=False)
+    projects.get_sufficiency_report_for_snapshot = original_get_report
+
+    predecessor.lifecycle_status = "approved"
+    with pytest.raises(ProjectServiceError, match="immutable"):
+        await service._lineage(
+            project_id,
+            guide_id,
+            snapshot_id,
+            lock=False,
+            predecessor_id=predecessor_id,
+        )
+
+
+async def test_submission_artifact_policy_manual_service_fail_closed_guards() -> None:
+    """Cover local authority, preparation, and replay-custody rejection guards."""
+    project_id, guide_id, snapshot_id, policy_id, operation_id = (uuid4() for _ in range(5))
+    request_digest = sha256_hash("guard-request")
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext(
+        resource_type="project_submission_artifact_policy_mutation",
+        resource_id=policy_id,
+        operation_id=operation_id,
+        request_digest=request_digest,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=sha256_hash("guard-snapshot"),
+        target_kind="create",
+        execution_kind="human",
+        policy_id=policy_id,
+        policy_version="manual-v1",
+        policy_generation=1,
+        setup_generation=1,
+        sufficiency_report_id=uuid4(),
+        sufficiency_status="passed",
+    )
+    facts = SubmissionPolicyReplayFacts(
+        actor_profile_id=str(uuid4()),
+        identity_link_id=str(uuid4()),
+        service_identity=None,
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
+        idempotency_key=uuid4(),
+        request_digest=request_digest,
+        resource_context=resource,
+        operation_id=operation_id,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        policy_id=str(policy_id),
+        setup_run_id=None,
+        setup_generation=1,
+        setup_task_id=None,
+        correlation_id=None,
+    )
+
+    with pytest.raises(RuntimeError, match="lacked covered"):
+        SubmissionPolicyMutationService._prove_human_authority(
+            SimpleNamespace(
+                matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                matched_grant_id=None,
+                matched_scope_project_id=None,
+            ),
+            project_id,
+        )
+    with pytest.raises(ValueError, match="invalid submission-policy replay action"):
+        SubmissionPolicyMutationService._replay_values(replace(facts, action_id="invalid"))
+    with pytest.raises(ValueError, match="human replay custody is invalid"):
+        SubmissionPolicyMutationService._replay_values(replace(facts, idempotency_key=None))
+
+    class Admin:
+        async def find_effective_grant(self, *_: object, **__: object):
+            return None
+
+    service = SubmissionPolicyMutationService(SimpleNamespace())  # type: ignore[arg-type]
+    service._admin = Admin()  # type: ignore[assignment]
+    resolved = SimpleNamespace(profile=SimpleNamespace(id=facts.actor_profile_id))
+    with pytest.raises(ProjectServiceError, match="not found"):
+        await service._require_pm_admission(resolved=resolved, project_id=project_id)
+
+    class UnsupportedPrepared:
+        denied = False
+
+        async def prepare(self, *_: object):
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+
+        async def deny_unsupported(self, *_: object):
+            self.denied = True
+            raise RuntimeError("unsupported preparation denied")
+
+    unsupported = UnsupportedPrepared()
+    with pytest.raises(RuntimeError, match="unsupported preparation denied"):
+        await service._prepare(
+            unsupported,  # type: ignore[arg-type]
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            SimpleNamespace(),  # type: ignore[arg-type]
+            project_id,
+            resource,
+        )
+    assert unsupported.denied is True
 
 
 async def test_submission_artifact_policy_replay_postgres_converges_exact_reservations(

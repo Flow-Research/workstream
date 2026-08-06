@@ -468,7 +468,7 @@ jobs:
           set -euo pipefail
           coverage run --append -m pytest -q -p pytest_asyncio.plugin \
             tests/test_projects.py \
-            -k 'submission_artifact_policy_replay_repository or submission_artifact_policy_authority_service'
+            -k 'submission_artifact_policy_replay_repository or submission_artifact_policy_authority_service or submission_artifact_policy_manual_service_executes_authorized_create_and_update or submission_artifact_policy_manual_lineage_loads_exact_locked_context or submission_artifact_policy_manual_service_fail_closed_guards'
           for source in \
             app/modules/projects/submission_policy_mutation_repository.py \
             app/modules/projects/submission_policy_mutation_service.py
