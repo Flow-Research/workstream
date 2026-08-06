@@ -17,12 +17,17 @@ P2.
 ## Allowed files
 ```text
 .ci/behavior-ownership/artifacts/**
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-03B-artifact-ownership.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-03B-*
 ```
 ## In-scope eligible targets
 Exactly the targets whose `group` is `artifacts` in the machine-readable
 partition committed by `WS-QUAL-002-01`. The validator must reject records
 outside that closed set; no prose inference or overlapping fallback scope is allowed.
+The validator reads the versioned partition only from protected base or the
+approved foundation commit, verifies its digest, and rejects any population-PR
+partition change, relocation, or shadow copy.
 ## Not allowed
 ```text
 backend/app/**; provider behavior; workflows; test weakening
@@ -30,6 +35,7 @@ backend/app/**; provider behavior; workflows; test weakening
 ## Acceptance criteria
 - [ ] Every target assigned to `artifacts` by the foundation partition is reviewed or structural-only; no other target is changed.
 - [ ] Storage, archive, scratch, and background-execution boundaries are explicit.
+- [ ] Every applicable provider-owned record cites real filesystem, S3/MinIO, archive, or external-adapter contract evidence; mocked-only tests cannot establish a real boundary.
 - [ ] Owning nodes remain bounded.
 - [ ] The validator collects and runs every exact pytest node referenced by changed records, including real-provider boundary nodes where declared.
 ## Verification commands

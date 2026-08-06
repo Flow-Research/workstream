@@ -22,7 +22,9 @@ backend/tests/test_behavior_ownership.py
 backend/tests/test_ci_test_lanes.py
 backend/pyproject.toml
 docs/operations_backend_testing.md
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-02-context-evidence.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-02-*
 ```
 ## Not allowed
 ```text
@@ -34,7 +36,8 @@ backend/app/**; .github/workflows/**; reviewed catalogue population; mutation re
 - [ ] Candidate output cannot satisfy reviewed ownership.
 - [ ] The prototype is a local/manual command only and adds no workflow or required check.
 - [ ] Added local runtime is at most two minutes and each generated artifact is at most 10 MiB; exceeding either limit stops adoption and triggers redesign.
-- [ ] Artifacts contain only commit SHAs, target paths, callable spans, collected node IDs, and line-coverage metadata, never environment values, secrets, tokens, request payloads, logs, or database values.
+- [ ] Artifacts contain only commit SHAs, lane identity, collection/completion status, skip/deselect status, target paths, callable spans, collected node IDs, line-coverage metadata, and an artifact digest or immutable canonical-lane manifest reference; they never contain environment values, secrets, tokens, request payloads, logs, or database values.
+- [ ] Validation rejects stale-head, partial, incomplete, skipped, deselected, digest-mismatched, or overwritten evidence as candidate input.
 ## Verification commands
 ```bash
 (cd backend && .venv/bin/python -m pytest -q tests/test_behavior_ownership.py tests/test_ci_test_lanes.py)

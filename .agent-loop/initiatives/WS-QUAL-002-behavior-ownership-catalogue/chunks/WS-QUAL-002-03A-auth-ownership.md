@@ -17,7 +17,9 @@ P1.
 ## Allowed files
 ```text
 .ci/behavior-ownership/auth/**
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-03A-auth-ownership.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-03A-*
 ```
 ## Not allowed
 ```text
@@ -27,6 +29,9 @@ backend/app/**; workflows; mutation policy; authorization behavior; unreviewed p
 Exactly the targets whose `group` is `auth` in the machine-readable partition
 committed by `WS-QUAL-002-01`. The validator must reject records outside that
 closed set; no prose inference or overlapping fallback scope is allowed.
+The validator reads the versioned partition only from protected base or the
+approved foundation commit, verifies its digest, and rejects any population-PR
+partition change, relocation, or shadow copy.
 ## Acceptance criteria
 - [ ] Every target assigned to `auth` by the foundation partition is reviewed-owned or strictly structural-only; no other target is changed.
 - [ ] Exact collected tests and context evidence support mappings.

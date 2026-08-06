@@ -39,6 +39,16 @@ New or remapped callables require an additive changed record validated from PR
 head. PR-head data cannot delete, narrow, downgrade, or replace protected-base
 reviewed ownership. Exact Git delta remains the source of changed callables.
 
+Each reviewed behavior has an immutable `behavior_id`; its current location is
+the exact `(target_path, AST-qualified callable name)` binding. A remap record
+names `supersedes_behavior_id`, is admitted only when the exact Git delta proves
+the protected location is absent or renamed and the PR-head location exists,
+and carries forward every protected owning test, outcome, and real boundary
+unless a separately reviewed ownership change adds stronger evidence. Effective
+selection resolves the superseded binding before mutation input and must yield
+exactly one reviewed owner for every changed executable line; zero or multiple
+effective owners fail closed.
+
 ## Verification strategy
 
 - JSON Schema and path/custody validation.
@@ -68,3 +78,10 @@ its target partition (`01`) and observational context evidence (`02`) merge.
 The observational context prototype is local/manual and adds no workflow;
 chunk `05` is the first chunk allowed to add a new workflow or reactivate
 mutation enforcement.
+
+Before reactivation, a blocking repository scan covers active workflows,
+scripts, and configuration and rejects references to the retired workflow,
+callable-wide selectors, or historical claim authority. Historical planning and
+review evidence may name the retirement; executable or active configuration may
+not. The retired state remains authoritative until this scan and all hosted
+evidence pass on the exact proposed head.

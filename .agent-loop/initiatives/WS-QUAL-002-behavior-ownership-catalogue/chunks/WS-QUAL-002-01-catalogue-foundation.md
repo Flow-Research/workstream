@@ -31,13 +31,17 @@ P2.
 ## Allowed files
 
 ```text
-.ci/behavior-ownership/**
+.ci/behavior-ownership/README.md
+.ci/behavior-ownership/partition.v1.json
+.ci/behavior-ownership/examples/**
 scripts/behavior-ownership.schema.json
 backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
 CONTRIBUTING.md
 docs/operations_backend_testing.md
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-01-catalogue-foundation.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-01-*
 ```
 
 ## Not allowed
@@ -55,18 +59,23 @@ authoritative inferred ownership without reviewed catalogue state
 ## Acceptance criteria
 
 - [ ] Schema distinguishes reviewed ownership, candidates, and strict structural-only records.
+- [ ] The schema defines `structural_only` as a machine-readable status with a required non-empty reason and forbids callable and test fields for that status; executable records require callable and test fields.
+- [ ] Validation and `--run-owned-tests` exclude valid `structural_only` records, reject mixed structural/executable fields, and test the no-executable-callable completeness case from `DISCOVERY.md`.
 - [ ] Inventory deterministically enumerates every eligible non-`__init__` module.
 - [ ] Eligibility, safe-path checks, callable spans, changed-callable derivation, observable outcomes, and real-boundary vocabulary delegate directly to the existing `mutation_policy.py` definitions; parity tests fail on drift rather than maintaining a second implementation.
-- [ ] A committed machine-readable partition assigns every eligible target to exactly one of `auth`, `artifacts`, `lifecycle`, or `shared`; validation rejects missing, duplicate, and out-of-group targets.
+- [ ] The sole partition artifact is `.ci/behavior-ownership/partition.v1.json` with schema identity `workstream.behavior-ownership-partition.v1`; it assigns every eligible target to exactly one of `auth`, `artifacts`, `lifecycle`, or `shared`.
+- [ ] Partition custody binds its protected-base commit and digest; validation rejects missing, relocated, duplicated, branch-local, or modified copies.
 - [ ] Callable groups enumerate exact AST callable members; changed-callable selection remains exact, and wildcards or implicit membership fail closed.
 - [ ] Validator rejects unsafe paths, duplicates, missing targets/callables/tests, stale nodes, narrowing, and malformed records.
+- [ ] Remap records require immutable `behavior_id` and `supersedes_behavior_id`, exact-Git-delta proof that the protected location is absent or renamed, and an existing PR-head location.
+- [ ] Remap validation carries forward all protected tests, outcomes, and real boundaries unless stronger reviewed evidence is added; deletion, narrowing, replacement, invalid ancestry, and zero or multiple effective owners fail closed.
 - [ ] Every referenced pytest node collects, and the validator can run the exact nodes referenced by a record or population group.
 - [ ] `structural_only` is allowed only for imports, constants, type-only declarations, protocols/interfaces, and declarative metadata with no executable functions, validators, I/O, SQL, external calls, branching, mutation, or runtime side effects; every record includes a reviewed rationale and executable counterexamples fail validation.
 - [ ] Generator emits deterministic candidates and a precise unresolved report; it never promotes candidates to reviewed.
 - [ ] Empty initial catalogue is allowed only with an explicit completeness report because mutation reactivation is not active.
 - [ ] New tooling has at least 90-percent focused coverage.
 - [ ] Retired mutation enforcement remains inactive; the Backend workflow and coverage floors are unchanged.
-- [ ] Negative tests cover missing/duplicate/wrong-group targets, stale nodes, overbroad groups, and executable behavior mislabeled `structural_only`.
+- [ ] Negative tests cover missing/duplicate/wrong-group targets, stale nodes, overbroad groups, executable behavior mislabeled `structural_only`, invalid remap ancestry/location, missing carry-forward evidence, protected-owner replacement, and zero/multiple effective owners.
 
 ## Verification commands
 

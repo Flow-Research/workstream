@@ -22,10 +22,11 @@ backend/tests/test_mutation_policy.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
 .github/workflows/behavior-mutation.yml
-.ci/behavior-ownership/**
 CONTRIBUTING.md
 docs/operations_backend_testing.md
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-05-mutation-reactivation.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-05-*
 ```
 ## Not allowed
 ```text
@@ -33,10 +34,14 @@ backend/app/**; migrations; global or callable-wide mutation; scores; exemptions
 ```
 ## Acceptance criteria
 - [ ] Existing callables resolve from the catalogue physically loaded from the exact protected base SHA, never from PR head, without manual claims.
-- [ ] Selection contains only changed executable lines and their exact containing callables; unchanged executable lines fail closed if selected.
+- [ ] The selection contract adds exact changed executable line/span data beside each containing callable, and the mutation runner consumes those spans—not callable names alone—when constructing final mutation input.
+- [ ] Selection contains only changed executable spans and their exact containing callables; unchanged executable lines fail closed if selected.
 - [ ] Negative tests prove that a one-line executable change selects only that line, never unchanged executable sibling lines in the same callable.
-- [ ] Negative tests reject unchanged executable lines, callable-wide/full-callable selectors, and any new workflow reference to the retired `mutation-pilot.yml`.
+- [ ] Negative tests inspect the runner's final mutation input and reject unchanged executable lines, callable-wide/full-callable selectors, and any new workflow reference to the retired `mutation-pilot.yml`.
+- [ ] A blocking pre-reactivation scan rejects active workflow, script, or configuration references to retired callable-wide workflow paths, selectors, or claim authority.
 - [ ] New/remapped callables require additive validated PR-head records and cannot replace protected records.
+- [ ] Effective selection resolves each validated `supersedes_behavior_id` before building mutation input and yields exactly one reviewed owner for every changed executable span; zero or multiple owners fail closed.
+- [ ] Selection tests reject remaps with missing protected absence/rename proof, nonexistent PR-head locations, narrowed carry-forward evidence, or attempts to delete or replace protected ownership.
 - [ ] PR data that deletes, narrows, downgrades, changes tests/outcomes/boundaries, or otherwise replaces existing protected reviewed ownership fails closed.
 - [ ] Negative tests prove forged PR-head ownership cannot affect protected-base selection and exact callable custody remains authoritative.
 - [ ] AUTH rehearsal and hosted mutation pass within the current cap.

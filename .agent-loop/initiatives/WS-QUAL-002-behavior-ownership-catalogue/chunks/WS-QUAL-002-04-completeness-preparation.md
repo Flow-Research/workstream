@@ -22,7 +22,9 @@ scripts/test_lightweight_agent_gates.py
 scripts/workstream_agent_gate.py
 CONTRIBUTING.md
 docs/operations_backend_testing.md
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-04-completeness-preparation.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-04-*
 ```
 ## Not allowed
 ```text

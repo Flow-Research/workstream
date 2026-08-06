@@ -17,12 +17,17 @@ P2.
 ## Allowed files
 ```text
 .ci/behavior-ownership/lifecycle/**
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/**
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-03C-lifecycle-ownership.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-03C-*
 ```
 ## In-scope eligible targets
 Exactly the targets whose `group` is `lifecycle` in the machine-readable
 partition committed by `WS-QUAL-002-01`. The validator must reject records
 outside that closed set; no prose inference or overlapping fallback scope is allowed.
+The validator reads the versioned partition only from protected base or the
+approved foundation commit, verifies its digest, and rejects any population-PR
+partition change, relocation, or shadow copy.
 ## Not allowed
 ```text
 backend/app/**; lifecycle states; review decisions; payment behavior; workflows
@@ -30,6 +35,7 @@ backend/app/**; lifecycle states; review decisions; payment behavior; workflows
 ## Acceptance criteria
 - [ ] Every target assigned to `lifecycle` by the foundation partition is reviewed or structural-only; no other target is changed.
 - [ ] State, denial, idempotency, revision, and concurrency outcomes are explicit.
+- [ ] Every applicable persistence-owned record cites real PostgreSQL and outbox evidence for transaction, idempotency, revision, and concurrency behavior; mocked-only tests cannot establish those boundaries.
 - [ ] Engineering ownership does not redefine product decisions.
 - [ ] The validator collects and runs every exact pytest node referenced by changed records.
 ## Verification commands
