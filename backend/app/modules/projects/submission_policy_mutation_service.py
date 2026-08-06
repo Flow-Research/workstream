@@ -278,12 +278,10 @@ class SubmissionPolicyMutationService:
                 raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
             if predecessor.lifecycle_status != "draft":
                 if predecessor.lifecycle_status == "approved":
-                    raise PolicyEditBlocked(
-                        "approved submission artifact policies are immutable"
-                    )
+                    raise PolicyEditBlocked("approved submission artifact policies are immutable")
                 raise PolicyEditBlocked("only a current draft policy can be replaced")
             if predecessor.derivation_source != MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-                raise PolicyEditBlocked("agent-derived policy bodies are immutable")
+                raise PolicyEditBlocked("agent-derived policy summaries are immutable")
         return _ManualPolicyLineage(
             guide_version=guide.version,
             snapshot_id=snapshot_id,
@@ -350,7 +348,7 @@ class SubmissionPolicyMutationService:
     ) -> ProjectSubmissionArtifactPolicyMutationResourceContext:
         return ProjectSubmissionArtifactPolicyMutationResourceContext(
             resource_type="project_submission_artifact_policy_mutation",
-            resource_id=policy_id,
+            resource_id=successor_id or policy_id,
             operation_id=operation_id,
             request_digest=request_digest,
             scope_project_id=project_id,
@@ -736,15 +734,6 @@ class SubmissionPolicyMutationService:
             or committed.creation_action_id != action.value
         ):
             raise SubmissionPolicyMutationConflict("idempotency_mismatch")
-        caller = PreparedAuthorizationInput(
-            idempotency_key=key,
-            request_value=cast(JsonValue, resource.model_dump(mode="json")),
-        )
-        handle = await self._prepare(prepared, action, caller, project_id, resource)
-        decision = await prepared.consume(handle, action, caller, resource)
-        self._prove_human_authority(decision, project_id)
-        if replay.resource_context_digest != decision.resource_context_digest:
-            raise SubmissionPolicyMutationConflict("idempotency_mismatch")
         return SubmissionPolicyMutationOutcome(response, True)
 
     async def create_manual(
@@ -769,7 +758,6 @@ class SubmissionPolicyMutationService:
         await self._require_pm_admission(resolved=resolved, project_id=project_id)
         replay = await self._existing_manual_replay(
             resolved=resolved,
-            prepared=prepared,
             key=key,
             action=action,
             project_id=project_id,
@@ -820,7 +808,6 @@ class SubmissionPolicyMutationService:
         await self._require_pm_admission(resolved=resolved, project_id=project_id)
         replay = await self._existing_manual_replay(
             resolved=resolved,
-            prepared=prepared,
             key=key,
             action=action,
             project_id=project_id,

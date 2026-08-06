@@ -5256,8 +5256,7 @@ async def approve_submission_artifact_policy(
         async with db_session.get_session_factory()() as session:
             authoritative_report = await session.scalar(
                 select(GuideSufficiencyReport).where(
-                    GuideSufficiencyReport.source_snapshot_id
-                    == setup_run["source_snapshot_id"],
+                    GuideSufficiencyReport.source_snapshot_id == setup_run["source_snapshot_id"],
                     GuideSufficiencyReport.project_setup_run_id.is_not(None),
                 )
             )
@@ -9346,9 +9345,9 @@ async def test_public_sufficiency_mutation_conceals_service_before_product_looku
         lookups += 1
         raise AssertionError("service token reached project lookup")
 
-    app.dependency_overrides[
-        guide_mutation_router_module.get_auth_verification_result
-    ] = verified_service
+    app.dependency_overrides[guide_mutation_router_module.get_auth_verification_result] = (
+        verified_service
+    )
     monkeypatch.setattr(ProjectRepository, "get_guide", forbidden_lookup)
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
@@ -12325,9 +12324,7 @@ async def test_submission_artifact_policy_update_conceals_foreign_policy_id(
 ) -> None:
     """A policy selected through another project or guide is indistinguishable from absent."""
     first_project = await create_project(project_client)
-    first_guide = await create_guide(
-        project_client, first_project["id"], complete_guide_payload()
-    )
+    first_guide = await create_guide(project_client, first_project["id"], complete_guide_payload())
     first_snapshot = await create_source_snapshot(
         project_client, first_project["id"], first_guide["id"]
     )
@@ -13532,6 +13529,10 @@ async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_polic
         snapshot["id"],
         status="passed_with_warnings",
     )
+    report = {
+        **report,
+        "id": await create_verified_report_fixture(report["id"], snapshot["id"]),
+    }
 
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(GuideSufficiencyReport, report["id"])

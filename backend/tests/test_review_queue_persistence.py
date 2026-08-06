@@ -505,9 +505,7 @@ async def test_database_enforces_routing_uniqueness_and_immutable_lineage(
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError, match="review queue identity is immutable"):
             await session.execute(
-                text(
-                    "update review_queue_entries set first_queued_at=:changed where id=:id"
-                ),
+                text("update review_queue_entries set first_queued_at=:changed where id=:id"),
                 {"changed": datetime.now(UTC) + timedelta(seconds=5), "id": value.id},
             )
         await session.rollback()
@@ -582,16 +580,26 @@ async def test_later_authority_preserves_populated_review_admission_on_downgrade
         with migration_lock():
             command.downgrade(config, "0050_guide_source_v2")
 
-    with pytest.raises(RuntimeError, match="cannot downgrade guide sufficiency authority"):
+    # Downgrades are newest-first; submission-policy evidence is the first
+    # irreversible boundary and must preserve the older review admission too.
+    with pytest.raises(
+        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
+    ):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("select version_num from alembic_version")) == initial_revision
-        assert await session.scalar(
-            select(ReviewAdmissionIdempotencyRecord.id).where(
-                ReviewAdmissionIdempotencyRecord.id == reservation_value.id
+        assert (
+            await session.scalar(text("select version_num from alembic_version"))
+            == initial_revision
+        )
+        assert (
+            await session.scalar(
+                select(ReviewAdmissionIdempotencyRecord.id).where(
+                    ReviewAdmissionIdempotencyRecord.id == reservation_value.id
+                )
             )
-        ) == reservation_value.id
+            == reservation_value.id
+        )
 
 
 @pytest.mark.postgres_schema_contract
@@ -617,9 +625,16 @@ async def test_later_authority_preserves_populated_review_queue_on_downgrade(
         with migration_lock():
             command.downgrade(config, "0050_guide_source_v2")
 
-    with pytest.raises(RuntimeError, match="cannot downgrade guide sufficiency authority"):
+    # Downgrades are newest-first; submission-policy evidence is the first
+    # irreversible boundary and must preserve the older queue entry too.
+    with pytest.raises(
+        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
+    ):
         await asyncio.to_thread(downgrade)
 
     async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("select version_num from alembic_version")) == initial_revision
+        assert (
+            await session.scalar(text("select version_num from alembic_version"))
+            == initial_revision
+        )
         assert await session.get(ReviewQueueEntry, queue_value.id) is not None
