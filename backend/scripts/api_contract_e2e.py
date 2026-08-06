@@ -1756,7 +1756,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client,
             "POST",
             "/api/v1/projects",
-            manager_token,
+            project_reader_token,
             {
                 "name": f"Wrong Scope Project {run_id}",
                 "slug": f"wrong-scope-project-{run_id}",
