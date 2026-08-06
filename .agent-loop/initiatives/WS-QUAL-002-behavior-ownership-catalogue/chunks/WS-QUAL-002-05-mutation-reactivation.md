@@ -1,11 +1,12 @@
-# Chunk Contract: WS-QUAL-002-05 — Catalogue-First Mutation Cutover
+# Chunk Contract: WS-QUAL-002-05 — Changed-Line-Aware Mutation Reactivation
 
 ## Parent initiative
 `WS-QUAL-002` — Behavior Ownership Catalogue
 ## Goal
-Use protected catalogue ownership by default and prove AUTH no longer pauses.
+Reactivate mutation through protected catalogue ownership and exact changed-line
+selection, then prove AUTH no longer pauses.
 ## Why this chunk exists
-This delivers reusable ownership while preserving changed-scope mutation.
+This delivers reusable ownership without restoring retired callable-wide mutation.
 ## Approved plan reference
 - INTENT: `.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/INTENT.md`
 - PLAN: `.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/PLAN.md`
@@ -20,8 +21,7 @@ backend/scripts/mutation_policy.py
 backend/tests/test_mutation_policy.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
-.github/workflows/mutation-pilot.yml
-.ci/behavior-claims/**
+.github/workflows/behavior-mutation.yml
 .ci/behavior-ownership/**
 CONTRIBUTING.md
 docs/operations_backend_testing.md
@@ -29,15 +29,21 @@ docs/operations_backend_testing.md
 ```
 ## Not allowed
 ```text
-backend/app/**; migrations; global mutation; scores; exemptions; PR authority for existing ownership; test weakening
+backend/app/**; migrations; global or callable-wide mutation; scores; exemptions; PR authority for existing ownership; test weakening; .github/workflows/mutation-pilot.yml
 ```
 ## Acceptance criteria
 - [ ] Existing callables resolve from the catalogue physically loaded from the exact protected base SHA, never from PR head, without manual claims.
+- [ ] Selection contains only changed executable lines and their exact containing callables; unchanged executable lines fail closed if selected.
+- [ ] Negative tests prove that a one-line executable change selects only that line, never unchanged executable sibling lines in the same callable.
+- [ ] Negative tests reject unchanged executable lines, callable-wide/full-callable selectors, and any new workflow reference to the retired `mutation-pilot.yml`.
 - [ ] New/remapped callables require additive validated PR-head records and cannot replace protected records.
 - [ ] PR data that deletes, narrows, downgrades, changes tests/outcomes/boundaries, or otherwise replaces existing protected reviewed ownership fails closed.
 - [ ] Negative tests prove forged PR-head ownership cannot affect protected-base selection and exact callable custody remains authoritative.
 - [ ] AUTH rehearsal and hosted mutation pass within the current cap.
-- [ ] Human explicitly approves cutover.
+- [ ] The retired `mutation-pilot.yml` workflow remains absent and unreferenced.
+- [ ] Historical `.ci/behavior-claims/**` data remains inactive; no workflow, selector, or contributor command reads it as mutation authority.
+- [ ] The new workflow emits one stable PR check on every pull request, has no workflow-level path filter, and resolves unrelated changes through an internal `not_applicable` preflight before mutation dependencies install or execute.
+- [ ] Human explicitly approves mutation reactivation.
 ## Verification commands
 ```bash
 (cd backend && .venv/bin/python -m pytest -q tests/test_behavior_ownership.py tests/test_mutation_policy.py)
@@ -47,6 +53,8 @@ git diff --check origin/main...HEAD
 ## Required reviewers
 Architecture, senior engineering, QA, security, product/ops, CI integrity, docs, reuse/dedup, and test delta.
 ## Human review focus
-Protected engineering-gate custody, additive flow, AUTH usability, and hosted runtime.
+Protected engineering-gate custody, changed-line selection, additive flow, AUTH
+usability, and hosted runtime.
 ## Stop conditions
-Stop if catalogue is incomplete, AUTH still needs routine claims, or 05M weakens.
+Stop if catalogue is incomplete, AUTH still needs routine claims, unchanged
+lines enter selection, or the retired 05M workflow would be restored.

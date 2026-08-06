@@ -11,7 +11,8 @@ contributors do not pause during implementation to rediscover mutation claims.
 - Ordinary PR mutation remains changed-scope.
 - Candidate automatic mappings are not blocking authority until reviewed.
 - AUTH is the first subsystem proof, but catalogue scope is repository-wide.
-- The 05M gate remains in force until explicit catalogue-first cutover.
+- The 05M workflow remains retired; only a fresh, explicitly approved,
+  changed-line-aware workflow may reactivate mutation enforcement.
 - Callable groups enumerate exact AST members and never widen exact-callable selection.
 - Foundation assigns every eligible target to one population group before concurrent work.
-- Coverage-context calibration is observational and separate from the blocking mutation gate.
+- Coverage-context calibration is local/manual and cannot add a workflow or required check.

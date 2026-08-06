@@ -63,9 +63,9 @@ authoritative inferred ownership without reviewed catalogue state
 - [ ] Every referenced pytest node collects, and the validator can run the exact nodes referenced by a record or population group.
 - [ ] `structural_only` is allowed only for imports, constants, type-only declarations, protocols/interfaces, and declarative metadata with no executable functions, validators, I/O, SQL, external calls, branching, mutation, or runtime side effects; every record includes a reviewed rationale and executable counterexamples fail validation.
 - [ ] Generator emits deterministic candidates and a precise unresolved report; it never promotes candidates to reviewed.
-- [ ] Empty initial catalogue is allowed only with an explicit completeness report because cutover is not active.
+- [ ] Empty initial catalogue is allowed only with an explicit completeness report because mutation reactivation is not active.
 - [ ] New tooling has at least 90-percent focused coverage.
-- [ ] Existing mutation gate, Backend workflow, and coverage floors are unchanged.
+- [ ] Retired mutation enforcement remains inactive; the Backend workflow and coverage floors are unchanged.
 - [ ] Negative tests cover missing/duplicate/wrong-group targets, stale nodes, overbroad groups, and executable behavior mislabeled `structural_only`.
 
 ## Verification commands
@@ -97,6 +97,6 @@ can represent all subsystems, and this PR does not alter current CI behavior.
 
 ## Stop conditions
 
-Stop if workflow/mutation cutover becomes necessary, ownership must be guessed
-as reviewed, current gates must weaken, or the schema cannot represent a
+Stop if workflow/mutation reactivation becomes necessary, ownership must be guessed
+as reviewed, active Backend, coverage, lint, or review gates must weaken, or the schema cannot represent a
 subsystem without free-form exemptions.

@@ -2,10 +2,12 @@
 
 ## Problem being solved
 
-The blocking mutation gate correctly requires exact changed-callable ownership,
-but contributors currently discover and author that ownership during each PR.
-AUTH had to pause implementation to build mutation metadata. That interruption
-will repeat across every initiative unless durable ownership already exists.
+The retired 05M mutation gate required exact changed-callable ownership, but
+contributors had to discover and author that ownership during each PR. AUTH
+paused implementation to build mutation metadata, while callable-wide mutation
+also evaluated unchanged executable lines. PR #289 retired that blocking
+workflow. Durable ownership and changed-line selection are both required before
+mutation enforcement can safely return.
 
 ## Why this work matters
 
@@ -19,23 +21,24 @@ to rediscover the repository's test architecture.
   `backend/scripts/`.
 - 66 backend test modules exist.
 - Only the historical `04M` and `05M` behavior claims exist.
-- Any eligible change requires one changed, PR-specific claim with exact
-  callable names and pytest nodes.
+- The hosted mutation workflow is retired; Backend lanes, coverage, lint,
+  review, and human merge remain active.
 
 ## Target behavior
 
 Main contains reviewed behavior ownership for every eligible module. A local
-command derives the exact changed callables from Git and generates the bounded
-PR selection automatically. Contributors update ownership only for new or
-materially remapped behavior.
+command derives exact changed executable lines and their containing callables
+from Git and generates bounded PR selection automatically. Contributors update
+ownership only for new or materially remapped behavior.
 
 ## Design chosen
 
 Create a canonical ownership catalogue separate from transient PR selection.
 Catalogue records bind targets and callable ownership to exact tests, observable
 outcomes, and required real boundaries. Generation and validation are
-deterministic. The mutation engine remains changed-scope and never runs the
-whole repository on an ordinary PR.
+deterministic. Any future mutation engine is changed-line-aware, never mutates
+unchanged executable lines, and never runs the whole repository on an ordinary
+PR.
 
 ## Alternatives considered
 
@@ -71,10 +74,10 @@ authority, or whole-repository mutation.
 
 Schema and generator tests, exact Git-delta tests, catalogue completeness and
 staleness checks, coverage-context evidence, subsystem review, an AUTH pilot,
-and final hosted changed-scope mutation evidence.
+and final hosted changed-line mutation evidence before reactivation.
 
 ## Human decisions required
 
-Approve the staged plan and first contract. Later cutover requires a separate
-human checkpoint after AUTH proves that normal work no longer pauses for manual
-claim construction.
+Approve the staged plan and first contract. Later mutation reactivation requires
+a separate human checkpoint after AUTH proves that normal work no longer pauses
+for manual claim construction and unchanged lines cannot enter selection.

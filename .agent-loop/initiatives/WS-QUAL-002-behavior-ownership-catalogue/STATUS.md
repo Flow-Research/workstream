@@ -1,8 +1,8 @@
 # Status: WS-QUAL-002 Behavior Ownership Catalogue
 
-Planning is complete and internally reviewed. The current 05M claim-based
-mutation gate remains authoritative. No catalogue implementation or cutover has
-started.
+Planning is complete and internally reviewed. PR #289 retired the 05M hosted
+mutation workflow; Backend lanes and coverage remain authoritative. No
+catalogue implementation or mutation reactivation has started.
 
 The first proposed chunk is `WS-QUAL-002-01`. Stop after planning review and
 human approval; do not start implementation automatically.

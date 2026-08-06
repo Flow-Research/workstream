@@ -9,7 +9,7 @@
 | `WS-QUAL-002-03C` | Projects, tasks, checkers, reviews, contribution ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-03D` | Core, DB, async execution, scripts, remaining shared ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-04` | Completeness/staleness gate and contributor preparation command | 03A-D | L1 | pending |
-| `WS-QUAL-002-05` | Catalogue-first mutation cutover and AUTH workflow proof | 04 | L1 | pending |
+| `WS-QUAL-002-05` | Changed-line-aware mutation reactivation and AUTH workflow proof | 04 | L1 | pending |
 
 Population chunks `03A` through `03D` may run concurrently in separate
 branches after `01` and `02` merge. Their scopes come exclusively from the

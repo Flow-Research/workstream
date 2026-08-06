@@ -26,7 +26,7 @@ docs/operations_backend_testing.md
 ```
 ## Not allowed
 ```text
-mutation cutover; backend/app/**; coverage weakening; administrator approval gates
+mutation reactivation; backend/app/**; coverage weakening; administrator approval gates
 ```
 ## Acceptance criteria
 - [ ] All current eligible targets reconcile exactly.
