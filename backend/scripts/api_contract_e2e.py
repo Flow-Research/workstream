@@ -1067,7 +1067,7 @@ async def create_policy_bundle_for_guide(
         manual_path,
         service_token,
         manual_payload,
-        expected_status=404,
+        expected_status=403,
         idempotency_key=str(uuid4()),
     )
     for denied_token in (role_claim_only_token, wrong_project_manager_token):
