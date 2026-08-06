@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
@@ -629,6 +629,19 @@ class ProjectRepository:
             .with_for_update()
         )
         return result.scalar_one_or_none()
+
+    async def supersede_draft_submission_artifact_policy(self, policy_id: str) -> bool:
+        """Atomically supersede exactly one still-current draft policy."""
+        result = await self._session.execute(
+            update(SubmissionArtifactPolicy)
+            .where(
+                SubmissionArtifactPolicy.id == policy_id,
+                SubmissionArtifactPolicy.lifecycle_status == "draft",
+            )
+            .values(lifecycle_status="superseded", superseded_at=func.now())
+            .returning(SubmissionArtifactPolicy.id)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def lock_submission_artifact_policy_diagnostic(
         self, policy_id: str, project_id: str, guide_id: str, guide_version: str

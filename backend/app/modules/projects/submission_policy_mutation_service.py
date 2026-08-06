@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -582,11 +581,11 @@ class SubmissionPolicyMutationService:
         except IntegrityError as exc:
             raise SubmissionPolicyMutationConflict("submission_policy_version_conflict") from exc
         if predecessor_id is not None:
-            predecessor = await self._projects.lock_submission_artifact_policy(str(predecessor_id))
-            if predecessor is None or predecessor.lifecycle_status != "draft":
+            superseded = await self._projects.supersede_draft_submission_artifact_policy(
+                str(predecessor_id)
+            )
+            if not superseded:
                 raise SubmissionPolicyMutationConflict("submission_policy_lineage_stale")
-            predecessor.lifecycle_status = "superseded"
-            predecessor.superseded_at = datetime.now(UTC)
             await self._session.flush()
         response = SubmissionArtifactPolicyResponse.model_validate(policy)
         await self.complete_replay(

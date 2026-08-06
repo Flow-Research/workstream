@@ -508,7 +508,12 @@ def _submission_policy_human_prepare_inputs(
     if target_kind in {"update", "approve"}:
         values.update(policy_status="draft", policy_digest=DIGEST)
     if target_kind == "update":
-        values.update(successor_policy_id=uuid4(), successor_policy_version="2")
+        successor_policy_id = uuid4()
+        values.update(
+            resource_id=successor_policy_id,
+            successor_policy_id=successor_policy_id,
+            successor_policy_version="2",
+        )
     if target_kind == "approve":
         values.update(
             effective_output_digest=DIGEST,
@@ -2388,10 +2393,15 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             )
         ),
     }
+    submission_policy_successor_id = uuid4()
     submission_resources = {
         action_id: ProjectSubmissionArtifactPolicyMutationResourceContext(
             resource_type="project_submission_artifact_policy_mutation",
-            resource_id=submission_policy_id,
+            resource_id=(
+                submission_policy_successor_id
+                if target_kind == "update"
+                else submission_policy_id
+            ),
             operation_id=operation_id,
             request_digest=DIGEST,
             scope_project_id=project_id,
@@ -2409,7 +2419,9 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
             setup_generation=1,
             sufficiency_report_id=report_id,
             sufficiency_status="passed",
-            successor_policy_id=(uuid4() if target_kind == "update" else None),
+            successor_policy_id=(
+                submission_policy_successor_id if target_kind == "update" else None
+            ),
             successor_policy_version=("2" if target_kind == "update" else None),
             stale_output_digest=DIGEST if target_kind == "derive" else None,
             effective_output_digest=DIGEST if target_kind == "approve" else None,
