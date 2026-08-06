@@ -24,3 +24,41 @@ behavior. The textual TOML rewrite remains fail closed; typed failure is the
 required safety property for unsupported legacy shapes.
 
 Exact-head hosted CI and CodeRabbit rereview remain required after publication.
+
+## PR #289 retirement review on `54cd358a`
+
+Comments addressed:
+
+- Rewrote the PR description using the complete repository trust-bundle
+  template so its title, intent, scope, evidence, reviewer results, deliberate
+  workflow retirement, remaining risk, and follow-up boundary match the final
+  diff.
+- Added the same reactivation guard to `CONTRIBUTING.md`, the behavior-claim
+  guide, and the Backend operations guide: enforcement cannot resume without an
+  approved fresh changed-line-aware plan proving unchanged executable lines do
+  not block declaration-only changes.
+- Reworded the remaining claim-discovery and fail-closed guidance as historical
+  behavior rather than an active contribution requirement.
+
+Comments deferred:
+
+- Two mutation-policy inline threads are outdated because the referenced
+  implementation was fully reverted and is absent from the final PR diff.
+
+Human decisions needed:
+
+- A repository administrator must remove the retired check from external
+  branch-protection settings if it was configured there.
+
+Commands rerun:
+
+```text
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+git diff --check
+```
+
+Remaining risks:
+
+- Behavior mutation is no longer enforced in hosted CI. Reintroduction requires
+  the separately approved changed-line-aware design recorded in current status.

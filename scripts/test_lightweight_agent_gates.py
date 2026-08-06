@@ -124,50 +124,10 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("pull_request_review:", agent_gates)
         self.assertIn("--require-pr-approval", agent_gates)
 
-    def test_behavior_mutation_gate_is_bounded_protected_and_independent(self) -> None:
-        workflow = Path(".github/workflows/mutation-pilot.yml").read_text(encoding="utf-8")
+    def test_retired_behavior_mutation_gate_stays_out_of_required_ci(self) -> None:
         backend = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
 
-        self.assertIn("  pull_request:\n", workflow)
-        self.assertIn("  push:\n", workflow)
-        self.assertNotIn("pull_request_target", workflow)
-        self.assertNotIn("    paths:", workflow)
-        self.assertIn("permissions:\n  contents: read", workflow)
-        self.assertNotIn("contents: write", workflow)
-        self.assertNotIn("continue-on-error", workflow)
-        self.assertIn("timeout-minutes: 15", workflow)
-        self.assertIn("timeout --signal=TERM --kill-after=15s 720s", workflow)
-        self.assertIn("persist-credentials: false", workflow)
-        self.assertIn("--require-hashes", workflow)
-        self.assertIn(
-            'git show "${base_sha}:scripts/mutation-requirements.txt"', workflow
-        )
-        self.assertIn(
-            'git show "${base_sha}:backend/pyproject.toml"', workflow
-        )
-        self.assertIn('git show "${base_sha}:backend/uv.lock"', workflow)
-        self.assertIn('if [[ "${bootstrap}" == "true" ]]', workflow)
-        self.assertIn('"${gate_dir}/venv/bin/uv" sync', workflow)
-        self.assertIn("--locked", workflow)
-        self.assertIn("--inexact", workflow)
-        self.assertIn(
-            'git show "${base_sha}:backend/scripts/mutation_policy.py"', workflow
-        )
-        self.assertIn('git show "${base_sha}:scripts/git_delta.py"', workflow)
-        self.assertLess(
-            workflow.index("Discover exact mutation applicability before installation"),
-            workflow.index("Install protected hash-locked mutation toolchain"),
-        )
-        self.assertIn("steps.preflight.outputs.applicability == 'applicable'", workflow)
-        self.assertIn("--discover", workflow)
-        self.assertIn("workstream-mutation-capability:discover-v1", workflow)
-        self.assertIn("--enforce", workflow)
-        self.assertIn("--self-test", workflow)
-        self.assertIn("--timeout-seconds 700", workflow)
-        self.assertIn("retention-days: 7", workflow)
-        self.assertIn("include-hidden-files: true", workflow)
-        self.assertNotIn('pip install -e "backend[dev]"', workflow)
-        self.assertNotIn('pip install -e ".[dev]"', workflow)
+        self.assertFalse(Path(".github/workflows/mutation-pilot.yml").exists())
         self.assertNotIn("mutation-pilot", backend)
 
 if __name__ == "__main__":

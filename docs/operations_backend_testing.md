@@ -171,56 +171,18 @@ does not override otherwise passing correctness, custody, service-contract,
 API, and coverage gates. Never lower coverage, skip nodes, or add a silent
 fallback to meet the target.
 
-## Required changed-scope behavior mutation
+## Retired changed-scope behavior mutation
 
-`Behavior Mutation Gate` is an independent required check. It does not join the
-Backend fan-in, alter the 78 percent global floor, or alter any protected 90
-percent subsystem floor. It always emits a stable pull-request result. Internal
-preflight returns typed `not_applicable` before dependency installation when the
-exact delta contains neither an eligible target nor a behavior claim.
+The hosted `Behavior Mutation Gate` is temporarily removed. Its callable-wide
+selection mutated unchanged executable lines whenever a small declaration or
+callable fragment changed, creating blockers that could not be resolved by the
+owning behavior assertions without implementation snapshots or gate bypasses.
 
-The gate selects eligible changed Python targets under `backend/app/` or
-`backend/scripts/`. One changed schema-v1 file under `.ci/behavior-claims/`
-provides qualified callable ownership, exact pytest nodes, typed observable
-outcomes, and essential real boundaries. Exact executable diff hunks must map
-to claimed callables. Missing, multiple, stale, unsafe, symlinked, narrowed, or
-unmappable claims fail closed. Mutmut configuration is generated only inside
-the disposable archive from the validated selection.
-
-The hash-locked toolchain is read only from
-`scripts/mutation-requirements.txt` at protected base and installed with
-`pip --require-hashes`. The same protected base supplies `backend/uv.lock` and
-`backend/pyproject.toml`; `uv sync --locked` installs the runtime and test
-dependencies needed by owning backend tests without trusting dependency edits
-from the pull-request head. Ordinary PR selection, classification, and verdict use
-the evaluator and Git-delta helper archived from protected base; PR-head policy
-code is not its own authority. Execution receives no secrets, uses read-only
-permissions and no persisted checkout credentials, removes token environment
-variables, and mutates only an exact-head disposable archive. Special entries,
-source-tree drift, custody drift, and baseline failure block.
-
-The independent job has a 15-minute cap, 720-second shell limit, and 700-second
-engine limit. Seven-day evidence binds the exact revisions/tree, protected
-manifest, generated configuration, selection, targets, tests, elapsed time,
-every mutant outcome, and the closed verdict. There is no score threshold.
-Killed mutants pass. Meaningful survivors, timeout, suspicious, error, unknown,
-or incomplete outcomes block. Excluded mutants pass only outside the selected
-callable filters. The repository's exact weak calibration survivor is the sole
-allowed control; contributors cannot add classifications, allowlists, free-form
-exemptions, or source mutation pragmas.
-
-For local discovery, run the command documented in
-`.ci/behavior-claims/README.md` and inspect the generated selection before
-publishing. The hosted artifact contains:
-
-- `selection.json`: pre-install applicability and exact claim/target selection;
-- `executed-selection.json`: the selection regenerated immediately before
-  execution;
-- `evidence.json`: exact-head custody, configuration digests, elapsed time,
-  calibration, complete mutant outcomes, and the closed verdict.
-
-For `not_applicable`, only `selection.json` is expected. For an applicable
-failure, first compare both selections, then inspect `verdict.status` and
-`verdict.blockers` in `evidence.json`. A selected survivor must be repaired in
-the owning assertion or production behavior. Missing evidence means the named
-earlier step failed; use its job log rather than manufacturing an artifact.
+Backend semantic lanes, the repository-wide 78 percent coverage floor, named
+90 percent subsystem floors, lint, docstring coverage, service-contract proof,
+internal reviews, CodeRabbit, and human merge approval remain unchanged. The
+mutation policy, claim schema, examples, pinned manifest, and prior evidence
+remain in the repository as design input for a future changed-line-aware gate.
+They are not active contribution requirements. Behavior-mutation enforcement
+must not resume until a fresh changed-line-aware plan is approved and proves
+that unchanged executable lines cannot block a declaration-only change.
