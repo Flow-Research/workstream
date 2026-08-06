@@ -167,9 +167,15 @@ def _limits() -> ArtifactPreparationLimits:
 
 class _AllowAuthority:
     def __init__(self) -> None:
+        self.preparation_facts = None
         self.facts = None
         self.action_id = None
         self.service_identity = None
+
+    async def prepare(self, *, facts, idempotency_key):
+        del idempotency_key
+        self.preparation_facts = facts
+        return _handle()
 
     async def consume(self, **values):
         self.facts = values["facts"]
@@ -244,6 +250,126 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
         await service.materialize_prepared_bundle(request)
 
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_authority_preparation_denies_before_zip_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalogue = build_pre_submission_checker_catalogue()
+    plan = _plan(catalogue)
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=_limits())
+    preparation = ArtifactPreparationService(manager)
+    prepared = await preparation.prepare(_bytes(_archive()), media_type="application/zip")
+    inspection_calls = 0
+
+    async def forbidden_inspection(*_args, **_kwargs):
+        nonlocal inspection_calls
+        inspection_calls += 1
+        raise AssertionError("ZIP inspection preceded authority preparation")
+
+    monkeypatch.setattr(type(prepared), "inspect", forbidden_inspection)
+    service = PreparedBundleMaterializationService(
+        authorization=DenyPreSubmitMaterializationAuthorization(),
+        preparation=preparation,
+        archive_inspector=SubmissionArchiveInspector(SubmissionArchiveLimits()),
+        catalogue=catalogue,
+        storage_scheme="s3",
+    )
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await service.prepare_authorization(
+            task_id=uuid4(),
+            assignment_id=uuid4(),
+            submission_artifact_policy_id=plan.lineage.effective_policy_id,
+            checker_policy_id=plan.lineage.pre_submit_policy_id,
+            prepared_artifact=prepared,
+            effective_plan=plan,
+            idempotency_key=uuid4(),
+        )
+
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    assert inspection_calls == 0
+    await prepared.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_manifest_drift_denies_before_authority_and_workspace(tmp_path: Path) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    first = next(entry for entry in request.inspection.entries if entry.sha256 is not None)
+    forged_entry = replace(first, sha256="sha256:" + "f" * 64)
+    forged_inspection = replace(
+        request.inspection,
+        entries=tuple(
+            forged_entry if entry is first else entry for entry in request.inspection.entries
+        ),
+    )
+    forged_manifest = build_submission_manifest(forged_inspection)
+    forged_change = evaluate_submission_change(
+        commitment=request.prepared_artifact.commitment,
+        manifest=forged_manifest,
+        predecessor=None,
+        predecessor_exists=False,
+    )
+    authority = _AllowAuthority()
+    service = PreparedBundleMaterializationService(
+        authorization=authority,
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+        storage_scheme="s3",
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="materialization_context_invalid",
+    ):
+        await service.materialize_prepared_bundle(
+            replace(request, manifest=forged_manifest, change_gate=forged_change)
+        )
+
+    assert authority.facts is None
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_two_stage_authority_uses_one_handle_and_exact_final_facts(
+    tmp_path: Path,
+) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    authority = _AllowAuthority()
+    service = PreparedBundleMaterializationService(
+        authorization=authority,
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+        storage_scheme="s3",
+    )
+    handle = await service.prepare_authorization(
+        task_id=request.task_id,
+        assignment_id=request.assignment_id,
+        submission_artifact_policy_id=request.submission_artifact_policy_id,
+        checker_policy_id=request.checker_policy_id,
+        prepared_artifact=request.prepared_artifact,
+        effective_plan=request.effective_plan,
+        idempotency_key=uuid4(),
+    )
+
+    result = await service.materialize_prepared_bundle(
+        replace(request, prepared_authorization=handle)
+    )
+
+    assert result.eligible is True
+    assert authority.preparation_facts is not None
+    assert authority.facts is not None
+    assert authority.facts.preparation == authority.preparation_facts
+    assert authority.facts.semantic_manifest_sha256 == request.manifest.sha256
     await request.prepared_artifact.close()
     manager.close()
 

@@ -124,17 +124,15 @@ setup-run binding findings were repaired.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-12E`; the user started the current-main guide-sufficiency
-authorization cutover after PR #257 merged REV-AUTH readiness. AUTH-12B, 12C,
-and 12D are merged. XINT-003-02A/02B supplied the immutable policy lineage and
-authorized mutation path that supersede the old 12D2 dependency. The 12E
-contract and preimplementation review are complete. Runtime implementation is
-under deterministic proof; its three actions become active only with this
-bounded merge.
+`WS-XINT-002-06A`; the user started the fixed pre-submit materializer
+activation after ART-04B3 and AUTH-12F2 merged. This cross-initiative chunk
+activates only `artifact.pre_submit.checker_input.materialize` before ART-04C1.
+AUTH-12F3 remains the next AUTH-12 successor and resumes while ART proceeds
+through 04C1/04C2 after 06A merges.
 
 ## Current review branch
 
-`codex/ws-auth-001-12e-guide-sufficiency`.
+`codex/ws-xint-002-06a-pre-submit-materialization`.
 
 ## Chunk status
 
@@ -185,7 +183,7 @@ bounded merge.
 | `WS-AUTH-001-12E` | Merged | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Three guide-sufficiency actions plus fixed setup-service run PREP merged as `b510bc4f`. |
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
-| `WS-AUTH-001-12F2` | In progress | `codex/ws-auth-001-12f2-manual-submission-policy` | - | Corrected contract passed all required L1 pre-start reviews; governed Project Manager append-only manual-draft create/update cutover is active. |
+| `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
 | `WS-AUTH-001-12F3` | Proposed | - | - | Fixed setup-service derivation and asynchronous executor cutover. |
 | `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |

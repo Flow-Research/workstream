@@ -7,7 +7,7 @@
 | `03` | Activate verifier, scheduler scan, and put resolver. | L1 | Merged |
 | `04A` | Activate Project Manager guide ingest. | L1 | Merged/active |
 | `04B` | Activate fixed-service guide binding and read. | L1 | Merged/active in PR #245 (`6babf81b`) |
-| `06A` | Activate only pre-submit checker-input materialization. | L1 | Hidden ART-04B evidence; must precede 05A |
+| `06A` | Activate only pre-submit checker-input materialization. | L1 | Merged ART-04B3/AUTH-12F2 evidence; must precede ART-04C1 and 05A |
 | `05A` | Activate initial contributor preparation and durable ready admission. | L1 | 06A plus ART-04A1-04C2 evidence |
 | `05B` | Activate fresh human Submission creation plus fixed binding/consumption. | L1 | 05A plus ART-05A/TASK evidence |
 | `05C` | Activate checker-remediation submission context. | L1 | 05B plus checker remediation evidence |

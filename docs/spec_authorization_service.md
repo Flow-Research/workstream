@@ -509,7 +509,7 @@ remain planned and unavailable, and add no migration.
 | `artifact.verification.execute` | `artifact.verification.execute` | fixed verifier service | verification job | `02D` |
 | `artifact.pending_work.scan` | `artifact.pending_work.scan` | fixed scheduler service | system pending-work scope | `02D` |
 | `artifact.put_attempt.resolve` | `artifact.put_attempt.resolve` | fixed put-resolver service | put attempt | `02D` |
-| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B2/04B3` |
+| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | exact task, assignment, project/guide/snapshot and locked policy lineage plus plan/catalogue/archive/semantic-manifest identities and current process-local prepared generation; no scratch path/handle is serialized | `04B2/04B3` + `XINT-002-06A` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `07A` |
@@ -517,7 +517,8 @@ remain planned and unavailable, and add no migration.
 
 The resource-owning chunk cells above identify ART hidden-behavior custody; they
 are distinct from the AUTH activation-custodian table and runtime
-`ActionOwner`. XINT activation waves do not create new catalogue owner values.
+`ActionOwner`. An approved XINT activation wave may take exact runtime owner
+custody for its one action; it does not change ART product-behavior ownership.
 
 The fixed internal service identities and their complete action sets are also
 closed:
@@ -539,13 +540,18 @@ closed:
 | `workstream.review.artifact_reference_reconciliation` | `review.artifact_reference.reconcile` |
 | `workstream.review.projection` | `review.projection.rebuild` |
 
-The hidden 04B2 prepared resource binds task, assignment, project, effective
+The hidden 04B2 prepared resource first locks fixed-service authority using
+task, assignment, project, effective
 submission-artifact-policy ID, pre-submit checker-policy ID, process-local
 prepared generation, plan hash, catalogue-manifest hash, archive SHA-256/byte
-count, and semantic-manifest hash. The fixed materializer consumes the opaque
-prepared handle before any prepared-byte read, ZIP open, workspace reservation,
-or checker fact. `AUTH_ART_04B` remains the catalogue owner; XINT-06A later
-activates the action after hidden 04B3. ART does not activate it.
+count, and storage scheme before ZIP inspection. The fixed materializer then
+consumes the same opaque handle against those facts plus the server-computed
+semantic-manifest hash before workspace reservation or checker execution.
+`WS-XINT-002-06A` is the catalogue owner and activates the
+action after merged ART-04B3; ART does not activate it. The ART-04C1 caller
+must lock and revalidate the exact active assignment before preparing these
+facts because `TaskAssignment` uses a new immutable ID for replacement rather
+than a separate generation counter.
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
 02C expands the current registry to fourteen identities. AUTH-12E activates only

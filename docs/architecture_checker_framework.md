@@ -257,8 +257,10 @@ facts, projects one callback-scoped sealed tree through ART scratch custody, and
 returns bounded entry results: `passed`, `warning`, `failed`,
 `advisory_disabled`, or `dependency_not_run`. It does not consult the legacy
 checker registry or standalone precheck, does not run `project_policy`
-primitives, and does not persist checker evidence. Fixed materializer authority
-remains planned/unavailable until XINT-06A.
+primitives, and does not persist checker evidence. XINT-06A activates only the
+fixed pre-submit materializer through two-stage PREP: scalar service/resource
+facts are locked before ZIP inspection, and the same handle consumes the final
+server-computed semantic-manifest fact before scratch or checker execution.
 
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
