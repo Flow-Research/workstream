@@ -71,6 +71,9 @@ of scope.
 - CodeRabbit's final guard-test nitpick was verified with the isolated
   PostgreSQL workflow (`1 passed`): evidence-set delete and truncate now assert
   the exact immutability-trigger error without child-FK interference.
+- The hosted task-lifecycle failure was reproduced as a stale test field, not a
+  runtime or segmentation failure. The corrected canonical-field regression
+  and focused suite pass (`38 passed, 1 deselected`).
 
 ## Remaining external gates
 

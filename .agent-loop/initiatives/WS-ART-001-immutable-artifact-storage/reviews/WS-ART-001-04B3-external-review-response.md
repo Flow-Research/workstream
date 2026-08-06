@@ -22,6 +22,9 @@
   precondition.
 - Evidence-set delete and truncate tests now avoid child-FK interference and
   assert the exact immutable-trigger error.
+- The hosted task-lifecycle failure exposed one stale test mutation against the
+  retired `evidence_keys` config field; the test now mutates the canonical
+  `evidence_paths` field and proves required-evidence coverage fails closed.
 - Policy primitive dispatch now has an explicit fail-closed default, result
   metadata types match their integer-only validator, result schema comes from
   the exact plan entry, and compiler/executor path checks share one helper.
