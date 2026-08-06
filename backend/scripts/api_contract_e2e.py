@@ -1115,7 +1115,7 @@ async def create_policy_bundle_for_guide(
     manual_update_payload = {
         "expected_policy_hash": manual_policy["policy_hash"],
         "successor_policy_version": "e2e-manual-v2",
-        "policy_body": manual_policy["policy_body"],
+        "policy_body": submission_artifact_policy_body(),
         "change_summary": "Manual policy replacement authorization E2E.",
     }
     manual_update_path = f"{manual_path}/{manual_policy['id']}"
