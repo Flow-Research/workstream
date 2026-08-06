@@ -3838,10 +3838,14 @@ async def test_submission_artifact_policy_create_update_wrong_project_grant_deni
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
     project_id = uuid4()
-    # The repository's exact-scope query filters the unrelated grant and returns none.
+    # The repository's exact-scope query must filter this other-project grant.
     facts = _GuideMutationAuthorityFacts(
         context,
-        grant=None,
+        grant=SimpleNamespace(
+            id=uuid4(),
+            status="active",
+            scope_project_id=uuid4(),
+        ),
         permission_id=PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
     )
     authorization, _ = _runtime_service(context, session=session, admin_repository=facts)
@@ -3926,6 +3930,11 @@ class _GuideMutationAuthorityFacts:
         assert scope_project_id is not None
         assert for_update is True
         assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
+        if self.grant is None or self.grant.scope_project_id not in {
+            None,
+            scope_project_id,
+        }:
+            return None
         return self.grant
 
 

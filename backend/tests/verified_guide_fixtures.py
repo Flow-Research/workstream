@@ -260,6 +260,14 @@ async def create_verified_report_fixture(
             .limit(1)
         )
         assert diagnostic_report is not None
+        authoritative_report = await session.scalar(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == source_snapshot_id,
+                GuideSufficiencyReport.project_setup_run_id.is_not(None),
+            )
+        )
+        if authoritative_report is not None:
+            return authoritative_report.id
         if setup_run is None:
             snapshot = await session.get(GuideSourceSnapshot, source_snapshot_id)
             assert snapshot is not None
@@ -280,29 +288,7 @@ async def create_verified_report_fixture(
             session.add(setup_run)
             await session.commit()
 
-    async with db_session.get_session_factory()() as session:
-        existing_usages = list(
-            (
-                await session.scalars(
-                    select(GuideSufficiencyReportSourceUsage)
-                    .join(
-                        GuideSufficiencyReport,
-                        GuideSufficiencyReport.id
-                        == GuideSufficiencyReportSourceUsage.report_id,
-                    )
-                    .where(
-                        GuideSufficiencyReport.source_snapshot_id == source_snapshot_id,
-                        GuideSufficiencyReport.project_setup_run_id.is_not(None),
-                    )
-                    .order_by(GuideSufficiencyReportSourceUsage.item_order)
-                )
-            ).all()
-        )
-    material = (
-        None
-        if existing_usages
-        else await create_verified_material_fixture(source_snapshot_id)
-    )
+    material = await create_verified_material_fixture(source_snapshot_id)
     async with db_session.get_session_factory()() as session:
         diagnostic_report = await session.get(GuideSufficiencyReport, report_id)
         setup_run = await session.scalar(
@@ -333,8 +319,7 @@ async def create_verified_report_fixture(
         )
         session.add(report)
         await session.flush()
-        usages = existing_usages if material is None else material.provenance
-        for usage in usages:
+        for usage in material.provenance:
             session.add(
                 GuideSufficiencyReportSourceUsage(
                     id=str(uuid4()),

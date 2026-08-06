@@ -12267,11 +12267,6 @@ async def test_draft_submission_artifact_policy_can_be_updated(
     assert updated["policy_hash"] != policy["policy_hash"]
     assert updated["policy_body"]["required_artifacts"][0]["path"] == ("outputs/final-answer.md")
     assert updated["change_summary"] == "Use final answer artifact path."
-    async with db_session.get_session_factory()() as session:
-        guide_row = await session.get(ProjectGuide, guide["id"])
-        assert guide_row is not None
-        guide_row.status = "active"
-        await session.commit()
     replay = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{policy['id']}",
@@ -12323,6 +12318,43 @@ async def test_submission_artifact_policy_update_rejects_stale_cas_without_succe
         )
     assert len(rows) == 1
     assert rows[0].lifecycle_status == "draft"
+
+
+async def test_submission_artifact_policy_update_conceals_foreign_policy_id(
+    project_client: AsyncClient,
+) -> None:
+    """A policy selected through another project or guide is indistinguishable from absent."""
+    first_project = await create_project(project_client)
+    first_guide = await create_guide(
+        project_client, first_project["id"], complete_guide_payload()
+    )
+    first_snapshot = await create_source_snapshot(
+        project_client, first_project["id"], first_guide["id"]
+    )
+    await create_sufficiency_report(
+        project_client, first_project["id"], first_guide["id"], first_snapshot["id"]
+    )
+    foreign_policy = await create_submission_artifact_policy(
+        project_client, first_project["id"], first_guide["id"], first_snapshot["id"]
+    )
+
+    second_project = await create_project(project_client, name="Foreign Policy Target")
+    second_guide = await create_guide(
+        project_client, second_project["id"], complete_guide_payload()
+    )
+    response = await project_client.patch(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
+        f"submission-artifact-policies/{foreign_policy['id']}",
+        headers=auth_headers(),
+        json={
+            "expected_policy_hash": foreign_policy["policy_hash"],
+            "successor_policy_version": "foreign-v2",
+            "change_summary": "must remain concealed",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "submission artifact policy not found"
 
 
 async def test_submission_artifact_policy_update_fault_rolls_back_replacement(
