@@ -1052,6 +1052,7 @@ async def create_policy_bundle_for_guide(
         "change_summary": "Manual policy authorization E2E.",
     }
     manual_path = f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"
+    manual_manager_token = diagnostic_reader_token
     await request_json(
         client,
         "POST",
@@ -1082,13 +1083,13 @@ async def create_policy_bundle_for_guide(
         )
     missing_key = await client.post(
         manual_path,
-        headers=auth_headers(manager_token),
+        headers=auth_headers(manual_manager_token),
         json=manual_payload,
     )
     ensure(missing_key.status_code == 422, "missing manual policy key was not rejected")
     invalid_key = await client.post(
         manual_path,
-        headers=auth_headers(manager_token) | {"Idempotency-Key": "not-a-uuid"},
+        headers=auth_headers(manual_manager_token) | {"Idempotency-Key": "not-a-uuid"},
         json=manual_payload,
     )
     ensure(invalid_key.status_code == 422, "invalid manual policy key was not rejected")
@@ -1096,7 +1097,7 @@ async def create_policy_bundle_for_guide(
         client,
         "POST",
         manual_path,
-        manager_token,
+        manual_manager_token,
         manual_payload,
         expected_status=201,
         idempotency_key=manual_create_key,
@@ -1105,7 +1106,7 @@ async def create_policy_bundle_for_guide(
         client,
         "POST",
         manual_path,
-        manager_token,
+        manual_manager_token,
         manual_payload,
         expected_status=201,
         idempotency_key=manual_create_key,
@@ -1120,24 +1121,24 @@ async def create_policy_bundle_for_guide(
     }
     manual_update_path = f"{manual_path}/{manual_policy['id']}"
     for invalid_headers, invalid_payload in (
-        (auth_headers(manager_token), manual_update_payload),
+        (auth_headers(manual_manager_token), manual_update_payload),
         (
-            auth_headers(manager_token) | {"Idempotency-Key": "not-a-uuid"},
+            auth_headers(manual_manager_token) | {"Idempotency-Key": "not-a-uuid"},
             manual_update_payload,
         ),
         (
-            auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
             {"successor_policy_version": "e2e-manual-v2"},
         ),
         (
-            auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
             {
                 "expected_policy_hash": "not-a-digest",
                 "successor_policy_version": "e2e-manual-v2",
             },
         ),
         (
-            auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            auth_headers(manual_manager_token) | {"Idempotency-Key": str(uuid4())},
             {"expected_policy_hash": manual_policy["policy_hash"]},
         ),
     ):
@@ -1154,7 +1155,7 @@ async def create_policy_bundle_for_guide(
         client,
         "PATCH",
         manual_update_path,
-        manager_token,
+        manual_manager_token,
         manual_update_payload,
         idempotency_key=manual_update_key,
     )
@@ -1162,7 +1163,7 @@ async def create_policy_bundle_for_guide(
         client,
         "PATCH",
         manual_update_path,
-        manager_token,
+        manual_manager_token,
         manual_update_payload,
         idempotency_key=manual_update_key,
     )
@@ -1175,7 +1176,7 @@ async def create_policy_bundle_for_guide(
         client,
         "PATCH",
         f"{manual_path}/{manual_successor['id']}",
-        manager_token,
+        manual_manager_token,
         {
             **manual_update_payload,
             "expected_policy_hash": "sha256:" + ("0" * 64),
@@ -1896,7 +1897,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert patched_guide["change_summary"] == "Patched before activation through real API"
         await create_policy_bundle_for_guide(
             client,
-            project_reader_token,
+            manager_token,
             project_reader_token,
             worker_token,
             untrusted_service_token,
