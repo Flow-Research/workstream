@@ -519,6 +519,7 @@ class PreparedPreSubmitMaterializationAuthorization:
     """Issue one exact capability to the fixed pre-submit materializer."""
 
     def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        """Bind the adapter to the materializer identity and action."""
         self._delegate = _PreparedArtifactServiceAuthorization(
             session,
             service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
@@ -533,6 +534,7 @@ class PreparedPreSubmitMaterializationAuthorization:
         facts: PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
+        """Prepare authority from the locked scalar facts before ZIP inspection."""
         return await self._delegate.prepare(facts=facts, idempotency_key=idempotency_key)
 
     async def consume(
@@ -543,6 +545,7 @@ class PreparedPreSubmitMaterializationAuthorization:
         prepared_authorization: PreparedAuthorizationHandle,
         facts: PreSubmitMaterializationAuthorityFacts,
     ) -> None:
+        """Consume authority only for the exact materializer and final facts."""
         if (
             service_identity is not ServiceIdentity.ARTIFACT_MATERIALIZER
             or action_id is not ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
@@ -554,6 +557,7 @@ class PreparedPreSubmitMaterializationAuthorization:
         )
 
     def close(self) -> None:
+        """Discard any process-local prepared capability still held by the adapter."""
         self._delegate.close()
 
 
@@ -568,6 +572,7 @@ def _artifact_service_resource_context(
     | PreSubmitCheckerInputResourceContext
     | PreSubmitCheckerInputPreparationContext
 ):
+    """Compose the canonical AUTH resource context for fixed ART service facts."""
     values = asdict(facts)
     if isinstance(facts, PreSubmitMaterializationAuthorityFacts):
         values = asdict(facts.preparation)
@@ -605,6 +610,7 @@ def _prepared_artifact_facts_match(
     | GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationAuthorityFacts,
 ) -> bool:
+    """Require final facts to preserve every fact bound during preparation."""
     if isinstance(prepared, PreSubmitMaterializationPreparationFacts):
         return (
             isinstance(final, PreSubmitMaterializationAuthorityFacts)

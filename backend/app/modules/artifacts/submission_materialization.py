@@ -97,7 +97,9 @@ class PreSubmitMaterializationAuthorization(Protocol):
         *,
         facts: PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle: ...
+    ) -> PreparedAuthorizationHandle:
+        """Prepare an opaque capability before any submitted byte is inspected."""
+        ...
 
     async def consume(
         self,
@@ -106,7 +108,9 @@ class PreSubmitMaterializationAuthorization(Protocol):
         action_id: ActionId,
         prepared_authorization: PreparedAuthorizationHandle,
         facts: PreSubmitMaterializationAuthorityFacts,
-    ) -> None: ...
+    ) -> None:
+        """Consume the capability against the server-computed final facts."""
+        ...
 
 
 class DenyPreSubmitMaterializationAuthorization:
@@ -118,6 +122,7 @@ class DenyPreSubmitMaterializationAuthorization:
         facts: PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
+        """Deny capability preparation while the production adapter is absent."""
         del facts, idempotency_key
         raise ArtifactAuthorityDeniedError(
             "pre-submit checker input materialization is unavailable"
@@ -131,6 +136,7 @@ class DenyPreSubmitMaterializationAuthorization:
         prepared_authorization: PreparedAuthorizationHandle,
         facts: PreSubmitMaterializationAuthorityFacts,
     ) -> None:
+        """Deny capability consumption while the production adapter is absent."""
         del service_identity, action_id, prepared_authorization, facts
         raise ArtifactAuthorityDeniedError(
             "pre-submit checker input materialization is unavailable"
@@ -149,6 +155,7 @@ class PreparedBundleMaterializationService:
         catalogue: PreSubmissionCheckerCatalogue,
         storage_scheme: str,
     ) -> None:
+        """Compose the bounded materializer from its AUTH and ART dependencies."""
         self._authorization = authorization
         self._preparation = preparation
         self._archive_inspector = archive_inspector
@@ -221,6 +228,7 @@ class PreparedBundleMaterializationService:
         self,
         request: PreparedBundleMaterializationRequest,
     ) -> PreSubmitMaterializationAuthorityFacts:
+        """Build final authority facts from the canonical inspected manifest."""
         plan = request.effective_plan
         preparation = self._preparation_facts(
             task_id=request.task_id,
@@ -255,6 +263,7 @@ class PreparedBundleMaterializationService:
         prepared_artifact: PreparedArtifact,
         effective_plan: EffectivePreSubmissionExecutionPlan,
     ) -> PreSubmitMaterializationPreparationFacts:
+        """Build pre-inspection facts from locked lineage and byte commitment."""
         plan = effective_plan
         if plan.plan_sha256 != canonical_json_hash(plan.as_dict()):
             raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_identity_invalid")
@@ -297,6 +306,7 @@ class PreparedBundlePreSubmitEvidenceService:
         session: AsyncSession,
         materialization: PreparedBundleMaterializationService,
     ) -> None:
+        """Bind execution to the transaction used for durable evidence."""
         self._session = session
         self._materialization = materialization
 
