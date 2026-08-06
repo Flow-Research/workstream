@@ -20,6 +20,8 @@ from app.modules.artifacts.models import (  # noqa: F401
     ArtifactOperationReceipt,
     ArtifactReplica,
     ArtifactRecoveryAttempt,
+    PreSubmitEvidenceResult,
+    PreSubmitEvidenceSet,
 )
 from app.modules.authorization.models import (  # noqa: F401
     AdminRoleGrant,

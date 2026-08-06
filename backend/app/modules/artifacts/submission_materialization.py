@@ -6,18 +6,27 @@ from dataclasses import dataclass
 from typing import Protocol, final
 from uuid import UUID
 
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.preparation import ArtifactPreparationService
+from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitEvidencePersistenceRequest,
+    PreSubmitEvidencePersistenceResult,
+    PreSubmitEvidenceService,
+)
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
 from app.modules.checkers.pre_submit_execution import (
+    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
     DefaultPreSubmissionExecutionInput,
-    DefaultPreSubmissionExecutionResult,
-    DefaultPreSubmissionProcessor,
+    EffectivePreSubmissionProcessor,
+    PreSubmissionExecutionResult,
     PreSubmissionInfrastructureUnavailable,
 )
 
@@ -38,6 +47,7 @@ class PreSubmitMaterializationAuthorityFacts:
     archive_sha256: str
     archive_byte_count: int
     semantic_manifest_sha256: str
+    storage_scheme: str
 
 
 class PreSubmitMaterializationAuthorization(Protocol):
@@ -80,16 +90,20 @@ class PreparedBundleMaterializationService:
         preparation: ArtifactPreparationService,
         archive_inspector: SubmissionArchiveInspector,
         catalogue: PreSubmissionCheckerCatalogue,
+        storage_scheme: str,
     ) -> None:
         self._authorization = authorization
         self._preparation = preparation
         self._archive_inspector = archive_inspector
         self._catalogue = catalogue
+        if storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES:
+            raise ValueError("pre-submit materializer storage scheme is invalid")
+        self._storage_scheme = storage_scheme
 
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
-    ) -> DefaultPreSubmissionExecutionResult:
+    ) -> PreSubmissionExecutionResult:
         """Consume fixed-service authority before any byte or workspace access."""
         facts = self._authority_facts(request)
         await self._authorization.consume(
@@ -98,7 +112,7 @@ class PreparedBundleMaterializationService:
             prepared_authorization=request.prepared_authorization,
             facts=facts,
         )
-        processor = DefaultPreSubmissionProcessor(
+        processor = EffectivePreSubmissionProcessor(
             archive_inspector=self._archive_inspector,
             catalogue=self._catalogue,
             execution_input=DefaultPreSubmissionExecutionInput(
@@ -108,6 +122,8 @@ class PreparedBundleMaterializationService:
                 manifest=request.manifest,
                 change_gate=request.change_gate,
                 packet=request.packet,
+                prepared_generation_id=request.prepared_artifact.generation_id,
+                storage_scheme=self._storage_scheme,
             ),
         )
         # Intentional friend call: this is the sole authority-gated caller, and
@@ -144,4 +160,54 @@ class PreparedBundleMaterializationService:
             archive_sha256=commitment.sha256,
             archive_byte_count=commitment.byte_count,
             semantic_manifest_sha256=request.manifest.sha256,
+            storage_scheme=self._storage_scheme,
         )
+
+
+class PreparedBundlePreSubmitEvidenceService:
+    """Execute in scratch, then persist exact evidence in a fresh transaction."""
+
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        materialization: PreparedBundleMaterializationService,
+    ) -> None:
+        self._session = session
+        self._materialization = materialization
+
+    async def execute(
+        self,
+        request: PreparedBundleMaterializationRequest,
+        *,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        predecessor_submission_id: UUID | None,
+    ) -> PreSubmitEvidencePersistenceResult:
+        """Persist only after materialization has returned and cleaned its scratch lease."""
+        if self._session.in_transaction():
+            raise RuntimeError(
+                "pre-submit evidence orchestration requires a transaction-free session"
+            )
+        commitment = request.prepared_artifact.commitment
+        prepared_generation_id = request.prepared_artifact.generation_id
+        execution = await self._materialization.materialize_prepared_bundle(request)
+        async with self._session.begin():
+            await self._session.execute(
+                text("set transaction isolation level read committed")
+            )
+            return await PreSubmitEvidenceService(self._session).persist(
+                PreSubmitEvidencePersistenceRequest(
+                    actor_profile_id=actor_profile_id,
+                    identity_link_id=identity_link_id,
+                    task_id=request.task_id,
+                    assignment_id=request.assignment_id,
+                    predecessor_submission_id=predecessor_submission_id,
+                    prepared_generation_id=prepared_generation_id,
+                    archive_sha256=commitment.sha256,
+                    archive_byte_count=commitment.byte_count,
+                    semantic_manifest_sha256=request.manifest.sha256,
+                    plan=request.effective_plan,
+                    execution=execution,
+                )
+            )

@@ -7,11 +7,15 @@ from io import BytesIO
 from dataclasses import replace
 from pathlib import Path
 import threading
-from typing import cast
+from types import SimpleNamespace
+from typing import Any, cast
 import zipfile
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
@@ -33,6 +37,7 @@ from app.modules.artifacts.submission_manifest import (
 )
 from app.modules.artifacts.submission_materialization import (
     DenyPreSubmitMaterializationAuthorization,
+    PreparedBundlePreSubmitEvidenceService,
     PreparedBundleMaterializationService,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
@@ -46,9 +51,10 @@ from app.modules.checkers.effective_plan import (
     compile_effective_pre_submission_execution_plan,
 )
 from app.modules.checkers.pre_submit_execution import (
-    DefaultPreSubmissionResultStatus,
+    PreSubmissionResultStatus,
     PreSubmissionInfrastructureUnavailable,
     SubmissionPacketView,
+    validate_pre_submission_execution_result,
 )
 
 
@@ -56,10 +62,31 @@ async def _bytes(value: bytes):
     yield value
 
 
-def _archive(path: str = "task.toml") -> bytes:
+@pytest.mark.asyncio
+async def test_evidence_workflow_requires_transaction_free_session() -> None:
+    materialization = SimpleNamespace(materialize_prepared_bundle=lambda _request: None)
+    workflow = PreparedBundlePreSubmitEvidenceService(
+        session=cast(Any, SimpleNamespace(in_transaction=lambda: True)),
+        materialization=cast(Any, materialization),
+    )
+
+    with pytest.raises(RuntimeError, match="requires a transaction-free session"):
+        await workflow.execute(
+            cast(Any, object()),
+            actor_profile_id=uuid4(),
+            identity_link_id=uuid4(),
+            predecessor_submission_id=None,
+        )
+
+
+def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes:
     output = BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
         archive.writestr(path, b"[task]\nname='proof'\n")
+        if extra_path is not None:
+            archive.writestr(extra_path, b"blocked\n")
+        if path != "evidence/results":
+            archive.writestr("evidence/results", b"verified\n")
     return output.getvalue()
 
 
@@ -73,7 +100,7 @@ def _effective_policy() -> dict[str, object]:
         "workstream_default_policy": defaults,
         "project_policy": {},
         "required_packet_fields": defaults["required_packet_fields"],
-        "required_artifacts": [{"key": "task.toml", "required": True}],
+        "required_artifacts": [{"key": "task.toml", "path": "task.toml", "required": True}],
         "required_evidence": [{"key": "results", "required": True}],
         "forbidden_artifacts": defaults["forbidden_artifacts"],
         "attestation_terms": defaults["attestation_terms"],
@@ -158,10 +185,16 @@ def _handle() -> PreparedAuthorizationHandle:
     return cast(PreparedAuthorizationHandle, _TestPreparedAuthorizationHandle())
 
 
-async def _request(tmp_path: Path, *, path: str = "task.toml", catalogue=None):
+async def _request(
+    tmp_path: Path,
+    *,
+    path: str = "task.toml",
+    extra_path: str | None = None,
+    catalogue=None,
+):
     selected_catalogue = catalogue or build_pre_submission_checker_catalogue()
     plan = _plan(selected_catalogue)
-    data = _archive(path)
+    data = _archive(path, extra_path=extra_path)
     inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=_limits())
     preparation = ArtifactPreparationService(manager)
@@ -189,7 +222,7 @@ async def _request(tmp_path: Path, *, path: str = "task.toml", catalogue=None):
             summary="Completed exact project work.",
             contributor_attestation=(
                 "I confirm no confidential client data, credentials, or copied source "
-                "material is included in this submission."
+                "material is included in this submission; rights_confirmed."
             ),
         ),
     )
@@ -204,6 +237,7 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(ArtifactAuthorityDeniedError):
@@ -212,6 +246,360 @@ async def test_authority_denial_precedes_workspace_and_checker_access(tmp_path: 
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await request.prepared_artifact.close()
     manager.close()
+
+
+@pytest.mark.asyncio
+async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
+    tmp_path: Path,
+    isolated_database_env: str,
+) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    actor_id = uuid4()
+    identity_link_id = uuid4()
+    lineage = request.effective_plan.lineage
+    engine = create_async_engine(isolated_database_env)
+    custody_triggers = (
+        ("projects", "project_creation_custody"),
+        ("project_guides", "guide_mutation_product_custody"),
+        ("guide_source_snapshots", "source_snapshot_product_custody"),
+        ("submission_artifact_policies", "submission_policy_creation_custody"),
+        (
+            "effective_project_submission_artifact_policies",
+            "effective_submission_policy_custody",
+        ),
+        ("pre_submit_checker_policies", "pre_submit_policy_custody"),
+        ("review_policies", "review_policy_mutation_custody"),
+        ("revision_policies", "revision_policy_mutation_custody"),
+    )
+    blocked_prepared = None
+    original_prepared_closed = False
+    tables = (
+        "artifact_contents",
+        "artifact_replicas",
+        "artifact_put_attempts",
+        "submissions",
+        "checker_runs",
+        "review_queue_entries",
+    )
+    try:
+        async with engine.begin() as connection:
+            params = {
+                "actor": str(actor_id),
+                "link": str(identity_link_id),
+                "project": str(lineage.project_id),
+                "guide": str(lineage.guide_id),
+                "snapshot": str(lineage.source_snapshot_id),
+                "snapshot_hash": lineage.source_snapshot_hash,
+                "submission_policy": str(uuid4()),
+                "effective_policy": str(lineage.effective_policy_id),
+                "effective_hash": lineage.effective_policy_hash,
+                "checker_policy": str(lineage.pre_submit_policy_id),
+                "checker_hash": lineage.pre_submit_policy_bundle_hash,
+                "post_policy": str(uuid4()),
+                "post_policy_hash": "sha256:" + "8" * 64,
+                "review_policy": str(uuid4()),
+                "review_policy_hash": "sha256:" + "7" * 64,
+                "revision_policy": str(uuid4()),
+                "revision_policy_hash": "sha256:" + "6" * 64,
+                "task": str(request.task_id),
+                "assignment": str(request.assignment_id),
+            }
+            await connection.execute(
+                text(
+                    "insert into actor_profiles "
+                    "(id,actor_kind,status,provisioning_method,created_by) values "
+                    "(:actor,'human','active','automatic_first_access','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                    "last_verified_at) values "
+                    "(:link,:actor,'flow-test',:actor,'human','active','test',now())"
+                ),
+                params,
+            )
+            for table, trigger in custody_triggers:
+                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
+            await connection.execute(
+                text(
+                    "insert into projects (id,name,slug,status) values "
+                    "(:project,'Evidence project',:project,'draft')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into project_guides "
+                    "(id,project_id,version,status,content_markdown,created_by) values "
+                    "(:guide,:project,'1','draft','# Guide','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into guide_source_snapshots "
+                    "(id,project_id,guide_id,guide_version,manifest_schema_version,"
+                    "manifest_json,bundle_hash,captured_by) values "
+                    "(:snapshot,:project,:guide,'1','1','{}'::json,:snapshot_hash,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into submission_artifact_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,policy_version,lifecycle_status,policy_body,"
+                    "policy_hash,derivation_source,source_material_refs,created_by) values "
+                    "(:submission_policy,:project,:guide,'1',:snapshot,:snapshot_hash,'1',"
+                    "'draft','{}'::json,:effective_hash,'test','[]'::json,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into effective_project_submission_artifact_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,submission_artifact_policy_id,"
+                    "submission_artifact_policy_hash,lifecycle_status,merge_algorithm_version,"
+                    "effective_policy,effective_policy_hash,created_by) values "
+                    "(:effective_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":submission_policy,:effective_hash,'approved','1','{}'::json,"
+                    ":effective_hash,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into pre_submit_checker_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
+                    "lifecycle_status,compiler_version,compiled_bundle,compiled_bundle_hash,"
+                    "checker_names,checker_configs,created_by) values "
+                    "(:checker_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":effective_policy,:effective_hash,'compiled','1','{}'::json,"
+                    ":checker_hash,'[]'::json,'{}'::json,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into checker_policies "
+                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
+                    "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
+                    "pre_submit_checker_policy_id,pre_submit_checker_bundle_hash,"
+                    "required_checkers,warning_checkers,blocking_severities,policy_hash,"
+                    "policy_body,lifecycle_status,created_by) values "
+                    "(:post_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    ":effective_policy,:effective_hash,:checker_policy,:checker_hash,"
+                    "'[]'::json,'[]'::json,'[]'::json,:post_policy_hash,'{}'::json,"
+                    "'compiled','test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,policy_generation,policy_hash,"
+                    "semantics_status,requires_second_review,allowed_decisions,"
+                    "minimum_finding_fields) values "
+                    "(:review_policy,:project,'1',1,:review_policy_hash,"
+                    "'legacy_incomplete',false,'[]'::json,'[]'::json)"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,policy_generation,policy_hash,"
+                    "semantics_status,max_revision_rounds,revision_deadline_hours,"
+                    "allowed_resubmission_states) values "
+                    "(:revision_policy,:project,'1',1,:revision_policy_hash,"
+                    "'legacy_incomplete',1,24,'[]'::json)"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into workstream_tasks "
+                    "(id,project_id,locked_guide_version,locked_guide_source_snapshot_id,"
+                    "locked_guide_source_snapshot_hash,"
+                    "locked_effective_project_submission_artifact_policy_id,"
+                    "locked_effective_project_submission_artifact_policy_hash,"
+                    "locked_pre_submit_checker_policy_id,locked_pre_submit_checker_bundle_hash,"
+                    "locked_post_submit_checker_policy_id,"
+                    "locked_post_submit_checker_policy_version,"
+                    "locked_post_submit_checker_policy_hash,"
+                    "locked_post_submit_checker_policy_body,"
+                    "locked_review_policy_id,locked_review_policy_generation,"
+                    "locked_review_policy_hash,locked_revision_policy_id,"
+                    "locked_revision_policy_generation,locked_revision_policy_hash,"
+                    "source_type,title,description,skill_tags,status,assigned_to,created_by) values "
+                    "(:task,:project,'1',:snapshot,:snapshot_hash,:effective_policy,"
+                    ":effective_hash,:checker_policy,:checker_hash,:post_policy,'1',"
+                    ":post_policy_hash,'{}'::json,:review_policy,1,:review_policy_hash,"
+                    ":revision_policy,1,:revision_policy_hash,'manual','Evidence task',"
+                    "'Evidence test task','[]'::json,'in_progress',:actor,'test')"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "insert into task_assignments "
+                    "(id,task_id,contributor_id,assigned_by,status) values "
+                    "(:assignment,:task,:actor,'test','active')"
+                ),
+                params,
+            )
+            before = {
+                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
+                for table in tables
+            }
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as session:
+            workflow = PreparedBundlePreSubmitEvidenceService(
+                session=session,
+                materialization=PreparedBundleMaterializationService(
+                    authorization=_AllowAuthority(),
+                    preparation=preparation,
+                    archive_inspector=inspector,
+                    catalogue=catalogue,
+                    storage_scheme="s3",
+                ),
+            )
+            first = await workflow.execute(
+                request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
+            replay = await workflow.execute(
+                request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
+            await request.prepared_artifact.close()
+            original_prepared_closed = True
+            blocked_prepared = await preparation.prepare(
+                _bytes(_archive("task.toml")), media_type="application/zip"
+            )
+            blocked_inspection = await blocked_prepared.inspect(inspector)
+            blocked_manifest = build_submission_manifest(blocked_inspection)
+            blocked_request = replace(
+                request,
+                prepared_artifact=blocked_prepared,
+                inspection=blocked_inspection,
+                manifest=blocked_manifest,
+                change_gate=evaluate_submission_change(
+                    commitment=blocked_prepared.commitment,
+                    manifest=blocked_manifest,
+                    predecessor=None,
+                    predecessor_exists=False,
+                ),
+                packet=SubmissionPacketView(
+                    summary="Completed exact project work.",
+                    contributor_attestation="",
+                ),
+            )
+            blocked = await workflow.execute(
+                blocked_request,
+                actor_profile_id=actor_id,
+                identity_link_id=identity_link_id,
+                predecessor_submission_id=None,
+            )
+        async with engine.begin() as connection:
+            evidence_count = int(
+                await connection.scalar(text("select count(*) from pre_submit_evidence_sets")) or 0
+            )
+            result_count = int(
+                await connection.scalar(text("select count(*) from pre_submit_evidence_results"))
+                or 0
+            )
+            after = {
+                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
+                for table in tables
+            }
+            immutable_statements = (
+                "update pre_submit_evidence_sets set terminal_status='blocked'",
+                "update pre_submit_evidence_results set status='failed'",
+                "delete from pre_submit_evidence_results",
+                "truncate pre_submit_evidence_results",
+                "insert into pre_submit_evidence_results "
+                "select '00000000-0000-0000-0000-000000000001',"
+                "evidence_set_id,result_order+1000,"
+                "schema_version,dispatch_authority,definition_id || '.forged',"
+                "definition_version,public_name,source,phase,classification,severity,status,"
+                "failure_code,message_code,effective_plan_sha256,rule_instance_id,"
+                "locked_policy_sha256,now() from pre_submit_evidence_results limit 1",
+            )
+            for statement in immutable_statements:
+                with pytest.raises(DBAPIError):
+                    async with connection.begin_nested():
+                        await connection.execute(text(statement))
+            with pytest.raises(DBAPIError, match="pre_submit_evidence_sets rows are immutable"):
+                async with connection.begin_nested():
+                    await connection.execute(
+                        text(
+                            "insert into pre_submit_evidence_sets select "
+                            "(jsonb_populate_record(null::pre_submit_evidence_sets, "
+                            "to_jsonb(existing_row) || jsonb_build_object("
+                            "'id','00000000-0000-0000-0000-000000000003',"
+                            "'operation_identity','sha256:' || repeat('e',64),"
+                            "'created_at',transaction_timestamp()))).* "
+                            "from pre_submit_evidence_sets existing_row limit 1"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            "delete from pre_submit_evidence_sets "
+                            "where id='00000000-0000-0000-0000-000000000003'"
+                        )
+                    )
+            with pytest.raises(DBAPIError, match="pre_submit_evidence_sets rows are immutable"):
+                async with connection.begin_nested():
+                    await connection.execute(text("truncate pre_submit_evidence_sets cascade"))
+            with pytest.raises(DBAPIError, match="creation timestamp is invalid"):
+                async with connection.begin_nested():
+                    await connection.execute(
+                        text(
+                            "insert into pre_submit_evidence_sets select "
+                            "(jsonb_populate_record(null::pre_submit_evidence_sets, "
+                            "to_jsonb(existing_row) || jsonb_build_object("
+                            "'id','00000000-0000-0000-0000-000000000002',"
+                            "'operation_identity','sha256:' || repeat('f',64),"
+                            "'created_at',existing_row.created_at - interval '1 day'))).* "
+                            "from pre_submit_evidence_sets existing_row limit 1"
+                        )
+                    )
+    finally:
+        if blocked_prepared is not None:
+            await blocked_prepared.close()
+        if not original_prepared_closed:
+            await request.prepared_artifact.close()
+        manager.close()
+        async with engine.begin() as connection:
+            for table, trigger in reversed(custody_triggers):
+                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
+        await engine.dispose()
+
+    assert first.evidence.replayed is False
+    assert replay.evidence.replayed is True
+    assert replay.evidence.evidence_set_id == first.evidence.evidence_set_id
+    assert first.pass_capability is not None
+    assert replay.pass_capability is None
+    assert first.failure_audit is None
+    assert blocked.pass_capability is None
+    assert blocked.evidence.replayed is False
+    assert blocked.failure_audit is not None
+    assert blocked.failure_audit["event_type"] == "pre_submission_check_failed"
+    assert blocked.failure_audit["failed_count"] >= 1
+    assert "task.toml" not in repr(blocked.failure_audit)
+    assert evidence_count == 2
+    assert result_count == 2 * len(request.effective_plan.entries)
+    assert after == before
 
 
 @pytest.mark.asyncio
@@ -226,6 +614,7 @@ async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(
@@ -243,7 +632,7 @@ async def test_materializer_rejects_policy_lineage_mismatch_before_authority(
 
 
 @pytest.mark.asyncio
-async def test_default_executor_uses_plan_order_and_never_dispatches_project_rules(
+async def test_effective_executor_uses_plan_order_and_dispatches_project_rules(
     tmp_path: Path,
 ) -> None:
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
@@ -253,6 +642,7 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -260,17 +650,11 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
     expected = [
         entry.definition_id
         for entry in request.effective_plan.entries
-        if entry.phase
-        in {
-            PreSubmissionCheckerPhase.CUSTODY.value,
-            PreSubmissionCheckerPhase.IDENTITY.value,
-            PreSubmissionCheckerPhase.MATERIALIZATION.value,
-            PreSubmissionCheckerPhase.DEFAULT_POLICY.value,
-        }
+        if entry.phase in set(PreSubmissionCheckerPhase)
     ]
-    assert [entry.entry_id for entry in result.entries] == expected
-    assert all(not entry.entry_id.startswith("policy.") for entry in result.entries)
-    assert all(entry.status is DefaultPreSubmissionResultStatus.PASSED for entry in result.entries)
+    assert [entry.definition.definition_id for entry in result.entries] == expected
+    assert any(entry.definition.definition_id.startswith("policy.") for entry in result.entries)
+    assert all(entry.status is PreSubmissionResultStatus.PASSED for entry in result.entries)
     assert result.eligible is True
     assert authority.facts is not None
     assert authority.action_id.value == "artifact.pre_submit.checker_input.materialize"
@@ -289,6 +673,7 @@ async def test_default_executor_uses_plan_order_and_never_dispatches_project_rul
     assert authority.facts.archive_sha256 == request.prepared_artifact.commitment.sha256
     assert authority.facts.archive_byte_count == request.prepared_artifact.commitment.byte_count
     assert authority.facts.semantic_manifest_sha256 == request.manifest.sha256
+    assert authority.facts.storage_scheme == "s3"
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await request.prepared_artifact.close()
     manager.close()
@@ -304,16 +689,17 @@ async def test_blocking_default_stops_later_dependency_without_review_decision(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
-    by_id = {entry.entry_id: entry for entry in result.entries}
+    by_id = {entry.definition.definition_id: entry for entry in result.entries}
 
     assert by_id["artifact.sensitive_paths.high_confidence"].status is (
-        DefaultPreSubmissionResultStatus.FAILED
+        PreSubmissionResultStatus.FAILED
     )
     assert by_id["artifact.quality.placeholder_signal"].status is (
-        DefaultPreSubmissionResultStatus.DEPENDENCY_NOT_RUN
+        PreSubmissionResultStatus.DEPENDENCY_NOT_RUN
     )
     assert result.eligible is False
     assert all(
@@ -337,14 +723,17 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
     advisory = next(
-        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
-    assert advisory.status is DefaultPreSubmissionResultStatus.ADVISORY_DISABLED
+    assert advisory.status is PreSubmissionResultStatus.ADVISORY_DISABLED
     assert result.eligible is True
     await request.prepared_artifact.close()
     manager.close()
@@ -362,14 +751,17 @@ async def test_quality_warning_emits_only_a_bounded_category_count(tmp_path: Pat
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
     warning = next(
-        entry for entry in result.entries if entry.entry_id == "artifact.quality.placeholder_signal"
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "artifact.quality.placeholder_signal"
     )
 
-    assert warning.status is DefaultPreSubmissionResultStatus.WARNING
+    assert warning.status is PreSubmissionResultStatus.WARNING
     assert warning.metadata == (("matched_category_count", 2),)
     assert result.eligible is True
     await request.prepared_artifact.close()
@@ -386,6 +778,7 @@ async def test_forged_plan_identity_fails_closed_and_cleans_workspace(tmp_path: 
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable, match="plan_identity"):
@@ -453,6 +846,7 @@ async def test_invalid_executor_state_fails_closed_and_cleans_workspace(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=selected_catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable, match=expected_message):
@@ -488,6 +882,7 @@ async def test_disabled_mandatory_executor_state_fails_closed(tmp_path: Path) ->
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     with pytest.raises(PreSubmissionInfrastructureUnavailable):
@@ -499,7 +894,7 @@ async def test_disabled_mandatory_executor_state_fails_closed(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: Path) -> None:
+async def test_effective_execution_enforces_project_only_forbidden_rule(tmp_path: Path) -> None:
     catalogue = build_pre_submission_checker_catalogue()
     policy = _effective_policy()
     project_rule = {"pattern": "project-only.blocked"}
@@ -520,7 +915,7 @@ async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: P
     )
     request, inspector, manager, preparation, _ = await _request(
         tmp_path,
-        path="project-only.blocked",
+        extra_path="project-only.blocked",
         catalogue=catalogue,
     )
     request = replace(
@@ -534,12 +929,74 @@ async def test_default_execution_ignores_project_only_forbidden_rule(tmp_path: P
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
 
-    assert result.eligible is True
-    assert all(not entry.entry_id.startswith("policy.") for entry in result.entries)
+    assert result.eligible is False
+    project_result = next(
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "policy.artifact.forbid"
+    )
+    assert project_result.status is PreSubmissionResultStatus.FAILED
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_effective_execution_enforces_server_owned_storage_scheme(tmp_path: Path) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    service = PreparedBundleMaterializationService(
+        authorization=_AllowAuthority(),
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+        storage_scheme="local",
+    )
+
+    result = await service.materialize_prepared_bundle(request)
+
+    policy_result = next(
+        entry
+        for entry in result.entries
+        if entry.definition.definition_id == "policy.storage_scheme.enforce"
+    )
+    assert policy_result.status is PreSubmissionResultStatus.FAILED
+    assert policy_result.message_code == "storage_scheme_not_allowed"
+    await request.prepared_artifact.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_canonical_result_validator_rejects_forged_definition(tmp_path: Path) -> None:
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    service = PreparedBundleMaterializationService(
+        authorization=_AllowAuthority(),
+        preparation=preparation,
+        archive_inspector=inspector,
+        catalogue=catalogue,
+        storage_scheme="s3",
+    )
+    result = await service.materialize_prepared_bundle(request)
+    first = result.entries[0]
+    forged = replace(
+        result,
+        entries=(
+            replace(
+                first,
+                definition=replace(first.definition, public_name="caller-selected"),
+            ),
+            *result.entries[1:],
+        ),
+    )
+
+    with pytest.raises(
+        PreSubmissionInfrastructureUnavailable,
+        match="pre_submission_result_context_invalid",
+    ):
+        validate_pre_submission_execution_result(request.effective_plan, forged)
     await request.prepared_artifact.close()
     manager.close()
 
@@ -561,6 +1018,7 @@ async def test_legacy_precheck_runner_is_not_an_execution_dependency(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
 
     result = await service.materialize_prepared_bundle(request)
@@ -577,21 +1035,22 @@ async def test_authorized_cancellation_cleans_before_propagating(
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     entered = threading.Event()
     release = threading.Event()
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process_blocking
+    original = EffectivePreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "process_blocking", blocking_process)
     service = PreparedBundleMaterializationService(
         authorization=_AllowAuthority(),
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -625,6 +1084,7 @@ async def test_cancellation_during_member_projection_cleans_workspace(
         preparation=preparation,
         archive_inspector=_BlockingProjectionInspector(SubmissionArchiveLimits()),
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -647,16 +1107,16 @@ async def test_timeout_during_checker_access_cleans_workspace(
     request, inspector, manager, preparation, catalogue = await _request(tmp_path)
     entered = threading.Event()
     release = threading.Event()
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
-    original = DefaultPreSubmissionProcessor.process_blocking
+    original = EffectivePreSubmissionProcessor.process_blocking
 
     def blocking_process(self, reader, workspace):
         entered.set()
         assert release.wait(timeout=5)
         return original(self, reader, workspace)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "process_blocking", blocking_process)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "process_blocking", blocking_process)
     preparation._active[request.prepared_artifact._binding].deadline = (
         asyncio.get_running_loop().time() + 0.01
     )
@@ -665,6 +1125,7 @@ async def test_timeout_during_checker_access_cleans_workspace(
         preparation=preparation,
         archive_inspector=inspector,
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
@@ -696,16 +1157,16 @@ async def test_terminal_event_during_sealing_precedes_checker_access_and_cleans(
             assert release.wait(timeout=5)
             return super()._seal_projected_content(root_fd, entries)
 
-    from app.modules.checkers.pre_submit_execution import DefaultPreSubmissionProcessor
+    from app.modules.checkers.pre_submit_execution import EffectivePreSubmissionProcessor
 
     checker_called = threading.Event()
-    original_execute = DefaultPreSubmissionProcessor._execute
+    original_execute = EffectivePreSubmissionProcessor._execute
 
     def observed_execute(self, tree):
         checker_called.set()
         return original_execute(self, tree)
 
-    monkeypatch.setattr(DefaultPreSubmissionProcessor, "_execute", observed_execute)
+    monkeypatch.setattr(EffectivePreSubmissionProcessor, "_execute", observed_execute)
 
     if terminal == "timeout":
         preparation._active[request.prepared_artifact._binding].deadline = (
@@ -716,11 +1177,13 @@ async def test_terminal_event_during_sealing_precedes_checker_access_and_cleans(
         preparation=preparation,
         archive_inspector=_BlockingSealInspector(SubmissionArchiveLimits()),
         catalogue=catalogue,
+        storage_scheme="s3",
     )
     task = asyncio.create_task(service.materialize_prepared_bundle(request))
     assert await asyncio.to_thread(entered.wait, 5)
     if terminal == "cancel":
         task.cancel()
+        await asyncio.sleep(0)
     else:
         await asyncio.sleep(0.02)
     release.set()

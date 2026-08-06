@@ -130,6 +130,7 @@ class WorkstreamTask(Base):
             name="fk_workstream_tasks_locked_pre_submit_checker_hash",
         ),
         UniqueConstraint("id", "locked_guide_version", name="uq_workstream_tasks_id_locked_guide"),
+        UniqueConstraint("id", "project_id", name="uq_workstream_tasks_id_project"),
         UniqueConstraint(
             "id",
             "locked_post_submit_checker_policy_id",
@@ -273,6 +274,9 @@ class TaskAssignment(Base):
 
     __tablename__ = "task_assignments"
     __table_args__ = (
+        UniqueConstraint(
+            "id", "task_id", "contributor_id", name="uq_task_assignments_id_task_contributor"
+        ),
         Index(
             "uq_task_assignments_one_active_per_task",
             "task_id",
