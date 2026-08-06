@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol, final
 from uuid import UUID
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
@@ -22,6 +23,7 @@ from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
 from app.modules.checkers.pre_submit_execution import (
+    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
     DefaultPreSubmissionExecutionInput,
     EffectivePreSubmissionProcessor,
     PreSubmissionExecutionResult,
@@ -94,7 +96,7 @@ class PreparedBundleMaterializationService:
         self._preparation = preparation
         self._archive_inspector = archive_inspector
         self._catalogue = catalogue
-        if storage_scheme not in {"local", "s3"}:
+        if storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES:
             raise ValueError("pre-submit materializer storage scheme is invalid")
         self._storage_scheme = storage_scheme
 
@@ -183,9 +185,17 @@ class PreparedBundlePreSubmitEvidenceService:
         predecessor_submission_id: UUID | None,
     ) -> PreSubmitEvidencePersistenceResult:
         """Persist only after materialization has returned and cleaned its scratch lease."""
-        execution = await self._materialization.materialize_prepared_bundle(request)
+        if self._session.in_transaction():
+            raise RuntimeError(
+                "pre-submit evidence orchestration requires a transaction-free session"
+            )
         commitment = request.prepared_artifact.commitment
+        prepared_generation_id = request.prepared_artifact.generation_id
+        execution = await self._materialization.materialize_prepared_bundle(request)
         async with self._session.begin():
+            await self._session.execute(
+                text("set transaction isolation level read committed")
+            )
             return await PreSubmitEvidenceService(self._session).persist(
                 PreSubmitEvidencePersistenceRequest(
                     actor_profile_id=actor_profile_id,
@@ -193,7 +203,7 @@ class PreparedBundlePreSubmitEvidenceService:
                     task_id=request.task_id,
                     assignment_id=request.assignment_id,
                     predecessor_submission_id=predecessor_submission_id,
-                    prepared_generation_id=request.prepared_artifact.generation_id,
+                    prepared_generation_id=prepared_generation_id,
                     archive_sha256=commitment.sha256,
                     archive_byte_count=commitment.byte_count,
                     semantic_manifest_sha256=request.manifest.sha256,

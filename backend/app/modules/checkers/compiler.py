@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import PurePosixPath
 from collections.abc import Callable
 from typing import Any
 
@@ -14,6 +13,7 @@ from app.modules.checkers.catalogue import (
     PreSubmissionCheckerCatalogue,
     build_pre_submission_checker_catalogue,
 )
+from app.modules.checkers.pre_submit_defaults import is_canonical_relative_path
 
 PRE_SUBMIT_COMPILER_VERSION = "workstream-pre-submit-compiler-v0.1"
 PRE_SUBMIT_BUNDLE_SCHEMA_VERSION = "pre_submit_checker_bundle.v1"
@@ -580,7 +580,7 @@ def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[di
 def _required_artifact_path(item: dict[str, Any]) -> str:
     """Require the explicit server-approved path attached to an artifact key."""
     value = item.get("path")
-    if not isinstance(value, str) or not _is_canonical_relative_path(value):
+    if not isinstance(value, str) or not is_canonical_relative_path(value):
         raise PreSubmitCheckerCompilerError(
             "effective project submission artifact policy path is invalid"
         )
@@ -602,17 +602,6 @@ def _project_unique_paths(
     return paths
 
 
-def _is_canonical_relative_path(value: str) -> bool:
-    path = PurePosixPath(value)
-    return (
-        value not in {"", ".", ".."}
-        and "\\" not in value
-        and not path.is_absolute()
-        and value == path.as_posix()
-        and ".." not in path.parts
-    )
-
-
 def _required_evidence_path(item: dict[str, Any]) -> str:
     """Project an evidence identity into Workstream's closed evidence namespace."""
     key = item.get("key")
@@ -627,7 +616,12 @@ def _required_evidence_path(item: dict[str, Any]) -> str:
         raise PreSubmitCheckerCompilerError(
             "effective project submission evidence key is unmappable"
         )
-    return f"evidence/{key}"
+    path = f"evidence/{key}"
+    if not is_canonical_relative_path(path):
+        raise PreSubmitCheckerCompilerError(
+            "effective project submission evidence key is unmappable"
+        )
+    return path
 
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:

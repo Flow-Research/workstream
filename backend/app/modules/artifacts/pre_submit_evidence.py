@@ -14,6 +14,7 @@ from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.models import PreSubmitEvidenceResult, PreSubmitEvidenceSet
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.checkers.pre_submit_execution import (
+    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
     PreSubmissionEntryResult,
     PreSubmissionExecutionResult,
     validate_pre_submission_execution_result,
@@ -106,7 +107,7 @@ class PreSubmitEvidenceContext:
             )
         ):
             raise ValueError("pre-submit evidence catalogue identity is invalid")
-        if self.storage_scheme not in {"local", "s3"}:
+        if self.storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES:
             raise ValueError("pre-submit evidence storage scheme is invalid")
 
     def operation_identity(self, *, effective_plan_sha256: str) -> str:

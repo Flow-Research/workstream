@@ -808,10 +808,11 @@ the transaction-bound evidence service reloads the actor, identity link, task,
 assignment, predecessor, guide and locked policy rows and persists one
 `PreSubmitEvidenceSet` with ordered `PreSubmitEvidenceResult` members. Evidence
 identity is deterministic over the complete custody and locked-policy context;
-exact replay returns the same set and changed facts fail closed. A passing set
-also produces a process-local, generation- and predecessor-bound single-use
-capability for immediate admission continuation. The evidence-set ID alone is
-never that capability.
+exact replay returns the same durable set without minting another pass
+capability, and changed facts fail closed. Only first persistence of a passing
+execution produces a process-local, generation- and predecessor-bound
+single-use capability for immediate admission continuation; a later attempt
+must re-prepare the bundle. The evidence-set ID alone is never that capability.
 
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no

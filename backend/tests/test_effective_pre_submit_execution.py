@@ -99,6 +99,16 @@ def test_pass_capability_is_generation_bound_and_single_use() -> None:
         storage_scheme="s3",
     )
 
+    with pytest.raises(PreSubmitEvidenceConflict, match="pre_submit_pass_capability_invalid"):
+        capability.consume(
+            prepared_generation_id=uuid4(),
+            predecessor_submission_id=None,
+            effective_plan_sha256=_sha("7"),
+            archive_sha256=_sha("1"),
+            semantic_manifest_sha256=_sha("2"),
+            storage_scheme="s3",
+        )
+
     assert (
         capability.consume(
             prepared_generation_id=generation_id,
@@ -173,6 +183,28 @@ def test_compiler_rejects_unmappable_artifact_paths(path: object) -> None:
     }
 
     with pytest.raises(PreSubmitCheckerCompilerError, match="path is invalid"):
+        compile_effective_project_submission_artifact_policy(policy, _sha("9"))
+
+
+@pytest.mark.parametrize("key", [".", ".."])
+def test_compiler_rejects_noncanonical_evidence_keys(key: str) -> None:
+    policy = {
+        "workstream_default_policy": {},
+        "project_policy": {},
+        "required_packet_fields": [],
+        "required_artifacts": [],
+        "required_evidence": [{"key": key, "required": True}],
+        "forbidden_artifacts": [],
+        "attestation_terms": [],
+        "manifest_required": False,
+        "artifact_hash_required": False,
+        "allowed_storage_schemes": ["s3"],
+        "maximum_file_size_bytes": None,
+        "maximum_package_size_bytes": None,
+        "packaging": {"package_required": False},
+    }
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="key is unmappable"):
         compile_effective_project_submission_artifact_policy(policy, _sha("9"))
 
 

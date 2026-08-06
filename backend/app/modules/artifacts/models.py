@@ -75,6 +75,11 @@ class PreSubmitEvidenceSet(Base):
             name="fk_pre_submit_evidence_task_guide",
         ),
         ForeignKeyConstraint(
+            ["guide_id", "project_id", "guide_version"],
+            ["project_guides.id", "project_guides.project_id", "project_guides.version"],
+            name="fk_pre_submit_evidence_guide_lineage",
+        ),
+        ForeignKeyConstraint(
             ["task_id", "source_snapshot_id", "source_snapshot_sha256"],
             [
                 "workstream_tasks.id",
@@ -239,6 +244,11 @@ class PreSubmitEvidenceResult(Base):
         CheckConstraint(
             "status in ('passed','warning','advisory_disabled','dependency_not_run','failed')",
             name="ck_pre_submit_result_status",
+        ),
+        CheckConstraint(
+            "(status='failed' and failure_code is not null) or "
+            "(status<>'failed' and failure_code is null)",
+            name="result_failure_shape",
         ),
         CheckConstraint(
             "phase in ('custody','identity','materialization','default_policy','project_policy')",

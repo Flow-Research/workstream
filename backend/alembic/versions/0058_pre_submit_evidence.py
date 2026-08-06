@@ -52,6 +52,11 @@ def upgrade() -> None:
         "task_assignments",
         ["id", "task_id", "contributor_id"],
     )
+    op.create_unique_constraint(
+        "uq_project_guides_id_project_version",
+        "project_guides",
+        ["id", "project_id", "version"],
+    )
     op.create_table(
         "pre_submit_evidence_sets",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -189,6 +194,11 @@ def upgrade() -> None:
             name="fk_pre_submit_evidence_task_guide",
         ),
         sa.ForeignKeyConstraint(
+            ["guide_id", "project_id", "guide_version"],
+            ["project_guides.id", "project_guides.project_id", "project_guides.version"],
+            name="fk_pre_submit_evidence_guide_lineage",
+        ),
+        sa.ForeignKeyConstraint(
             ["task_id", "source_snapshot_id", "source_snapshot_sha256"],
             [
                 "workstream_tasks.id",
@@ -263,6 +273,11 @@ def upgrade() -> None:
             name="ck_pre_submit_result_status",
         ),
         sa.CheckConstraint(
+            "(status='failed' and failure_code is not null) or "
+            "(status<>'failed' and failure_code is null)",
+            name="result_failure_shape",
+        ),
+        sa.CheckConstraint(
             "phase in ('custody','identity','materialization','default_policy','project_policy')",
             name="ck_pre_submit_result_phase",
         ),
@@ -302,6 +317,25 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        create function guard_pre_submit_evidence_set_creation() returns trigger
+        language plpgsql as $$
+        begin
+          if new.created_at is distinct from transaction_timestamp() then
+            raise exception 'pre-submit evidence creation timestamp is invalid'
+              using errcode='55000';
+          end if;
+          return new;
+        end;
+        $$
+        """
+    )
+    op.execute(
+        "create trigger pre_submit_evidence_sets_creation before insert "
+        "on pre_submit_evidence_sets for each row execute function "
+        "guard_pre_submit_evidence_set_creation()"
+    )
+    op.execute(
+        """
         create function guard_pre_submit_evidence_result_membership() returns trigger
         language plpgsql as $$
         declare parent_created_at timestamptz; expected_count integer; current_count integer;
@@ -336,6 +370,8 @@ def downgrade() -> None:
         raise RuntimeError("cannot downgrade populated immutable pre-submit evidence")
     op.execute("drop trigger pre_submit_evidence_results_membership on pre_submit_evidence_results")
     op.execute("drop function guard_pre_submit_evidence_result_membership()")
+    op.execute("drop trigger pre_submit_evidence_sets_creation on pre_submit_evidence_sets")
+    op.execute("drop function guard_pre_submit_evidence_set_creation()")
     for table in ("pre_submit_evidence_sets", "pre_submit_evidence_results"):
         op.execute(f"drop trigger {table}_no_truncate on {table}")
         op.execute(f"drop trigger {table}_immutable on {table}")
@@ -352,6 +388,9 @@ def downgrade() -> None:
     ):
         op.drop_index(name, table_name="pre_submit_evidence_sets")
     op.drop_table("pre_submit_evidence_sets")
+    op.drop_constraint(
+        "uq_project_guides_id_project_version", "project_guides", type_="unique"
+    )
     op.drop_constraint(
         "uq_task_assignments_id_task_contributor", "task_assignments", type_="unique"
     )

@@ -7,7 +7,8 @@ from io import BytesIO
 from dataclasses import replace
 from pathlib import Path
 import threading
-from typing import cast
+from types import SimpleNamespace
+from typing import Any, cast
 import zipfile
 from uuid import uuid4
 
@@ -59,6 +60,23 @@ from app.modules.checkers.pre_submit_execution import (
 
 async def _bytes(value: bytes):
     yield value
+
+
+@pytest.mark.asyncio
+async def test_evidence_workflow_requires_transaction_free_session() -> None:
+    materialization = SimpleNamespace(materialize_prepared_bundle=lambda _request: None)
+    workflow = PreparedBundlePreSubmitEvidenceService(
+        session=cast(Any, SimpleNamespace(in_transaction=lambda: True)),
+        materialization=cast(Any, materialization),
+    )
+
+    with pytest.raises(RuntimeError, match="requires a transaction-free session"):
+        await workflow.execute(
+            cast(Any, object()),
+            actor_profile_id=uuid4(),
+            identity_link_id=uuid4(),
+            predecessor_submission_id=None,
+        )
 
 
 def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes:
@@ -523,6 +541,19 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 with pytest.raises(DBAPIError):
                     async with connection.begin_nested():
                         await connection.execute(text(statement))
+            with pytest.raises(DBAPIError, match="creation timestamp is invalid"):
+                async with connection.begin_nested():
+                    await connection.execute(
+                        text(
+                            "insert into pre_submit_evidence_sets select "
+                            "(jsonb_populate_record(null::pre_submit_evidence_sets, "
+                            "to_jsonb(existing_row) || jsonb_build_object("
+                            "'id','00000000-0000-0000-0000-000000000002',"
+                            "'operation_identity','sha256:' || repeat('f',64),"
+                            "'created_at',existing_row.created_at - interval '1 day'))).* "
+                            "from pre_submit_evidence_sets existing_row limit 1"
+                        )
+                    )
     finally:
         if blocked_prepared is not None:
             await blocked_prepared.close()

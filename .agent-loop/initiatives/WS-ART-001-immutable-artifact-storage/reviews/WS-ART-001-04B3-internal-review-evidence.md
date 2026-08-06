@@ -49,6 +49,26 @@ of scope.
 - Prevented replay from issuing another process-local continuation capability.
 - Proved blocked evidence produces only bounded audit/evidence effects.
 
+## External-review repair re-review
+
+- Architecture: PASS WITH LOW RISKS; the composite guide lineage, transaction
+  ownership, and shared checker semantics remain inside 04B3.
+- Security: PASS; the new database guards fail closed.
+- QA: PASS after the isolated PostgreSQL evidence workflow and migration round
+  trip passed together (`2 passed`).
+- Product/ops: PASS; replay and blocked outcomes remain outside review,
+  contribution, compensation, and reputation effects.
+- Senior engineering: PASS WITH LOW RISKS.
+- CI integrity: PASS; no workflow, coverage, or mutation-policy bypass was
+  added to ART.
+- Docs: PASS after replay/capability and external-response corrections.
+- Reuse/dedup: PASS WITH LOW RISKS; the remaining product-code storage-scheme
+  literal was removed after review.
+- Test delta: PASS after adding behavioral proof that a forged creation
+  timestamp is rejected.
+- Final focused non-database suite: `37 passed, 1 deselected`; the deselected
+  PostgreSQL workflow passed through the canonical isolated runner.
+
 ## Remaining external gates
 
 GitHub Backend Gates, CodeRabbit, and human review remain external checks. Human

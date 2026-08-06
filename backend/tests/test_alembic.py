@@ -126,7 +126,8 @@ async def _pre_submit_evidence_schema(database_url: str) -> dict[str, object]:
                             "'%pre_submit_evidence%' or conname in "
                             "('uq_actor_identity_links_id_profile',"
                             "'uq_workstream_tasks_id_project',"
-                            "'uq_task_assignments_id_task_contributor')"
+                            "'uq_task_assignments_id_task_contributor',"
+                            "'uq_project_guides_id_project_version')"
                         )
                     )
                 ).scalars()
@@ -175,13 +176,17 @@ def test_0058_pre_submit_evidence_empty_round_trip(
         "uq_actor_identity_links_id_profile",
         "uq_workstream_tasks_id_project",
         "uq_task_assignments_id_task_contributor",
+        "uq_project_guides_id_project_version",
         "fk_pre_submit_evidence_identity_actor",
         "fk_pre_submit_evidence_assignment",
         "fk_pre_submit_evidence_task_project",
+        "fk_pre_submit_evidence_guide_lineage",
         "fk_pre_submit_evidence_task_source_snapshot",
+        "ck_pre_submit_evidence_results_result_failure_shape",
     }.issubset(installed["constraints"])
     assert installed["triggers"] == {
         "pre_submit_evidence_sets_immutable",
+        "pre_submit_evidence_sets_creation",
         "pre_submit_evidence_sets_no_truncate",
         "pre_submit_evidence_results_immutable",
         "pre_submit_evidence_results_membership",

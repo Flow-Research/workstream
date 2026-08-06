@@ -1214,8 +1214,10 @@ the complete canonical envelope.
 
 The operation identity hashes every input custody and locked-policy fact. A
 database uniqueness constraint permits one set for that identity. Exact replay
-returns the existing set, while changed facts or changed deterministic results
-conflict. Migration `0058_pre_submit_evidence` installs the normalized set and
+returns the existing durable evidence set but never returns a new pass
+capability; the caller must re-prepare the exact bundle before a later
+submission attempt. Changed facts or changed deterministic results conflict.
+Migration `0058_pre_submit_evidence` installs the normalized set and
 result tables plus composite identity-link, assignment, task/project, locked
 guide/policy and predecessor lineage constraints. Set and result rows reject
 update, delete and truncate; result membership closes with the creating

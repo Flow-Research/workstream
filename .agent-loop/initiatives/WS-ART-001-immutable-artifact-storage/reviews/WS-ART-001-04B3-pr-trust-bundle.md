@@ -21,6 +21,8 @@ platform-plus-project result.
 - Added exact replay, result-membership closure, member verification, bounded
   failure audit, and a non-replayable process-local pass capability.
 - Added Alembic `0058_pre_submit_evidence` with composite lineage constraints.
+- Hardened guide identity, result shape, creation-window, canonical evidence-key,
+  and transaction-ownership constraints after external review.
 - Updated semantic test lanes and canonical architecture documentation.
 
 ## Scope control

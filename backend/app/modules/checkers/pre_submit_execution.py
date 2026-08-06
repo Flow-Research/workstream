@@ -24,7 +24,6 @@ from app.modules.artifacts.submission_manifest import (
     build_submission_manifest,
 )
 from app.modules.checkers.catalogue import (
-    PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
     PreSubmissionCheckerCatalogue,
     PreSubmissionCheckerPhase,
     PreSubmissionCheckerState,
@@ -37,6 +36,7 @@ from app.modules.checkers.effective_plan import (
 )
 from app.modules.checkers.pre_submit_defaults import (
     attestation_validation_facts,
+    is_canonical_relative_path,
     matched_low_quality_patterns,
 )
 
@@ -72,6 +72,7 @@ _RESULT_MESSAGE_CODES = frozenset(
     }
 )
 _RESULT_METADATA_KEYS = frozenset({"entry_count", "finding_count", "matched_category_count"})
+ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
 
 
 class DefaultPreSubmissionExecutionError(RuntimeError):
@@ -140,7 +141,7 @@ class PreSubmissionEntryResult:
     status: PreSubmissionResultStatus
     failure_code: str | None
     message_code: str
-    metadata: tuple[tuple[str, int | bool | str], ...] = ()
+    metadata: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -465,6 +466,10 @@ class EffectivePreSubmissionProcessor:
                 message_code="quality_signal_warning" if matches else "passed",
                 metadata=(("matched_category_count", len(matches)),) if matches else (),
             )
+        else:
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_policy_primitive_unknown"
+            )
         return self._blocking_or_pass(entry, failure_count, message_code)
 
     @staticmethod
@@ -481,12 +486,7 @@ class EffectivePreSubmissionProcessor:
     def _canonical_policy_paths(cls, value: object) -> tuple[str, ...]:
         paths = cls._string_list(value)
         if len(paths) != len(set(paths)) or any(
-            path in {".", ".."}
-            or "\\" in path
-            or PurePosixPath(path).is_absolute()
-            or path != PurePosixPath(path).as_posix()
-            or ".." in PurePosixPath(path).parts
-            for path in paths
+            not is_canonical_relative_path(path) for path in paths
         ):
             raise PreSubmissionInfrastructureUnavailable("pre_submission_policy_path_unmappable")
         return paths
@@ -526,11 +526,11 @@ class EffectivePreSubmissionProcessor:
         *,
         failure_code: str | None = None,
         message_code: str = "passed",
-        metadata: tuple[tuple[str, int | bool | str], ...] = (),
+        metadata: tuple[tuple[str, int], ...] = (),
     ) -> PreSubmissionEntryResult:
         """Build one result bound to the exact plan and definition version."""
         return PreSubmissionEntryResult(
-            schema_version=PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
+            schema_version=entry.result_schema,
             definition=PreSubmissionResultDefinition(
                 dispatch_authority="workstream.pre_submission_checker_catalogue",
                 definition_id=entry.definition_id,
@@ -572,7 +572,7 @@ def validate_pre_submission_execution_result(
         or type(custody.archive_byte_count) is not int
         or type(execution.eligible) is not bool
         or custody.archive_byte_count < 0
-        or custody.storage_scheme not in {"local", "s3"}
+        or custody.storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES
         or execution.plan_sha256 != plan.plan_sha256
         or len(execution.entries) != len(plan.entries)
     ):
