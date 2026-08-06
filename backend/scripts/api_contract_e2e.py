@@ -1896,7 +1896,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert patched_guide["change_summary"] == "Patched before activation through real API"
         await create_policy_bundle_for_guide(
             client,
-            manager_token,
+            project_reader_token,
             project_reader_token,
             worker_token,
             untrusted_service_token,
