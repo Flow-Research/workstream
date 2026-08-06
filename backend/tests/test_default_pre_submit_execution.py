@@ -524,8 +524,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             }
             immutable_statements = (
                 "update pre_submit_evidence_sets set terminal_status='blocked'",
-                "delete from pre_submit_evidence_sets",
-                "truncate pre_submit_evidence_sets",
                 "update pre_submit_evidence_results set status='failed'",
                 "delete from pre_submit_evidence_results",
                 "truncate pre_submit_evidence_results",
@@ -541,6 +539,28 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 with pytest.raises(DBAPIError):
                     async with connection.begin_nested():
                         await connection.execute(text(statement))
+            with pytest.raises(DBAPIError, match="pre_submit_evidence_sets rows are immutable"):
+                async with connection.begin_nested():
+                    await connection.execute(
+                        text(
+                            "insert into pre_submit_evidence_sets select "
+                            "(jsonb_populate_record(null::pre_submit_evidence_sets, "
+                            "to_jsonb(existing_row) || jsonb_build_object("
+                            "'id','00000000-0000-0000-0000-000000000003',"
+                            "'operation_identity','sha256:' || repeat('e',64),"
+                            "'created_at',transaction_timestamp()))).* "
+                            "from pre_submit_evidence_sets existing_row limit 1"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            "delete from pre_submit_evidence_sets "
+                            "where id='00000000-0000-0000-0000-000000000003'"
+                        )
+                    )
+            with pytest.raises(DBAPIError, match="pre_submit_evidence_sets rows are immutable"):
+                async with connection.begin_nested():
+                    await connection.execute(text("truncate pre_submit_evidence_sets cascade"))
             with pytest.raises(DBAPIError, match="creation timestamp is invalid"):
                 async with connection.begin_nested():
                     await connection.execute(

@@ -68,6 +68,9 @@ of scope.
   timestamp is rejected.
 - Final focused non-database suite: `37 passed, 1 deselected`; the deselected
   PostgreSQL workflow passed through the canonical isolated runner.
+- CodeRabbit's final guard-test nitpick was verified with the isolated
+  PostgreSQL workflow (`1 passed`): evidence-set delete and truncate now assert
+  the exact immutability-trigger error without child-FK interference.
 
 ## Remaining external gates
 

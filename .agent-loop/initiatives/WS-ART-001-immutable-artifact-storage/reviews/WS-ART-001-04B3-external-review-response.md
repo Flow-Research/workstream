@@ -20,6 +20,8 @@
 - Tests cover noncanonical evidence keys, a mismatched prepared generation
   before capability consumption, and the transaction-free orchestration
   precondition.
+- Evidence-set delete and truncate tests now avoid child-FK interference and
+  assert the exact immutable-trigger error.
 - Policy primitive dispatch now has an explicit fail-closed default, result
   metadata types match their integer-only validator, result schema comes from
   the exact plan entry, and compiler/executor path checks share one helper.
