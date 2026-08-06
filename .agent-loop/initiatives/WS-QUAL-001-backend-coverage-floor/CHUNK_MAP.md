@@ -24,12 +24,12 @@ remain stopped historical experiments. Do not resume them.
 | `WS-QUAL-001-PLAN3R1` | Resolve five valid late CodeRabbit findings from PR #272 | L1 | Merged PR #278 |
 | `WS-QUAL-001-04P` | Establish protected hash-verified mutation dependency authority | L1 | Merged PR #281 |
 | `WS-QUAL-001-04M` | Pilot pinned changed-scope mutation evidence without a score gate | L1 | Merged PR #285 as `7f395d47`; hosted calibration accepted |
-| `WS-QUAL-001-05M` | Add calibrated blocking behavior-mutation policy | L1 | Active by explicit human instruction |
+| `WS-QUAL-001-05M` | Add calibrated blocking behavior-mutation policy | L1 | Retired after callable-wide enforcement proved unsuitable; requires a fresh changed-line-aware plan |
 
 ## Dependency rule
 
 `PLAN3 -> PLAN3R1 -> 04P -> 04M -> human calibration checkpoint -> 05M`.
 
-Each chunk maps to one PR. `04M` may prove that the candidate engine or target
-strategy is unsuitable and stop without `05M`. Planning does not pre-authorize
-either implementation chunk.
+The completed pilot evidence remains historical input. Do not restart `05M` or
+another blocking mutation workflow without a fresh bounded plan proving that
+unchanged executable lines cannot block a declaration-only change.

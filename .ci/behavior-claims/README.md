@@ -1,37 +1,49 @@
 # Behavior mutation claims
 
-Schema-v1 claim files provide bounded owning pytest nodes for mutation targets.
-They are additive: every eligible changed production or CI-runtime Python target
-is selected independently, and a claim cannot remove or replace one.
+The hosted behavior-mutation workflow is temporarily retired. These files are
+retained as historical design input and are not currently required for pull
+requests. The claim-discovery and fail-closed rules below describe the retired
+design only; do not infer a blocking check from them. Behavior-mutation
+enforcement must not resume until a fresh changed-line-aware plan is approved
+and proves that unchanged executable lines cannot block a declaration-only
+change.
 
-The filename and `chunk_id` must match. Targets are repository-relative Python
-files under `backend/app/` or `backend/scripts/`; each target also names its
+Historically, schema-v1 claim files provided bounded owning pytest nodes for
+mutation targets. They were additive: every eligible changed production or
+CI-runtime Python target was selected independently, and a claim could not
+remove or replace one.
+
+Under that retired design, the filename and `chunk_id` had to match. Targets
+were repository-relative Python files under `backend/app/` or
+`backend/scripts/`; each target also named its
 qualified callables, exact owning pytest nodes, typed observable outcomes, and
 any essential real boundaries. Unknown fields, unsafe paths, missing files,
-duplicate entries, unowned changed targets, or stale chunk identifiers fail
+duplicate entries, unowned changed targets, or stale chunk identifiers failed
 closed.
 
-The required behavior-mutation check discovers the one claim changed by the
+The retired behavior-mutation check discovered the one claim changed by the
 pull request; labels, workflow inputs, environment variables, and PR prose
-cannot select it. Copy `example.behavior-claim.json`, rename it to the bounded
-chunk identifier, and replace every example target, callable, test, outcome,
-and boundary. Eligible production changes without exactly one changed claim
-fail closed. A test-only behavior claim is additive and cannot remove an
+could not select it. Contributors copied `example.behavior-claim.json`, renamed
+it to the bounded chunk identifier, and replaced every example target,
+callable, test, outcome, and boundary. Eligible production changes without exactly one changed claim
+failed closed. A test-only behavior claim was additive and could not remove an
 eligible changed target.
 
-The check has no mutation percentage. Killed mutants pass. A meaningful
+The retired check had no mutation percentage. Killed mutants passed. A meaningful
 survivor, timeout, suspicious result, engine error, malformed or stale evidence,
-target escape, or excluded mutant inside the selected callable scope blocks.
-The only surviving control allowed by policy is Workstream's exact deliberately
-weak calibration callable; contributors cannot add survivor allowlists,
+target escape, or excluded mutant inside the selected callable scope blocked.
+The only surviving control allowed by policy was Workstream's exact deliberately
+weak calibration callable; contributors could not add survivor allowlists,
 free-form exemptions, or source mutation pragmas.
 
-Changes with no eligible target and no claim produce typed `not_applicable`
-evidence before the mutation toolchain is installed. Ordinary PR verdicts are
+Under the retired design, changes with no eligible target and no claim produced
+typed `not_applicable`
+evidence before the mutation toolchain was installed. Ordinary PR verdicts were
 calculated by the evaluator and Git-delta helper archived from protected base,
 not by PR-head policy code.
 
-Validate claim discovery locally from the repository root:
+For historical diagnostics only, claim discovery can still be inspected locally
+from the repository root:
 
 ```bash
 backend/.venv/bin/python backend/scripts/mutation_policy.py \
@@ -42,7 +54,7 @@ backend/.venv/bin/python backend/scripts/mutation_policy.py \
   --selection-output /tmp/workstream-mutation-selection.json
 ```
 
-An unrelated delta reports `applicability: not_applicable`. An applicable
-delta must report the exact changed targets, callable ownership, and owning
-tests expected by the contributor. Discovery errors are policy failures; fix
-the claim or delta rather than editing generated evidence.
+Under the retired design, an unrelated delta reported
+`applicability: not_applicable`. An applicable delta reported the exact changed
+targets, callable ownership, and owning tests expected by the contributor.
+This command does not produce active PR evidence or authorize reactivation.
