@@ -23,7 +23,8 @@ bindings, human checker authority, generic artifact reads, or new ActionIds.
 - only the fixed pre-submit materializer identity may prepare and consume it;
 - authority binds the process-local prepared-bundle/scratch generation,
   task/project/guide/locked policy, archive/manifest, checker definition,
-  request, session, and transaction facts; no durable admission exists yet;
+  server-selected ArtifactStore storage scheme, request, session, and
+  transaction facts; no durable admission exists yet;
 - denial/replay/stale/cross-resource cases fail before scratch exposure;
 - prepared handles never enter Celery payloads.
 

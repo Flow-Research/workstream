@@ -43,7 +43,9 @@ def _effective_policy() -> dict[str, object]:
         "workstream_default_policy": default_policy,
         "project_policy": {},
         "required_packet_fields": default_policy["required_packet_fields"],
-        "required_artifacts": [{"key": "task.toml", "required": True}],
+        "required_artifacts": [
+            {"key": "task.toml", "path": "task.toml", "required": True}
+        ],
         "required_evidence": [{"key": "results", "required": True}],
         "forbidden_artifacts": default_policy["forbidden_artifacts"],
         "attestation_terms": default_policy["attestation_terms"],
@@ -324,8 +326,8 @@ def test_effective_plan_is_deterministic_and_commits_to_lineage_catalogue_and_co
         entry for entry in first.entries if entry.definition_id == "policy.file.require"
     )
     exported = required_file.as_dict()
-    exported["configuration"]["artifact_keys"].append("mutated-after-hash")
-    assert required_file.as_dict()["configuration"]["artifact_keys"] == ["task.toml"]
+    exported["configuration"]["artifact_paths"].append("mutated-after-hash")
+    assert required_file.as_dict()["configuration"]["artifact_paths"] == ["task.toml"]
     assert hash(required_file)
     assert first.plan_sha256 == canonical_json_hash(first.as_dict())
 

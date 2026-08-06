@@ -924,7 +924,7 @@ def test_pre_submit_compiler_rejects_skipped_evidence_coverage() -> None:
     spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
     for rule in spec["rules"]:
         if rule["primitive"] == "require_minimum_evidence":
-            rule["config"]["evidence_keys"] = []
+            rule["config"]["evidence_paths"] = []
 
     with pytest.raises(PreSubmitCheckerCompilerError, match="required evidence"):
         compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)

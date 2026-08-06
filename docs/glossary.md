@@ -229,10 +229,12 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 The server-generated project checker matrix produced from the effective project submission artifact policy and one immutable default-catalogue snapshot. The compiled bundle embeds the catalogue version, canonical manifest digest, ordered entry ID/version/configuration hashes, and enabled/disabled state. Its compiled bundle hash therefore commits transitively to that exact snapshot, and each task locks that hash before entering the contributor pipeline. Runtime uses the same snapshot to derive the effective-plan hash. It runs against the uploaded ZIP in bounded scratch before Workstream creates a submission. A failed preparation returns `pre_submission_checker_failed` with bounded same-request details. The old standalone preflight route remains frozen legacy behavior until ART-05B removes it with the legacy Submission path; it is not an alternate authority for this policy. Results never use review decision values: `accept`, `needs_revision`, or `reject`.
 
-The hidden Workstream-default execution slice uses the closed entry statuses
+The hidden 04B2 Workstream-default execution slice and the hidden 04B3 complete
+effective execution use the closed entry statuses
 `passed`, `warning`, `failed`, `advisory_disabled`, and
 `dependency_not_run`. These are checker-execution facts, not review decisions.
-Project-policy entries execute later through the same plan.
+04B3 executes locked project-policy entries through that same plan and persists
+one immutable ordered platform-plus-project evidence set after scratch cleanup.
 
 ## pre_submission_checker_failed
 

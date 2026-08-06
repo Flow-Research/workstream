@@ -17,7 +17,7 @@ from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.checkers.effective_plan import EffectivePreSubmissionExecutionPlan
 from app.modules.checkers.pre_submit_execution import (
-    DefaultPreSubmissionExecutionResult,
+    PreSubmissionExecutionResult,
     SubmissionPacketView,
 )
 
@@ -372,7 +372,7 @@ class ArtifactMaterializationPort(Protocol):
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
-    ) -> DefaultPreSubmissionExecutionResult:
+    ) -> PreSubmissionExecutionResult:
         """Materialize one process-local prepared bundle generation."""
 
     async def materialize_guide_source(

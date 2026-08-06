@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -45,6 +46,264 @@ class ArtifactContent(Base):
     byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
     media_type: Mapped[str | None] = mapped_column(String(200))
     normalized_display_name: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PreSubmitEvidenceSet(Base):
+    """Immutable execution provenance for one exact prepared submission bundle."""
+
+    __tablename__ = "pre_submit_evidence_sets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_pre_submit_evidence_identity_actor",
+        ),
+        ForeignKeyConstraint(
+            ["assignment_id", "task_id", "actor_profile_id"],
+            ["task_assignments.id", "task_assignments.task_id", "task_assignments.contributor_id"],
+            name="fk_pre_submit_evidence_assignment",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "project_id"],
+            ["workstream_tasks.id", "workstream_tasks.project_id"],
+            name="fk_pre_submit_evidence_task_project",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "guide_version"],
+            ["workstream_tasks.id", "workstream_tasks.locked_guide_version"],
+            name="fk_pre_submit_evidence_task_guide",
+        ),
+        ForeignKeyConstraint(
+            ["guide_id", "project_id", "guide_version"],
+            ["project_guides.id", "project_guides.project_id", "project_guides.version"],
+            name="fk_pre_submit_evidence_guide_lineage",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "source_snapshot_id", "source_snapshot_sha256"],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_guide_source_snapshot_id",
+                "workstream_tasks.locked_guide_source_snapshot_hash",
+            ],
+            name="fk_pre_submit_evidence_task_source_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["predecessor_submission_id", "task_id", "predecessor_submission_version"],
+            ["submissions.id", "submissions.task_id", "submissions.version"],
+            name="fk_pre_submit_evidence_predecessor",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "effective_policy_id", "locked_artifact_policy_sha256"],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_effective_project_submission_artifact_policy_id",
+                "workstream_tasks.locked_effective_project_submission_artifact_policy_hash",
+            ],
+            name="fk_pre_submit_evidence_task_artifact_policy",
+        ),
+        ForeignKeyConstraint(
+            ["task_id", "pre_submit_policy_id", "locked_checker_policy_sha256"],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_pre_submit_checker_policy_id",
+                "workstream_tasks.locked_pre_submit_checker_bundle_hash",
+            ],
+            name="fk_pre_submit_evidence_task_checker_policy",
+        ),
+        UniqueConstraint("operation_identity", name="uq_pre_submit_evidence_operation"),
+        CheckConstraint(
+            SHA256_CHECK.format(column="operation_identity"),
+            name="ck_pre_submit_evidence_operation_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="archive_sha256"),
+            name="ck_pre_submit_evidence_archive_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="semantic_manifest_sha256"),
+            name="ck_pre_submit_evidence_manifest_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="effective_plan_sha256"),
+            name="ck_pre_submit_evidence_plan_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="catalogue_manifest_sha256"),
+            name="ck_pre_submit_evidence_catalogue_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="locked_guide_sha256"),
+            name="ck_pre_submit_evidence_guide_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="source_snapshot_sha256"),
+            name="ck_pre_submit_evidence_source_snapshot_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="locked_artifact_policy_sha256"),
+            name="ck_pre_submit_evidence_artifact_policy_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="locked_checker_policy_sha256"),
+            name="ck_pre_submit_evidence_checker_policy_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="result_manifest_sha256"),
+            name="ck_pre_submit_evidence_result_manifest_sha256",
+        ),
+        CheckConstraint("archive_byte_count >= 0", name="ck_pre_submit_evidence_archive_size"),
+        CheckConstraint("result_count > 0", name="ck_pre_submit_evidence_result_count"),
+        CheckConstraint(
+            "(predecessor_submission_id is null and predecessor_submission_version is null) "
+            "or (predecessor_submission_id is not null and "
+            "predecessor_submission_version is not null)",
+            name="ck_pre_submit_evidence_predecessor_shape",
+        ),
+        CheckConstraint(
+            "storage_scheme in ('local','s3')", name="ck_pre_submit_evidence_storage_scheme"
+        ),
+        CheckConstraint(
+            "terminal_status in ('passed','blocked')",
+            name="ck_pre_submit_evidence_terminal_status",
+        ),
+        CheckConstraint(
+            "(terminal_status='passed' and eligible) or "
+            "(terminal_status='blocked' and not eligible)",
+            name="ck_pre_submit_evidence_status_eligibility",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    operation_identity: Mapped[str] = mapped_column(String(71), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    identity_link_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_identity_links.id", ondelete="RESTRICT"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    assignment_id: Mapped[str] = mapped_column(
+        ForeignKey("task_assignments.id", ondelete="RESTRICT"), nullable=False
+    )
+    predecessor_submission_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submissions.id", ondelete="RESTRICT")
+    )
+    predecessor_submission_version: Mapped[int | None] = mapped_column(Integer)
+    prepared_generation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    archive_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    archive_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    semantic_manifest_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    semantic_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    guide_id: Mapped[str] = mapped_column(
+        ForeignKey("project_guides.id", ondelete="RESTRICT"), nullable=False
+    )
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_snapshot_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_guide_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    effective_policy_id: Mapped[str] = mapped_column(
+        ForeignKey("effective_project_submission_artifact_policies.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    locked_artifact_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    pre_submit_policy_id: Mapped[str] = mapped_column(
+        ForeignKey("pre_submit_checker_policies.id", ondelete="RESTRICT"), nullable=False
+    )
+    locked_checker_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    effective_plan_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    catalogue_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    catalogue_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    catalogue_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    storage_scheme: Mapped[str] = mapped_column(String(16), nullable=False)
+    terminal_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    result_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    result_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PreSubmitEvidenceResult(Base):
+    """One immutable ordered member of a pre-submit evidence set."""
+
+    __tablename__ = "pre_submit_evidence_results"
+    __table_args__ = (
+        UniqueConstraint("evidence_set_id", "result_order", name="uq_pre_submit_result_order"),
+        UniqueConstraint(
+            "evidence_set_id", "definition_id",
+            name="uq_pre_submit_result_definition",
+        ),
+        CheckConstraint("result_order >= 0", name="ck_pre_submit_result_order"),
+        CheckConstraint(
+            "status in ('passed','warning','advisory_disabled','dependency_not_run','failed')",
+            name="ck_pre_submit_result_status",
+        ),
+        CheckConstraint(
+            "(status='failed' and failure_code is not null) or "
+            "(status<>'failed' and failure_code is null)",
+            name="result_failure_shape",
+        ),
+        CheckConstraint(
+            "phase in ('custody','identity','materialization','default_policy','project_policy')",
+            name="ck_pre_submit_result_phase",
+        ),
+        CheckConstraint(
+            "classification in ('mandatory_security','mandatory_integrity',"
+            "'mandatory_accountability','advisory')",
+            name="ck_pre_submit_result_classification",
+        ),
+        CheckConstraint(
+            "severity in ('blocking','warning')",
+            name="ck_pre_submit_result_severity",
+        ),
+        CheckConstraint(
+            "(classification='advisory' and severity='warning') or "
+            "(classification<>'advisory' and severity='blocking')",
+            name="ck_pre_submit_result_classification_severity",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="effective_plan_sha256"),
+            name="ck_pre_submit_result_plan_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="locked_policy_sha256"),
+            name="ck_pre_submit_result_policy_sha256",
+        ),
+        CheckConstraint(
+            "(phase='project_policy' and rule_instance_id is not null and "
+            "rule_instance_id ~ '^sha256:[0-9a-f]{64}$') or "
+            "(phase<>'project_policy' and rule_instance_id is null)",
+            name="ck_pre_submit_result_rule_instance_shape",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    evidence_set_id: Mapped[str] = mapped_column(
+        ForeignKey("pre_submit_evidence_sets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    result_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    dispatch_authority: Mapped[str] = mapped_column(String(160), nullable=False)
+    definition_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    definition_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    public_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    source: Mapped[str] = mapped_column(String(160), nullable=False)
+    phase: Mapped[str] = mapped_column(String(40), nullable=False)
+    classification: Mapped[str] = mapped_column(String(40), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    failure_code: Mapped[str | None] = mapped_column(String(160))
+    message_code: Mapped[str] = mapped_column(String(160), nullable=False)
+    effective_plan_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    rule_instance_id: Mapped[str | None] = mapped_column(String(71))
+    locked_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

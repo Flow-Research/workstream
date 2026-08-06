@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0057_submission_policy_authority"
+HEAD_REVISION = "0058_pre_submit_evidence"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -100,6 +100,99 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12G,
     ActionOwner.AUTH_12H,
 }
+
+
+async def _pre_submit_evidence_schema(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            tables = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select table_name from information_schema.tables where "
+                            "table_schema=current_schema() and table_name like "
+                            "'pre_submit_evidence_%'"
+                        )
+                    )
+                ).scalars()
+            }
+            constraints = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select conname from pg_constraint where conname like "
+                            "'%pre_submit_evidence%' or conname in "
+                            "('uq_actor_identity_links_id_profile',"
+                            "'uq_workstream_tasks_id_project',"
+                            "'uq_task_assignments_id_task_contributor',"
+                            "'uq_project_guides_id_project_version')"
+                        )
+                    )
+                ).scalars()
+            }
+            triggers = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and "
+                            "tgname like 'pre_submit_evidence_%'"
+                        )
+                    )
+                ).scalars()
+            }
+            return {"tables": tables, "constraints": constraints, "triggers": triggers}
+    finally:
+        await engine.dispose()
+
+
+def test_0058_pre_submit_evidence_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0057_submission_policy_authority")
+            prior = asyncio.run(_pre_submit_evidence_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            installed = asyncio.run(_pre_submit_evidence_schema(isolated_database_env))
+            command.downgrade(config, "0057_submission_policy_authority")
+            restored = asyncio.run(_pre_submit_evidence_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            repeated = asyncio.run(_pre_submit_evidence_schema(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert prior == restored == {"tables": set(), "constraints": set(), "triggers": set()}
+    assert installed == repeated
+    assert installed["tables"] == {
+        "pre_submit_evidence_sets",
+        "pre_submit_evidence_results",
+    }
+    assert {
+        "uq_actor_identity_links_id_profile",
+        "uq_workstream_tasks_id_project",
+        "uq_task_assignments_id_task_contributor",
+        "uq_project_guides_id_project_version",
+        "fk_pre_submit_evidence_identity_actor",
+        "fk_pre_submit_evidence_assignment",
+        "fk_pre_submit_evidence_task_project",
+        "fk_pre_submit_evidence_guide_lineage",
+        "fk_pre_submit_evidence_task_source_snapshot",
+        "ck_pre_submit_evidence_results_result_failure_shape",
+    }.issubset(installed["constraints"])
+    assert installed["triggers"] == {
+        "pre_submit_evidence_sets_immutable",
+        "pre_submit_evidence_sets_creation",
+        "pre_submit_evidence_sets_no_truncate",
+        "pre_submit_evidence_results_immutable",
+        "pre_submit_evidence_results_membership",
+        "pre_submit_evidence_results_no_truncate",
+    }
 
 
 async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:

@@ -156,6 +156,9 @@ class ActorIdentityLink(Base):
         ),
         UniqueConstraint("issuer", "subject", name="external_identity"),
         UniqueConstraint("actor_profile_id", name="actor_profile"),
+        UniqueConstraint(
+            "id", "actor_profile_id", name="uq_actor_identity_links_id_profile"
+        ),
         Index(
             "ix_actor_identity_links_issuer_subject_status",
             "issuer",
