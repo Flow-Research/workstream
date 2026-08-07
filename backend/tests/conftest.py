@@ -94,6 +94,7 @@ RESETTABLE_TEST_TABLES = (
     "review_queue_entries",
     "submission_policy_mutation_idempotency_records",
     "submission_artifact_policies",
+    "submission_bundle_durable_intents",
     "submissions",
     "task_assignments",
     "workstream_tasks",
@@ -123,6 +124,7 @@ TRUNCATE_GUARDED_TABLES = (
     "review_queue_entries",
     "review_policies",
     "revision_policies",
+    "submission_bundle_durable_intents",
     "submission_policy_mutation_idempotency_records",
 )
 TestDatabaseReset = Callable[..., Awaitable[None]]
