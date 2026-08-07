@@ -50,7 +50,7 @@ provider redesign, second recovery aggregate, retention/deletion, or availabilit
 - The shared `ArtifactPutAttempt` producer constraints explicitly admit the
   submission-bundle producer. Generic scanner, verification, and recovery paths
   remain producer-neutral; guide setup continuation must ignore submission
-  attempts and no producer-specific worker path is added.
+  attempts and no producer-specific execution path is added.
 - Exact concurrent continuation of one live prepared generation is fenced by
   durable uniqueness and creates one intent, capacity effect, and logical put
   effect. If a process dies after immutable passing evidence commits but before

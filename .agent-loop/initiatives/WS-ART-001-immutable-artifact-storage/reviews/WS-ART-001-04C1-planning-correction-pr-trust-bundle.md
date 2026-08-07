@@ -49,13 +49,16 @@ retention/deletion, provider redesign, and AUTH availability.
 
 - `git diff --check`: passed.
 - stale artifact contract scan: passed.
-- Markdown link scan across six changed files: passed.
+- Markdown link scan across all changed Markdown files: passed.
+- stale authorization documentation scan: passed after replacing two ambiguous
+  human-role uses of “worker” with precise process/execution wording.
 - Test delta: none; planning-only.
 - CI integrity: no workflow, command, coverage, or dependency change.
 
 Internal architecture, security/auth, product/ops, QA, senior-engineering, and
 docs plan reviews passed after all material findings were incorporated.
-External CI and CodeRabbit remain pending after PR publication.
+CodeRabbit completed with no actionable comments. Backend gates passed on the
+initial PR head; hosted Agent Gates are rerun after the wording repair.
 
 ## Remaining Risks And Follow-Up
 

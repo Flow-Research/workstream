@@ -411,7 +411,7 @@ Neither scratch state nor a process-local capability is durable lineage, and
 04C2 never reconstructs facts by parsing a request digest.
 
 The normal path consumes a live `PreSubmitPassCapability` and the exact
-`PreparedArtifact` immediately. If a worker dies after immutable passing
+`PreparedArtifact` immediately. If the process terminates after immutable passing
 evidence commits but before the durable intent transaction, recovery requires a
 complete fresh upload and checker execution with a new prepared generation,
 evidence identity, and immediate pass capability. An old durable evidence row
