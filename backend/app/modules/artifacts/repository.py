@@ -17,6 +17,7 @@ from app.modules.artifacts.models import (
     ArtifactBinding,
     ArtifactContent,
     ArtifactOperationReceipt,
+    PreSubmitEvidenceSet,
     ArtifactPutAttempt,
     ArtifactPutAttemptCharge,
     ArtifactPutObservationReceipt,
@@ -25,6 +26,7 @@ from app.modules.artifacts.models import (
     ArtifactReplica,
     ArtifactRecoveryAttempt,
     ArtifactStorageNamespace,
+    SubmissionBundleDurableIntent,
 )
 from app.modules.checkers.models import CheckerRun
 from app.modules.projects.models import (
@@ -383,6 +385,46 @@ class ArtifactRepository:
                 ArtifactPutAttempt.operation_identity == operation_identity
             )
         )
+
+    async def lock_pre_submit_evidence_set(
+        self, evidence_set_id: str
+    ) -> PreSubmitEvidenceSet | None:
+        """Lock one immutable passing evidence identity for durable continuation."""
+        return await self._session.scalar(
+            select(PreSubmitEvidenceSet)
+            .where(PreSubmitEvidenceSet.id == evidence_set_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+
+    async def get_submission_bundle_intent_by_evidence(
+        self, evidence_set_id: str
+    ) -> SubmissionBundleDurableIntent | None:
+        """Load the one durable intent already created from an evidence set."""
+        return await self._session.scalar(
+            select(SubmissionBundleDurableIntent).where(
+                SubmissionBundleDurableIntent.pre_submit_evidence_set_id == evidence_set_id
+            )
+        )
+
+    async def lock_submission_bundle_intent(
+        self, intent_id: str
+    ) -> SubmissionBundleDurableIntent | None:
+        """Lock one exact durable intent selected for bounded source replay."""
+        return await self._session.scalar(
+            select(SubmissionBundleDurableIntent)
+            .where(SubmissionBundleDurableIntent.id == intent_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+
+    async def add_submission_bundle_intent(
+        self, intent: SubmissionBundleDurableIntent
+    ) -> SubmissionBundleDurableIntent:
+        """Flush the immutable evidence-to-put-attempt fence."""
+        self._session.add(intent)
+        await self._session.flush()
+        return intent
 
     async def lock_put_attempt(self, attempt_id: str) -> ArtifactPutAttempt | None:
         """Lock one exact attempt and refresh its current fence."""

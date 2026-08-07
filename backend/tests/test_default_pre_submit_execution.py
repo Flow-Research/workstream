@@ -9,15 +9,17 @@ from pathlib import Path
 import threading
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 import zipfile
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
+from app.core.config import Settings
 from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
@@ -27,6 +29,19 @@ from app.modules.artifacts.preparation import (
     ArtifactScratchManager,
 )
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+from app.modules.artifacts.models import SubmissionBundleDurableIntent
+from app.modules.artifacts.service import (
+    ArtifactAdmissionRelationshipError,
+    ArtifactAdmissionService,
+    ArtifactStorageNamespaceSpec,
+)
+from app.modules.artifacts.submission_admission import (
+    SubmissionBundleDurablePutRequest,
+    SubmissionBundleDurablePutService,
+)
+from app.modules.artifacts.submission_authorization import (
+    DenySubmissionBundlePreparedAuthorization,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
     SubmissionArchiveLimits,
@@ -56,10 +71,22 @@ from app.modules.checkers.pre_submit_execution import (
     SubmissionPacketView,
     validate_pre_submission_execution_result,
 )
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
 async def _bytes(value: bytes):
     yield value
+
+
+class _AllowSubmissionPreparedAuthorization:
+    """Test-only final authority that records transaction-bound consumption."""
+
+    def __init__(self) -> None:
+        self.facts = None
+
+    async def consume(self, *, prepared_authorization, facts) -> None:
+        assert type(prepared_authorization) is PreparedAuthorizationHandle
+        self.facts = facts
 
 
 @pytest.mark.asyncio
@@ -82,11 +109,16 @@ async def test_evidence_workflow_requires_transaction_free_session() -> None:
 def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes:
     output = BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
-        archive.writestr(path, b"[task]\nname='proof'\n")
+
+        def write(name: str, value: bytes) -> None:
+            entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            archive.writestr(entry, value)
+
+        write(path, b"[task]\nname='proof'\n")
         if extra_path is not None:
-            archive.writestr(extra_path, b"blocked\n")
+            write(extra_path, b"blocked\n")
         if path != "evidence/results":
-            archive.writestr("evidence/results", b"verified\n")
+            write("evidence/results", b"verified\n")
     return output.getvalue()
 
 
@@ -595,6 +627,35 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     storage_scheme="s3",
                 ),
             )
+
+            async def fresh_checked_bundle():
+                prepared = await preparation.prepare(
+                    _bytes(_archive()),
+                    media_type="application/zip",
+                )
+                inspection = await prepared.inspect(inspector)
+                manifest = build_submission_manifest(inspection)
+                fresh_request = replace(
+                    request,
+                    prepared_artifact=prepared,
+                    inspection=inspection,
+                    manifest=manifest,
+                    change_gate=evaluate_submission_change(
+                        commitment=prepared.commitment,
+                        manifest=manifest,
+                        predecessor=None,
+                        predecessor_exists=False,
+                    ),
+                )
+                result = await workflow.execute(
+                    fresh_request,
+                    actor_profile_id=actor_id,
+                    identity_link_id=identity_link_id,
+                    predecessor_submission_id=None,
+                )
+                assert result.pass_capability is not None
+                return prepared, result
+
             first = await workflow.execute(
                 request,
                 actor_profile_id=actor_id,
@@ -607,6 +668,161 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 identity_link_id=identity_link_id,
                 predecessor_submission_id=None,
             )
+            assert first.pass_capability is not None
+            namespace = ArtifactStorageNamespaceSpec(
+                backend="local",
+                adapter="local",
+                provider_profile="test",
+                namespace_descriptor={"test": "submission-bundle"},
+                namespace_fingerprint=canonical_json_hash({"test": "submission-bundle"}),
+            )
+            admission_settings = Settings(
+                **artifact_admission_limit_settings(1024 * 1024),
+                environment="test",
+                artifact_store_backend="local",
+                artifact_local_root=tmp_path / "durable",
+                artifact_scratch_root=tmp_path / "scratch",
+                artifact_scratch_minimum_free_bytes=0,
+            )
+            provider = SimpleNamespace(
+                execute_committed_put=AsyncMock(),
+                resume_committed_put=AsyncMock(),
+            )
+            final_authority = _AllowSubmissionPreparedAuthorization()
+            durable_service = SubmissionBundleDurablePutService(
+                session=session,
+                admission=ArtifactAdmissionService(
+                    session,
+                    admission_settings,
+                    namespace,
+                ),
+                storage=provider,
+                authorization=final_authority,
+            )
+            async with session.begin():
+                (
+                    retained,
+                    selected_evidence_id,
+                    first_admission,
+                ) = await durable_service.admit_in_transaction(
+                    SubmissionBundleDurablePutRequest(
+                        prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                        prepared_artifact=request.prepared_artifact,
+                        pass_capability=first.pass_capability,
+                    )
+                )
+            provider.execute_committed_put.assert_not_awaited()
+            provider.resume_committed_put.assert_not_awaited()
+            intent = await session.scalar(
+                select(SubmissionBundleDurableIntent).where(
+                    SubmissionBundleDurableIntent.put_attempt_id == str(first_admission.attempt_id)
+                )
+            )
+            assert intent is not None
+            replay_intent_id = UUID(intent.id)
+            await session.rollback()
+
+            replay_prepared, fresh = await fresh_checked_bundle()
+            async with session.begin():
+                (
+                    replay_retained,
+                    replay_evidence_id,
+                    replay_admission,
+                ) = await durable_service.admit_in_transaction(
+                    SubmissionBundleDurablePutRequest(
+                        prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                        prepared_artifact=replay_prepared,
+                        pass_capability=fresh.pass_capability,
+                        replay_durable_intent_id=replay_intent_id,
+                    )
+                )
+            assert replay_admission.replayed is True
+            assert replay_admission.attempt_id == first_admission.attempt_id
+            assert replay_evidence_id == fresh.evidence.evidence_set_id
+            await replay_retained.close()
+            intent_count = int(
+                await session.scalar(
+                    select(func.count()).select_from(SubmissionBundleDurableIntent)
+                )
+                or 0
+            )
+            assert intent_count == 1
+            await session.rollback()
+
+            drift_prepared, drift = await fresh_checked_bundle()
+            await session.execute(
+                text("update task_assignments set status='inactive' where id=:assignment"),
+                {"assignment": str(request.assignment_id)},
+            )
+            await session.commit()
+            with pytest.raises(
+                ArtifactAdmissionRelationshipError,
+                match="passing evidence is unavailable|locked_context",
+            ):
+                async with session.begin():
+                    await durable_service.admit_in_transaction(
+                        SubmissionBundleDurablePutRequest(
+                            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                            prepared_artifact=drift_prepared,
+                            pass_capability=drift.pass_capability,
+                        )
+                    )
+            await session.execute(
+                text("update task_assignments set status='active' where id=:assignment"),
+                {"assignment": str(request.assignment_id)},
+            )
+            await session.commit()
+
+            denied_prepared, denied = await fresh_checked_bundle()
+            denied_service = SubmissionBundleDurablePutService(
+                session=session,
+                admission=ArtifactAdmissionService(
+                    session,
+                    admission_settings,
+                    namespace,
+                ),
+                storage=provider,
+                authorization=DenySubmissionBundlePreparedAuthorization(),
+            )
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                async with session.begin():
+                    await denied_service.admit_in_transaction(
+                        SubmissionBundleDurablePutRequest(
+                            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                            prepared_artifact=denied_prepared,
+                            pass_capability=denied.pass_capability,
+                        )
+                    )
+            durable_counts = {
+                table: int(await session.scalar(text(f"select count(*) from {table}")) or 0)
+                for table in (
+                    "artifact_put_attempts",
+                    "submission_bundle_durable_intents",
+                    "artifact_admission_charges",
+                )
+            }
+            guide_continuation_matches = int(
+                await session.scalar(
+                    text(
+                        "select count(*) from artifact_put_attempts attempt "
+                        "join guide_source_snapshot_items item "
+                        "on item.id=attempt.guide_source_item_id "
+                        "where attempt.producer_request_type='submission_bundle'"
+                    )
+                )
+                or 0
+            )
+            await session.rollback()
+            assert durable_counts == {
+                "artifact_put_attempts": 1,
+                "submission_bundle_durable_intents": 1,
+                "artifact_admission_charges": 4,
+            }
+            assert guide_continuation_matches == 0
+            provider.execute_committed_put.assert_not_awaited()
+            provider.resume_committed_put.assert_not_awaited()
+            assert selected_evidence_id == first.evidence.evidence_set_id
+            assert retained is request.prepared_artifact
             await request.prepared_artifact.close()
             original_prepared_closed = True
             blocked_prepared = await preparation.prepare(
@@ -723,9 +939,12 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     assert blocked.failure_audit["event_type"] == "pre_submission_check_failed"
     assert blocked.failure_audit["failed_count"] >= 1
     assert "task.toml" not in repr(blocked.failure_audit)
-    assert evidence_count == 2
-    assert result_count == 2 * len(request.effective_plan.entries)
-    assert after == before
+    assert evidence_count == 5
+    assert result_count == 5 * len(request.effective_plan.entries)
+    assert after == {
+        **before,
+        "artifact_put_attempts": before["artifact_put_attempts"] + 1,
+    }
 
 
 @pytest.mark.asyncio

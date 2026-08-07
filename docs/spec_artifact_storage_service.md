@@ -1239,8 +1239,8 @@ messages.
 
 Before provider I/O, the final preparation transaction persists one immutable
 submission-producer intent linked by foreign keys to the exact passing
-`PreSubmitEvidenceSet` and generic `ArtifactPutAttempt`. It preserves the actor
-and identity link, project, task, assignment, predecessor identity/version,
+`PreSubmitEvidenceSet` and generic `ArtifactPutAttempt`. Those typed joins
+preserve the actor and identity link, project, task, assignment, predecessor identity/version,
 locked guide/snapshot/policy lineage, semantic-manifest identity/digest,
 archive digest/size/media type, effective-plan digest, storage scheme, and
 operation identity required for database-only verified-admission publication.
@@ -1259,6 +1259,9 @@ execution, which produces a new prepared generation, evidence identity, and
 single-use pass capability. If the process dies after intent commit, the
 existing generic put-attempt observation and recovery machinery owns the
 technical obligation without another submission-specific recovery aggregate.
+Migration `0059_submission_bundle_durable_intent` installs the immutable join
+and extends only the existing generic put-attempt and receipt producer shapes
+needed for submission bundles.
 
 ### SubmissionBundleAdmission
 

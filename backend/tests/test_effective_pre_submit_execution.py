@@ -15,7 +15,7 @@ from app.modules.tasks.pre_submit_context import (
 from app.modules.artifacts.pre_submit_evidence import (
     PreSubmitEvidenceConflict,
     PreSubmitEvidenceContext,
-    PreSubmitPassCapability,
+    PreSubmitEvidenceService,
     PersistedPreSubmitEvidence,
     pre_submit_failure_audit_payload,
     semantic_manifest_identity,
@@ -89,7 +89,7 @@ def test_semantic_manifest_identity_is_server_deterministic() -> None:
 def test_pass_capability_is_generation_bound_and_single_use() -> None:
     evidence_set_id = uuid4()
     generation_id = uuid4()
-    capability = PreSubmitPassCapability(
+    capability = PreSubmitEvidenceService(SimpleNamespace())._mint_pass_capability(
         evidence_set_id=evidence_set_id,
         prepared_generation_id=generation_id,
         predecessor_submission_id=None,

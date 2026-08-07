@@ -72,6 +72,7 @@ INTERNAL_ADMISSION_TYPES = {
     "ArtifactAdmissionResult",
     "CheckerOutputArtifactAdmissionRequest",
     "GuideArtifactAdmissionRequest",
+    "SubmissionBundleArtifactAdmissionRequest",
 }
 
 RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
