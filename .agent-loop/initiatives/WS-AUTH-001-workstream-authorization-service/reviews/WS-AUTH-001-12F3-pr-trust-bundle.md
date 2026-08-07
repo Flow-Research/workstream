@@ -101,7 +101,14 @@ docs, and CI-integrity reviews passed after findings were fixed.
 
 ## External review
 
-Pending CodeRabbit and exact-head GitHub Actions checks.
+CodeRabbit reported no actionable comments. The first hosted Backend run found
+three stale contract expectations after the fixed-service cutover; they were
+corrected without changing authorization behavior or CI. Fresh exact-head
+GitHub Actions checks are required after the corrective push.
+
+The corrective local evidence passed: Ruff, two focused OpenAPI/audit tests,
+and four focused PostgreSQL migration regressions. CI-integrity re-review passed
+with no required fixes.
 
 ## Remaining risks
 

@@ -97,6 +97,7 @@ _PROJECT_MUTATION_OWNERS = {
     ActionOwner.AUTH_12E,
     ActionOwner.AUTH_12F,
     ActionOwner.AUTH_12F2,
+    ActionOwner.AUTH_12F3,
     ActionOwner.AUTH_12G,
     ActionOwner.AUTH_12H,
 }
