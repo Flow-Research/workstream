@@ -12,6 +12,11 @@
   action when its catalogue owner moved from `AUTH_12F` to `AUTH_12F3`; the
   frozen project-mutation owner set now includes the successor owner so all
   eighteen migration-0041 action pairs and downgrade exclusions remain exact.
+- The next hosted run passed all five semantic lanes, then the real-API drill
+  exposed stale test composition: its deterministic project-agent runtime was
+  not installed in the new 12F3 policy-derivation owner. The drill now installs
+  that runtime in `submission_policy_mutation_service` as well; production
+  fail-closed adapter behavior is unchanged.
 
 ## Comments deferred
 
@@ -28,6 +33,8 @@ None before review. Human approval remains required to merge PR #295.
 - Four focused PostgreSQL migration regressions covering migration-0041 action
   parity, downgrade custody, authorization-action evidence, and bootstrap
   authority passed.
+- The API-contract support module selector passed (17 tests), together with
+  Ruff and compile validation of the real-API drill.
 - Full repository coverage remains assigned to exact-head GitHub Actions.
 
 ## Remaining risks

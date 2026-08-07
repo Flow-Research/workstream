@@ -110,6 +110,11 @@ The corrective local evidence passed: Ruff, two focused OpenAPI/audit tests,
 and four focused PostgreSQL migration regressions. CI-integrity re-review passed
 with no required fixes.
 
+The following hosted run passed every semantic lane, then found that the
+real-API drill had not injected its deterministic agent into the new 12F3
+policy-derivation module. Test composition was corrected without adding a
+production fallback; the API-contract support selector passes locally.
+
 ## Remaining risks
 
 Low: execution-fence and worker composition scaffolding parallels sufficiency;
