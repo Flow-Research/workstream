@@ -23,7 +23,6 @@ scripts/workstream_agent_gate.py
 CONTRIBUTING.md
 docs/operations_backend_testing.md
 .agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
-.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-04-completeness-preparation.md
 .agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-04-*
 ```
 ## Not allowed
@@ -47,4 +46,5 @@ Architecture, QA, security, CI integrity, docs, reuse/dedup, and test delta.
 ## Human review focus
 No admin action and precise contributor repair.
 ## Stop conditions
-Stop if unrelated work is blocked ambiguously.
+Stop if unrelated work is blocked ambiguously. Changes to this contract require
+parent-initiative approval and are outside the chunk's own write authority.

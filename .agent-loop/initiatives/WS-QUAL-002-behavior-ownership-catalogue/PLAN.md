@@ -45,9 +45,14 @@ names `supersedes_behavior_id`, is admitted only when the exact Git delta proves
 the protected location is absent or renamed and the PR-head location exists,
 and carries forward every protected owning test, outcome, and real boundary
 unless a separately reviewed ownership change adds stronger evidence. Effective
-selection resolves the superseded binding before mutation input and must yield
-exactly one reviewed owner for every changed executable line; zero or multiple
-effective owners fail closed.
+selection first requires globally unique `behavior_id` values across protected
+records and a one-to-one `supersedes_behavior_id` mapping: one remap may
+supersede one protected identity, and a protected identity may be superseded by
+at most one admitted remap. Duplicate reviewed owners, duplicate behavior
+identities, mapping collisions, or remaps whose protected identity lookup does
+not resolve exactly once fail closed before mutation input. After resolving the
+superseded binding, selection must yield exactly one reviewed owner for every
+changed executable line; zero or multiple effective owners also fail closed.
 
 ## Verification strategy
 
