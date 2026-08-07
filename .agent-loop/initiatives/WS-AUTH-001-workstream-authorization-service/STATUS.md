@@ -183,7 +183,7 @@ human-merged.
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
-| `WS-AUTH-001-12F3` | Ready for PR | `codex/ws-auth-001-12f3-service-derivation` | - | Fixed setup-service derivation and asynchronous executor cutover; internal L1 reviews passed. |
+| `WS-AUTH-001-12F3` | External checks | `codex/ws-auth-001-12f3-service-derivation` | #295 | Fixed setup-service derivation and asynchronous executor cutover; internal L1 reviews passed. |
 | `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |
 | `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |

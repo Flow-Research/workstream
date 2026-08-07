@@ -2,8 +2,8 @@
 
 ## Status and prerequisite
 
-Implementation complete and ready for hosted CI/external review after merged
-12F2. Risk: L1. Human merge remains required.
+Implementation complete in PR #295; hosted CI/external review is pending after
+merged 12F2. Risk: L1. Human merge remains required.
 
 ## Goal
 
