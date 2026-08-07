@@ -28,6 +28,10 @@ from app.modules.artifacts.schemas import (
     ArtifactPutAttemptAuthorityFacts,
     ArtifactVerificationAuthorityFacts,
 )
+from app.modules.artifacts.submission_materialization import (
+    PreSubmitMaterializationAuthorityFacts,
+    PreSubmitMaterializationPreparationFacts,
+)
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
@@ -49,6 +53,8 @@ from app.modules.authorization.runtime import (
     GuideSourceIngestResourceContext,
     GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
+    PreSubmitCheckerInputResourceContext,
+    PreSubmitCheckerInputPreparationContext,
     HumanAuthorizationContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
@@ -352,8 +358,8 @@ def get_guide_artifact_prepared_authorization(
     return PreparedGuideArtifactAuthorization(session)
 
 
-class _PreparedGuideSourceServiceAuthorization:
-    """Issue and consume one exact fixed-service guide capability."""
+class _PreparedArtifactServiceAuthorization:
+    """Issue and consume one exact fixed-service artifact capability."""
 
     def __init__(
         self,
@@ -372,18 +378,26 @@ class _PreparedGuideSourceServiceAuthorization:
         self._prepared: PreparedAuthorizationService | None = None
         self._input: PreparedAuthorizationInput | None = None
         self._handle: PreparedAuthorizationHandle | None = None
-        self._facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts | None = None
+        self._facts: (
+            GuideSourceBindingAuthorityFacts
+            | GuideSourceReadAuthorityFacts
+            | PreSubmitMaterializationAuthorityFacts
+            | PreSubmitMaterializationPreparationFacts
+            | None
+        ) = None
 
     async def prepare(
         self,
         *,
-        facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
+        facts: GuideSourceBindingAuthorityFacts
+        | GuideSourceReadAuthorityFacts
+        | PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
         """Prepare one process-local capability bound to every canonical fact."""
         if self._prepared is not None:
-            raise ArtifactAuthorityDeniedError("guide source authority is invalid")
-        resource = _guide_source_resource_context(facts)
+            raise ArtifactAuthorityDeniedError("artifact service authority is invalid")
+        resource = _artifact_service_resource_context(facts)
         try:
             context = await fixed_service_authorization_context(
                 self._session,
@@ -392,9 +406,7 @@ class _PreparedGuideSourceServiceAuthorization:
                 self._correlation_id,
             )
         except PreparedAuthorizationUnsupported as exc:
-            raise ArtifactAuthorityDeniedError(
-                "artifact service principal is unavailable"
-            ) from exc
+            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
         repository = AdminAuthorizationRepository(self._session)
 
         authorization = AuthorizationService(
@@ -405,9 +417,7 @@ class _PreparedGuideSourceServiceAuthorization:
             ),
             admin_repository=repository,
         )
-        prepared = PreparedAuthorizationService(
-            self._session, context, authorization, repository
-        )
+        prepared = PreparedAuthorizationService(self._session, context, authorization, repository)
         caller_input = PreparedAuthorizationInput(
             idempotency_key=idempotency_key,
             request_value=resource.model_dump(mode="json"),
@@ -426,7 +436,7 @@ class _PreparedGuideSourceServiceAuthorization:
             ValidationError,
         ) as exc:
             prepared.close()
-            raise ArtifactAuthorityDeniedError("guide source authority is unavailable") from exc
+            raise ArtifactAuthorityDeniedError("artifact service authority is unavailable") from exc
         except BaseException:
             prepared.close()
             raise
@@ -440,26 +450,28 @@ class _PreparedGuideSourceServiceAuthorization:
         self,
         *,
         prepared_authorization: PreparedAuthorizationHandle,
-        facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
+        facts: GuideSourceBindingAuthorityFacts
+        | GuideSourceReadAuthorityFacts
+        | PreSubmitMaterializationAuthorityFacts,
     ) -> None:
         """Consume only the exact handle and facts prepared by this adapter."""
         if (
             self._prepared is None
             or self._input is None
             or self._handle is not prepared_authorization
-            or self._facts != facts
+            or not _prepared_artifact_facts_match(self._facts, facts)
         ):
-            raise ArtifactAuthorityDeniedError("guide source authority is invalid")
+            raise ArtifactAuthorityDeniedError("artifact service authority is invalid")
         prepared = self._prepared
         try:
             await prepared.consume(
                 prepared_authorization,
                 self._action_id,
                 self._input,
-                _guide_source_resource_context(facts),
+                _artifact_service_resource_context(facts),
             )
         except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, ValidationError) as exc:
-            raise ArtifactAuthorityDeniedError("guide source authority is unavailable") from exc
+            raise ArtifactAuthorityDeniedError("artifact service authority is unavailable") from exc
         finally:
             prepared.close()
             self._prepared = None
@@ -477,7 +489,7 @@ class _PreparedGuideSourceServiceAuthorization:
         self._facts = None
 
 
-class PreparedGuideSourceBindingAuthorization(_PreparedGuideSourceServiceAuthorization):
+class PreparedGuideSourceBindingAuthorization(_PreparedArtifactServiceAuthorization):
     """Prepared authority reserved to the fixed guide binding service."""
 
     def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
@@ -490,7 +502,7 @@ class PreparedGuideSourceBindingAuthorization(_PreparedGuideSourceServiceAuthori
         )
 
 
-class PreparedGuideSourceReadAuthorization(_PreparedGuideSourceServiceAuthorization):
+class PreparedGuideSourceReadAuthorization(_PreparedArtifactServiceAuthorization):
     """Prepared authority reserved to the fixed guide reader service."""
 
     def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
@@ -503,10 +515,79 @@ class PreparedGuideSourceReadAuthorization(_PreparedGuideSourceServiceAuthorizat
         )
 
 
-def _guide_source_resource_context(
-    facts: GuideSourceBindingAuthorityFacts | GuideSourceReadAuthorityFacts,
-) -> GuideSourceBindingResourceContext | GuideSourceReadResourceContext:
+class PreparedPreSubmitMaterializationAuthorization:
+    """Issue one exact capability to the fixed pre-submit materializer."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        """Bind the adapter to the materializer identity and action."""
+        self._delegate = _PreparedArtifactServiceAuthorization(
+            session,
+            service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+
+    async def prepare(
+        self,
+        *,
+        facts: PreSubmitMaterializationPreparationFacts,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle:
+        """Prepare authority from the locked scalar facts before ZIP inspection."""
+        return await self._delegate.prepare(facts=facts, idempotency_key=idempotency_key)
+
+    async def consume(
+        self,
+        *,
+        service_identity: ServiceIdentity,
+        action_id: ActionId,
+        prepared_authorization: PreparedAuthorizationHandle,
+        facts: PreSubmitMaterializationAuthorityFacts,
+    ) -> None:
+        """Consume authority only for the exact materializer and final facts."""
+        if (
+            service_identity is not ServiceIdentity.ARTIFACT_MATERIALIZER
+            or action_id is not ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
+        ):
+            raise ArtifactAuthorityDeniedError("pre-submit materialization authority is invalid")
+        await self._delegate.consume(
+            prepared_authorization=prepared_authorization,
+            facts=facts,
+        )
+
+    def close(self) -> None:
+        """Discard any process-local prepared capability still held by the adapter."""
+        self._delegate.close()
+
+
+def _artifact_service_resource_context(
+    facts: GuideSourceBindingAuthorityFacts
+    | GuideSourceReadAuthorityFacts
+    | PreSubmitMaterializationAuthorityFacts
+    | PreSubmitMaterializationPreparationFacts,
+) -> (
+    GuideSourceBindingResourceContext
+    | GuideSourceReadResourceContext
+    | PreSubmitCheckerInputResourceContext
+    | PreSubmitCheckerInputPreparationContext
+):
+    """Compose the canonical AUTH resource context for fixed ART service facts."""
     values = asdict(facts)
+    if isinstance(facts, PreSubmitMaterializationAuthorityFacts):
+        values = asdict(facts.preparation)
+        return PreSubmitCheckerInputResourceContext(
+            resource_type="pre_submit_checker_input",
+            resource_id=facts.preparation.prepared_generation_id,
+            semantic_manifest_sha256=facts.semantic_manifest_sha256,
+            **values,
+        )
+    if isinstance(facts, PreSubmitMaterializationPreparationFacts):
+        return PreSubmitCheckerInputPreparationContext(
+            resource_type="pre_submit_checker_input",
+            resource_id=facts.prepared_generation_id,
+            **values,
+        )
     if isinstance(facts, GuideSourceBindingAuthorityFacts):
         return GuideSourceBindingResourceContext(
             resource_type="guide_source_binding",
@@ -518,6 +599,24 @@ def _guide_source_resource_context(
         resource_id=facts.binding_id,
         **values,
     )
+
+
+def _prepared_artifact_facts_match(
+    prepared: GuideSourceBindingAuthorityFacts
+    | GuideSourceReadAuthorityFacts
+    | PreSubmitMaterializationPreparationFacts
+    | PreSubmitMaterializationAuthorityFacts,
+    final: GuideSourceBindingAuthorityFacts
+    | GuideSourceReadAuthorityFacts
+    | PreSubmitMaterializationAuthorityFacts,
+) -> bool:
+    """Require final facts to preserve every fact bound during preparation."""
+    if isinstance(prepared, PreSubmitMaterializationPreparationFacts):
+        return (
+            isinstance(final, PreSubmitMaterializationAuthorityFacts)
+            and prepared == final.preparation
+        )
+    return prepared == final
 
 
 class PreparedArtifactInternalAuthority:
@@ -668,9 +767,7 @@ class PreparedArtifactInternalAuthority:
                 self._correlation_id,
             )
         except PreparedAuthorizationUnsupported as exc:
-            raise ArtifactAuthorityDeniedError(
-                "artifact service principal is unavailable"
-            ) from exc
+            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
 
 
 def _scope(

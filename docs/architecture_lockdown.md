@@ -136,11 +136,14 @@ is audit evidence, not a product review decision. The independently invocable
 legacy preflight route remains frozen until ART-05B removes it together with the
 legacy Submission path; it is never an alternate authority for this flow.
 
-Hidden ART-04B2 authorizes the fixed materializer before any prepared-byte read,
-reserves the complete expanded workspace budget, verifies one canonical sealed
-tree against the 04A identities, and runs only platform/default catalogue
-entries. The callback-scoped tree and all paths are destroyed before bounded
-results return. Hidden ART-04B3 extends that same plan and sealed-tree callback
+Hidden ART-04B2 uses XINT-06A's two-stage fixed-materializer PREP. It locks the
+service/action and scalar lineage before ZIP inspection, then consumes the same
+process-local handle with the server-computed semantic-manifest identity before
+workspace reservation or checker execution. It reserves the complete expanded
+workspace budget, verifies one canonical sealed tree against the 04A identities,
+and runs only platform/default catalogue entries. The callback-scoped tree and
+all paths are destroyed before bounded results return. Hidden ART-04B3 extends
+that same plan and sealed-tree callback
 to the locked project-policy entries, then reloads the exact task context and
 persists one immutable platform-plus-project evidence set after scratch cleanup.
 It creates no provider object, admission, Submission, or lifecycle effect;

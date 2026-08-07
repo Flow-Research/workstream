@@ -48,6 +48,7 @@ from app.modules.authorization.runtime import (
     ArtifactVerificationJobResourceContext,
     GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
+    PreSubmitCheckerInputResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -188,6 +189,10 @@ _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
         "guide_source_read",
         GuideSourceReadResourceContext,
+    ),
+    ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
+        "pre_submit_checker_input",
+        PreSubmitCheckerInputResourceContext,
     ),
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
         "artifact_put_attempt",
@@ -980,9 +985,7 @@ class AuthorizationService:
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if action_id is ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN:
                 if denial is None and (
-                    not isinstance(
-                        resource_context, ProjectGuideSufficiencyMutationResourceContext
-                    )
+                    not isinstance(resource_context, ProjectGuideSufficiencyMutationResourceContext)
                     or resource_context.execution_kind != "setup_service"
                     or resource_context.scope_project_id != authority.scope_project_id
                 ):
@@ -1521,6 +1524,12 @@ class AuthorizationService:
             audit_resource_id = str(resource_context.resource_id)
             target_ref_kind = "project"
             target_ref_id = str(resource_context.scope_project_id)
+        elif isinstance(resource_context, PreSubmitCheckerInputResourceContext):
+            audit_project_id = str(resource_context.project_id)
+            audit_resource_type = resource_context.resource_type
+            audit_resource_id = str(resource_context.resource_id)
+            target_ref_kind = "project"
+            target_ref_id = str(resource_context.project_id)
         elif decision.action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             if resource_context is not None:
                 project_id = self._resource_project_id(resource_context)
@@ -1537,6 +1546,7 @@ class AuthorizationService:
             "artifact_pending_work",
             "guide_source_binding",
             "guide_source_read",
+            "pre_submit_checker_input",
             "project_diagnostic",
             "project_policy_read",
             "project_active_guide_read",

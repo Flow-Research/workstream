@@ -222,6 +222,7 @@ class ActionOwner(StrEnum):
     AUTH_12E = "WS-AUTH-001-12E"
     AUTH_12F = "WS-AUTH-001-12F"
     AUTH_12F2 = "WS-AUTH-001-12F2"
+    XINT_002_06A = "WS-XINT-002-06A"
     AUTH_12G = "WS-AUTH-001-12G"
     AUTH_12H = "WS-AUTH-001-12H"
     AUTH_13 = "WS-AUTH-001-13"
@@ -235,7 +236,6 @@ class ActionOwner(StrEnum):
     AUTH_REV_12 = "WS-AUTH-001-REV-12"
     AUTH_ART_02D_INTERNAL = "WS-AUTH-001-ART-02D-INTERNAL"
     AUTH_ART_02D_OPERATOR = "WS-AUTH-001-ART-02D-OPERATOR"
-    AUTH_ART_04B = "WS-AUTH-001-ART-04B"
     AUTH_ART_05 = "WS-AUTH-001-ART-05"
     AUTH_ART_06A = "WS-AUTH-001-ART-06A"
     AUTH_ART_06B = "WS-AUTH-001-ART-06B"
@@ -723,10 +723,10 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-        ActionOwner.AUTH_ART_04B,
+        ActionOwner.XINT_002_06A,
     ),
     _planned(
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
@@ -857,6 +857,7 @@ def _index_actions(
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
     }
     if {
         definition.action_id
@@ -1000,7 +1001,7 @@ def _index_service_actions(
         ),
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
             PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-            ActionOwner.AUTH_ART_04B,
+            ActionOwner.XINT_002_06A,
         ),
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
             PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
@@ -1074,6 +1075,7 @@ def _index_service_actions(
                 ActionId.ARTIFACT_PENDING_WORK_SCAN,
                 ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
                 ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+                ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
             }
             else ActionAvailability.PLANNED

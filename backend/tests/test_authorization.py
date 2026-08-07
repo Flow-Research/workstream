@@ -9,7 +9,7 @@ import base64
 import copy
 from collections import UserDict
 from collections.abc import Iterator, Mapping
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 import inspect
 import hashlib
@@ -67,6 +67,10 @@ import app.modules.artifacts.authorization as artifact_authorization
 from app.modules.artifacts.authorization import (
     PreparedGuideSourceBindingAuthorization,
     PreparedGuideSourceReadAuthorization,
+    PreparedPreSubmitMaterializationAuthorization,
+)
+from app.modules.artifacts.submission_materialization import (
+    PreSubmitMaterializationAuthorityFacts,
 )
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
@@ -192,6 +196,8 @@ from app.modules.authorization.runtime import (
     ArtifactVerificationJobResourceContext,
     GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
+    PreSubmitCheckerInputPreparationContext,
+    PreSubmitCheckerInputResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -1744,8 +1750,8 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
     "artifact.pre_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
-        "WS-AUTH-001-ART-04B",
-        "planned",
+        "WS-XINT-002-06A",
+        "active",
     ),
     "artifact.submission.binding.create": (
         "artifact.binding.create",
@@ -2148,6 +2154,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
     }
     assert {
         definition.action_id.value: (
@@ -2178,7 +2185,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             ActionOwner.AUTH_ART_02D_OPERATOR,
             ActionOwner.AUTH_ART_02D_INTERNAL,
             ActionOwner.XINT_002_04B,
-            ActionOwner.AUTH_ART_04B,
+            ActionOwner.XINT_002_06A,
             ActionOwner.AUTH_ART_05,
             ActionOwner.AUTH_ART_06A,
             ActionOwner.AUTH_ART_06B,
@@ -2190,7 +2197,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionOwner.AUTH_ART_02D_OPERATOR: 8,
         ActionOwner.AUTH_ART_02D_INTERNAL: 3,
         ActionOwner.XINT_002_04B: 2,
-        ActionOwner.AUTH_ART_04B: 1,
+        ActionOwner.XINT_002_06A: 1,
         ActionOwner.AUTH_ART_05: 1,
         ActionOwner.AUTH_ART_06A: 1,
         ActionOwner.AUTH_ART_06B: 2,
@@ -2229,14 +2236,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 50
+        == 51
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 50
+        == 49
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2398,9 +2405,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
         action_id: ProjectSubmissionArtifactPolicyMutationResourceContext(
             resource_type="project_submission_artifact_policy_mutation",
             resource_id=(
-                submission_policy_successor_id
-                if target_kind == "update"
-                else submission_policy_id
+                submission_policy_successor_id if target_kind == "update" else submission_policy_id
             ),
             operation_id=operation_id,
             request_digest=DIGEST,
@@ -2798,6 +2803,7 @@ def test_submission_artifact_policy_create_update_activation_is_12f2_only() -> N
     active_internal = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
@@ -4493,7 +4499,6 @@ async def test_project_diagnostic_read_requires_exact_active_admin_grant_and_chi
     assert evidence.events[0].after_facts["resource_context_digest"] == (
         decision.resource_context_digest
     )
-
     service, _ = _runtime_service(
         context,
         admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant),
@@ -5767,6 +5772,117 @@ async def test_prepared_guide_service_authority_is_exact_and_single_use(
 
 
 @pytest.mark.asyncio
+async def test_real_prepared_materializer_binds_preflight_and_final_evidence() -> None:
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+    session = _PreparedTestSession()
+
+    class LockedServiceFacts:
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind="service",
+                    status="active",
+                    service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER.value,
+                ),
+            )
+
+    repository = LockedServiceFacts()
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=repository,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        repository,
+    )
+    generation_id = uuid4()
+    common = {
+        "resource_type": "pre_submit_checker_input",
+        "resource_id": generation_id,
+        "task_id": uuid4(),
+        "assignment_id": uuid4(),
+        "project_id": uuid4(),
+        "guide_id": uuid4(),
+        "guide_version": 1,
+        "source_snapshot_id": uuid4(),
+        "source_snapshot_hash": "sha256:" + "1" * 64,
+        "submission_artifact_policy_id": uuid4(),
+        "submission_artifact_policy_hash": "sha256:" + "2" * 64,
+        "checker_policy_id": uuid4(),
+        "checker_policy_hash": "sha256:" + "3" * 64,
+        "prepared_generation_id": generation_id,
+        "plan_sha256": "sha256:" + "4" * 64,
+        "catalogue_manifest_sha256": "sha256:" + "5" * 64,
+        "archive_sha256": "sha256:" + "6" * 64,
+        "archive_byte_count": 10,
+        "storage_scheme": "s3",
+    }
+    preflight = PreSubmitCheckerInputPreparationContext(**common)
+    final = PreSubmitCheckerInputResourceContext(
+        **common,
+        semantic_manifest_sha256="sha256:" + "7" * 64,
+    )
+    caller = PreparedAuthorizationInput(
+        idempotency_key=uuid4(),
+        request_value=preflight.model_dump(mode="json"),
+    )
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+        artifact_resource_type="pre_submit_checker_input",
+        artifact_resource_id=generation_id,
+    )
+    handle = await prepared.prepare(
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        caller,
+        scope,
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            caller,
+            final.model_copy(update={"assignment_id": uuid4()}),
+        )
+    decision = await prepared.consume(
+        handle,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        caller,
+        final,
+    )
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
+    assert decision.resource_context_digest == authorization_resource_digest(final)
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
+    assert evidence.events[0].resource_type == "pre_submit_checker_input"
+    assert evidence.events[0].resource_id == str(generation_id)
+    assert evidence.events[0].project_id == str(final.project_id)
+    assert evidence.events[0].target_ref_kind == "project"
+    assert evidence.events[0].target_ref_id == str(final.project_id)
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            caller,
+            final,
+        )
+
+
+@pytest.mark.asyncio
 async def test_prepared_sufficiency_run_admits_only_exact_setup_service_custody() -> None:
     context = _runtime_context(
         actor_kind=ActorKind.SERVICE,
@@ -6031,6 +6147,130 @@ async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_
     await authority.consume(prepared_authorization=handle, facts=facts)
     with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
         await authority.consume(prepared_authorization=handle, facts=facts)
+
+
+@pytest.mark.asyncio
+async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _PreparedTestSession()
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+
+    async def fixed_context(*_args):
+        return context
+
+    prepared_instances = []
+
+    class FakePrepared:
+        def __init__(self, *_args) -> None:
+            self.handle = object.__new__(PreparedAuthorizationHandle)
+            self.prepared_args = None
+            self.consumed_args = None
+            prepared_instances.append(self)
+
+        async def prepare(self, *args):
+            self.prepared_args = args
+            return self.handle
+
+        async def consume(self, handle, *args):
+            assert handle is self.handle
+            self.consumed_args = args
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        artifact_authorization,
+        "fixed_service_authorization_context",
+        fixed_context,
+    )
+    monkeypatch.setattr(artifact_authorization, "PreparedAuthorizationService", FakePrepared)
+    facts = PreSubmitMaterializationAuthorityFacts(
+        task_id=uuid4(),
+        assignment_id=uuid4(),
+        project_id=uuid4(),
+        guide_id=uuid4(),
+        guide_version=1,
+        source_snapshot_id=uuid4(),
+        source_snapshot_hash="sha256:" + "1" * 64,
+        submission_artifact_policy_id=uuid4(),
+        submission_artifact_policy_hash="sha256:" + "2" * 64,
+        checker_policy_id=uuid4(),
+        checker_policy_hash="sha256:" + "3" * 64,
+        prepared_generation_id=uuid4(),
+        plan_sha256="sha256:" + "4" * 64,
+        catalogue_manifest_sha256="sha256:" + "5" * 64,
+        archive_sha256="sha256:" + "6" * 64,
+        archive_byte_count=10,
+        semantic_manifest_sha256="sha256:" + "7" * 64,
+        storage_scheme="s3",
+    )
+    authority = PreparedPreSubmitMaterializationAuthorization(
+        session,  # type: ignore[arg-type]
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    handle = await authority.prepare(facts=facts.preparation, idempotency_key=uuid4())
+    prepared_instance = prepared_instances[0]
+    prepared_action, caller_input, scope = prepared_instance.prepared_args
+    assert prepared_action is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
+    assert caller_input.request_value == PreSubmitCheckerInputPreparationContext(
+        resource_type="pre_submit_checker_input",
+        resource_id=facts.prepared_generation_id,
+        **asdict(facts.preparation),
+    ).model_dump(mode="json")
+    assert scope == PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+        artifact_resource_type="pre_submit_checker_input",
+        artifact_resource_id=facts.prepared_generation_id,
+    )
+    for field_name in facts.preparation.__dataclass_fields__:
+        original = getattr(facts, field_name)
+        changed = (
+            uuid4()
+            if isinstance(original, UUID)
+            else (original + 1 if isinstance(original, int) else f"changed-{original}")
+        )
+        with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+            await authority.consume(
+                service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+                action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+                prepared_authorization=handle,
+                facts=replace(facts, **{field_name: changed}),
+            )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+        await authority.consume(
+            service_identity=ServiceIdentity.ARTIFACT_GUIDE_READER,
+            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            prepared_authorization=handle,
+            facts=facts,
+        )
+    await authority.consume(
+        service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+        action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        prepared_authorization=handle,
+        facts=facts,
+    )
+    consumed_action, consumed_input, consumed_resource = prepared_instance.consumed_args
+    assert consumed_action is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
+    assert consumed_input is caller_input
+    assert consumed_resource == PreSubmitCheckerInputResourceContext(
+        resource_type="pre_submit_checker_input",
+        resource_id=facts.prepared_generation_id,
+        **asdict(facts.preparation),
+        semantic_manifest_sha256=facts.semantic_manifest_sha256,
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
+        await authority.consume(
+            service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
+            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            prepared_authorization=handle,
+            facts=facts,
+        )
 
 
 @pytest.mark.asyncio
