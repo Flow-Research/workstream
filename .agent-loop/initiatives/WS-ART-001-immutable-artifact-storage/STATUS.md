@@ -133,8 +133,10 @@ project-policy execution, durable evidence/admission/Submission write, route
 exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` merged through
 PR #291 as `8f516e6d`. It executes the project-policy continuation through that
 same plan and sealed tree and persists one immutable platform-plus-project
-evidence set. ART-04C1 remains stopped until AUTH `WS-XINT-002-06A` activates
-the mandatory fixed pre-submit materializer.
+evidence set. AUTH `WS-XINT-002-06A` merged through PR #293 as `1ddb941e` and
+activated only the mandatory fixed pre-submit materializer. ART-04C1 is now
+unblocked; its preimplementation review requires the durable intent correction
+recorded in the current 04C1 contract before runtime implementation.
 
 ## Gate
 
