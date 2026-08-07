@@ -430,6 +430,9 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("revision_policies", "revision_policy_mutation_custody"),
     )
     blocked_prepared = None
+    replay_prepared = None
+    drift_prepared = None
+    denied_prepared = None
     original_prepared_closed = False
     tables = (
         "artifact_contents",
@@ -917,15 +920,23 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                         )
                     )
     finally:
-        if blocked_prepared is not None:
-            await blocked_prepared.close()
+        for prepared in (
+            blocked_prepared,
+            replay_prepared,
+            drift_prepared,
+            denied_prepared,
+        ):
+            if prepared is not None:
+                await prepared.close()
         if not original_prepared_closed:
             await request.prepared_artifact.close()
-        manager.close()
-        async with engine.begin() as connection:
-            for table, trigger in reversed(custody_triggers):
-                await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
-        await engine.dispose()
+        try:
+            manager.close()
+        finally:
+            async with engine.begin() as connection:
+                for table, trigger in reversed(custody_triggers):
+                    await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
+            await engine.dispose()
 
     assert first.evidence.replayed is False
     assert replay.evidence.replayed is True
