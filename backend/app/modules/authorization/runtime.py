@@ -112,6 +112,7 @@ class PreparedAuthorityScope(BaseModel):
             "artifact_pending_work",
             "guide_source_binding",
             "guide_source_read",
+            "pre_submit_checker_input",
         ]
         | None
     ) = None
@@ -171,6 +172,7 @@ class PreparedAuthorityScope(BaseModel):
                             "artifact_verification_job",
                             "guide_source_binding",
                             "guide_source_read",
+                            "pre_submit_checker_input",
                         }
                         and isinstance(self.artifact_resource_id, UUID)
                     )
@@ -1447,6 +1449,44 @@ class GuideSourceReadResourceContext(BaseModel):
         return self
 
 
+class PreSubmitCheckerInputPreparationContext(BaseModel):
+    """Pre-inspection facts used to lock materializer authority."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["pre_submit_checker_input"]
+    resource_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    project_id: UUID
+    guide_id: UUID
+    guide_version: int = Field(gt=0)
+    source_snapshot_id: UUID
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    submission_artifact_policy_id: UUID
+    submission_artifact_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    checker_policy_id: UUID
+    checker_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    prepared_generation_id: UUID
+    plan_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    catalogue_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    archive_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    archive_byte_count: int = Field(ge=0)
+    storage_scheme: Literal["local", "s3"]
+
+    @model_validator(mode="after")
+    def bind_prepared_generation(self):
+        """Use the process-local prepared generation as the opaque selector."""
+        if self.resource_id != self.prepared_generation_id:
+            raise ValueError("pre-submit checker input resource must match generation")
+        return self
+
+
+class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationContext):
+    """Exact inspected contributor bundle authorized for checker materialization."""
+
+    semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ProjectReadResourceContext
@@ -1488,6 +1528,7 @@ AuthorizationResourceContext = (
     | ArtifactPendingWorkResourceContext
     | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
+    | PreSubmitCheckerInputResourceContext
 )
 
 
@@ -1576,6 +1617,7 @@ class AuthorizationDecision(BaseModel):
         "artifact_pending_work",
         "guide_source_binding",
         "guide_source_read",
+        "pre_submit_checker_input",
     ]
     resource_id: (
         UUID

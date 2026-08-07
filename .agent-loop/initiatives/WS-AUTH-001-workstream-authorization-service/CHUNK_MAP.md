@@ -70,7 +70,7 @@ stopped.
 | `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Merged through PR #263 |
 | `WS-AUTH-001-12F` | Submission Artifact Policy Planning Parent | L1 | Split after failed L1 pre-start review; zero activation |
 | `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Merged through PR #286; zero activation |
-| `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | In progress after passed corrected pre-start review |
+| `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Merged through PR #292 as `81f281bd` |
 | `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | Proposed after 12F2 |
 | `WS-AUTH-001-12F4` | Submission Policy Approval Chain | L1 | Proposed after 12F3 |
 | `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F4 |
@@ -92,7 +92,7 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
-| `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | After hidden ART-04B; before 05A |
+| `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | After merged ART-04B3/AUTH-12F2; before ART-04C1 and 05A |
 | `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A1-04C2 hidden behavior and 06A |
 | `WS-XINT-002-05B` | Submission Binding Activation | L1 | Feature-gated on hidden ART-05A |
 | `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on ART-06A/06B |

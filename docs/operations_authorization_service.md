@@ -807,16 +807,18 @@ compositions are the deliberate exception: their adapter retains the exact
 denial, the composition root first rolls back ART state, and AUTH's public
 bounded restage operation commits the same denial in a clean AUTH-only
 transaction. The two guide binding/read adapters do not use that exception.
-Still-planned fixed-service preparation still issues no handle. When a planned
-pre-submit materializer request is diagnosed, expect denial before any ZIP read
-or scratch workspace reservation and no ART checker result. The future XINT-06A
-activation must bind task, assignment, project, effective-policy ID,
-pre-submit-policy ID, process-local prepared generation, effective-plan and
-catalogue hashes, archive digest/size, and semantic-manifest hash to
+Still-planned fixed-service preparation still issues no handle. XINT-06A
+activates the pre-submit materializer only for
+`workstream.artifact.materializer`. PREP first locks the service/action and the
+scalar task, assignment, project, policy, plan, catalogue, archive, generation,
+and storage-scheme facts before ZIP inspection. After inspection, the same
+process-local handle is consumed with the server-computed semantic-manifest
+hash before scratch reservation or checker execution. The activation binds
+those exact facts to
 `workstream.artifact.materializer` plus
 `artifact.pre_submit.checker_input.materialize`. The uploader's project role
 grant does not substitute for this fixed-service authority, and no prepared
-handle is serialized into a Celery message or durable record.
+handle or scratch path is serialized into a Celery message or durable record.
 
 When a planned foundation action enters its ART adapter with an exact resource context, its
 bounded `action_unavailable` denial follows the same rollback-then-clean-restage

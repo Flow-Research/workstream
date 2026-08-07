@@ -45,7 +45,7 @@ mappings, and availability must remain identical.
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-05A` | Planned: `artifact.submission_bundle.prepare` |
-| `WS-XINT-002-06A` | Planned: `artifact.pre_submit.checker_input.materialize` |
+| `WS-XINT-002-06A` | Active: `artifact.pre_submit.checker_input.materialize` |
 | `WS-XINT-002-05B` | Planned: `artifact.submission.binding.create` |
 | `WS-XINT-002-06B` | Planned: `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | Planned: `artifact.review_packet.materialize` only |
