@@ -1086,7 +1086,7 @@ with exact setup custody and no matched human grant.
 | `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.submission_artifact_policy.create` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
-| `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |
+| `project.submission_artifact_policy.derive` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |
 | `project.submission_artifact_policy.update` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
 | `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F4` |
 | `project.post_submit_checker_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
@@ -1115,17 +1115,21 @@ policy generation, actor/link and grant-or-fixed-service custody, and current
 root transaction. Approval also binds the immutable default-catalogue manifest,
 ordered and disabled entry configuration digests, compiler/bundle schema, and
 compiled/effective output hashes. Its replay reservation distinguishes human
-idempotency from fixed setup-service task custody and permits only
-`pending -> committed`; it does not perform a product mutation or own commit.
+idempotency from fixed setup-service task custody. Manual mutations permit only
+`pending -> committed`. Fixed-service derivation uses the 12F3 one-way
+`reserved -> pending -> committed` state machine: `reserved` is committed before
+material or agent I/O, while the final two transitions commit atomically with
+the derived policy, final AUTH evidence, and setup output.
 Migration `0057_submission_policy_authority` preserves existing product rows in
 the all-null unattributed shape until their owning route cutovers. 12F2 now
 activates only manual human create/update. Manual update appends a separately
 authorized successor, binds predecessor hash and successor identity through
 PREP/replay, and supersedes the predecessor in the same root transaction.
 Diagnostic sufficiency, legacy role strings, services, contributors, and
-agent-derived rows cannot authorize this exception. Derive and approve remain
-planned. Any replay
-row—including pending—or attributed provenance blocks downgrade. Any submission-policy
+agent-derived rows cannot authorize this exception. Fixed-service derive is
+active under 12F3; human approval remains planned for 12F4. Any durable
+execution claim or replay row—including reserved or pending—or attributed
+provenance blocks downgrade. Any submission-policy
 authorization audit event, including denied evidence, also blocks downgrade so
 the admitted evidence vocabulary is never removed while referenced.
 

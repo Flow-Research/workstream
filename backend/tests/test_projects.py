@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest  # type: ignore[import-not-found]
 from pydantic import ValidationError
@@ -111,8 +111,10 @@ from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import repository as project_repository_module
-from app.modules.projects import router as project_router_module
 from app.modules.projects import service as project_service_module
+from app.modules.projects import (
+    submission_policy_mutation_service as submission_policy_mutation_service_module,
+)
 from app.modules.projects import sufficiency_mutation_service as sufficiency_mutation_service_module
 from app.modules.projects import guide_mutation_router as guide_mutation_router_module
 from app.modules.projects import guide_mutation_service as guide_mutation_service_module
@@ -1020,167 +1022,9 @@ def isolated_project_settings_cache() -> Iterator[None]:
         get_settings.cache_clear()
 
 
-@pytest.mark.asyncio
-async def test_submission_policy_derivation_persists_verified_agent_result(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
-    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
-    snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
-    report = SimpleNamespace(
-        status="passed",
-        findings=[],
-        summary="Verified guide is sufficient.",
-    )
-    stored: list[SubmissionArtifactPolicy] = []
-
-    class Repository:
-        async def get_sufficiency_report_for_snapshot(self, _snapshot_id: str) -> Any:
-            return report
-
-        async def get_agent_derived_submission_artifact_policy_for_snapshot(
-            self, *_args: Any
-        ) -> None:
-            return None
-
-        async def add_submission_artifact_policy(
-            self, policy: SubmissionArtifactPolicy
-        ) -> SubmissionArtifactPolicy:
-            stored.append(policy)
-            return policy
-
-    class Runtime:
-        async def derive_submission_artifact_policy(
-            self, material: Any, runtime_report: GuideSufficiencyAgentResult
-        ) -> SubmissionArtifactPolicyDerivationResult:
-            assert material.snapshot_id == snapshot_id
-            assert runtime_report.status == "guide_sufficient"
-            return SubmissionArtifactPolicyDerivationResult(
-                policy_version="ignored-server-derived",
-                policy_body=SubmissionArtifactPolicyInput().model_dump(mode="json"),
-                change_summary="Derived from the verified guide.",
-                agent_version="test-runtime-v1",
-            )
-
-    session = _RecordingSession()
-    service = ProjectService(cast(Any, session), agent_runtime=cast(Any, Runtime()))
-    service._repo = cast(Any, Repository())
-
-    async def get_guide(*_args: Any) -> Any:
-        return guide
-
-    async def get_snapshot(*_args: Any) -> Any:
-        return snapshot
-
-    async def no_op(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    async def material(*_args: Any) -> Any:
-        return SimpleNamespace(snapshot_id=snapshot_id)
-
-    async def source_refs(*_args: Any) -> list[str]:
-        return [f"snapshot:{snapshot_id}"]
-
-    service._get_project_guide = get_guide
-    service._lock_project_guide_for_setup = get_guide
-    service._get_snapshot_for_guide = get_snapshot
-    service._ensure_snapshot_is_latest = no_op
-    service.validate_source_snapshot_integrity = no_op
-    service._validate_sufficiency_report_allows_policy_derivation = cast(Any, lambda *_: None)
-    service._validate_agent_sufficiency_report_for_derivation = no_op
-    service._verified_guide_source_material = material
-    service._verified_source_material_refs = source_refs
-    service._merge_effective_submission_artifact_policy = cast(Any, lambda body: body)
-    monkeypatch.setattr(
-        project_service_module,
-        "SubmissionArtifactPolicyResponse",
-        _IdentityResponse,
-    )
-
-    policy, created = await service.run_submission_artifact_policy_derivation_agent(
-        _project_manager_actor(), project_id, guide_id, snapshot_id
-    )
-
-    assert created is True
-    assert policy is stored[0]
-    assert policy.derivation_source == "agent_derivation"
-    assert policy.source_material_refs == [f"snapshot:{snapshot_id}"]
-    assert policy.change_summary == "Derived from the verified guide."
-    assert session.rollbacks == 1
-    assert session.commits == 1
-    assert session.refreshed == [policy]
-
-
-@pytest.mark.asyncio
-async def test_submission_policy_derivation_returns_concurrent_winner(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project_id, guide_id, snapshot_id = (str(uuid4()) for _ in range(3))
-    guide = SimpleNamespace(id=guide_id, project_id=project_id, version="v1", status="draft")
-    snapshot = SimpleNamespace(id=snapshot_id, bundle_hash=f"sha256:{'a' * 64}")
-    report = SimpleNamespace(status="passed", findings=[], summary="Sufficient")
-    winner = SimpleNamespace(id="winner")
-    reads = 0
-
-    class Repository:
-        async def get_sufficiency_report_for_snapshot(self, _snapshot_id: str) -> Any:
-            return report
-
-        async def get_agent_derived_submission_artifact_policy_for_snapshot(
-            self, *_args: Any
-        ) -> Any:
-            nonlocal reads
-            reads += 1
-            return winner if reads == 3 else None
-
-        async def add_submission_artifact_policy(self, _policy: Any) -> Any:
-            raise IntegrityError("insert", {}, RuntimeError("race"))
-
-    class Runtime:
-        async def derive_submission_artifact_policy(
-            self, *_args: Any
-        ) -> SubmissionArtifactPolicyDerivationResult:
-            return SubmissionArtifactPolicyDerivationResult(
-                policy_version="agent-v1",
-                policy_body=SubmissionArtifactPolicyInput().model_dump(mode="json"),
-                change_summary="derived",
-                agent_version="test-runtime-v1",
-            )
-
-    session = _RecordingSession()
-    service = ProjectService(cast(Any, session), agent_runtime=cast(Any, Runtime()))
-    service._repo = cast(Any, Repository())
-
-    async def get_guide(*_args: Any) -> Any:
-        return guide
-
-    async def get_snapshot(*_args: Any) -> Any:
-        return snapshot
-
-    async def no_op(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    service._get_project_guide = get_guide
-    service._lock_project_guide_for_setup = get_guide
-    service._get_snapshot_for_guide = get_snapshot
-    service._ensure_snapshot_is_latest = no_op
-    service.validate_source_snapshot_integrity = no_op
-    service._validate_sufficiency_report_allows_policy_derivation = cast(Any, lambda *_: None)
-    service._validate_agent_sufficiency_report_for_derivation = no_op
-    service._validate_agent_derived_submission_artifact_policy = cast(Any, lambda *_: None)
-    service._verified_guide_source_material = cast(Any, lambda *_: no_op())
-    service._verified_source_material_refs = cast(Any, lambda *_: no_op())
-    service._merge_effective_submission_artifact_policy = cast(Any, lambda body: body)
-    monkeypatch.setattr(
-        project_service_module, "SubmissionArtifactPolicyResponse", _IdentityResponse
-    )
-
-    policy, created = await service.run_submission_artifact_policy_derivation_agent(
-        _project_manager_actor(), project_id, guide_id, snapshot_id
-    )
-
-    assert (policy, created) == (winner, False)
-    assert session.rollbacks == 2
+def test_submission_policy_derivation_has_no_public_project_service_seam() -> None:
+    """12F3 removes role-bearing inline derivation from import reachability."""
+    assert not hasattr(ProjectService, "run_submission_artifact_policy_derivation_agent")
 
 
 @pytest.mark.asyncio
@@ -2855,24 +2699,13 @@ def test_setup_mutations_use_locked_guide_helper() -> None:
         "request_post_submit_checker_policy_correction",
         "activate_guide",
     ]
-    agent_methods = [
-        "run_submission_artifact_policy_derivation_agent",
-    ]
-
     for method_name in locked_methods:
         source = inspect.getsource(getattr(ProjectService, method_name))
 
         assert "_lock_project_guide_for_setup" in source
         assert "_get_project_guide(project_id, guide_id)" not in source
 
-    for method_name in agent_methods:
-        source = inspect.getsource(getattr(ProjectService, method_name))
-
-        assert "_get_project_guide(project_id, guide_id)" in source
-        assert "_lock_project_guide_for_setup" in source
-        assert source.index("_get_project_guide(project_id, guide_id)") < source.index(
-            "_lock_project_guide_for_setup"
-        )
+    assert not hasattr(ProjectService, "run_submission_artifact_policy_derivation_agent")
 
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:
@@ -4062,11 +3895,6 @@ async def prepare_verified_sufficiency_route(
             assert resolved_material is not None
             return resolved_material
 
-    monkeypatch.setattr(
-        project_router_module,
-        "SqlAlchemyGuideSufficiencyMaterialAdapter",
-        VerifiedMaterialAdapter,
-    )
     async with db_session.get_session_factory()() as session:
         guide = await session.get(ProjectGuide, guide_id)
         assert guide is not None
@@ -7245,6 +7073,377 @@ async def test_verified_worker_composes_fresh_exact_setup_service_authority(
         "source_snapshot_id": snapshot_id,
         "custody": "locked-custody",
     }
+
+
+async def test_submission_artifact_policy_agent_worker_composes_fresh_service_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Policy derivation obtains fresh process-local PREP and transports IDs only."""
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    from app.workers import project_setup as worker
+
+    project_id, guide_id, snapshot_id, setup_run_id = (uuid4() for _ in range(4))
+    calls: dict[str, object] = {}
+
+    class Session:
+        commits = 0
+        rollbacks = 0
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+        async def rollback(self) -> None:
+            self.rollbacks += 1
+
+    class Mutation:
+        def __init__(self, session: object, *, material: object) -> None:
+            calls["session"] = session
+            calls["material"] = material
+
+        async def resolve_setup_service_custody(self, **facts: object) -> object:
+            calls["custody_facts"] = facts
+            return "policy-custody"
+
+        @asynccontextmanager
+        async def run_setup_service(self, **facts: object):
+            calls["run_facts"] = facts
+            yield SimpleNamespace(replayed=False, response=SimpleNamespace(id="policy"))
+
+    @asynccontextmanager
+    async def fixed_authority(session: object, **facts: object):
+        calls["authority_session"] = session
+        calls["authority_facts"] = facts
+        yield SimpleNamespace(
+            actor_profile_id="setup-profile",
+            identity_link_id="setup-link",
+            service="prepared-service",
+        )
+
+    monkeypatch.setattr(worker, "SubmissionPolicyMutationService", Mutation)
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", lambda _: "material")
+    monkeypatch.setattr(worker, "fixed_service_prepared_authorization", fixed_authority)
+    session = Session()
+
+    outcome = await worker._run_authorized_setup_policy_derivation(
+        session,
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        setup_run_id=str(setup_run_id),
+        setup_generation=3,
+    )
+
+    assert outcome.response.id == "policy"
+    assert session.commits == 1
+    assert session.rollbacks == 0
+    assert calls["authority_facts"]["service_identity"] is ServiceIdentity.PROJECT_SETUP
+    custody = calls["custody_facts"]
+    assert custody["project_id"] == project_id
+    assert custody["setup_run_id"] == setup_run_id
+    assert custody["setup_generation"] == 3
+    assert custody["task_id"] == calls["authority_facts"]["request_id"]
+    assert custody["correlation_id"] == calls["authority_facts"]["correlation_id"]
+    assert calls["run_facts"]["prepared"] == "prepared-service"
+    assert calls["run_facts"]["custody"] == "policy-custody"
+
+
+async def test_submission_artifact_policy_agent_service_commits_and_replays_without_io(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A committed worker redelivery returns the canonical draft with zero external I/O."""
+    from app.workers import project_setup as worker
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    adapter = await prepare_verified_sufficiency_route(
+        monkeypatch, project_id=project["id"], guide_id=guide["id"], snapshot=snapshot
+    )
+    runtime = DeterministicTestProjectGuideAgentRuntime()
+    monkeypatch.setattr(
+        sufficiency_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: runtime,
+    )
+    report = await run_verified_sufficiency_as_setup_service(
+        monkeypatch,
+        project_id=project["id"],
+        guide_id=guide["id"],
+        snapshot_id=snapshot["id"],
+        material_adapter=adapter,
+    )
+    async with db_session.get_session_factory()() as session:
+        setup = await session.scalar(
+            select(ProjectSetupRun).where(ProjectSetupRun.source_snapshot_id == snapshot["id"])
+        )
+        assert setup is not None
+        setup.status = "running_policy_derivation_agent"
+        setup.current_step = "submission_artifact_policy_derivation"
+        setup.output_sufficiency_report_id = report.id
+        await session.commit()
+        setup_run_id, setup_generation = setup.id, setup.setup_generation
+
+    monkeypatch.setattr(
+        submission_policy_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: runtime,
+    )
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", adapter)
+    async with db_session.get_session_factory()() as session:
+        first = await worker._run_authorized_setup_policy_derivation(
+            session,
+            project_id=project["id"],
+            guide_id=guide["id"],
+            source_snapshot_id=snapshot["id"],
+            setup_run_id=setup_run_id,
+            setup_generation=setup_generation,
+        )
+
+    assert first.response.derivation_source == "agent_derivation"
+    assert first.response.policy_version.startswith("agent-")
+    assert first.response.source_material_refs
+    assert first.response.policy_body["manifest_required"] is True
+    assert first.response.policy_body["artifact_hash_required"] is True
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(SubmissionArtifactPolicy, first.response.id)
+    assert persisted is not None
+    assert persisted.created_by_service_identity == ServiceIdentity.PROJECT_SETUP.value
+    assert persisted.created_by_admin_role_grant_id is None
+    assert persisted.creation_decision_event_id is not None
+    update = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{first.response.id}",
+        headers=auth_headers(),
+        json={
+            "expected_policy_hash": first.response.policy_hash,
+            "successor_policy_version": "manual-v2",
+            "change_summary": "Human rewrite of service output.",
+        },
+    )
+    assert update.status_code == 409
+    assert "agent-derived policy summaries are immutable" in update.json()["detail"]
+
+    class NoReplayMaterial:
+        def __init__(self, _session: object) -> None:
+            pass
+
+        async def load(self, _request: object) -> object:
+            raise AssertionError("committed replay performed material I/O")
+
+    class NoReplayRuntime:
+        async def derive_submission_artifact_policy(self, *_: object) -> object:
+            raise AssertionError("committed replay invoked the agent")
+
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", NoReplayMaterial)
+    monkeypatch.setattr(
+        submission_policy_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: NoReplayRuntime(),
+    )
+    async with db_session.get_session_factory()() as session:
+        second = await worker._run_authorized_setup_policy_derivation(
+            session,
+            project_id=project["id"],
+            guide_id=guide["id"],
+            source_snapshot_id=snapshot["id"],
+            setup_run_id=setup_run_id,
+            setup_generation=setup_generation,
+        )
+
+    assert first.replayed is False
+    assert second.replayed is True
+    assert second.response.id == first.response.id
+
+    # A crash-equivalent failure after external I/O leaves a durable execution
+    # reservation. Redelivery is denied before repeating material or agent I/O.
+    project_2 = await create_project(project_client)
+    guide_2 = await create_guide(
+        project_client, project_2["id"], complete_guide_payload()
+    )
+    snapshot_2 = await create_source_snapshot(
+        project_client, project_2["id"], guide_2["id"]
+    )
+    adapter_2 = await prepare_verified_sufficiency_route(
+        monkeypatch,
+        project_id=project_2["id"],
+        guide_id=guide_2["id"],
+        snapshot=snapshot_2,
+    )
+    monkeypatch.setattr(
+        sufficiency_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: runtime,
+    )
+    report_2 = await run_verified_sufficiency_as_setup_service(
+        monkeypatch,
+        project_id=project_2["id"],
+        guide_id=guide_2["id"],
+        snapshot_id=snapshot_2["id"],
+        material_adapter=adapter_2,
+    )
+    async with db_session.get_session_factory()() as session:
+        setup_2 = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.source_snapshot_id == snapshot_2["id"]
+            )
+        )
+        assert setup_2 is not None
+        setup_2.status = "running_policy_derivation_agent"
+        setup_2.current_step = "submission_artifact_policy_derivation"
+        setup_2.output_sufficiency_report_id = report_2.id
+        await session.commit()
+        setup_run_id_2 = setup_2.id
+        setup_generation_2 = setup_2.setup_generation
+
+    class FailedPolicyRuntime:
+        async def derive_submission_artifact_policy(self, *_: object) -> object:
+            raise ProjectAgentRuntimeError("provider stopped after admission")
+
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", adapter_2)
+    monkeypatch.setattr(
+        submission_policy_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: FailedPolicyRuntime(),
+    )
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(AgentRuntimeUnavailable):
+            await worker._run_authorized_setup_policy_derivation(
+                session,
+                project_id=project_2["id"],
+                guide_id=guide_2["id"],
+                source_snapshot_id=snapshot_2["id"],
+                setup_run_id=setup_run_id_2,
+                setup_generation=setup_generation_2,
+            )
+    async with db_session.get_session_factory()() as session:
+        reservation = await session.scalar(
+            select(SubmissionPolicyMutationIdempotencyRecord).where(
+                SubmissionPolicyMutationIdempotencyRecord.project_id == project_2["id"]
+            )
+        )
+    assert reservation is not None
+    assert reservation.status == "reserved"
+
+    monkeypatch.setattr(worker, "SqlAlchemyGuideSufficiencyMaterialAdapter", NoReplayMaterial)
+    monkeypatch.setattr(
+        submission_policy_mutation_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: NoReplayRuntime(),
+    )
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(
+            submission_policy_mutation_service_module.SubmissionPolicyMutationConflict,
+            match="idempotency_mismatch",
+        ):
+            await worker._run_authorized_setup_policy_derivation(
+                session,
+                project_id=project_2["id"],
+                guide_id=guide_2["id"],
+                source_snapshot_id=snapshot_2["id"],
+                setup_run_id=setup_run_id_2,
+                setup_generation=setup_generation_2,
+            )
+
+
+@pytest.mark.parametrize(
+    ("changed_field", "changed_value"),
+    [
+        ("setup_generation", 2),
+        ("celery_task_id", str(uuid4())),
+        ("output_sufficiency_report_id", str(uuid4())),
+        ("current_step", "guide_sufficiency"),
+        ("status", "setup_blocked"),
+        ("output_submission_artifact_policy_id", str(uuid4())),
+    ],
+)
+def test_submission_artifact_policy_agent_final_custody_rejects_stale_output(
+    changed_field: str,
+    changed_value: object,
+) -> None:
+    """Every post-agent setup-custody mismatch fails before persistence."""
+    from app.modules.authorization.runtime import ProjectSetupServiceCustodyContext
+
+    project_id, guide_id, snapshot_id, setup_run_id, report_id = (uuid4() for _ in range(5))
+    task_id = uuid4()
+    correlation_id = uuid5(NAMESPACE_URL, f"{task_id}:correlation")
+    setup = SimpleNamespace(
+        id=str(setup_run_id),
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        setup_generation=1,
+        status="running_policy_derivation_agent",
+        current_step="submission_artifact_policy_derivation",
+        celery_task_id=str(task_id),
+        output_sufficiency_report_id=str(report_id),
+        output_submission_artifact_policy_id=None,
+    )
+    stale_digest = canonical_json_hash(
+        {
+            "domain": "workstream.project_setup.policy_derivation_stale_output.v1",
+            "setup_run_id": setup.id,
+            "setup_generation": 1,
+            "current_step": "submission_artifact_policy_derivation",
+            "sufficiency_report_id": str(report_id),
+            "submission_artifact_policy_id": None,
+        }
+    )
+    custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=setup_run_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        expected_step="submission_artifact_policy",
+        task_id=task_id,
+        correlation_id=correlation_id,
+        stale_output_digest=stale_digest,
+    )
+    setattr(setup, changed_field, changed_value)
+    lineage = SimpleNamespace(report_id=report_id)
+
+    with pytest.raises(SubmissionPolicyMutationConflict):
+        SubmissionPolicyMutationService._require_exact_running_custody(
+            setup, lineage, custody
+        )
+
+
+def test_submission_artifact_policy_agent_replay_rejects_changed_completed_output() -> None:
+    """Completed replay is bound to the exact deterministic policy output."""
+    from app.modules.authorization.runtime import ProjectSetupServiceCustodyContext
+
+    project_id, guide_id, snapshot_id, setup_run_id, report_id = (uuid4() for _ in range(5))
+    task_id, policy_id = uuid4(), uuid4()
+    custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=setup_run_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        expected_step="submission_artifact_policy",
+        task_id=task_id,
+        correlation_id=uuid5(NAMESPACE_URL, f"{task_id}:correlation"),
+        stale_output_digest="sha256:" + "a" * 64,
+    )
+    setup = SimpleNamespace(
+        id=str(setup_run_id),
+        project_id=str(project_id),
+        guide_id=str(guide_id),
+        source_snapshot_id=str(snapshot_id),
+        setup_generation=1,
+        status="policy_draft_ready",
+        current_step="submission_artifact_policy_derivation",
+        celery_task_id=str(task_id),
+        output_sufficiency_report_id=str(report_id),
+        output_submission_artifact_policy_id=str(uuid4()),
+    )
+
+    with pytest.raises(SubmissionPolicyMutationConflict):
+        SubmissionPolicyMutationService._require_exact_completed_custody(
+            setup, SimpleNamespace(report_id=report_id), custody, policy_id
+        )
 
 
 async def test_setup_service_recovers_exact_committed_sufficiency_replay(
@@ -11794,7 +11993,7 @@ async def test_sufficiency_agent_blocks_thin_guides(
     assert response.findings[0]["code"] == "project_owner_clarification_required"
 
 
-async def test_derivation_agent_allows_warning_report_without_acknowledgement_and_is_idempotent(
+async def test_submission_artifact_policy_public_agent_derivation_route_and_service_seam_removed(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -11820,25 +12019,13 @@ async def test_derivation_agent_allows_warning_report_without_acknowledgement_an
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/derive-submission-artifact-policy"
     )
-    first, second = await asyncio.gather(
-        project_client.post(endpoint, headers=auth_headers()),
-        project_client.post(endpoint, headers=auth_headers()),
-    )
+    response = await project_client.post(endpoint, headers=auth_headers())
 
-    assert inspect.iscoroutinefunction(
-        ProjectService.run_submission_artifact_policy_derivation_agent
-    )
-    assert {first.status_code, second.status_code} == {200, 201}
-    assert first.json()["id"] == second.json()["id"]
-    assert first.json()["source_snapshot_id"] == snapshot["id"]
-    assert first.json()["source_snapshot_hash"] == snapshot["bundle_hash"]
-    assert first.json()["derivation_source"] == "agent_derivation"
-    assert first.json()["policy_body"]["artifact_hash_algorithm"] == "sha256"
-    assert first.json()["policy_body"]["manifest_required"] is True
-    assert first.json()["policy_body"]["artifact_hash_required"] is True
+    assert response.status_code == 404
+    assert not hasattr(ProjectService, "run_submission_artifact_policy_derivation_agent")
 
 
-async def test_derivation_agent_requires_agent_sufficiency_report(
+async def test_submission_artifact_policy_removed_agent_derivation_route_discloses_no_state(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -11863,13 +12050,10 @@ async def test_derivation_agent_requires_agent_sufficiency_report(
     response = await project_client.post(endpoint, headers=auth_headers())
 
     assert manual_report["agent_name"] is None
-    assert response.status_code == 422
-    assert (
-        "guide sufficiency report is required before policy derivation" in response.json()["detail"]
-    )
+    assert response.status_code == 404
 
 
-async def test_derivation_agent_uses_verified_sources_and_replays_exact_policy(
+async def test_submission_artifact_policy_removed_agent_route_cannot_read_verified_sources(
     project_client: AsyncClient,
     deterministic_project_agent_runtime: None,
 ) -> None:
@@ -11907,17 +12091,8 @@ async def test_derivation_agent_uses_verified_sources_and_replays_exact_policy(
     created = await project_client.post(endpoint, headers=auth_headers())
     replayed = await project_client.post(endpoint, headers=auth_headers())
 
-    assert created.status_code == 201, created.text
-    assert replayed.status_code == 200, replayed.text
-    assert replayed.json()["id"] == created.json()["id"]
-    assert created.json()["derivation_source"] == "agent_derivation"
-    assert created.json()["derivation_agent_name"]
-    assert created.json()["derivation_agent_version"]
-    assert created.json()["source_material_refs"]
-    assert all(
-        ref.startswith("artifact-content:") and "#extraction-usage:" in ref
-        for ref in created.json()["source_material_refs"]
-    )
+    assert created.status_code == 404
+    assert replayed.status_code == 404
 
 
 async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields(
@@ -12008,7 +12183,7 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert update_response.json()["detail"][0]["loc"] == ["body", "derivation_agent_name"]
 
 
-async def test_derivation_agent_validates_existing_policy_integrity_before_reuse(
+async def test_submission_artifact_policy_removed_agent_route_cannot_reuse_existing_policy(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -12057,11 +12232,10 @@ async def test_derivation_agent_validates_existing_policy_integrity_before_reuse
     )
     blocked = await project_client.post(endpoint, headers=auth_headers())
 
-    assert blocked.status_code == 409
-    assert "policy body hash mismatch" in blocked.json()["detail"]
+    assert blocked.status_code == 404
 
 
-async def test_manual_submission_artifact_policy_update_rejects_agent_derived_row(
+async def test_submission_artifact_policy_human_cannot_invoke_removed_agent_route(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -12084,51 +12258,7 @@ async def test_manual_submission_artifact_policy_update_rejects_agent_derived_ro
         f"{snapshot['id']}/derive-submission-artifact-policy"
     )
     derived = await project_client.post(endpoint, headers=auth_headers())
-    assert derived.status_code == 201, derived.text
-
-    update_response = await project_client.patch(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{derived.json()['id']}",
-        headers=auth_headers(),
-        json={
-            "expected_policy_hash": derived.json()["policy_hash"],
-            "successor_policy_version": "manual-v2",
-            "policy_body": project_submission_artifact_policy_body(
-                artifact_path="adjusted/output.json"
-            ),
-        },
-    )
-
-    assert update_response.status_code == 409
-    assert "agent-derived policy summaries are immutable" in update_response.json()["detail"]
-
-    summary_response = await project_client.patch(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{derived.json()['id']}",
-        headers=auth_headers(),
-        json={
-            "expected_policy_hash": derived.json()["policy_hash"],
-            "successor_policy_version": "manual-v3",
-            "change_summary": "Admin-edited generated summary.",
-        },
-    )
-
-    assert summary_response.status_code == 409
-    assert "agent-derived policy summaries are immutable" in summary_response.json()["detail"]
-
-    approved = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{derived.json()['id']}/approve",
-        headers=auth_headers(),
-        json={"approval_note": "Approval note must not overwrite generated summary."},
-    )
-    assert approved.status_code == 200, approved.text
-
-    async with db_session.get_session_factory()() as session:
-        persisted_policy = await session.get(SubmissionArtifactPolicy, derived.json()["id"])
-
-    assert persisted_policy is not None
-    assert persisted_policy.change_summary == derived.json()["change_summary"]
+    assert derived.status_code == 404
 
 
 async def test_agent_derived_policy_approval_revalidates_server_owned_provenance(
@@ -12175,7 +12305,7 @@ async def test_agent_derived_policy_approval_revalidates_server_owned_provenance
     assert "runtime provenance is not server-owned" in response.json()["detail"]
 
 
-async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
+async def test_submission_artifact_policy_removed_agent_route_performs_no_runtime_calls(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -12247,18 +12377,9 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
         project_client.post(endpoint, headers=auth_headers()),
     )
 
-    assert {first.status_code, second.status_code} == {200, 201}
-    assert first.json()["id"] == second.json()["id"]
-    assert first.json()["policy_version"].startswith("agent-")
-    assert first.json()["policy_version"] != "provider-version-1"
-    assert second.json()["policy_version"] != "provider-version-2"
-    assert first.json()["derivation_agent_name"] == SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME
-    assert (
-        first.json()["derivation_agent_version"]
-        == SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION
-    )
-    assert "ProjectOwnerApprovedDerivationAgent" not in first.text
-    assert "fake-v0" not in first.text
+    assert first.status_code == 404
+    assert second.status_code == 404
+    assert runtime.calls == 0
     async with db_session.get_session_factory()() as session:
         policies = (
             await session.scalars(
@@ -12270,7 +12391,7 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
             )
         ).all()
 
-    assert len(policies) == 1
+    assert policies == []
 
 
 async def test_activation_revalidates_agent_derived_policy_provenance(

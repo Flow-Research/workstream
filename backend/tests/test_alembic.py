@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0058_pre_submit_evidence"
+HEAD_REVISION = "0059_policy_execution_claim"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -370,7 +370,7 @@ def test_submission_policy_authority_safe_empty_roundtrip(
     assert upgraded["provenance_triggers"] == 4
     assert dict(upgraded["action_states"]) == {
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value: "active",
-        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value: "planned",
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value: "active",
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE.value: "active",
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE.value: "planned",
     }

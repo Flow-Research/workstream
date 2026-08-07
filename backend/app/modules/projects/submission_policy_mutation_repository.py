@@ -104,6 +104,7 @@ class SubmissionPolicyMutationReplayRepository:
         setup_generation: int,
         setup_task_id: UUID | None,
         correlation_id: UUID | None,
+        status: Literal["reserved", "pending"] = "pending",
     ) -> tuple[
         Literal["claimed", "mismatch", "pending", "replayed"],
         SubmissionPolicyMutationIdempotencyRecord,
@@ -128,7 +129,7 @@ class SubmissionPolicyMutationReplayRepository:
             "setup_generation": setup_generation,
             "setup_task_id": setup_task_id,
             "correlation_id": correlation_id,
-            "status": "pending",
+            "status": status,
         }
         record_id = await self._session.scalar(
             insert(SubmissionPolicyMutationIdempotencyRecord)
@@ -187,6 +188,39 @@ class SubmissionPolicyMutationReplayRepository:
         ):
             return "mismatch", record
         return ("replayed" if record.status == "committed" else "pending"), record
+
+    async def bind_reserved_execution(
+        self,
+        operation_id: UUID,
+        *,
+        expected_request_digest: str,
+        expected_resource_context_digest: str,
+        request_digest: str,
+        resource_context_digest: str,
+        resource_context_json: dict,
+    ) -> SubmissionPolicyMutationIdempotencyRecord | None:
+        """Advance one durable pre-I/O reservation to exact final replay custody."""
+        record_id = await self._session.scalar(
+            update(SubmissionPolicyMutationIdempotencyRecord)
+            .where(
+                SubmissionPolicyMutationIdempotencyRecord.operation_id == operation_id,
+                SubmissionPolicyMutationIdempotencyRecord.status == "reserved",
+                SubmissionPolicyMutationIdempotencyRecord.request_digest
+                == expected_request_digest,
+                SubmissionPolicyMutationIdempotencyRecord.resource_context_digest
+                == expected_resource_context_digest,
+            )
+            .values(
+                status="pending",
+                request_digest=request_digest,
+                resource_context_digest=resource_context_digest,
+                resource_context_json=resource_context_json,
+            )
+            .returning(SubmissionPolicyMutationIdempotencyRecord.id)
+        )
+        if record_id is None:
+            return None
+        return await self._session.get(SubmissionPolicyMutationIdempotencyRecord, record_id)
 
     async def complete(
         self,

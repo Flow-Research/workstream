@@ -124,15 +124,14 @@ setup-run binding findings were repaired.
 
 ## Active implementation chunk
 
-`WS-XINT-002-06A`; the user started the fixed pre-submit materializer
-activation after ART-04B3 and AUTH-12F2 merged. This cross-initiative chunk
-activates only `artifact.pre_submit.checker_input.materialize` before ART-04C1.
-AUTH-12F3 remains the next AUTH-12 successor and resumes while ART proceeds
-through 04C1/04C2 after 06A merges.
+`WS-AUTH-001-12F3`; implementation and required internal reviews are complete.
+The fixed setup-service derivation cutover is ready for hosted CI and external
+review. `WS-AUTH-001-12F4` remains proposed and must not start before 12F3 is
+human-merged.
 
 ## Current review branch
 
-`codex/ws-xint-002-06a-pre-submit-materialization`.
+`codex/ws-auth-001-12f3-service-derivation`.
 
 ## Chunk status
 
@@ -184,7 +183,7 @@ through 04C1/04C2 after 06A merges.
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
-| `WS-AUTH-001-12F3` | Proposed | - | - | Fixed setup-service derivation and asynchronous executor cutover. |
+| `WS-AUTH-001-12F3` | Ready for PR | `codex/ws-auth-001-12f3-service-derivation` | - | Fixed setup-service derivation and asynchronous executor cutover; internal L1 reviews passed. |
 | `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |
 | `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |

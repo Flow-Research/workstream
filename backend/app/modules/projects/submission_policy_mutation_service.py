@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Literal, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import JsonValue
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.hashing import canonical_json_hash
+from app.core.project_agents import get_project_guide_agent_runtime
+from app.interfaces.project_agents import (
+    AgentFinding,
+    GuideSufficiencyAgentResult,
+    ProjectAgentRuntimeError,
+)
+from app.interfaces.artifact_operations import GuideSufficiencyMaterialPort
 from app.modules.actors.service import ResolvedActor
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.prepared import PreparedAuthorizationService
@@ -22,6 +31,7 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationUnsupported,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
+    ProjectSetupServiceCustodyContext,
     ProjectSubmissionArtifactPolicyMutationResourceContext,
     authorization_resource_digest,
 )
@@ -36,10 +46,18 @@ from app.modules.projects.models import (
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import (
     SubmissionArtifactPolicyCreate,
+    SubmissionArtifactPolicyInput,
     SubmissionArtifactPolicyResponse,
     SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import (
+    AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
+    PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+    PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+    REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS,
+    SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
+    SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+    AgentRuntimeUnavailable,
     GuideEditBlocked,
     GuideNotFound,
     MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
@@ -48,6 +66,7 @@ from app.modules.projects.service import (
     ProjectService,
     ProjectServiceError,
     SubmissionArtifactPolicyNotFound,
+    agent_submission_artifact_policy_version,
 )
 from app.modules.projects.submission_policy_mutation_repository import (
     SubmissionPolicyMutationReplayRepository,
@@ -112,12 +131,47 @@ class _ManualPolicyLineage:
 class SubmissionPolicyMutationService:
     """Stage replay custody without owning commit, rollback, or product writes."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        material: GuideSufficiencyMaterialPort | None = None,
+    ) -> None:
         self._session = session
         self._replay = SubmissionPolicyMutationReplayRepository(session)
         self._projects = ProjectRepository(session)
         self._admin = AdminAuthorizationRepository(session)
-        self._validation = ProjectService(session)
+        self._validation = ProjectService(session, guide_sufficiency_material=material)
+
+    @asynccontextmanager
+    async def _execution_fence(self, actor_profile_id: str, action: ActionId, key: UUID):
+        """Serialize one service-owned external derivation across processes."""
+        engine = self._session.bind
+        if not isinstance(engine, AsyncEngine):
+            raise RuntimeError("submission-policy derivation requires an async database engine")
+        digest = canonical_json_hash(
+            {
+                "domain": "workstream.submission_policy.execution_fence.v1",
+                "actor_profile_id": actor_profile_id,
+                "action_id": action.value,
+                "key": str(key),
+            }
+        )
+        lock_key = int(digest.removeprefix("sha256:")[:16], 16)
+        if lock_key >= 2**63:
+            lock_key -= 2**64
+        async with engine.connect() as connection:
+            acquired = await connection.scalar(
+                text("select pg_try_advisory_lock(:lock_key)"), {"lock_key": lock_key}
+            )
+            if acquired is not True:
+                raise SubmissionPolicyMutationConflict("idempotency_pending")
+            try:
+                yield
+            finally:
+                await connection.execute(
+                    text("select pg_advisory_unlock(:lock_key)"), {"lock_key": lock_key}
+                )
 
     @staticmethod
     def _stable_uuid(*parts: object) -> UUID:
@@ -855,6 +909,490 @@ class SubmissionPolicyMutationService:
             ),
         )
 
+    @staticmethod
+    def _prove_setup_service_authority(decision) -> None:
+        if (
+            decision.matched_authority_kind is not MatchedAuthorityKind.FIXED_SERVICE
+            or decision.matched_grant_id is not None
+        ):
+            raise RuntimeError("policy derivation lacked fixed setup-service authority")
+
+    @staticmethod
+    def _service_identity(
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        custody,
+    ) -> tuple[UUID, UUID, UUID]:
+        operation_id = SubmissionPolicyMutationService._stable_uuid(
+            "derive-operation", actor_profile_id, identity_link_id, custody.setup_run_id,
+            custody.setup_generation,
+        )
+        policy_id = SubmissionPolicyMutationService._stable_uuid("derive-policy", operation_id)
+        replay_key = SubmissionPolicyMutationService._stable_uuid("derive-replay", operation_id)
+        return operation_id, policy_id, replay_key
+
+    @staticmethod
+    def _service_resource(
+        *,
+        project_id: UUID,
+        guide_id: UUID,
+        policy_id: UUID,
+        operation_id: UUID,
+        request_digest: str,
+        lineage: _ManualPolicyLineage,
+        custody,
+    ) -> ProjectSubmissionArtifactPolicyMutationResourceContext:
+        return ProjectSubmissionArtifactPolicyMutationResourceContext(
+            resource_type="project_submission_artifact_policy_mutation",
+            resource_id=policy_id,
+            operation_id=operation_id,
+            request_digest=request_digest,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            guide_version=lineage.guide_version,
+            source_snapshot_id=lineage.snapshot_id,
+            source_snapshot_hash=lineage.snapshot_hash,
+            target_kind="derive",
+            execution_kind="setup_service",
+            policy_id=policy_id,
+            policy_version=agent_submission_artifact_policy_version(lineage.snapshot_hash),
+            policy_generation=lineage.setup_generation,
+            setup_generation=lineage.setup_generation,
+            sufficiency_report_id=lineage.report_id,
+            sufficiency_status=lineage.report_status,
+            sufficiency_acknowledgement_digest=lineage.acknowledgement_digest,
+            stale_output_digest=custody.stale_output_digest,
+            setup_service_custody=custody,
+        )
+
+    async def resolve_setup_service_custody(
+        self,
+        *,
+        project_id: UUID,
+        guide_id: UUID,
+        source_snapshot_id: UUID,
+        setup_run_id: UUID,
+        setup_generation: int,
+        task_id: UUID,
+        correlation_id: UUID,
+    ):
+        """Resolve the exact persisted derivation step to the closed AUTH selector."""
+        lineage = await self._lineage(project_id, guide_id, source_snapshot_id, lock=False)
+        setup = await self._projects.lock_project_setup_run(str(setup_run_id))
+        running = (
+            setup is not None
+            and setup.status == "running_policy_derivation_agent"
+            and setup.current_step == "submission_artifact_policy_derivation"
+            and setup.output_submission_artifact_policy_id is None
+        )
+        completed = (
+            setup is not None
+            and setup.status == "policy_draft_ready"
+            and setup.current_step == "submission_artifact_policy_derivation"
+            and setup.output_submission_artifact_policy_id is not None
+        )
+        if (
+            lineage.setup_run_id != setup_run_id
+            or lineage.setup_generation != setup_generation
+            or setup is None
+            or not (running or completed)
+            or setup.celery_task_id != str(task_id)
+            or setup.output_sufficiency_report_id != str(lineage.report_id)
+            or correlation_id != uuid5(NAMESPACE_URL, f"{task_id}:correlation")
+        ):
+            raise SubmissionPolicyMutationConflict("project_setup_run_context_mismatch")
+        stale_output_digest = self._policy_derivation_stale_output_digest(setup)
+
+        return ProjectSetupServiceCustodyContext(
+            setup_run_id=setup_run_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=source_snapshot_id,
+            setup_generation=setup_generation,
+            expected_step="submission_artifact_policy",
+            task_id=task_id,
+            correlation_id=correlation_id,
+            stale_output_digest=stale_output_digest,
+        )
+
+    @staticmethod
+    def _policy_derivation_stale_output_digest(setup) -> str:
+        return canonical_json_hash(
+            {
+                "domain": "workstream.project_setup.policy_derivation_stale_output.v1",
+                "setup_run_id": setup.id,
+                "setup_generation": setup.setup_generation,
+                "current_step": setup.current_step,
+                "sufficiency_report_id": setup.output_sufficiency_report_id,
+                "submission_artifact_policy_id": None,
+            }
+        )
+
+    async def _lock_complete_derivation_lineage(
+        self,
+        project_id: UUID,
+        guide_id: UUID,
+        source_snapshot_id: UUID,
+        *,
+        expected_policy_id: UUID | None = None,
+    ) -> _ManualPolicyLineage:
+        """Lock the shared 12F3/12F4/12G policy chain in its total order."""
+        lineage = await self._lineage(
+            project_id, guide_id, source_snapshot_id, lock=True
+        )
+        policies = await self._projects.lock_submission_artifact_policies(
+            str(project_id), str(guide_id), lineage.guide_version
+        )
+        current = [
+            policy
+            for policy in policies
+            if policy.lifecycle_status in {"draft", "approved"}
+        ]
+        if current and not (
+            expected_policy_id is not None
+            and len(current) == 1
+            and current[0].id == str(expected_policy_id)
+            and current[0].derivation_source
+            == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE
+        ):
+            raise SubmissionPolicyMutationConflict("submission_policy_lineage_stale")
+        effective = await self._projects.lock_effective_submission_artifact_policy(
+            str(project_id), lineage.guide_version, str(source_snapshot_id)
+        )
+        if effective is not None:
+            await self._projects.lock_compiled_pre_submit_checker_policy(effective.id)
+        await self._projects.lock_post_submit_checker_policy_for_guide(
+            str(project_id), lineage.guide_version
+        )
+        return lineage
+
+    @staticmethod
+    def _require_exact_running_custody(setup, lineage, custody) -> None:
+        expected_stale = SubmissionPolicyMutationService._policy_derivation_stale_output_digest(
+            setup
+        )
+        if (
+            setup.id != str(custody.setup_run_id)
+            or setup.project_id != str(custody.scope_project_id)
+            or setup.guide_id != str(custody.guide_id)
+            or setup.source_snapshot_id != str(custody.source_snapshot_id)
+            or setup.setup_generation != custody.setup_generation
+            or setup.status != "running_policy_derivation_agent"
+            or setup.current_step != "submission_artifact_policy_derivation"
+            or setup.celery_task_id != str(custody.task_id)
+            or setup.output_sufficiency_report_id != str(lineage.report_id)
+            or setup.output_submission_artifact_policy_id is not None
+            or custody.correlation_id
+            != uuid5(NAMESPACE_URL, f"{custody.task_id}:correlation")
+            or custody.stale_output_digest != expected_stale
+        ):
+            raise SubmissionPolicyMutationConflict("project_setup_run_context_mismatch")
+
+    @staticmethod
+    def _require_exact_completed_custody(setup, lineage, custody, policy_id: UUID) -> None:
+        if (
+            setup.id != str(custody.setup_run_id)
+            or setup.project_id != str(custody.scope_project_id)
+            or setup.guide_id != str(custody.guide_id)
+            or setup.source_snapshot_id != str(custody.source_snapshot_id)
+            or setup.setup_generation != custody.setup_generation
+            or setup.status != "policy_draft_ready"
+            or setup.current_step != "submission_artifact_policy_derivation"
+            or setup.celery_task_id != str(custody.task_id)
+            or setup.output_sufficiency_report_id != str(lineage.report_id)
+            or setup.output_submission_artifact_policy_id != str(policy_id)
+            or custody.correlation_id
+            != uuid5(NAMESPACE_URL, f"{custody.task_id}:correlation")
+        ):
+            raise SubmissionPolicyMutationConflict("project_setup_run_context_mismatch")
+
+    @asynccontextmanager
+    async def run_setup_service(
+        self,
+        *,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        prepared: PreparedAuthorizationService,
+        project_id: UUID,
+        guide_id: UUID,
+        source_snapshot_id: UUID,
+        custody,
+    ):
+        """Derive one policy under fresh, single-use fixed-service authority."""
+        operation_id, policy_id, replay_key = self._service_identity(
+            actor_profile_id, identity_link_id, custody
+        )
+        async with self._execution_fence(
+            str(actor_profile_id), ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE, replay_key
+        ):
+            yield await self._run_setup_derivation(
+                actor_profile_id=actor_profile_id,
+                identity_link_id=identity_link_id,
+                prepared=prepared,
+                project_id=project_id,
+                guide_id=guide_id,
+                source_snapshot_id=source_snapshot_id,
+                custody=custody,
+                operation_id=operation_id,
+                policy_id=policy_id,
+            )
+
+    async def _run_setup_derivation(
+        self,
+        *,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        prepared: PreparedAuthorizationService,
+        project_id: UUID,
+        guide_id: UUID,
+        source_snapshot_id: UUID,
+        custody,
+        operation_id: UUID,
+        policy_id: UUID,
+    ) -> SubmissionPolicyMutationOutcome:
+        action = ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE
+        initial = await self._lineage(project_id, guide_id, source_snapshot_id, lock=False)
+        preflight_digest = canonical_json_hash(
+            {"domain": "workstream.submission_policy.derive.preflight.v1", "custody": custody.model_dump(mode="json")}
+        )
+        preflight_resource = self._service_resource(
+            project_id=project_id, guide_id=guide_id, policy_id=policy_id,
+            operation_id=operation_id, request_digest=preflight_digest,
+            lineage=initial, custody=custody,
+        )
+        preflight_caller = PreparedAuthorizationInput(
+            idempotency_key=operation_id,
+            request_value=cast(JsonValue, preflight_resource.model_dump(mode="json")),
+        )
+        handle = await self._prepare(
+            prepared, action, preflight_caller, project_id, preflight_resource
+        )
+        decision = await prepared.consume(handle, action, preflight_caller, preflight_resource)
+        self._prove_setup_service_authority(decision)
+        await self._session.rollback()
+
+        existing_replay = await self._replay.find_by_operation(operation_id)
+        if existing_replay is not None:
+            if (
+                existing_replay.actor_profile_id != str(actor_profile_id)
+                or existing_replay.identity_link_id != str(identity_link_id)
+                or existing_replay.service_identity != ServiceIdentity.PROJECT_SETUP.value
+                or existing_replay.action_id != action.value
+                or existing_replay.setup_run_id != str(custody.setup_run_id)
+                or existing_replay.setup_generation != custody.setup_generation
+                or existing_replay.setup_task_id != custody.task_id
+                or existing_replay.correlation_id != custody.correlation_id
+                or existing_replay.status != "committed"
+                or existing_replay.response_json is None
+                or existing_replay.committed_policy_id != str(policy_id)
+            ):
+                raise SubmissionPolicyMutationConflict("idempotency_mismatch")
+            replay_resource = (
+                ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate_json(
+                    json.dumps(existing_replay.resource_context_json)
+                )
+            )
+            final = await self._lock_complete_derivation_lineage(
+                project_id,
+                guide_id,
+                source_snapshot_id,
+                expected_policy_id=policy_id,
+            )
+            if (
+                final != initial
+                or existing_replay.resource_context_digest
+                != authorization_resource_digest(replay_resource)
+                or replay_resource
+                != self._service_resource(
+                    project_id=project_id,
+                    guide_id=guide_id,
+                    policy_id=policy_id,
+                    operation_id=operation_id,
+                    request_digest=existing_replay.request_digest,
+                    lineage=final,
+                    custody=custody,
+                )
+            ):
+                raise SubmissionPolicyMutationConflict("idempotency_mismatch")
+            setup = await self._projects.lock_project_setup_run(str(custody.setup_run_id))
+            if setup is None:
+                raise SubmissionPolicyMutationConflict("project_setup_run_context_mismatch")
+            self._require_exact_completed_custody(setup, final, custody, policy_id)
+            persisted = await self._projects.get_submission_artifact_policy(str(policy_id))
+            persisted_response = (
+                SubmissionArtifactPolicyResponse.model_validate(persisted)
+                if persisted is not None
+                else None
+            )
+            replay_response = SubmissionArtifactPolicyResponse.model_validate(
+                existing_replay.response_json
+            )
+            if persisted_response is None or replay_response != persisted_response:
+                raise SubmissionPolicyMutationConflict("idempotency_mismatch")
+            replay_caller = PreparedAuthorizationInput(
+                idempotency_key=operation_id,
+                request_value=cast(JsonValue, replay_resource.model_dump(mode="json")),
+            )
+            replay_handle = await self._prepare(
+                prepared, action, replay_caller, project_id, replay_resource
+            )
+            replay_decision = await prepared.consume(
+                replay_handle, action, replay_caller, replay_resource
+            )
+            self._prove_setup_service_authority(replay_decision)
+            return SubmissionPolicyMutationOutcome(
+                replay_response,
+                True,
+            )
+
+        existing_policy = (
+            await self._projects.get_agent_derived_submission_artifact_policy_for_snapshot(
+                str(project_id), initial.guide_version, str(source_snapshot_id)
+            )
+        )
+        if existing_policy is not None:
+            raise SubmissionPolicyMutationConflict("submission_policy_replay_missing")
+
+        preflight_facts = SubmissionPolicyReplayFacts(
+            actor_profile_id=str(actor_profile_id),
+            identity_link_id=str(identity_link_id),
+            service_identity=ServiceIdentity.PROJECT_SETUP.value,
+            action_id=action.value,
+            idempotency_key=None,
+            request_digest=preflight_digest,
+            resource_context=preflight_resource,
+            operation_id=operation_id,
+            project_id=str(project_id),
+            guide_id=str(guide_id),
+            source_snapshot_id=str(source_snapshot_id),
+            policy_id=str(policy_id),
+            setup_run_id=str(custody.setup_run_id),
+            setup_generation=custody.setup_generation,
+            setup_task_id=custody.task_id,
+            correlation_id=custody.correlation_id,
+        )
+        disposition, _ = await self.reserve_replay(preflight_facts, execution_claim=True)
+        if disposition != "claimed":
+            raise SubmissionPolicyMutationConflict(f"idempotency_{disposition}")
+        # Persist the execution claim before external material or agent I/O. A
+        # crashed delivery therefore remains pending and cannot repeat that I/O.
+        await self._session.commit()
+
+        guide = await self._projects.get_guide(str(guide_id))
+        snapshot = await self._projects.get_guide_source_snapshot(str(source_snapshot_id))
+        report = await self._projects.get_guide_sufficiency_report(str(initial.report_id))
+        if guide is None or snapshot is None or report is None:
+            raise SubmissionPolicyMutationConflict("submission_policy_lineage_stale")
+        await self._validation.validate_agent_sufficiency_report_for_derivation(report)
+        material = await self._validation.verified_guide_source_material_for_agent(
+            guide, snapshot, report
+        )
+        runtime_report = GuideSufficiencyAgentResult(
+            status=REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS[report.status],
+            findings=[AgentFinding.model_validate(finding) for finding in report.findings],
+            summary=report.summary,
+            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+        )
+        try:
+            result = await get_project_guide_agent_runtime().derive_submission_artifact_policy(
+                material, runtime_report
+            )
+        except ProjectAgentRuntimeError:
+            raise AgentRuntimeUnavailable(
+                "submission artifact policy agent is unavailable"
+            ) from None
+        try:
+            validated_policy = SubmissionArtifactPolicyInput.model_validate(result.policy_body)
+        except ValueError as exc:
+            raise PolicySetupBlocked("derived submission artifact policy is invalid") from exc
+        policy_body = self._validation.canonical_agent_submission_policy_body(
+            validated_policy.model_dump(mode="json")
+        )
+        policy_hash = canonical_json_hash(policy_body)
+        final = await self._lock_complete_derivation_lineage(
+            project_id, guide_id, source_snapshot_id
+        )
+        if final != initial:
+            raise SubmissionPolicyMutationConflict("submission_policy_lineage_stale")
+        setup = await self._projects.lock_project_setup_run(str(custody.setup_run_id))
+        if setup is None:
+            raise SubmissionPolicyMutationConflict("project_setup_run_context_mismatch")
+        self._require_exact_running_custody(setup, final, custody)
+        request_digest = canonical_json_hash(
+            {
+                "domain": "workstream.submission_policy.derive.final.v1",
+                "custody": custody.model_dump(mode="json"),
+                "policy_hash": policy_hash,
+                "change_summary": result.change_summary,
+            }
+        )
+        resource = self._service_resource(
+            project_id=project_id, guide_id=guide_id, policy_id=policy_id,
+            operation_id=operation_id, request_digest=request_digest,
+            lineage=final, custody=custody,
+        )
+        caller = PreparedAuthorizationInput(
+            idempotency_key=operation_id,
+            request_value=cast(JsonValue, resource.model_dump(mode="json")),
+        )
+        handle = await self._prepare(prepared, action, caller, project_id, resource)
+        decision = await prepared.consume(handle, action, caller, resource)
+        self._prove_setup_service_authority(decision)
+        preflight_values = self._replay_values(preflight_facts)
+        final_facts = SubmissionPolicyReplayFacts(
+            actor_profile_id=str(actor_profile_id), identity_link_id=str(identity_link_id),
+            service_identity=ServiceIdentity.PROJECT_SETUP.value, action_id=action.value,
+            idempotency_key=None, request_digest=request_digest, resource_context=resource,
+            operation_id=operation_id, project_id=str(project_id), guide_id=str(guide_id),
+            source_snapshot_id=str(source_snapshot_id), policy_id=str(policy_id),
+            setup_run_id=str(custody.setup_run_id), setup_generation=custody.setup_generation,
+            setup_task_id=custody.task_id, correlation_id=custody.correlation_id,
+        )
+        final_values = self._replay_values(final_facts)
+        rebound = await self._replay.bind_reserved_execution(
+            operation_id,
+            expected_request_digest=preflight_digest,
+            expected_resource_context_digest=str(
+                preflight_values["resource_context_digest"]
+            ),
+            request_digest=request_digest,
+            resource_context_digest=str(final_values["resource_context_digest"]),
+            resource_context_json=cast(dict, final_values["resource_context_json"]),
+        )
+        if rebound is None:
+            raise SubmissionPolicyMutationConflict("idempotency_mismatch")
+        policy = SubmissionArtifactPolicy(
+            id=str(policy_id), project_id=str(project_id), guide_id=str(guide_id),
+            guide_version=final.guide_version, source_snapshot_id=str(source_snapshot_id),
+            source_snapshot_hash=final.snapshot_hash,
+            policy_version=agent_submission_artifact_policy_version(final.snapshot_hash),
+            lifecycle_status="draft", policy_body=policy_body, policy_hash=policy_hash,
+            derivation_source=AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
+            source_material_refs=list(final.source_material_refs),
+            derivation_agent_name=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
+            derivation_agent_version=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+            created_by=str(actor_profile_id), created_by_actor_profile_id=str(actor_profile_id),
+            created_via_identity_link_id=str(identity_link_id),
+            created_by_admin_role_grant_id=None,
+            created_by_service_identity=ServiceIdentity.PROJECT_SETUP.value,
+            creation_scope_type="service", creation_scope_project_id=str(project_id),
+            creation_action_id=action.value,
+            creation_decision_event_id=str(decision.decision_id),
+            change_summary=result.change_summary,
+        )
+        await self._projects.add_submission_artifact_policy(policy)
+        setup.status = "policy_draft_ready"
+        setup.current_step = "submission_artifact_policy_derivation"
+        setup.output_submission_artifact_policy_id = policy.id
+        response = SubmissionArtifactPolicyResponse.model_validate(policy)
+        await self.complete_replay(
+            final_facts,
+            response_json=response.model_dump(mode="json"),
+            committed_policy_id=policy.id,
+        )
+        return SubmissionPolicyMutationOutcome(response, False)
+
     def _require_root_transaction(self) -> None:
         transaction = self._session.sync_session.get_transaction()
         if (
@@ -925,14 +1463,18 @@ class SubmissionPolicyMutationService:
         }
 
     async def reserve_replay(
-        self, facts: SubmissionPolicyReplayFacts
+        self,
+        facts: SubmissionPolicyReplayFacts,
+        *,
+        execution_claim: bool = False,
     ) -> tuple[
         Literal["claimed", "mismatch", "pending", "replayed"],
         SubmissionPolicyMutationIdempotencyRecord,
     ]:
         """Reserve replay custody while leaving transaction ownership to the caller."""
         self._require_root_transaction()
-        return await self._replay.reserve(**self._replay_values(facts))
+        status: Literal["reserved", "pending"] = "reserved" if execution_claim else "pending"
+        return await self._replay.reserve(**self._replay_values(facts), status=status)
 
     async def complete_replay(
         self,

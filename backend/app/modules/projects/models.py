@@ -280,10 +280,11 @@ class SubmissionPolicyMutationIdempotencyRecord(Base):
             name="ck_submission_policy_replay_principal_shape",
         ),
         CheckConstraint(
-            "status in ('pending','committed')", name="ck_submission_policy_replay_status"
+            "status in ('reserved','pending','committed')",
+            name="ck_submission_policy_replay_status",
         ),
         CheckConstraint(
-            "(status='pending' and response_json is null and committed_at is null "
+            "(status in ('reserved','pending') and response_json is null and committed_at is null "
             "and committed_policy_id is null and committed_effective_policy_id is null "
             "and committed_pre_submit_policy_id is null) or "
             "(status='committed' and response_json is not null and committed_at is not null "

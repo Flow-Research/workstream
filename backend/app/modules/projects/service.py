@@ -24,10 +24,8 @@ from app.core.hashing import canonical_json_hash
 from app.core.permissions import require_any_role
 from app.core.project_agents import get_project_guide_agent_runtime
 from app.interfaces.project_agents import (
-    AgentFinding,
     GuideSourceItemMaterial,
     GuideSourceMaterial,
-    GuideSufficiencyAgentResult,
     PostSubmitCheckerCatalogEntry,
     PostSubmitCheckerPolicyCorrectionFeedback,
     PostSubmitCheckerPolicyDerivationContext,
@@ -102,7 +100,6 @@ from app.modules.projects.schemas import (
     ProjectSetupRunResponse,
     RevisionPolicyResponse,
     ReviewPolicyResponse,
-    SubmissionArtifactPolicyInput,
     SubmissionArtifactPolicyApprove,
     SubmissionArtifactPolicyResponse,
 )
@@ -972,136 +969,6 @@ class ProjectService:
         await self._session.commit()
         await self._session.refresh(report)
         return GuideSufficiencyReportResponse.model_validate(report)
-
-    async def run_submission_artifact_policy_derivation_agent(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-    ) -> tuple[SubmissionArtifactPolicyResponse, bool]:
-        """Run the configured policy derivation agent for a source snapshot.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the guide.
-            guide_id: Guide whose immutable source snapshot should be analyzed.
-            source_snapshot_id: Source snapshot id to derive policy from.
-
-        Returns:
-            Existing or newly persisted policy plus whether it was created.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can derive submission artifact policies")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        self._validate_sufficiency_report_allows_policy_derivation(
-            sufficiency_report,
-            snapshot,
-        )
-        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
-        assert sufficiency_report is not None
-        existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
-            project_id,
-            guide.version,
-            snapshot.id,
-        )
-        if existing is not None:
-            self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
-            return SubmissionArtifactPolicyResponse.model_validate(existing), False
-
-        material = await self._verified_guide_source_material(
-            guide,
-            snapshot,
-            sufficiency_report,
-        )
-        runtime_report = GuideSufficiencyAgentResult(
-            status=REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS[sufficiency_report.status],
-            findings=[
-                AgentFinding.model_validate(finding) for finding in sufficiency_report.findings
-            ],
-            summary=sufficiency_report.summary,
-            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
-            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
-        )
-        await self._session.rollback()
-        try:
-            result = await self._project_agent_runtime().derive_submission_artifact_policy(
-                material,
-                runtime_report,
-            )
-        except ProjectAgentRuntimeError:
-            raise AgentRuntimeUnavailable(
-                "submission artifact policy agent is unavailable"
-            ) from None
-
-        try:
-            policy_input = SubmissionArtifactPolicyInput.model_validate(result.policy_body)
-        except ValueError as exc:
-            raise PolicySetupBlocked("derived submission artifact policy is invalid") from exc
-        policy_body = self._canonical_policy_body(policy_input.model_dump(mode="json"))
-        self._merge_effective_submission_artifact_policy(policy_body)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can derive submission artifact policies")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        self._validate_sufficiency_report_allows_policy_derivation(
-            sufficiency_report,
-            snapshot,
-        )
-        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
-        existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
-            project_id,
-            guide.version,
-            snapshot.id,
-        )
-        if existing is not None:
-            self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
-            return SubmissionArtifactPolicyResponse.model_validate(existing), False
-        source_material_refs = await self._verified_source_material_refs(sufficiency_report)
-        policy = SubmissionArtifactPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            policy_version=agent_submission_artifact_policy_version(snapshot.bundle_hash),
-            lifecycle_status="draft",
-            policy_body=policy_body,
-            policy_hash=self._hash_canonical_json(policy_body),
-            derivation_source=AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
-            source_material_refs=source_material_refs,
-            derivation_agent_name=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
-            derivation_agent_version=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
-            created_by=actor.actor_id,
-            change_summary=result.change_summary,
-        )
-        try:
-            policy = await self._repo.add_submission_artifact_policy(policy)
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
-                project_id,
-                guide.version,
-                snapshot.id,
-            )
-            if existing is not None:
-                self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
-                return SubmissionArtifactPolicyResponse.model_validate(existing), False
-            raise PolicySetupConflict(
-                "submission artifact policy conflicted with concurrent setup; retry"
-            ) from exc
-        await self._session.refresh(policy)
-        return SubmissionArtifactPolicyResponse.model_validate(policy), True
 
     async def run_post_submit_checker_policy_derivation_agent(
         self,
@@ -2715,6 +2582,15 @@ class ProjectService:
             representative_task_material=RepresentativeTaskMaterialContext(items=[]),
         )
 
+    async def verified_guide_source_material_for_agent(
+        self,
+        guide: ProjectGuide,
+        snapshot: GuideSourceSnapshot,
+        report: GuideSufficiencyReport,
+    ) -> GuideSourceMaterial:
+        """Load canonical ART-verified material for a setup agent."""
+        return await self._verified_guide_source_material(guide, snapshot, report)
+
     @staticmethod
     def _verified_agent_item(item: Any) -> GuideSourceItemMaterial:
         """Project one canonical extraction row into bounded untrusted agent input."""
@@ -3273,6 +3149,20 @@ class ProjectService:
                 "agent sufficiency report is required before policy derivation"
             )
         await self._verified_report_usages(sufficiency_report)
+
+    async def validate_agent_sufficiency_report_for_derivation(
+        self, sufficiency_report: GuideSufficiencyReport | None
+    ) -> None:
+        """Validate server-owned sufficiency provenance for downstream agents."""
+        await self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
+
+    def canonical_agent_submission_policy_body(
+        self, policy_body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Canonicalize agent output and enforce platform policy defaults."""
+        canonical = self._canonical_policy_body(policy_body)
+        self._merge_effective_submission_artifact_policy(canonical)
+        return canonical
 
     async def _verified_report_usages(
         self,

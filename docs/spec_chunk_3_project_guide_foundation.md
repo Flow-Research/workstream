@@ -135,7 +135,6 @@ Adds protected v1 routes:
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy` (legacy until 12F3 removes it)
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/activate`
@@ -143,8 +142,8 @@ Adds protected v1 routes:
 
 These routes require an actor role allowed to manage project setup.
 
-Normal project setup does not depend on manually calling the sufficiency or
-derivation routes. Creating guide-source snapshot metadata enqueues the Celery
+Normal project setup does not depend on manually requesting sufficiency, and
+there is no public derivation route. Creating guide-source snapshot metadata enqueues the Celery
 project setup pipeline; guide creation alone does not. The pipeline runs guide sufficiency first and only
 continues to submission artifact policy derivation when sufficiency is not
 blocked.
@@ -157,9 +156,11 @@ automatic setup run. Both paths use the canonical same-generation ART material.
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
 
-Until `WS-AUTH-001-12F3` merges, the public
-`derive-submission-artifact-policy` repair endpoint remains legacy behavior
-using its current actor and setup-role checks. After that merge, automatic
+`WS-AUTH-001-12F3` removes the public inline derivation endpoint. Submission
+artifact policy derivation runs only in the asynchronous project-setup worker
+under fresh `workstream.project.setup` fixed-service authority
+using exact active service-profile, identity-link, action, and setup-custody
+checks. After that merge, automatic
 derivation is owned only by the fixed `workstream.project.setup` service after
 current lineage and sufficiency are revalidated; a Project Manager cannot
 invoke the agent inline.

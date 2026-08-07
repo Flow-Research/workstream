@@ -6,7 +6,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.artifacts import get_guide_artifact_ingest_command
@@ -24,9 +24,6 @@ from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
 )
 from app.modules.artifacts.authorization import get_artifact_authorization_context
-from app.modules.artifacts.guide_sufficiency_material import (
-    SqlAlchemyGuideSufficiencyMaterialAdapter,
-)
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
@@ -519,6 +516,15 @@ async def acknowledge_guide_sufficiency_warnings(
             resolved, prepared, key, project_id, guide_id, report_id, payload
         )
         await (session.rollback() if outcome.replayed else session.commit())
+        if outcome.response.project_setup_run_id is not None:
+            await dispatch_pre_submit_setup_pipeline_after_commit(
+                session,
+                project_id=str(project_id),
+                guide_id=str(guide_id),
+                source_snapshot_id=outcome.response.source_snapshot_id,
+                setup_run_id=outcome.response.project_setup_run_id,
+                setup_generation=outcome.response.setup_generation,
+            )
         return outcome.response
     except GuideSufficiencyMutationConflict as exc:
         await session.rollback()
@@ -559,44 +565,6 @@ async def create_submission_artifact_policy(
         raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
         await session.rollback()
-        raise project_http_error(exc) from exc
-
-
-@router.post(
-    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy",
-    response_model=SubmissionArtifactPolicyResponse,
-    status_code=201,
-    responses={
-        200: {
-            "model": SubmissionArtifactPolicyResponse,
-            "description": "Existing agent-derived submission artifact policy reused.",
-        }
-    },
-)
-async def run_submission_artifact_policy_derivation_agent(
-    project_id: str,
-    guide_id: str,
-    source_snapshot_id: str,
-    response: Response,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> SubmissionArtifactPolicyResponse:
-    """Run Workstream's submission artifact policy derivation agent."""
-    try:
-        result, created = await ProjectService(
-            session,
-            guide_sufficiency_material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
-        ).run_submission_artifact_policy_derivation_agent(
-            actor,
-            project_id,
-            guide_id,
-            source_snapshot_id,
-        )
-        response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return result
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
         raise project_http_error(exc) from exc
 
 

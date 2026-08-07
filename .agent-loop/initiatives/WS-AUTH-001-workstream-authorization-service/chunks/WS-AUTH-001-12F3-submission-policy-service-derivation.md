@@ -2,7 +2,8 @@
 
 ## Status and prerequisite
 
-Proposed and inactive after merged 12F2. Risk: L1.
+Implementation complete and ready for hosted CI/external review after merged
+12F2. Risk: L1. Human merge remains required.
 
 ## Goal
 
@@ -24,9 +25,14 @@ backend/app/modules/projects/service.py
 backend/app/modules/projects/setup_queue.py
 backend/app/modules/projects/submission_policy_mutation_service.py
 backend/app/modules/projects/submission_policy_mutation_repository.py
+backend/app/modules/projects/models.py
+backend/app/modules/projects/sufficiency_mutation_service.py
 backend/app/workers/project_setup.py
 backend/tests/test_authorization.py
+backend/tests/test_alembic.py
 backend/tests/test_projects.py
+backend/tests/conftest.py
+backend/alembic/versions/0059_submission_policy_execution_claim.py
 backend/scripts/api_contract_e2e.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
@@ -58,6 +64,10 @@ mutation, post-submit policy, generic service authority, or ART behavior.
   and be `passed`, or `passed_with_warnings` with its warnings acknowledged.
   Missing, blocked, stale, diagnostic-only or unacknowledged-warning output
   denies before material or agent I/O.
+- After an authorized warning acknowledgement, the same setup generation is
+  deterministically requeued and resumes derivation without rerunning
+  sufficiency; repeated recovery does not duplicate material access, agent
+  invocation or the policy draft.
 - Before material or agent I/O, the service acquires a deterministic execution
   fence and proves current fixed-service admission. No prepared handle crosses
   rollback, external material/agent work, Celery, serialization or transaction.

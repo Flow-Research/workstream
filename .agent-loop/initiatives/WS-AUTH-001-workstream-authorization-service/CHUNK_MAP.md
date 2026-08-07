@@ -71,7 +71,7 @@ stopped.
 | `WS-AUTH-001-12F` | Submission Artifact Policy Planning Parent | L1 | Split after failed L1 pre-start review; zero activation |
 | `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Merged through PR #286; zero activation |
 | `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Merged through PR #292 as `81f281bd` |
-| `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | Proposed after 12F2 |
+| `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | Ready for PR; internal L1 reviews passed |
 | `WS-AUTH-001-12F4` | Submission Policy Approval Chain | L1 | Proposed after 12F3 |
 | `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F4 |
 | `WS-AUTH-001-12H` | Guide Activation Cutover | L1 | Proposed after 12B2 and the owning CON clean cut |
