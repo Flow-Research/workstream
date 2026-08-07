@@ -9,8 +9,9 @@ verification and compose the hidden continuous contributor endpoint.
 
 ## Allowed Files
 
-SubmissionBundleAdmission model/migration/repository, verification publication
-integration, bounded Operator projection, hidden route composition, tests/docs/CI.
+SubmissionBundleAdmission model/migration/repository, verified
+`SubmissionBundleDurableIntent` reload, verification publication integration,
+bounded Operator projection, hidden route composition, tests/docs/CI.
 
 ## Not Allowed Changes
 
@@ -19,11 +20,16 @@ candidate storage, review/contribution, or new recovery machinery.
 
 ## Acceptance Criteria
 
-Only verified matching bytes publish ready; lifecycle is ready->consumed|stale;
-actor/link/project/task/assignment/predecessor/context/manifest/evidence lineage
-is immutable; abandoned ready remains charged; exact POST replay returns the
-same operation/admission; 04A2-04C2 run in one request with no serialized local
-handle; fixed pre-submit materializer is active before later live activation.
+Only verified matching bytes publish ready. 04C2 locks and reloads the exact
+`SubmissionBundleDurableIntent`, its passing/eligible `PreSubmitEvidenceSet`,
+generic put attempt, verified content, replica, and receipt as the sole durable
+publication lineage; it never parses an opaque request digest or relies on
+scratch, prepared handles, or process-local capability state. Lifecycle is
+ready->consumed|stale; actor/link/project/task/assignment/predecessor/context/
+manifest/evidence lineage is immutable; abandoned ready remains charged; exact
+POST replay returns the same operation/admission; 04A2-04C2 run in one request
+with no serialized local handle; fixed pre-submit materializer is active before
+later live activation.
 
 ## Verification Commands
 

@@ -1235,6 +1235,31 @@ identity, stable codes, counts and categories without submitted paths,
 filenames, scratch/provider references, credentials, raw output or free-form
 messages.
 
+### SubmissionBundleDurableIntent
+
+Before provider I/O, the final preparation transaction persists one immutable
+submission-producer intent linked by foreign keys to the exact passing
+`PreSubmitEvidenceSet` and generic `ArtifactPutAttempt`. It preserves the actor
+and identity link, project, task, assignment, predecessor identity/version,
+locked guide/snapshot/policy lineage, semantic-manifest identity/digest,
+archive digest/size/media type, effective-plan digest, storage scheme, and
+operation identity required for database-only verified-admission publication.
+It is not a bindable admission, Submission, review, or contribution fact.
+
+The intent, transaction-local authorization evidence, provisional capacity
+reservation, and put attempt commit atomically before the prepared ZIP is
+handed to `ArtifactStore`. One-to-one uniqueness on the evidence set and put
+attempt fences concurrent continuation. Recovery and 04C2 reload the typed
+row; they never parse the opaque put-attempt request digest and never depend on
+scratch, a prepared handle, or process-local capability state.
+
+If the process dies before this intent commits, the old evidence row cannot
+mint or remint authority. Recovery requires a complete fresh upload and checker
+execution, which produces a new prepared generation, evidence identity, and
+single-use pass capability. If the process dies after intent commit, the
+existing generic put-attempt observation and recovery machinery owns the
+technical obligation without another submission-specific recovery aggregate.
+
 ### SubmissionBundleAdmission
 
 One immutable verified preparation with closed status:
