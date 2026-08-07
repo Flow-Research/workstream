@@ -400,6 +400,27 @@ or locked-context replacement may instead commit only the terminal stale
 transition and bounded evidence, with no Submission or binding. ART/TASK never
 imports or locks AUTH-owned tables.
 
+The submission producer is not encoded only in generic put-attempt columns or
+an opaque request digest. Before provider I/O, 04C1 persists one immutable,
+foreign-keyed durable intent joining the exact passing pre-submit evidence set
+to the generic put attempt. That intent preserves the actor and identity link,
+project, task, assignment, predecessor identity/version, locked guide/snapshot/
+policy lineage, semantic manifest, archive commitment, effective plan, and
+storage scheme needed for database-only 04C2 publication after process loss.
+Neither scratch state nor a process-local capability is durable lineage, and
+04C2 never reconstructs facts by parsing a request digest.
+
+The normal path consumes a live `PreSubmitPassCapability` and the exact
+`PreparedArtifact` immediately. If a worker dies after immutable passing
+evidence commits but before the durable intent transaction, recovery requires a
+complete fresh upload and checker execution with a new prepared generation,
+evidence identity, and immediate pass capability. An old durable evidence row
+never mints or remints process-local authority. Database uniqueness fences
+concurrent continuation of each live generation to one intent, one capacity
+effect, and one logical provider operation; content-addressed capacity and
+provider storage continue deduplicating identical bytes across later complete
+reuploads.
+
 ## Durable Verification And Recovery
 
 Background jobs have exactly one operation class:
