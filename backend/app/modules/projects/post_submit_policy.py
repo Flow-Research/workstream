@@ -7,6 +7,10 @@ from types import MappingProxyType
 from typing import Any
 
 from app.core.hashing import canonical_json_hash
+from app.interfaces.project_agents import (
+    PostSubmissionCapabilityDefinition,
+    PostSubmissionCapabilityProjection,
+)
 from app.modules.checkers.runner import (
     UnknownChecker,
     default_checker_registry,
@@ -50,6 +54,12 @@ POST_SUBMIT_DEFAULT_CHECKERS_BY_COMPILER_VERSION = MappingProxyType(
         POST_SUBMIT_COMPILER_VERSION: POST_SUBMIT_V01_DEFAULT_CHECKERS,
     }
 )
+POST_SUBMIT_V01_SELECTABLE_CHECKERS = ("check_acceptance_criteria_present",)
+POST_SUBMIT_SELECTABLE_CHECKERS_BY_COMPILER_VERSION = MappingProxyType(
+    {
+        POST_SUBMIT_COMPILER_VERSION: POST_SUBMIT_V01_SELECTABLE_CHECKERS,
+    }
+)
 SUPPORTED_POST_SUBMIT_COMPILER_VERSIONS = frozenset(
     POST_SUBMIT_DEFAULT_CHECKERS_BY_COMPILER_VERSION
 )
@@ -62,10 +72,50 @@ POST_SUBMIT_SEVERITY_ORDER = (
 )
 PLATFORM_BLOCKING_SEVERITIES = ("critical", "high")
 PLATFORM_BLOCKING_SEVERITY_SET = frozenset(PLATFORM_BLOCKING_SEVERITIES)
+POST_SUBMISSION_CAPABILITY_CATALOGUE_ID = "workstream.post_submission_checkers"
+POST_SUBMISSION_CAPABILITY_SCHEMA_VERSION = "post_submission_checker_capability_projection.v1"
 
 
 class PostSubmitCheckerCompilerError(ValueError):
     """Raised when post-submit checker policy compilation fails closed."""
+
+
+def project_guide_post_submission_capabilities(
+    *, compiler_version: str = POST_SUBMIT_COMPILER_VERSION
+) -> PostSubmissionCapabilityProjection:
+    """Project registered CHECKER truth and frozen defaults without a new registry."""
+    defaults = _default_checkers_for_compiler_version(compiler_version)
+    selectable = POST_SUBMIT_SELECTABLE_CHECKERS_BY_COMPILER_VERSION.get(compiler_version)
+    if selectable is None:
+        raise PostSubmitCheckerCompilerError("unsupported post-submit compiler version")
+    registered = tuple(sorted(default_checker_registry().names()))
+    default_set = frozenset(defaults)
+    selectable_set = frozenset(selectable)
+    if default_set & selectable_set:
+        raise PostSubmitCheckerCompilerError(
+            "post-submit default and selectable checker snapshots overlap"
+        )
+    if not (default_set | selectable_set).issubset(registered):
+        raise PostSubmitCheckerCompilerError("post-submit checker registration parity is invalid")
+    definitions = tuple(
+        PostSubmissionCapabilityDefinition(
+            capability_id=name,
+            capability_version=compiler_version,
+            platform_default=name in default_set,
+            selectable=name in selectable_set,
+        )
+        for name in registered
+    )
+    body = {
+        "catalogue_id": POST_SUBMISSION_CAPABILITY_CATALOGUE_ID,
+        "source_version": compiler_version,
+        "schema_version": POST_SUBMISSION_CAPABILITY_SCHEMA_VERSION,
+        "definitions": [definition.model_dump(mode="json") for definition in definitions],
+    }
+    return PostSubmissionCapabilityProjection(
+        **body,
+        manifest_sha256=canonical_json_hash(body),
+    )
 
 
 @dataclass(frozen=True)
@@ -324,7 +374,9 @@ def _validate_spec_shape(
         raise PostSubmitCheckerCompilerError("post-submit checker spec guide context mismatch")
     for field_name in ("required_checkers", "warning_checkers", "blocking_severities"):
         if not _string_list(spec.get(field_name)):
-            raise PostSubmitCheckerCompilerError(f"post-submit checker spec {field_name} is invalid")
+            raise PostSubmitCheckerCompilerError(
+                f"post-submit checker spec {field_name} is invalid"
+            )
 
 
 def _validate_checker_classifications(
