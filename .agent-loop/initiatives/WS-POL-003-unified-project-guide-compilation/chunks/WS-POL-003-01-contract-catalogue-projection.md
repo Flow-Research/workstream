@@ -21,6 +21,8 @@ second POL-owned registry.
 backend/app/interfaces/project_agents.py
 backend/app/modules/checkers/catalogue.py
 backend/app/modules/projects/post_submit_policy.py
+backend/scripts/run_test_lanes.py
+backend/tests/test_ci_test_lanes.py
 backend/tests/test_project_guide_compilation_contracts.py
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/**
 ```
@@ -28,6 +30,9 @@ backend/tests/test_project_guide_compilation_contracts.py
 `catalogue.py` and `post_submit_policy.py` may add pure read-only projection
 functions only. Their existing registry, definitions, defaults, compiler,
 validation, hashing, and execution semantics are frozen.
+
+The CI lane files may change only to assign the new test module exactly once
+to the existing task-lifecycle lane and update its exact-inventory assertion.
 
 ## Not allowed
 

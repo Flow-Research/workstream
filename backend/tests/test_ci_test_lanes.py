@@ -46,6 +46,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/test_checkers.py",
         "tests/test_default_pre_submit_execution.py",
         "tests/test_effective_pre_submit_execution.py",
+        "tests/test_project_guide_compilation_contracts.py",
         "tests/test_review_lease_persistence.py",
         "tests/test_review_queue_persistence.py",
         "tests/test_tasks.py",
