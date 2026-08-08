@@ -22,6 +22,7 @@ from app.modules.artifacts.models import (  # noqa: F401
     ArtifactRecoveryAttempt,
     PreSubmitEvidenceResult,
     PreSubmitEvidenceSet,
+    SubmissionBundleDurableIntent,
 )
 from app.modules.authorization.models import (  # noqa: F401
     AdminRoleGrant,

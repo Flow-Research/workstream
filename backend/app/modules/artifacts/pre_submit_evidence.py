@@ -223,12 +223,18 @@ def semantic_manifest_identity(semantic_manifest_sha256: str) -> UUID:
     )
 
 
+_PRE_SUBMIT_PASS_CAPABILITY_SEAL = object()
+
+
 class PreSubmitPassCapability:
     """Single-use process-local proof for immediate 04C continuation only."""
 
     __slots__ = (
         "_consumed",
+        "_binding",
         "_lock",
+        "_owner",
+        "_seal",
         "evidence_set_id",
         "prepared_generation_id",
         "predecessor_submission_id",
@@ -238,9 +244,16 @@ class PreSubmitPassCapability:
         "storage_scheme",
     )
 
-    def __init__(
-        self,
+    def __init__(self, *_: object, **__: object) -> None:
+        """Reject direct construction outside the evidence service."""
+        raise TypeError("PreSubmitPassCapability can only be created by pre-submit evidence")
+
+    @classmethod
+    def _from_evidence_service(
+        cls,
         *,
+        owner: PreSubmitEvidenceService,
+        binding: object,
         evidence_set_id: UUID,
         prepared_generation_id: UUID,
         predecessor_submission_id: UUID | None,
@@ -248,16 +261,24 @@ class PreSubmitPassCapability:
         archive_sha256: str,
         semantic_manifest_sha256: str,
         storage_scheme: str,
-    ) -> None:
-        self.evidence_set_id = evidence_set_id
-        self.prepared_generation_id = prepared_generation_id
-        self.predecessor_submission_id = predecessor_submission_id
-        self.effective_plan_sha256 = effective_plan_sha256
-        self.archive_sha256 = archive_sha256
-        self.semantic_manifest_sha256 = semantic_manifest_sha256
-        self.storage_scheme = storage_scheme
-        self._consumed = False
-        self._lock = threading.Lock()
+    ) -> PreSubmitPassCapability:
+        """Mint only from the service that persisted fresh passing evidence."""
+        if type(owner) is not PreSubmitEvidenceService or not owner._claims_pass_binding(binding):
+            raise TypeError("PreSubmitPassCapability can only be created by pre-submit evidence")
+        capability = object.__new__(cls)
+        capability._owner = owner
+        capability._binding = binding
+        capability.evidence_set_id = evidence_set_id
+        capability.prepared_generation_id = prepared_generation_id
+        capability.predecessor_submission_id = predecessor_submission_id
+        capability.effective_plan_sha256 = effective_plan_sha256
+        capability.archive_sha256 = archive_sha256
+        capability.semantic_manifest_sha256 = semantic_manifest_sha256
+        capability.storage_scheme = storage_scheme
+        capability._consumed = False
+        capability._lock = threading.Lock()
+        capability._seal = _PRE_SUBMIT_PASS_CAPABILITY_SEAL
+        return capability
 
     def consume(
         self,
@@ -271,17 +292,40 @@ class PreSubmitPassCapability:
     ) -> UUID:
         """Consume once only when the immediate continuation facts still match."""
         with self._lock:
-            if self._consumed or (
-                prepared_generation_id != self.prepared_generation_id
-                or predecessor_submission_id != self.predecessor_submission_id
-                or effective_plan_sha256 != self.effective_plan_sha256
-                or archive_sha256 != self.archive_sha256
-                or semantic_manifest_sha256 != self.semantic_manifest_sha256
-                or storage_scheme != self.storage_scheme
+            if (
+                self._seal is not _PRE_SUBMIT_PASS_CAPABILITY_SEAL
+                or self._consumed
+                or (
+                    prepared_generation_id != self.prepared_generation_id
+                    or predecessor_submission_id != self.predecessor_submission_id
+                    or effective_plan_sha256 != self.effective_plan_sha256
+                    or archive_sha256 != self.archive_sha256
+                    or semantic_manifest_sha256 != self.semantic_manifest_sha256
+                    or storage_scheme != self.storage_scheme
+                )
             ):
+                raise PreSubmitEvidenceConflict("pre_submit_pass_capability_invalid")
+            if not self._owner._consume_pass_binding(self._binding):
                 raise PreSubmitEvidenceConflict("pre_submit_pass_capability_invalid")
             self._consumed = True
             return self.evidence_set_id
+
+    def _assert_live_prepared_custody(
+        self,
+        *,
+        prepared_generation_id: UUID,
+        archive_sha256: str,
+    ) -> None:
+        """Fail before handoff when this capability is spent or for other bytes."""
+        with self._lock:
+            if (
+                self._seal is not _PRE_SUBMIT_PASS_CAPABILITY_SEAL
+                or self._consumed
+                or not self._owner._claims_pass_binding(self._binding)
+                or prepared_generation_id != self.prepared_generation_id
+                or archive_sha256 != self.archive_sha256
+            ):
+                raise PreSubmitEvidenceConflict("pre_submit_pass_capability_invalid")
 
 
 class _PreSubmitEvidenceRepository:
@@ -431,6 +475,48 @@ class PreSubmitEvidenceService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._repository = _PreSubmitEvidenceRepository(session)
+        self._live_pass_bindings: set[object] = set()
+
+    def _claims_pass_binding(self, binding: object) -> bool:
+        """Recognize only an issuance registered by this live service instance."""
+        return binding in getattr(self, "_live_pass_bindings", set())
+
+    def _consume_pass_binding(self, binding: object) -> bool:
+        """Retire one process-local issuance binding exactly once."""
+        if binding not in self._live_pass_bindings:
+            return False
+        self._live_pass_bindings.remove(binding)
+        return True
+
+    def _mint_pass_capability(
+        self,
+        *,
+        evidence_set_id: UUID,
+        prepared_generation_id: UUID,
+        predecessor_submission_id: UUID | None,
+        effective_plan_sha256: str,
+        archive_sha256: str,
+        semantic_manifest_sha256: str,
+        storage_scheme: str,
+    ) -> PreSubmitPassCapability:
+        """Register one unguessable issuance after fresh passing persistence."""
+        binding = object()
+        self._live_pass_bindings.add(binding)
+        try:
+            return PreSubmitPassCapability._from_evidence_service(
+                owner=self,
+                binding=binding,
+                evidence_set_id=evidence_set_id,
+                prepared_generation_id=prepared_generation_id,
+                predecessor_submission_id=predecessor_submission_id,
+                effective_plan_sha256=effective_plan_sha256,
+                archive_sha256=archive_sha256,
+                semantic_manifest_sha256=semantic_manifest_sha256,
+                storage_scheme=storage_scheme,
+            )
+        except BaseException:
+            self._live_pass_bindings.discard(binding)
+            raise
 
     async def persist(
         self, request: PreSubmitEvidencePersistenceRequest
@@ -508,7 +594,7 @@ class PreSubmitEvidenceService:
             execution=request.execution,
         )
         pass_capability = (
-            PreSubmitPassCapability(
+            self._mint_pass_capability(
                 evidence_set_id=evidence.evidence_set_id,
                 prepared_generation_id=request.prepared_generation_id,
                 predecessor_submission_id=request.predecessor_submission_id,

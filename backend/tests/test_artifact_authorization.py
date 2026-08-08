@@ -191,6 +191,7 @@ async def test_quota_reconciliation_is_configuration_driven_and_rollback_safe() 
         guide_source_snapshot_id=None,
         checker_run_id=None,
         logical_role=None,
+        pre_submit_evidence_set_id=None,
         operation_identity="sha256:" + "a" * 64,
     )
     result = await service._reserve_charges(
