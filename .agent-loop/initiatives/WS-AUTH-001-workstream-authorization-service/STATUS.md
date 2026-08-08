@@ -124,14 +124,16 @@ setup-run binding findings were repaired.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-12F3`; implementation and required internal reviews are complete.
-The fixed setup-service derivation cutover is ready for hosted CI and external
-review. `WS-AUTH-001-12F4` remains proposed and must not start before 12F3 is
-human-merged.
+None. Planning reconciliation is active after merged PR #295. No runtime chunk
+may start until the unified `WS-POL-003` dependency graph and remaining AUTH,
+ART, XINT, REV, and downstream contracts are reviewed and merged.
+The concise new 12I/12B2/12F4/12G/12H records are dependency skeletons, not
+implementation authority; each requires a then-current executable contract
+with explicit path scope, commands, and named reviewers before human start.
 
 ## Current review branch
 
-`codex/ws-auth-001-12f3-service-derivation`.
+`codex/ws-pol-003-auth-plan-reconciliation`.
 
 ## Chunk status
 
@@ -175,18 +177,19 @@ human-merged.
 | `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
 | `WS-AUTH-001-12A` | Merged | `codex/ws-auth-001-12a-project-mutation-catalogue` | #226 | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; merged as `64dd9c98` with zero activation. |
 | `WS-AUTH-001-12B` | Merged | `codex/ws-auth-001-12b-project-setup-service` | #227 | Fixed project-setup service identity and planned matrix only; zero activation and no actor/link seed. |
-| `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after 12E, 12F4, and 12G activate the exact product actions. |
+| `WS-AUTH-001-12B2` | Proposed | - | - | Setup-ledger activation after hidden POL-04A; POL-04B owns the live setup-service cutover. |
 | `WS-AUTH-001-12C` | Merged | `codex/ws-auth-001-12c-project-create` | #229 | System-scoped project creation cutover merged as `67f2c14b`. |
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
-| `WS-AUTH-001-12E` | Merged | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Three guide-sufficiency actions plus fixed setup-service run PREP merged as `b510bc4f`. |
+| `WS-AUTH-001-12E` | Merged; transitional | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Merged as `b510bc4f`; projection custody remains reusable, but the standalone inference entry point becomes unreachable at POL-04B and is deleted at POL-08. |
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
-| `WS-AUTH-001-12F3` | External checks | `codex/ws-auth-001-12f3-service-derivation` | #295 | Fixed setup-service derivation and asynchronous executor cutover; internal L1 reviews passed. |
-| `WS-AUTH-001-12F4` | Proposed | - | - | Project Manager approval and atomic effective/pre-submit policy chain. |
-| `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover after 12F4. |
-| `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |
+| `WS-AUTH-001-12F3` | Merged; transitional | `codex/ws-auth-001-12f3-service-derivation` | #295 | Merged as `99c0aaf0`; authority/provenance is reused, while its separate inference entry point is removed at POL-04B. |
+| `WS-AUTH-001-12I` | Proposed | - | - | Activates hidden unified compilation request/execute only. |
+| `WS-AUTH-001-12F4` | Proposed | - | - | Activates approval of the stored unified pre-submit component; no inference. |
+| `WS-AUTH-001-12G` | Proposed | - | - | Activates deterministic stored post-submit projection; zero model calls. |
+| `WS-AUTH-001-12H` | Proposed | - | - | Activates only a complete approved unified guide lineage. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |
 | `WS-AUTH-001-15` | Proposed | - | - | Remaining internal service and obsolete authority removal. |

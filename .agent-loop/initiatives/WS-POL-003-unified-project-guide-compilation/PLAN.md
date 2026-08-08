@@ -22,12 +22,29 @@ The invocation proposes:
 The model is untrusted. Trusted server code validates, canonicalizes, hashes,
 persists, compiles, and submits separate canonical policies for approval.
 
-## Prerequisite sequence
+## Prerequisite and activation sequence
 
-AUTH-12F, 12G, 12B2, and 12H complete the existing policy mutation,
-fixed-service worker, and activation authorization boundaries. WS-POL-003 must
-reuse those action-specific boundaries rather than create a broad
-`project.guide.compile_everything` permission.
+The mandatory order is:
+
+```text
+typed contract and hidden feature behavior
+-> narrow AUTH/XINT registration and activation
+-> live feature cutover
+-> legacy-path deletion
+```
+
+AUTH owns action registration, evaluator/PREP composition, availability, and
+authorization evidence. POL owns unified compilation, trusted projections,
+approval lifecycle behavior, and one-call orchestration. AUTH must not
+implement a second compiler or agent lifecycle; POL must not create broad
+`project.guide.compile_everything` authority.
+
+AUTH-12E and AUTH-12F3 are merged transitional separate-inference paths. Their
+action-specific projection custody remains reusable, but POL-04B makes their
+independent model calls unreachable without aliases or fallbacks. Remaining
+AUTH-12F4, 12G, 12B2, and 12H are narrow authorization/activation gates placed
+after the corresponding hidden POL behavior and before its live cutover. They
+are not blanket prerequisites for POL-01.
 
 ART-04B1 supplies the complete typed pre-submit catalogue and effective-plan
 compiler: mandatory/non-selectable platform coverage plus its closed selectable
@@ -54,7 +71,8 @@ selectable project rules. WS-POL-003 creates no pre-submit or post-submit
 dispatch registry; the unified agent sees read-only projections from both
 canonical phase owners.
 
-Before persistence/runtime cutover, an XINT/AUTH amendment must activate:
+After strict contracts, the unified adapter, and the hidden persistence
+manifest exist, a bounded XINT/AUTH amendment must register and activate:
 
 - `project.guide_compilation.request`: Project Manager dispatch/recovery bound
   to exact actor/link/grant, project, draft guide, snapshot, setup
@@ -63,6 +81,12 @@ Before persistence/runtime cutover, an XINT/AUTH amendment must activate:
   authority bound to exact canonical input hash, source and phase-owned
   capability snapshot hashes, setup run/generation, instruction/agent version,
   prior compilation when superseding, session/root transaction, and result.
+
+Execute has two fresh authorization points around external I/O: fail-closed
+preflight over the exact canonical input before the provider call, then fresh
+transaction-bound PREP over the exact accepted-result digest before immutable
+persistence. A durable attempt reservation and provider idempotency key commit
+before I/O; no database transaction or row lock is held across the model call.
 
 Execute authorizes only the model call plus immutable compilation parent
 creation/supersession. It does not authorize canonical projections: 12E owns
@@ -237,11 +261,11 @@ Validation must, in order:
    timeout/budget fields only when their canonical source defines them;
 9. sanitize every persisted text field;
 10. canonicalize and hash the result and each projection; and
-11. prepare every required action-specific fixed-service PREP, consume all of
-    them inside the one root database transaction owning compilation and
-    projection persistence, then commit mutations and authorization evidence
-    together; any validation, consumption, or write failure rolls back the
-    entire unit without borrowing authority between actions.
+11. consume fresh action-specific fixed-service PREP inside each protected
+    projection transaction and commit that projection with its authorization
+    evidence atomically, without borrowing authority between actions. The
+    already committed pre-I/O attempt reservation is a separate crash fence;
+    no transaction spans provider I/O and no plan promises to roll it back.
 
 The agent cannot order platform execution. Catalogue phases, dependencies, and
 the trusted compiler determine order.
@@ -270,13 +294,17 @@ ART verified extraction
 -> canonical platform/capability projections
 -> one unified model invocation
 -> trusted validation and immutable compilation
--> separate sufficiency/policy proposals
--> Project Manager review/approval
+-> complete sufficiency/artifact/pre/post proposal visible for review
+-> Project Manager submission/effective/pre approval
 -> trusted effective + pre-submit compilation
 -> deterministic post-submit proposal compilation (zero model calls)
 -> separate PostSubmitCheckerPolicy approval
 -> existing authorized guide activation
 ```
+
+No approval may occur before the complete immutable result, including its
+post-submit proposal, exists. Separate approvals preserve canonical policy
+lifecycles; they never trigger another inference.
 
 Blocked compilation creates no policy projections. A required capability gap
 blocks activation with an exact operator-visible setup status/error. The setup

@@ -4,8 +4,9 @@
 
 Planning-only parent. Required L1 review rejected the inherited combined
 runtime contract before application-code edits. Runtime work is split into
-12A through 12H plus 12B2 and 12D2, and each child requires its own reviewed
-start.
+12A through 12I plus 12B2 and 12D2. The inventory and order below record the
+original split and merged transitional actions; D38 and `CHUNK_MAP.md`
+supersede its future inference/cutover sequence. It is not executable.
 
 ## Parent initiative
 
@@ -34,6 +35,21 @@ P1
 
 ## Exact mutation inventory
 
+The current unified-compilation delta is owned by 12I:
+
+| Surface | ActionId | PermissionId | ActionOwner | Principal | Resource/PREP and proof | Child |
+|---|---|---|---|---|---|---|
+| asynchronous request/recovery | `project.guide_compilation.request` | `project.guide_compilation.request` | `WS-AUTH-001-12I` | covered Project Manager | Exact actor/link/grant, project/guide/source, setup generation, operation/request/idempotency; dispatch-only evidence | 12I |
+| fixed-service execution/persistence | `project.guide_compilation.execute` | `project.guide_compilation.execute` | `WS-AUTH-001-12I` | `workstream.project.setup` | Exact service profile/link/matrix, canonical input/catalogues, setup generation, attempt/provider key, result-bound two-stage PREP; no handle/transaction across I/O | 12I |
+
+## Historical and transitional inventory
+
+The table below records the original AUTH-12 split; it is not the active
+future inventory. Rows for 12E, 12F3, and legacy 12G derivation are
+non-activatable transitional history.
+POL-04B removes their inference entry points from live reachability; POL-08
+deletes them. Remaining 12G is deterministic projection/approval only.
+
 | Surface / handler | ActionId | PermissionId | ActionOwner | Principal | Child |
 |---|---|---|---|---|---|
 | `POST /api/v1/projects` / `create_project` | `project.create` | `project.create` | `WS-AUTH-001-12C` | system-scoped Project Manager | 12C |
@@ -59,7 +75,9 @@ The hidden ART ingest route and `artifact.guide_source.ingest` are already
 active under `WS-XINT-002-04A` and are frozen outside AUTH-12. ART binding/read,
 provider access, extraction, and later ART activation remain outside AUTH-12.
 
-## Child order
+## Historical child order
+
+Superseded for all remaining work by D38 and `CHUNK_MAP.md`.
 
 1. 12A registers all eighteen actions as planned, adds exact typed resource
    contracts, and adds PostgreSQL action-evidence parity in the next revision

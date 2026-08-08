@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed final gate. It cannot start until every protected feature surface
-already merged has its matching AUTH activation, while every registered action
-without merged feature behavior still denies as planned.
+Proposed final gate. It cannot start before `WS-POL-003-08`, corrected
+`WS-AUTH-001-12B2/12H`, `WS-AUTH-001-13/14/15`, and all applicable ART, XINT,
+REV, and CON gates have merged.
 
 ## Parent initiative
 
@@ -130,6 +130,14 @@ starting WS-POL-002-04 or another initiative automatically
 - Every activated feature action proves immutable feature-manifest-before-AUTH
   ordering, real-kernel unavailable behavior before activation, exact
   availability delta after activation, and no alternate feature writer.
+- End-to-end proof shows one logical/provider guide-compilation attempt yields
+  sufficiency plus artifact, pre-submit, and post-submit policy components;
+  approval performs no inference; post-submit projection performs zero model
+  calls; every task, admission, Submission, checker run, review, revision, and
+  audit fact retains the exact unified lineage.
+- No legacy three-call inference method, standalone precheck trigger,
+  caller-selected checker trigger, per-checker public API, serialized prepared
+  handle, or compatibility alias remains reachable.
 - When review evidence binding is registered, proof includes distinct human and
   binding-service decisions/evidence, exact lock order, and one transaction.
   When `review.decision` is active, REV plus the flush-only CON participant
@@ -155,7 +163,7 @@ starting WS-POL-002-04 or another initiative automatically
   production dependency change requires separately recorded explicit human
   approval before modification.
 - No obsolete token-role authorization remains in runtime code.
-- Initiative memory records proof and does not start `WS-POL-002-04` or another
+- Initiative memory records proof and does not start another
   initiative without a separate explicit user signal.
 
 ## Verification commands

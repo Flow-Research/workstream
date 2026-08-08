@@ -61,3 +61,16 @@
     attempt, result, and evidence writer. The post command uses CHECKER's sole
     durable executor/repository. The facade creates no duplicate member rows or
     evidence and returns only the canonical phase result/reference.
+20. Feature behavior is built hidden before AUTH activation, then cut live;
+    AUTH owns action/PREP/evidence custody and POL owns product behavior.
+21. The complete unified result, including the post-submit proposal, exists
+    before any approval. Separate approval gates never cause inference.
+22. Compilation execution uses pre-I/O authorization, a committed durable
+    attempt/idempotency reservation, external I/O without held DB locks, and
+    fresh result-bound PREP for final persistence.
+23. AUTH-12E/12F3 are transitional separate-call implementations. POL-04B
+    removes all three legacy inference methods from live reachability; POL-08
+    later deletes the retired code without compatibility aliases.
+24. Post-submit projection is deterministic from the stored unified component
+    and performs zero model calls in projection, approval, correction, replay,
+    or recovery.

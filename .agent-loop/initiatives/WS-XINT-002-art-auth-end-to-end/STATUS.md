@@ -31,7 +31,7 @@ merge.
 
 04A is merged and active. 04B production implementation merged in PR #245 at
 `6babf81b`; guide read and binding are active for their fixed services.
-Future chunk 06 must split: 06A activates pre-submit materialization before
+Chunk 06 is split: merged 06A activates pre-submit materialization before
 05A, and 06B later activates post-submit materialization plus checker output
 write/binding. Reviewer packet activation is independent; review-evidence
 binding remains planned without approved reviewer-upload intent.

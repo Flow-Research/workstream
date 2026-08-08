@@ -206,16 +206,17 @@ proving the same issuer role metadata alone no longer authorizes.
     10C activates PREP-bound issue/revoke mutations and concurrency proof.
 13. Cut project identity, guide, source, and visibility queries over to local
    permissions.
-14. Treat AUTH-12 as a planning-only parent. Its ordered children register
-    exact mutation/PREP contracts, establish a zero-activation fixed setup
-    identity, cut project/guide/sufficiency/policy families separately, leave
-    retired guide-bound economic policy to CON ownership, cut the Celery call
-    graph only after its product actions are active, and finish with guide
-    activation only after the owning CON clean cut. ART-owned `0040` is now
-    merged; the first AUTH migration is allocated from that trusted head.
+14. Treat AUTH-12 as a planning-only parent. Merged 12E and 12F3 are
+    transitional authority/provenance foundations, not the final product call
+    graph. `WS-POL-003` owns one unified compilation attempt and every product
+    projection. AUTH-12I activates only the hidden request/execute boundary;
+    12B2, 12F4, 12G, and 12H are narrow activation/cutover gates after their
+    hidden POL behavior exists. No AUTH chunk owns agent orchestration or a
+    second inference path.
 15. Cut task management, queue, assignment, claim, and start operations over.
-16. Cut submission, pre-submit, checker trigger/read, and task audit visibility
-    over.
+16. Activate admission-backed submission authority, bounded checker
+    read/repair, and audit visibility only after ART/POL hidden behavior exists;
+    never add a standalone precheck or caller-selected checker trigger.
 17. Cut remaining internal services over, verify the project-setup cutover,
     remove old runtime authority, and enforce a
     deterministic stale-authority scanner.

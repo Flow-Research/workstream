@@ -1,6 +1,6 @@
 # Chunk Contract: WS-POL-003-07 - Single Checker Service Port
 
-Status: Proposed after 06. Risk: L1.
+Status: Proposed after 06B and merged ART-04B1-04B3. Risk: L1.
 
 ## Goal
 
@@ -42,7 +42,8 @@ plugins, arbitrary code/network execution, or prepared handles in payloads.
 - Post composes durable defaults with exact task-locked project post-submit
   entries and evaluates them against one verified stored/bound content lineage.
 - Both commands bind exact project/task/assignment, guide/policy, artifact,
-  manifest, generation, attempt, action, service identity, and transaction
+  compilation/result/component/catalogue hashes, manifest, generation,
+  attempt, action, service identity, and transaction
   facts; stale/replay/cross-phase/cross-resource calls fail closed.
 - The port requires a deterministic attempt identity. Bounded retry/repair may
   call the command again for that same logical attempt, but replay returns the

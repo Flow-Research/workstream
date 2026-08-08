@@ -1,5 +1,8 @@
 # WS-POL-003 Planning PR Trust Bundle
 
+Historical evidence for the original planning PR. The current authoritative
+split and dependency graph is `../CHUNK_MAP.md`; this file is not executable.
+
 ## Chunk
 
 `WS-POL-003-PLAN` — Unified Project Guide Compilation planning.

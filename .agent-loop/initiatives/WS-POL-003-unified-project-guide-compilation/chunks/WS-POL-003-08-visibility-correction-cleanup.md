@@ -1,6 +1,6 @@
 # Chunk Contract: WS-POL-003-08 - Visibility, Correction, and Cleanup
 
-Status: Proposed after 07 and AUTH-12H. Risk: L1.
+Status: Proposed after 07, AUTH-12H, and ART-05B. Risk: L1.
 
 ## Goal
 
@@ -10,7 +10,7 @@ paths and parallel project-checker maps.
 
 ## Allowed files
 
-Project setup visibility/correction/API/service/worker surfaces, agent
+Project setup visibility/correction/API/fixed-service surfaces, agent
 interfaces/adapters cleanup, checker project-catalogue and ordinary trigger
 route cleanup, task/activation regression tests, docs, and WS-POL-003 memory.
 
@@ -27,7 +27,7 @@ aliases.
 - Correction creates a new setup generation and compilation; immutable history
   remains linked and superseded.
 - Existing authorized activation consumes only the complete current approved
-  chain.
+  unified chain with exact compilation/result/component/catalogue hashes.
 - Three retired runtime methods/prompts and the second post-submit model call
   are deleted; the canonical ART-04B1 pre-submit catalogue, canonical
   CHECKER/POL post-submit catalogue, and one checker service port remain.
@@ -39,6 +39,9 @@ aliases.
 - Static/import tests find no per-checker product entry, caller-selected
   checker names, dual project registry, stale terminology, or compatibility
   inference path.
+- The live call graph was already clean-cut in 04B; this chunk physically
+  deletes retired code and cannot temporarily restore it for migration or
+  compatibility.
 - Failures/gaps create no contribution, payment, or reputation evidence.
 
 ## Verification and review

@@ -1,5 +1,19 @@
 # Intent: WS-POL-002 - Post-Submit Checker Foundation
 
+## Current authority
+
+`WS-POL-003` supersedes every future setup-time derivation described below.
+One unified guide-compilation attempt stores the post-submit component;
+remaining WS-POL-002 work deterministically projects and executes it with zero
+additional model calls. The older agent-derivation narrative is retained only
+as historical rationale and is not implementation authority.
+
+## Historical intent below
+
+Every remaining section in this file describes the original POL-002 intent and
+must be read only as historical context. The current executable direction is
+the unified, zero-additional-model-call authority above.
+
 ## Human Intent
 
 Make post-submit checkers work with the same discipline as the pre-submit

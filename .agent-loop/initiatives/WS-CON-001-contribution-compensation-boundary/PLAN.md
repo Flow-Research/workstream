@@ -1,5 +1,11 @@
 # Plan: WS-CON-001 Contribution And Compensation
 
+Current dependency note: CON consumes accepted REV outcomes whose Submission
+lineage already binds the exact WS-POL-003 compilation, accepted result,
+post-submit component, pre/post catalogue hashes, compiled-plan identity/hash,
+and current approval identity/hash/provenance. CON does not compile guides,
+project policies, or checker plans and does not invoke checker services.
+
 > Historical PLAN4 plan. Live 03A implementation state is in `STATUS.md`,
 > `SOURCE_MANIFEST.md`, and the `WS-CON-001-03A` contract.
 

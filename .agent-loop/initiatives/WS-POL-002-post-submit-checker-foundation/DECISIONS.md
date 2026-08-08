@@ -1,5 +1,15 @@
 # Decisions: WS-POL-002 - Post-Submit Checker Foundation
 
+## Current authority
+
+`WS-POL-003` supersedes the standalone derivation decisions below for all
+future work. The post-submit proposal comes from the one unified compilation
+result and is deterministically projected/approved/executed with zero further
+model calls. D1-D8 below are historical evidence only and are not active
+implementation guidance.
+
+## Historical decisions D1-D8
+
 ## D1. Post-Submit Policy Is Project-Scoped
 
 `PostSubmitCheckerPolicy` remains attached to the project guide/source snapshot

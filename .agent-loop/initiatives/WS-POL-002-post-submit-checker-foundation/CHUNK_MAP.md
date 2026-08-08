@@ -14,7 +14,7 @@ reviewed, merged by explicit human approval, and followed by a memory update.
 | `WS-POL-002-02` | Post-Submit Derivation Agent And Resumable Setup Integration | L1 | Merged |
 | `WS-POL-002-03` | Server-Owned Policy Approval And Visibility APIs | L1 | Merged through PR #90 as `a7aa474` |
 | `WS-POL-002-04` | Locked Runtime Execution And Routing Hardening | L1 | Inactive pending auth proof and explicit start |
-| `WS-POL-002-05` | Terminal Benchmark Post-Submit Live API Proof | L1 | Proposed |
+| `WS-POL-002-05` | Unified Post-Submit Live Proof | L1 | Non-executable planning skeleton pending then-current contract expansion |
 
 ## Dependency Order
 
