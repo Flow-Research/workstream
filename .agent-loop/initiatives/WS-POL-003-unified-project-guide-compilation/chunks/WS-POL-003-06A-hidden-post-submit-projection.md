@@ -22,8 +22,10 @@ execution, new registrations, or reuse of agent provenance by manual policy.
 - Projection binds compilation/result/post component, approved upstream chain,
   catalogue snapshot, setup generation, and deterministic output hash.
 - Unknown/wrong-stage/default-repeating entries fail closed.
-- Correction requires new unified generation or separately proven manual
-  provenance; it cannot rederive from the guide.
+- A correction request against existing provenance performs no model call. A
+  correction requiring new unified generation is a separate compilation
+  attempt with its own idempotency key. Separately proven manual provenance
+  remains distinct; neither path may silently rederive from the guide.
 - Candidate mutations remain denied until AUTH-12G.
 
 ## Verification and review

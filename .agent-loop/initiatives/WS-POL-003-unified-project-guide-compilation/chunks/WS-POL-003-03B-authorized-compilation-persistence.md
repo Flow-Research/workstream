@@ -9,18 +9,18 @@ dispatch custody and fixed-service immutable compilation persistence are usable.
 
 ## Allowed files
 
-Compilation request/service/repository/router/worker composition, AUTH resource
+Compilation request/service/repository/fixed-service execution composition, AUTH resource
 adapter consumption, focused tests, specifications, and WS-POL-003 docs.
 
 ## Not allowed
 
-Policy projection writes, approval, live unified worker cutover, checker
+Policy projection writes, approval, live setup-service cutover, checker
 execution, broad authority, handles in Celery, or transactions across I/O.
 
 ## Acceptance
 
 - PM request records only authorized dispatch/recovery custody and identifiers.
-- Worker independently authenticates the fixed service and performs exact
+- `workstream.project.setup` independently authenticates as the fixed service and performs exact
   pre-I/O admission, committed attempt reservation, same-key provider recovery,
   and fresh final result-bound PREP before immutable persistence.
 - Compilation/result/evidence commit atomically in the final transaction;

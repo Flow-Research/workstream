@@ -181,7 +181,7 @@ with explicit path scope, commands, and named reviewers before human start.
 | `WS-AUTH-001-12C` | Merged | `codex/ws-auth-001-12c-project-create` | #229 | System-scoped project creation cutover merged as `67f2c14b`. |
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
-| `WS-AUTH-001-12E` | Merged | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Three guide-sufficiency actions plus fixed setup-service run PREP merged as `b510bc4f`. |
+| `WS-AUTH-001-12E` | Merged; transitional | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Merged as `b510bc4f`; projection custody remains reusable, but the standalone inference entry point becomes unreachable at POL-04B and is deleted at POL-08. |
 | `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |

@@ -26,14 +26,16 @@ intake, migration of product columns, or approval of a 12F3-only draft.
   human Project Manager; every service and unrelated human denies.
 - Resource/PREP binds project/guide/source/setup generation, immutable
   compilation/result plus artifact/pre/post component hashes, both catalogue
-  snapshots, target draft, compiler/plan versions, operation, request,
+  snapshots, target draft, current approval identity/hash/provenance,
+  compiler/plan versions, operation, request,
   idempotency, actor/link/grant, session, and root transaction.
 - The complete unified result, including post-submit proposal and capability
   gaps, exists before approval can prepare or consume.
 - POL-05B alone owns product locks, compilation, writes, replay, and commit.
   AUTH evaluates and persists bounded decision evidence atomically through the
   existing participant; it does not implement a competing compiler.
-- Revocation, stale/mixed generation, changed component/catalogue, replay,
+- Revocation, stale/mixed generation, changed component/catalogue/approval
+  hash or provenance, replay,
   copied/wrong handle, or transaction/session mismatch denies with no product
   mutation or allowed evidence.
 

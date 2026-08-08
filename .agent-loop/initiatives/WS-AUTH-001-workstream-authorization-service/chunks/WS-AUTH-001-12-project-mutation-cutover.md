@@ -37,12 +37,16 @@ P1
 
 The current unified-compilation delta is owned by 12I:
 
-| Surface | ActionId | Principal |
-|---|---|---|
-| asynchronous request/recovery | `project.guide_compilation.request` | covered Project Manager |
-| fixed-service execution/persistence | `project.guide_compilation.execute` | `workstream.project.setup` |
+| Surface | ActionId | PermissionId | ActionOwner | Principal | Resource/PREP and proof | Child |
+|---|---|---|---|---|---|---|
+| asynchronous request/recovery | `project.guide_compilation.request` | `project.guide_compilation.request` | `WS-AUTH-001-12I` | covered Project Manager | Exact actor/link/grant, project/guide/source, setup generation, operation/request/idempotency; dispatch-only evidence | 12I |
+| fixed-service execution/persistence | `project.guide_compilation.execute` | `project.guide_compilation.execute` | `WS-AUTH-001-12I` | `workstream.project.setup` | Exact service profile/link/matrix, canonical input/catalogues, setup generation, attempt/provider key, result-bound two-stage PREP; no handle/transaction across I/O | 12I |
 
-Rows below for 12E/12F3/legacy 12G derivation are transitional history.
+## Historical and transitional inventory
+
+The table below records the original AUTH-12 split; it is not the active
+future inventory. Rows for 12E, 12F3, and legacy 12G derivation are
+non-activatable transitional history.
 POL-04B removes their inference entry points from live reachability; POL-08
 deletes them. Remaining 12G is deterministic projection/approval only.
 

@@ -1,8 +1,11 @@
 # Chunk Contract: WS-POL-002-04 - Locked Runtime Execution And Routing Hardening
 
-This proposed contract must first reconcile with `WS-POL-003-06B/07`. It
-consumes the stored unified post-submit component through the single checker
-service port and performs no inference or out-of-plan checker selection.
+This proposed contract must first reconcile with `WS-POL-003-06B/07`. It binds
+the exact compilation, accepted result, post-submit component, pre/post
+catalogue hashes, compiled-plan identity/hash, and current approval
+identity/hash/provenance. It consumes that lineage only through the POL-07
+single checker-service port, performs no inference, and permits no caller or
+runtime checker selection outside the compiled plan.
 
 ## Parent Initiative
 

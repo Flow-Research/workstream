@@ -7,7 +7,7 @@ runnable verification commands, and named reviewer tracks.
 
 ## Goal
 
-Prove the sole automatic post-submit checker path end to end without policy
+Prove the sole automatic post-submit checker path end-to-end without policy
 inference or caller-selected execution.
 
 ## Allowed

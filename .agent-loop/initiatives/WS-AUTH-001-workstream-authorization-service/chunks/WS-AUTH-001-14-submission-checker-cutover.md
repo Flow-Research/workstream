@@ -12,9 +12,10 @@ ActionIds and the then-current migration must be frozen at start.
 
 ## Goal
 
-Activate only admission-backed submission authority, bounded checker
-read/repair authority, contributor projections, and task audit visibility.
-ART and POL retain all product mutation, checker orchestration, and routing.
+Verify exact admission authority and activate `submission.create`, bounded
+checker read/repair authority, contributor projections, and task audit
+visibility. ART and POL retain submission mutations, checker execution,
+findings, routing, and the sole checker-port product behavior.
 
 ## Why this chunk exists
 
@@ -69,6 +70,7 @@ docs/operations_authorization_service.md
 submission creation/finalization or artifact binding product mutations
 checker execution/routing, standalone precheck triggers, or ordinary checker triggers
 agent adapters, guide compilation, or checker-policy derivation
+checker-port implementation, checker findings, or product lifecycle behavior
 internal Celery worker authority cutover
 review queue/lease/decision implementation
 token role fallback
@@ -92,6 +94,9 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   migrated submission/checker/audit route declares one primary registered
   action against a feature-owned canonical target and keeps artifact bytes and
   unnecessary actor data outside `ResourceContext` and authority evidence.
+- AUTH must register/evaluate/consume `submission.create` authority and commit
+  its decision evidence; feature owners alone perform the protected Submission
+  mutation.
 - Generated OpenAPI/command manifest-delta tests prove every protected
   submission/checker/audit surface migrated here has exactly one active
   `ActionId` declaration.

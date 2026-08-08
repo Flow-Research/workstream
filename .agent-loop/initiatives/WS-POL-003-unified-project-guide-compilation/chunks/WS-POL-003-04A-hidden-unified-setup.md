@@ -14,7 +14,7 @@ focused project/authorization tests, and WS-POL-003 docs.
 
 ## Not allowed
 
-Live worker routing, setup-ledger activation, approval, checker execution,
+Live fixed-service routing, setup-ledger activation, approval, checker execution,
 serialized handles/material, or any legacy inference fallback.
 
 ## Acceptance

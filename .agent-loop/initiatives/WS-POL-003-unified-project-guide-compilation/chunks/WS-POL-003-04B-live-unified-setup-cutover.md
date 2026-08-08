@@ -21,7 +21,9 @@ compatibility routing, or a second provider attempt/key.
 
 - Live orchestration invokes only `compile_project_guide`.
 - Sufficiency and artifact-policy projections each consume fresh action-bound
-  PREP in their own atomic transaction and bind the compilation/component hash.
+  PREP in their own atomic transaction. Each PREP binds the immutable
+  compilation and accepted-result hashes plus its exact sufficiency or
+  artifact-policy component hash.
 - All three old model methods/prompts are unreachable for unified generations;
   no deferred legacy post call or fallback exists.
 - Complete replay returns canonical outputs with zero provider calls.

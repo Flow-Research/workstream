@@ -106,9 +106,12 @@ review/contribution/compensation implementation
   allowlist, and typed-profile workflow eligibility consumers removed in chunk
   14 remain absent.
 - The scanner also rejects the three transitional guide inference entry points,
-  any model-backed post-submit derivation, standalone precheck APIs,
+  any legacy standalone or three-call post-submit derivation, standalone precheck APIs,
   caller-selectable checker triggers, per-checker public APIs, reconstructed
   prepared handles, and compatibility aliases for any removed path.
+- The scanner must not reject the WS-POL-003 unified provider compilation or
+  its model-produced post-submit component; only obsolete parallel inference
+  paths are forbidden.
 - The stale scanner and route tests prove the legacy worker-profile endpoint,
   activation service/schema, token-role observation fields, and actor-service
   authority checks are absent from runtime code.

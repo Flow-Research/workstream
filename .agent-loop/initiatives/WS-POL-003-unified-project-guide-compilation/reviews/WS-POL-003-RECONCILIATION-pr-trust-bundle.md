@@ -24,6 +24,8 @@ runtime work resumes.
 Architecture, security, product/operations, QA, senior engineering, and docs
 review passed after resolving dependency and stale-authority findings. Details
 are in `WS-POL-003-RECONCILIATION-internal-review-evidence.md`.
+All ten CodeRabbit inline findings were addressed; the external response is in
+`WS-POL-003-RECONCILIATION-external-review-response.md`.
 
 The following deterministic checks pass:
 
