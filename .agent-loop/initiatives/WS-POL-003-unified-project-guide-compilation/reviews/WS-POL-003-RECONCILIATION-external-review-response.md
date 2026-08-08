@@ -15,7 +15,7 @@ PR: #298
 - Narrowed the cleanup scanner to legacy standalone inference without blocking
   WS-POL-003 unified provider compilation.
 - Marked POL-002 D1-D8 and remaining intent text explicitly historical.
-- Replaced stale human-worker terminology with fixed setup-service terminology.
+- Replaced stale human-principal terminology with fixed setup-service terminology.
 - Bound each POL-04B projection PREP to compilation, accepted result, and the
   matching component hash.
 - Distinguished zero-call correction/recovery from a new-generation attempt

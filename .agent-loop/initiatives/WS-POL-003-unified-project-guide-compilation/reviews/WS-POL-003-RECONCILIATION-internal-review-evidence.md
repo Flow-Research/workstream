@@ -17,7 +17,7 @@ hidden product behavior -> narrow AUTH activation -> live product cutover -> cle
 - Security: pass with low risk after the same terminal-activation repair; the
   two-stage PREP/provider-I/O boundary is fail closed.
 - Product/operations: pass after removing future standalone post-submit
-  derivation authority and moving live-worker proof out of AUTH-12B2.
+  derivation authority and moving live setup-service proof out of AUTH-12B2.
 - QA: pass with low risk after aligning ART-06A/06B and XINT-06B executable
   contracts and every cross-initiative order table with POL-06B/07.
 - Senior engineering: pass with low risk after marking concise future records

@@ -9,5 +9,5 @@ persistence usable. Policy projections remain owned by 04B, 05B, and 06B in
 their separate protected transactions.
 
 No transaction or lock spans provider I/O. PM request/recovery records only
-dispatch custody; the worker later authenticates independently as
+dispatch custody; the setup service later authenticates independently as
 `workstream.project.setup`. No handle crosses Celery.

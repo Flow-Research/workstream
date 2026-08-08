@@ -10,7 +10,7 @@ paths and parallel project-checker maps.
 
 ## Allowed files
 
-Project setup visibility/correction/API/service/worker surfaces, agent
+Project setup visibility/correction/API/fixed-service surfaces, agent
 interfaces/adapters cleanup, checker project-catalogue and ordinary trigger
 route cleanup, task/activation regression tests, docs, and WS-POL-003 memory.
 

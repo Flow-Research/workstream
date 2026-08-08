@@ -9,7 +9,7 @@ contains sufficiency, artifact, pre-submit, and post-submit proposals together.
 
 ## Allowed files
 
-Project setup worker/service/queue composition, unified compilation services,
+Project setup-service/queue composition, unified compilation services,
 focused project/authorization tests, and WS-POL-003 docs.
 
 ## Not allowed

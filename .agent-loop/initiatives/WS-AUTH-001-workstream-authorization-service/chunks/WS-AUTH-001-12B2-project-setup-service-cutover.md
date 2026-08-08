@@ -5,7 +5,7 @@ Status: Proposed after hidden WS-POL-003-04A; inactive. Risk: L1.
 ## Goal
 
 Activate only `project.setup_run.update` and its fixed-service adapter for the
-reviewed unified worker manifest. POL-04B, not AUTH, owns the live one-call
+reviewed unified setup-service manifest. POL-04B, not AUTH, owns the live one-call
 Celery call-graph cutover.
 
 ## Allowed files
@@ -15,7 +15,7 @@ focused authorization/POL integration tests, specifications, and AUTH memory.
 
 ## Not allowed
 
-Worker routing, agent orchestration, model calls, policy/compiler behavior,
+Fixed-service routing, agent orchestration, model calls, policy/compiler behavior,
 human routes, generic setup authority, serialized handles, ART/checker/review/
 contribution behavior, or compatibility paths.
 
@@ -29,7 +29,7 @@ contribution behavior, or compatibility paths.
 - Product projections retain their separate 12E/12F/12G actions. Setup-ledger
   authority never authorizes a projection row or provider call.
 - The hidden POL-04A manifest proves this authority is sufficient for its exact
-  ledger transition. POL-04B alone proves live worker reachability and removal
+  ledger transition. POL-04B alone proves live setup-service reachability and removal
   of the three legacy inference calls.
 - No handle crosses Celery, commit, rollback, provider I/O, session, or
   transaction; stale/replay/cross-resource/cross-step uses deny.

@@ -44,7 +44,7 @@ on 2026-08-08.
 ## Canonical dependencies
 
 - AUTH-12I: hidden unified compilation request/execute activation after POL-03A.
-- AUTH-12B2: setup-ledger-only activation after hidden POL-04A; POL-04B owns the live worker cutover.
+- AUTH-12B2: setup-ledger-only activation after hidden POL-04A; POL-04B owns the live setup-service cutover.
 - AUTH-12F4: stored unified pre-submit component approval after hidden POL-05A; no inference.
 - AUTH-12G: deterministic stored post-submit projection/approval after hidden POL-06A; zero model calls.
 - AUTH-12H: terminal guide activation after POL-07 and the CON clean cut.

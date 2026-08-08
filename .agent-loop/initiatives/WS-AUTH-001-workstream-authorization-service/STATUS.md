@@ -177,7 +177,7 @@ with explicit path scope, commands, and named reviewers before human start.
 | `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
 | `WS-AUTH-001-12A` | Merged | `codex/ws-auth-001-12a-project-mutation-catalogue` | #226 | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; merged as `64dd9c98` with zero activation. |
 | `WS-AUTH-001-12B` | Merged | `codex/ws-auth-001-12b-project-setup-service` | #227 | Fixed project-setup service identity and planned matrix only; zero activation and no actor/link seed. |
-| `WS-AUTH-001-12B2` | Proposed | - | - | Setup-ledger activation after hidden POL-04A; POL-04B owns the live worker cutover. |
+| `WS-AUTH-001-12B2` | Proposed | - | - | Setup-ledger activation after hidden POL-04A; POL-04B owns the live setup-service cutover. |
 | `WS-AUTH-001-12C` | Merged | `codex/ws-auth-001-12c-project-create` | #229 | System-scoped project creation cutover merged as `67f2c14b`. |
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |

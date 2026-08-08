@@ -29,7 +29,7 @@ after merged AUTH-12F3 PR #295.
 | POL-01/02 strict manifest and adapter | POL-03A | Proposed |
 | Hidden POL-03A compilation manifest | AUTH-12I compilation request/execute activation | Proposed |
 | AUTH-12I | POL-03B authorized persistence | Not yet implemented |
-| Hidden POL-04A unified worker manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
+| Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
 | Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |

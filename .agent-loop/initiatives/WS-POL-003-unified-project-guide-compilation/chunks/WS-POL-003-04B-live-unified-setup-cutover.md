@@ -4,12 +4,12 @@ Status: Proposed after 04A and AUTH-12B2; inactive. Risk: L1.
 
 ## Goal
 
-Make the unified setup worker the sole live inference path and persist the
+Make the unified setup service the sole live inference path and persist the
 complete compilation plus canonical sufficiency/artifact-policy projections.
 
 ## Allowed files
 
-Project setup worker/service/queue/composition, projection repositories, exact
+Project setup-service/queue/composition, projection repositories, exact
 12E/12F action adapters, focused tests, specifications, and WS-POL-003 docs.
 
 ## Not allowed

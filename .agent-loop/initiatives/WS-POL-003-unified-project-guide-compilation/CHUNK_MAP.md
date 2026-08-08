@@ -10,9 +10,9 @@ it. No chunk starts automatically.
 | `WS-POL-003-02` | One `compile_project_guide` adapter method and fake-runtime proof. | 01 |
 | `WS-POL-003-03A` | Hidden immutable attempt/compilation schema, validator, repository, crash fence, and deny-by-default authorization seams. | 02 |
 | `WS-AUTH-001-12I` | Register and activate exact PM compilation request/recovery plus fixed-service compilation execute authority. | 03A exact resource/action manifest |
-| `WS-POL-003-03B` | Consume 12I to make immutable compilation parent/result persistence usable; no policy projection or worker cutover. | 03A + AUTH-12I |
+| `WS-POL-003-03B` | Consume 12I to make immutable compilation parent/result persistence usable; no policy projection or setup-service cutover. | 03A + AUTH-12I |
 | `WS-POL-003-04A` | Hidden one-attempt setup orchestrator over the complete result, with all three legacy inference methods denied/unreachable in the candidate call graph. | 03B |
-| `WS-AUTH-001-12B2` | Activate only setup-ledger mutation and its fixed-service adapter for the reviewed unified worker manifest. | 04A |
+| `WS-AUTH-001-12B2` | Activate only setup-ledger mutation and its fixed-service adapter for the reviewed unified setup-service manifest. | 04A |
 | `WS-POL-003-04B` | Live one-call setup cutover; persist complete result, sufficiency, and artifact-policy projections; remove every legacy inference call from live reachability. | 04A + AUTH-12B2 |
 | `WS-POL-003-05A` | Hidden approval/effective/pre-submit projection behavior over the complete immutable result. | 04B |
 | `WS-AUTH-001-12F4` | Activate exact PM approval authority and PREP composition for the hidden 05A manifest. | 05A |
