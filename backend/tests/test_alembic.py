@@ -397,7 +397,7 @@ def test_0061_submission_bundle_admission_empty_round_trip(
             "triggers": set(),
             "evidence_column": False,
             "evidence_constraints": set(),
-            "evidence_immutable_enabled": "O",
+            "evidence_immutable_enabled": b"O",
             "consumer_index": False,
         }
     )
@@ -418,7 +418,7 @@ def test_0061_submission_bundle_admission_empty_round_trip(
     assert installed["evidence_constraints"] == {
         "ck_pre_submit_evidence_sets_policy_context_sha256"
     }
-    assert installed["evidence_immutable_enabled"] == "O"
+    assert installed["evidence_immutable_enabled"] == b"O"
     assert installed["consumer_index"] is True
 
 
