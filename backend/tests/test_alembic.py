@@ -321,7 +321,51 @@ async def _submission_bundle_admission_schema(database_url: str) -> dict[str, ob
                     )
                 ).all()
             )
-            return {"table_exists": table_exists, "constraints": constraints, "triggers": triggers}
+            evidence_column = bool(
+                await connection.scalar(
+                    text(
+                        "select count(*) from information_schema.columns "
+                        "where table_schema='public' and table_name='pre_submit_evidence_sets' "
+                        "and column_name='locked_policy_context_hash'"
+                    )
+                )
+            )
+            evidence_constraints = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select conname from pg_constraint where conrelid="
+                            "to_regclass('pre_submit_evidence_sets') and "
+                            "conname='ck_pre_submit_evidence_sets_policy_context_sha256'"
+                        )
+                    )
+                ).all()
+            )
+            evidence_immutable_enabled = await connection.scalar(
+                text(
+                    "select tgenabled from pg_trigger where not tgisinternal and "
+                    "tgrelid=to_regclass('pre_submit_evidence_sets') and "
+                    "tgname='pre_submit_evidence_sets_immutable'"
+                )
+            )
+            consumer_index = bool(
+                await connection.scalar(
+                    text(
+                        "select count(*) from pg_indexes where schemaname='public' and "
+                        "tablename='submission_bundle_admissions' and "
+                        "indexname='uq_submission_bundle_admission_consumer'"
+                    )
+                )
+            )
+            return {
+                "table_exists": table_exists,
+                "constraints": constraints,
+                "triggers": triggers,
+                "evidence_column": evidence_column,
+                "evidence_constraints": evidence_constraints,
+                "evidence_immutable_enabled": evidence_immutable_enabled,
+                "consumer_index": consumer_index,
+            }
     finally:
         await engine.dispose()
 
@@ -344,7 +388,19 @@ def test_0061_submission_bundle_admission_empty_round_trip(
         finally:
             command.upgrade(config, "head")
 
-    assert prior == restored == {"table_exists": False, "constraints": set(), "triggers": set()}
+    assert (
+        prior
+        == restored
+        == {
+            "table_exists": False,
+            "constraints": set(),
+            "triggers": set(),
+            "evidence_column": False,
+            "evidence_constraints": set(),
+            "evidence_immutable_enabled": "O",
+            "consumer_index": False,
+        }
+    )
     assert installed == repeated
     assert {
         "uq_submission_bundle_admission_intent",
@@ -358,6 +414,12 @@ def test_0061_submission_bundle_admission_empty_round_trip(
         "submission_bundle_admission_lineage",
         "submission_bundle_admission_delete",
     }
+    assert installed["evidence_column"] is True
+    assert installed["evidence_constraints"] == {
+        "ck_pre_submit_evidence_sets_policy_context_sha256"
+    }
+    assert installed["evidence_immutable_enabled"] == "O"
+    assert installed["consumer_index"] is True
 
 
 async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:

@@ -283,8 +283,16 @@ async def test_locked_context_revalidates_identity_assignment_and_policy_lineage
                 ),
                 None,
                 SimpleNamespace(id=str(guide_id), project_id=str(project_id), version="1"),
-                SimpleNamespace(id=str(effective_policy_id), effective_policy_hash=_sha("2")),
-                SimpleNamespace(id=str(checker_policy_id), compiled_bundle_hash=_sha("3")),
+                SimpleNamespace(
+                    id=str(effective_policy_id),
+                    effective_policy_hash=_sha("2"),
+                    effective_policy={},
+                ),
+                SimpleNamespace(
+                    id=str(checker_policy_id),
+                    compiled_bundle_hash=_sha("3"),
+                    compiled_bundle={},
+                ),
             ]
         )
     )

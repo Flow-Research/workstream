@@ -59,7 +59,7 @@ def upgrade() -> None:
     )
     op.alter_column("pre_submit_evidence_sets", "locked_policy_context_hash", nullable=False)
     op.create_check_constraint(
-        "ck_pre_submit_evidence_policy_context_sha256",
+        "policy_context_sha256",
         "pre_submit_evidence_sets",
         "locked_policy_context_hash ~ '^sha256:[0-9a-f]{64}$'",
     )
@@ -176,6 +176,13 @@ def upgrade() -> None:
         op.create_index(
             f"ix_submission_bundle_admissions_{column}", "submission_bundle_admissions", [column]
         )
+    op.create_index(
+        "uq_submission_bundle_admission_consumer",
+        "submission_bundle_admissions",
+        ["consumed_by_submission_id"],
+        unique=True,
+        postgresql_where=sa.text("consumed_by_submission_id is not null"),
+    )
     op.execute(
         """
         create function guard_submission_bundle_admission_verified_lineage()
@@ -314,7 +321,7 @@ def downgrade() -> None:
     op.execute("drop function guard_submission_bundle_admission_verified_lineage()")
     op.drop_table("submission_bundle_admissions")
     op.drop_constraint(
-        "ck_pre_submit_evidence_policy_context_sha256",
+        "policy_context_sha256",
         "pre_submit_evidence_sets",
         type_="check",
     )

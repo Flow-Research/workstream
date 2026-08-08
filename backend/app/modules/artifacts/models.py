@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -150,7 +151,7 @@ class PreSubmitEvidenceSet(Base):
         ),
         CheckConstraint(
             SHA256_CHECK.format(column="locked_policy_context_hash"),
-            name="ck_pre_submit_evidence_policy_context_sha256",
+            name="policy_context_sha256",
         ),
         CheckConstraint(
             SHA256_CHECK.format(column="result_manifest_sha256"),
@@ -1080,6 +1081,12 @@ class SubmissionBundleAdmission(Base):
         ),
         UniqueConstraint(
             "verification_receipt_id", name="uq_submission_bundle_admission_verification"
+        ),
+        Index(
+            "uq_submission_bundle_admission_consumer",
+            "consumed_by_submission_id",
+            unique=True,
+            postgresql_where=text("consumed_by_submission_id is not null"),
         ),
         CheckConstraint("status in ('ready','consumed','stale')", name="status"),
         CheckConstraint(

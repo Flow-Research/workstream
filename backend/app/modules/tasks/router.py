@@ -40,6 +40,7 @@ from app.modules.tasks.schemas import (
     TaskWorkContextResponse,
     TaskWithAssignmentResponse,
 )
+from app.modules.tasks.pre_submit_context import PreSubmitLockedContextInvalid
 from app.modules.tasks.service import TaskService, TaskServiceError
 from app.schemas.auth import ActorContext
 
@@ -76,6 +77,20 @@ PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
         {"$ref": "#/components/schemas/HTTPValidationError"},
     ]
 }
+
+
+def _require_ascii_submission_packet_headers(summary: str, attestation: str) -> None:
+    """Reject lossy HTTP-header decoding before immutable evidence hashing."""
+    try:
+        summary.encode("ascii")
+        attestation.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="submission_bundle_packet_header_encoding_invalid",
+        ) from exc
+
+
 TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
     "oneOf": [
         {
@@ -420,6 +435,7 @@ async def prepare_submission_bundle(
         raise HTTPException(status_code=404, detail="Task not found")
     assert assignment_id is not None and idempotency_key is not None
     assert summary is not None and contributor_attestation is not None
+    _require_ascii_submission_packet_headers(summary, contributor_attestation)
     try:
         identifiers = (
             UUID(task_id),
@@ -447,6 +463,11 @@ async def prepare_submission_bundle(
         raise HTTPException(status_code=404, detail="Task not found") from exc
     except SubmissionBundlePreparationRejected as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PreSubmitLockedContextInvalid as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="submission_bundle_preparation_context_changed",
+        ) from exc
     return SubmissionBundlePreparationResponse.model_validate(result, from_attributes=True)
 
 

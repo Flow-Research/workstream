@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 
 from app.modules.artifacts.pre_submit_evidence import (
     PreSubmitEvidenceConflict,
@@ -50,7 +51,10 @@ from app.modules.authorization.runtime import (
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
 from app.main import create_app
-from app.modules.tasks.router import router as tasks_router
+from app.modules.tasks.router import (
+    _require_ascii_submission_packet_headers,
+    router as tasks_router,
+)
 
 
 def _sha(character: str) -> str:
@@ -70,6 +74,14 @@ def test_submission_bundle_preparation_route_is_hidden() -> None:
     assert str(mounted).endswith("/submission-bundle-preparations")
     assert route.methods == {"POST"}
     assert "/api/v1/tasks/{task_id}/submission-bundle-preparations" not in app.openapi()["paths"]
+
+
+def test_submission_packet_headers_reject_non_ascii() -> None:
+    _require_ascii_submission_packet_headers("plain summary", "plain attestation")
+    with pytest.raises(HTTPException) as failure:
+        _require_ascii_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
+    assert failure.value.status_code == 422
+    assert failure.value.detail == "submission_bundle_packet_header_encoding_invalid"
 
 
 @asynccontextmanager
