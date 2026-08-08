@@ -59,6 +59,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     assert {
         "tests/test_actors.py",
         "tests/test_artifact_admission.py",
+        "tests/test_submission_bundle_admission.py",
         "tests/test_authorization.py",
         "tests/test_guide_artifacts.py",
         "tests/test_mutation_policy.py",

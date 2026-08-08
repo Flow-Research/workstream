@@ -133,6 +133,7 @@ LANES = (
             "tests/test_auth.py",
             "tests/test_authorization.py",
             "tests/test_artifact_admission.py",
+            "tests/test_submission_bundle_admission.py",
             "tests/test_artifact_operator_api.py",
             "tests/test_artifact_recovery.py",
             "tests/test_db_session.py",

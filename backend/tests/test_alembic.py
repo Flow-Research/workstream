@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0059_policy_execution_claim"
+HEAD_REVISION = "0060_submission_bundle_intent"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -194,6 +194,102 @@ def test_0058_pre_submit_evidence_empty_round_trip(
         "pre_submit_evidence_results_membership",
         "pre_submit_evidence_results_no_truncate",
     }
+
+
+async def _submission_bundle_intent_schema(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            table_exists = bool(
+                await connection.scalar(
+                    text("select to_regclass('submission_bundle_durable_intents') is not null")
+                )
+            )
+            request_type = await connection.scalar(
+                text(
+                    "select pg_get_constraintdef(oid) from pg_constraint "
+                    "where conrelid='artifact_put_attempts'::regclass "
+                    "and conname='ck_artifact_put_attempts_producer_request_type'"
+                )
+            )
+            constraints = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select conname from pg_constraint where conrelid="
+                            "to_regclass('submission_bundle_durable_intents')"
+                        )
+                    )
+                ).scalars()
+            }
+            triggers = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and "
+                            "tgrelid=to_regclass('submission_bundle_durable_intents')"
+                        )
+                    )
+                ).scalars()
+            }
+            receipt_triggers = {
+                row
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and "
+                            "tgrelid='artifact_operation_receipts'::regclass"
+                        )
+                    )
+                ).scalars()
+            }
+            return {
+                "table_exists": table_exists,
+                "request_type": request_type,
+                "constraints": constraints,
+                "triggers": triggers,
+                "receipt_triggers": receipt_triggers,
+            }
+    finally:
+        await engine.dispose()
+
+
+def test_0060_submission_bundle_intent_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0059_policy_execution_claim")
+            prior = asyncio.run(_submission_bundle_intent_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            installed = asyncio.run(_submission_bundle_intent_schema(isolated_database_env))
+            command.downgrade(config, "0059_policy_execution_claim")
+            restored = asyncio.run(_submission_bundle_intent_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            repeated = asyncio.run(_submission_bundle_intent_schema(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert prior == restored
+    assert prior["table_exists"] is False
+    assert "submission_bundle" not in str(prior["request_type"])
+    assert installed == repeated
+    assert installed["table_exists"] is True
+    assert "submission_bundle" in str(installed["request_type"])
+    assert {
+        "uq_submission_bundle_intent_evidence",
+        "uq_submission_bundle_intent_put_attempt",
+    }.issubset(installed["constraints"])
+    assert installed["triggers"] == {
+        "submission_bundle_durable_intent_put_attempt",
+        "submission_bundle_durable_intents_immutable",
+        "submission_bundle_durable_intents_no_truncate",
+    }
+    assert "artifact_receipt_producer_reference" in installed["receipt_triggers"]
 
 
 async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:
