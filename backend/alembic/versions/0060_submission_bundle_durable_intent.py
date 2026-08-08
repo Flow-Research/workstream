@@ -159,6 +159,31 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        create function guard_submission_bundle_durable_intent_put_attempt()
+        returns trigger language plpgsql as $$
+        declare request_type text;
+        begin
+          select producer_request_type into request_type
+          from artifact_put_attempts
+          where id = new.put_attempt_id
+          for share;
+          if request_type is distinct from 'submission_bundle' then
+            raise exception 'submission bundle durable intent requires submission_bundle put attempt'
+              using errcode='23514';
+          end if;
+          return new;
+        end;
+        $$
+        """
+    )
+    op.execute(
+        "create trigger submission_bundle_durable_intent_put_attempt "
+        "before insert on submission_bundle_durable_intents "
+        "for each row execute function "
+        "guard_submission_bundle_durable_intent_put_attempt()"
+    )
+    op.execute(
+        """
         create function guard_submission_bundle_durable_intents_immutable()
         returns trigger language plpgsql as $$
         begin
@@ -197,6 +222,11 @@ def downgrade() -> None:
         "on submission_bundle_durable_intents"
     )
     op.execute("drop function guard_submission_bundle_durable_intents_immutable()")
+    op.execute(
+        "drop trigger submission_bundle_durable_intent_put_attempt "
+        "on submission_bundle_durable_intents"
+    )
+    op.execute("drop function guard_submission_bundle_durable_intent_put_attempt()")
     op.drop_index(
         "ix_submission_bundle_durable_intents_put_attempt_id",
         table_name="submission_bundle_durable_intents",

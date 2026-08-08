@@ -285,6 +285,7 @@ def test_0060_submission_bundle_intent_empty_round_trip(
         "uq_submission_bundle_intent_put_attempt",
     }.issubset(installed["constraints"])
     assert installed["triggers"] == {
+        "submission_bundle_durable_intent_put_attempt",
         "submission_bundle_durable_intents_immutable",
         "submission_bundle_durable_intents_no_truncate",
     }
