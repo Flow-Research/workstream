@@ -1259,7 +1259,7 @@ execution, which produces a new prepared generation, evidence identity, and
 single-use pass capability. If the process dies after intent commit, the
 existing generic put-attempt observation and recovery machinery owns the
 technical obligation without another submission-specific recovery aggregate.
-Migration `0059_submission_bundle_intent` installs the immutable join
+Migration `0060_submission_bundle_intent` installs the immutable join
 and extends only the existing generic put-attempt and receipt producer shapes
 needed for submission bundles.
 
