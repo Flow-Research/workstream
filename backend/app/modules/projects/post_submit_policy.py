@@ -54,6 +54,12 @@ POST_SUBMIT_DEFAULT_CHECKERS_BY_COMPILER_VERSION = MappingProxyType(
         POST_SUBMIT_COMPILER_VERSION: POST_SUBMIT_V01_DEFAULT_CHECKERS,
     }
 )
+POST_SUBMIT_V01_SELECTABLE_CHECKERS = ("check_acceptance_criteria_present",)
+POST_SUBMIT_SELECTABLE_CHECKERS_BY_COMPILER_VERSION = MappingProxyType(
+    {
+        POST_SUBMIT_COMPILER_VERSION: POST_SUBMIT_V01_SELECTABLE_CHECKERS,
+    }
+)
 SUPPORTED_POST_SUBMIT_COMPILER_VERSIONS = frozenset(
     POST_SUBMIT_DEFAULT_CHECKERS_BY_COMPILER_VERSION
 )
@@ -79,18 +85,24 @@ def project_guide_post_submission_capabilities(
 ) -> PostSubmissionCapabilityProjection:
     """Project registered CHECKER truth and frozen defaults without a new registry."""
     defaults = _default_checkers_for_compiler_version(compiler_version)
+    selectable = POST_SUBMIT_SELECTABLE_CHECKERS_BY_COMPILER_VERSION.get(compiler_version)
+    if selectable is None:
+        raise PostSubmitCheckerCompilerError("unsupported post-submit compiler version")
     registered = tuple(sorted(default_checker_registry().names()))
     default_set = frozenset(defaults)
-    if not default_set.issubset(registered):
+    selectable_set = frozenset(selectable)
+    if default_set & selectable_set:
         raise PostSubmitCheckerCompilerError(
-            "post-submit default checker registration parity is invalid"
+            "post-submit default and selectable checker snapshots overlap"
         )
+    if not (default_set | selectable_set).issubset(registered):
+        raise PostSubmitCheckerCompilerError("post-submit checker registration parity is invalid")
     definitions = tuple(
         PostSubmissionCapabilityDefinition(
             capability_id=name,
             capability_version=compiler_version,
             platform_default=name in default_set,
-            selectable=name not in default_set,
+            selectable=name in selectable_set,
         )
         for name in registered
     )

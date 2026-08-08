@@ -5,7 +5,7 @@ Date: 2026-08-08. Risk: L1.
 ## Deterministic evidence
 
 - Scoped Ruff: passed.
-- Focused non-database tests: 66 passed.
+- Focused non-database tests: 91 passed after external-review corrections.
 - Changed-subsystem coverage with the neighboring checker tests reached above
   90 percent; database-backed completion remains assigned to the hosted
   Backend lane because it supplies Postgres and `WORKSTREAM_TEST_DATABASE_URL`.
@@ -36,6 +36,19 @@ Date: 2026-08-08. Risk: L1.
   are explicit and no gate is weakened.
 - Docs: pass; the active plan now distinguishes POL-01 context fields from
   later correction/persistence fields.
+
+## External-review correction re-review
+
+- Architecture: pass after explicit post-submit selectability, default/selectable
+  disjointness, and matching chunk-contract wording were added.
+- Security: pass after bare value-shaped credential forms, complete non-empty
+  ART lineage, unavailable mandatory pre-submit coverage, and closed
+  post-submit selectability were enforced.
+- QA: pass; all six CodeRabbit findings have regression proof.
+- Senior engineering: pass after credential detection was narrowed to preserve
+  ordinary security-policy language.
+- Test delta: pass after missing selectable-registration and snapshot-overlap
+  regressions were added; no tests were removed or skipped.
 
 All blocking findings were corrected and re-reviewed. No reviewer session
 remains open.

@@ -105,9 +105,11 @@ validator. This chunk does not change the historical post-submit compiler.
   registered names, frozen default names, stage, and selectability.
 - Capability identity is the registered checker name; capability version is
   the frozen source/compiler version; stage is exactly `post_submit`.
-- The eight frozen v0.1 defaults are non-selectable platform coverage. The
-  registered-minus-default set is project-selectable; on current main it is
-  exactly `check_acceptance_criteria_present`.
+- The eight frozen v0.1 defaults are non-selectable platform coverage. A
+  separate frozen compiler-version snapshot explicitly owns project-selectable
+  capabilities; it is disjoint from the defaults and currently contains only
+  `check_acceptance_criteria_present`. Registered but unlisted capabilities are
+  neither default nor selectable.
 - Default/unknown/wrong-stage/stale-snapshot bindings fail in unified proposal
   validation. No registry or compiler mutation occurs.
 

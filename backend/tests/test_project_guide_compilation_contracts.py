@@ -96,7 +96,7 @@ def test_pre_submission_projection_preserves_exact_manifest_and_selectability() 
     projection = project_guide_pre_submission_capabilities(catalogue)
 
     assert projection.manifest_sha256 == catalogue.manifest_sha256
-    assert len(projection.definitions) == 26
+    assert len(projection.definitions) == len(catalogue.entries)
     assert [item.stable_id for item in projection.definitions] == [
         item.stable_id for item in catalogue.entries
     ]
@@ -131,6 +131,28 @@ def test_pre_submission_projection_reports_disabled_mandatory_unavailable() -> N
     assert projection.definitions[0].selectable is False
 
 
+def test_compilation_rejects_unavailable_mandatory_pre_submission_projection() -> None:
+    context = _context().model_copy(
+        update={
+            "pre_submission_capabilities": project_guide_pre_submission_capabilities(
+                build_pre_submission_checker_catalogue(
+                    disabled_entry_ids=frozenset({"artifact.outer_zip.valid"})
+                )
+            )
+        }
+    )
+    result = ProjectGuideCompilationResult(
+        status="draft_ready",
+        findings=(
+            CompilationFinding(severity="info", code="guide.ready", message="Guide is complete."),
+        ),
+        submission_artifact_policy=_artifact_policy(),
+        agent_version="v1",
+    )
+    with pytest.raises(ValueError, match="projection is unavailable"):
+        validate_project_guide_compilation_result(context, result)
+
+
 def test_post_submission_projection_uses_registry_and_frozen_default_truth() -> None:
     projection = project_guide_post_submission_capabilities()
     by_name = {item.capability_id: item for item in projection.definitions}
@@ -144,6 +166,57 @@ def test_post_submission_projection_uses_registry_and_frozen_default_truth() -> 
         "check_acceptance_criteria_present"
     ]
     assert all(item.stage == "post_submit" for item in projection.definitions)
+
+
+def test_post_submission_projection_does_not_select_new_registration_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExpandedRegistry:
+        def names(self) -> set[str]:
+            return {
+                *POST_SUBMIT_V01_DEFAULT_CHECKERS,
+                "check_acceptance_criteria_present",
+                "check_experimental_internal",
+            }
+
+    monkeypatch.setattr(
+        "app.modules.projects.post_submit_policy.default_checker_registry",
+        ExpandedRegistry,
+    )
+    projection = project_guide_post_submission_capabilities()
+    experimental = next(
+        item
+        for item in projection.definitions
+        if item.capability_id == "check_experimental_internal"
+    )
+    assert experimental.platform_default is False
+    assert experimental.selectable is False
+
+
+def test_post_submission_projection_rejects_missing_selectable_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DefaultsOnlyRegistry:
+        def names(self) -> set[str]:
+            return set(POST_SUBMIT_V01_DEFAULT_CHECKERS)
+
+    monkeypatch.setattr(
+        "app.modules.projects.post_submit_policy.default_checker_registry",
+        DefaultsOnlyRegistry,
+    )
+    with pytest.raises(PostSubmitCheckerCompilerError, match="registration parity"):
+        project_guide_post_submission_capabilities()
+
+
+def test_post_submission_projection_rejects_default_selectable_overlap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.modules.projects.post_submit_policy.POST_SUBMIT_SELECTABLE_CHECKERS_BY_COMPILER_VERSION",
+        {POST_SUBMIT_COMPILER_VERSION: (POST_SUBMIT_V01_DEFAULT_CHECKERS[0],)},
+    )
+    with pytest.raises(PostSubmitCheckerCompilerError, match="snapshots overlap"):
+        project_guide_post_submission_capabilities()
 
 
 def test_post_submission_projection_rejects_unknown_compiler_snapshot() -> None:
@@ -183,6 +256,12 @@ def test_guide_evidence_ref_rejects_non_lineage_fields(payload: dict[str, str], 
         "https://example.invalid/instructions",
         "/etc/passwd",
         "token=secret",
+        "Bearer opaque-token",
+        "password hunter2",
+        "secret hidden-value",
+        "credential private-value",
+        "api key private-value",
+        "token opaque-value",
         "import subprocess",
         "curl example.invalid",
         "see docs/guide.md",
@@ -194,6 +273,19 @@ def test_guide_evidence_ref_rejects_non_lineage_fields(payload: dict[str, str], 
 def test_model_produced_text_rejects_unsafe_shapes(unsafe: str) -> None:
     with pytest.raises(ValidationError):
         CapabilitySuggestion(title="new checker", rationale=unsafe)
+
+
+@pytest.mark.parametrize(
+    "safe",
+    [
+        "Require credential handling attestation.",
+        "Document token rotation requirements.",
+        "Avoid password storage in submissions.",
+    ],
+)
+def test_model_produced_text_allows_safe_security_policy_language(safe: str) -> None:
+    suggestion = CapabilitySuggestion(title="security guidance", rationale=safe)
+    assert suggestion.rationale == safe
 
 
 def test_representative_task_context_is_optional_and_rejects_pii_fields() -> None:
@@ -253,17 +345,27 @@ def test_unified_result_accepts_exact_stage_capability_and_closed_parameters() -
 
 
 @pytest.mark.parametrize(
-    ("capability_id", "version", "stage"),
+    ("capability_id", "version", "stage", "expected_error"),
     [
-        ("submission.packet.required_fields", "v1", "pre_submit"),
-        ("policy.submission_packet.validate", "stale", "pre_submit"),
-        ("unknown.capability", "v1", "pre_submit"),
-        ("check_submission_packet", POST_SUBMIT_COMPILER_VERSION, "post_submit"),
-        ("check_acceptance_criteria_present", POST_SUBMIT_COMPILER_VERSION, "pre_submit"),
+        ("submission.packet.required_fields", "v1", "pre_submit", "binding is invalid"),
+        ("policy.submission_packet.validate", "stale", "pre_submit", "version is stale"),
+        ("unknown.capability", "v1", "pre_submit", "binding is invalid"),
+        (
+            "check_submission_packet",
+            POST_SUBMIT_COMPILER_VERSION,
+            "post_submit",
+            "binding is invalid",
+        ),
+        (
+            "check_acceptance_criteria_present",
+            POST_SUBMIT_COMPILER_VERSION,
+            "pre_submit",
+            "binding is invalid",
+        ),
     ],
 )
 def test_unified_result_rejects_default_unknown_stale_and_wrong_stage_bindings(
-    capability_id: str, version: str, stage: str
+    capability_id: str, version: str, stage: str, expected_error: str
 ) -> None:
     context = _context()
     disposition = "supported_post_submit" if stage == "post_submit" else "supported_pre_submit"
@@ -287,7 +389,7 @@ def test_unified_result_rejects_default_unknown_stale_and_wrong_stage_bindings(
         post_submit_bindings=(binding,) if stage == "post_submit" else (),
         agent_version="v1",
     )
-    with pytest.raises(ValueError, match="capability binding|version"):
+    with pytest.raises(ValueError, match=expected_error):
         validate_project_guide_compilation_result(context, result)
 
 
@@ -360,6 +462,26 @@ def test_context_rejects_unverified_or_unredacted_legacy_material() -> None:
             GuideSourceMaterial(
                 **{**base, "guide_material": {"content_markdown": {"command": "sh"}}},
                 verified_artifact_material=True,
+            )
+        )
+
+    with pytest.raises(ValueError, match="complete source lineage"):
+        VerifiedGuideMaterialSnapshot.from_material(
+            GuideSourceMaterial(**base, verified_artifact_material=True)
+        )
+
+    with pytest.raises(ValueError, match="complete source lineage"):
+        VerifiedGuideMaterialSnapshot.from_material(
+            GuideSourceMaterial(
+                **base,
+                verified_artifact_material=True,
+                source_items=[
+                    {
+                        "source_kind": "uploaded_file",
+                        "ingestion_adapter": "artifact_store",
+                        "source_item_id": str(SOURCE_ITEM_ID),
+                    }
+                ],
             )
         )
 
@@ -453,17 +575,22 @@ def test_capability_binding_rejects_unowned_parameters(stage: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "finding_severity", "disposition"),
+    ("status", "finding_severity", "disposition", "expected_error"),
     [
-        ("draft_ready", "blocking_gap", "informational"),
-        ("draft_ready", "info", "guide_blocker"),
-        ("draft_ready", "warning", "informational"),
-        ("draft_ready_with_warnings", "info", "informational"),
-        ("guide_blocked", "info", "informational"),
+        ("draft_ready", "blocking_gap", "informational", "cannot contain blocking"),
+        ("draft_ready", "info", "guide_blocker", "cannot contain blocking"),
+        ("draft_ready", "warning", "informational", "cannot contain warnings"),
+        (
+            "draft_ready_with_warnings",
+            "info",
+            "informational",
+            "requires a warning",
+        ),
+        ("guide_blocked", "info", "informational", "requires blocking evidence"),
     ],
 )
 def test_result_status_must_match_findings_and_blocking_dispositions(
-    status: str, finding_severity: str, disposition: str
+    status: str, finding_severity: str, disposition: str, expected_error: str
 ) -> None:
     result = ProjectGuideCompilationResult(
         status=status,
@@ -484,7 +611,7 @@ def test_result_status_must_match_findings_and_blocking_dispositions(
         ),
         agent_version="v1",
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=expected_error):
         validate_project_guide_compilation_result(_context(), result)
 
 
@@ -561,7 +688,7 @@ def test_platform_coverage_rejects_disabled_platform_capability() -> None:
         ),
         agent_version="v1",
     )
-    with pytest.raises(ValueError, match="canonical truth"):
+    with pytest.raises(ValueError, match="projection is unavailable"):
         validate_project_guide_compilation_result(context, result)
 
 

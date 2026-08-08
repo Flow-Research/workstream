@@ -35,8 +35,9 @@ _UNSAFE_MODEL_TEXT = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f]|(?:https?|file|data|ssh)://|"
     r"(?:^|\s)(?:/|\\\\|\.\.?/|[a-z]:\\|[\w.-]+/[\w./-]+)|"
     r"\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|"
-    r"\b(?:password|secret|credential|bearer|"
-    r"api[_ -]?key|token)\b\s*[:=]|\brequire\s*\(|\b(?:import|pip install|npm install|"
+    r"\b(?:bearer\s+\S+|(?:password|secret|credential|api[_ -]?key|token)"
+    r"\b\s*(?:[:=]\s*\S+|\s+(?=\S*(?:\d|[-_=+/]))\S+))|"
+    r"\brequire\s*\(|\b(?:import|pip install|npm install|"
     r"curl|wget|powershell|bash|sh)\b",
     re.IGNORECASE,
 )
@@ -252,6 +253,8 @@ class VerifiedGuideMaterialSnapshot(BaseModel):
             for item in material.source_items
             if item.source_item_id and item.extraction_usage_id and item.canonical_output_sha256
         )
+        if not lineage or len(lineage) != len(material.source_items):
+            raise ValueError("compilation material requires complete source lineage")
         return cls(
             project_id=material.project_id,
             guide_id=material.guide_id,
@@ -484,6 +487,8 @@ def validate_project_guide_compilation_result(
     result: ProjectGuideCompilationResult,
 ) -> None:
     """Fail closed when an untrusted result diverges from canonical capability truth."""
+    if not context.pre_submission_capabilities.available:
+        raise ValueError("pre-submit capability projection is unavailable")
     requirements = {item.requirement_id: item for item in result.requirements}
     if len(requirements) != len(result.requirements):
         raise ValueError("compilation requirements must be unique")
