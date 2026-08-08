@@ -8,6 +8,10 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from app.core.hashing import canonical_json_hash
+from app.interfaces.project_agents import (
+    PreSubmissionCapabilityDefinition,
+    PreSubmissionCapabilityProjection,
+)
 
 
 PRE_SUBMISSION_CATALOGUE_ID = "workstream.pre_submission_checkers"
@@ -44,9 +48,7 @@ class PreSubmissionCheckerPhase(StrEnum):
     PROJECT_POLICY = "project_policy"
 
 
-_PHASE_ORDER = {
-    phase: index for index, phase in enumerate(PreSubmissionCheckerPhase)
-}
+_PHASE_ORDER = {phase: index for index, phase in enumerate(PreSubmissionCheckerPhase)}
 
 
 def pre_submission_phase_order(phase: PreSubmissionCheckerPhase) -> int:
@@ -322,6 +324,31 @@ def parse_disabled_pre_submission_checker_ids(raw: str) -> frozenset[str]:
     if len(parts) != len(set(parts)):
         raise PreSubmissionCatalogueError("disabled catalogue configuration has duplicates")
     return frozenset(parts)
+
+
+def project_guide_pre_submission_capabilities(
+    catalogue: PreSubmissionCheckerCatalogue,
+) -> PreSubmissionCapabilityProjection:
+    """Project the exact deployment catalogue without creating policy authority."""
+    definitions = tuple(
+        PreSubmissionCapabilityDefinition(
+            **entry.manifest_entry(),
+            selectable=(
+                entry.state is PreSubmissionCheckerState.ENABLED
+                and entry.dispatch_kind is PreSubmissionDispatchKind.POLICY_PRIMITIVE
+                and entry.phase is PreSubmissionCheckerPhase.PROJECT_POLICY
+            ),
+        )
+        for entry in catalogue.entries
+    )
+    return PreSubmissionCapabilityProjection(
+        catalogue_id=catalogue.catalogue_id,
+        version=catalogue.version,
+        schema_version=catalogue.schema_version,
+        manifest_sha256=catalogue.manifest_sha256,
+        available=catalogue.available,
+        definitions=definitions,
+    )
 
 
 def _definition_sort_key(entry: PreSubmissionCheckerDefinition) -> tuple[int, int, str]:

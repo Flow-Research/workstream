@@ -95,14 +95,15 @@ on 2026-08-08.
   setup generation changes.
 - Representative task material is optional bounded context. Guide setup must
   not depend on tasks already existing.
-- Current post-submit compilation must gain a trusted hard rejection for
-  platform-default repetition; prompt instructions are insufficient.
+- The new unified proposal validator must reject platform-default repetition;
+  POL-01 does not change historical post-submit compiler behavior.
 - A catalogue is not an execution API. The checker service must expose exactly
   one typed call per phase and accept no caller-selected checker names.
 
-## Unknowns to resolve in the planning PR
+## Remaining unknowns after POL-01 contract repair
 
-- Final names and limits for evidence-reference and safe-text schemas.
+- POL-01 freezes evidence-reference and safe-text names/limits in its active
+  executable contract; implementation must prove them before later chunks.
 - Exact AUTH action/resource binding for creation of the compilation record;
   use narrow XINT/AUTH compilation request+execute actions for the parent while
   preserving separate 12E/12F/12G projection actions.

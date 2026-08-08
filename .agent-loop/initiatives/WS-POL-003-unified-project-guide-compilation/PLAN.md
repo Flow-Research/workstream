@@ -133,15 +133,19 @@ boundaries without WS-POL-003 modifying ART code or forcing ART lifecycle change
 
 `ProjectGuideCompilationContext` is strict (`extra="forbid"`) and contains:
 
-- exact existing ART-verified `GuideSourceMaterial`;
+- a deeply immutable canonical snapshot of exact ART-verified
+  `GuideSourceMaterial`, its payload hash, and source evidence lineage;
 - optional bounded representative task context;
-- non-selectable `platform_coverage` generated from ART-04B1 platform entries
-  plus CHECKER-owned durable post-submit defaults;
-- selectable `project_capabilities` generated from ART-04B1's project-rule
-  namespace for pre-submit and CHECKER/POL's registered rules for post-submit;
-- server-owned classification policy and schema versions;
-- optional bounded correction feedback tied to an exact superseded
-  compilation.
+- one exact `pre_submission_capabilities` projection generated from ART-04B1,
+  carrying both non-selectable platform entries and selectable project-policy
+  primitives;
+- one exact `post_submission_capabilities` projection generated from
+  CHECKER-owned registration plus the frozen durable default snapshot; and
+- server-owned setup run/generation, instruction version, and agent identity.
+
+Later persistence/correction chunks bind classification policy and bounded
+correction feedback to an exact superseded compilation; POL-01 does not expose
+those fields prematurely.
 
 Representative task context is tenant-local, server-redacted, and limited to
 policy shape. It excludes actor/user IDs, emails, submission artifacts, review
