@@ -29,6 +29,7 @@ from app.modules.artifacts.submission_authorization import (
 )
 from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutRequest,
+    SubmissionBundleDurablePutResult,
     SubmissionBundleDurablePutService,
 )
 from app.modules.artifacts.submission_admission_publication import (
@@ -40,6 +41,7 @@ from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCus
 from app.modules.artifacts.submission_preparation import (
     PreparedSubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
+    SubmissionBundlePreparationResult,
 )
 from app.interfaces.artifact_operations import SubmissionBundlePreparationRequest
 from app.modules.authorization.runtime import (
@@ -180,6 +182,54 @@ async def test_hidden_preparation_closes_authority_after_invalid_media_type() ->
             )
         )
     authority.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_existing_durable_preparation_projects_exact_ready_admission() -> None:
+    attempt_id = uuid4()
+    admission_id = uuid4()
+    row_result = SimpleNamespace(
+        one_or_none=lambda: (
+            SimpleNamespace(id=str(uuid4())),
+            SimpleNamespace(id=str(attempt_id), status="object_confirmed"),
+            SimpleNamespace(id=str(admission_id)),
+        )
+    )
+    session = SimpleNamespace(begin=_transaction, execute=AsyncMock(return_value=row_result))
+    command = PreparedSubmissionBundlePreparationCommand(
+        session=session,
+        authority=SimpleNamespace(),
+        runtime_factory=Mock(),
+    )
+
+    result = await command._existing_durable_result(uuid4())
+
+    assert result == SubmissionBundlePreparationResult(
+        put_attempt_id=attempt_id,
+        admission_id=admission_id,
+        status="ready",
+        replayed=True,
+    )
+
+
+def test_durable_put_result_projects_without_losing_replay_state() -> None:
+    durable = SubmissionBundleDurablePutResult(
+        put_attempt_id=uuid4(),
+        pre_submit_evidence_set_id=uuid4(),
+        operation_identity=_sha("9"),
+        admission_id=None,
+        status="prepared",
+        replayed=True,
+    )
+
+    assert PreparedSubmissionBundlePreparationCommand._result(durable) == (
+        SubmissionBundlePreparationResult(
+            put_attempt_id=durable.put_attempt_id,
+            admission_id=None,
+            status="prepared",
+            replayed=True,
+        )
+    )
 
 
 def _capability(prepared, evidence_set_id):
