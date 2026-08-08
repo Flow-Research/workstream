@@ -70,12 +70,27 @@ Different initiatives may proceed concurrently in separate branches or
 worktrees. If another pull request changes the base, inspect the new delta and
 rerun affected checks; unchanged evidence does not need ceremonial repetition.
 
-## Behavior Mutation Claims
+## Behavior Ownership Catalogue
 
 The hosted behavior-mutation check is temporarily retired because its
 callable-wide survivor policy blocked declaration-only changes by mutating
-unchanged executable lines. Do not treat a behavior claim as a required PR
-gate while the replacement is being designed.
+unchanged executable lines. Do not treat a historical behavior claim or a
+catalogue candidate as a required PR gate.
+
+The versioned catalogue foundation lives under `.ci/behavior-ownership/`.
+Contributors can run its read-only inventory, candidate generator, and validator
+from `backend/`:
+
+```bash
+.venv/bin/python -m scripts.behavior_ownership inventory
+.venv/bin/python -m scripts.behavior_ownership generate
+.venv/bin/python -m scripts.behavior_ownership validate
+```
+
+Candidate output is discovery assistance only. It cannot become reviewed
+ownership without an explicit catalogue record and the required human and
+internal review. The validator reports unresolved targets while population is
+in progress; that report does not block ordinary contributions.
 
 Existing claim, schema, policy, dependency, and evidence files remain as
 historical design input. They do not replace focused tests, hosted Backend

@@ -186,3 +186,31 @@ remain in the repository as design input for a future changed-line-aware gate.
 They are not active contribution requirements. Behavior-mutation enforcement
 must not resume until a fresh changed-line-aware plan is approved and proves
 that unchanged executable lines cannot block a declaration-only change.
+
+### Behavior ownership catalogue foundation
+
+The replacement foundation is a read-only engineering QA catalogue under
+`.ci/behavior-ownership/`. Its canonical `partition.v1.json` assigns every
+eligible non-`__init__` module to exactly one population group and binds the
+protected-base commit plus a digest over the assignment authority. Validation
+rejects missing, relocated, duplicated, modified, branch-local, or incomplete
+partitions.
+
+Run its commands from `backend/`:
+
+```bash
+.venv/bin/python -m scripts.behavior_ownership inventory
+.venv/bin/python -m scripts.behavior_ownership generate --group auth
+.venv/bin/python -m scripts.behavior_ownership validate
+```
+
+The generator is deterministic and emits only `candidate` records. Candidates
+never satisfy reviewed ownership or activate a gate. Reviewed executable
+records bind exact AST callables, pytest nodes, outcomes, boundaries, and
+reviewers. `structural_only` records require a reviewed reason, cannot contain
+callable or test fields, and fail validation when the target contains an
+executable callable or module-level runtime behavior such as calls, branches,
+loops, raises, awaits, mutation, I/O, SQL, validators, or other side effects.
+Until population and a separately approved changed-line reactivation chunk are
+complete, Backend lanes and existing coverage floors remain the only hosted
+test authority.

@@ -1,0 +1,20 @@
+{
+  "behavior_id": "example.hashing.sha256",
+  "boundaries": [],
+  "callables": [
+    "app.core.hashing.canonical_json_hash"
+  ],
+  "group": "shared",
+  "outcomes": [
+    "return"
+  ],
+  "reviewed_by": [
+    "example-reviewer"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/core/hashing.py",
+  "tests": [
+    "backend/tests/test_checkers.py::test_canonical_json_hash_rejects_non_finite_numbers"
+  ]
+}

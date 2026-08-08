@@ -1,11 +1,24 @@
 # Status: WS-QUAL-002 Behavior Ownership Catalogue
 
 Planning is complete and internally reviewed. PR #289 retired the 05M hosted
-mutation workflow; Backend lanes and coverage remain authoritative. No
-catalogue implementation or mutation reactivation has started.
+mutation workflow; Backend lanes and coverage remain authoritative. PR #290
+merged the catalogue plan.
 
-The first proposed chunk is `WS-QUAL-002-01`. Stop after planning review and
-human approval; do not start implementation automatically.
+`WS-QUAL-002-01` is in implementation. The current branch adds the schema,
+canonical exact target partition, deterministic inventory/candidate generator,
+fail-closed validator, examples, focused tests, and contributor documentation.
+It does not reactivate mutation or change any workflow, product behavior,
+coverage floor, lane, skip, or deselection.
+
+Current focused evidence:
+
+- 49 focused tests pass.
+- `scripts.behavior_ownership` coverage is 91.30 percent.
+- 33 semantic-lane contract tests pass, including exact assignment of the new
+  focused test module to `shared_foundations` under the human-approved scope
+  correction.
+- The initial catalogue is explicitly incomplete and candidate output remains
+  non-authoritative while subsystem population has not started.
 
 ## Plan review
 
