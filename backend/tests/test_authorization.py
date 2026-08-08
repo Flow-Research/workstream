@@ -2066,9 +2066,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             "project.effective_policy.manage",
             "WS-AUTH-001-12F2",
         ),
-        "project.submission_artifact_policy.derive": (
-            "project.effective_policy.manage",
-            "WS-AUTH-001-12F",
+            "project.submission_artifact_policy.derive": (
+                "project.effective_policy.manage",
+                "WS-AUTH-001-12F3",
         ),
         "project.submission_artifact_policy.update": (
             "project.effective_policy.manage",
@@ -2136,6 +2136,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
@@ -2236,14 +2237,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 51
+        == 52
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 49
+        == 48
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2768,8 +2769,8 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ),
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-            ActionOwner.AUTH_12F,
-            ActionAvailability.PLANNED,
+            ActionOwner.AUTH_12F3,
+            ActionAvailability.ACTIVE,
         ),
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
@@ -2784,8 +2785,8 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
     }
 
 
-def test_submission_artifact_policy_create_update_activation_is_12f2_only() -> None:
-    """Activate only the two human manual-draft actions under the child owner."""
+def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> None:
+    """Activate human drafting and fixed-service derivation under exact owners."""
     for action in (
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
@@ -2794,12 +2795,12 @@ def test_submission_artifact_policy_create_update_activation_is_12f2_only() -> N
         assert definition.owner is ActionOwner.AUTH_12F2
         assert definition.availability is ActionAvailability.ACTIVE
         assert definition.permission_id is PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE
-    for action in (
-        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
-        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
-    ):
-        assert ACTION_BY_ID[action].owner is ActionOwner.AUTH_12F
-        assert ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+    derive = ACTION_BY_ID[ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE]
+    assert derive.owner is ActionOwner.AUTH_12F3
+    assert derive.availability is ActionAvailability.ACTIVE
+    approval = ACTION_BY_ID[ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE]
+    assert approval.owner is ActionOwner.AUTH_12F
+    assert approval.availability is ActionAvailability.PLANNED
     active_internal = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -2808,6 +2809,7 @@ def test_submission_artifact_policy_create_update_activation_is_12f2_only() -> N
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
     }
     assert {
         action
@@ -3762,6 +3764,7 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
             caller_input, scope = _submission_policy_derive_prepare_inputs()
         elif action_id in {
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
         }:
@@ -5980,6 +5983,76 @@ async def test_prepared_sufficiency_run_admits_only_exact_setup_service_custody(
     )
     assert decision.allowed is True
     assert decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
+
+
+@pytest.mark.asyncio
+async def test_submission_artifact_policy_derive_prepared_service_is_exact_and_single_use() -> None:
+    """Only the fixed setup service receives exact derivation authority."""
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=ServiceIdentity.PROJECT_SETUP,
+    )
+    assert isinstance(context, ServiceAuthorizationContext)
+    session = _PreparedTestSession()
+
+    class LockedServiceFacts:
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind="service",
+                    status="active",
+                    service_identity=ServiceIdentity.PROJECT_SETUP.value,
+                ),
+            )
+
+    facts = LockedServiceFacts()
+    authorization, evidence = _runtime_service(
+        context, session=session, admin_repository=facts
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,
+    )
+    caller, scope = _submission_policy_derive_prepare_inputs()
+    resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate_json(
+        json.dumps(caller.request_value)
+    )
+    handle = await prepared.prepare(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE, caller, scope
+    )
+    wrong = resource.model_copy(update={"source_snapshot_hash": "sha256:" + "b" * 64})
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+            caller,
+            wrong,
+        )
+    decision = await prepared.consume(
+        handle,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+        caller,
+        resource,
+    )
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
+    assert decision.matched_grant_id is None
+    assert len(evidence.events) == 1
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+            caller,
+            resource,
+        )
     assert decision.matched_grant_id is None
     assert decision.matched_scope_project_id is None
     assert len(evidence.events) == 1

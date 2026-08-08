@@ -907,8 +907,9 @@ Historically, AUTH-12B extended the registry to an eighth identity,
 `project.guide_sufficiency.run`,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
-AUTH-12E activates only `project.guide_sufficiency.run`; the other three
-memberships remain planned and unavailable. The active action can be resolved
+AUTH-12E activates `project.guide_sufficiency.run`, and AUTH-12F3 activates
+`project.submission_artifact_policy.derive`; the other two memberships remain
+planned and unavailable. Each active action can be resolved
 for this fixed service only by an internal command carrying exact setup-run,
 expected-step, task/correlation, project, guide, snapshot, generation, stale
 output, and material custody. It is not admitted through the public HTTP route,
@@ -1359,18 +1360,21 @@ refused after any 12E replay or attributed sufficiency provenance exists; do
 not delete replay, product, or authority evidence to force rollback.
 
 Migration `0057_submission_policy_authority` installs submission-policy
-PREP, replay, and nullable provenance custody only. Existing submission,
+PREP, replay, and nullable provenance custody. Migration
+`0059_policy_execution_claim` adds the fixed-service derivation execution claim.
+Existing submission,
 effective, and pre-submit policy rows remain readable with all authority fields
-null; do not backfill invented authority. The replay reservation is mutable only
-for its single `pending -> committed` completion, remains in the caller's root
-transaction, and must not be committed or rolled back by the AUTH helper. A
-pending reservation is still authority evidence and intentionally blocks
-downgrade. Any audit event using the submission-policy mutation resource type,
+null; do not backfill invented authority. Human replay custody permits only
+`pending -> committed`. Fixed-service derivation commits `reserved` before
+material or agent I/O, then uses fresh final PREP and atomically advances
+`reserved -> pending -> committed` with the protected product mutation. A
+reserved or pending row is durable custody and intentionally blocks downgrade.
+Any audit event using the submission-policy mutation resource type,
 including denied evidence, blocks downgrade independently. 12F2 activates only
 manual human create/update. Each update appends a separately authorized
-successor and supersedes its exact hash-selected predecessor atomically; derive
-and approve remain planned. Operators must not treat the shared schema as wider
-activation.
+successor and supersedes its exact hash-selected predecessor atomically. 12F3
+activates derive only for the fixed `workstream.project.setup` service; approve
+remains planned. Operators must not treat the shared schema as wider activation.
 
 ## Draft review and revision policy authorization
 

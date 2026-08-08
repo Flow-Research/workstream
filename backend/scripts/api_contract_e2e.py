@@ -937,6 +937,9 @@ async def create_policy_bundle_for_guide(
         )
         from app.modules.projects import service as project_service_module
         from app.modules.projects import (
+            submission_policy_mutation_service as submission_policy_mutation_service_module,
+        )
+        from app.modules.projects import (
             sufficiency_mutation_service as sufficiency_mutation_service_module,
         )
         from app.workers.project_setup import run_pre_submit_setup_pipeline
@@ -968,6 +971,9 @@ async def create_policy_bundle_for_guide(
         agent_runtime = E2EProjectGuideAgentRuntime()
         project_service_module.get_project_guide_agent_runtime = lambda: agent_runtime
         sufficiency_mutation_service_module.get_project_guide_agent_runtime = lambda: agent_runtime
+        submission_policy_mutation_service_module.get_project_guide_agent_runtime = (
+            lambda: agent_runtime
+        )
         setup_worker_result = await asyncio.to_thread(
             run_pre_submit_setup_pipeline,
             project_id,

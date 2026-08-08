@@ -24,6 +24,9 @@ from app.modules.projects.service import (
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.prepared import fixed_service_prepared_authorization
 from app.modules.projects.sufficiency_mutation_service import GuideSufficiencyMutationService
+from app.modules.projects.submission_policy_mutation_service import (
+    SubmissionPolicyMutationService,
+)
 from app.modules.projects.setup_queue import pre_submit_setup_task_id
 from app.schemas.auth import ActorContext
 from app.workers.async_runner import run_async_task
@@ -49,6 +52,52 @@ async def _run_authorized_setup_sufficiency(
 ):
     """Compose the exact fixed-service command for one verified sufficiency run."""
     mutation = GuideSufficiencyMutationService(
+        session,
+        material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
+    )
+    execution_name = pre_submit_setup_task_id(setup_run_id, setup_generation)
+    task_id = UUID(execution_name)
+    correlation_id = uuid5(NAMESPACE_URL, f"{execution_name}:correlation")
+    custody = await mutation.resolve_setup_service_custody(
+        project_id=UUID(project_id),
+        guide_id=UUID(guide_id),
+        source_snapshot_id=UUID(source_snapshot_id),
+        setup_run_id=UUID(setup_run_id),
+        setup_generation=setup_generation,
+        task_id=task_id,
+        correlation_id=correlation_id,
+    )
+    async with fixed_service_prepared_authorization(
+        session,
+        service_identity=ServiceIdentity.PROJECT_SETUP,
+        request_id=task_id,
+        correlation_id=correlation_id,
+    ) as authority:
+        execution = mutation.run_setup_service(
+            actor_profile_id=authority.actor_profile_id,
+            identity_link_id=authority.identity_link_id,
+            prepared=authority.service,
+            project_id=UUID(project_id),
+            guide_id=UUID(guide_id),
+            source_snapshot_id=UUID(source_snapshot_id),
+            custody=custody,
+        )
+        async with execution as outcome:
+            await (session.rollback() if outcome.replayed else session.commit())
+    return outcome
+
+
+async def _run_authorized_setup_policy_derivation(
+    session,
+    *,
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    setup_run_id: str,
+    setup_generation: int,
+):
+    """Compose fresh fixed-service authority for one policy derivation."""
+    mutation = SubmissionPolicyMutationService(
         session,
         material=SqlAlchemyGuideSufficiencyMaterialAdapter(session),
     )
@@ -189,7 +238,6 @@ async def _run_verified_pre_submit_sufficiency_continuation(
     setup_generation: int,
 ) -> dict[str, Any]:
     """Run the live ART-backed same-generation sufficiency continuation."""
-    actor = project_setup_pipeline_actor()
     engine = create_async_engine(get_database_url(), pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -260,23 +308,18 @@ async def _run_verified_pre_submit_sufficiency_continuation(
                     current_step="submission_artifact_policy_derivation",
                     output_sufficiency_report_id=sufficiency_report.id,
                 )
-                policy, _ = await service.run_submission_artifact_policy_derivation_agent(
-                    actor,
-                    project_id,
-                    guide_id,
-                    source_snapshot_id,
-                )
-                await service.update_project_setup_run_status(
-                    setup_run_id,
-                    status="policy_draft_ready",
-                    current_step="submission_artifact_policy_derivation",
-                    output_sufficiency_report_id=sufficiency_report.id,
-                    output_submission_artifact_policy_id=policy.id,
+                policy_outcome = await _run_authorized_setup_policy_derivation(
+                    session,
+                    project_id=project_id,
+                    guide_id=guide_id,
+                    source_snapshot_id=source_snapshot_id,
+                    setup_run_id=setup_run_id,
+                    setup_generation=setup_generation,
                 )
                 return {
                     "status": "policy_draft_ready",
                     "guide_sufficiency_report_id": sufficiency_report.id,
-                    "submission_artifact_policy_id": policy.id,
+                    "submission_artifact_policy_id": policy_outcome.response.id,
                 }
             except GuideSufficiencyMaterialUnavailable as exc:
                 await session.rollback()

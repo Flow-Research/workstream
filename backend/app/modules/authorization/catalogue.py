@@ -222,6 +222,7 @@ class ActionOwner(StrEnum):
     AUTH_12E = "WS-AUTH-001-12E"
     AUTH_12F = "WS-AUTH-001-12F"
     AUTH_12F2 = "WS-AUTH-001-12F2"
+    AUTH_12F3 = "WS-AUTH-001-12F3"
     XINT_002_06A = "WS-XINT-002-06A"
     AUTH_12G = "WS-AUTH-001-12G"
     AUTH_12H = "WS-AUTH-001-12H"
@@ -487,10 +488,10 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
         ActionOwner.AUTH_12F2,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F3,
     ),
     _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
@@ -839,6 +840,7 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
@@ -1025,7 +1027,7 @@ def _index_service_actions(
         ),
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-            ActionOwner.AUTH_12F,
+            ActionOwner.AUTH_12F3,
         ),
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
@@ -1077,6 +1079,7 @@ def _index_service_actions(
                 ActionId.ARTIFACT_GUIDE_SOURCE_READ,
                 ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+                ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
             }
             else ActionAvailability.PLANNED
         )
