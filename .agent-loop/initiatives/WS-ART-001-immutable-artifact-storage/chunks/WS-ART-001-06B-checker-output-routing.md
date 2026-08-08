@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-06B Checker Output And Post-Submit Routing
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06A
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06A and POL-07
 
 Artifact contract phase: `checker_cutover`
 
@@ -54,8 +54,10 @@ lease, assignment, or decision.
   only when expired; slow-active, cancellation, and crash cases are tested;
 - non-reproducible crash replay fails the old checker attempt and uses a new
   attempt identity;
-- the project `PostSubmitCheckerPolicy` selects project checks and non-bypassable
-  Workstream defaults remain included;
+- the exact unified compilation post-submit component and POL-07 compiled plan
+  select project checks; non-bypassable Workstream defaults remain included;
+- output facts retain compilation/result/component/catalogue/plan hashes;
+  stale pre-unified, mixed-generation, or out-of-plan output denies;
 - transient provider failure keeps `evaluation_pending` and uses checker
   infrastructure retry; it creates no product decision;
 - after checker outputs and completion facts commit atomically, the existing
@@ -115,3 +117,4 @@ reuse/dedup, CI integrity, test delta, and docs.
 - Are checker outputs bound to the exact run and independently verified?
 - Can infrastructure failure ever become contributor blame?
 - Is the WS-REV ownership boundary preserved?
+- Is POL-07 the sole routing port with no caller-selected checker path?

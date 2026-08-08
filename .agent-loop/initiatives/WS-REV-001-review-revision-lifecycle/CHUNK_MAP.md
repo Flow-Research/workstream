@@ -1,5 +1,9 @@
 # Chunk Map: WS-REV-001 Review And Revision Lifecycle
 
+REV owns review/revision lifecycle behavior, not guide compilation or checker
+orchestration. Every eligible Submission and packet retains the exact
+`WS-POL-003` compilation, component, catalogue, and compiled-plan lineage.
+
 ## Live sequence
 
 Historical PLAN through PLAN3 and retired 02-family records remain evidence.

@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed and inactive. Exact ActionIds and its then-current migration must be
-enumerated before implementation; AUTH-PREP and the merged contributor
-foundation are required for mutations.
+Proposed and inactive. It may start only after `WS-AUTH-001-13`,
+`WS-ART-001-05B`, `WS-POL-003-07`, and `WS-XINT-002-06B` have merged. Exact
+ActionIds and the then-current migration must be frozen at start.
 
 ## Parent initiative
 
@@ -12,9 +12,10 @@ foundation are required for mutations.
 
 ## Goal
 
-Move submission precheck/create/read/finalize, checker trigger/read, checker
-contributor projections, and task audit visibility to registered permissions and
-canonical task/project/assignment guards.
+Verify exact admission authority and activate `submission.create`, bounded
+checker read/repair authority, contributor projections, and task audit
+visibility. ART and POL retain submission mutations, checker execution,
+findings, routing, and the sole checker-port product behavior.
 
 ## Why this chunk exists
 
@@ -46,7 +47,6 @@ backend/app/modules/actors/**
 backend/app/modules/checkers/**
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
-backend/app/adapters/project_agents/openai_agent_sdk.py
 backend/alembic/versions/<then-current-next>_*.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
@@ -67,7 +67,10 @@ docs/operations_authorization_service.md
 ## Not allowed
 
 ```text
-checker execution/routing semantics or task lifecycle redesign
+submission creation/finalization or artifact binding product mutations
+checker execution/routing, standalone precheck triggers, or ordinary checker triggers
+agent adapters, guide compilation, or checker-policy derivation
+checker-port implementation, checker findings, or product lifecycle behavior
 internal Celery worker authority cutover
 review queue/lease/decision implementation
 token role fallback
@@ -85,14 +88,24 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   direct provider access. Dedicated AUTH custodians activate the actions only
   after hidden ART behavior merges. Submission authority never implies
   artifact-storage authority.
-- Submission creation authorizes against its existing active assignment; every
+- `submission.create` authorizes only consumption of one exact verified ART
+  admission under its existing active assignment and locked unified-compilation
+  lineage; every
   migrated submission/checker/audit route declares one primary registered
   action against a feature-owned canonical target and keeps artifact bytes and
   unnecessary actor data outside `ResourceContext` and authority evidence.
+- AUTH must register/evaluate/consume `submission.create` authority and commit
+  its decision evidence; feature owners alone perform the protected Submission
+  mutation.
 - Generated OpenAPI/command manifest-delta tests prove every protected
   submission/checker/audit surface migrated here has exactly one active
   `ActionId` declaration.
-- Manager repair/checker triggers require covered project permissions.
+- There is no caller-selectable or standalone precheck trigger. The sole POL
+  checker port consumes the compiled plan automatically at the ART scratch and
+  stored boundaries. AUTH exposes no alternate checker API.
+- Manager repair and Operator retry resume the same Submission, admission,
+  compilation, plan, checker, and run-attempt identity. They cannot select a
+  checker, change policy, or create a second business effect.
 - Project Manager repair uses covered `project.task.manage`; Operator recovery
   uses distinct `operations.submission_gate.repair` and
   `operations.checker.retry` permissions. Each path requires a reason and

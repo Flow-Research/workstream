@@ -1,13 +1,17 @@
 # Discovery: WS-POL-003 - Unified Project Guide Compilation
 
-Baseline inspected: `origin/main` `bb77ff4a0ab61120b94d6d4763934b444c39207d`
-on 2026-08-05.
+Baseline refreshed: `origin/main` `99c0aaf04efd36c7ac4af4aeec2e9d810f012305`
+on 2026-08-08.
 
 ## Current behavior
 
 - `backend/app/interfaces/project_agents.py` exposes separate
   `analyze_guide_sufficiency`, `derive_submission_artifact_policy`, and
   `derive_post_submit_checker_policy` contracts.
+- AUTH-12E and AUTH-12F3 are merged transitional implementations of the first
+  two separate calls. Their action-specific authorization/projection custody
+  remains reusable, but their independent invocation paths are not the final
+  orchestration and must become unreachable at the unified cutover.
 - `backend/app/adapters/project_agents/openai_agent_sdk.py` implements three
   prompts/model calls behind `ProjectGuideAgentRuntime`.
 - `backend/app/modules/projects/sufficiency_mutation_service.py` now performs
@@ -39,10 +43,11 @@ on 2026-08-05.
 
 ## Canonical dependencies
 
-- AUTH-12F: submission-artifact policy mutation/provenance authority.
-- AUTH-12G: post-submit policy mutation/provenance authority.
-- AUTH-12B2: fixed setup-service worker call-graph cutover.
-- AUTH-12H: terminal guide activation authority.
+- AUTH-12I: hidden unified compilation request/execute activation after POL-03A.
+- AUTH-12B2: setup-ledger-only activation after hidden POL-04A; POL-04B owns the live setup-service cutover.
+- AUTH-12F4: stored unified pre-submit component approval after hidden POL-05A; no inference.
+- AUTH-12G: deterministic stored post-submit projection/approval after hidden POL-06A; zero model calls.
+- AUTH-12H: terminal guide activation after POL-07 and the CON clean cut.
 - ART-04B1: merged PR #276. The immutable catalogue is exactly
   `workstream.pre_submission_checkers` `v0.1` with schema
   `pre_submission_checker_catalogue.v1`; the pure effective plan is
@@ -50,6 +55,9 @@ on 2026-08-05.
   source/effective/pre-submit policy lineage.
 - ART-04B2/04B3: sealed scratch/default execution facts consumed through a
   typed boundary; WS-POL-003 does not change those ART behaviors.
+- ART-04B2, ART-04B3, and XINT-06A pre-submit materialization activation are
+  merged. ART-04C1 is the next admission-path implementation and may proceed
+  independently of unified compilation.
 - CHECKER/POL: canonical durable post-submit defaults/selectable rules and one
   typed evaluation service with a complete pre and complete post command.
 - Artifact-flow orchestration invokes the pre command once while material is

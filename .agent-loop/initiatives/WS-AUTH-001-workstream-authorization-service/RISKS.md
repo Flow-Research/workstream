@@ -15,10 +15,10 @@ merge and activate their exact actions.
 - Agent-backed setup operations deliberately break transactions around external
   work. Carrying PREP across that boundary would make stale authority usable;
   runtime children require fresh terminal authorization.
-- The Celery setup service currently fabricates human roles. 12B provisions one
-  exact fixed identity with four planned memberships; 12B2 performs the runtime
-  cut only after 12E/12F2/12F3/12F4/12G own the complete manual and
-  fixed-service product actions and provenance.
+- Historical AUTH-12 risk context: the Celery setup service fabricated human
+  roles and 12B provisioned one fixed identity. D38/`CHUNK_MAP.md` supersede the
+  old 12B2 sequence: POL-04A hidden behavior precedes 12B2 ledger activation,
+  and POL-04B owns the live one-call cutover.
 - ART-03B2 migration `0040` is merged on trusted main. AUTH-12 must allocate
   the next revision from that exact head and must not reuse `0040`.
 
@@ -48,8 +48,8 @@ merge and activate their exact actions.
 | A10 | Approval provenance breaks | Existing policy activation becomes unreadable or forgeable | Preserve historical values; new actions reference matched local grant | Migration and project approval tests |
 | A11 | API namespace forks | Client and documentation drift | Adopt `/api/v1` only and update references together | Route/OpenAPI and stale-reference scan |
 | A12 | Existing intake regresses | Project/task/checker pipeline stops | Run full current suite and API drill after actor migration and each cutover surface | Existing backend suite and live drill |
-| A13 | Auth initiative becomes one oversized PR | Review failure and hidden coupling | Sixteen bounded implementation chunks, one active at a time | Circuit-breaker and PR-size evidence |
-| A14 | Later WS-POL work resumes on obsolete auth | Rework and inconsistent authority | Keep WS-POL-002-04 inactive until PR #90 merges, auth proof exists, and the user starts it | Loop-memory gate |
+| A13 | Auth initiative becomes one oversized PR | Review failure and hidden coupling | Bounded executable child chunks, one active at a time | Circuit-breaker and PR-size evidence |
+| A14 | Later WS-POL work resumes the obsolete standalone derivation path | Rework, extra model calls, and inconsistent policy lineage | WS-POL-003 is current authority; POL-002-04 consumes the unified component only | Zero-call and stale-path scanner proof |
 | A15 | Authority mutation ships before durable evidence | Missing provenance cannot be reconstructed | Introduce correlation/idempotency/shared audit with canonical actor persistence | Atomic state+idempotency+event tests in every authority chunk |
 | A16 | Identity-link revocation strands final administrator | Administrative lockout despite active grant row | Apply AuthorityControl lock to link revoke plus grant/profile changes | Mixed concurrent link/grant/profile final-admin tests |
 | A17 | Canonical actor migration deletes typed-profile workflow eligibility before task/submission cutover | An intermediate merged release cannot claim, start, or submit work | Bounded non-authoritative workflow-eligibility adapter in chunk 06; remove task consumers in 13 and final consumer plus adapter in 14 | Full suite/API drill after chunks 06, 13, 14, and scanner proof in 15 |
@@ -69,6 +69,9 @@ merge and activate their exact actions.
 | A31 | Service provisioning crosses inverse actor/link locks | Administrative and lifecycle mutations deadlock or admit stale authority | Canonical AuthorityControl -> profile -> exact link -> exact grant order before fixed-identity and issuer/subject advisory locks | Independent-session same-key, identity collision, revoke/lifecycle crossing, rollback, and no-deadlock proof |
 | A32 | Sensitive authorization reads have no dedicated abuse control or leak resource existence through errors | Enumeration, privacy breach, or cross-project intelligence disclosure | Add one durable `authorization_read` scope before routes; map only the three read actions to one audited not-found boundary | Migration/concurrency/rate tests plus identical-response and persisted-denial-evidence tests |
 | A33 | Pagination cursors replay across actions, projects, or filters | Hidden rows disclose or pagination crosses authority scope | Distinct required 32-byte HMAC key, canonical versioned payload, complete query binding, and constant-time verification | Tamper, cross-scope/filter/limit, equal-boundary, no-gap, and no-query tests |
+| A34 | AUTH activates before hidden feature behavior exists | Deny-only or alternate live path | Hidden POL/ART manifest, then narrow AUTH activation, then live owner cutover | Dependency and availability-delta proof |
+| A35 | Prepared authority or a database transaction spans model/provider I/O | Lock exhaustion, stale authority, or replay ambiguity | Pre-I/O authorization plus committed attempt reservation; fresh result-bound PREP after I/O | Timeout/cancellation/revocation/cross-transaction tests |
+| A36 | Separate approval restarts inference or accepts an incomplete result | Policy components drift across one guide generation | Persist all four components before approval; approvals only project stored components | One-attempt and zero-approval-call proof |
 
 ## Required reviewers
 

@@ -7,12 +7,12 @@
 | `03` | Activate verifier, scheduler scan, and put resolver. | L1 | Merged |
 | `04A` | Activate Project Manager guide ingest. | L1 | Merged/active |
 | `04B` | Activate fixed-service guide binding and read. | L1 | Merged/active in PR #245 (`6babf81b`) |
-| `06A` | Activate only pre-submit checker-input materialization. | L1 | Merged ART-04B3/AUTH-12F2 evidence; must precede ART-04C1 and 05A |
-| `05A` | Activate initial contributor preparation and durable ready admission. | L1 | 06A plus ART-04A1-04C2 evidence |
-| `05B` | Activate fresh human Submission creation plus fixed binding/consumption. | L1 | 05A plus ART-05A/TASK evidence |
+| `06A` | Activate only pre-submit checker-input materialization. | L1 | Merged through PR #293; precedes ART-04C1 and 05A |
+| `05A` | Activate initial contributor preparation only over hidden ART ready-admission behavior. | L1 | 06A plus ART-04A1-04C2 evidence |
+| `05B` | Activate fresh human Submission creation plus fixed binding/consumption; ART owns the mutations. | L1 | 05A plus ART-05A/TASK evidence |
 | `05C` | Activate checker-remediation submission context. | L1 | 05B plus checker remediation evidence |
 | `05D` | Activate human-review revision context. | L1 | 05B plus REV revision-obligation evidence |
-| `06B` | Activate post-submit materialization and checker output write/binding. | L1 | ART-06A/06B evidence |
+| `06B` | Activate post-submit materialization and checker output write/binding. | L1 | POL-06B/07 unified-plan plus ART-06A/06B evidence |
 | `07A` | Activate lease-scoped reviewer packet materialization only. | L1 | ART-07A plus REV lease/packet evidence |
 | `07B` | Reserved review-evidence binding gate; keep unavailable absent new approved REV intent. | L1 | Future approved REV evidence-upload contract, if any |
 | `08` | Prove complete catalogue, least privilege, revocation, replay, concurrency, audit, and lifecycle conformance. | L1 | All activated v0.1 waves |

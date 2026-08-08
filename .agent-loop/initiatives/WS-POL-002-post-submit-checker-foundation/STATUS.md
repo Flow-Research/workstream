@@ -1,5 +1,9 @@
 # Status: WS-POL-002 - Post-Submit Checker Foundation
 
+`WS-POL-003` is authoritative for future guide inference. Remaining runtime
+work consumes its stored post-submit component and performs no standalone
+derivation.
+
 ## Current Status
 
 Planning completed and merged through PR #85 as
@@ -49,7 +53,7 @@ None for implementation. Post-merge memory is complete through PR #94.
 | `WS-POL-002-02` | Merged | `codex/ws-pol-002-02-post-submit-derivation` | #88 | Post-submit derivation agent and resumable setup integration; merged as `32af6a7`. |
 | `WS-POL-002-03` | Merged | `codex/ws-pol-002-03-post-submit-approval-visibility` | #90 | Server-owned approval, correction audit history, and setup visibility APIs; merged as `a7aa474`. |
 | `WS-POL-002-04` | Inactive | - | - | Runtime hardening remains gated by authorization proof and a separate user start. |
-| `WS-POL-002-05` | Proposed | - | - | Terminal Benchmark-style live API proof and report. |
+| `WS-POL-002-05` | Planning skeleton | - | - | Unified zero-model-call live proof; not executable until its full contract is expanded and reviewed. |
 
 ## Blockers
 

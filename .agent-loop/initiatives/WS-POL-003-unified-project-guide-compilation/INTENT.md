@@ -22,6 +22,9 @@ approval authority.
   blocks that generation. Correction or another genuine evaluation requires a
   new setup generation; transport uncertainty is reconciled under the original
   key and can only reuse an already accepted result.
+- The accepted result contains sufficiency, submission-artifact, pre-submit,
+  and post-submit proposals together before any Project Manager approval can
+  occur. Approval never triggers another guide-reading inference.
 - Trusted server validation projects the immutable result into the existing
   canonical policy objects; `ProjectGuideCompilation` does not replace them.
 - Platform checks remain mandatory and non-selectable.
@@ -58,6 +61,8 @@ approval authority.
 
 - Prefer one unified inference over three complete guide-reading inferences.
 - Keep durable policy lifecycles and approval gates separate.
+- Separate approval gates operate on components of the already complete
+  immutable result; they do not divide model generation into stages.
 - Treat the model as an untrusted proposal generator.
 - Preserve async-first execution and fixed-service authorization custody.
 - Do not preserve compatibility aliases or dual inference paths in v0.1.
