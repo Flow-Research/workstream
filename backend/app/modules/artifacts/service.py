@@ -1881,6 +1881,18 @@ class ArtifactAdmissionService:
                         authority_facts,
                         operation_identity=replay_attempt.operation_identity,
                     )
+                consumed_evidence_id = request.custody.pass_capability.consume(
+                    prepared_generation_id=authority_facts.prepared_generation_id,
+                    predecessor_submission_id=authority_facts.predecessor_submission_id,
+                    effective_plan_sha256=authority_facts.effective_plan_sha256,
+                    archive_sha256=authority_facts.archive_sha256,
+                    semantic_manifest_sha256=authority_facts.semantic_manifest_sha256,
+                    storage_scheme=authority_facts.storage_scheme,
+                )
+                if consumed_evidence_id != authority_facts.pre_submit_evidence_set_id:
+                    raise ArtifactAdmissionRelationshipError(
+                        "submission bundle pass capability evidence changed"
+                    )
                 await submission_prepared_authorization.consume(
                     prepared_authorization=prepared_authorization,
                     facts=authority_facts,
@@ -2314,22 +2326,6 @@ class ArtifactAdmissionService:
             or locked.pre_submit_policy_sha256 != evidence.locked_checker_policy_sha256
         ):
             raise ArtifactAdmissionRelationshipError("submission bundle locked context changed")
-        consumed_evidence_id = pass_capability.consume(
-            prepared_generation_id=request.custody.prepared_generation_id,
-            predecessor_submission_id=(
-                UUID(evidence.predecessor_submission_id)
-                if evidence.predecessor_submission_id is not None
-                else None
-            ),
-            effective_plan_sha256=evidence.effective_plan_sha256,
-            archive_sha256=commitment.sha256,
-            semantic_manifest_sha256=evidence.semantic_manifest_sha256,
-            storage_scheme=evidence.storage_scheme,
-        )
-        if consumed_evidence_id != UUID(evidence.id):
-            raise ArtifactAdmissionRelationshipError(
-                "submission bundle pass capability evidence changed"
-            )
         operation_identity = canonical_json_hash(
             {
                 "request_type": "submission_bundle",

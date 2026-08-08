@@ -933,10 +933,14 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         try:
             manager.close()
         finally:
-            async with engine.begin() as connection:
-                for table, trigger in reversed(custody_triggers):
-                    await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
-            await engine.dispose()
+            try:
+                async with engine.begin() as connection:
+                    for table, trigger in reversed(custody_triggers):
+                        await connection.execute(
+                            text(f"alter table {table} enable trigger {trigger}")
+                        )
+            finally:
+                await engine.dispose()
 
     assert first.evidence.replayed is False
     assert replay.evidence.replayed is True
