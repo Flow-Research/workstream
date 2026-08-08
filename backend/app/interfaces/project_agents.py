@@ -43,23 +43,29 @@ _UNSAFE_MODEL_TEXT = re.compile(
 
 
 def _validated_safe_model_text(value: str) -> str:
+    """Reject unsafe or unbounded model-produced operator text."""
     if not value or len(value) > 1000 or _UNSAFE_MODEL_TEXT.search(value):
         raise ValueError("model-produced text is unsafe")
     return value
 
 
 def _validated_identifier(value: str) -> str:
+    """Require one bounded canonical identifier."""
     if not _SAFE_IDENTIFIER.fullmatch(value):
         raise ValueError("identifier is invalid")
     return value
 
 
 class CompilationStage(StrEnum):
+    """Closed checker stages available to unified compilation."""
+
     PRE_SUBMIT = "pre_submit"
     POST_SUBMIT = "post_submit"
 
 
 class RequirementDisposition(StrEnum):
+    """Closed trusted classifications for one atomic guide requirement."""
+
     PLATFORM_COVERED = "platform_covered"
     SUPPORTED_PRE_SUBMIT = "supported_pre_submit"
     PRE_SUBMIT_CAPABILITY_GAP = "pre_submit_capability_gap"
@@ -155,11 +161,13 @@ class RepresentativeTaskPolicyContext(BaseModel):
     @field_validator("task_kind")
     @classmethod
     def validate_task_kind(cls, value: str) -> str:
+        """Require a canonical redacted task-kind identifier."""
         return _validated_identifier(value)
 
     @field_validator("deliverable_kinds", "required_evidence_kinds")
     @classmethod
     def validate_task_identifiers(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Require unique canonical task policy identifiers."""
         if len(values) != len(set(values)):
             raise ValueError("task policy identifiers must be unique")
         return tuple(_validated_identifier(value) for value in values)
@@ -178,6 +186,7 @@ class GuideEvidenceRef(BaseModel):
 
     @model_validator(mode="after")
     def validate_ordinals(self) -> GuideEvidenceRef:
+        """Require a non-empty ordered evidence range."""
         if self.end_ordinal <= self.start_ordinal:
             raise ValueError("evidence ordinals are invalid")
         return self
@@ -209,6 +218,7 @@ class VerifiedGuideMaterialSnapshot(BaseModel):
 
     @model_validator(mode="after")
     def validate_snapshot_integrity(self) -> VerifiedGuideMaterialSnapshot:
+        """Bind the immutable payload to its hash and unique lineage."""
         expected_hash = "sha256:" + hashlib.sha256(self.canonical_payload).hexdigest()
         if self.canonical_payload_sha256 != expected_hash:
             raise ValueError("canonical guide material hash is invalid")
@@ -221,6 +231,7 @@ class VerifiedGuideMaterialSnapshot(BaseModel):
 
     @classmethod
     def from_material(cls, material: GuideSourceMaterial) -> VerifiedGuideMaterialSnapshot:
+        """Snapshot exact verified material after rejecting legacy open shapes."""
         if not material.verified_artifact_material:
             raise ValueError("compilation requires ART-verified guide material")
         if material.representative_task_material.items:
@@ -270,6 +281,7 @@ class CapabilityParameter(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
+        """Require a canonical catalogue-owned parameter name."""
         return _validated_identifier(value)
 
     @field_validator("value")
@@ -277,6 +289,7 @@ class CapabilityParameter(BaseModel):
     def validate_value(
         cls, value: CapabilityScalar | tuple[CapabilityScalar, ...]
     ) -> CapabilityScalar | tuple[CapabilityScalar, ...]:
+        """Reject nested, non-finite, executable, or unbounded parameter values."""
         values = value if isinstance(value, tuple) else (value,)
         if not values or len(values) > 50:
             raise ValueError("capability parameter value is invalid")
@@ -305,10 +318,12 @@ class CapabilityBindingProposal(BaseModel):
     @field_validator("requirement_id", "capability_id", "capability_version")
     @classmethod
     def validate_identifiers(cls, value: str) -> str:
+        """Require canonical requirement and capability identity fields."""
         return _validated_identifier(value)
 
     @model_validator(mode="after")
     def validate_parameter_names(self) -> CapabilityBindingProposal:
+        """Reject duplicate parameter names within one binding."""
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
             raise ValueError("capability parameters must be unique")
@@ -316,6 +331,8 @@ class CapabilityBindingProposal(BaseModel):
 
 
 class CompilationFinding(BaseModel):
+    """One bounded operator-visible finding from unified compilation."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     severity: Literal["blocking_gap", "warning", "info"]
@@ -344,6 +361,8 @@ class PlatformCoverageRef(BaseModel):
 
 
 class AtomicGuideRequirement(BaseModel):
+    """One evidence-linked guide requirement with one disposition."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     requirement_id: str
@@ -359,6 +378,8 @@ class AtomicGuideRequirement(BaseModel):
 
 
 class SubmissionArtifactPolicyProposal(BaseModel):
+    """Closed submission artifact policy proposed by compilation."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     packaging: Literal["zip"] = "zip"
@@ -375,12 +396,14 @@ class SubmissionArtifactPolicyProposal(BaseModel):
     )
     @classmethod
     def validate_policy_text(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Reject duplicate or unsafe artifact policy text."""
         if len(values) != len(set(values)):
             raise ValueError("artifact policy values must be unique")
         return tuple(_validated_safe_model_text(value) for value in values)
 
     @model_validator(mode="after")
     def validate_package_limit(self) -> SubmissionArtifactPolicyProposal:
+        """Require coherent file/package limits and artifact sets."""
         if self.maximum_file_size_bytes > self.maximum_package_size_bytes:
             raise ValueError("file limit exceeds package limit")
         if set(self.required_artifacts).intersection(self.forbidden_artifacts):
@@ -389,6 +412,8 @@ class SubmissionArtifactPolicyProposal(BaseModel):
 
 
 class CapabilitySuggestion(BaseModel):
+    """Non-executable engineering suggestion for a capability gap."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     title: str
@@ -448,6 +473,7 @@ class ProjectGuideCompilationResult(BaseModel):
     @field_validator("setup_notes")
     @classmethod
     def validate_notes(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Reject unsafe setup notes before trusted validation."""
         return tuple(_validated_safe_model_text(value) for value in values)
 
     _agent_version = field_validator("agent_version")(_validated_identifier)
@@ -503,6 +529,7 @@ def validate_project_guide_compilation_result(
 
 
 def _validate_status_consistency(result: ProjectGuideCompilationResult) -> None:
+    """Require ready and blocked status to match findings and dispositions."""
     has_blocker = any(finding.severity == "blocking_gap" for finding in result.findings) or any(
         requirement.disposition
         in {
@@ -528,6 +555,7 @@ def _validate_platform_coverage(
     pre_definitions: dict[str, PreSubmissionCapabilityDefinition],
     post_definitions: dict[str, PostSubmissionCapabilityDefinition],
 ) -> None:
+    """Resolve platform coverage only against eligible phase-owner truth."""
     for requirement in requirements:
         coverage = requirement.platform_coverage
         if requirement.disposition is not RequirementDisposition.PLATFORM_COVERED:
@@ -562,6 +590,7 @@ def _validate_evidence_lineage(
     context: ProjectGuideCompilationContext,
     result: ProjectGuideCompilationResult,
 ) -> None:
+    """Resolve every model evidence reference to immutable source lineage."""
     source_lineage = {
         (
             str(item.source_item_id),
@@ -591,6 +620,7 @@ def _validate_bindings(
     definitions: dict[str, PreSubmissionCapabilityDefinition | PostSubmissionCapabilityDefinition],
     expected_stage: Literal["pre_submit", "post_submit"],
 ) -> set[str]:
+    """Validate exact stage, version, selectability, and parameter ownership."""
     seen_requirements: set[str] = set()
     expected_disposition = (
         RequirementDisposition.SUPPORTED_PRE_SUBMIT
