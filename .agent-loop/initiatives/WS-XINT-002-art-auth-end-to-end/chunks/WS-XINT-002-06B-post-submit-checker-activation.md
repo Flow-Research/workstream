@@ -1,6 +1,6 @@
 # Chunk Contract: WS-XINT-002-06B — Post-Submit Checker Activation
 
-Parent initiative: `WS-XINT-002` | Risk: L1 | Status: Proposed after ART-06B
+Parent initiative: `WS-XINT-002` | Risk: L1 | Status: Proposed after POL-06B/07 and ART-06A/06B
 
 ## Goal
 
@@ -23,7 +23,10 @@ reads, Submission consumption, or new ActionIds.
   change availability;
 - fixed identities are distinct and cannot substitute for each other;
 - facts bind Submission, binding/content/manifest, CheckerRun, checker role,
-  generated commitment, request, session, and transaction;
+  unified compilation/result/post component, both catalogue hashes, compiled
+  checker plan, generated commitment, request, session, and transaction;
+- no action activates for pre-unified, mixed-generation, missing-plan, stale,
+  or non-POL-07 lineage;
 - denial/replay/stale/cross-resource cases precede byte exposure or mutation;
 - no prepared handle is serialized.
 
@@ -39,4 +42,5 @@ reuse/dedup, test delta, and docs.
 
 ## Human Review Focus And Stop Conditions
 
-Confirm service separation and exact facts. Stop before reviewer activation.
+Confirm service separation, exact unified facts, and the sole POL-07 port. Stop
+before reviewer activation.

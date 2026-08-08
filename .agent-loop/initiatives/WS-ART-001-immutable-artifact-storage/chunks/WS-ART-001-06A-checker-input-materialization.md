@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05B
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05B and POL-06B/07
 
 Artifact contract phase: `submission_cutover`
 
@@ -38,8 +38,11 @@ bounded isolated checker workspaces.
 ## Acceptance Criteria
 
 - `CheckerInputSnapshot` commits to submission version, submission-bundle
-  manifest, exact binding/content IDs, hashes/sizes, locked policy/checker versions, and checker
+  manifest, exact binding/content IDs, hashes/sizes, unified compilation/result,
+  pre/post component and catalogue hashes, compiled checker-plan identity, and checker
   implementation identity;
+- stale pre-unified, mixed-generation, missing-plan, or non-POL-07 lineage
+  fails before materialization;
 - pre-submit evidence and post-submit input prove the same archive commitment,
   semantic-manifest hash, and exact binding;
 - the post-submit runner receives only authorized immutable Workstream binding
@@ -116,3 +119,4 @@ reuse/dedup, CI integrity, test delta, and docs.
 - Is materialization bounded, isolated, and integrity checked?
 - Can any post-submit path bypass the exact materializer already used by
   pre-submit or leave a writable/orphaned workspace?
+- Does every materialization consume the POL-07 single-port compiled plan?

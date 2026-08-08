@@ -63,7 +63,7 @@ stopped.
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
 | `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
 | `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Merged through PR #227; identity/matrix registration only, zero activation |
-| `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F4, and 12G |
+| `WS-AUTH-001-12B2` | Unified Setup Ledger Activation | L1 | Proposed after hidden POL-04A and AUTH-12I; before POL-04B live cutover |
 | `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Merged through PR #229 |
 | `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Merged through PR #232 |
 | `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |
@@ -71,10 +71,11 @@ stopped.
 | `WS-AUTH-001-12F` | Submission Artifact Policy Planning Parent | L1 | Split after failed L1 pre-start review; zero activation |
 | `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Merged through PR #286; zero activation |
 | `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Merged through PR #292 as `81f281bd` |
-| `WS-AUTH-001-12F3` | Fixed-Service Policy Derivation | L1 | PR #295; external checks pending |
-| `WS-AUTH-001-12F4` | Submission Policy Approval Chain | L1 | Proposed after 12F3 |
-| `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F4 |
-| `WS-AUTH-001-12H` | Guide Activation Cutover | L1 | Proposed after 12B2 and the owning CON clean cut |
+| `WS-AUTH-001-12F3` | Transitional Fixed-Service Policy Derivation | L1 | Merged through PR #295 as `99c0aaf0`; superseded at POL-04B live cutover |
+| `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Proposed after hidden POL-03A; before POL-03B |
+| `WS-AUTH-001-12F4` | Unified Pre-Submit Approval Activation | L1 | Proposed after hidden POL-05A; before POL-05B |
+| `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
+| `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Submission, Checker, And Audit Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |
@@ -92,10 +93,10 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
-| `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | After merged ART-04B3/AUTH-12F2; before ART-04C1 and 05A |
+| `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | Merged through PR #293; ART-04C1 is its next ART consumer |
 | `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A1-04C2 hidden behavior and 06A |
 | `WS-XINT-002-05B` | Submission Binding Activation | L1 | Feature-gated on hidden ART-05A |
-| `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on ART-06A/06B |
+| `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on POL-06B/07 unified plan plus ART-06A/06B evidence |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-07` | REV 07 Context Chain And Finding Evidence Activation | L1 | Feature/ART-gated |
@@ -155,12 +156,14 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-12F1
 -> WS-AUTH-001-12F2
 -> WS-AUTH-001-12F3
--> WS-AUTH-001-12F4
--> WS-AUTH-001-12G
--> WS-AUTH-001-12B2
--> WS-AUTH-001-12H
+-> WS-POL-003-01 -> 02 -> 03A
+-> WS-AUTH-001-12I -> WS-POL-003-03B -> 04A
+-> WS-AUTH-001-12B2 -> WS-POL-003-04B -> 05A
+-> WS-AUTH-001-12F4 -> WS-POL-003-05B -> 06A
+-> WS-AUTH-001-12G -> WS-POL-003-06B -> 07
+-> WS-AUTH-001-12H -> WS-POL-003-08
 -> WS-AUTH-001-13
--> WS-AUTH-001-14
+-> ART/XINT submission and checker gates -> WS-AUTH-001-14
 -> WS-AUTH-001-15
 -> all registration/activation chunks whose feature surfaces have merged
 -> WS-AUTH-001-16
@@ -169,6 +172,9 @@ WS-AUTH-001-PLAN
 ## Boundary notes
 
 - Chunk 02 authenticates tokens but grants no product authority.
+- `WS-POL-003` owns unified guide compilation and product orchestration. AUTH
+  owns only catalogue/evaluator/PREP activation and evidence. Hidden behavior
+  precedes each AUTH activation; live cutover follows it.
 - Chunk 03 provides a supported classification gate before schema migration.
 - Parent chunk 04 was split before implementation. Chunk 04A establishes
   request/correlation and additive error compatibility; chunk 04B later owns

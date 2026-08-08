@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed and inactive. Exact ActionIds and its then-current migration must be
-enumerated before implementation; AUTH-PREP and the merged contributor
-foundation are required for mutations.
+Proposed and inactive. It may start only after `WS-POL-003-06B`,
+`WS-POL-003-07`, `WS-AUTH-001-12H`, and the required ART admission gates have
+merged. Exact ActionIds and the then-current migration must be frozen at start.
 
 ## Parent initiative
 
@@ -14,7 +14,8 @@ foundation are required for mutations.
 
 Move task creation/screen/release, queue visibility, contributor claim, assignment,
 and start operations to scoped manager or exact-project submitter permissions
-while preserving task lifecycle guards.
+while preserving task lifecycle guards and the exact unified-compilation
+lineage that governs the task.
 
 ## Why this chunk exists
 
@@ -69,6 +70,7 @@ docs/operations_authorization_service.md
 submission create/read/finalize
 checker trigger/read or contributor checker results
 new terminal task states or unrelated lifecycle redesign
+guide compilation, policy projection, checker selection, or checker execution
 review models or self-review implementation
 token role or legacy active-worker-profile fallback
 ```
@@ -83,6 +85,11 @@ token role or legacy active-worker-profile fallback
 - An active submitter grant for the exact project is required for
   queue/claim/start, plus existing task availability, assignment, ownership,
   and state guards.
+- A task may become claimable only under the current activated guide whose
+  immutable unified compilation has approved sufficiency, artifact,
+  pre-submit, and post-submit components. Task/assignment locks stamp the exact
+  compilation result, component hashes, catalogue hashes, and compiled checker
+  plan. AUTH validates those facts but does not compile or invoke checkers.
 - Every migrated task/assignment route or reconciliation command declares one
   primary registered action against the canonically loaded project, task, or
   assignment target. Feature-owned TaskRepository facts remain authoritative.

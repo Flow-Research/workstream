@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed and inactive. Exact remaining command ActionIds, service identities,
-and then-current migration parity must be enumerated before implementation.
+Proposed cleanup-only and inactive. It follows `WS-AUTH-001-14`,
+`WS-POL-003-08`, and the applicable ART/XINT activation gates.
 
 ## Parent initiative
 
@@ -73,6 +73,7 @@ docs/operations_authorization_service.md
 
 ```text
 new product lifecycle behavior
+new action activation or compatibility aliases
 human roles on service ActorProfiles
 authorization allowlist broad enough to hide new token-role consumption
 review/contribution/compensation implementation
@@ -104,6 +105,10 @@ review/contribution/compensation implementation
 - The scanner proves the `LegacyWorkflowEligibilityCompatibility` adapter,
   allowlist, and typed-profile workflow eligibility consumers removed in chunk
   14 remain absent.
+- The scanner also rejects the three transitional guide inference entry points,
+  any model-backed post-submit derivation, standalone precheck APIs,
+  caller-selectable checker triggers, per-checker public APIs, reconstructed
+  prepared handles, and compatibility aliases for any removed path.
 - The stale scanner and route tests prove the legacy worker-profile endpoint,
   activation service/schema, token-role observation fields, and actor-service
   authority checks are absent from runtime code.

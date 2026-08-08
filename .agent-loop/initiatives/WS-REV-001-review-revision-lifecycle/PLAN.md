@@ -2,6 +2,11 @@
 
 ## Current authority
 
+REV owns review/revision lifecycle behavior only. Eligible Submissions and
+packets must carry the exact WS-POL-003 compilation/component/catalogue/plan
+lineage admitted by ART/AUTH/XINT; REV neither compiles guides nor selects or
+invokes checkers.
+
 This PLAN4 refresh supersedes PLAN2/PLAN3 implementation sequencing while
 preserving their boundary correction: REV begins only at a final current
 CheckerRun `allow_review`. Historical files remain evidence, not executable

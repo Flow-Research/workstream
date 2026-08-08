@@ -1,98 +1,41 @@
-# Chunk Contract: WS-AUTH-001-12B2 — Project Setup Service Runtime Cutover
+# Chunk Contract: WS-AUTH-001-12B2 - Unified Setup Ledger Activation
 
-## Status and prerequisite
-
-Proposed and inactive. 12B, 12E, 12F4, and 12G must be merged.
-
-## Parent initiative
-
-`WS-AUTH-001` — Workstream Authorization Service
+Status: Proposed after hidden WS-POL-003-04A; inactive. Risk: L1.
 
 ## Goal
 
-Activate `project.setup_run.update` and cut both Celery setup entry points to
-the fixed `workstream.project.setup` identity after every product action they
-invoke is active for that identity.
-
-## Why this chunk exists
-
-Registering the service identity early avoids invented authority, but switching the
-call graph early would duplicate or bypass sufficiency and policy provenance.
-
-## Risk class
-
-L1
-
-## SLA
-
-P1
+Activate only `project.setup_run.update` and its fixed-service adapter for the
+reviewed unified worker manifest. POL-04B, not AUTH, owns the live one-call
+Celery call-graph cutover.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/catalogue.py
-backend/app/modules/authorization/kernel.py
-backend/app/modules/authorization/prepared.py
-backend/app/modules/authorization/runtime.py
-backend/app/modules/projects/authorization_reads.py
-backend/app/modules/projects/repository.py
-backend/app/modules/projects/service.py
-backend/app/modules/projects/setup_queue.py
-backend/app/workers/project_setup.py
-backend/tests/test_authorization.py
-backend/tests/test_projects.py
-backend/scripts/api_contract_e2e.py
-docs/spec_authorization_service.md
-docs/operations_authorization_service.md
-.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
-```
+AUTH catalogue/kernel/PREP/runtime, narrow setup-ledger authorization adapter,
+focused authorization/POL integration tests, specifications, and AUTH memory.
 
-## Not allowed changes
+## Not allowed
 
-New service identity, new product action, human route behavior, generic setup
-authority, serialized handles, ART/checker/review/contribution behavior, or
-issuer-claim compatibility.
+Worker routing, agent orchestration, model calls, policy/compiler behavior,
+human routes, generic setup authority, serialized handles, ART/checker/review/
+contribution behavior, or compatibility paths.
 
-## Acceptance criteria
+## Acceptance
 
-- 12B, 12E, 12F4, and 12G must be merged. The fixed identity has active
-  sufficiency-run, submission-policy-derive, and post-submit-policy-derive
-  memberships before either Celery entry point changes.
-- 12B2 activates `project.setup_run.update` and verifies its fixed-service
-  membership before either Celery entry point changes; no setup-ledger mutation
-  occurs before that activation.
-- `project.setup_run.update` alone covers setup context validation, task-id and
-  status changes, continuation start, output-id persistence, terminal errors,
-  and enqueue-failure persistence. Product rows retain their owning
-  12E/12F2/12F3/12F4/12G actions and provenance.
-- Celery payloads carry durable IDs/generation facts only. Each product or
-  ledger mutation resolves fresh service context and consumes fresh PREP in its
-  own root transaction after exact canonical locks.
-- No handle crosses Celery, agent calls, rollback, commit, session, or
-  transaction. Wrong/stale/cross-resource IDs, revoked service, replay, copied
-  handle, and partial failure deny or roll back without mixed provenance.
-- The fabricated human-management ActorContext is removed from the full call
-  graph, and static scanning proves no setup mutation uses it.
-- Changed authorization/project/setup-service modules remain at least 90
-  percent covered. Final pushed head SHA passes `Backend / test` and
-  `Agent Gates`.
+- Activate `project.setup_run.update` only for fixed
+  `workstream.project.setup`; no human or unrelated service receives it.
+- Bind exact project/guide/source, setup run/generation, compilation attempt,
+  canonical input/result identity, deterministic task/correlation identity,
+  expected step/transition, operation, request, session, and transaction.
+- Product projections retain their separate 12E/12F/12G actions. Setup-ledger
+  authority never authorizes a projection row or provider call.
+- The hidden POL-04A manifest proves this authority is sufficient for its exact
+  ledger transition. POL-04B alone proves live worker reachability and removal
+  of the three legacy inference calls.
+- No handle crosses Celery, commit, rollback, provider I/O, session, or
+  transaction; stale/replay/cross-resource/cross-step uses deny.
 
-## Verification commands
+## Verification and review
 
-Before start, freeze exact isolated-runner, coverage, Celery payload/rollback,
-all-pairs service denial, stale-doc, Ruff, API drill, link, and diff commands.
-
-## Required reviewers
-
-Senior engineering, QA/test, security/auth, product/ops, architecture, CI
-integrity, docs, reuse/dedup, and test delta.
-
-## Human review focus
-
-No duplicated product authority, exact setup ledger ownership, fresh per-step
-authorization, and complete removal of fabricated human authority.
-
-## Stop conditions
-
-Stop if any called product action is unavailable, a handle must cross an
-external boundary, or setup-run authority would own a product row.
+All-pairs service denial, PREP/transition binding, command manifest, POL-04A
+hidden integration, hosted coverage, and all L1 tracks. Human
+focus: ledger authority only; POL owns the cutover.

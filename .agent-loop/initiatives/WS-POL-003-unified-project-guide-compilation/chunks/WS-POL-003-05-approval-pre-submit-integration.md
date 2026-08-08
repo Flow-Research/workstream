@@ -1,40 +1,8 @@
-# Chunk Contract: WS-POL-003-05 - Approval and Pre-Submit Integration
+# Planning Parent: WS-POL-003-05 - Approval and Pre-Submit Integration
 
-Status: Proposed after 04. Risk: L1.
+Status: Split into `05A` and `05B`; this file is not executable. Risk: L1.
 
-## Goal
-
-Bind Project Manager approval to the exact immutable compilation and compile
-approved project pre-submit bindings through ART-04B1's effective-plan
-compiler while preserving its platform entries as mandatory and non-selectable.
-
-## Allowed files
-
-Project policy approval/service/repository/router/schema surfaces,
-ART-04B1 catalogue/compiler integration,
-authorization resource composition, focused tests, and specifications.
-
-## Not allowed
-
-Second registry/compiler, platform-default selection, checker execution,
-post-submit compilation, unrelated approval semantics, task/review/payment
-behavior, or in-place agent edits. This chunk does own Project Manager approval
-binding to the exact compilation, including hash binding, stale invalidation,
-and activation blocking.
-
-## Acceptance
-
-- Approval locks exact compilation/result/artifact/pre-submit hashes.
-- Platform defaults are composed only by ART and cannot be selected, repeated,
-  weakened, reordered, or downgraded.
-- Required capability gaps block approval/activation with exact operator code.
-- Catalogue/source/generation/projection changes stale prior approval.
-- Effective and pre-submit outputs commit atomically with authorization evidence.
-- The approved project plan and mandatory ART platform entries compose only
-  through the later single checker-service pre-submit command; this chunk does
-  not change ART or expose an execution route.
-
-## Verification and review
-
-Postgres approval races, stale hashes, default isolation, compiler parity,
-AUTH denial, and task-lock regression tests. Required reviewers: all L1 tracks.
+`05A` builds hidden approval/effective/pre-submit behavior over an already
+complete immutable unified result. AUTH-12F4 then activates the exact human
+approval boundary. `05B` exposes it. The post-submit proposal already exists
+before approval; approval causes no model call.

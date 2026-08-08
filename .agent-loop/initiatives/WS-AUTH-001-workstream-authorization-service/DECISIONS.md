@@ -861,3 +861,26 @@ result is usable only when its acknowledgement has the complete merged 12E
 actor, identity-link, grant, action, decision, scope, report, snapshot, and
 setup-generation custody. The legacy role-string acknowledgement is not
 authority.
+
+## D38: WS-POL-003 owns unified guide compilation; AUTH owns only gates
+
+Status: accepted planning correction on 2026-08-08.
+
+One logical/provider attempt produces one immutable result containing guide
+sufficiency plus artifact, pre-submit, and post-submit policy proposals before
+any Project Manager approval. Approval never invokes inference. Post-submit
+policy is a deterministic projection of that stored result and performs zero
+model calls.
+
+Merged AUTH-12E and AUTH-12F3 remain valid transitional authority and
+provenance foundations. Their separate inference entry points become
+unreachable at `WS-POL-003-04B` and are physically removed at
+`WS-POL-003-08`. Future AUTH chunks activate only already-hidden POL behavior:
+12I compilation request/execute, 12B2 setup-ledger mutation, 12F4 pre-submit
+approval, 12G post-submit projection, and 12H terminal activation.
+
+External I/O uses pre-I/O authorization plus a committed attempt/idempotency
+reservation. No database transaction or prepared handle spans provider I/O.
+Accepted output receives fresh result-bound PREP authority for persistence.
+This decision supersedes D35/D36 only where they describe separate future
+inference passes or AUTH ownership of product orchestration.

@@ -746,6 +746,8 @@ AUTH-04B implementation/activation [merged PR #245]
 -> ART-05A atomic Submission/binding/admission consumption
 -> XINT-05B Submission/binding activation
 -> ART-05B admission-backed Submission/API/dispatch cutover plus complete legacy precheck removal
+-> POL-06B deterministic unified post-submit projection
+-> POL-07 sole checker service port
 -> ART-06A post-submit checker snapshot/materialization
 -> ART-06B checker output binding and routing
 -> XINT-06B post-submit/output activation

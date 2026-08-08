@@ -1,27 +1,49 @@
 # Status: WS-POL-003 - Unified Project Guide Compilation
 
-Status: planning candidate under review; no implementation is active.
+Status: planning reconciliation active; no implementation chunk is active.
 
-Baseline: `origin/main` `bb77ff4a0ab61120b94d6d4763934b444c39207d`.
+Baseline: `origin/main` `99c0aaf04efd36c7ac4af4aeec2e9d810f012305`
+after merged AUTH-12F3 PR #295.
+
+## Current delivery truth
+
+- One logical model attempt per immutable guide/catalogue/setup generation is
+  the sole target design.
+- The complete accepted result contains sufficiency, artifact, pre-submit, and
+  post-submit proposals before any approval.
+- AUTH-12E and AUTH-12F3 are merged transitional separate-call
+  implementations. Their action-specific projection custody is reusable; their
+  independent inference paths must not survive POL-04B.
+- ART-04B1, 04B2, 04B3, and XINT-06A are merged. ART-04C1 is ready to proceed
+  independently through the admission sequence.
+- Remaining AUTH-12F4, 12G, 12B2, and 12H contracts require reconciliation as
+  narrow activation gates around hidden POL behavior. They are not authority
+  for another inference pipeline.
 
 ## Dependency gates
 
-| Dependency | Required before | Current status at baseline |
+| Dependency | Required before | Current status |
 |---|---|---|
-| AUTH-12F | service submission-policy projection writes | Proposed after merged 12E |
-| AUTH-12G | service post-submit projection writes | Proposed after 12F |
-| AUTH-12B2 | unified Celery call-graph cutover | Proposed after 12F/12G |
-| AUTH-12H | terminal activation integration | Proposed after 12B2 |
-| ART PLAN5 / 04A4 | 04A4 superseded; standalone precheck clean cut moved to ART-05B | PLAN5 merged through PR #273 |
-| ART-04B1 complete pre-submit catalogue/effective-plan contract | exact immutable platform plus closed project-rule projection consumed read-only | Merged through PR #276 |
-| ART-04B2/04B3 | sealed execution and immutable evidence writer used behind the pre facade | Proposed after merged ART-04B1 |
-| ART-05B | standalone precheck and legacy Submission path clean cut | Proposed after ART/XINT admission sequence |
-| CHECKER/POL post-submit catalogue | durable defaults plus registered selectable project rules | Consumed read-only/hardened by POL work |
-| CHECKER typed evaluation port | one pre call in scratch and one post call after verified storage/binding | Owned by WS-POL-003-07 |
-| XINT/AUTH compilation activation | exact PM request and fixed-service execute actions for immutable compilation custody | Not yet planned/merged |
+| ART-04B1 complete pre-submit catalogue/effective plan | POL-01 | Merged PR #276 |
+| Canonical CHECKER/POL post-submit registry | POL-01 | Present; remaining POL-002 work must be reframed as executor ownership, not inference |
+| POL-01/02 strict manifest and adapter | POL-03A | Proposed |
+| Hidden POL-03A compilation manifest | AUTH-12I compilation request/execute activation | Proposed |
+| AUTH-12I | POL-03B authorized persistence | Not yet implemented |
+| Hidden POL-04A unified worker manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
+| Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
+| Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
+| Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |
+| ART-05B + POL-07 + ART-06A/06B evidence | XINT-06B and AUTH-14 | Not yet implemented |
 
 ## Chunk state
 
-All WS-POL-003 chunks are proposed and inactive. Planning does not authorize
-implementation. The first implementation chunk requires explicit human start
-after this plan and its applicable dependencies are merged.
+POL-01 and POL-02 retain their full executable contracts. The newly split
+03A-06B and corresponding AUTH gates are reviewed planning skeletons only:
+before any is started, its contract must be expanded on then-current main with
+explicit allowed/not-allowed paths, runnable verification commands, and named
+reviewer tracks. They cannot authorize implementation in their current form.
+
+All WS-POL-003 chunks and corresponding AUTH gates are proposed and inactive.
+The current work is planning-only. The first executable candidate after this
+planning PR merges is `WS-POL-003-01`, subject to a separate explicit start and
+fresh preimplementation review.
