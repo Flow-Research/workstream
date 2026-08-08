@@ -38,8 +38,29 @@ class CheckerOutputArtifactAdmissionRequest:
     source: CommittedArtifactSource
 
 
+@final
+@dataclass(frozen=True, slots=True)
+class SubmissionBundleArtifactAdmissionRequest:
+    """One passing prepared bundle selected for durable provider intent."""
+
+    pre_submit_evidence_set_id: UUID
+    custody: object
+    replay_durable_intent_id: UUID | None
+
+    @property
+    def source(self) -> CommittedArtifactSource:
+        """Expose only the source sealed into process-local prepared custody."""
+        from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
+
+        if type(self.custody) is not SubmissionBundlePreparedCustody:
+            raise TypeError("submission bundle prepared custody is unavailable")
+        return self.custody.source
+
+
 ArtifactAdmissionRequest: TypeAlias = (
-    GuideArtifactAdmissionRequest | CheckerOutputArtifactAdmissionRequest
+    GuideArtifactAdmissionRequest
+    | CheckerOutputArtifactAdmissionRequest
+    | SubmissionBundleArtifactAdmissionRequest
 )
 
 
@@ -115,6 +136,39 @@ class GuideSourceReadAuthorityFacts:
     sha256: str
     byte_count: int
     media_type: str
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class SubmissionBundleDurableIntentAuthorityFacts:
+    """Final locked contributor and custody facts bound before durable intent."""
+
+    actor_profile_id: UUID
+    identity_link_id: UUID
+    project_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    predecessor_submission_id: UUID | None
+    predecessor_submission_version: int | None
+    pre_submit_evidence_set_id: UUID
+    prepared_generation_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_sha256: str
+    effective_policy_id: UUID
+    effective_policy_sha256: str
+    pre_submit_policy_id: UUID
+    pre_submit_policy_sha256: str
+    effective_plan_sha256: str
+    semantic_manifest_id: UUID
+    semantic_manifest_sha256: str
+    archive_sha256: str
+    archive_byte_count: int
+    media_type: str
+    storage_scheme: str
+    operation_identity: str
+    replay_durable_intent_id: UUID | None
 
 
 class ArtifactInternalResourceType(StrEnum):

@@ -237,7 +237,8 @@ class PreSubmitEvidenceResult(Base):
     __table_args__ = (
         UniqueConstraint("evidence_set_id", "result_order", name="uq_pre_submit_result_order"),
         UniqueConstraint(
-            "evidence_set_id", "definition_id",
+            "evidence_set_id",
+            "definition_id",
             name="uq_pre_submit_result_definition",
         ),
         CheckConstraint("result_order >= 0", name="ck_pre_submit_result_order"),
@@ -894,7 +895,7 @@ class ArtifactPutAttempt(Base):
         ),
         UniqueConstraint("operation_identity", name="uq_artifact_put_attempt_operation"),
         CheckConstraint(
-            "producer_request_type in ('guide', 'checker_output')",
+            "producer_request_type in ('guide', 'checker_output', 'submission_bundle')",
             name="producer_request_type",
         ),
         CheckConstraint(
@@ -907,7 +908,11 @@ class ArtifactPutAttempt(Base):
             + UUID_CHECK.format(column="producer_ref")
             + ") or (producer_request_type = 'checker_output' "
             "and producer_type = 'service_identity' "
-            "and producer_ref = 'workstream.artifact.checker_output'))",
+            "and producer_ref = 'workstream.artifact.checker_output') or "
+            "(producer_request_type = 'submission_bundle' "
+            "and producer_type = 'actor_profile' and "
+            + UUID_CHECK.format(column="producer_ref")
+            + "))",
             name="producer_identity",
         ),
         CheckConstraint(SHA256_CHECK.format(column="sha256"), name="sha256_shape"),
@@ -969,7 +974,10 @@ class ArtifactPutAttempt(Base):
             "and logical_role is null) or "
             "(producer_request_type = 'checker_output' and guide_source_item_id is null "
             "and checker_run_id is not null and task_id is not null "
-            "and octet_length(logical_role) between 1 and 100)",
+            "and octet_length(logical_role) between 1 and 100) or "
+            "(producer_request_type = 'submission_bundle' "
+            "and guide_source_item_id is null and checker_run_id is null "
+            "and task_id is not null and logical_role is null)",
             name="producer_reference",
         ),
     )
@@ -1022,6 +1030,37 @@ class ArtifactPutAttempt(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SubmissionBundleDurableIntent(Base):
+    """Immutable join fencing one passing evidence set to one provider intent."""
+
+    __tablename__ = "submission_bundle_durable_intents"
+    __table_args__ = (
+        UniqueConstraint(
+            "pre_submit_evidence_set_id",
+            name="uq_submission_bundle_intent_evidence",
+        ),
+        UniqueConstraint(
+            "put_attempt_id",
+            name="uq_submission_bundle_intent_put_attempt",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    pre_submit_evidence_set_id: Mapped[str] = mapped_column(
+        ForeignKey("pre_submit_evidence_sets.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    put_attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 
@@ -1102,8 +1141,12 @@ class ArtifactOperationReceipt(Base):
         CheckConstraint("attempt_number > 0", name="attempt_positive"),
         CheckConstraint(
             "contract_version = 2 and put_attempt_id is not null and "
-            "((guide_source_item_id is not null)::int + "
-            "(checker_run_id is not null)::int) = 1",
+            "((guide_source_item_id is not null and checker_run_id is null "
+            "and logical_role is null) or "
+            "(guide_source_item_id is null and checker_run_id is not null "
+            "and octet_length(logical_role) between 1 and 100) or "
+            "(guide_source_item_id is null and checker_run_id is null "
+            "and logical_role is null))",
             name="contract_producer_reference",
         ),
     )

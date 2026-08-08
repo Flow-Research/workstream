@@ -814,6 +814,16 @@ execution produces a process-local, generation- and predecessor-bound
 single-use capability for immediate admission continuation; a later attempt
 must re-prepare the bundle. The evidence-set ID alone is never that capability.
 
+ART-04C1 consumes that live capability and exact prepared generation inside the
+final authorization transaction. One immutable `SubmissionBundleDurableIntent`
+then joins the passing evidence set one-to-one with the generic
+`ArtifactPutAttempt`. The join is the database-recoverable producer fence for
+later verification publication; it does not duplicate evidence lineage, store
+scratch state, or create a bindable admission. Provisional capacity, the put
+attempt, authorization evidence, and this join commit before provider I/O.
+Generic observation and recovery continue from the put attempt after process
+loss.
+
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. Workstream still writes a task audit event named

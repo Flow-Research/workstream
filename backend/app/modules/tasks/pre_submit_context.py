@@ -51,34 +51,36 @@ async def load_locked_pre_submit_context(
     task_id: UUID,
     assignment_id: UUID,
     predecessor_submission_id: UUID | None,
+    include_actor_identity_locks: bool = True,
 ) -> LockedPreSubmitContext:
     """Lock and revalidate task, assignment, predecessor, guide, and policy lineage."""
-    actor_profile = await session.scalar(
-        select(ActorProfile)
-        .where(ActorProfile.id == str(actor_profile_id))
-        .with_for_update()
-    )
-    identity_link = await session.scalar(
-        select(ActorIdentityLink)
-        .where(ActorIdentityLink.id == str(identity_link_id))
-        .with_for_update()
-    )
+    actor_profile = identity_link = None
+    if include_actor_identity_locks:
+        actor_profile = await session.scalar(
+            select(ActorProfile).where(ActorProfile.id == str(actor_profile_id)).with_for_update()
+        )
+        identity_link = await session.scalar(
+            select(ActorIdentityLink)
+            .where(ActorIdentityLink.id == str(identity_link_id))
+            .with_for_update()
+        )
     task = await session.scalar(
-        select(WorkstreamTask)
-        .where(WorkstreamTask.id == str(task_id))
-        .with_for_update()
+        select(WorkstreamTask).where(WorkstreamTask.id == str(task_id)).with_for_update()
     )
     assignment = await session.scalar(
-        select(TaskAssignment)
-        .where(TaskAssignment.id == str(assignment_id))
-        .with_for_update()
+        select(TaskAssignment).where(TaskAssignment.id == str(assignment_id)).with_for_update()
     )
     if (
-        actor_profile is None
-        or actor_profile.status != "active"
-        or identity_link is None
-        or identity_link.actor_profile_id != str(actor_profile_id)
-        or identity_link.status != "active"
+        (
+            include_actor_identity_locks
+            and (
+                actor_profile is None
+                or actor_profile.status != "active"
+                or identity_link is None
+                or identity_link.actor_profile_id != str(actor_profile_id)
+                or identity_link.status != "active"
+            )
+        )
         or task is None
         or assignment is None
         or assignment.task_id != str(task_id)
@@ -121,8 +123,7 @@ async def load_locked_pre_submit_context(
             EffectiveProjectSubmissionArtifactPolicy.id
             == task.locked_effective_project_submission_artifact_policy_id,
             EffectiveProjectSubmissionArtifactPolicy.project_id == task.project_id,
-            EffectiveProjectSubmissionArtifactPolicy.guide_version
-            == task.locked_guide_version,
+            EffectiveProjectSubmissionArtifactPolicy.guide_version == task.locked_guide_version,
             EffectiveProjectSubmissionArtifactPolicy.effective_policy_hash
             == task.locked_effective_project_submission_artifact_policy_hash,
         )
