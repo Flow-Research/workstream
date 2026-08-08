@@ -1,9 +1,10 @@
 # Status: WS-POL-003 - Unified Project Guide Compilation
 
-Status: planning reconciliation active; no implementation chunk is active.
+Status: `WS-POL-003-02` implementation and internal review complete; awaiting
+external review and human merge.
 
-Baseline: `origin/main` `99c0aaf04efd36c7ac4af4aeec2e9d810f012305`
-after merged AUTH-12F3 PR #295.
+Baseline: `origin/main` `fb90237de499ec6d46ad7dfe1eee649f31857fd1`
+after merged `WS-POL-003-01` PR #299.
 
 ## Current delivery truth
 
@@ -26,7 +27,7 @@ after merged AUTH-12F3 PR #295.
 |---|---|---|
 | ART-04B1 complete pre-submit catalogue/effective plan | POL-01 | Merged PR #276 |
 | Canonical CHECKER/POL post-submit registry | POL-01 | Present; remaining POL-002 work must be reframed as executor ownership, not inference |
-| POL-01/02 strict manifest and adapter | POL-03A | Proposed |
+| POL-01/02 strict manifest and adapter | POL-03A | POL-01 merged; POL-02 awaiting external review and human merge |
 | Hidden POL-03A compilation manifest | AUTH-12I compilation request/execute activation | Proposed |
 | AUTH-12I | POL-03B authorized persistence | Not yet implemented |
 | Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
@@ -37,13 +38,11 @@ after merged AUTH-12F3 PR #295.
 
 ## Chunk state
 
-POL-01 and POL-02 retain their full executable contracts. The newly split
+POL-01 is merged and POL-02 is active. The newly split
 03A-06B and corresponding AUTH gates are reviewed planning skeletons only:
 before any is started, its contract must be expanded on then-current main with
 explicit allowed/not-allowed paths, runnable verification commands, and named
 reviewer tracks. They cannot authorize implementation in their current form.
 
-All WS-POL-003 chunks and corresponding AUTH gates are proposed and inactive.
-The current work is planning-only. The first executable candidate after this
-planning PR merges is `WS-POL-003-01`, subject to a separate explicit start and
-fresh preimplementation review.
+All later WS-POL-003 chunks and corresponding AUTH gates remain proposed and
+inactive. No later chunk starts automatically.
