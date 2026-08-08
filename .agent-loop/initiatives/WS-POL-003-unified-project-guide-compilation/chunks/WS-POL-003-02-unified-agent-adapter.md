@@ -14,8 +14,11 @@ failures. Do not rewire production Celery orchestration.
 - `backend/app/interfaces/project_agents.py`
 - `backend/app/adapters/project_agents/openai_agent_sdk.py`
 - `backend/tests/test_agent_runtime.py`
-- this chunk contract, initiative status, and review/trust evidence under
-  `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/`
+- `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/CHUNK_MAP.md`
+- `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md`
+- `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/chunks/WS-POL-003-02-unified-agent-adapter.md`
+- `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/reviews/WS-POL-003-02-internal-review-evidence.md`
+- `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/reviews/WS-POL-003-02-pr-trust-bundle.md`
 
 ## Not allowed
 
