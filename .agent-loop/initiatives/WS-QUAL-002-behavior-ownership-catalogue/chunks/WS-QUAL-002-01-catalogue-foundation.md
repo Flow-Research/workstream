@@ -36,6 +36,7 @@ P2.
 .ci/behavior-ownership/examples/**
 scripts/behavior-ownership.schema.json
 backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_behavior_ownership.py
 CONTRIBUTING.md
 docs/operations_backend_testing.md
@@ -55,6 +56,10 @@ scripts/behavior-claim.schema.json
 coverage thresholds, lane membership, skips, deselection, survivor exemptions
 authoritative inferred ownership without reviewed catalogue state
 ```
+
+The only approved lane-membership change is assigning
+`tests/test_behavior_ownership.py` to the existing `shared_foundations` lane.
+No other lane membership or execution behavior may change.
 
 ## Acceptance criteria
 

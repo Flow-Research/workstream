@@ -1,0 +1,70 @@
+{
+  "$id": "https://workstream.dev/schemas/behavior-ownership-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    { "$ref": "#/$defs/reviewed" },
+    { "$ref": "#/$defs/candidate" },
+    { "$ref": "#/$defs/structural" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["schema", "behavior_id", "status", "group", "target"],
+      "properties": {
+        "schema": { "const": "workstream.behavior-ownership.v1" },
+        "behavior_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]+$" },
+        "group": { "enum": ["auth", "artifacts", "lifecycle", "shared"] },
+        "target": { "type": "string", "pattern": "^backend/(app|scripts)/.+\\.py$" },
+        "supersedes_behavior_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]+$" }
+      }
+    },
+    "reviewed": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["callables", "tests", "outcomes", "boundaries", "reviewed_by"],
+          "properties": {
+            "status": { "const": "reviewed" },
+            "callables": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+            "tests": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+            "outcomes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+            "boundaries": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+            "reviewed_by": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "candidate": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["callables", "unresolved_reason"],
+          "properties": {
+            "status": { "const": "candidate" },
+            "callables": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+            "unresolved_reason": { "type": "string", "minLength": 1 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "structural": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "required": ["reason", "reviewed_by"],
+          "properties": {
+            "status": { "const": "structural_only" },
+            "reason": { "type": "string", "minLength": 1 },
+            "reviewed_by": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}
