@@ -209,7 +209,7 @@ async def _submission_bundle_intent_schema(database_url: str) -> dict[str, objec
                 text(
                     "select pg_get_constraintdef(oid) from pg_constraint "
                     "where conrelid='artifact_put_attempts'::regclass "
-                    "and conname='producer_request_type'"
+                    "and conname='ck_artifact_put_attempts_producer_request_type'"
                 )
             )
             constraints = {

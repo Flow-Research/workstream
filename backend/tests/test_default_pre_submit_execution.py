@@ -724,6 +724,9 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             assert intent is not None
             replay_intent_id = UUID(intent.id)
             await session.rollback()
+            assert retained is request.prepared_artifact
+            await retained.close()
+            original_prepared_closed = True
 
             replay_prepared, fresh = await fresh_checked_bundle()
             async with session.begin():
@@ -825,9 +828,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             provider.execute_committed_put.assert_not_awaited()
             provider.resume_committed_put.assert_not_awaited()
             assert selected_evidence_id == first.evidence.evidence_set_id
-            assert retained is request.prepared_artifact
-            await request.prepared_artifact.close()
-            original_prepared_closed = True
             blocked_prepared = await preparation.prepare(
                 _bytes(_archive("task.toml")), media_type="application/zip"
             )
