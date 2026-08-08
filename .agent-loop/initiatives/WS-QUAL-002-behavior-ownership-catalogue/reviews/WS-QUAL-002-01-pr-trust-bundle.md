@@ -54,7 +54,7 @@ changed.
 - `scripts.behavior_ownership` focused coverage is 91.30 percent, above 90.
 - 33 semantic-lane contract tests pass.
 - Ruff passes for all touched backend Python files.
-- Real validation reports 173 unresolved targets and `complete: false`.
+- Real validation reports 176 unresolved targets and `complete: false`.
 - Candidate generation remains `authoritative: false`, emits no empty-callable
   candidate, and separates structural-review targets.
 - Markdown links pass; stale wording passed during product/operations review.

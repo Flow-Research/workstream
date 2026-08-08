@@ -274,7 +274,19 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/submission_admission.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/submission_archive.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/submission_authorization.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/submission_custody.py"
     },
     {
       "group": "artifacts",
@@ -693,7 +705,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "9897223853b489bc7fa998910e84a9fc260849d1ea7292d796e95438094137e3",
-  "protected_base_commit": "99c0aaf04efd36c7ac4af4aeec2e9d810f012305",
+  "authority_digest": "c05cdc4b7a4c6c016000475035e47ef4437767ce5152b322cba9dceb6e992e7f",
+  "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
