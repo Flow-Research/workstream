@@ -118,6 +118,28 @@ own facts; ART receives only the typed capability and never imports AUTH-owned
 repositories. Authorization evidence, capacity reservation, and durable put
 intent commit atomically before provider I/O.
 
+### Exact 04C2 activation manifest
+
+The hidden surface is
+`POST /api/v1/tasks/{task_id}/submission-bundle-preparations`. Its body is the
+one outer ZIP (`Content-Type: application/zip`). It accepts required headers
+`X-Task-Assignment-Id`, `Idempotency-Key`, `X-Submission-Summary`, and
+`X-Contributor-Attestation`, plus optional `X-Predecessor-Submission-Id`.
+Until activation, absent or malformed selectors and authorization denial are
+concealed as the same not-found response. The bounded `202` response contains
+only `put_attempt_id`, nullable `admission_id`, `status`, and `replayed`.
+
+The preflight action is exactly `artifact.submission_bundle.prepare`. Final
+transaction-bound consumption binds every field of
+`SubmissionBundleDurableIntentAuthorityFacts`: actor profile, identity link,
+project, task, assignment, nullable predecessor ID/version, passing evidence
+set, prepared generation, locked guide/version/source snapshot, effective
+artifact policy, checker policy, effective plan, semantic manifest, archive
+digest/bytes/media type, storage scheme, operation identity, and nullable
+server-selected replay intent. Consumption precedes capacity reservation,
+durable intent creation, and provider I/O. AUTH must not accept client-selected
+resource facts, serialize handles, or activate any additional action.
+
 ART-05 requires a new human authorization decision for `submission.create` and
 a separately prepared fixed-service capability for
 ActionId `artifact.submission.binding.create`, mapped to PermissionId

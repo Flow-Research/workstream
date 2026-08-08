@@ -132,10 +132,12 @@ exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` merged through
 PR #291 as `8f516e6d`. It executes the project-policy continuation through that
 same plan and sealed tree and persists one immutable platform-plus-project
 evidence set. AUTH `WS-XINT-002-06A` merged through PR #293 as `1ddb941e` and
-activated only the mandatory fixed pre-submit materializer. ART-04C1 then
-merged through PR #296 and persists the evidence-linked durable put intent.
-The dependency-ordered successor is 04C2; open pull requests determine whether
-it is currently under review.
+activated only the mandatory fixed pre-submit materializer. ART-04C1 merged
+through PR #296 as `6e1d5c9f` and installed the evidence-bound durable put
+intent. ART-04C2 is active and owns verified ready-admission publication plus
+the still-hidden, fail-closed continuous preparation composition. AUTH action
+activation, admission consumption, Submission creation, and binding remain out
+of scope.
 
 ## Gate
 

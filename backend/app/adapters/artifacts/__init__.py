@@ -27,6 +27,10 @@ from app.modules.artifacts.preparation import (
     ArtifactScratchManager,
 )
 from app.modules.artifacts.submission_archive import SubmissionArchiveLimits
+from app.modules.artifacts.submission_authorization import (
+    SubmissionBundlePreparationAuthorization,
+)
+from app.modules.artifacts.submission_preparation import SubmissionBundlePreparationCommand
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
 )
@@ -207,6 +211,120 @@ def get_guide_artifact_ingest_command(
 
     service = GuideArtifactIngestService(runtime, authority)
     return PreparedGuideArtifactIngestCommand(service, authority)
+
+
+def get_submission_bundle_preparation_authorization():
+    """Keep contributor preparation fail closed until XINT-05A activation."""
+    from app.modules.artifacts.submission_authorization import (
+        DenySubmissionBundlePreparationAuthorization,
+    )
+
+    return DenySubmissionBundlePreparationAuthorization()
+
+
+def get_submission_bundle_preparation_command(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    internal_authority: Annotated[
+        ArtifactInternalAuthority,
+        Depends(get_artifact_internal_authority),
+    ],
+    authority: Annotated[
+        SubmissionBundlePreparationAuthorization,
+        Depends(get_submission_bundle_preparation_authorization),
+    ],
+) -> SubmissionBundlePreparationCommand:
+    """Compose the sole hidden contributor preparation path from closed ART ports."""
+    from app.modules.artifacts.authorization import (
+        PreparedPreSubmitMaterializationAuthorization,
+    )
+    from app.modules.artifacts.service import (
+        ArtifactAdmissionService,
+        ArtifactStorageOrchestrator,
+        artifact_storage_namespace_spec,
+    )
+    from app.modules.artifacts.submission_admission import SubmissionBundleDurablePutService
+    from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
+    from app.modules.artifacts.submission_materialization import (
+        PreparedBundleMaterializationService,
+        PreparedBundlePreSubmitEvidenceService,
+    )
+    from app.modules.artifacts.submission_preparation import (
+        PreparedSubmissionBundlePreparationCommand,
+        SubmissionBundlePreparationRuntime,
+    )
+
+    settings = request.app.state.settings
+    request_id, correlation_id = (UUID(value) for value in request_ids(request))
+
+    @asynccontextmanager
+    async def runtime():
+        bootstrap = create_artifact_store_bootstrap(settings)
+        manager = create_artifact_scratch_manager(settings)
+        materialization_authority = PreparedPreSubmitMaterializationAuthorization(
+            session,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+        try:
+            namespace = artifact_storage_namespace_spec(settings, bootstrap)
+            store = bootstrap.initialize_after_namespace_claim(
+                ArtifactStoreNamespaceClaim(
+                    adapter_identity=bootstrap.identity,
+                    namespace_identity=bootstrap.namespace_identity,
+                    namespace_fingerprint=namespace.namespace_fingerprint,
+                )
+            )
+            preparation = ArtifactPreparationService(manager)
+            catalogue = request.app.state.pre_submission_checker_catalogue
+            storage_schemes = {"local": "local", "s3_compatible": "s3"}
+            try:
+                storage_scheme = storage_schemes[settings.artifact_store_backend]
+            except KeyError as exc:
+                raise RuntimeError("unsupported artifact store backend") from exc
+            materialization = PreparedBundleMaterializationService(
+                authorization=materialization_authority,
+                preparation=preparation,
+                archive_inspector=SubmissionArchiveInspector(
+                    submission_archive_limits(settings)
+                ),
+                catalogue=catalogue,
+                storage_scheme=storage_scheme,
+            )
+            admission = ArtifactAdmissionService(session, settings, namespace)
+            storage = ArtifactStorageOrchestrator(
+                session,
+                store,
+                namespace,
+                settings,
+                internal_authority,
+            )
+            yield SubmissionBundlePreparationRuntime(
+                preparation=preparation,
+                inspector=SubmissionArchiveInspector(submission_archive_limits(settings)),
+                catalogue=catalogue,
+                materialization=materialization,
+                evidence=PreparedBundlePreSubmitEvidenceService(
+                    session=session,
+                    materialization=materialization,
+                ),
+                durable_put=SubmissionBundleDurablePutService(
+                    session=session,
+                    admission=admission,
+                    storage=storage,
+                    authorization=authority,
+                ),
+            )
+        finally:
+            materialization_authority.close()
+            manager.close()
+            bootstrap.close()
+
+    return PreparedSubmissionBundlePreparationCommand(
+        session=session,
+        authority=authority,
+        runtime_factory=runtime,
+    )
 
 
 async def cleanup_stale_artifact_scratch(settings: Settings) -> int:

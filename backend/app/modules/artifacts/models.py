@@ -149,6 +149,10 @@ class PreSubmitEvidenceSet(Base):
             name="ck_pre_submit_evidence_checker_policy_sha256",
         ),
         CheckConstraint(
+            SHA256_CHECK.format(column="locked_policy_context_hash"),
+            name="ck_pre_submit_evidence_policy_context_sha256",
+        ),
+        CheckConstraint(
             SHA256_CHECK.format(column="result_manifest_sha256"),
             name="ck_pre_submit_evidence_result_manifest_sha256",
         ),
@@ -218,6 +222,7 @@ class PreSubmitEvidenceSet(Base):
         ForeignKey("pre_submit_checker_policies.id", ondelete="RESTRICT"), nullable=False
     )
     locked_checker_policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_policy_context_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     effective_plan_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     catalogue_id: Mapped[str] = mapped_column(String(160), nullable=False)
     catalogue_version: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -1059,6 +1064,110 @@ class SubmissionBundleDurableIntent(Base):
         nullable=False,
         index=True,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SubmissionBundleAdmission(Base):
+    """Immutable verified submission-bundle lineage awaiting TASK consumption."""
+
+    __tablename__ = "submission_bundle_admissions"
+    __table_args__ = (
+        UniqueConstraint("durable_intent_id", name="uq_submission_bundle_admission_intent"),
+        UniqueConstraint(
+            "pre_submit_evidence_set_id", name="uq_submission_bundle_admission_evidence"
+        ),
+        UniqueConstraint(
+            "verification_receipt_id", name="uq_submission_bundle_admission_verification"
+        ),
+        CheckConstraint("status in ('ready','consumed','stale')", name="status"),
+        CheckConstraint(
+            SHA256_CHECK.format(column="locked_policy_context_hash"),
+            name="policy_context_hash",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="semantic_manifest_sha256"), name="manifest_sha256"
+        ),
+        CheckConstraint(SHA256_CHECK.format(column="archive_sha256"), name="archive_sha256"),
+        CheckConstraint("archive_byte_count >= 0", name="archive_size"),
+        CheckConstraint(
+            "(predecessor_submission_id is null) = (predecessor_submission_version is null)",
+            name="predecessor_shape",
+        ),
+        CheckConstraint(
+            "((put_operation_receipt_id is not null)::int + "
+            "(put_observation_receipt_id is not null)::int) = 1",
+            name="write_receipt_shape",
+        ),
+        CheckConstraint(
+            "(status='ready' and consumed_at is null and consumed_by_submission_id is null "
+            "and stale_at is null and stale_reason is null) or "
+            "(status='consumed' and consumed_at is not null and "
+            "consumed_by_submission_id is not null and stale_at is null and stale_reason is null) or "
+            "(status='stale' and consumed_at is null and consumed_by_submission_id is null "
+            "and stale_at is not null and octet_length(stale_reason) between 1 and 500)",
+            name="terminal_shape",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    durable_intent_id: Mapped[str] = mapped_column(
+        ForeignKey("submission_bundle_durable_intents.id", ondelete="RESTRICT"), nullable=False
+    )
+    pre_submit_evidence_set_id: Mapped[str] = mapped_column(
+        ForeignKey("pre_submit_evidence_sets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    put_attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False
+    )
+    artifact_content_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    verified_replica_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), nullable=False
+    )
+    verification_receipt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_verification_receipts.id", ondelete="RESTRICT"), nullable=False
+    )
+    put_operation_receipt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_operation_receipts.id", ondelete="RESTRICT")
+    )
+    put_observation_receipt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_put_observation_receipts.id", ondelete="RESTRICT")
+    )
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    identity_link_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_identity_links.id", ondelete="RESTRICT"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    task_id: Mapped[str] = mapped_column(
+        ForeignKey("workstream_tasks.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    assignment_id: Mapped[str] = mapped_column(
+        ForeignKey("task_assignments.id", ondelete="RESTRICT"), nullable=False
+    )
+    predecessor_submission_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submissions.id", ondelete="RESTRICT")
+    )
+    predecessor_submission_version: Mapped[int | None] = mapped_column(Integer)
+    locked_policy_context_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    semantic_manifest_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    semantic_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    archive_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    archive_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ready", index=True)
+    ready_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_by_submission_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submissions.id", ondelete="RESTRICT")
+    )
+    stale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stale_reason: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

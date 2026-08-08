@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0060_submission_bundle_intent"
+HEAD_REVISION = "0061_submission_admission"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -290,6 +290,74 @@ def test_0060_submission_bundle_intent_empty_round_trip(
         "submission_bundle_durable_intents_no_truncate",
     }
     assert "artifact_receipt_producer_reference" in installed["receipt_triggers"]
+
+
+async def _submission_bundle_admission_schema(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            table_exists = bool(
+                await connection.scalar(
+                    text("select to_regclass('submission_bundle_admissions') is not null")
+                )
+            )
+            constraints = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select conname from pg_constraint where conrelid="
+                            "to_regclass('submission_bundle_admissions')"
+                        )
+                    )
+                ).all()
+            )
+            triggers = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and "
+                            "tgrelid=to_regclass('submission_bundle_admissions')"
+                        )
+                    )
+                ).all()
+            )
+            return {"table_exists": table_exists, "constraints": constraints, "triggers": triggers}
+    finally:
+        await engine.dispose()
+
+
+def test_0061_submission_bundle_admission_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0060_submission_bundle_intent")
+            prior = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            installed = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.downgrade(config, "0060_submission_bundle_intent")
+            restored = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            repeated = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert prior == restored == {"table_exists": False, "constraints": set(), "triggers": set()}
+    assert installed == repeated
+    assert {
+        "uq_submission_bundle_admission_intent",
+        "uq_submission_bundle_admission_evidence",
+        "uq_submission_bundle_admission_verification",
+        "ck_submission_bundle_admissions_terminal_shape",
+        "ck_submission_bundle_admissions_write_receipt_shape",
+    }.issubset(installed["constraints"])
+    assert installed["triggers"] == {
+        "submission_bundle_admission_verified_lineage",
+        "submission_bundle_admission_lineage",
+        "submission_bundle_admission_delete",
+    }
 
 
 async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:

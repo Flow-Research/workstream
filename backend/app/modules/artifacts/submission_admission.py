@@ -43,6 +43,7 @@ class SubmissionBundleDurablePutResult:
     operation_identity: str
     status: str
     replayed: bool
+    admission_id: UUID | None
 
 
 class SubmissionBundleDurablePutService:
@@ -113,6 +114,35 @@ class SubmissionBundleDurablePutService:
             await prepared.close()
             raise RuntimeError("submission bundle durable transaction is still active")
         try:
+            from app.modules.artifacts.submission_admission_publication import (
+                current_submission_bundle_admission_id,
+            )
+
+            admission_id = None
+            if admission.replayed:
+                async with self._session.begin():
+                    admission_id = await current_submission_bundle_admission_id(
+                        self._session,
+                        put_attempt_id=admission.attempt_id,
+                    )
+            if admission_id is not None:
+                return SubmissionBundleDurablePutResult(
+                    put_attempt_id=admission.attempt_id,
+                    pre_submit_evidence_set_id=evidence_set_id,
+                    operation_identity=admission.operation_identity,
+                    status="ready",
+                    replayed=True,
+                    admission_id=admission_id,
+                )
+            if admission.replayed and admission.status == "object_confirmed":
+                return SubmissionBundleDurablePutResult(
+                    put_attempt_id=admission.attempt_id,
+                    pre_submit_evidence_set_id=evidence_set_id,
+                    operation_identity=admission.operation_identity,
+                    status="object_confirmed",
+                    replayed=True,
+                    admission_id=None,
+                )
             if admission.replayed:
                 status = await self._storage.resume_committed_put(
                     attempt_id=admission.attempt_id,
@@ -123,12 +153,18 @@ class SubmissionBundleDurablePutService:
                     attempt_id=admission.attempt_id,
                     source=prepared.committed_source,
                 )
+            async with self._session.begin():
+                admission_id = await current_submission_bundle_admission_id(
+                    self._session,
+                    put_attempt_id=admission.attempt_id,
+                )
             return SubmissionBundleDurablePutResult(
                 put_attempt_id=admission.attempt_id,
                 pre_submit_evidence_set_id=evidence_set_id,
                 operation_identity=admission.operation_identity,
                 status=status,
                 replayed=admission.replayed,
+                admission_id=admission_id,
             )
         finally:
             await prepared.close()

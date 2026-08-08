@@ -138,6 +138,10 @@ class ArtifactAdmissionUsageResponse(StrictOperatorResponse):
     limit_bytes: int
     remaining_bytes: int
     configured_limit_bytes: int
+    unbound_ready_count: int
+    unbound_ready_bytes: int
+    stale_count: int
+    stale_bytes: int
     cas_version: int
     updated_at: datetime
 

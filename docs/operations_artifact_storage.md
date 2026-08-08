@@ -47,6 +47,14 @@ HTTP response and audit identifiers.
 It never enumerates producer-scope identifiers. It is read-only: it cannot
 release charges, change configuration, or create recovery work.
 
+Each bounded scope also reports submission-bundle pressure as
+`unbound_ready_count`/`unbound_ready_bytes` and
+`stale_count`/`stale_bytes`. Ready admissions are verified but not yet consumed
+by a Submission; stale admissions proved incompatible at a later consumption
+boundary. Both remain charged under v0.1 capacity limits. Use these projections
+to distinguish abandoned or context-invalid bundles from ordinary artifact
+growth; there is no operator deletion or release action.
+
 Every successful admission transaction emits
 `workstream_artifact_admission_pressure_total`
 for each derived deployment, project, producer, and task scope. The bounded
@@ -63,6 +71,11 @@ Treat a critical or exhausted scope as an incident. Identify whether growth is
 expected, confirm that its parent scopes have capacity, and compare the
 configured limit with the persisted scope limit. Do not delete admission
 charges or edit counters in PostgreSQL.
+
+Migration `0061_submission_admission` installs immutable ready-admission
+custody. Downgrade is intentionally refused once admission rows exist; rollback
+planning must preserve those facts and move forward with a corrective migration
+rather than deleting or bypassing them.
 
 ## Quota expansion and rollback
 

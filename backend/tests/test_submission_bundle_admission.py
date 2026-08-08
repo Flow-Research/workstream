@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
@@ -22,19 +24,57 @@ from app.modules.artifacts.schemas import (
 )
 from app.modules.artifacts.submission_authorization import (
     DenySubmissionBundlePreparedAuthorization,
+    DenySubmissionBundlePreparationAuthorization,
 )
 from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutRequest,
     SubmissionBundleDurablePutService,
 )
+from app.modules.artifacts.submission_admission_publication import (
+    SubmissionBundleAdmissionPublicationError,
+    SubmissionBundleAdmissionPublisher,
+)
 from app.modules.artifacts.service import ArtifactAdmissionService
 from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
+from app.modules.artifacts.submission_preparation import (
+    PreparedSubmissionBundlePreparationCommand,
+    SubmissionBundlePreparationRejected,
+)
+from app.interfaces.artifact_operations import SubmissionBundlePreparationRequest
+from app.modules.authorization.runtime import (
+    ActorKind,
+    ActorStatus,
+    HumanAuthorizationContext,
+    IdentityLinkStatus,
+)
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
+from app.main import create_app
+from app.modules.tasks.router import router as tasks_router
 
 
 def _sha(character: str) -> str:
     return "sha256:" + character * 64
+
+
+def test_submission_bundle_preparation_route_is_hidden() -> None:
+    app = create_app()
+    route = next(
+        route
+        for route in tasks_router.routes
+        if getattr(route, "name", None) == "prepare_submission_bundle"
+    )
+    assert route.include_in_schema is False
+    mounted = app.url_path_for("prepare_submission_bundle", task_id=str(uuid4()))
+    assert str(mounted).startswith("/api/v1/tasks/")
+    assert str(mounted).endswith("/submission-bundle-preparations")
+    assert route.methods == {"POST"}
+    assert "/api/v1/tasks/{task_id}/submission-bundle-preparations" not in app.openapi()["paths"]
+
+
+@asynccontextmanager
+async def _transaction():
+    yield
 
 
 async def _prepared(tmp_path):
@@ -47,6 +87,87 @@ async def _prepared(tmp_path):
         media_type="application/zip",
     )
     return manager, prepared
+
+
+@pytest.mark.asyncio
+async def test_hidden_preparation_denies_before_reading_uploaded_bytes() -> None:
+    reads = 0
+
+    async def bytes_source():
+        nonlocal reads
+        reads += 1
+        yield b"PK\x03\x04must-not-be-read"
+
+    def runtime_factory():
+        raise AssertionError("runtime must not open before contributor preflight")
+
+    command = PreparedSubmissionBundlePreparationCommand(
+        session=SimpleNamespace(),
+        authority=DenySubmissionBundlePreparationAuthorization(),
+        runtime_factory=runtime_factory,
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await command.prepare(
+            SubmissionBundlePreparationRequest(
+                authorization_context=HumanAuthorizationContext(
+                    actor_profile_id=uuid4(),
+                    actor_kind=ActorKind.HUMAN,
+                    actor_status=ActorStatus.ACTIVE,
+                    identity_link_id=uuid4(),
+                    identity_link_status=IdentityLinkStatus.ACTIVE,
+                    request_id=uuid4(),
+                    correlation_id=uuid4(),
+                ),
+                task_id=uuid4(),
+                assignment_id=uuid4(),
+                predecessor_submission_id=None,
+                idempotency_key=uuid4(),
+                summary="summary",
+                contributor_attestation="attestation",
+                media_type="application/zip",
+                byte_source=bytes_source(),
+            )
+        )
+    assert reads == 0
+
+
+@pytest.mark.asyncio
+async def test_hidden_preparation_closes_authority_after_invalid_media_type() -> None:
+    authority = SimpleNamespace(
+        preflight=AsyncMock(),
+        close=Mock(),
+    )
+    command = PreparedSubmissionBundlePreparationCommand(
+        session=SimpleNamespace(),
+        authority=authority,
+        runtime_factory=Mock(side_effect=AssertionError("runtime must stay closed")),
+    )
+    with pytest.raises(
+        SubmissionBundlePreparationRejected,
+        match="submission_bundle_media_type_invalid",
+    ):
+        await command.prepare(
+            SubmissionBundlePreparationRequest(
+                authorization_context=HumanAuthorizationContext(
+                    actor_profile_id=uuid4(),
+                    actor_kind=ActorKind.HUMAN,
+                    actor_status=ActorStatus.ACTIVE,
+                    identity_link_id=uuid4(),
+                    identity_link_status=IdentityLinkStatus.ACTIVE,
+                    request_id=uuid4(),
+                    correlation_id=uuid4(),
+                ),
+                task_id=uuid4(),
+                assignment_id=uuid4(),
+                predecessor_submission_id=None,
+                idempotency_key=uuid4(),
+                summary="summary",
+                contributor_attestation="attestation",
+                media_type="application/json",
+                byte_source=artifact_byte_stream(b"{}"),
+            )
+        )
+    authority.close.assert_called_once_with()
 
 
 def _capability(prepared, evidence_set_id):
@@ -63,6 +184,225 @@ def _capability(prepared, evidence_set_id):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("observed_confirmation", [False, True])
+async def test_verified_submission_lineage_publishes_one_ready_admission(
+    observed_confirmation: bool,
+) -> None:
+    attempt_id = str(uuid4())
+    replica_id = str(uuid4())
+    content_id = str(uuid4())
+    job_id = str(uuid4())
+    receipt_id = str(uuid4())
+    evidence_id = str(uuid4())
+    digest = _sha("1")
+    evidence = SimpleNamespace(
+        id=evidence_id,
+        terminal_status="passed",
+        eligible=True,
+        archive_sha256=digest,
+        archive_byte_count=25,
+        actor_profile_id=str(uuid4()),
+        identity_link_id=str(uuid4()),
+        project_id=str(uuid4()),
+        task_id=str(uuid4()),
+        assignment_id=str(uuid4()),
+        predecessor_submission_id=None,
+        predecessor_submission_version=None,
+        semantic_manifest_id=str(uuid4()),
+        semantic_manifest_sha256=_sha("2"),
+        guide_id=str(uuid4()),
+        guide_version="1",
+        source_snapshot_id=str(uuid4()),
+        source_snapshot_sha256=_sha("3"),
+        locked_guide_sha256=_sha("4"),
+        effective_policy_id=str(uuid4()),
+        locked_artifact_policy_sha256=_sha("5"),
+        pre_submit_policy_id=str(uuid4()),
+        locked_checker_policy_sha256=_sha("6"),
+        effective_plan_sha256=_sha("7"),
+        locked_policy_context_hash=_sha("8"),
+    )
+    attempt = SimpleNamespace(
+        id=attempt_id,
+        producer_request_type="submission_bundle",
+        producer_ref=evidence.actor_profile_id,
+        project_id=evidence.project_id,
+        task_id=evidence.task_id,
+        sha256=digest,
+        byte_count=25,
+        media_type="application/zip",
+        replica_id=replica_id,
+        receipt_id=None if observed_confirmation else str(uuid4()),
+    )
+    job = SimpleNamespace(
+        id=job_id,
+        originating_put_attempt_id=attempt_id,
+        replica_id=replica_id,
+        execution_generation=2,
+    )
+    intent = SimpleNamespace(id=str(uuid4()), pre_submit_evidence_set_id=evidence_id)
+    replica = SimpleNamespace(
+        id=replica_id,
+        content_id=content_id,
+        verification_state="verified",
+        availability_state="available",
+        integrity_state="valid",
+    )
+    content = SimpleNamespace(id=content_id, sha256=digest, byte_count=25)
+    verification = SimpleNamespace(
+        id=receipt_id,
+        verification_job_id=job_id,
+        execution_generation=2,
+        outcome="verified",
+        observed_sha256=digest,
+        observed_byte_count=25,
+    )
+    put_receipt = SimpleNamespace(id=str(uuid4()) if observed_confirmation else attempt.receipt_id)
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        scalar=AsyncMock(
+            side_effect=[
+                job,
+                attempt,
+                intent,
+                None,
+                evidence,
+                replica,
+                verification,
+                content,
+                put_receipt,
+                now,
+            ]
+        ),
+        add=Mock(),
+        flush=AsyncMock(),
+    )
+
+    admission = await SubmissionBundleAdmissionPublisher(session).publish_verified(
+        verification_job_id=job_id,
+        verification_receipt_id=receipt_id,
+    )
+
+    assert admission is not None
+    assert admission.status == "ready"
+    assert admission.pre_submit_evidence_set_id == evidence_id
+    assert admission.artifact_content_id == content_id
+    assert admission.put_operation_receipt_id == (
+        None if observed_confirmation else attempt.receipt_id
+    )
+    assert admission.put_observation_receipt_id == (
+        put_receipt.id if observed_confirmation else None
+    )
+    session.add.assert_called_once_with(admission)
+
+
+@pytest.mark.asyncio
+async def test_observed_confirmed_write_receipt_is_supported() -> None:
+    attempt = SimpleNamespace(
+        id=str(uuid4()),
+        receipt_id=None,
+        sha256=_sha("1"),
+        byte_count=25,
+    )
+    observation = SimpleNamespace(id=str(uuid4()))
+    session = SimpleNamespace(scalar=AsyncMock(return_value=observation))
+
+    operation_id, observation_id = await SubmissionBundleAdmissionPublisher(
+        session
+    )._write_receipt_ids(attempt)
+
+    assert operation_id is None
+    assert observation_id == observation.id
+
+
+@pytest.mark.asyncio
+async def test_verified_guide_content_does_not_publish_submission_admission() -> None:
+    job = SimpleNamespace(id=str(uuid4()), originating_put_attempt_id=str(uuid4()))
+    attempt = SimpleNamespace(id=job.originating_put_attempt_id, producer_request_type="guide")
+    session = SimpleNamespace(
+        scalar=AsyncMock(side_effect=[job, attempt]),
+        add=Mock(),
+    )
+
+    result = await SubmissionBundleAdmissionPublisher(session).publish_verified(
+        verification_job_id=job.id,
+        verification_receipt_id=str(uuid4()),
+    )
+
+    assert result is None
+    session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_unverified_or_mismatched_lineage_is_not_publishable() -> None:
+    digest = _sha("1")
+    evidence = SimpleNamespace(
+        id=str(uuid4()),
+        terminal_status="failed",
+        eligible=False,
+        archive_sha256=digest,
+        archive_byte_count=25,
+        actor_profile_id=str(uuid4()),
+        project_id=str(uuid4()),
+        task_id=str(uuid4()),
+    )
+    attempt = SimpleNamespace(
+        id=str(uuid4()),
+        sha256=digest,
+        byte_count=25,
+        producer_ref=evidence.actor_profile_id,
+        project_id=evidence.project_id,
+        task_id=evidence.task_id,
+        media_type="application/zip",
+        replica_id=str(uuid4()),
+    )
+    job = SimpleNamespace(
+        id=str(uuid4()),
+        originating_put_attempt_id=attempt.id,
+        replica_id=attempt.replica_id,
+        execution_generation=1,
+    )
+    replica = SimpleNamespace(
+        id=attempt.replica_id,
+        content_id=str(uuid4()),
+        verification_state="verified",
+        availability_state="available",
+        integrity_state="valid",
+    )
+    content = SimpleNamespace(id=replica.content_id, sha256=digest, byte_count=25)
+    receipt = SimpleNamespace(
+        verification_job_id=job.id,
+        execution_generation=1,
+        outcome="integrity_mismatch",
+        observed_sha256=digest,
+        observed_byte_count=25,
+    )
+
+    assert not SubmissionBundleAdmissionPublisher._matches_verified_lineage(
+        evidence, attempt, job, replica, content, receipt
+    )
+    intent = SimpleNamespace(id=str(uuid4()), pre_submit_evidence_set_id=evidence.id)
+    session = SimpleNamespace(
+        scalar=AsyncMock(
+            side_effect=[job, attempt, intent, None, evidence, replica, receipt, content]
+        ),
+        add=Mock(),
+        flush=AsyncMock(),
+    )
+    attempt.producer_request_type = "submission_bundle"
+    with pytest.raises(
+        SubmissionBundleAdmissionPublicationError,
+        match="verified submission bundle lineage does not match",
+    ):
+        await SubmissionBundleAdmissionPublisher(session).publish_verified(
+            verification_job_id=job.id,
+            verification_receipt_id=str(uuid4()),
+        )
+    session.add.assert_not_called()
+    session.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_durable_put_admits_in_transaction_then_publishes(tmp_path) -> None:
     manager, prepared = await _prepared(tmp_path)
     evidence_set_id = uuid4()
@@ -72,6 +412,8 @@ async def test_durable_put_admits_in_transaction_then_publishes(tmp_path) -> Non
         sync_session=SimpleNamespace(get_transaction=lambda: transaction),
         in_nested_transaction=lambda: False,
         in_transaction=lambda: state["transaction"],
+        scalar=AsyncMock(return_value=None),
+        begin=_transaction,
     )
     admission_result = ArtifactAdmissionResult(
         attempt_id=uuid4(),
@@ -278,6 +620,8 @@ async def test_fresh_checked_custody_resumes_existing_committed_intent(tmp_path)
             sync_session=SimpleNamespace(get_transaction=lambda: SimpleNamespace(is_active=True)),
             in_nested_transaction=lambda: False,
             in_transaction=lambda: state["transaction"],
+            scalar=AsyncMock(return_value=None),
+            begin=_transaction,
         ),
         admission=SimpleNamespace(admit=admit),
         storage=storage,
@@ -301,6 +645,44 @@ async def test_fresh_checked_custody_resumes_existing_committed_intent(tmp_path)
         assert result.replayed is True
         storage.resume_committed_put.assert_awaited_once()
         storage.execute_committed_put.assert_not_awaited()
+    finally:
+        await prepared.close()
+        manager.close()
+
+
+@pytest.mark.asyncio
+async def test_object_confirmed_replay_does_not_reclaim_provider_work(tmp_path) -> None:
+    manager, prepared = await _prepared(tmp_path)
+    storage = SimpleNamespace(
+        execute_committed_put=AsyncMock(),
+        resume_committed_put=AsyncMock(),
+    )
+    service = SubmissionBundleDurablePutService(
+        session=SimpleNamespace(
+            in_transaction=lambda: False,
+            scalar=AsyncMock(return_value=None),
+            begin=_transaction,
+        ),
+        admission=SimpleNamespace(),
+        storage=storage,
+        authorization=object(),
+    )
+    try:
+        result = await service.publish_after_commit(
+            prepared,
+            uuid4(),
+            ArtifactAdmissionResult(
+                attempt_id=uuid4(),
+                status="object_confirmed",
+                operation_identity=_sha("3"),
+                request_digest=_sha("4"),
+                charge_ids=(uuid4(),),
+                replayed=True,
+            ),
+        )
+        assert result.status == "object_confirmed"
+        storage.execute_committed_put.assert_not_awaited()
+        storage.resume_committed_put.assert_not_awaited()
     finally:
         await prepared.close()
         manager.close()
