@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import Select, and_, or_, select
+from sqlalchemy import Select, and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -14,15 +14,19 @@ from app.interfaces.artifact_operations import (
     ArtifactBindingResourceType,
 )
 from app.modules.artifacts.models import (
+    ArtifactAdmissionCharge,
     ArtifactAdmissionScope,
     ArtifactBinding,
     ArtifactOperationReceipt,
     ArtifactPutAttempt,
+    ArtifactPutAttemptCharge,
     ArtifactPutObservationReceipt,
     ArtifactRecoveryAttempt,
     ArtifactReplica,
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
+    SubmissionBundleAdmission,
+    SubmissionBundleDurableIntent,
 )
 from app.modules.artifacts.metrics import ArtifactAdmissionMetrics
 from app.modules.artifacts.schemas import (
@@ -513,6 +517,48 @@ class ArtifactOperatorService:
             ).all()
         )
         configured = self._configured_limits()
+        scope_keys = [(row.scope_type, row.scope_id) for row in rows[:limit]]
+        admission_usage: dict[tuple[str, str, str], tuple[int, int]] = {}
+        if scope_keys:
+            usage_rows = await self._session.execute(
+                select(
+                    ArtifactAdmissionCharge.scope_type,
+                    ArtifactAdmissionCharge.scope_id,
+                    SubmissionBundleAdmission.status,
+                    func.count(SubmissionBundleAdmission.id),
+                    func.coalesce(func.sum(ArtifactAdmissionCharge.byte_count), 0),
+                )
+                .join(
+                    ArtifactPutAttemptCharge,
+                    ArtifactPutAttemptCharge.charge_id == ArtifactAdmissionCharge.id,
+                )
+                .join(
+                    SubmissionBundleDurableIntent,
+                    SubmissionBundleDurableIntent.put_attempt_id
+                    == ArtifactPutAttemptCharge.attempt_id,
+                )
+                .join(
+                    SubmissionBundleAdmission,
+                    SubmissionBundleAdmission.durable_intent_id
+                    == SubmissionBundleDurableIntent.id,
+                )
+                .where(
+                    tuple_(
+                        ArtifactAdmissionCharge.scope_type,
+                        ArtifactAdmissionCharge.scope_id,
+                    ).in_(scope_keys),
+                    SubmissionBundleAdmission.status.in_(("ready", "stale")),
+                )
+                .group_by(
+                    ArtifactAdmissionCharge.scope_type,
+                    ArtifactAdmissionCharge.scope_id,
+                    SubmissionBundleAdmission.status,
+                )
+            )
+            admission_usage = {
+                (scope_type, scope_id, admission_status): (int(count), int(byte_count))
+                for scope_type, scope_id, admission_status, count, byte_count in usage_rows
+            }
         return self._result(
             rows,
             limit,
@@ -523,6 +569,18 @@ class ArtifactOperatorService:
                 "limit_bytes": row.limit_bytes,
                 "remaining_bytes": row.limit_bytes - row.counted_bytes,
                 "configured_limit_bytes": configured[row.scope_type],
+                "unbound_ready_count": admission_usage.get(
+                    (row.scope_type, row.scope_id, "ready"), (0, 0)
+                )[0],
+                "unbound_ready_bytes": admission_usage.get(
+                    (row.scope_type, row.scope_id, "ready"), (0, 0)
+                )[1],
+                "stale_count": admission_usage.get(
+                    (row.scope_type, row.scope_id, "stale"), (0, 0)
+                )[0],
+                "stale_bytes": admission_usage.get(
+                    (row.scope_type, row.scope_id, "stale"), (0, 0)
+                )[1],
                 "cas_version": row.cas_version,
                 "updated_at": row.updated_at,
             },

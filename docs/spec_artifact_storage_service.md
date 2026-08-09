@@ -363,12 +363,13 @@ get_verification_job/get_recovery_attempt/list_audit_events/admission_usage(...)
 ArtifactOperatorRecoveryPort.retry_verification(ArtifactRecoveryRequest)
 ```
 
-Every durable mutation request in this port family except the unchanged
-Operator recovery request is a process-local,
-non-Pydantic value carrying one opaque `PreparedAuthorizationHandle`. The
-typed method fixes the expected action; requests contain no caller-selected
-ActionId, generic resource context, or facts map. Handles never enter route
-schemas, outbox/Celery payloads, provider interfaces, or serialized contracts.
+Every protected durable mutation in this port family consumes one opaque,
+process-local `PreparedAuthorizationHandle` at its transaction boundary. The
+hidden HTTP submission-bundle preparation request carries authenticated request
+context rather than a prepared handle; ART obtains separate prepared handles
+immediately before materialization and durable put intent. The typed methods fix
+their expected actions, and handles never enter route schemas, outbox/Celery
+payloads, provider interfaces, or serialized contracts.
 
 `GuideArtifactIngestRequest` contains prepared authority, exact project, guide,
 guide-source snapshot and item IDs, logical role, media type, and authorized
@@ -377,9 +378,9 @@ reference. `GuideSourceMaterializationRequest` contains an idempotency key and
 the exact guide, source, setup-generation, and binding identifiers; it contains
 no prepared handle. The materializer creates and consumes fresh fixed-reader
 authority inside the same root transaction that locks the canonical read facts.
-`SubmissionBundlePreparationRequest` contains
-prepared authority, contributor task/assignment selectors, and one outer ZIP
-byte source. There is no upload-session compatibility port.
+`SubmissionBundlePreparationRequest` contains authenticated request context,
+contributor task/assignment selectors, and one outer ZIP byte source. There is
+no upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
 only prepared authority, the exact task/assignment context, the current
 `PreparedArtifact` generation, and exact policy/checker selectors.
@@ -1269,15 +1270,21 @@ One immutable verified preparation with closed status:
 
 ```text
 status                         = ready | consumed | stale
+durable_intent_id              = UUID
+put_attempt_id                 = UUID
 actor_profile_id               = UUID
-preparation_identity_link_id   = UUID
+identity_link_id               = UUID
 project_id                     = UUID
 task_id                        = UUID
 assignment_id                  = UUID
 predecessor_submission_id      = UUID | null
-locked_task_context_id/hash    = immutable canonical context reference
+locked_policy_context_hash    = SHA-256 copied from immutable pre-submit evidence
 artifact_content_id            = UUID
-submission_bundle_manifest_id  = UUID
+verified_replica_id            = UUID
+verification_receipt_id        = UUID
+put_operation_receipt_id       = UUID | null
+put_observation_receipt_id     = UUID | null
+semantic_manifest_id/hash      = immutable canonical manifest identity
 pre_submit_evidence_set_id      = UUID
 ready_at                       = timestamp
 consumed_at                    = timestamp | null
@@ -1291,8 +1298,20 @@ task, assignment, immediate predecessor, exact locked task/guide/policy context,
 `ArtifactContent`, `SubmissionBundleManifest`, immutable pre-submit evidence-set
 identity, timestamps, terminal reason, and optional consuming Submission.
 Status-field constraints require terminal facts only in their matching state.
+A matching hash is first persisted on the immutable evidence set and the
+admission trigger requires the copied value, so a direct insert cannot invent a
+different policy-context identity.
 A unique Submission admission reference plus locked/CAS transition permits at
 most one consumer.
+
+ART-04C2 publishes `ready` only inside the generic verifier's successful
+terminal transaction through a narrow submission publisher. It reloads and
+matches the durable intent, passing evidence, put attempt, content, verified
+replica, and successful full-read verification receipt. Direct provider
+acknowledgement and observed-confirmed recovery use distinct nullable receipt
+references; exactly one must match. Guide and checker-output verification do
+not create submission admissions. The hidden preparation POST returns bounded
+operation/current-admission state and does not wait for verification.
 
 `ready -> consumed` occurs only in the transaction creating Submission and
 binding. `ready -> stale` occurs only when consumption proves task closure,

@@ -323,9 +323,37 @@ class PreparedBundlePreSubmitEvidenceService:
             raise RuntimeError(
                 "pre-submit evidence orchestration requires a transaction-free session"
             )
+        execution = await self.materialize(request)
+        return await self.persist(
+            request,
+            execution=execution,
+            actor_profile_id=actor_profile_id,
+            identity_link_id=identity_link_id,
+            predecessor_submission_id=predecessor_submission_id,
+        )
+
+    async def materialize(
+        self, request: PreparedBundleMaterializationRequest
+    ) -> PreSubmissionExecutionResult:
+        """Consume fixed-service authority while its owning transaction is active."""
+        return await self._materialization.materialize_prepared_bundle(request)
+
+    async def persist(
+        self,
+        request: PreparedBundleMaterializationRequest,
+        *,
+        execution: PreSubmissionExecutionResult,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+        predecessor_submission_id: UUID | None,
+    ) -> PreSubmitEvidencePersistenceResult:
+        """Persist completed, cleaned execution evidence in a fresh transaction."""
+        if self._session.in_transaction():
+            raise RuntimeError(
+                "pre-submit evidence persistence requires a transaction-free session"
+            )
         commitment = request.prepared_artifact.commitment
         prepared_generation_id = request.prepared_artifact.generation_id
-        execution = await self._materialization.materialize_prepared_bundle(request)
         async with self._session.begin():
             await self._session.execute(text("set transaction isolation level read committed"))
             return await PreSubmitEvidenceService(self._session).persist(

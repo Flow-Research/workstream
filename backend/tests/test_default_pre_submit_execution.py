@@ -29,7 +29,15 @@ from app.modules.artifacts.preparation import (
     ArtifactScratchManager,
 )
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
-from app.modules.artifacts.models import SubmissionBundleDurableIntent
+from app.modules.artifacts.models import (
+    ArtifactContent,
+    ArtifactOperationReceipt,
+    ArtifactPutAttempt,
+    ArtifactReplica,
+    ArtifactVerificationJob,
+    ArtifactVerificationReceipt,
+    SubmissionBundleDurableIntent,
+)
 from app.modules.artifacts.service import (
     ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
@@ -39,6 +47,12 @@ from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutRequest,
     SubmissionBundleDurablePutService,
 )
+from app.modules.artifacts.submission_admission import (
+    SubmissionBundleAdmissionPublisher,
+)
+from app.modules.artifacts.operator import ArtifactOperatorService
+from app.modules.artifacts.metrics import artifact_admission_metrics
+from app.modules.artifacts.schemas import ArtifactOperatorAuthorizationEvidence
 from app.modules.artifacts.submission_authorization import (
     DenySubmissionBundlePreparedAuthorization,
 )
@@ -56,6 +70,7 @@ from app.modules.artifacts.submission_materialization import (
     PreparedBundleMaterializationService,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
+from app.modules.authorization.catalogue import ACTION_BY_ID
 from app.modules.checkers.catalogue import (
     PreSubmissionCheckerPhase,
     build_pre_submission_checker_catalogue,
@@ -87,6 +102,15 @@ class _AllowSubmissionPreparedAuthorization:
     async def consume(self, *, prepared_authorization, facts) -> None:
         assert type(prepared_authorization) is PreparedAuthorizationHandle
         self.facts = facts
+
+
+class _AllowOperatorAuthority:
+    async def authorize(self, *, facts, **_values) -> ArtifactOperatorAuthorizationEvidence:
+        return ArtifactOperatorAuthorizationEvidence(
+            action_id=facts.action_id,
+            permission_id=ACTION_BY_ID[facts.action_id].permission_id.value,
+            decision_id=uuid4(),
+        )
 
 
 @pytest.mark.asyncio
@@ -438,6 +462,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         "artifact_contents",
         "artifact_replicas",
         "artifact_put_attempts",
+        "submission_bundle_admissions",
         "submissions",
         "checker_runs",
         "review_queue_entries",
@@ -799,6 +824,110 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                             pass_capability=denied.pass_capability,
                         )
                     )
+            async with session.begin():
+                attempt = await session.get(
+                    ArtifactPutAttempt,
+                    str(first_admission.attempt_id),
+                    with_for_update=True,
+                )
+                assert attempt is not None
+                content = ArtifactContent(
+                    id=str(uuid4()),
+                    sha256=attempt.sha256,
+                    byte_count=attempt.byte_count,
+                    media_type=attempt.media_type,
+                    normalized_display_name=None,
+                )
+                replica = ArtifactReplica(
+                    id=str(uuid4()),
+                    content_id=content.id,
+                    storage_namespace_id=attempt.storage_namespace_id,
+                    namespace_fingerprint=attempt.namespace_fingerprint,
+                    adapter="local",
+                    provider_profile="test",
+                    provider_object_ref=attempt.canonical_target,
+                    verification_state="verified",
+                    availability_state="available",
+                    integrity_state="valid",
+                )
+                session.add_all((content, replica))
+                await session.flush()
+                put_receipt = ArtifactOperationReceipt(
+                    id=str(uuid4()),
+                    put_attempt_id=attempt.id,
+                    guide_source_item_id=None,
+                    checker_run_id=None,
+                    logical_role=None,
+                    replica_id=replica.id,
+                    operation="put",
+                    idempotency_key=attempt.operation_identity,
+                    request_digest=attempt.request_digest,
+                    provider_object_ref=attempt.canonical_target,
+                    replayed=False,
+                    outcome="stored_pending_verification",
+                    attempt_number=1,
+                    correlation_id=attempt.operation_identity,
+                    details=[],
+                )
+                job = ArtifactVerificationJob(
+                    id=str(uuid4()),
+                    originating_put_attempt_id=attempt.id,
+                    replica_id=replica.id,
+                    status="verified",
+                    maximum_attempts=5,
+                    execution_generation=1,
+                )
+                session.add_all((put_receipt, job))
+                attempt.status = "object_confirmed"
+                attempt.replica_id = replica.id
+                attempt.receipt_id = put_receipt.id
+                verification_receipt = ArtifactVerificationReceipt(
+                    id=str(uuid4()),
+                    verification_job_id=job.id,
+                    execution_generation=1,
+                    outcome="verified",
+                    observed_sha256=attempt.sha256,
+                    observed_byte_count=attempt.byte_count,
+                )
+                session.add(verification_receipt)
+                await session.flush()
+                job_id = job.id
+                verification_receipt_id = verification_receipt.id
+                attempt_byte_count = attempt.byte_count
+
+            async def publish_ready() -> str:
+                async with session_factory() as publisher_session:
+                    async with publisher_session.begin():
+                        ready = await SubmissionBundleAdmissionPublisher(
+                            publisher_session
+                        ).publish_verified(
+                            verification_job_id=job_id,
+                            verification_receipt_id=verification_receipt_id,
+                        )
+                        assert ready is not None and ready.status == "ready"
+                        return ready.id
+
+            published_ids = await asyncio.gather(publish_ready(), publish_ready())
+            assert published_ids[0] == published_ids[1]
+            async with session.begin():
+                usage = await ArtifactOperatorService(
+                    session,
+                    _AllowOperatorAuthority(),
+                    admission_settings,
+                    artifact_admission_metrics,
+                ).admission_usage(
+                    authorization_context=cast(Any, object()),
+                    project_id=lineage.project_id,
+                    task_id=request.task_id,
+                    cursor=None,
+                    limit=10,
+                )
+                assert len(usage.items) == 3
+                assert all(item["unbound_ready_count"] == 1 for item in usage.items)
+                assert all(
+                    item["unbound_ready_bytes"] == attempt_byte_count for item in usage.items
+                )
+                assert all(item["stale_count"] == 0 for item in usage.items)
             durable_counts = {
                 table: int(await session.scalar(text(f"select count(*) from {table}")) or 0)
                 for table in (
@@ -828,6 +957,47 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             provider.execute_committed_put.assert_not_awaited()
             provider.resume_committed_put.assert_not_awaited()
             assert selected_evidence_id == first.evidence.evidence_set_id
+            await session.execute(
+                text(
+                    "update submission_bundle_admissions set status='stale', "
+                    "stale_at=now(), stale_reason='predecessor_advanced' where id=:id"
+                ),
+                {"id": published_ids[0]},
+            )
+            await session.commit()
+            async with session.begin():
+                stale_usage = await ArtifactOperatorService(
+                    session,
+                    _AllowOperatorAuthority(),
+                    admission_settings,
+                    artifact_admission_metrics,
+                ).admission_usage(
+                    authorization_context=cast(Any, object()),
+                    project_id=lineage.project_id,
+                    task_id=request.task_id,
+                    cursor=None,
+                    limit=10,
+                )
+                assert all(item["unbound_ready_count"] == 0 for item in stale_usage.items)
+                assert all(item["stale_count"] == 1 for item in stale_usage.items)
+                assert all(item["stale_bytes"] == attempt_byte_count for item in stale_usage.items)
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text(
+                        "update submission_bundle_admissions set archive_sha256=:digest "
+                        "where id=:id"
+                    ),
+                    {"id": published_ids[0], "digest": "sha256:" + "9" * 64},
+                )
+                await session.commit()
+            await session.rollback()
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text("delete from submission_bundle_admissions where id=:id"),
+                    {"id": published_ids[0]},
+                )
+                await session.commit()
+            await session.rollback()
             blocked_prepared = await preparation.prepare(
                 _bytes(_archive("task.toml")), media_type="application/zip"
             )
@@ -958,7 +1128,10 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     assert result_count == 5 * len(request.effective_plan.entries)
     assert after == {
         **before,
+        "artifact_contents": before["artifact_contents"] + 1,
+        "artifact_replicas": before["artifact_replicas"] + 1,
         "artifact_put_attempts": before["artifact_put_attempts"] + 1,
+        "submission_bundle_admissions": before["submission_bundle_admissions"] + 1,
     }
 
 

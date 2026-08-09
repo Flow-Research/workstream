@@ -824,6 +824,15 @@ attempt, authorization evidence, and this join commit before provider I/O.
 Generic observation and recovery continue from the put attempt after process
 loss.
 
+ART-04C2 adds one `SubmissionBundleAdmission` only when the verifier's complete
+read produces a matching successful receipt. The row joins the exact durable
+intent and evidence to provider-neutral content, the verified replica, the
+verification receipt, and exactly one direct-put or observed-confirmed receipt.
+It starts in `ready`; later 05A alone may execute `ready -> consumed|stale`.
+The hidden preparation route keeps scratch and prepared handles process-local,
+returns before durable verification finishes, and remains excluded from OpenAPI
+and unavailable until AUTH activates `artifact.submission_bundle.prepare`.
+
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. Workstream still writes a task audit event named

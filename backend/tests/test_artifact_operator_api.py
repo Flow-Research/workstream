@@ -433,6 +433,18 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 )
                 assert usage.status_code == 200
                 assert usage.json()["items"]
+                for item in usage.json()["items"]:
+                    assert {
+                        "unbound_ready_count": item["unbound_ready_count"],
+                        "unbound_ready_bytes": item["unbound_ready_bytes"],
+                        "stale_count": item["stale_count"],
+                        "stale_bytes": item["stale_bytes"],
+                    } == {
+                        "unbound_ready_count": 0,
+                        "unbound_ready_bytes": 0,
+                        "stale_count": 0,
+                        "stale_bytes": 0,
+                    }
                 assert "producer_ref" not in usage.text
                 usage_types = [usage.json()["items"][0]["scope_type"]]
                 usage_cursor = usage.json()["next_cursor"]

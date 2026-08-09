@@ -58,6 +58,7 @@ PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
     "ArtifactRecoveryRequest",
     "GuideSufficiencyMaterialRequest",
     "GuideSourceMaterializationRequest",
+    "SubmissionBundlePreparationRequest",
 }
 PREPARED_HANDLE_FORBIDDEN_ROOTS = (
     APP_ROOT / "adapters",
@@ -563,6 +564,23 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
                 expected_request_by_method[node.name]
             }
             assert "AuthorizationContext" not in _declared_annotation_names(node)
+
+
+def test_submission_preparation_http_request_never_carries_prepared_authority() -> None:
+    tree = _tree(ARTIFACT_OPERATIONS)
+    request_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SubmissionBundlePreparationRequest"
+    )
+    fields = {
+        node.target.id: _annotation_names(node.annotation)
+        for node in request_class.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+    assert "prepared_authorization" not in fields
+    assert fields["authorization_context"] == {"AuthorizationContext"}
+    assert fields["idempotency_key"] == {"UUID"}
 
 
 def test_prepared_handle_never_enters_public_async_or_provider_contracts() -> None:

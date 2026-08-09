@@ -438,7 +438,7 @@ class _PreSubmitEvidenceRepository:
             key: str(value) if isinstance(value, UUID) else value
             for key, value in asdict(context).items()
         }
-        return {
+        values = {
             "operation_identity": operation_identity,
             **values,
             "effective_plan_sha256": execution.plan_sha256,
@@ -467,6 +467,21 @@ class _PreSubmitEvidenceRepository:
                 }
             ),
         }
+        values["locked_policy_context_hash"] = canonical_json_hash(
+            {
+                "guide_id": values["guide_id"],
+                "guide_version": values["guide_version"],
+                "source_snapshot_id": values["source_snapshot_id"],
+                "source_snapshot_sha256": values["source_snapshot_sha256"],
+                "locked_guide_sha256": values["locked_guide_sha256"],
+                "effective_policy_id": values["effective_policy_id"],
+                "locked_artifact_policy_sha256": values["locked_artifact_policy_sha256"],
+                "pre_submit_policy_id": values["pre_submit_policy_id"],
+                "locked_checker_policy_sha256": values["locked_checker_policy_sha256"],
+                "effective_plan_sha256": values["effective_plan_sha256"],
+            }
+        )
+        return values
 
 
 class PreSubmitEvidenceService:

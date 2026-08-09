@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0060_submission_bundle_intent"
+HEAD_REVISION = "0061_submission_admission"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -290,6 +290,136 @@ def test_0060_submission_bundle_intent_empty_round_trip(
         "submission_bundle_durable_intents_no_truncate",
     }
     assert "artifact_receipt_producer_reference" in installed["receipt_triggers"]
+
+
+async def _submission_bundle_admission_schema(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            table_exists = bool(
+                await connection.scalar(
+                    text("select to_regclass('submission_bundle_admissions') is not null")
+                )
+            )
+            constraints = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select conname from pg_constraint where conrelid="
+                            "to_regclass('submission_bundle_admissions')"
+                        )
+                    )
+                ).all()
+            )
+            triggers = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and "
+                            "tgrelid=to_regclass('submission_bundle_admissions')"
+                        )
+                    )
+                ).all()
+            )
+            evidence_column = bool(
+                await connection.scalar(
+                    text(
+                        "select count(*) from information_schema.columns "
+                        "where table_schema='public' and table_name='pre_submit_evidence_sets' "
+                        "and column_name='locked_policy_context_hash'"
+                    )
+                )
+            )
+            evidence_constraints = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select conname from pg_constraint where conrelid="
+                            "to_regclass('pre_submit_evidence_sets') and "
+                            "conname='ck_pre_submit_evidence_sets_policy_context_sha256'"
+                        )
+                    )
+                ).all()
+            )
+            evidence_immutable_enabled = await connection.scalar(
+                text(
+                    "select tgenabled from pg_trigger where not tgisinternal and "
+                    "tgrelid=to_regclass('pre_submit_evidence_sets') and "
+                    "tgname='pre_submit_evidence_sets_immutable'"
+                )
+            )
+            consumer_index = bool(
+                await connection.scalar(
+                    text(
+                        "select count(*) from pg_indexes where schemaname='public' and "
+                        "tablename='submission_bundle_admissions' and "
+                        "indexname='uq_submission_bundle_admission_consumer'"
+                    )
+                )
+            )
+            return {
+                "table_exists": table_exists,
+                "constraints": constraints,
+                "triggers": triggers,
+                "evidence_column": evidence_column,
+                "evidence_constraints": evidence_constraints,
+                "evidence_immutable_enabled": evidence_immutable_enabled,
+                "consumer_index": consumer_index,
+            }
+    finally:
+        await engine.dispose()
+
+
+def test_0061_submission_bundle_admission_empty_round_trip(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "0060_submission_bundle_intent")
+            prior = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            installed = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.downgrade(config, "0060_submission_bundle_intent")
+            restored = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+            command.upgrade(config, HEAD_REVISION)
+            repeated = asyncio.run(_submission_bundle_admission_schema(isolated_database_env))
+        finally:
+            command.upgrade(config, "head")
+
+    assert (
+        prior
+        == restored
+        == {
+            "table_exists": False,
+            "constraints": set(),
+            "triggers": set(),
+            "evidence_column": False,
+            "evidence_constraints": set(),
+            "evidence_immutable_enabled": b"O",
+            "consumer_index": False,
+        }
+    )
+    assert installed == repeated
+    assert {
+        "uq_submission_bundle_admission_intent",
+        "uq_submission_bundle_admission_evidence",
+        "uq_submission_bundle_admission_verification",
+        "ck_submission_bundle_admissions_terminal_shape",
+        "ck_submission_bundle_admissions_write_receipt_shape",
+    }.issubset(installed["constraints"])
+    assert installed["triggers"] == {
+        "submission_bundle_admission_verified_lineage",
+        "submission_bundle_admission_lineage",
+        "submission_bundle_admission_delete",
+    }
+    assert installed["evidence_column"] is True
+    assert installed["evidence_constraints"] == {
+        "ck_pre_submit_evidence_sets_policy_context_sha256"
+    }
+    assert installed["evidence_immutable_enabled"] == b"O"
+    assert installed["consumer_index"] is True
 
 
 async def _submission_policy_authority_shape(database_url: str) -> dict[str, object]:
