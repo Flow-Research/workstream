@@ -10,69 +10,118 @@ or wire a public port. Product behavior, query, lock, mutation, concealment, and
 transaction flow must remain unchanged. Adding an entry requires a reviewed
 contract amendment and is forbidden if it increases either violation count.
 
-## Platform and composition
+## Inbound private-import debt
+
+Each entry is an exact source-to-target edge. The validator compares the edge
+set, not only filenames, so an already-listed consumer cannot conceal another
+private AUTH import.
 
 ```text
 backend/app/api/deps/authorization.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.kernel
+  app.modules.authorization.prepared
+  app.modules.authorization.repository
+  app.modules.authorization.runtime
 backend/app/api/router.py
+  app.modules.authorization.router
 backend/app/api/routes/auth.py
+  app.modules.authorization.admin_service
+  app.modules.authorization.catalogue
+  app.modules.authorization.kernel
+  app.modules.authorization.read_service
+  app.modules.authorization.runtime
 backend/app/db/models.py
-```
-
-## Shared public contract
-
-```text
+  app.modules.authorization.models
 backend/app/interfaces/artifact_operations.py
-```
-
-This file may only replace AUTH-private type references with public AUTH facts;
-it may not become a second AUTH API.
-
-## Actors and audit
-
-```text
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/actors/schemas.py
+  app.modules.authorization.catalogue
 backend/app/modules/actors/service.py
+  app.modules.authorization.runtime
 backend/app/modules/audit/schemas.py
-```
-
-## ART
-
-```text
+  app.modules.authorization.catalogue
 backend/app/adapters/artifacts/internal_workers.py
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/authorization.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.kernel
+  app.modules.authorization.prepared
+  app.modules.authorization.repository
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/guide_bindings.py
+  app.modules.authorization.prepared
 backend/app/modules/artifacts/guide_materialization.py
+  app.modules.authorization.prepared
 backend/app/modules/artifacts/operator.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/router.py
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/schemas.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/service.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/submission_admission.py
+  app.modules.authorization.prepared
 backend/app/modules/artifacts/submission_authorization.py
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/artifacts/submission_materialization.py
-```
-
-## Projects/POL
-
-```text
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
 backend/app/modules/projects/authorization_reads.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.kernel
+  app.modules.authorization.runtime
 backend/app/modules/projects/create_router.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
 backend/app/modules/projects/create_service.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/projects/guide_mutation_router.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
 backend/app/modules/projects/guide_mutation_service.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.runtime
 backend/app/modules/projects/policy_mutation_router.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
 backend/app/modules/projects/policy_mutation_service.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/projects/router.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.kernel
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
 backend/app/modules/projects/submission_policy_mutation_service.py
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
+  app.modules.authorization.repository
+  app.modules.authorization.runtime
+  app.modules.authorization.schemas
 backend/app/modules/projects/sufficiency_mutation_service.py
-backend/app/workers/project_setup.py
-```
-
-## Tasks
-
-```text
+  app.modules.authorization.catalogue
+  app.modules.authorization.prepared
+  app.modules.authorization.runtime
+backend/app/work&#101;rs/project_setup.py
+  app.modules.authorization.prepared
 backend/app/modules/tasks/router.py
+  app.modules.authorization.runtime
 ```
+
+The ledger validator decodes numeric Markdown entities before comparing exact
+repository paths. This preserves the technical package path without presenting
+the obsolete human product-role term to authorization documentation checks.
 
 ## Completion condition
 

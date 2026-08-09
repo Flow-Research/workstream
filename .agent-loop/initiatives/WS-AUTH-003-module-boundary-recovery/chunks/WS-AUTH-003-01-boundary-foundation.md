@@ -43,8 +43,10 @@ docs/spec_authorization_service.md
 2. The validator parses Python imports without importing application code.
 3. Any new consumer import of private AUTH, any new AUTH import of a product
    model/repository/service/router/schema/persistence implementation, any
-   wildcard/dynamic bypass, malformed ledger, or either count increase fails
-   closed.
+   wildcard import, or dynamic import through `__import__`,
+   `importlib.import_module`, or an aliased form fails closed. The foundation
+   supports no dynamic-import allowlist: unknown/computed import forms,
+   malformed ledger data, or either exact edge-set/count increase also fail.
 4. Existing recorded inbound and outbound violations remain visible and
    unchanged; the foundation neither hides nor migrates them.
 5. `authorization.api` imports in a clean process and exposes only bounded
@@ -55,6 +57,9 @@ docs/spec_authorization_service.md
 7. CI runs the validator on every backend change.
 8. No runtime authorization or product test assertion changes.
 9. Behavior ownership and architecture tests recognize the exact new files.
+   Architecture fixtures prove wildcard, direct and aliased `__import__`,
+   direct and aliased `importlib.import_module`, and computed module-name
+   bypasses are rejected.
 10. Required architecture, security, QA, CI-integrity, and test-delta reviews
     pass before the PR is ready.
 
