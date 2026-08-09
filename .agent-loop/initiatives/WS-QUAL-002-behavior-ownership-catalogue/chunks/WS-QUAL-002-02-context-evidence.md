@@ -23,6 +23,7 @@ backend/tests/test_ci_test_lanes.py
 backend/pyproject.toml
 docs/operations_backend_testing.md
 .agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md
+.agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/CHUNK_MAP.md
 .agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/chunks/WS-QUAL-002-02-context-evidence.md
 .agent-loop/initiatives/WS-QUAL-002-behavior-ownership-catalogue/reviews/WS-QUAL-002-02-*
 ```

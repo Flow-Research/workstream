@@ -21,6 +21,7 @@ from jsonschema import Draft202012Validator
 
 from scripts import run_test_lanes as test_lanes
 from scripts.mutation_policy import CALLABLE_RE
+from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import OBSERVABLE_OUTCOMES
 from scripts.mutation_policy import REAL_BOUNDARIES
 from scripts.mutation_policy import TEST_NODE_RE
@@ -489,8 +490,11 @@ def _write_exclusive(path: Path, data: bytes) -> None:
         raise BehaviorOwnershipError("context_evidence_too_large")
     if not path.parent.is_dir():
         raise BehaviorOwnershipError("invalid_context_output_parent")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        descriptor = os.open(path, flags, 0o600)
     except OSError as exc:
         raise BehaviorOwnershipError("context_output_exists_or_unsafe") from exc
     try:
@@ -502,6 +506,42 @@ def _write_exclusive(path: Path, data: bytes) -> None:
         except OSError:
             pass
         raise
+
+
+def _tracked_at_revision(root: Path, revision: str, path: str) -> bool:
+    """Return whether one safe repository path is tracked at the revision."""
+    try:
+        _safe_path(path)
+    except MutationPolicyError:
+        return False
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}:{path}"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _context_node_is_valid(node: object, test_module: str) -> bool:
+    """Validate one backend-relative pytest node against the selected module."""
+    if not isinstance(node, str) or any(character in node for character in "\x00\r\n"):
+        return False
+    try:
+        return test_lanes._module_from_node(node) == test_module
+    except test_lanes.LaneError:
+        return False
+
+
+def _context_target_is_valid(root: Path, target: object) -> bool:
+    """Validate an eligible regular target without leaking policy exceptions."""
+    if not isinstance(target, str):
+        return False
+    try:
+        return _eligible_target(target) and _regular_repository_file(root, target)
+    except MutationPolicyError:
+        return False
 
 
 def _coverage_lines_by_context(
@@ -547,8 +587,16 @@ def build_context_evidence(
     if test_module not in test_lanes.discover_test_modules(backend_root / "tests", backend_root):
         raise BehaviorOwnershipError("missing_context_test_module")
     head_sha = _git(root, "rev-parse", "HEAD")
+    if not _tracked_at_revision(root, head_sha, target) or not _tracked_at_revision(
+        root, head_sha, f"backend/{test_module}"
+    ):
+        raise BehaviorOwnershipError("untracked_context_input")
     if _git(root, "status", "--porcelain", "--untracked-files=no"):
         raise BehaviorOwnershipError("dirty_context_tree")
+    if output.is_symlink() or any(
+        parent.is_symlink() for parent in output.parents if parent.exists()
+    ):
+        raise BehaviorOwnershipError("context_output_exists_or_unsafe")
     try:
         output = output.resolve(strict=False)
     except OSError as exc:
@@ -570,6 +618,30 @@ def build_context_evidence(
         environment = test_lanes.lane_environment(
             lane, metadata, coverage_path, "context", head_sha
         )
+        allowed_environment = {
+            "PATH",
+            "PYTHONPATH",
+            "VIRTUAL_ENV",
+            "LANG",
+            "LC_ALL",
+            "TZ",
+            "TMPDIR",
+        }
+        environment = {
+            key: value
+            for key, value in environment.items()
+            if key in allowed_environment
+            or key
+            in {
+                test_lanes.COLLECTED_ENV,
+                test_lanes.COMPLETED_ENV,
+                test_lanes.SKIPPED_ENV,
+                test_lanes.DESELECTED_ENV,
+                test_lanes.HEAD_ENV,
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+            }
+            or key == "COVERAGE_FILE"
+        }
         command = [
             sys.executable,
             "-m",
@@ -676,6 +748,21 @@ def validate_context_evidence(
         raise BehaviorOwnershipError("context_evidence_digest_mismatch")
     if value["head_sha"] != _git(root, "rev-parse", head_revision):
         raise BehaviorOwnershipError("stale_context_evidence")
+    head_sha = value["head_sha"]
+    target = value["target"]
+    test_module = value["test_module"]
+    if (
+        not isinstance(head_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", head_sha) is None
+        or not _context_target_is_valid(root, target)
+        or not _tracked_at_revision(root, head_revision, target)
+        or not isinstance(test_module, str)
+        or not test_lanes._safe_module_path(test_module)
+        or test_module
+        not in test_lanes.discover_test_modules(root / "backend/tests", root / "backend")
+        or not _tracked_at_revision(root, head_revision, f"backend/{test_module}")
+    ):
+        raise BehaviorOwnershipError("invalid_context_identity")
     collected = value["collected_nodes"]
     completed = value["completed_nodes"]
     if (
@@ -684,11 +771,23 @@ def validate_context_evidence(
         or value["execution_complete"] is not True
         or not isinstance(collected, list)
         or not collected
+        or any(not _context_node_is_valid(node, test_module) for node in collected)
+        or not isinstance(completed, list)
+        or any(not _context_node_is_valid(node, test_module) for node in completed)
         or collected != completed
         or len(collected) != len(set(collected))
     ):
         raise BehaviorOwnershipError("incomplete_context_evidence")
-    if value["skipped_nodes"] or value["deselected_nodes"]:
+    skipped = value["skipped_nodes"]
+    deselected = value["deselected_nodes"]
+    if (
+        not isinstance(skipped, list)
+        or not isinstance(deselected, list)
+        or any(not _context_node_is_valid(node, test_module) for node in skipped)
+        or any(not _context_node_is_valid(node, test_module) for node in deselected)
+        or skipped
+        or deselected
+    ):
         raise BehaviorOwnershipError("weakened_context_evidence")
     if (
         not isinstance(value["elapsed_seconds"], (int, float))
@@ -699,17 +798,23 @@ def validate_context_evidence(
         raise BehaviorOwnershipError("invalid_context_elapsed")
     if not isinstance(value["callables"], list):
         raise BehaviorOwnershipError("invalid_context_callables")
+    actual_callables = set(callable_names(root, target))
+    seen_callables: set[str] = set()
     for item in value["callables"]:
         if (
             not isinstance(item, dict)
             or set(item) != {"callable", "start_line", "end_line", "contexts"}
             or not isinstance(item["callable"], str)
+            or CALLABLE_RE.fullmatch(item["callable"]) is None
+            or item["callable"] not in actual_callables
+            or item["callable"] in seen_callables
             or not isinstance(item["start_line"], int)
             or not isinstance(item["end_line"], int)
             or item["start_line"] > item["end_line"]
             or not isinstance(item["contexts"], list)
         ):
             raise BehaviorOwnershipError("invalid_context_callables")
+        seen_callables.add(item["callable"])
         for context in item["contexts"]:
             if (
                 not isinstance(context, dict)

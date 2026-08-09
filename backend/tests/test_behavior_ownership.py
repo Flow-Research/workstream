@@ -548,6 +548,18 @@ def _context_artifact(**overrides: object) -> dict[str, object]:
     return {**authority, "artifact_digest": ownership._digest(authority)}
 
 
+def _prepare_context_identity(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = root / "backend/scripts/example.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("def run():\n    return 1\n", encoding="utf-8")
+    test_module = root / "backend/tests/test_example.py"
+    test_module.parent.mkdir(parents=True, exist_ok=True)
+    test_module.write_text("def test_run(): pass\n", encoding="utf-8")
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+
+
 def test_context_evidence_is_separate_digest_bound_candidate_input(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -555,6 +567,7 @@ def test_context_evidence_is_separate_digest_bound_candidate_input(
     artifact = _context_artifact()
     _write_json(path, artifact)
     monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
 
     result = ownership.validate_context_evidence(tmp_path, path)
 
@@ -586,6 +599,7 @@ def test_context_evidence_rejects_stale_partial_skip_and_deselect(
     path = tmp_path / "context.json"
     _write_json(path, _context_artifact(**updates))
     monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
 
     with pytest.raises(ownership.BehaviorOwnershipError, match=error):
         ownership.validate_context_evidence(tmp_path, path)
@@ -599,6 +613,7 @@ def test_context_evidence_rejects_digest_drift_and_overwrite(
     artifact["artifact_digest"] = "0" * 64
     _write_json(path, artifact)
     monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
     with pytest.raises(ownership.BehaviorOwnershipError, match="digest_mismatch"):
         ownership.validate_context_evidence(tmp_path, path)
     with pytest.raises(ownership.BehaviorOwnershipError, match="output_exists"):
@@ -631,6 +646,7 @@ def test_build_context_evidence_reuses_lane_collection_and_completion(
         "collect_nodes",
         lambda *args: (0, [node], []),
     )
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
 
     def fake_run(arguments, *, cwd, env, check, timeout):
         metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
@@ -682,6 +698,26 @@ def test_context_output_rejects_size_and_missing_parent(tmp_path: Path) -> None:
         )
     with pytest.raises(ownership.BehaviorOwnershipError, match="output_parent"):
         ownership._write_exclusive(tmp_path / "missing/out.json", b"{}\n")
+
+
+def test_context_identity_helpers_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    completed = subprocess.CompletedProcess(["git"], 0, stdout="", stderr="")
+    monkeypatch.setattr(ownership.subprocess, "run", lambda *args, **kwargs: completed)
+    assert ownership._tracked_at_revision(tmp_path, "HEAD", "backend/scripts/example.py")
+    completed.returncode = 1
+    assert not ownership._tracked_at_revision(
+        tmp_path, "HEAD", "backend/scripts/example.py"
+    )
+    assert not ownership._tracked_at_revision(tmp_path, "HEAD", "../unsafe.py")
+    assert ownership._context_node_is_valid(
+        "tests/test_example.py::test_run", "tests/test_example.py"
+    )
+    assert not ownership._context_node_is_valid(
+        "tests/test_other.py::test_run", "tests/test_example.py"
+    )
+    assert not ownership._context_target_is_valid(tmp_path, "../unsafe.py")
 
 
 def test_coverage_context_reader_filters_noncompleted_and_requires_every_node(
@@ -754,6 +790,11 @@ def test_coverage_context_reader_rejects_invalid_data(
             },
             "invalid_context_callables",
         ),
+        ({"target": "../unsafe.py"}, "invalid_context_identity"),
+        ({"test_module": "../unsafe.py"}, "invalid_context_identity"),
+        ({"head_sha": "not-a-sha"}, "stale_context_evidence"),
+        ({"collected_nodes": ["invalid node"], "completed_nodes": ["invalid node"]}, "incomplete_context_evidence"),
+        ({"skipped_nodes": "wrong"}, "weakened_context_evidence"),
         (
             {
                 "callables": [
@@ -778,6 +819,7 @@ def test_context_validator_rejects_invalid_shapes(
     path = tmp_path / "context.json"
     _write_json(path, _context_artifact(**updates))
     monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
     with pytest.raises(ownership.BehaviorOwnershipError, match=error):
         ownership.validate_context_evidence(tmp_path, path)
 
@@ -810,6 +852,8 @@ def test_context_validator_rejects_unsafe_and_unknown_shape(tmp_path: Path) -> N
         ("module", "invalid_context_test_module"),
         ("missing_module", "missing_context_test_module"),
         ("dirty", "dirty_context_tree"),
+        ("untracked", "untracked_context_input"),
+        ("symlink_output", "context_output_exists_or_unsafe"),
         ("output", "context_output_exists_or_unsafe"),
         ("collection", "invalid_context_collection"),
     ],
@@ -846,12 +890,19 @@ def test_context_builder_fails_closed_before_execution(
         lambda *args: () if case == "missing_module" else ("tests/test_example.py",),
     )
     monkeypatch.setattr(
+        ownership,
+        "_tracked_at_revision",
+        lambda *args: case != "untracked",
+    )
+    monkeypatch.setattr(
         ownership.test_lanes,
         "collect_nodes",
         lambda *args: (1, [], []) if case == "collection" else (0, ["node::id"], []),
     )
     if case == "output":
         output.write_text("existing", encoding="utf-8")
+    if case == "symlink_output":
+        output.symlink_to(tmp_path / "missing-context.json")
 
     with pytest.raises(ownership.BehaviorOwnershipError, match=error):
         ownership.build_context_evidence(
