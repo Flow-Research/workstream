@@ -22,8 +22,8 @@ Current focused evidence:
 - 33 semantic-lane contract tests pass, including exact assignment of the new
   focused test module to `shared_foundations` under the human-approved scope
   correction.
-- The real local context probe completed 72 exact nodes in 27 seconds and
-  emitted a 96,535-byte digest-bound artifact, below both adoption limits.
+- The real local context probe completed 72 exact nodes in 38 seconds and
+  emitted a 96,570-byte digest-bound artifact, below both adoption limits.
 - The initial catalogue is explicitly incomplete and candidate output remains
   non-authoritative while subsystem population has not started.
 
