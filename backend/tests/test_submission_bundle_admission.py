@@ -32,13 +32,13 @@ from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutResult,
     SubmissionBundleDurablePutService,
 )
-from app.modules.artifacts.submission_admission_publication import (
+from app.modules.artifacts.submission_admission import (
     SubmissionBundleAdmissionPublicationError,
     SubmissionBundleAdmissionPublisher,
 )
 from app.modules.artifacts.service import ArtifactAdmissionService
 from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
-from app.modules.artifacts.submission_preparation import (
+from app.modules.artifacts.submission_admission import (
     PreparedSubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationResult,

@@ -30,7 +30,7 @@ from app.modules.artifacts.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_authorization import (
     SubmissionBundlePreparationAuthorization,
 )
-from app.modules.artifacts.submission_preparation import SubmissionBundlePreparationCommand
+from app.modules.artifacts.submission_admission import SubmissionBundlePreparationCommand
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
 )
@@ -121,12 +121,8 @@ def submission_archive_limits(settings: Settings) -> SubmissionArchiveLimits:
         ),
         maximum_entry_bytes=settings.artifact_submission_zip_maximum_entry_bytes,
         maximum_expanded_bytes=settings.artifact_submission_zip_maximum_expanded_bytes,
-        maximum_compression_ratio=(
-            settings.artifact_submission_zip_maximum_compression_ratio
-        ),
-        maximum_inspection_seconds=(
-            settings.artifact_submission_zip_maximum_inspection_seconds
-        ),
+        maximum_compression_ratio=(settings.artifact_submission_zip_maximum_compression_ratio),
+        maximum_inspection_seconds=(settings.artifact_submission_zip_maximum_inspection_seconds),
     )
 
 
@@ -249,7 +245,7 @@ def get_submission_bundle_preparation_command(
         PreparedBundleMaterializationService,
         PreparedBundlePreSubmitEvidenceService,
     )
-    from app.modules.artifacts.submission_preparation import (
+    from app.modules.artifacts.submission_admission import (
         PreparedSubmissionBundlePreparationCommand,
         SubmissionBundlePreparationRuntime,
     )
@@ -285,9 +281,7 @@ def get_submission_bundle_preparation_command(
             materialization = PreparedBundleMaterializationService(
                 authorization=materialization_authority,
                 preparation=preparation,
-                archive_inspector=SubmissionArchiveInspector(
-                    submission_archive_limits(settings)
-                ),
+                archive_inspector=SubmissionArchiveInspector(submission_archive_limits(settings)),
                 catalogue=catalogue,
                 storage_scheme=storage_scheme,
             )

@@ -47,7 +47,7 @@ from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutRequest,
     SubmissionBundleDurablePutService,
 )
-from app.modules.artifacts.submission_admission_publication import (
+from app.modules.artifacts.submission_admission import (
     SubmissionBundleAdmissionPublisher,
 )
 from app.modules.artifacts.operator import ArtifactOperatorService

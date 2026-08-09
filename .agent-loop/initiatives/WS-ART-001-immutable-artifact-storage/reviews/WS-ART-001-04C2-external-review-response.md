@@ -45,3 +45,9 @@ None.
 
 AUTH activation and admission consumption remain separate reviewed chunks. The
 route remains hidden and unavailable in this PR.
+
+WS-QUAL-002-01 merged its protected exact module partition while this ART chunk
+was in flight. The ready-admission publisher and hidden preparation command are
+therefore consolidated in `submission_admission.py`; the QUAL-owned partition
+is unchanged. Do not re-split those classes into new eligible Python modules
+until a QUAL-owned protected-partition update has merged.

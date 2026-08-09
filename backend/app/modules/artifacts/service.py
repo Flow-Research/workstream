@@ -1275,7 +1275,7 @@ class ArtifactStorageOrchestrator:
                 )
             )
             if outcome == "verified":
-                from app.modules.artifacts.submission_admission_publication import (
+                from app.modules.artifacts.submission_admission import (
                     SubmissionBundleAdmissionPublicationError,
                     SubmissionBundleAdmissionPublisher,
                 )

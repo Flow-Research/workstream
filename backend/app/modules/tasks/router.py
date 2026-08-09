@@ -18,7 +18,7 @@ from app.adapters.artifacts import get_submission_bundle_preparation_command
 from app.interfaces.artifact_operations import SubmissionBundlePreparationRequest
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
-from app.modules.artifacts.submission_preparation import (
+from app.modules.artifacts.submission_admission import (
     SubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
 )
