@@ -1,12 +1,12 @@
 # Chunk Map: WS-POL-003 - Unified Project Guide Compilation
 
-All chunks are L1, one PR each, proposed, and inactive. Product behavior is
-built hidden before AUTH activation; only a later live-cutover chunk exposes
-it. No chunk starts automatically.
+All chunks are L1 and one PR each. Product behavior is built hidden before AUTH
+activation; only a later live-cutover chunk exposes it. Open pull requests show
+transient work, and no chunk starts automatically.
 
 | Chunk | Purpose | Hard dependency |
 |---|---|---|
-| `WS-POL-003-01` | Strict unified contracts and read-only pre/post capability projections. | Merged ART-04B1 and canonical CHECKER/POL post-submit registry |
+| `WS-POL-003-01` | Strict unified contracts and read-only pre/post capability projections. Merged PR #299. | Merged ART-04B1 and canonical CHECKER/POL post-submit registry |
 | `WS-POL-003-02` | One `compile_project_guide` adapter method and fake-runtime proof. | 01 |
 | `WS-POL-003-03A` | Hidden immutable attempt/compilation schema, validator, repository, crash fence, and deny-by-default authorization seams. | 02 |
 | `WS-AUTH-001-12I` | Register and activate exact PM compilation request/recovery plus fixed-service compilation execute authority. | 03A exact resource/action manifest |
@@ -31,7 +31,7 @@ The ART admission sequence remains independent and may proceed concurrently:
 ```text
 merged ART-04B3
 -> merged XINT-06A
--> ART-04C1 -> ART-04C2
+-> merged ART-04C1 -> ART-04C2
 -> XINT-05A -> ART-05A -> XINT-05B -> ART-05B
 ```
 

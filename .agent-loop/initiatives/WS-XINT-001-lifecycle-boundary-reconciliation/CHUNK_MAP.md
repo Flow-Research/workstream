@@ -1,12 +1,11 @@
 # Chunk Map: WS-XINT-001 Lifecycle Boundary Reconciliation
 
 This initiative contains one planning PR. Runtime work remains in the four
-owning initiatives and requires separate chunk contracts, review, and explicit
-human starts.
+owning initiatives and requires separate bounded changes and review.
 
 | Chunk | Purpose | Risk | Status |
 |---|---|---:|---|
-| `WS-XINT-001-PLAN` | Reconcile AUTH, ART, REV, and CON ownership, activation, transactions, and handoffs | L1 | Active after explicit user start |
+| `WS-XINT-001-PLAN` | Reconcile AUTH, ART, REV, and CON ownership, activation, transactions, and handoffs | L1 | Merged PR #139; initiative closed |
 
 ## Downstream owner handoffs
 

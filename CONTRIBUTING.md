@@ -28,7 +28,10 @@ Before implementation, update from current `main` and read:
 1. [README.md](README.md) for the product boundary and current v0.1 summary.
 2. [Current v0.1 Status](docs/roadmap_status.md) for implemented, in-progress, and
    remaining capabilities.
-3. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
+3. [Current Engineering State](.agent-loop/CURRENT_STATE.md) for durable
+   initiative dispositions, remaining boundaries, and the live pull-request
+   view of transient work.
+4. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
    the canonical specification for the subsystem being changed.
 
 Code, migrations, tests, accepted ADRs, and canonical repository specifications
@@ -45,6 +48,13 @@ time windows as repository authority.
 Contributors with GitHub write access may create a branch, implement a bounded
 change, and open a pull request. Contributors without write access may use a
 fork and open a normal pull request.
+
+Before claiming a remaining boundary, inspect
+[open pull requests](https://github.com/Flow-Research/workstream/pulls) and
+coordinate any overlapping path or behavior ownership. Static status files do
+not attempt to mirror transient branches because that information becomes
+stale at merge. Review logs are evidence for earlier exact changes, never an
+active queue or approval gate.
 
 ## Before Opening A Pull Request
 

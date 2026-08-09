@@ -19,3 +19,9 @@ initiative plan and chunk contract. Different initiatives may run concurrently.
 
 GitHub permissions govern who may contribute. CI validates quality. Human
 maintainers decide merges. See [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+Start with [CURRENT_STATE.md](CURRENT_STATE.md) to see durable initiative
+dispositions, remaining boundaries, and the live GitHub view of work under
+review. `REVIEW_LOG.md` and initiative `reviews/` directories are archives for
+exact historical changes; never use them to decide that a chunk is currently
+active, blocked, approved, or complete.

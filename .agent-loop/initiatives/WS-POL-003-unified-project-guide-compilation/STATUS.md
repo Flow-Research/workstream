@@ -1,9 +1,8 @@
 # Status: WS-POL-003 - Unified Project Guide Compilation
 
-Status: planning reconciliation active; no implementation chunk is active.
-
-Baseline: `origin/main` `99c0aaf04efd36c7ac4af4aeec2e9d810f012305`
-after merged AUTH-12F3 PR #295.
+Planning reconciliation merged through PR #298. `WS-POL-003-01` merged through
+PR #299 and established the strict unified contract catalogue. Open pull
+requests, not this static file, determine transient implementation ownership.
 
 ## Current delivery truth
 
@@ -14,8 +13,8 @@ after merged AUTH-12F3 PR #295.
 - AUTH-12E and AUTH-12F3 are merged transitional separate-call
   implementations. Their action-specific projection custody is reusable; their
   independent inference paths must not survive POL-04B.
-- ART-04B1, 04B2, 04B3, and XINT-06A are merged. ART-04C1 is ready to proceed
-  independently through the admission sequence.
+- ART-04B1, 04B2, 04B3, XINT-06A, and ART-04C1 are merged. ART admission may
+  continue independently through its dependency sequence.
 - Remaining AUTH-12F4, 12G, 12B2, and 12H contracts require reconciliation as
   narrow activation gates around hidden POL behavior. They are not authority
   for another inference pipeline.
@@ -26,7 +25,8 @@ after merged AUTH-12F3 PR #295.
 |---|---|---|
 | ART-04B1 complete pre-submit catalogue/effective plan | POL-01 | Merged PR #276 |
 | Canonical CHECKER/POL post-submit registry | POL-01 | Present; remaining POL-002 work must be reframed as executor ownership, not inference |
-| POL-01/02 strict manifest and adapter | POL-03A | Proposed |
+| POL-01 strict manifest | POL-02 | Merged PR #299 |
+| POL-02 adapter | POL-03A | Remaining |
 | Hidden POL-03A compilation manifest | AUTH-12I compilation request/execute activation | Proposed |
 | AUTH-12I | POL-03B authorized persistence | Not yet implemented |
 | Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
@@ -37,13 +37,12 @@ after merged AUTH-12F3 PR #295.
 
 ## Chunk state
 
-POL-01 and POL-02 retain their full executable contracts. The newly split
+POL-01 is merged. POL-02 retains its full executable contract. The newly split
 03A-06B and corresponding AUTH gates are reviewed planning skeletons only:
 before any is started, its contract must be expanded on then-current main with
 explicit allowed/not-allowed paths, runnable verification commands, and named
 reviewer tracks. They cannot authorize implementation in their current form.
 
-All WS-POL-003 chunks and corresponding AUTH gates are proposed and inactive.
-The current work is planning-only. The first executable candidate after this
-planning PR merges is `WS-POL-003-01`, subject to a separate explicit start and
-fresh preimplementation review.
+The next dependency-ordered boundary after merged `01` is `WS-POL-003-02`.
+Later chunks and corresponding AUTH gates remain planned and inactive until
+their exact dependencies and executable contracts are current.

@@ -1,5 +1,9 @@
 # Internal Plan Review Log: WS-REV-001
 
+> Archive only. Use `../../CURRENT_STATE.md`, current `main`, and open pull
+> requests for current state. Entries below apply only to exact reviewed
+> changes.
+
 ## WS-REV-001-PLAN4 Current-Main End-To-End Refresh - 2026-08-03
 
 Architecture passed the full revised sequence and confirmed that 03A1 is a

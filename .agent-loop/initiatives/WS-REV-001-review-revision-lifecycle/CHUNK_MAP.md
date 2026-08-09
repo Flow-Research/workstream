@@ -11,9 +11,9 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 
 | Chunk | Purpose | Gate | Status |
 |---|---|---|---|
-| `WS-REV-001-PLAN4` | Current-main full lifecycle replan | AUTH 02D merged PR #257 | Proposed planning PR |
+| `WS-REV-001-PLAN4` | Current-main full lifecycle replan | AUTH 02D merged PR #257 | Merged PR #258 |
 | `WS-REV-001-03A1` | Queue and admission-idempotency persistence | PLAN4 approved | Merged PR #262 |
-| `WS-REV-001-03A2` | REV-owned lease and preference persistence | Merged 03A1 + CON-03B PR #274 policy-version FK target | Active exact contract |
+| `WS-REV-001-03A2` | REV-owned lease and preference persistence | Merged 03A1 + CON-03B PR #274 policy-version FK target | Merged PR #280 |
 | `WS-REV-001-03B` | Normalized packet-manifest persistence | 03A2 + ART-owned contract-only packet membership port published before ART-07A runtime | Skeleton |
 | `WS-REV-001-04A` | Immutable Review/finding/resolution/decision-request persistence | 03B | Skeleton |
 | `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + CON-02A outbox persistence + CON-02C audit participant | Skeleton; enables CON-03C schema work |

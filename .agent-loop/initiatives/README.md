@@ -8,6 +8,11 @@ recovery scripts. Those references describe the process used at that time; do
 not execute them as current commands. Current contribution guidance lives in
 [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
+Current initiative disposition and remaining boundaries live in
+[`CURRENT_STATE.md`](../CURRENT_STATE.md). Use GitHub's open pull requests for
+transient work. Do not infer current work from a review file, branch name, old
+`Active` field, or chronological log entry.
+
 ## Historical ENG Initiatives
 
 ENG-001 through ENG-008 record the repository-control work that preceded the

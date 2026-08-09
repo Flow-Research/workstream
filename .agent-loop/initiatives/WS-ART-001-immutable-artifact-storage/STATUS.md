@@ -106,13 +106,11 @@ adds bounded PPTX slide/notes extraction. 03B3B3D merged through PR #238 and
 adds bounded XLSX cell extraction. 03B3B4 merged through PR #239 and adds only
 bounded PNG/JPEG/WebP structural metadata. 03B4 merged through PR #240 and adds
 the hidden same-generation sufficiency continuation. ART-03C and ART-04A1 are
-merged. ART-04A1 merged through PR #264. ART-04A2 is implemented on its
-bounded branch with internal L1 reviews passed; hosted PR gates and human merge
-remain pending.
+merged. ART-04A1 merged through PR #264, and ART-04A2 merged through PR #266.
 
 AUTH `WS-XINT-002-04B` activated only fixed-service binding and guide read.
 ART-03C removed the legacy identity/excerpt path and made the verified pipeline
-authoritative. ART-04A2 merged through PR #266. ART-04A3 merged through PR #268
+authoritative. ART-04A3 merged through PR #268
 and provides canonical server-derived semantic manifests, executable
 normalization, and fail-closed unchanged-work comparison.
 
@@ -134,9 +132,10 @@ exposure, provider I/O, or AUTH activation. `WS-ART-001-04B3` merged through
 PR #291 as `8f516e6d`. It executes the project-policy continuation through that
 same plan and sealed tree and persists one immutable platform-plus-project
 evidence set. AUTH `WS-XINT-002-06A` merged through PR #293 as `1ddb941e` and
-activated only the mandatory fixed pre-submit materializer. ART-04C1 is now
-unblocked; its preimplementation review requires the durable intent correction
-recorded in the current 04C1 contract before runtime implementation.
+activated only the mandatory fixed pre-submit materializer. ART-04C1 then
+merged through PR #296 and persists the evidence-linked durable put intent.
+The dependency-ordered successor is 04C2; open pull requests determine whether
+it is currently under review.
 
 ## Gate
 

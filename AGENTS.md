@@ -23,6 +23,10 @@ definition or ownership boundary of Workstream.
 - Codex-discoverable repository skills live under `.agents/skills/`.
 - Codex custom reviewer agents live under `.codex/agents/`.
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
+- `.agent-loop/CURRENT_STATE.md` is the current initiative entry point. GitHub
+  open pull requests are the transient-work view. Review logs and review
+  bundles are historical exact-change evidence, never an active-work queue or
+  authorization source.
 - `CONTRIBUTING.md` is the canonical human and agent entry path. GitHub
   permissions and branch protection govern contribution authority. Planning
   artifacts explain work; they do not authorize or block it.

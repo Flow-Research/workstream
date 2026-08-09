@@ -4,11 +4,15 @@ Planning is complete and internally reviewed. PR #289 retired the 05M hosted
 mutation workflow; Backend lanes and coverage remain authoritative. PR #290
 merged the catalogue plan.
 
-`WS-QUAL-002-01` is in implementation. The current branch adds the schema,
-canonical exact target partition, deterministic inventory/candidate generator,
-fail-closed validator, examples, focused tests, and contributor documentation.
-It does not reactivate mutation or change any workflow, product behavior,
-coverage floor, lane, skip, or deselection.
+`WS-QUAL-002-01` merged through PR #297. It adds the schema, canonical exact
+target partition, deterministic inventory/candidate generator, fail-closed
+validator, examples, focused tests, and contributor documentation. It does not
+reactivate mutation or change any workflow, product behavior, coverage floor,
+lane, skip, or deselection.
+
+The next dependency-ordered boundary is `WS-QUAL-002-02` context evidence.
+Open pull requests, not this static file, determine whether that or any other
+chunk is currently under review.
 
 Current focused evidence:
 

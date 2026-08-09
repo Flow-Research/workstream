@@ -1,7 +1,6 @@
 # Status: WS-AUTH-002 — Authorization Docstring Lint Correction
 
-- Phase: implementation
-- Active planning chunk: none
-- Active implementation chunk: `WS-AUTH-002-01`
-- Completed planning chunk: `WS-AUTH-002-PLAN`
-- Gate: implementation review and hosted evidence
+- Phase: complete
+- `WS-AUTH-002-PLAN` merged through PR #199.
+- `WS-AUTH-002-01` merged through PR #200.
+- No remaining chunk is declared.

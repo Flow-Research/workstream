@@ -113,27 +113,26 @@ complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR #153
 merged the contributor foundation as `8d5eb15` on 2026-07-19. No service caller
 or consumer feature action is active.
 
-## Active planning chunk
+## Current planning boundary
 
-`WS-AUTH-001-12`; the user started it on 2026-07-29. Required L1
+`WS-AUTH-001-12` planning is merged. Required L1
 preimplementation review rejected the inherited combined runtime contract
 before application-code edits. The repaired planning parent now splits runtime
 work into 12A through 12H plus 12B2 and 12D2. All nine exact-plan reviewer
 tracks passed after action-custody, canonical-lineage reuse, and fixed-service
 setup-run binding findings were repaired.
 
-## Active implementation chunk
+## Current implementation state
 
-None. Planning reconciliation is active after merged PR #295. No runtime chunk
-may start until the unified `WS-POL-003` dependency graph and remaining AUTH,
-ART, XINT, REV, and downstream contracts are reviewed and merged.
+No AUTH implementation chunk is declared active in durable memory. PR #298
+merged the unified `WS-POL-003` dependency reconciliation, and PR #299 merged
+its first contract chunk. Remaining AUTH runtime chunks follow their exact
+merged POL, ART, XINT, REV, and downstream dependencies.
 The concise new 12I/12B2/12F4/12G/12H records are dependency skeletons, not
 implementation authority; each requires a then-current executable contract
 with explicit path scope, commands, and named reviewers before human start.
 
-## Current review branch
-
-`codex/ws-pol-003-auth-plan-reconciliation`.
+Open pull requests, not this file, are the transient review view.
 
 ## Chunk status
 
@@ -168,13 +167,13 @@ with explicit path scope, commands, and named reviewers before human start.
 | `WS-AUTH-001-ART-CUSTODY` | Merged | `codex/ws-auth-001-art-custody` | #158 | Merged as `be2a79a2` on 2026-07-20; all 25 ART actions remain planned. |
 | `WS-AUTH-001-REV-CUSTODY` | Merged | `codex/ws-auth-001-rev-custody` | #160 | Merged as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned. |
 | `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
-| `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
-| `WS-AUTH-001-11` | Planning split authored | `codex/ws-auth-001-11-project-read-cutover` | - | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2; signed automation remains the live-state authority. |
+| `WS-AUTH-001-10` | Completed through children | `codex/ws-auth-001-10-project-role-grants` | #168 | Planning split merged; 10A, 10B1, 10B2, and 10C later merged through PRs #170, #175, #178, and #194. |
+| `WS-AUTH-001-11` | Planning split merged | `codex/ws-auth-001-11-project-read-cutover` | #201 | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2. |
 | `WS-AUTH-001-11A` | Merged | `codex/ws-auth-001-11a-project-read-catalogue` | #208 | Registered the project-read catalogue and migration `0035`; no activation. |
 | `WS-AUTH-001-11B` | Merged | `codex/ws-auth-001-11b-project-identity-context` | #214 | Project identity and self authorization-context hard cutover; merged as `033654ac`. |
 | `WS-AUTH-001-11C1` | Merged | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | #216 | Setup-diagnostic read hard cutover merged as `2965a9f9` on 2026-07-28. |
 | `WS-AUTH-001-11C2` | Merged | `codex/ws-auth-001-11c2-effective-policy-active-guide-reads` | #221 | Effective-policy and active-guide read cutover merged as `3fc323d7` on 2026-07-29. |
-| `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
+| `WS-AUTH-001-12` | Planning split merged | `codex/ws-auth-001-12-project-mutation-cutover` | #224 | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
 | `WS-AUTH-001-12A` | Merged | `codex/ws-auth-001-12a-project-mutation-catalogue` | #226 | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; merged as `64dd9c98` with zero activation. |
 | `WS-AUTH-001-12B` | Merged | `codex/ws-auth-001-12b-project-setup-service` | #227 | Fixed project-setup service identity and planned matrix only; zero activation and no actor/link seed. |
 | `WS-AUTH-001-12B2` | Proposed | - | - | Setup-ledger activation after hidden POL-04A; POL-04B owns the live setup-service cutover. |
@@ -182,7 +181,7 @@ with explicit path scope, commands, and named reviewers before human start.
 | `WS-AUTH-001-12D` | Merged | `codex/ws-auth-001-12d-guide-draft-source` | #232 | Draft guide and source metadata mutation cutover merged as `99dc0b34`. |
 | `WS-AUTH-001-12D2` | Superseded | - | #248 | XINT-003-02A/02B own immutable review/revision policy lineage and the sole authorized mutation path; 02B merged as `25fc27c4`. |
 | `WS-AUTH-001-12E` | Merged; transitional | `codex/ws-auth-001-12e-guide-sufficiency` | #263 | Merged as `b510bc4f`; projection custody remains reusable, but the standalone inference entry point becomes unreachable at POL-04B and is deleted at POL-08. |
-| `WS-AUTH-001-12F` | Planning split | `codex/ws-auth-001-12f-submission-artifact-policy` | - | Combined contract failed required L1 pre-start review; parent now activates nothing and delegates to 12F1-12F4. |
+| `WS-AUTH-001-12F` | Planning split merged | `codex/ws-auth-001-12f-submission-artifact-policy` | #283 | Combined contract failed required L1 preimplementation review; parent activates nothing and delegates to 12F1-12F4. |
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
 | `WS-AUTH-001-12F3` | Merged; transitional | `codex/ws-auth-001-12f3-service-derivation` | #295 | Merged as `99c0aaf0`; authority/provenance is reused, while its separate inference entry point is removed at POL-04B. |

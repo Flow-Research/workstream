@@ -1,5 +1,8 @@
 # REVIEW LOG: WS-ENG-003
 
+> Archive only. This initiative is historical and closed. Do not use this log
+> as current engineering instructions.
+
 ## WS-ENG-003-01
 
 - Preimplementation plan review: PASS after moving recovery preparation before sequential reduction and binding the exact resolved target.
