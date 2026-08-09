@@ -630,52 +630,13 @@ def build_context_evidence(
 
     with tempfile.TemporaryDirectory(prefix="workstream-context-evidence-") as directory:
         metadata = Path(directory)
-        collection_files = {
-            test_lanes.COLLECTED_ENV: metadata / "collection.nodes.jsonl",
-            test_lanes.DESELECTED_ENV: metadata / "collection.deselected.jsonl",
-        }
-        for evidence_path in collection_files.values():
-            test_lanes._exclusive_file(evidence_path)
-        collection_environment = _sanitize_context_environment(
-            {
-                **os.environ,
-                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-                "PYTHONPATH": str(backend_root),
-                test_lanes.HEAD_ENV: head_sha,
-                **{key: str(path.resolve()) for key, path in collection_files.items()},
-            },
-            backend_root,
+        collection_code, nodes, collection_deselected = test_lanes.collect_nodes(
+            (test_module,),
+            metadata,
+            head_sha,
+            base_environment=_sanitize_context_environment(os.environ, backend_root),
         )
-        collection = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "--collect-only",
-                "-q",
-                *test_lanes._plugin_args(),
-                test_module,
-            ],
-            cwd=backend_root,
-            env=collection_environment,
-            check=False,
-            timeout=runtime_limit_seconds,
-        )
-        nodes = (
-            test_lanes._read_nodes(collection_files[test_lanes.COLLECTED_ENV])
-            if collection.returncode == 0
-            else []
-        )
-        collection_deselected = test_lanes._read_nodes(
-            collection_files[test_lanes.DESELECTED_ENV], allow_empty=True
-        )
-        if (
-            collection.returncode != 0
-            or collection_deselected
-            or not nodes
-            or len(nodes) != len(set(nodes))
-            or any(test_lanes._module_from_node(node) != test_module for node in nodes)
-        ):
+        if collection_code != 0 or collection_deselected or not nodes:
             raise BehaviorOwnershipError("invalid_context_collection")
         coverage_path = metadata / ".coverage.context"
         lane = test_lanes.TestLane("context_evidence", (test_module,), requires_postgres=False)
