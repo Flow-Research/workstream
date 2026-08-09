@@ -23,6 +23,7 @@ from pydantic import (
 )
 
 MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES = 12 * 1024 * 1024
+MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES = 16 * 1024 * 1024
 MAXIMUM_COMPILATION_FINDINGS = 100
 MAXIMUM_COMPILATION_REQUIREMENTS = 200
 MAXIMUM_COMPILATION_BINDINGS = 100
@@ -444,6 +445,21 @@ class ProjectGuideCompilationContext(BaseModel):
     representative_task: RepresentativeTaskPolicyContext | None = None
 
 
+def canonical_project_guide_compilation_context_bytes(
+    context: ProjectGuideCompilationContext,
+) -> bytes:
+    """Serialize one context without double-encoding canonical guide JSON."""
+    body = context.model_dump(mode="json")
+    body["material"]["canonical_payload"] = json.loads(context.material.canonical_payload)
+    return json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
 class ProjectGuideCompilationResult(BaseModel):
     """Strict untrusted proposal; trusted code must validate it with context."""
 
@@ -863,6 +879,12 @@ class PostSubmitCheckerPolicyDerivationResult(BaseModel):
 
 class ProjectGuideAgentRuntime(Protocol):
     """Port implemented by project guide setup agent runtimes."""
+
+    async def compile_project_guide(
+        self,
+        context: ProjectGuideCompilationContext,
+    ) -> ProjectGuideCompilationResult:
+        """Compile one complete untrusted project-guide proposal."""
 
     async def analyze_guide_sufficiency(
         self,

@@ -1,8 +1,9 @@
 # Chunk Map: WS-POL-003 - Unified Project Guide Compilation
 
-All chunks are L1, one PR each, proposed, and inactive. Product behavior is
-built hidden before AUTH activation; only a later live-cutover chunk exposes
-it. No chunk starts automatically.
+All chunks are L1 and one PR each. POL-01 is merged, POL-02 is active after its
+explicit human start, and later chunks remain proposed and inactive. Product
+behavior is built hidden before AUTH activation; only a later live-cutover
+chunk exposes it. No chunk starts automatically.
 
 | Chunk | Purpose | Hard dependency |
 |---|---|---|
