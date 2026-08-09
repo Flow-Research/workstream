@@ -555,6 +555,8 @@ def _coverage_lines_by_context(
         raise BehaviorOwnershipError("invalid_context_coverage") from exc
     result: dict[str, set[int]] = {}
     for context in sorted(data.measured_contexts()):
+        # Fixture setup/teardown contexts are deliberately excluded: they do
+        # not prove that the test body executed the callable behavior.
         node = context.removesuffix("|run")
         if node not in completed_nodes:
             continue
@@ -630,12 +632,19 @@ def build_context_evidence(
 
     with tempfile.TemporaryDirectory(prefix="workstream-context-evidence-") as directory:
         metadata = Path(directory)
-        collection_code, nodes, collection_deselected = test_lanes.collect_nodes(
-            (test_module,),
-            metadata,
-            head_sha,
-            base_environment=_sanitize_context_environment(os.environ, backend_root),
-        )
+        remaining = runtime_limit_seconds - (time.monotonic() - started)
+        if remaining <= 0:
+            raise BehaviorOwnershipError("context_runtime_exceeded")
+        try:
+            collection_code, nodes, collection_deselected = test_lanes.collect_nodes(
+                (test_module,),
+                metadata,
+                head_sha,
+                base_environment=_sanitize_context_environment(os.environ, backend_root),
+                timeout_seconds=remaining,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise BehaviorOwnershipError("context_runtime_exceeded") from exc
         if collection_code != 0 or collection_deselected or not nodes:
             raise BehaviorOwnershipError("invalid_context_collection")
         coverage_path = metadata / ".coverage.context"
@@ -657,13 +666,16 @@ def build_context_evidence(
             "--cov-context=test",
             *nodes,
         ]
+        remaining = runtime_limit_seconds - (time.monotonic() - started)
+        if remaining <= 0:
+            raise BehaviorOwnershipError("context_runtime_exceeded")
         try:
             run = subprocess.run(
                 command,
                 cwd=backend_root,
                 env=environment,
                 check=False,
-                timeout=runtime_limit_seconds,
+                timeout=remaining,
             )
         except subprocess.TimeoutExpired as exc:
             raise BehaviorOwnershipError("context_runtime_exceeded") from exc

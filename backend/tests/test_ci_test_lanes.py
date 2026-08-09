@@ -503,6 +503,7 @@ def test_collection_accepts_a_minimal_base_environment(
 
     def fake_run(*_args, **kwargs):
         environment = kwargs["env"]
+        assert kwargs["timeout"] == 12.5
         assert environment["PYTHONPATH"] == str(runner.ROOT)
         assert "UNRELATED_SECRET" not in environment
         Path(environment[runner.COLLECTED_ENV]).write_text(
@@ -517,6 +518,7 @@ def test_collection_accepts_a_minimal_base_environment(
         metadata,
         "a" * 40,
         base_environment={"PYTHONPATH": str(runner.ROOT)},
+        timeout_seconds=12.5,
     )
 
     assert result == (0, [f"{module}::test_alpha"], [])

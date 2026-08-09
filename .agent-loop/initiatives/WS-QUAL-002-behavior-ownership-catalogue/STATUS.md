@@ -17,8 +17,8 @@ is authoritative for its transient review and merge state.
 
 Current focused evidence:
 
-- 83 behavior-ownership tests pass; the combined behavior-ownership and
-  semantic-lane contract suite passes all 117 tests.
+- 90 behavior-ownership tests pass; the combined behavior-ownership and
+  semantic-lane contract suite passes all 124 tests.
 - `scripts.behavior_ownership` coverage is 91 percent.
 - 33 semantic-lane contract tests pass, including exact assignment of the new
   focused test module to `shared_foundations` under the human-approved scope

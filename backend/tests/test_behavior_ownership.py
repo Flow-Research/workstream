@@ -908,6 +908,7 @@ def test_context_validator_rejects_unsafe_and_unknown_shape(tmp_path: Path) -> N
         ("symlink_output", "context_output_exists_or_unsafe"),
         ("output", "context_output_exists_or_unsafe"),
         ("collection", "invalid_context_collection"),
+        ("collection_timeout", "context_runtime_exceeded"),
     ],
 )
 def test_context_builder_fails_closed_before_execution(
@@ -947,6 +948,8 @@ def test_context_builder_fails_closed_before_execution(
         lambda *args: case != "untracked",
     )
     def fake_collection(arguments, *, cwd, env, check, timeout=None):
+        if case == "collection_timeout":
+            raise subprocess.TimeoutExpired(arguments, timeout)
         if case != "collection":
             Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
                 json.dumps("tests/test_example.py::test_run") + "\n", encoding="utf-8"
@@ -967,6 +970,84 @@ def test_context_builder_fails_closed_before_execution(
             test_module=test_module,
             output=output,
             runtime_limit_seconds=runtime,
+        )
+
+
+@pytest.mark.parametrize(
+    ("case", "error"),
+    [
+        ("failure", "context_test_failure"),
+        ("incomplete", "incomplete_context_execution"),
+        ("skipped", "weakened_context_execution"),
+        ("deselected", "weakened_context_execution"),
+        ("missing_coverage", "missing_context_coverage"),
+        ("timeout", "context_runtime_exceeded"),
+    ],
+)
+def test_context_builder_fails_closed_after_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    error: str,
+) -> None:
+    target = "backend/scripts/example.py"
+    target_path = tmp_path / target
+    target_path.parent.mkdir(parents=True)
+    target_path.write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    (tests / "test_example.py").write_text("def test_run(): pass\n", encoding="utf-8")
+    node = "tests/test_example.py::test_run"
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "discover_test_modules",
+        lambda *args: ("tests/test_example.py",),
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "collect_nodes",
+        lambda *args, **kwargs: (0, [node], []),
+    )
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+    monkeypatch.setattr(
+        ownership,
+        "_coverage_lines_by_context",
+        lambda *args: {node: {1, 2}},
+    )
+
+    def fake_run(arguments, *, cwd, env, check, timeout):
+        if case == "timeout":
+            raise subprocess.TimeoutExpired(arguments, timeout)
+        metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
+        collected = [node]
+        completed = [f"{node}_other"] if case == "incomplete" else [node]
+        for suffix, values in (
+            ("collected", collected),
+            ("completed", completed),
+            ("skipped", [node] if case == "skipped" else []),
+            ("deselected", [node] if case == "deselected" else []),
+        ):
+            (metadata / f"context.{suffix}.jsonl").write_text(
+                "".join(json.dumps(value) + "\n" for value in values),
+                encoding="utf-8",
+            )
+        if case != "missing_coverage":
+            Path(env["COVERAGE_FILE"]).write_bytes(b"coverage")
+        return subprocess.CompletedProcess(arguments, 1 if case == "failure" else 0)
+
+    monkeypatch.setattr(ownership.subprocess, "run", fake_run)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match=error):
+        ownership.build_context_evidence(
+            tmp_path,
+            target=target,
+            test_module="tests/test_example.py",
+            output=tmp_path / "context.json",
         )
 
 

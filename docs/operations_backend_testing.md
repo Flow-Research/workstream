@@ -241,3 +241,7 @@ its digest. It contains no environment values, credentials, payloads, logs, or
 database values; keep it outside `.ci/behavior-ownership/` and do not commit it.
 The catalogue validator never consumes this artifact, and no workflow or
 required check invokes the command.
+
+Only pytest `|run` coverage contexts count as callable-execution evidence.
+Fixture setup and teardown coverage is intentionally excluded because it does
+not prove that the test body exercised the callable.

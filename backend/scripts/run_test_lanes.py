@@ -453,6 +453,7 @@ def collect_nodes(
     tree_sha: str,
     *,
     base_environment: dict[str, str] | None = None,
+    timeout_seconds: float | None = None,
 ) -> tuple[int, list[str], list[str]]:
     collected = metadata_dir / "collection.nodes.jsonl"
     deselected = metadata_dir / "collection.deselected.jsonl"
@@ -468,6 +469,7 @@ def collect_nodes(
             base_environment=base_environment,
         ),
         check=False,
+        timeout=timeout_seconds,
     )
     nodes = _read_nodes(collected) if result.returncode == 0 else []
     deselected_nodes = _read_nodes(deselected, allow_empty=True)
