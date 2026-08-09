@@ -1,5 +1,8 @@
 # REVIEW LOG: WS-ENG-002
 
+> Archive only. This initiative is historical and closed. Do not use this log
+> as current engineering instructions.
+
 ## WS-ENG-002-01
 
 - Preimplementation plan review: PASS after narrowing cancellation and defining dual-era authority evidence.

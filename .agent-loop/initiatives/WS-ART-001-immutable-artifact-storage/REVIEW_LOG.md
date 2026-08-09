@@ -1,5 +1,9 @@
 # Review Log: WS-ART-001 Immutable Artifact Storage
 
+> Archive only. Use `../../CURRENT_STATE.md`, current `main`, and open pull
+> requests for current state. Entries below apply only to the exact reviewed
+> changes and do not activate, block, or complete later work.
+
 ## WS-ART-001-03A
 
 - Reconciled on 2026-07-28 with trusted `main` `033654ac`, after merged

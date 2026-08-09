@@ -94,11 +94,12 @@ remain outside v0.1.
 The following areas have merged planning, contracts, or partial foundations,
 but are not all complete as one production path:
 
-- Hidden contributor-ZIP default pre-submit execution: fixed-service authority
-  precedes byte access, one manifest-verified callback-scoped scratch tree runs
-  only platform/default catalogue phases, and cleanup precedes bounded
-  non-durable results. Project-policy execution, durable evidence, contributor
-  preparation, admission, and Submission remain unavailable.
+- Hidden contributor-ZIP pre-submit execution: fixed-service authority precedes
+  byte access; one manifest-verified callback-scoped scratch tree runs the
+  platform/default and project-policy phases; cleanup precedes one immutable
+  combined evidence set. The evidence-linked durable put intent is merged.
+  Ready-admission publication, contributor preparation, and Submission
+  consumption are not yet part of the complete production path.
 
 - integration of the merged review/revision policy and authorization readiness
   contracts into hidden REV lifecycle behavior;

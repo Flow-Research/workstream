@@ -2,9 +2,9 @@
 
 ## Current status
 
-WS-XINT-003-01, WS-XINT-003-02A, WS-XINT-003-02B, and WS-XINT-003-02C are
-merged. PR #255 merged 02C as `745d9c3f` on 2026-08-03 after Backend, Agent
-Gates, and CodeRabbit passed on the final PR head. Exactly
+WS-XINT-003-01, WS-XINT-003-02A, WS-XINT-003-02B, WS-XINT-003-02C, and
+WS-XINT-003-02D are merged. PR #257 merged 02D and published the complete
+fail-closed PREP and read contract handoff for REV. Exactly
 `project.review_policy.update` and
 `project.revision_policy.update` are active; review/revision lifecycle actions
 remain planned or unavailable.
@@ -51,10 +51,8 @@ REV-owned semantics with AUTH-owned mutation authorization.
 
 ## Next step
 
-WS-XINT-003-02D implements the complete typed, fail-closed PREP/read contract
-handoff on top of merged 02C. Its merge permits REV to begin hidden lifecycle
-implementation against that stable surface. AUTH then returns to its independent
-agenda; later XINT activation waves reconnect only to exact merged REV behavior.
-Do not infer review lifecycle
-activation from readiness: later action activation still requires exact merged
-REV behavior and integrated proof.
+REV may implement its hidden lifecycle against the merged 02D surface. Later
+XINT activation waves reconnect only to exact merged REV behavior. Do not infer
+review lifecycle activation from readiness: later action activation still
+requires exact merged REV behavior and integrated proof. Open pull requests
+determine transient XINT work.

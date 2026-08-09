@@ -1,5 +1,8 @@
 # Review Log: Writer-Directed Workstream Start
 
+> Archive only. This initiative is historical and closed. Do not use this log
+> as current engineering instructions.
+
 - 2026-07-21: Post-merge Loop Memory run `29835344158` failed closed because
   rebuild authentication invoked the new renderer before authenticating prior
   signed projections. The bounded 01R1 repair separates structural/signature

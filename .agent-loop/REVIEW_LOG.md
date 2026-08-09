@@ -1,11 +1,12 @@
 # Review Log
 
-> Historical record: entries below preserve the review context that existed
+> **ARCHIVE — NOT CURRENT STATE.** Entries below preserve the review context that existed
 > when each change was evaluated. References to signed starts, loop memory,
 > recovery certificates, machine scope, pending PRs, or future successors are
-> not current status. PR #207 retired that repository-control runtime. Use
-> `CONTRIBUTING.md` for the current engineering loop and the initiative
-> `STATUS.md` files for final ENG dispositions.
+> not current status. PR #207 retired that repository-control runtime. Do not
+> derive active, blocked, approved, incomplete, or next work from this file.
+> Use `.agent-loop/CURRENT_STATE.md`, `docs/roadmap_status.md`, current `main`,
+> and open GitHub pull requests instead.
 
 ## 2026-07-21 - WS-AUTH-001-10B Internal Plan Review
 

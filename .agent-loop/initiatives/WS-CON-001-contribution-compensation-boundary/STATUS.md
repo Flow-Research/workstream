@@ -8,9 +8,8 @@
 - PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
   `needs_revision` rebase rule.
 - Runtime on main contains shared outbox persistence, the schema-only
-  compensation binding foundation, and contribution-policy persistence. 02C
-  implementation, deterministic proof, internal review, and external checks
-  are complete; human approval and merge remain pending. Contribution-record,
+  compensation binding foundation, contribution-policy persistence, and the
+  02C shared lifecycle-audit participant merged through PR #277. Contribution-record,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
 - The pre-existing local deletion of the archival reference PDF is user-owned
   and excluded from this runtime change.
@@ -72,9 +71,7 @@ schema work. Current dependency analysis yields:
 
 ## Immediate next action
 
-Move CON-02C through external review and human approval now that implementation,
-deterministic proof, and required internal review are complete. REV-03A2 may
-proceed against the merged contribution-policy version FK, and REV-04B may
-proceed in parallel against the 02C contract but must merge after 02C.
-Binding creation remains deferred to 04A after AUTH approves the exact adapter
-identity/capability contract.
+CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
+participant after REV's earlier gates merge. Binding creation remains deferred
+to CON-04A after AUTH approves the exact adapter identity and capability
+contract. Open pull requests determine transient CON work.

@@ -49,13 +49,13 @@ stopped.
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; historical 25-row transfer later reconciled by WS-XINT-002-01 to 22 planned ART actions |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
-| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active planning-only parent; split approved after failed L1 combined review |
-| `WS-AUTH-001-10A` | Project Role Grant Data And Evidence Foundation | L1 | Proposed successor; migration `0031`, no active surface |
-| `WS-AUTH-001-10B` | Project Role Grant Read Planning Parent | L1 | Active start split before runtime implementation |
-| `WS-AUTH-001-10B1` | Durable Authorization Read Rate Control | L1 | Proposed successor after 10B planning merge/memory |
-| `WS-AUTH-001-10B2` | Privacy-Safe Project Role Grant Reads | L1 | Proposed after 10B1 |
-| `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B2 |
-| `WS-AUTH-001-11` | Project Read Cutover Planning Parent | L1 | Signed start run `30167274426`; planning split authored, no runtime implementation |
+| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Planning split merged PR #168 |
+| `WS-AUTH-001-10A` | Project Role Grant Data And Evidence Foundation | L1 | Merged PR #170; migration `0031` |
+| `WS-AUTH-001-10B` | Project Role Grant Read Planning Parent | L1 | Planning split merged PR #173 |
+| `WS-AUTH-001-10B1` | Durable Authorization Read Rate Control | L1 | Merged PR #175 |
+| `WS-AUTH-001-10B2` | Privacy-Safe Project Role Grant Reads | L1 | Merged PR #178 |
+| `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Merged PR #194 |
+| `WS-AUTH-001-11` | Project Read Cutover Planning Parent | L1 | Planning split merged PR #201 |
 | `WS-AUTH-001-11A` | Project Read Catalogue And Projection Foundation | L1 | Merged in PR #208; migration `0035`, no active surface |
 | `WS-AUTH-001-11B` | Project Identity And Actor Context Cutover | L1 | Merged in PR #214 as `033654ac` |
 | `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Merged in PR #216 as `2965a9f9` |

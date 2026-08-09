@@ -1,5 +1,9 @@
 # Review Log: WS-XINT-002
 
+> Archive only. Use `../../CURRENT_STATE.md`, current `main`, and open pull
+> requests for current state. Entries below apply only to exact reviewed
+> changes.
+
 ## Planning review
 
 Architecture, security/auth, QA/test, product/ops, senior engineering, and CI

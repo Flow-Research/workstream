@@ -1,5 +1,9 @@
 # Review Log: WS-XINT-003 REV-AUTH End-to-End Contract
 
+> Archive only. Use `../../CURRENT_STATE.md`, current `main`, and open pull
+> requests for current state. Entries below apply only to exact reviewed
+> changes.
+
 ## AUTH-readiness sequencing amendment — 2026-08-03
 
 Post-02B review found a circular delivery dependency absent from the corrected

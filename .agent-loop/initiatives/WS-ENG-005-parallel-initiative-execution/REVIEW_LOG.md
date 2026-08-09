@@ -1,5 +1,8 @@
 # Review Log: Parallel Initiative Execution
 
+> Archive only. This initiative is historical and closed. Current concurrency
+> guidance lives in `CONTRIBUTING.md` and `../../CURRENT_STATE.md`.
+
 - 2026-07-21: User approved replacing repository-global serialization with one
   active chunk per initiative and maximum safe cross-initiative concurrency.
 - 2026-07-21: L1 plan review passed after requiring forward-compatible rollback,
