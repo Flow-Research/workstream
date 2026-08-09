@@ -802,7 +802,9 @@ def validate_context_evidence(
         raise BehaviorOwnershipError("invalid_context_elapsed")
     if not isinstance(value["callables"], list):
         raise BehaviorOwnershipError("invalid_context_callables")
-    source = (root / target).read_text(encoding="utf-8")
+    source = _git_show_optional(root, head_revision, target)
+    if source is None:
+        raise BehaviorOwnershipError("invalid_context_identity")
     actual_spans = {
         name: (start_line, end_line)
         for start_line, end_line, name in _callable_spans(

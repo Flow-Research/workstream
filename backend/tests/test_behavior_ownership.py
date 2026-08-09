@@ -551,13 +551,19 @@ def _context_artifact(**overrides: object) -> dict[str, object]:
 def _prepare_context_identity(
     root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    committed_source = "def run():\n    return 1\n"
     target = root / "backend/scripts/example.py"
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("def run():\n    return 1\n", encoding="utf-8")
+    target.write_text(committed_source, encoding="utf-8")
     test_module = root / "backend/tests/test_example.py"
     test_module.parent.mkdir(parents=True, exist_ok=True)
     test_module.write_text("def test_run(): pass\n", encoding="utf-8")
     monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: committed_source,
+    )
 
 
 def test_context_evidence_is_separate_digest_bound_candidate_input(
@@ -576,6 +582,23 @@ def test_context_evidence_is_separate_digest_bound_candidate_input(
     assert result["node_count"] == 1
     assert "status" not in artifact
     assert artifact["schema"] != ownership.CATALOGUE_SCHEMA
+
+
+def test_context_evidence_callable_spans_are_bound_to_committed_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    artifact = _context_artifact()
+    _write_json(path, artifact)
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+    (tmp_path / "backend/scripts/example.py").write_text(
+        "def changed():\n    return 2\n", encoding="utf-8"
+    )
+
+    result = ownership.validate_context_evidence(tmp_path, path)
+
+    assert result["callable_count"] == 1
 
 
 @pytest.mark.parametrize(
@@ -923,7 +946,7 @@ def test_context_builder_fails_closed_before_execution(
         "_tracked_at_revision",
         lambda *args: case != "untracked",
     )
-    def fake_collection(arguments, *, cwd, env, check, timeout):
+    def fake_collection(arguments, *, cwd, env, check, timeout=None):
         if case != "collection":
             Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
                 json.dumps("tests/test_example.py::test_run") + "\n", encoding="utf-8"
