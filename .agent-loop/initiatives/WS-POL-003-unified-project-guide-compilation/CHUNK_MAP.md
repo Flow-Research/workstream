@@ -7,7 +7,7 @@ transient work, and no chunk starts automatically.
 | Chunk | Purpose | Hard dependency |
 |---|---|---|
 | `WS-POL-003-01` | Strict unified contracts and read-only pre/post capability projections. Merged PR #299. | Merged ART-04B1 and canonical CHECKER/POL post-submit registry |
-| `WS-POL-003-02` | One `compile_project_guide` adapter method and fake-runtime proof. | 01 |
+| `WS-POL-003-02` | One `compile_project_guide` adapter method and fake-runtime proof. Merged PR #301. | 01 |
 | `WS-POL-003-03A` | Hidden immutable attempt/compilation schema, validator, repository, crash fence, and deny-by-default authorization seams. | 02 |
 | `WS-AUTH-001-12I` | Register and activate exact PM compilation request/recovery plus fixed-service compilation execute authority. | 03A exact resource/action manifest |
 | `WS-POL-003-03B` | Consume 12I to make immutable compilation parent/result persistence usable; no policy projection or setup-service cutover. | 03A + AUTH-12I |
