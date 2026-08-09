@@ -7,14 +7,21 @@ import argparse
 import ast
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import subprocess
 import sys
+import tempfile
+import time
 from typing import Any, Iterable
 
+from coverage import CoverageData
 from jsonschema import Draft202012Validator
 
+from scripts import run_test_lanes as test_lanes
 from scripts.mutation_policy import CALLABLE_RE
+from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import OBSERVABLE_OUTCOMES
 from scripts.mutation_policy import REAL_BOUNDARIES
 from scripts.mutation_policy import TEST_NODE_RE
@@ -30,7 +37,27 @@ SCHEMA_PATH = "scripts/behavior-ownership.schema.json"
 PARTITION_PATH = ".ci/behavior-ownership/partition.v1.json"
 PARTITION_SCHEMA = "workstream.behavior-ownership-partition.v1"
 CATALOGUE_SCHEMA = "workstream.behavior-ownership.v1"
+CONTEXT_EVIDENCE_SCHEMA = "workstream.behavior-ownership-context-evidence.v1"
 GROUPS = ("auth", "artifacts", "lifecycle", "shared")
+CONTEXT_RUNTIME_LIMIT_SECONDS = 120.0
+CONTEXT_ARTIFACT_LIMIT_BYTES = 10 * 1024 * 1024
+CONTEXT_EVIDENCE_KEYS = {
+    "schema",
+    "authoritative",
+    "head_sha",
+    "lane",
+    "target",
+    "test_module",
+    "collection_complete",
+    "execution_complete",
+    "collected_nodes",
+    "completed_nodes",
+    "skipped_nodes",
+    "deselected_nodes",
+    "callables",
+    "elapsed_seconds",
+    "artifact_digest",
+}
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -457,6 +484,396 @@ def generate_candidates(root: Path = ROOT, *, group: str | None = None) -> dict[
     }
 
 
+def _write_exclusive(path: Path, data: bytes) -> None:
+    """Write one private regular artifact without overwrite or symlink following."""
+    if len(data) > CONTEXT_ARTIFACT_LIMIT_BYTES:
+        raise BehaviorOwnershipError("context_evidence_too_large")
+    if not path.parent.is_dir():
+        raise BehaviorOwnershipError("invalid_context_output_parent")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise BehaviorOwnershipError("context_output_exists_or_unsafe") from exc
+    try:
+        with os.fdopen(descriptor, "wb") as destination:
+            destination.write(data)
+    except OSError:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def _tracked_at_revision(root: Path, revision: str, path: str) -> bool:
+    """Return whether one safe repository path is tracked at the revision."""
+    try:
+        _safe_path(path)
+    except MutationPolicyError:
+        return False
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}:{path}"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _context_node_is_valid(node: object, test_module: str) -> bool:
+    """Validate one backend-relative pytest node against the selected module."""
+    if not isinstance(node, str) or any(character in node for character in "\x00\r\n"):
+        return False
+    try:
+        return test_lanes._module_from_node(node) == test_module
+    except test_lanes.LaneError:
+        return False
+
+
+def _context_target_is_valid(root: Path, target: object) -> bool:
+    """Validate an eligible regular target without leaking policy exceptions."""
+    if not isinstance(target, str):
+        return False
+    try:
+        return _eligible_target(target) and _regular_repository_file(root, target)
+    except MutationPolicyError:
+        return False
+
+
+def _coverage_lines_by_context(
+    coverage_path: Path, target_path: Path, completed_nodes: set[str]
+) -> dict[str, set[int]]:
+    """Read exact pytest contexts without exposing unrelated coverage metadata."""
+    data = CoverageData(basename=str(coverage_path))
+    try:
+        data.read()
+    except Exception as exc:
+        raise BehaviorOwnershipError("invalid_context_coverage") from exc
+    result: dict[str, set[int]] = {}
+    for context in sorted(data.measured_contexts()):
+        # Fixture setup/teardown contexts are deliberately excluded: they do
+        # not prove that the test body executed the callable behavior.
+        node = context.removesuffix("|run")
+        if node not in completed_nodes:
+            continue
+        data.set_query_contexts([f"^{re.escape(context)}$"])
+        lines = data.lines(str(target_path.resolve())) or []
+        result.setdefault(node, set()).update(lines)
+    data.set_query_contexts(None)
+    if set(result) != completed_nodes:
+        raise BehaviorOwnershipError("missing_test_context")
+    return result
+
+
+def _sanitize_context_environment(
+    environment: dict[str, str], backend_root: Path
+) -> dict[str, str]:
+    """Retain only non-secret runtime and lane-custody environment values."""
+    allowed = {
+        "PATH",
+        "VIRTUAL_ENV",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        "TMPDIR",
+        test_lanes.COLLECTED_ENV,
+        test_lanes.COMPLETED_ENV,
+        test_lanes.SKIPPED_ENV,
+        test_lanes.DESELECTED_ENV,
+        test_lanes.HEAD_ENV,
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+        "COVERAGE_FILE",
+    }
+    sanitized = {key: value for key, value in environment.items() if key in allowed}
+    sanitized["PYTHONPATH"] = str(backend_root)
+    return sanitized
+
+
+def build_context_evidence(
+    root: Path,
+    *,
+    target: str,
+    test_module: str,
+    output: Path,
+    runtime_limit_seconds: float = CONTEXT_RUNTIME_LIMIT_SECONDS,
+) -> dict[str, Any]:
+    """Run one local context probe and emit non-authoritative evidence."""
+    started = time.monotonic()
+    if runtime_limit_seconds <= 0 or runtime_limit_seconds > CONTEXT_RUNTIME_LIMIT_SECONDS:
+        raise BehaviorOwnershipError("invalid_context_runtime_limit")
+    if not _regular_repository_file(root, target) or not _eligible_target(target):
+        raise BehaviorOwnershipError("unsafe_or_missing_target")
+    backend_root = root / "backend"
+    if not test_lanes._safe_module_path(test_module):
+        raise BehaviorOwnershipError("invalid_context_test_module")
+    if test_module not in test_lanes.discover_test_modules(backend_root / "tests", backend_root):
+        raise BehaviorOwnershipError("missing_context_test_module")
+    head_sha = _git(root, "rev-parse", "HEAD")
+    if not _tracked_at_revision(root, head_sha, target) or not _tracked_at_revision(
+        root, head_sha, f"backend/{test_module}"
+    ):
+        raise BehaviorOwnershipError("untracked_context_input")
+    if _git(root, "status", "--porcelain", "--untracked-files=all"):
+        raise BehaviorOwnershipError("dirty_context_tree")
+    if output.is_symlink() or any(
+        parent.is_symlink() for parent in output.parents if parent.exists()
+    ):
+        raise BehaviorOwnershipError("context_output_exists_or_unsafe")
+    try:
+        output = output.resolve(strict=False)
+    except OSError as exc:
+        raise BehaviorOwnershipError("invalid_context_output") from exc
+    if output.exists() or output.is_symlink():
+        raise BehaviorOwnershipError("context_output_exists_or_unsafe")
+
+    with tempfile.TemporaryDirectory(prefix="workstream-context-evidence-") as directory:
+        metadata = Path(directory)
+        remaining = runtime_limit_seconds - (time.monotonic() - started)
+        if remaining <= 0:
+            raise BehaviorOwnershipError("context_runtime_exceeded")
+        try:
+            collection_code, nodes, collection_deselected = test_lanes.collect_nodes(
+                (test_module,),
+                metadata,
+                head_sha,
+                base_environment=_sanitize_context_environment(os.environ, backend_root),
+                timeout_seconds=remaining,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise BehaviorOwnershipError("context_runtime_exceeded") from exc
+        if collection_code != 0 or collection_deselected or not nodes:
+            raise BehaviorOwnershipError("invalid_context_collection")
+        coverage_path = metadata / ".coverage.context"
+        lane = test_lanes.TestLane("context_evidence", (test_module,), requires_postgres=False)
+        for suffix in ("collected", "completed", "skipped", "deselected"):
+            test_lanes._exclusive_file(metadata / f"context.{suffix}.jsonl")
+        environment = test_lanes.lane_environment(
+            lane, metadata, coverage_path, "context", head_sha
+        )
+        environment = _sanitize_context_environment(environment, backend_root)
+        command = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            *test_lanes._plugin_args(),
+            f"--cov={module_name(target)}",
+            "--cov-report=",
+            "--cov-context=test",
+            *nodes,
+        ]
+        remaining = runtime_limit_seconds - (time.monotonic() - started)
+        if remaining <= 0:
+            raise BehaviorOwnershipError("context_runtime_exceeded")
+        try:
+            run = subprocess.run(
+                command,
+                cwd=backend_root,
+                env=environment,
+                check=False,
+                timeout=remaining,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise BehaviorOwnershipError("context_runtime_exceeded") from exc
+        if run.returncode:
+            raise BehaviorOwnershipError("context_test_failure")
+        collected = test_lanes._read_nodes(metadata / "context.collected.jsonl")
+        completed = test_lanes._read_nodes(metadata / "context.completed.jsonl")
+        skipped = test_lanes._read_nodes(
+            metadata / "context.skipped.jsonl", allow_empty=True
+        )
+        deselected = test_lanes._read_nodes(
+            metadata / "context.deselected.jsonl", allow_empty=True
+        )
+        if collected != nodes or completed != nodes:
+            raise BehaviorOwnershipError("incomplete_context_execution")
+        if skipped or deselected:
+            raise BehaviorOwnershipError("weakened_context_execution")
+        if not coverage_path.is_file() or coverage_path.is_symlink():
+            raise BehaviorOwnershipError("missing_context_coverage")
+        lines_by_node = _coverage_lines_by_context(
+            coverage_path, root / target, set(completed)
+        )
+
+    elapsed = time.monotonic() - started
+    if elapsed > runtime_limit_seconds:
+        raise BehaviorOwnershipError("context_runtime_exceeded")
+    source = (root / target).read_text(encoding="utf-8")
+    spans = _callable_spans(source, module_name(target))[0]
+    callables = []
+    for start_line, end_line, name in sorted(spans, key=lambda item: item[2]):
+        node_lines = {
+            node: sorted(line for line in lines if start_line <= line <= end_line)
+            for node, lines in lines_by_node.items()
+        }
+        callables.append(
+            {
+                "callable": name,
+                "start_line": start_line,
+                "end_line": end_line,
+                "contexts": [
+                    {"nodeid": node, "lines": lines}
+                    for node, lines in sorted(node_lines.items())
+                    if lines
+                ],
+            }
+        )
+    authority = {
+        "schema": CONTEXT_EVIDENCE_SCHEMA,
+        "authoritative": False,
+        "head_sha": head_sha,
+        "lane": "context_evidence",
+        "target": target,
+        "test_module": test_module,
+        "collection_complete": True,
+        "execution_complete": True,
+        "collected_nodes": nodes,
+        "completed_nodes": completed,
+        "skipped_nodes": skipped,
+        "deselected_nodes": deselected,
+        "callables": callables,
+        "elapsed_seconds": round(elapsed, 3),
+    }
+    artifact = {**authority, "artifact_digest": _digest(authority)}
+    _write_exclusive(output, _json_bytes(artifact))
+    return artifact
+
+
+def validate_context_evidence(
+    root: Path, path: Path, *, head_revision: str = "HEAD"
+) -> dict[str, Any]:
+    """Validate one local context artifact as non-authoritative candidate input."""
+    try:
+        if not path.is_file() or path.is_symlink():
+            raise BehaviorOwnershipError("unsafe_context_evidence")
+        if path.stat().st_size > CONTEXT_ARTIFACT_LIMIT_BYTES:
+            raise BehaviorOwnershipError("context_evidence_too_large")
+    except OSError as exc:
+        raise BehaviorOwnershipError("unsafe_context_evidence") from exc
+    value = _read_json(path, "invalid_context_evidence_json")
+    if not isinstance(value, dict) or set(value) != CONTEXT_EVIDENCE_KEYS:
+        raise BehaviorOwnershipError("invalid_context_evidence_shape")
+    if value["schema"] != CONTEXT_EVIDENCE_SCHEMA or value["authoritative"] is not False:
+        raise BehaviorOwnershipError("invalid_context_evidence_schema")
+    authority = {key: value[key] for key in value if key != "artifact_digest"}
+    if value["artifact_digest"] != _digest(authority):
+        raise BehaviorOwnershipError("context_evidence_digest_mismatch")
+    if value["head_sha"] != _git(root, "rev-parse", head_revision):
+        raise BehaviorOwnershipError("stale_context_evidence")
+    head_sha = value["head_sha"]
+    target = value["target"]
+    test_module = value["test_module"]
+    if (
+        not isinstance(head_sha, str)
+        or re.fullmatch(r"[0-9a-f]{40}", head_sha) is None
+        or not _context_target_is_valid(root, target)
+        or not _tracked_at_revision(root, head_revision, target)
+        or not isinstance(test_module, str)
+        or not test_lanes._safe_module_path(test_module)
+        or test_module
+        not in test_lanes.discover_test_modules(root / "backend/tests", root / "backend")
+        or not _tracked_at_revision(root, head_revision, f"backend/{test_module}")
+    ):
+        raise BehaviorOwnershipError("invalid_context_identity")
+    collected = value["collected_nodes"]
+    completed = value["completed_nodes"]
+    if (
+        value["lane"] != "context_evidence"
+        or value["collection_complete"] is not True
+        or value["execution_complete"] is not True
+        or not isinstance(collected, list)
+        or not collected
+        or any(not _context_node_is_valid(node, test_module) for node in collected)
+        or not isinstance(completed, list)
+        or any(not _context_node_is_valid(node, test_module) for node in completed)
+        or collected != completed
+        or len(collected) != len(set(collected))
+    ):
+        raise BehaviorOwnershipError("incomplete_context_evidence")
+    skipped = value["skipped_nodes"]
+    deselected = value["deselected_nodes"]
+    if (
+        not isinstance(skipped, list)
+        or not isinstance(deselected, list)
+        or any(not _context_node_is_valid(node, test_module) for node in skipped)
+        or any(not _context_node_is_valid(node, test_module) for node in deselected)
+        or skipped
+        or deselected
+    ):
+        raise BehaviorOwnershipError("weakened_context_evidence")
+    if (
+        not isinstance(value["elapsed_seconds"], (int, float))
+        or isinstance(value["elapsed_seconds"], bool)
+        or value["elapsed_seconds"] < 0
+        or value["elapsed_seconds"] > CONTEXT_RUNTIME_LIMIT_SECONDS
+    ):
+        raise BehaviorOwnershipError("invalid_context_elapsed")
+    if not isinstance(value["callables"], list):
+        raise BehaviorOwnershipError("invalid_context_callables")
+    source = _git_show_optional(root, head_revision, target)
+    if source is None:
+        raise BehaviorOwnershipError("invalid_context_identity")
+    actual_spans = {
+        name: (start_line, end_line)
+        for start_line, end_line, name in _callable_spans(
+            source, module_name(target)
+        )[0]
+    }
+    actual_callables = set(actual_spans)
+    seen_callables: set[str] = set()
+    for item in value["callables"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"callable", "start_line", "end_line", "contexts"}
+            or not isinstance(item["callable"], str)
+            or CALLABLE_RE.fullmatch(item["callable"]) is None
+            or item["callable"] not in actual_callables
+            or item["callable"] in seen_callables
+            or not isinstance(item["start_line"], int)
+            or isinstance(item["start_line"], bool)
+            or not isinstance(item["end_line"], int)
+            or isinstance(item["end_line"], bool)
+            or item["start_line"] > item["end_line"]
+            or (item["start_line"], item["end_line"])
+            != actual_spans[item["callable"]]
+            or not isinstance(item["contexts"], list)
+        ):
+            raise BehaviorOwnershipError("invalid_context_callables")
+        seen_callables.add(item["callable"])
+        for context in item["contexts"]:
+            if (
+                not isinstance(context, dict)
+                or set(context) != {"nodeid", "lines"}
+                or context["nodeid"] not in completed
+                or not isinstance(context["lines"], list)
+                or not context["lines"]
+                or any(
+                    not isinstance(line, int)
+                    or isinstance(line, bool)
+                    or line < item["start_line"]
+                    or line > item["end_line"]
+                    for line in context["lines"]
+                )
+            ):
+                raise BehaviorOwnershipError("invalid_context_callables")
+    if seen_callables != actual_callables:
+        raise BehaviorOwnershipError("incomplete_context_evidence")
+    return {
+        "schema": CONTEXT_EVIDENCE_SCHEMA,
+        "authoritative": False,
+        "head_sha": value["head_sha"],
+        "target": value["target"],
+        "test_module": value["test_module"],
+        "callable_count": len(value["callables"]),
+        "node_count": len(collected),
+        "artifact_digest": value["artifact_digest"],
+    }
+
+
 def _run_test_nodes(
     root: Path, records: Iterable[dict[str, Any]], *, collect_only: bool
 ) -> int:
@@ -494,6 +911,13 @@ def _main() -> int:
     validate_parser.add_argument("--run-owned-tests", action="store_true")
     partition_parser = subparsers.add_parser("partition")
     partition_parser.add_argument("--base-commit")
+    context_parser = subparsers.add_parser("context-evidence")
+    context_parser.add_argument("--target", required=True)
+    context_parser.add_argument("--test-module", required=True)
+    context_parser.add_argument("--output", required=True, type=Path)
+    context_validate_parser = subparsers.add_parser("validate-context-evidence")
+    context_validate_parser.add_argument("--input", required=True, type=Path)
+    context_validate_parser.add_argument("--head-revision", default="HEAD")
     args = parser.parse_args()
     try:
         if args.command == "inventory":
@@ -502,6 +926,17 @@ def _main() -> int:
             result = generate_candidates(group=args.group)
         elif args.command == "partition":
             result = build_partition(base_commit=args.base_commit)
+        elif args.command == "context-evidence":
+            result = build_context_evidence(
+                ROOT,
+                target=args.target,
+                test_module=args.test_module,
+                output=args.output,
+            )
+        elif args.command == "validate-context-evidence":
+            result = validate_context_evidence(
+                ROOT, args.input, head_revision=args.head_revision
+            )
         else:
             result = validate_catalogue(
                 group=args.group,

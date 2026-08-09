@@ -214,3 +214,34 @@ loops, raises, awaits, mutation, I/O, SQL, validators, or other side effects.
 Until population and a separately approved changed-line reactivation chunk are
 complete, Backend lanes and existing coverage floors remain the only hosted
 test authority.
+
+### Local coverage-context evidence
+
+Coverage contexts can suggest which exact tests execute a callable, but they do
+not prove assertions or establish reviewed ownership. Generate one temporary,
+non-catalogue artifact from a clean committed tree:
+
+```bash
+cd backend
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "$tmp_dir"' EXIT
+.venv/bin/python -m scripts.behavior_ownership context-evidence \
+  --target backend/scripts/behavior_ownership.py \
+  --test-module tests/test_behavior_ownership.py \
+  --output "$tmp_dir/context-evidence.json"
+.venv/bin/python -m scripts.behavior_ownership validate-context-evidence \
+  --input "$tmp_dir/context-evidence.json"
+```
+
+The command reuses semantic-lane pytest collection and completion custody,
+rejects dirty trees, skipped/deselected/partial execution, stale heads,
+overwrite attempts, digest drift, runs over two minutes, and artifacts over 10
+MiB. The private output contains only exact Git/test/callable/line metadata and
+its digest. It contains no environment values, credentials, payloads, logs, or
+database values; keep it outside `.ci/behavior-ownership/` and do not commit it.
+The catalogue validator never consumes this artifact, and no workflow or
+required check invokes the command.
+
+Only pytest `|run` coverage contexts count as callable-execution evidence.
+Fixture setup and teardown coverage is intentionally excluded because it does
+not prove that the test body exercised the callable.

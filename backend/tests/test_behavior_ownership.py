@@ -519,6 +519,538 @@ def test_cli_inventory_generate_validate_and_errors(
     assert "behavior_ownership_error:bad" in capsys.readouterr().err
 
 
+def _context_artifact(**overrides: object) -> dict[str, object]:
+    node = "tests/test_example.py::test_run"
+    authority: dict[str, object] = {
+        "schema": ownership.CONTEXT_EVIDENCE_SCHEMA,
+        "authoritative": False,
+        "head_sha": "a" * 40,
+        "lane": "context_evidence",
+        "target": "backend/scripts/example.py",
+        "test_module": "tests/test_example.py",
+        "collection_complete": True,
+        "execution_complete": True,
+        "collected_nodes": [node],
+        "completed_nodes": [node],
+        "skipped_nodes": [],
+        "deselected_nodes": [],
+        "callables": [
+            {
+                "callable": "scripts.example.run",
+                "start_line": 1,
+                "end_line": 2,
+                "contexts": [{"nodeid": node, "lines": [1, 2]}],
+            }
+        ],
+        "elapsed_seconds": 1.25,
+    }
+    authority.update(overrides)
+    return {**authority, "artifact_digest": ownership._digest(authority)}
+
+
+def _prepare_context_identity(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committed_source = "def run():\n    return 1\n"
+    target = root / "backend/scripts/example.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(committed_source, encoding="utf-8")
+    test_module = root / "backend/tests/test_example.py"
+    test_module.parent.mkdir(parents=True, exist_ok=True)
+    test_module.write_text("def test_run(): pass\n", encoding="utf-8")
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: committed_source,
+    )
+
+
+def test_context_evidence_is_separate_digest_bound_candidate_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    artifact = _context_artifact()
+    _write_json(path, artifact)
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+
+    result = ownership.validate_context_evidence(tmp_path, path)
+
+    assert result["authoritative"] is False
+    assert result["schema"] == ownership.CONTEXT_EVIDENCE_SCHEMA
+    assert result["node_count"] == 1
+    assert "status" not in artifact
+    assert artifact["schema"] != ownership.CATALOGUE_SCHEMA
+
+
+def test_context_evidence_callable_spans_are_bound_to_committed_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    artifact = _context_artifact()
+    _write_json(path, artifact)
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+    (tmp_path / "backend/scripts/example.py").write_text(
+        "def changed():\n    return 2\n", encoding="utf-8"
+    )
+
+    result = ownership.validate_context_evidence(tmp_path, path)
+
+    assert result["callable_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("updates", "error"),
+    [
+        ({"head_sha": "b" * 40}, "stale_context_evidence"),
+        ({"completed_nodes": []}, "incomplete_context_evidence"),
+        ({"skipped_nodes": ["tests/test_example.py::test_run"]}, "weakened_context_evidence"),
+        (
+            {"deselected_nodes": ["tests/test_example.py::test_run"]},
+            "weakened_context_evidence",
+        ),
+    ],
+)
+def test_context_evidence_rejects_stale_partial_skip_and_deselect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    updates: dict[str, object],
+    error: str,
+) -> None:
+    path = tmp_path / "context.json"
+    _write_json(path, _context_artifact(**updates))
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match=error):
+        ownership.validate_context_evidence(tmp_path, path)
+
+
+def test_context_evidence_rejects_missing_callable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    _write_json(path, _context_artifact(callables=[]))
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+
+    with pytest.raises(
+        ownership.BehaviorOwnershipError, match="incomplete_context_evidence"
+    ):
+        ownership.validate_context_evidence(tmp_path, path)
+
+
+def test_context_evidence_rejects_digest_drift_and_overwrite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    artifact = _context_artifact()
+    artifact["artifact_digest"] = "0" * 64
+    _write_json(path, artifact)
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="digest_mismatch"):
+        ownership.validate_context_evidence(tmp_path, path)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="output_exists"):
+        ownership._write_exclusive(path, b"{}\n")
+
+
+def test_build_context_evidence_reuses_lane_collection_and_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = "backend/scripts/example.py"
+    target_path = tmp_path / target
+    target_path.parent.mkdir(parents=True)
+    target_path.write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests_dir = tmp_path / "backend/tests"
+    tests_dir.mkdir(parents=True)
+    (tests_dir / "test_example.py").write_text("def test_run(): pass\n", encoding="utf-8")
+    node = "tests/test_example.py::test_run"
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "discover_test_modules",
+        lambda *args: ("tests/test_example.py",),
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "collect_nodes",
+        lambda *args, **kwargs: (0, [node], []),
+    )
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+
+    def fake_run(arguments, *, cwd, env, check, timeout):
+        assert env["PYTHONPATH"] == str(tmp_path / "backend")
+        assert "UNRELATED_SECRET" not in env
+        metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
+        for suffix in ("collected", "completed"):
+            (metadata / f"context.{suffix}.jsonl").write_text(
+                json.dumps(node) + "\n", encoding="utf-8"
+            )
+        (metadata / "context.skipped.jsonl").write_text("", encoding="utf-8")
+        (metadata / "context.deselected.jsonl").write_text("", encoding="utf-8")
+        Path(env["COVERAGE_FILE"]).write_bytes(b"coverage")
+        assert "--cov-context=test" in arguments
+        return subprocess.CompletedProcess(arguments, 0)
+
+    monkeypatch.setattr(ownership.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        ownership,
+        "_coverage_lines_by_context",
+        lambda path, target_path, completed: {node: {1, 2}},
+    )
+    output = tmp_path / "context.json"
+
+    artifact = ownership.build_context_evidence(
+        tmp_path,
+        target=target,
+        test_module="tests/test_example.py",
+        output=output,
+    )
+
+    assert output.stat().st_size <= ownership.CONTEXT_ARTIFACT_LIMIT_BYTES
+    assert artifact["collected_nodes"] == [node]
+    assert artifact["completed_nodes"] == [node]
+    assert artifact["callables"][0]["contexts"] == [{"nodeid": node, "lines": [1, 2]}]
+
+    ticks = iter((0.0, ownership.CONTEXT_RUNTIME_LIMIT_SECONDS + 1.0))
+    monkeypatch.setattr(ownership.time, "monotonic", lambda: next(ticks))
+    with pytest.raises(ownership.BehaviorOwnershipError, match="context_runtime_exceeded"):
+        ownership.build_context_evidence(
+            tmp_path,
+            target=target,
+            test_module="tests/test_example.py",
+            output=tmp_path / "late-context.json",
+        )
+
+
+def test_context_output_rejects_size_and_missing_parent(tmp_path: Path) -> None:
+    with pytest.raises(ownership.BehaviorOwnershipError, match="too_large"):
+        ownership._write_exclusive(
+            tmp_path / "large.json", b"x" * (ownership.CONTEXT_ARTIFACT_LIMIT_BYTES + 1)
+        )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="output_parent"):
+        ownership._write_exclusive(tmp_path / "missing/out.json", b"{}\n")
+
+
+def test_context_identity_helpers_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    completed = subprocess.CompletedProcess(["git"], 0, stdout="", stderr="")
+    monkeypatch.setattr(ownership.subprocess, "run", lambda *args, **kwargs: completed)
+    assert ownership._tracked_at_revision(tmp_path, "HEAD", "backend/scripts/example.py")
+    completed.returncode = 1
+    assert not ownership._tracked_at_revision(
+        tmp_path, "HEAD", "backend/scripts/example.py"
+    )
+    assert not ownership._tracked_at_revision(tmp_path, "HEAD", "../unsafe.py")
+    assert ownership._context_node_is_valid(
+        "tests/test_example.py::test_run", "tests/test_example.py"
+    )
+    assert not ownership._context_node_is_valid(
+        "tests/test_other.py::test_run", "tests/test_example.py"
+    )
+    assert not ownership._context_target_is_valid(tmp_path, "../unsafe.py")
+
+
+def test_coverage_context_reader_filters_noncompleted_and_requires_every_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    node = "tests/test_example.py::test_run"
+
+    class FakeCoverageData:
+        def __init__(self, *, basename: str) -> None:
+            self.basename = basename
+            self.contexts: list[str] | None = []
+
+        def read(self) -> None:
+            return None
+
+        def measured_contexts(self) -> set[str]:
+            return {f"{node}|run", "tests/test_other.py::test_other|run"}
+
+        def set_query_contexts(self, contexts: list[str] | None) -> None:
+            self.contexts = contexts
+
+        def lines(self, filename: str) -> list[int]:
+            assert filename.endswith("example.py")
+            return [1, 2]
+
+    monkeypatch.setattr(ownership, "CoverageData", FakeCoverageData)
+    result = ownership._coverage_lines_by_context(
+        tmp_path / "coverage", tmp_path / "example.py", {node}
+    )
+    assert result == {node: {1, 2}}
+    with pytest.raises(ownership.BehaviorOwnershipError, match="missing_test_context"):
+        ownership._coverage_lines_by_context(
+            tmp_path / "coverage", tmp_path / "example.py", {node, "missing::node"}
+        )
+
+
+def test_coverage_context_reader_rejects_invalid_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class BrokenCoverageData:
+        def __init__(self, *, basename: str) -> None:
+            pass
+
+        def read(self) -> None:
+            raise ValueError("broken")
+
+    monkeypatch.setattr(ownership, "CoverageData", BrokenCoverageData)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="invalid_context_coverage"):
+        ownership._coverage_lines_by_context(
+            tmp_path / "coverage", tmp_path / "example.py", {"tests/test_x.py::test_x"}
+        )
+
+
+@pytest.mark.parametrize(
+    ("updates", "error"),
+    [
+        ({"schema": "wrong"}, "invalid_context_evidence_schema"),
+        ({"elapsed_seconds": 121.0}, "invalid_context_elapsed"),
+        ({"callables": "wrong"}, "invalid_context_callables"),
+        (
+            {
+                "callables": [
+                    {
+                        "callable": "scripts.example.run",
+                        "start_line": 2,
+                        "end_line": 1,
+                        "contexts": [],
+                    }
+                ]
+            },
+            "invalid_context_callables",
+        ),
+        (
+            {
+                "callables": [
+                    {
+                        "callable": "scripts.example.run",
+                        "start_line": 1,
+                        "end_line": 3,
+                        "contexts": [],
+                    }
+                ]
+            },
+            "invalid_context_callables",
+        ),
+        ({"target": "../unsafe.py"}, "invalid_context_identity"),
+        ({"test_module": "../unsafe.py"}, "invalid_context_identity"),
+        ({"head_sha": "not-a-sha"}, "stale_context_evidence"),
+        ({"collected_nodes": ["invalid node"], "completed_nodes": ["invalid node"]}, "incomplete_context_evidence"),
+        ({"skipped_nodes": "wrong"}, "weakened_context_evidence"),
+        (
+            {
+                "callables": [
+                    {
+                        "callable": "scripts.example.run",
+                        "start_line": 1,
+                        "end_line": 2,
+                        "contexts": [{"nodeid": "missing::node", "lines": [3]}],
+                    }
+                ]
+            },
+            "invalid_context_callables",
+        ),
+    ],
+)
+def test_context_validator_rejects_invalid_shapes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    updates: dict[str, object],
+    error: str,
+) -> None:
+    path = tmp_path / "context.json"
+    _write_json(path, _context_artifact(**updates))
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+    with pytest.raises(ownership.BehaviorOwnershipError, match=error):
+        ownership.validate_context_evidence(tmp_path, path)
+
+
+def test_context_validator_rejects_unsafe_and_unknown_shape(tmp_path: Path) -> None:
+    with pytest.raises(ownership.BehaviorOwnershipError, match="unsafe_context_evidence"):
+        ownership.validate_context_evidence(tmp_path, tmp_path / "missing.json")
+    symlink = tmp_path / "symlink.json"
+    symlink.symlink_to(tmp_path / "missing-target.json")
+    with pytest.raises(ownership.BehaviorOwnershipError, match="unsafe_context_evidence"):
+        ownership.validate_context_evidence(tmp_path, symlink)
+    oversized = tmp_path / "oversized.json"
+    with oversized.open("wb") as destination:
+        destination.truncate(ownership.CONTEXT_ARTIFACT_LIMIT_BYTES + 1)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="too_large"):
+        ownership.validate_context_evidence(tmp_path, oversized)
+    path = tmp_path / "context.json"
+    artifact = _context_artifact()
+    artifact["unexpected"] = True
+    _write_json(path, artifact)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="invalid_context_evidence_shape"):
+        ownership.validate_context_evidence(tmp_path, path)
+
+
+@pytest.mark.parametrize(
+    ("case", "error"),
+    [
+        ("runtime", "invalid_context_runtime_limit"),
+        ("target", "unsafe_or_missing_target"),
+        ("module", "invalid_context_test_module"),
+        ("missing_module", "missing_context_test_module"),
+        ("dirty", "dirty_context_tree"),
+        ("untracked", "untracked_context_input"),
+        ("symlink_output", "context_output_exists_or_unsafe"),
+        ("output", "context_output_exists_or_unsafe"),
+        ("collection", "invalid_context_collection"),
+        ("collection_timeout", "context_runtime_exceeded"),
+    ],
+)
+def test_context_builder_fails_closed_before_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    error: str,
+) -> None:
+    target = "backend/scripts/example.py"
+    path = tmp_path / target
+    path.parent.mkdir(parents=True)
+    path.write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    (tests / "test_example.py").write_text("def test_run(): pass\n", encoding="utf-8")
+    output = tmp_path / "context.json"
+    test_module = "../unsafe.py" if case == "module" else "tests/test_example.py"
+    selected_target = "backend/scripts/missing.py" if case == "target" else target
+    runtime = 0.0 if case == "runtime" else ownership.CONTEXT_RUNTIME_LIMIT_SECONDS
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: (
+            "dirty" if arguments[0] == "status" and case == "dirty" else "a" * 40
+            if arguments[0] == "rev-parse"
+            else ""
+        ),
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "discover_test_modules",
+        lambda *args: () if case == "missing_module" else ("tests/test_example.py",),
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_tracked_at_revision",
+        lambda *args: case != "untracked",
+    )
+    def fake_collection(arguments, *, cwd, env, check, timeout=None):
+        if case == "collection_timeout":
+            raise subprocess.TimeoutExpired(arguments, timeout)
+        if case != "collection":
+            Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
+                json.dumps("tests/test_example.py::test_run") + "\n", encoding="utf-8"
+            )
+        Path(env[ownership.test_lanes.DESELECTED_ENV]).write_text("", encoding="utf-8")
+        return subprocess.CompletedProcess(arguments, 1 if case == "collection" else 0)
+
+    monkeypatch.setattr(ownership.subprocess, "run", fake_collection)
+    if case == "output":
+        output.write_text("existing", encoding="utf-8")
+    if case == "symlink_output":
+        output.symlink_to(tmp_path / "missing-context.json")
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match=error):
+        ownership.build_context_evidence(
+            tmp_path,
+            target=selected_target,
+            test_module=test_module,
+            output=output,
+            runtime_limit_seconds=runtime,
+        )
+
+
+@pytest.mark.parametrize(
+    ("case", "error"),
+    [
+        ("failure", "context_test_failure"),
+        ("incomplete", "incomplete_context_execution"),
+        ("skipped", "weakened_context_execution"),
+        ("deselected", "weakened_context_execution"),
+        ("missing_coverage", "missing_context_coverage"),
+        ("timeout", "context_runtime_exceeded"),
+    ],
+)
+def test_context_builder_fails_closed_after_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    error: str,
+) -> None:
+    target = "backend/scripts/example.py"
+    target_path = tmp_path / target
+    target_path.parent.mkdir(parents=True)
+    target_path.write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    (tests / "test_example.py").write_text("def test_run(): pass\n", encoding="utf-8")
+    node = "tests/test_example.py::test_run"
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "discover_test_modules",
+        lambda *args: ("tests/test_example.py",),
+    )
+    monkeypatch.setattr(
+        ownership.test_lanes,
+        "collect_nodes",
+        lambda *args, **kwargs: (0, [node], []),
+    )
+    monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
+    monkeypatch.setattr(
+        ownership,
+        "_coverage_lines_by_context",
+        lambda *args: {node: {1, 2}},
+    )
+
+    def fake_run(arguments, *, cwd, env, check, timeout):
+        if case == "timeout":
+            raise subprocess.TimeoutExpired(arguments, timeout)
+        metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
+        collected = [node]
+        completed = [f"{node}_other"] if case == "incomplete" else [node]
+        for suffix, values in (
+            ("collected", collected),
+            ("completed", completed),
+            ("skipped", [node] if case == "skipped" else []),
+            ("deselected", [node] if case == "deselected" else []),
+        ):
+            (metadata / f"context.{suffix}.jsonl").write_text(
+                "".join(json.dumps(value) + "\n" for value in values),
+                encoding="utf-8",
+            )
+        if case != "missing_coverage":
+            Path(env["COVERAGE_FILE"]).write_bytes(b"coverage")
+        return subprocess.CompletedProcess(arguments, 1 if case == "failure" else 0)
+
+    monkeypatch.setattr(ownership.subprocess, "run", fake_run)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match=error):
+        ownership.build_context_evidence(
+            tmp_path,
+            target=target,
+            test_module="tests/test_example.py",
+            output=tmp_path / "context.json",
+        )
+
+
 @pytest.mark.parametrize(
     "source",
     [
