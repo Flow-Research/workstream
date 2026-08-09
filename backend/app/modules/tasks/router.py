@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.auth import actor_registry_http_error, get_registered_actor
 from app.core.api_controls import StructuredHTTPException, error_response
 from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
+from app.adapters.artifacts import get_submission_bundle_preparation_command
+from app.interfaces.artifact_operations import SubmissionBundlePreparationRequest
+from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+from app.modules.artifacts.submission_admission import (
+    SubmissionBundlePreparationCommand,
+    SubmissionBundlePreparationRejected,
+)
+from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.actors.schemas import (
     LegacyWorkflowEligibilityActivationRequest,
     LegacyWorkflowEligibilityResponse,
@@ -29,10 +40,23 @@ from app.modules.tasks.schemas import (
     TaskWorkContextResponse,
     TaskWithAssignmentResponse,
 )
+from app.modules.tasks.pre_submit_context import PreSubmitLockedContextInvalid
 from app.modules.tasks.service import TaskService, TaskServiceError
 from app.schemas.auth import ActorContext
 
 router = APIRouter(tags=["tasks"])
+
+
+class SubmissionBundlePreparationResponse(BaseModel):
+    """Bounded hidden operation state without provider or scratch coordinates."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    put_attempt_id: UUID
+    admission_id: UUID | None
+    status: str
+    replayed: bool
+
 
 CANONICAL_ERROR_OBJECT_SCHEMA = {"$ref": "#/components/schemas/ApiError"}
 PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
@@ -53,6 +77,20 @@ PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
         {"$ref": "#/components/schemas/HTTPValidationError"},
     ]
 }
+
+
+def _require_ascii_submission_packet_headers(summary: str, attestation: str) -> None:
+    """Reject lossy HTTP-header decoding before immutable evidence hashing."""
+    try:
+        summary.encode("ascii")
+        attestation.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="submission_bundle_packet_header_encoding_invalid",
+        ) from exc
+
+
 TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
     "oneOf": [
         {
@@ -366,6 +404,71 @@ async def start_task(
         raise permission_http_error(exc) from exc
     except TaskServiceError as exc:
         raise task_http_error(exc) from exc
+
+
+@router.post(
+    "/tasks/{task_id}/submission-bundle-preparations",
+    response_model=SubmissionBundlePreparationResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    include_in_schema=False,
+)
+async def prepare_submission_bundle(
+    task_id: str,
+    request: Request,
+    context: Annotated[AuthorizationContext, Depends(get_artifact_authorization_context)],
+    command: Annotated[
+        SubmissionBundlePreparationCommand,
+        Depends(get_submission_bundle_preparation_command),
+    ],
+    assignment_id: Annotated[str | None, Header(alias="X-Task-Assignment-Id")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    summary: Annotated[str | None, Header(alias="X-Submission-Summary")] = None,
+    contributor_attestation: Annotated[
+        str | None, Header(alias="X-Contributor-Attestation")
+    ] = None,
+    predecessor_submission_id: Annotated[
+        str | None, Header(alias="X-Predecessor-Submission-Id")
+    ] = None,
+) -> SubmissionBundlePreparationResponse:
+    """Run the hidden continuous ZIP preparation surface; AUTH remains fail closed."""
+    if None in (assignment_id, idempotency_key, summary, contributor_attestation):
+        raise HTTPException(status_code=404, detail="Task not found")
+    assert assignment_id is not None and idempotency_key is not None
+    assert summary is not None and contributor_attestation is not None
+    _require_ascii_submission_packet_headers(summary, contributor_attestation)
+    try:
+        identifiers = (
+            UUID(task_id),
+            UUID(assignment_id),
+            UUID(idempotency_key),
+            UUID(predecessor_submission_id) if predecessor_submission_id else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
+    try:
+        result = await command.prepare(
+            SubmissionBundlePreparationRequest(
+                authorization_context=context,
+                task_id=identifiers[0],
+                assignment_id=identifiers[1],
+                predecessor_submission_id=identifiers[3],
+                idempotency_key=identifiers[2],
+                summary=summary,
+                contributor_attestation=contributor_attestation,
+                media_type=request.headers.get("content-type", ""),
+                byte_source=request.stream(),
+            )
+        )
+    except ArtifactAuthorityDeniedError as exc:
+        raise HTTPException(status_code=404, detail="Task not found") from exc
+    except SubmissionBundlePreparationRejected as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except PreSubmitLockedContextInvalid as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="submission_bundle_preparation_context_changed",
+        ) from exc
+    return SubmissionBundlePreparationResponse.model_validate(result, from_attributes=True)
 
 
 @router.post(

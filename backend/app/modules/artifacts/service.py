@@ -1264,7 +1264,7 @@ class ArtifactStorageOrchestrator:
                     states
                 )
                 replica.last_reconciled_at = now
-            await self._repo.add_verification_receipt(
+            verification_receipt = await self._repo.add_verification_receipt(
                 ArtifactVerificationReceipt(
                     id=str(uuid4()),
                     verification_job_id=job.id,
@@ -1274,6 +1274,25 @@ class ArtifactStorageOrchestrator:
                     observed_byte_count=observed_size,
                 )
             )
+            if outcome == "verified":
+                from app.modules.artifacts.submission_admission import (
+                    SubmissionBundleAdmissionPublicationError,
+                    SubmissionBundleAdmissionPublisher,
+                )
+
+                try:
+                    await SubmissionBundleAdmissionPublisher(self._session).publish_verified(
+                        verification_job_id=job.id,
+                        verification_receipt_id=verification_receipt.id,
+                    )
+                except SubmissionBundleAdmissionPublicationError:
+                    # Valid bytes can still have permanently inadmissible
+                    # submission lineage. Keep one fenced terminal receipt and
+                    # prevent an endless verifier retry loop.
+                    outcome = "conflict"
+                    verification_receipt.outcome = "conflict"
+                    verification_receipt.observed_sha256 = None
+                    verification_receipt.observed_byte_count = None
             job.status = outcome
             job.next_run_at = None
             job.terminal_result_code = outcome
@@ -2166,7 +2185,12 @@ class ArtifactAdmissionService:
             or attempt is None
             or attempt.producer_request_type != "submission_bundle"
             or attempt.status
-            not in {"prepared", "acknowledgement_unknown", "absent_replay_required"}
+            not in {
+                "prepared",
+                "acknowledgement_unknown",
+                "absent_replay_required",
+                "object_confirmed",
+            }
             or attempt.sha256 != current.archive_sha256
             or attempt.byte_count != current.archive_byte_count
             or attempt.media_type != current.media_type

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
-from app.modules.artifacts.sources import ArtifactCommitment, PreparedArtifact
+from app.modules.artifacts.sources import PreparedArtifact
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspectionResult
 from app.modules.artifacts.submission_manifest import (
     SubmissionChangeGateResult,
@@ -257,13 +257,17 @@ class CheckerOutputBindingRequest:
 
 @dataclass(frozen=True, slots=True)
 class SubmissionBundlePreparationRequest:
-    """One prepared contributor authority and continuous outer ZIP source."""
+    """One authorized continuous contributor ZIP request without local handles."""
 
-    prepared_authorization: PreparedAuthorizationHandle
+    authorization_context: AuthorizationContext
     task_id: UUID
     assignment_id: UUID
+    predecessor_submission_id: UUID | None
+    idempotency_key: UUID
+    summary: str
+    contributor_attestation: str
+    media_type: str
     byte_source: AsyncIterable[bytes]
-    client_commitment: ArtifactCommitment | None = None
 
 
 @dataclass(frozen=True, slots=True)

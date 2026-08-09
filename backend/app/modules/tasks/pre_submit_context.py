@@ -9,6 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
+from app.modules.checkers.effective_plan import (
+    EffectivePreSubmissionExecutionPlan,
+    EffectivePreSubmissionPlanLineage,
+    compile_effective_pre_submission_execution_plan,
+)
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
@@ -41,6 +47,8 @@ class LockedPreSubmitContext:
     effective_policy_sha256: str
     pre_submit_policy_id: UUID
     pre_submit_policy_sha256: str
+    effective_policy: dict[str, object]
+    compiled_pre_submit_bundle: dict[str, object]
 
 
 async def load_locked_pre_submit_context(
@@ -175,4 +183,45 @@ async def load_locked_pre_submit_context(
         effective_policy_sha256=effective_policy.effective_policy_hash,
         pre_submit_policy_id=UUID(checker_policy.id),
         pre_submit_policy_sha256=checker_policy.compiled_bundle_hash,
+        effective_policy=dict(effective_policy.effective_policy),
+        compiled_pre_submit_bundle=dict(checker_policy.compiled_bundle),
+    )
+
+
+def compile_locked_pre_submit_plan(
+    context: LockedPreSubmitContext,
+    catalogue: PreSubmissionCheckerCatalogue,
+) -> EffectivePreSubmissionExecutionPlan:
+    """Compile one exact plan from TASK-locked policy rows and the fixed catalogue."""
+    guide_version_text = context.guide_version
+    if guide_version_text.startswith("v"):
+        guide_version_text = guide_version_text[1:]
+    try:
+        guide_version = int(guide_version_text)
+    except ValueError as exc:
+        raise PreSubmitLockedContextInvalid("pre_submit_guide_version_invalid") from exc
+    return compile_effective_pre_submission_execution_plan(
+        lineage=EffectivePreSubmissionPlanLineage(
+            project_id=context.project_id,
+            guide_id=context.guide_id,
+            guide_version=guide_version,
+            source_snapshot_id=context.source_snapshot_id,
+            source_snapshot_hash=context.source_snapshot_sha256,
+            effective_policy_id=context.effective_policy_id,
+            effective_policy_hash=context.effective_policy_sha256,
+            pre_submit_policy_id=context.pre_submit_policy_id,
+            pre_submit_policy_bundle_hash=context.pre_submit_policy_sha256,
+        ),
+        effective_policy=context.effective_policy,
+        compiled_bundle=context.compiled_pre_submit_bundle,
+        catalogue=catalogue,
+    )
+
+
+async def load_canonical_submission_version(
+    session: AsyncSession, *, submission_id: UUID
+) -> int | None:
+    """Project TASK-owned immutable Submission version without leaking its model."""
+    return await session.scalar(
+        select(Submission.version).where(Submission.id == str(submission_id))
     )
