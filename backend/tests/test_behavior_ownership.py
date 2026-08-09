@@ -655,16 +655,19 @@ def test_build_context_evidence_reuses_lane_collection_and_completion(
         "discover_test_modules",
         lambda *args: ("tests/test_example.py",),
     )
-    monkeypatch.setattr(
-        ownership.test_lanes,
-        "collect_nodes",
-        lambda *args, **kwargs: (0, [node], []),
-    )
     monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
 
     def fake_run(arguments, *, cwd, env, check, timeout):
         assert env["PYTHONPATH"] == str(tmp_path / "backend")
         assert "UNRELATED_SECRET" not in env
+        if "--collect-only" in arguments:
+            Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
+                json.dumps(node) + "\n", encoding="utf-8"
+            )
+            Path(env[ownership.test_lanes.DESELECTED_ENV]).write_text(
+                "", encoding="utf-8"
+            )
+            return subprocess.CompletedProcess(arguments, 0)
         metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
         for suffix in ("collected", "completed"):
             (metadata / f"context.{suffix}.jsonl").write_text(

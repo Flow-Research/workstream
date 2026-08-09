@@ -430,17 +430,12 @@ def _plugin_args() -> list[str]:
     return ["-p", "pytest_asyncio.plugin", "-p", "pytest_cov.plugin", "-p", "scripts.run_test_lanes"]
 
 
-def _collection_environment(
-    collected: Path,
-    deselected: Path,
-    tree_sha: str,
-    *,
-    base_environment: dict[str, str] | None = None,
-) -> dict[str, str]:
-    env = (base_environment if base_environment is not None else os.environ).copy()
+def _collection_environment(collected: Path, deselected: Path, tree_sha: str) -> dict[str, str]:
+    env = os.environ.copy()
     env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
-    python_paths = (str(ROOT), *env.get("PYTHONPATH", "").split(os.pathsep))
-    env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(value for value in python_paths if value))
+    env["PYTHONPATH"] = os.pathsep.join(
+        value for value in (str(ROOT), env.get("PYTHONPATH", "")) if value
+    )
     env[COLLECTED_ENV] = str(collected.resolve())
     env[DESELECTED_ENV] = str(deselected.resolve())
     env[HEAD_ENV] = tree_sha
@@ -448,11 +443,7 @@ def _collection_environment(
 
 
 def collect_nodes(
-    modules: tuple[str, ...],
-    metadata_dir: Path,
-    tree_sha: str,
-    *,
-    base_environment: dict[str, str] | None = None,
+    modules: tuple[str, ...], metadata_dir: Path, tree_sha: str
 ) -> tuple[int, list[str], list[str]]:
     collected = metadata_dir / "collection.nodes.jsonl"
     deselected = metadata_dir / "collection.deselected.jsonl"
@@ -460,14 +451,7 @@ def collect_nodes(
     _exclusive_file(deselected)
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", *_plugin_args(), *modules],
-        cwd=ROOT,
-        env=_collection_environment(
-            collected,
-            deselected,
-            tree_sha,
-            base_environment=base_environment,
-        ),
-        check=False,
+        cwd=ROOT, env=_collection_environment(collected, deselected, tree_sha), check=False,
     )
     nodes = _read_nodes(collected) if result.returncode == 0 else []
     deselected_nodes = _read_nodes(deselected, allow_empty=True)
