@@ -641,14 +641,19 @@ def test_build_context_evidence_reuses_lane_collection_and_completion(
         "discover_test_modules",
         lambda *args: ("tests/test_example.py",),
     )
-    monkeypatch.setattr(
-        ownership.test_lanes,
-        "collect_nodes",
-        lambda *args: (0, [node], []),
-    )
     monkeypatch.setattr(ownership, "_tracked_at_revision", lambda *args: True)
 
     def fake_run(arguments, *, cwd, env, check, timeout):
+        assert env["PYTHONPATH"] == str(tmp_path / "backend")
+        assert "UNRELATED_SECRET" not in env
+        if "--collect-only" in arguments:
+            Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
+                json.dumps(node) + "\n", encoding="utf-8"
+            )
+            Path(env[ownership.test_lanes.DESELECTED_ENV]).write_text(
+                "", encoding="utf-8"
+            )
+            return subprocess.CompletedProcess(arguments, 0)
         metadata = Path(env[ownership.test_lanes.COLLECTED_ENV]).parent
         for suffix in ("collected", "completed"):
             (metadata / f"context.{suffix}.jsonl").write_text(
@@ -790,6 +795,19 @@ def test_coverage_context_reader_rejects_invalid_data(
             },
             "invalid_context_callables",
         ),
+        (
+            {
+                "callables": [
+                    {
+                        "callable": "scripts.example.run",
+                        "start_line": 1,
+                        "end_line": 3,
+                        "contexts": [],
+                    }
+                ]
+            },
+            "invalid_context_callables",
+        ),
         ({"target": "../unsafe.py"}, "invalid_context_identity"),
         ({"test_module": "../unsafe.py"}, "invalid_context_identity"),
         ({"head_sha": "not-a-sha"}, "stale_context_evidence"),
@@ -894,11 +912,15 @@ def test_context_builder_fails_closed_before_execution(
         "_tracked_at_revision",
         lambda *args: case != "untracked",
     )
-    monkeypatch.setattr(
-        ownership.test_lanes,
-        "collect_nodes",
-        lambda *args: (1, [], []) if case == "collection" else (0, ["node::id"], []),
-    )
+    def fake_collection(arguments, *, cwd, env, check, timeout):
+        if case != "collection":
+            Path(env[ownership.test_lanes.COLLECTED_ENV]).write_text(
+                json.dumps("tests/test_example.py::test_run") + "\n", encoding="utf-8"
+            )
+        Path(env[ownership.test_lanes.DESELECTED_ENV]).write_text("", encoding="utf-8")
+        return subprocess.CompletedProcess(arguments, 1 if case == "collection" else 0)
+
+    monkeypatch.setattr(ownership.subprocess, "run", fake_collection)
     if case == "output":
         output.write_text("existing", encoding="utf-8")
     if case == "symlink_output":

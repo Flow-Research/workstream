@@ -567,6 +567,30 @@ def _coverage_lines_by_context(
     return result
 
 
+def _sanitize_context_environment(
+    environment: dict[str, str], backend_root: Path
+) -> dict[str, str]:
+    """Retain only non-secret runtime and lane-custody environment values."""
+    allowed = {
+        "PATH",
+        "VIRTUAL_ENV",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        "TMPDIR",
+        test_lanes.COLLECTED_ENV,
+        test_lanes.COMPLETED_ENV,
+        test_lanes.SKIPPED_ENV,
+        test_lanes.DESELECTED_ENV,
+        test_lanes.HEAD_ENV,
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+        "COVERAGE_FILE",
+    }
+    sanitized = {key: value for key, value in environment.items() if key in allowed}
+    sanitized["PYTHONPATH"] = str(backend_root)
+    return sanitized
+
+
 def build_context_evidence(
     root: Path,
     *,
@@ -591,7 +615,7 @@ def build_context_evidence(
         root, head_sha, f"backend/{test_module}"
     ):
         raise BehaviorOwnershipError("untracked_context_input")
-    if _git(root, "status", "--porcelain", "--untracked-files=no"):
+    if _git(root, "status", "--porcelain", "--untracked-files=all"):
         raise BehaviorOwnershipError("dirty_context_tree")
     if output.is_symlink() or any(
         parent.is_symlink() for parent in output.parents if parent.exists()
@@ -606,10 +630,45 @@ def build_context_evidence(
 
     with tempfile.TemporaryDirectory(prefix="workstream-context-evidence-") as directory:
         metadata = Path(directory)
-        collection_code, nodes, collection_deselected = test_lanes.collect_nodes(
-            (test_module,), metadata, head_sha
+        collection_files = {
+            test_lanes.COLLECTED_ENV: metadata / "collection.nodes.jsonl",
+            test_lanes.DESELECTED_ENV: metadata / "collection.deselected.jsonl",
+        }
+        for evidence_path in collection_files.values():
+            test_lanes._exclusive_file(evidence_path)
+        collection_environment = _sanitize_context_environment(
+            {
+                **os.environ,
+                "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                "PYTHONPATH": str(backend_root),
+                test_lanes.HEAD_ENV: head_sha,
+                **{key: str(path.resolve()) for key, path in collection_files.items()},
+            },
+            backend_root,
         )
-        if collection_code != 0 or collection_deselected or not nodes:
+        collection = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q",
+             *test_lanes._plugin_args(), test_module],
+            cwd=backend_root,
+            env=collection_environment,
+            check=False,
+            timeout=runtime_limit_seconds,
+        )
+        nodes = (
+            test_lanes._read_nodes(collection_files[test_lanes.COLLECTED_ENV])
+            if collection.returncode == 0
+            else []
+        )
+        collection_deselected = test_lanes._read_nodes(
+            collection_files[test_lanes.DESELECTED_ENV], allow_empty=True
+        )
+        if (
+            collection.returncode != 0
+            or collection_deselected
+            or not nodes
+            or len(nodes) != len(set(nodes))
+            or any(test_lanes._module_from_node(node) != test_module for node in nodes)
+        ):
             raise BehaviorOwnershipError("invalid_context_collection")
         coverage_path = metadata / ".coverage.context"
         lane = test_lanes.TestLane("context_evidence", (test_module,), requires_postgres=False)
@@ -618,30 +677,7 @@ def build_context_evidence(
         environment = test_lanes.lane_environment(
             lane, metadata, coverage_path, "context", head_sha
         )
-        allowed_environment = {
-            "PATH",
-            "PYTHONPATH",
-            "VIRTUAL_ENV",
-            "LANG",
-            "LC_ALL",
-            "TZ",
-            "TMPDIR",
-        }
-        environment = {
-            key: value
-            for key, value in environment.items()
-            if key in allowed_environment
-            or key
-            in {
-                test_lanes.COLLECTED_ENV,
-                test_lanes.COMPLETED_ENV,
-                test_lanes.SKIPPED_ENV,
-                test_lanes.DESELECTED_ENV,
-                test_lanes.HEAD_ENV,
-                "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
-            }
-            or key == "COVERAGE_FILE"
-        }
+        environment = _sanitize_context_environment(environment, backend_root)
         command = [
             sys.executable,
             "-m",
@@ -798,7 +834,14 @@ def validate_context_evidence(
         raise BehaviorOwnershipError("invalid_context_elapsed")
     if not isinstance(value["callables"], list):
         raise BehaviorOwnershipError("invalid_context_callables")
-    actual_callables = set(callable_names(root, target))
+    source = (root / target).read_text(encoding="utf-8")
+    actual_spans = {
+        name: (start_line, end_line)
+        for start_line, end_line, name in _callable_spans(
+            source, module_name(target)
+        )[0]
+    }
+    actual_callables = set(actual_spans)
     seen_callables: set[str] = set()
     for item in value["callables"]:
         if (
@@ -809,8 +852,12 @@ def validate_context_evidence(
             or item["callable"] not in actual_callables
             or item["callable"] in seen_callables
             or not isinstance(item["start_line"], int)
+            or isinstance(item["start_line"], bool)
             or not isinstance(item["end_line"], int)
+            or isinstance(item["end_line"], bool)
             or item["start_line"] > item["end_line"]
+            or (item["start_line"], item["end_line"])
+            != actual_spans[item["callable"]]
             or not isinstance(item["contexts"], list)
         ):
             raise BehaviorOwnershipError("invalid_context_callables")
