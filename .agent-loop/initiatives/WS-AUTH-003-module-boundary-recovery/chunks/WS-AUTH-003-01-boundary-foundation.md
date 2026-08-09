@@ -20,8 +20,11 @@ backend/app/modules/authorization/api/facts.py
 backend/app/modules/authorization/api/ports.py
 backend/scripts/authorization_boundary.py
 backend/scripts/test_structure_boundary.py
+backend/scripts/behavior_ownership.py       # additive foundation transition only
+backend/scripts/run_test_lanes.py           # register the two architecture modules only
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/architecture/test_test_structure_boundary.py
+backend/tests/test_behavior_ownership.py    # additive transition proof only
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/assertion-maps/**
 .github/workflows/**                     # invoke the new validator only
@@ -52,7 +55,9 @@ docs/spec_authorization_service.md
    wildcard import, or dynamic import through `__import__`,
    `importlib.import_module`, or an aliased form fails closed. The foundation
    supports no dynamic-import allowlist: unknown/computed import forms,
-   malformed ledger data, or either exact edge-set/count increase also fail.
+   malformed ledger data, unresolved relative imports, or either exact
+   edge-set/count increase also fail. Relative imports are canonicalized before
+   edge comparison and cannot bypass either dependency direction.
 4. Existing recorded inbound and outbound violations remain visible and
    unchanged; the foundation neither hides nor migrates them.
 5. `authorization.api` imports in a clean process and exposes only bounded
@@ -66,7 +71,16 @@ docs/spec_authorization_service.md
 9. Behavior ownership and architecture tests recognize the exact new files.
    Architecture fixtures prove wildcard, direct and aliased `__import__`,
    direct and aliased `importlib.import_module`, and computed module-name
-   bypasses are rejected.
+   bypasses are rejected. They also prove inbound and outbound relative imports
+    resolve to the same canonical edge and unresolved relative forms fail closed.
+    The behavior-ownership partition may transition from trusted `origin/main`
+    only by adding the exact eligible files approved by this foundation. Every
+    trusted assignment, schema value, protected base, deterministic group, and
+    full-authority digest remains unchanged or exactly recomputed as applicable.
+    Removal, reassignment, reorder-based concealment, duplication, untracked or
+    ineligible additions, unavailable/malformed trusted state, or any extra
+    unresolved eligible target fails closed. No catalogue, eligibility,
+    grouping, remap, or owned-test semantics change.
 10. Required architecture, security, QA, CI-integrity, and test-delta reviews
     pass before the PR is ready.
 11. `TEST_STRUCTURE_DEBT.json` records existing oversized AUTH test
@@ -77,8 +91,11 @@ docs/spec_authorization_service.md
     existing debt, all new pytest/unittest skip and xfail mechanisms, malformed
     exceptions, and incomplete assertion mappings. It also rejects an absent,
     malformed, stale, or incomplete debt ledger. Assertion mappings record old
-    test and invariant IDs, source span/hash, category, new node and layer, and
-    reasoned applicability for concurrency and security dimensions.
+    test and assertion IDs, exact ancestor revision and source span/hash,
+    category, new node and layer, and reasoned applicability for concurrency
+    and security dimensions. The validator derives all old assertion spans from
+    the trusted old test and rejects fake nodes, mismatched bytes, duplicates,
+    or omitted dispositions.
 13. Static limits are never claimed as proof of cohesion. Architecture, QA,
     security, and test-delta review enforce the semantic rule that every new or
     materially changed test proves one primary behavior.
@@ -92,11 +109,18 @@ uv run ruff check app/modules/authorization/api scripts/authorization_boundary.p
 uv run python -m scripts.authorization_boundary validate --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
 uv run python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 uv run pytest -q tests/architecture/test_authorization_boundary.py tests/architecture/test_test_structure_boundary.py
+uv run pytest -q tests/test_behavior_ownership.py
 uv run python -m scripts.behavior_ownership validate
 ```
 
-GitHub runs both validators for applicable backend changes, then the existing
-full backend tests and coverage. Full coverage is not run locally.
+GitHub binds the exact checked-out head and runs both validators plus behavior
+ownership validation in an unconditional preflight job. The two architecture
+test files are registered in `shared_foundations` and therefore execute exactly
+once through the canonical hosted lane/coverage path. Existing backend lanes
+depend on preflight and otherwise retain their full tests and coverage
+unchanged. There are no workflow path filters, skip flags,
+`continue-on-error`, or fallback success paths. Full coverage is not run
+locally.
 
 ## Required reviewers
 

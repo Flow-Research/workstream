@@ -1,0 +1,50 @@
+{
+  "behavior_id": "shared.auth_boundary.import_validator",
+  "boundaries": [],
+  "callables": [
+    "scripts.authorization_boundary._DynamicImportVisitor.__init__",
+    "scripts.authorization_boundary._DynamicImportVisitor._is_computed_import_callable",
+    "scripts.authorization_boundary._DynamicImportVisitor._is_import_callable",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Assign",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Attribute",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Call",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Import",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_ImportFrom",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Name",
+    "scripts.authorization_boundary._DynamicImportVisitor.visit_Subscript",
+    "scripts.authorization_boundary._import_from_targets",
+    "scripts.authorization_boundary._module_name",
+    "scripts.authorization_boundary._parse_edges",
+    "scripts.authorization_boundary._private_auth_target",
+    "scripts.authorization_boundary._private_product_target",
+    "scripts.authorization_boundary._repository_path",
+    "scripts.authorization_boundary._resolve_from",
+    "scripts.authorization_boundary._section_block",
+    "scripts.authorization_boundary.load_ledger",
+    "scripts.authorization_boundary.main",
+    "scripts.authorization_boundary.scan_edges",
+    "scripts.authorization_boundary.source_imports",
+    "scripts.authorization_boundary.validate"
+  ],
+  "group": "shared",
+  "outcomes": [
+    "return",
+    "denial",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "WS-AUTH-003 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/scripts/authorization_boundary.py",
+  "tests": [
+    "backend/tests/architecture/test_authorization_boundary.py::test_repository_private_import_edges_equal_the_frozen_ledger",
+    "backend/tests/architecture/test_authorization_boundary.py::test_dynamic_and_wildcard_import_bypasses_fail_closed",
+    "backend/tests/architecture/test_authorization_boundary.py::test_relative_imports_resolve_to_canonical_edges",
+    "backend/tests/architecture/test_authorization_boundary.py::test_unresolved_relative_import_fails_closed",
+    "backend/tests/architecture/test_authorization_boundary.py::test_exact_edge_growth_fails_even_inside_an_already_recorded_file",
+    "backend/tests/architecture/test_authorization_boundary.py::test_import_scanner_parses_source_without_executing_it",
+    "backend/tests/architecture/test_authorization_boundary.py::test_malformed_python_fails_closed"
+  ]
+}

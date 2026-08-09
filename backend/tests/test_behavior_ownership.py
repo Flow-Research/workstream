@@ -144,7 +144,126 @@ def test_partition_rejects_untrusted_branch_copy(tmp_path: Path, monkeypatch: py
         "_git_show_optional",
         lambda root, revision, path: json.dumps({**value, "authority_digest": "0" * 64}),
     )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="invalid_trusted_partition"):
+        ownership.validate_partition(tmp_path, trusted_revision="main")
+
+
+def test_partition_requires_configured_trusted_revision_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI custody cannot fall back to ancestry when trusted content is unavailable."""
+    target = "backend/scripts/example.py"
+    _write_json(tmp_path / ownership.PARTITION_PATH, _partition([target]))
+    monkeypatch.setattr(ownership, "eligible_targets", lambda root=ownership.ROOT: [target])
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(ownership, "_git_show_optional", lambda root, revision, path: None)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="trusted_partition_unavailable"):
+        ownership.validate_partition(tmp_path, trusted_revision="origin/main")
+
+
+def test_partition_accepts_only_the_approved_additive_foundation_transition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Trusted assignments remain intact while one approved tracked target is added."""
+    existing = "backend/scripts/existing.py"
+    addition = "backend/scripts/authorization_boundary.py"
+    trusted = _partition([existing])
+    current = _partition([addition, existing])
+    _write_json(tmp_path / ownership.PARTITION_PATH, current)
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset({addition}))
+    monkeypatch.setattr(ownership, "eligible_targets", lambda root=ownership.ROOT: sorted({existing, addition}))
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: json.dumps(trusted),
+    )
+    assert ownership.validate_partition(tmp_path, trusted_revision="main") == {
+        addition: "shared",
+        existing: "shared",
+    }
+
+
+def test_partition_rejects_reordered_trusted_assignments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recomputed digest cannot legitimize reordered trusted custody."""
+    first = "backend/scripts/a.py"
+    second = "backend/scripts/b.py"
+    trusted = _partition([first, second])
+    trusted["assignments"].reverse()
+    authority = {key: trusted[key] for key in trusted if key != "authority_digest"}
+    trusted["authority_digest"] = ownership._digest(authority)
+    _write_json(tmp_path / ownership.PARTITION_PATH, _partition([first, second]))
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset())
+    monkeypatch.setattr(ownership, "eligible_targets", lambda root=ownership.ROOT: [first, second])
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: json.dumps(trusted),
+    )
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership.validate_partition(tmp_path, trusted_revision="main")
+
+
+@pytest.mark.parametrize("case", ("extra", "removal", "reassignment", "trusted_digest", "base"))
+def test_partition_additive_transition_rejects_custody_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    """The foundation transition cannot conceal any trusted-authority mutation."""
+    existing = "backend/scripts/existing.py"
+    addition = "backend/scripts/authorization_boundary.py"
+    extra = "backend/scripts/extra.py"
+    trusted = _partition([existing])
+    current_targets = [addition, existing]
+    approved = {addition}
+    if case == "extra":
+        current_targets.append(extra)
+    elif case == "removal":
+        current_targets.remove(existing)
+    elif case == "reassignment":
+        trusted["assignments"][0]["group"] = "auth"
+        authority = {key: trusted[key] for key in trusted if key != "authority_digest"}
+        trusted["authority_digest"] = ownership._digest(authority)
+    elif case == "trusted_digest":
+        trusted["authority_digest"] = "0" * 64
+    elif case == "base":
+        trusted["protected_base_commit"] = "b" * 40
+        authority = {key: trusted[key] for key in trusted if key != "authority_digest"}
+        trusted["authority_digest"] = ownership._digest(authority)
+    current = _partition(sorted(current_targets))
+    _write_json(tmp_path / ownership.PARTITION_PATH, current)
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset(approved))
+    monkeypatch.setattr(ownership, "eligible_targets", lambda root=ownership.ROOT: sorted(current_targets))
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: json.dumps(trusted),
+    )
+    with pytest.raises(
+        ownership.BehaviorOwnershipError,
+        match="invalid_trusted_partition|untrusted_partition_change",
+    ):
         ownership.validate_partition(tmp_path, trusted_revision="main")
 
 
@@ -231,6 +350,23 @@ def test_catalogue_empty_state_is_explicitly_incomplete(monkeypatch: pytest.Monk
     result = ownership.validate_catalogue()
     assert result["complete"] is False
     assert result["unresolved"] == [target]
+
+
+def test_approved_foundation_target_cannot_remain_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The additive partition path requires exact catalogue ownership evidence."""
+    target = "backend/scripts/authorization_boundary.py"
+    monkeypatch.setattr(
+        ownership, "validate_partition", lambda root=ownership.ROOT, **kwargs: {target: "shared"}
+    )
+    monkeypatch.setattr(ownership, "_catalogue_files", lambda root: [])
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset({target}))
+    with pytest.raises(
+        ownership.BehaviorOwnershipError,
+        match="unresolved_auth_boundary_foundation",
+    ):
+        ownership.validate_catalogue()
 
 
 def test_changed_callable_parity_delegates_to_policy(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -73,13 +73,15 @@ is absent, malformed, stale, or omits an observed baseline violation.
 
 Each capability repair stores its machine-readable mapping at
 `assertion-maps/<chunk-id>.json`. Every mapping entry records the old test node
-ID, old assertion or invariant ID, source span and content hash, invariant
-category, new/final test node ID, target test layer, and applicability for
+ID, exact ancestor revision, old assertion ID, source span and content hash,
+invariant category, new/final test node ID, target test layer, and applicability for
 concurrency, lock order, denial side effects, replay, revocation, evidence,
 transaction ownership, and concealment. A `not_applicable` value requires a
-specific reason. The validator checks that every frozen old assertion/invariant
-has exactly one preserved disposition and that every referenced old and new
-node exists; semantic reviewers confirm behavioral equivalence.
+specific reason. The validator loads the old node from that exact ancestor,
+derives its framework-aware assertion inventory, verifies every old span/hash,
+requires exactly one disposition for every derived assertion, and confirms the
+new node exists in one of the named test layers. Semantic reviewers confirm
+behavioral equivalence beyond those measurable facts.
 
 ## Capability repair proof
 

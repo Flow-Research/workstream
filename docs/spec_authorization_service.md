@@ -28,6 +28,14 @@ tokens and owns product authorization.
 
 All public routes use `/api/v1`. The archival short prefix is not an alias.
 
+Within the modular monolith, `app.modules.authorization.api` is the sole public
+AUTH dependency boundary. Other modules do not import AUTH models,
+repositories, evaluators, routers, sessions, or concrete services. AUTH also
+does not import another product module's private implementation; later
+capability repairs replace frozen legacy edges with that module's public typed
+port. These in-process contracts are deliberately suitable for later HTTP,
+gRPC, or asynchronous transport without changing product authority semantics.
+
 ## Authentication Contract
 
 `VerifiedIssuerToken` contains only verified identity and coarse-access data:

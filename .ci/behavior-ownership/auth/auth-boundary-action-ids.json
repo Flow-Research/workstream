@@ -1,0 +1,22 @@
+{
+  "behavior_id": "auth.boundary.action_ids",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.action_ids.action_id",
+    "app.modules.authorization.api.action_ids.permission_id"
+  ],
+  "group": "auth",
+  "outcomes": [
+    "return",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "WS-AUTH-003 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/action_ids.py",
+  "tests": [
+    "backend/tests/architecture/test_authorization_boundary.py::test_public_identifier_factories_reject_empty_values"
+  ]
+}

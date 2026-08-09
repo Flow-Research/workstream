@@ -18,7 +18,57 @@ env:
   MINIO_IMAGE: quay.io/minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
 
 jobs:
+  auth-boundary-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Bind exact checked-out tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse "${GITHUB_SHA}^{tree}")" = "$(git rev-parse HEAD^{tree})"
+
+      - name: Install backend architecture dependencies
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install ruff==0.15.22
+          test "$(ruff --version)" = "ruff 0.15.22"
+
+      - name: Validate AUTH module and test boundaries
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruff check \
+            app/modules/authorization/api \
+            scripts/authorization_boundary.py \
+            scripts/test_structure_boundary.py \
+            tests/architecture/test_authorization_boundary.py \
+            tests/architecture/test_test_structure_boundary.py
+          python -m scripts.authorization_boundary validate \
+            --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
+          python -m scripts.test_structure_boundary validate \
+            --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md \
+            --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
+          python -m scripts.behavior_ownership validate
+
   lanes:
+    needs: auth-boundary-preflight
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:

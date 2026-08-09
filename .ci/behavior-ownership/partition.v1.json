@@ -322,6 +322,26 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/action_ids.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/decisions.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/errors.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/facts.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/ports.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/catalogue.py"
     },
     {
@@ -658,6 +678,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/authorization_boundary.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/behavior_ownership.py"
     },
     {
@@ -698,6 +722,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/test_structure_boundary.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/validate_test_lane_evidence.py"
     },
     {
@@ -705,7 +733,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "c05cdc4b7a4c6c016000475035e47ef4437767ce5152b322cba9dceb6e992e7f",
+  "authority_digest": "36f63f2cb637dc92f32cacc37d69fe1dd05c99ae309ea8647441ee8e2bdd9efc",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
