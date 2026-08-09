@@ -9,6 +9,7 @@ evidence or transient branch prose as repository truth.
 
 - `AGENTS.md`
 - `CONTRIBUTING.md`
+- `docs/roadmap_status.md`
 - `.agent-loop/README.md`
 - `.agent-loop/CURRENT_STATE.md`
 - `.agent-loop/REVIEW_LOG.md`

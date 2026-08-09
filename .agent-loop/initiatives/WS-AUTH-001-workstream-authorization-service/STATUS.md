@@ -115,12 +115,13 @@ or consumer feature action is active.
 
 ## Current planning boundary
 
-`WS-AUTH-001-12` planning is merged. Required L1
-preimplementation review rejected the inherited combined runtime contract
-before application-code edits. The repaired planning parent now splits runtime
-work into 12A through 12H plus 12B2 and 12D2. All nine exact-plan reviewer
-tracks passed after action-custody, canonical-lineage reuse, and fixed-service
-setup-run binding findings were repaired.
+`WS-AUTH-001-12` planning is merged. Required L1 preimplementation review
+rejected the inherited combined runtime contract before application-code edits.
+The repaired planning parent records 12A through 12H, 12B2, and the later 12I
+unified compilation gate. The former 12D2 path is superseded by merged
+WS-XINT-003-02A/02B. All nine exact-plan reviewer tracks passed after
+action-custody, canonical-lineage reuse, and fixed-service setup-run binding
+findings were repaired.
 
 ## Current implementation state
 

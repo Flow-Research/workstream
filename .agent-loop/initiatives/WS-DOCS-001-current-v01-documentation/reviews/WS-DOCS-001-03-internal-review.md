@@ -26,6 +26,9 @@ capability-ledger correction.
 - Reuse/deduplication: PASS
 - Open findings: none
 
+External review is recorded separately in
+`WS-DOCS-001-03-external-review-response.md`.
+
 ## Deterministic Evidence
 
 ```text
