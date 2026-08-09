@@ -1,0 +1,21 @@
+{
+  "behavior_id": "auth.boundary.ports",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.ports.AuthorizationPort.authorize",
+    "app.modules.authorization.api.ports.PreparedAuthorizationPort.prepare"
+  ],
+  "group": "auth",
+  "outcomes": [
+    "return"
+  ],
+  "reviewed_by": [
+    "WS-AUTH-003 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/ports.py",
+  "tests": [
+    "backend/tests/architecture/test_authorization_boundary.py::test_public_api_reachability_contains_no_private_runtime_module"
+  ]
+}

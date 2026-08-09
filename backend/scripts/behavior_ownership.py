@@ -24,7 +24,6 @@ from scripts.mutation_policy import CALLABLE_RE
 from scripts.mutation_policy import MutationPolicyError
 from scripts.mutation_policy import OBSERVABLE_OUTCOMES
 from scripts.mutation_policy import REAL_BOUNDARIES
-from scripts.mutation_policy import TEST_NODE_RE
 from scripts.mutation_policy import _callable_spans
 from scripts.mutation_policy import _eligible_target
 from scripts.mutation_policy import _safe_path
@@ -58,6 +57,20 @@ CONTEXT_EVIDENCE_KEYS = {
     "elapsed_seconds",
     "artifact_digest",
 }
+OWNERSHIP_TEST_NODE_RE = re.compile(
+    r"^backend/tests/(?:[A-Za-z0-9_]+/)*test_[A-Za-z0-9_]+\.py::[^\s]+$"
+)
+AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/api/action_ids.py",
+        "backend/app/modules/authorization/api/decisions.py",
+        "backend/app/modules/authorization/api/errors.py",
+        "backend/app/modules/authorization/api/facts.py",
+        "backend/app/modules/authorization/api/ports.py",
+        "backend/scripts/authorization_boundary.py",
+        "backend/scripts/test_structure_boundary.py",
+    }
+)
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -160,6 +173,51 @@ def _read_json(path: Path, error: str) -> Any:
         raise BehaviorOwnershipError(error) from exc
 
 
+def _validate_additive_partition_transition(
+    current: dict[str, Any],
+    trusted: Any,
+) -> None:
+    """Allow only the exact approved AUTH boundary-foundation additions."""
+    keys = {"schema", "protected_base_commit", "assignments", "authority_digest"}
+    if not isinstance(trusted, dict) or set(trusted) != keys:
+        raise BehaviorOwnershipError("invalid_trusted_partition")
+    trusted_authority = {key: trusted[key] for key in trusted if key != "authority_digest"}
+    if trusted.get("authority_digest") != _digest(trusted_authority):
+        raise BehaviorOwnershipError("invalid_trusted_partition")
+    if (
+        trusted.get("schema") != current["schema"]
+        or trusted.get("protected_base_commit") != current["protected_base_commit"]
+        or not isinstance(trusted.get("assignments"), list)
+    ):
+        raise BehaviorOwnershipError("untrusted_partition_change")
+    trusted_assignments = trusted["assignments"]
+    trusted_targets: list[str] = []
+    for item in trusted_assignments:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"group", "target"}
+            or item.get("group") not in GROUPS
+            or not isinstance(item.get("target"), str)
+        ):
+            raise BehaviorOwnershipError("invalid_trusted_partition")
+        trusted_targets.append(item["target"])
+    if len(trusted_targets) != len(set(trusted_targets)):
+        raise BehaviorOwnershipError("invalid_trusted_partition")
+    current_assignments = current["assignments"]
+    current_by_target = {item["target"]: item for item in current_assignments}
+    if [current_by_target.get(target) for target in trusted_targets] != trusted_assignments:
+        raise BehaviorOwnershipError("untrusted_partition_change")
+    additions = set(current_by_target) - set(trusted_targets)
+    expected_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS - set(trusted_targets)
+    if additions != expected_additions:
+        raise BehaviorOwnershipError("untrusted_partition_change")
+    if any(
+        current_by_target[target]["group"] != group_for_target(target)
+        for target in additions
+    ):
+        raise BehaviorOwnershipError("untrusted_partition_change")
+
+
 def validate_partition(
     root: Path = ROOT,
     *,
@@ -228,12 +286,9 @@ def validate_partition(
             except json.JSONDecodeError as exc:
                 raise BehaviorOwnershipError("invalid_trusted_partition") from exc
             if trusted_value != value:
-                raise BehaviorOwnershipError("untrusted_partition_change")
+                _validate_additive_partition_transition(value, trusted_value)
         else:
-            try:
-                _git(root, "merge-base", "--is-ancestor", protected_base, "HEAD")
-            except BehaviorOwnershipError as exc:
-                raise BehaviorOwnershipError("invalid_partition_ancestry") from exc
+            raise BehaviorOwnershipError("trusted_partition_unavailable")
     return {item["target"]: item["group"] for item in assignments}
 
 
@@ -308,7 +363,7 @@ def _validate_record_semantics(root: Path, record: dict[str, Any]) -> None:
             raise BehaviorOwnershipError("invalid_catalogue_outcome")
         if not set(record["boundaries"]).issubset(REAL_BOUNDARIES):
             raise BehaviorOwnershipError("invalid_catalogue_boundary")
-        if any(TEST_NODE_RE.fullmatch(node) is None for node in record["tests"]):
+        if any(OWNERSHIP_TEST_NODE_RE.fullmatch(node) is None for node in record["tests"]):
             raise BehaviorOwnershipError("invalid_catalogue_test")
         for node in record["tests"]:
             test_path = node.split("::", 1)[0]
@@ -438,13 +493,16 @@ def validate_catalogue(
             raise BehaviorOwnershipError("owned_test_failure")
     covered = {item["target"] for item in records}
     expected = {target for target, assigned in partition.items() if group in (None, assigned)}
+    unresolved = expected - covered
+    if unresolved.intersection(AUTH_BOUNDARY_FOUNDATION_TARGETS):
+        raise BehaviorOwnershipError("unresolved_auth_boundary_foundation")
     return {
         "schema": CATALOGUE_SCHEMA,
         "group": group,
         "reviewed": sum(item["status"] == "reviewed" for item in records),
         "candidates": sum(item["status"] == "candidate" for item in records),
         "structural_only": sum(item["status"] == "structural_only" for item in records),
-        "unresolved": sorted(expected - covered),
+        "unresolved": sorted(unresolved),
         "complete": expected == covered and all(item["status"] != "candidate" for item in records),
     }
 

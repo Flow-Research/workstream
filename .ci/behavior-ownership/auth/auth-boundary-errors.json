@@ -1,0 +1,11 @@
+{
+  "behavior_id": "auth.boundary.errors",
+  "group": "auth",
+  "reason": "Stable exception declarations contain no executable behavior.",
+  "reviewed_by": [
+    "WS-AUTH-003 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "structural_only",
+  "target": "backend/app/modules/authorization/api/errors.py"
+}

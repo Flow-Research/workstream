@@ -1,0 +1,26 @@
+{
+  "behavior_id": "auth.boundary.facts",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.facts.ActorIdentityFacts.__post_init__",
+    "app.modules.authorization.api.facts.ResourceFacts.__post_init__",
+    "app.modules.authorization.api.facts._is_immutable_resource_value"
+  ],
+  "group": "auth",
+  "outcomes": [
+    "return",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "WS-AUTH-003 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/facts.py",
+  "tests": [
+    "backend/tests/architecture/test_authorization_boundary.py::test_actor_identity_facts_require_service_identity_only_for_services",
+    "backend/tests/architecture/test_authorization_boundary.py::test_resource_facts_copy_and_freeze_caller_values",
+    "backend/tests/architecture/test_authorization_boundary.py::test_resource_facts_reject_mutable_or_non_finite_values",
+    "backend/tests/architecture/test_authorization_boundary.py::test_resource_facts_reject_an_empty_string_identifier"
+  ]
+}

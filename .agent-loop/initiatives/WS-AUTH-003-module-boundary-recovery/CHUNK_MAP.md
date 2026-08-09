@@ -2,7 +2,7 @@
 
 | Chunk | State | Purpose |
 |---|---|---|
-| `WS-AUTH-003-01` | proposed | Minimal public API, no-new-private-import gate, and no-new-test-structure-debt foundation |
+| `WS-AUTH-003-01` | in review | Minimal public API, no-new-private-import gate, and no-new-test-structure-debt foundation |
 | capability repairs | future, owned by touched feature chunks | Expose and migrate one exact AUTH capability while shrinking the ledger |
 | `WS-AUTH-003-CLOSE` | future | Remove remaining untouched legacy violations and require an empty ledger |
 
