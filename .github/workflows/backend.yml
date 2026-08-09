@@ -66,9 +66,6 @@ jobs:
             --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md \
             --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
-          pytest -q \
-            tests/architecture/test_authorization_boundary.py \
-            tests/architecture/test_test_structure_boundary.py
 
   lanes:
     needs: auth-boundary-preflight

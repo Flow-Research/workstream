@@ -21,6 +21,7 @@ backend/app/modules/authorization/api/ports.py
 backend/scripts/authorization_boundary.py
 backend/scripts/test_structure_boundary.py
 backend/scripts/behavior_ownership.py       # additive foundation transition only
+backend/scripts/run_test_lanes.py           # register the two architecture modules only
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/architecture/test_test_structure_boundary.py
 backend/tests/test_behavior_ownership.py    # additive transition proof only
@@ -112,12 +113,14 @@ uv run pytest -q tests/test_behavior_ownership.py
 uv run python -m scripts.behavior_ownership validate
 ```
 
-GitHub binds the exact checked-out head and runs both validators, behavior
-ownership validation, and the two exact architecture test files once in an
-unconditional preflight job. Existing backend lanes depend on that preflight
-and otherwise retain their full tests and coverage unchanged. There are no
-workflow path filters, skip flags, `continue-on-error`, or fallback success
-paths. Full coverage is not run locally.
+GitHub binds the exact checked-out head and runs both validators plus behavior
+ownership validation in an unconditional preflight job. The two architecture
+test files are registered in `shared_foundations` and therefore execute exactly
+once through the canonical hosted lane/coverage path. Existing backend lanes
+depend on preflight and otherwise retain their full tests and coverage
+unchanged. There are no workflow path filters, skip flags,
+`continue-on-error`, or fallback success paths. Full coverage is not run
+locally.
 
 ## Required reviewers
 
