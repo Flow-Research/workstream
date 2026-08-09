@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+import app.modules.artifacts.submission_admission as submission_admission_module
 from app.modules.artifacts.pre_submit_evidence import (
     PreSubmitEvidenceConflict,
     PreSubmitEvidenceService,
@@ -210,6 +211,104 @@ async def test_existing_durable_preparation_projects_exact_ready_admission() -> 
         status="ready",
         replayed=True,
     )
+
+
+@pytest.mark.asyncio
+async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch) -> None:
+    actor_id = uuid4()
+    task_id = uuid4()
+    assignment_id = uuid4()
+    evidence_id = uuid4()
+    expected = SubmissionBundlePreparationResult(
+        put_attempt_id=uuid4(),
+        admission_id=uuid4(),
+        status="ready",
+        replayed=True,
+    )
+    locked = SimpleNamespace(effective_policy_id=uuid4(), pre_submit_policy_id=uuid4())
+    prepared = SimpleNamespace(
+        commitment=object(),
+        inspect=AsyncMock(return_value=object()),
+        close=AsyncMock(),
+    )
+    runtime = SimpleNamespace(
+        preparation=SimpleNamespace(prepare=AsyncMock(return_value=prepared)),
+        inspector=object(),
+        catalogue=object(),
+        materialization=SimpleNamespace(prepare_authorization=AsyncMock(return_value=object())),
+        evidence=SimpleNamespace(
+            materialize=AsyncMock(return_value=object()),
+            persist=AsyncMock(
+                return_value=SimpleNamespace(
+                    evidence=SimpleNamespace(evidence_set_id=evidence_id),
+                    pass_capability=None,
+                )
+            ),
+        ),
+        durable_put=object(),
+    )
+
+    @asynccontextmanager
+    async def runtime_factory():
+        yield runtime
+
+    monkeypatch.setattr(
+        submission_admission_module,
+        "load_locked_pre_submit_context",
+        AsyncMock(return_value=locked),
+    )
+    monkeypatch.setattr(
+        submission_admission_module,
+        "compile_locked_pre_submit_plan",
+        Mock(return_value=object()),
+    )
+    monkeypatch.setattr(
+        submission_admission_module,
+        "build_submission_manifest",
+        Mock(return_value=object()),
+    )
+    monkeypatch.setattr(
+        submission_admission_module,
+        "evaluate_submission_change",
+        Mock(return_value=object()),
+    )
+    authority = SimpleNamespace(preflight=AsyncMock(), close=Mock())
+    command = PreparedSubmissionBundlePreparationCommand(
+        session=SimpleNamespace(begin=_transaction),
+        authority=authority,
+        runtime_factory=runtime_factory,
+    )
+    command._load_predecessor = AsyncMock(return_value=None)
+    command._existing_durable_result = AsyncMock(return_value=expected)
+
+    result = await command.prepare(
+        SubmissionBundlePreparationRequest(
+            authorization_context=HumanAuthorizationContext(
+                actor_profile_id=actor_id,
+                actor_kind=ActorKind.HUMAN,
+                actor_status=ActorStatus.ACTIVE,
+                identity_link_id=uuid4(),
+                identity_link_status=IdentityLinkStatus.ACTIVE,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            ),
+            task_id=task_id,
+            assignment_id=assignment_id,
+            predecessor_submission_id=None,
+            idempotency_key=uuid4(),
+            summary="summary",
+            contributor_attestation="attestation",
+            media_type="application/zip",
+            byte_source=artifact_byte_stream(b"PK\x03\x04replay"),
+        )
+    )
+
+    assert result == expected
+    runtime.preparation.prepare.assert_awaited_once()
+    runtime.evidence.materialize.assert_awaited_once()
+    runtime.evidence.persist.assert_awaited_once()
+    prepared.close.assert_awaited_once()
+    authority.close.assert_called_once_with()
 
 
 def test_durable_put_result_projects_without_losing_replay_state() -> None:
