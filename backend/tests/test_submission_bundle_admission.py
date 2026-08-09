@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 import app.modules.artifacts.submission_admission as submission_admission_module
 from app.modules.artifacts.pre_submit_evidence import (
@@ -56,8 +57,10 @@ from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparat
 from app.main import create_app
 from app.modules.tasks.router import (
     _require_ascii_submission_packet_headers,
+    prepare_submission_bundle,
     router as tasks_router,
 )
+from app.modules.tasks.pre_submit_context import PreSubmitLockedContextInvalid
 
 
 def _sha(character: str) -> str:
@@ -85,6 +88,45 @@ def test_submission_packet_headers_reject_non_ascii() -> None:
         _require_ascii_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
     assert failure.value.status_code == 422
     assert failure.value.detail == "submission_bundle_packet_header_encoding_invalid"
+
+
+@pytest.mark.asyncio
+async def test_hidden_preparation_maps_locked_context_race_to_bounded_conflict() -> None:
+    command = SimpleNamespace(
+        prepare=AsyncMock(side_effect=PreSubmitLockedContextInvalid("changed"))
+    )
+    context = HumanAuthorizationContext(
+        actor_profile_id=uuid4(),
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/",
+            "headers": [(b"content-type", b"application/zip")],
+        }
+    )
+
+    with pytest.raises(HTTPException) as failure:
+        await prepare_submission_bundle(
+            task_id=str(uuid4()),
+            request=request,
+            context=context,
+            command=command,
+            assignment_id=str(uuid4()),
+            idempotency_key=str(uuid4()),
+            summary="summary",
+            contributor_attestation="attestation",
+        )
+
+    assert failure.value.status_code == 409
+    assert failure.value.detail == "submission_bundle_preparation_context_changed"
 
 
 @asynccontextmanager
