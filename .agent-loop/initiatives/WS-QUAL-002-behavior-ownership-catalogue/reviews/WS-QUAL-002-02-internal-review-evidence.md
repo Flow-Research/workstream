@@ -11,10 +11,10 @@ behavior, or change hosted CI.
 - Architecture: PASS WITH LOW RISKS. The evidence envelope remains separate
   from authoritative catalogue data. Private lane helpers are acceptable for
   this bounded prototype; expose a public API only if more consumers appear.
-- QA: initial FAIL because a digest-valid artifact could omit a callable. The
-  validator now requires the submitted callable set to exactly equal the
-  callable set derived from committed source, with a focused negative test.
-  Final re-review is recorded in the PR trust bundle.
+- QA: initial FAIL because a digest-valid artifact could omit a callable and a
+  later re-review found validation reading callable spans from the working
+  tree. The validator now requires the complete callable set and derives exact
+  spans from the artifact-bound Git revision, with focused regression tests.
 - Security: initial FAIL because pytest collection inherited the caller's full
   environment. Collection and execution now use a minimal allowlist;
   untracked files invalidate generation; callable spans must exactly match
@@ -32,6 +32,7 @@ behavior, or change hosted CI.
 2. Rejected untracked files when binding evidence to an exact Git head.
 3. Required exact callable start and end lines from committed source.
 4. Required complete callable membership, not merely valid submitted entries.
+5. Bound validation spans to committed source rather than mutable local files.
 
 ## Accepted Low Risks
 

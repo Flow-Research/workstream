@@ -30,10 +30,12 @@ authorization, payment, reputation, or `ContributionRecord` behavior changed.
 
 ## Verification
 
-- 82 focused behavior-ownership tests pass.
-- `scripts.behavior_ownership` remains above the required 90 percent focused
-  coverage floor.
-- 33 semantic-lane contract tests pass.
+- 83 focused behavior-ownership tests pass; the combined focused suite passes
+  all 117 tests.
+- `scripts.behavior_ownership` has 91 percent focused coverage, above the
+  required 90 percent floor.
+- The exact-head probe completed 83 nodes in 29.71 seconds and produced a
+  126,769-byte artifact, below both adoption limits.
 - Ruff, Markdown links, stale-wording checks, and diff integrity pass.
 - A real clean-tree probe remains below the 120-second and 10-MiB adoption
   limits and passes standalone validation.

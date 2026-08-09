@@ -61,15 +61,15 @@ nodes, skip/deselect state, line-context mappings, elapsed time, and digest.
 It contains no test output, environment values, credentials, request payloads,
 logs, or database values.
 ## Acceptance criteria
-- [ ] Context evidence binds exact head, callable lines, and collected nodes.
-- [ ] Test discovery, collection, and completion evidence reuse `run_test_lanes.py` rather than introducing a parallel collector.
-- [ ] Candidate output cannot satisfy reviewed ownership.
-- [ ] Context evidence is a separate uncommitted local artifact and cannot be
+- [x] Context evidence binds exact head, callable lines, and collected nodes.
+- [x] Test discovery, collection, and completion evidence reuse `run_test_lanes.py` rather than introducing a parallel collector.
+- [x] Candidate output cannot satisfy reviewed ownership.
+- [x] Context evidence is a separate uncommitted local artifact and cannot be
       parsed as a catalogue record or consumed by catalogue validation.
-- [ ] The prototype is a local/manual command only and adds no workflow or required check.
-- [ ] Added local runtime is at most two minutes and each generated artifact is at most 10 MiB; exceeding either limit stops adoption and triggers redesign.
-- [ ] Artifacts contain only commit SHAs, lane identity, collection/completion status, skip/deselect status, target paths, callable spans, collected node IDs, line-coverage metadata, and an artifact digest or immutable canonical-lane manifest reference; they never contain environment values, secrets, tokens, request payloads, logs, or database values.
-- [ ] Validation rejects stale-head, partial, incomplete, skipped, deselected, digest-mismatched, or overwritten evidence as candidate input.
+- [x] The prototype is a local/manual command only and adds no workflow or required check.
+- [x] Added local runtime is at most two minutes and each generated artifact is at most 10 MiB; exceeding either limit stops adoption and triggers redesign.
+- [x] Artifacts contain only commit SHAs, lane identity, collection/completion status, skip/deselect status, target paths, callable spans, collected node IDs, line-coverage metadata, and an artifact digest or immutable canonical-lane manifest reference; they never contain environment values, secrets, tokens, request payloads, logs, or database values.
+- [x] Validation rejects stale-head, partial, incomplete, skipped, deselected, digest-mismatched, or overwritten evidence as candidate input.
 ## Verification commands
 ```bash
 (cd backend && .venv/bin/python -m pytest -q tests/test_behavior_ownership.py tests/test_ci_test_lanes.py)
