@@ -17,11 +17,13 @@ is authoritative for its transient review and merge state.
 
 Current focused evidence:
 
-- 49 focused tests pass.
-- `scripts.behavior_ownership` coverage is 91.30 percent.
+- 72 behavior-ownership tests pass.
+- `scripts.behavior_ownership` coverage is 90.11 percent.
 - 33 semantic-lane contract tests pass, including exact assignment of the new
   focused test module to `shared_foundations` under the human-approved scope
   correction.
+- The real local context probe completed 72 exact nodes in 27 seconds and
+  emitted a 96,535-byte digest-bound artifact, below both adoption limits.
 - The initial catalogue is explicitly incomplete and candidate output remains
   non-authoritative while subsystem population has not started.
 

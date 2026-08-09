@@ -664,6 +664,16 @@ def test_build_context_evidence_reuses_lane_collection_and_completion(
     assert artifact["completed_nodes"] == [node]
     assert artifact["callables"][0]["contexts"] == [{"nodeid": node, "lines": [1, 2]}]
 
+    ticks = iter((0.0, ownership.CONTEXT_RUNTIME_LIMIT_SECONDS + 1.0))
+    monkeypatch.setattr(ownership.time, "monotonic", lambda: next(ticks))
+    with pytest.raises(ownership.BehaviorOwnershipError, match="context_runtime_exceeded"):
+        ownership.build_context_evidence(
+            tmp_path,
+            target=target,
+            test_module="tests/test_example.py",
+            output=tmp_path / "late-context.json",
+        )
+
 
 def test_context_output_rejects_size_and_missing_parent(tmp_path: Path) -> None:
     with pytest.raises(ownership.BehaviorOwnershipError, match="too_large"):
@@ -775,6 +785,15 @@ def test_context_validator_rejects_invalid_shapes(
 def test_context_validator_rejects_unsafe_and_unknown_shape(tmp_path: Path) -> None:
     with pytest.raises(ownership.BehaviorOwnershipError, match="unsafe_context_evidence"):
         ownership.validate_context_evidence(tmp_path, tmp_path / "missing.json")
+    symlink = tmp_path / "symlink.json"
+    symlink.symlink_to(tmp_path / "missing-target.json")
+    with pytest.raises(ownership.BehaviorOwnershipError, match="unsafe_context_evidence"):
+        ownership.validate_context_evidence(tmp_path, symlink)
+    oversized = tmp_path / "oversized.json"
+    with oversized.open("wb") as destination:
+        destination.truncate(ownership.CONTEXT_ARTIFACT_LIMIT_BYTES + 1)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="too_large"):
+        ownership.validate_context_evidence(tmp_path, oversized)
     path = tmp_path / "context.json"
     artifact = _context_artifact()
     artifact["unexpected"] = True
