@@ -34,7 +34,8 @@ moving runtime product behavior.
 - Boundary, structure, and ownership tests: 175 passed.
 - CI-integrity re-review: passed.
 - Security re-review: passed after five focused bypass-probe rounds.
-- Exact-head hosted CI: required after the corrective commit is pushed.
+- Exact-head hosted CI: passed on the corrective implementation head; the final
+  status-only head must preserve the same result.
 
 ## Remaining risks
 
