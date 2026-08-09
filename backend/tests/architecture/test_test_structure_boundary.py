@@ -125,6 +125,16 @@ def test_malformed_exception_schema_fails_closed(tmp_path: Path) -> None:
         structure.load_ledger(path)
 
 
+def test_non_string_policy_digest_fails_with_the_mapped_ledger_error(tmp_path: Path) -> None:
+    """Malformed digest types cannot escape the validator with a raw TypeError."""
+    value = structure.load_ledger(LEDGER)
+    value["policy_sha256"] = 42
+    path = tmp_path / "ledger.json"
+    _canonical(path, value)
+    with pytest.raises(structure.TestStructureError, match="invalid_debt_ledger"):
+        structure.load_ledger(path)
+
+
 def test_assertion_map_rejects_a_missing_new_test_node(tmp_path: Path) -> None:
     """Decomposition evidence must point to a test that exists now."""
     maps = tmp_path / "assertion-maps"

@@ -192,6 +192,33 @@ def test_partition_accepts_only_the_approved_additive_foundation_transition(
     }
 
 
+def test_partition_rejects_reordered_trusted_assignments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recomputed digest cannot legitimize reordered trusted custody."""
+    first = "backend/scripts/a.py"
+    second = "backend/scripts/b.py"
+    trusted = _partition([first, second])
+    trusted["assignments"].reverse()
+    authority = {key: trusted[key] for key in trusted if key != "authority_digest"}
+    trusted["authority_digest"] = ownership._digest(authority)
+    _write_json(tmp_path / ownership.PARTITION_PATH, _partition([first, second]))
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset())
+    monkeypatch.setattr(ownership, "eligible_targets", lambda root=ownership.ROOT: [first, second])
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: json.dumps(trusted),
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership.validate_partition(tmp_path, trusted_revision="main")
+
+
 @pytest.mark.parametrize("case", ("extra", "removal", "reassignment", "trusted_digest", "base"))
 def test_partition_additive_transition_rejects_custody_drift(
     tmp_path: Path,

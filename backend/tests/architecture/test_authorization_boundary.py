@@ -76,6 +76,7 @@ def test_actor_identity_facts_require_service_identity_only_for_services() -> No
     """Human and fixed-service identity facts cannot be structurally confused."""
     profile_id, link_id = uuid4(), uuid4()
     human = api.ActorIdentityFacts(profile_id, link_id, api.ActorKind.HUMAN)
+    blank_human = api.ActorIdentityFacts(profile_id, link_id, api.ActorKind.HUMAN, " ")
     service = api.ActorIdentityFacts(
         profile_id,
         link_id,
@@ -83,6 +84,7 @@ def test_actor_identity_facts_require_service_identity_only_for_services() -> No
         "workstream.artifact.binding",
     )
     assert human.service_identity is None
+    assert blank_human.service_identity is None
     assert service.service_identity == "workstream.artifact.binding"
     with pytest.raises(ValueError, match="must match actor kind"):
         api.ActorIdentityFacts(profile_id, link_id, api.ActorKind.HUMAN, "unexpected")
@@ -118,6 +120,12 @@ def test_resource_facts_reject_an_empty_string_identifier() -> None:
     """A public resource selector always names one exact resource."""
     with pytest.raises(ValueError, match="identifier must not be empty"):
         api.ResourceFacts("guide", " ", {})
+
+
+def test_resource_facts_reject_an_identifier_outside_the_public_contract() -> None:
+    """A resource selector is exactly a UUID or canonical non-empty string."""
+    with pytest.raises(ValueError, match="UUID or non-empty string"):
+        api.ResourceFacts("guide", 42, {})  # type: ignore[arg-type]
 
 
 def test_decision_denial_code_matches_the_outcome() -> None:
@@ -162,6 +170,20 @@ def test_decision_denial_code_matches_the_outcome() -> None:
         "def loader(run): return run('x')\nloader(__import__)\n",
         "(lambda run=__import__: run('app.modules.authorization.runtime'))()\n",
         "from builtins import globals as namespace\nnamespace()['__builtins__']\n",
+        "import sys\nsys.modules['builtins'].__import__('app.modules.authorization.runtime')\n",
+        "import sys as registry\nregistry.modules['builtins'].__import__('x')\n",
+        "from sys import modules as registry\nregistry['builtins'].__import__('x')\n",
+        "from sys import modules\nmodules['builtins'].__import__('x')\n",
+        "import sys\nregistry = sys.modules\nregistry['builtins'].__import__('x')\n",
+        "import sys\ngetattr(sys, 'modules')['builtins'].__import__('x')\n",
+        "import sys as registry\ngetattr(registry, 'modules')['builtins'].__import__('x')\n",
+        "import sys\ngetattr(sys, 'mod' + 'ules')['builtins'].__import__('x')\n",
+        "import runpy\nrunpy.run_module('app.modules.authorization.runtime')\n",
+        "import pkgutil\npkgutil.resolve_name('app.modules.authorization.runtime')\n",
+        "import pydoc\npydoc.locate('app.modules.authorization.runtime')\n",
+        "from zipimport import zipimporter\nzipimporter('payload.zip').load_module('x')\n",
+        "import imp\nimp.load_source('app.modules.authorization.runtime', 'runtime.py')\n",
+        "from imp import load_source\nload_source('app.modules.authorization.runtime', 'runtime.py')\n",
     ),
 )
 def test_dynamic_and_wildcard_import_bypasses_fail_closed(tmp_path: Path, source: str) -> None:
@@ -189,6 +211,11 @@ def test_dynamic_and_wildcard_import_bypasses_fail_closed(tmp_path: Path, source
             "backend/app/modules/authorization/example.py",
             "from ..projects.repository import ProjectRepository\n",
             "app.modules.projects.repository",
+        ),
+        (
+            "backend/app/modules/authorization/__init__.py",
+            "from ..actors.service import actor\n",
+            "app.modules.actors.service",
         ),
     ),
 )

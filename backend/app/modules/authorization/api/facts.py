@@ -47,6 +47,8 @@ class ActorIdentityFacts:
     def __post_init__(self) -> None:
         """Require service identity only for service actors."""
         normalized = self.service_identity.strip() if self.service_identity is not None else None
+        if not normalized:
+            normalized = None
         has_service_identity = bool(normalized)
         if has_service_identity != (self.actor_kind is ActorKind.SERVICE):
             raise ValueError("service identity must match actor kind")
@@ -66,6 +68,8 @@ class ResourceFacts:
         resource_type = self.resource_type.strip()
         if not resource_type:
             raise ValueError("resource type must not be empty")
+        if not isinstance(self.resource_id, (UUID, str)):
+            raise ValueError("resource identifier must be a UUID or non-empty string")
         if isinstance(self.resource_id, str) and not self.resource_id.strip():
             raise ValueError("resource identifier must not be empty")
         if not all(isinstance(key, str) and key.strip() for key in self.values):

@@ -205,7 +205,10 @@ def _validate_additive_partition_transition(
         raise BehaviorOwnershipError("invalid_trusted_partition")
     current_assignments = current["assignments"]
     current_by_target = {item["target"]: item for item in current_assignments}
-    if [current_by_target.get(target) for target in trusted_targets] != trusted_assignments:
+    if (
+        trusted_targets != sorted(trusted_targets)
+        or [current_by_target.get(target) for target in trusted_targets] != trusted_assignments
+    ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
     expected_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS - set(trusted_targets)

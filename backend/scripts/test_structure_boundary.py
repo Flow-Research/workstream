@@ -319,7 +319,11 @@ def load_ledger(path: Path) -> dict[str, Any]:
     value = _load_json(path, "invalid_debt_ledger")
     if set(value) != {"entries", "exceptions", "policy_sha256", "schema"}:
         raise TestStructureError("invalid_debt_ledger")
-    if value["schema"] != SCHEMA or not re.fullmatch(r"[0-9a-f]{64}", value["policy_sha256"]):
+    if (
+        value["schema"] != SCHEMA
+        or not isinstance(value["policy_sha256"], str)
+        or not re.fullmatch(r"[0-9a-f]{64}", value["policy_sha256"])
+    ):
         raise TestStructureError("invalid_debt_ledger")
     if not isinstance(value["entries"], list) or not isinstance(value["exceptions"], list):
         raise TestStructureError("invalid_debt_ledger")
@@ -596,13 +600,13 @@ def validate_assertion_maps(root: Path, maps_dir: Path) -> None:
         for mapping in value["mappings"]:
             _validate_mapping_entry(mapping, nodes)
             revision_node = (mapping["old_revision"], mapping["old_test_node"])
-            inventory = inventories.setdefault(
-                revision_node,
-                _assertion_inventory(
+            inventory = inventories.get(revision_node)
+            if inventory is None:
+                inventory = _assertion_inventory(
                     _old_source(root, mapping["old_revision"], mapping["old_test_node"]),
                     mapping["old_test_node"],
-                ),
-            )
+                )
+                inventories[revision_node] = inventory
             span = _validate_old_assertion(mapping, inventory)
             key = (*revision_node, mapping["old_assertion_id"])
             if key in dispositions:

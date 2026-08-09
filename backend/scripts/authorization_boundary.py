@@ -14,6 +14,15 @@ from typing import Iterable
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 AUTH_PACKAGE = "app.modules.authorization"
 PUBLIC_PACKAGE = f"{AUTH_PACKAGE}.api"
+DYNAMIC_LOADING_MODULES = {
+    "builtins",
+    "imp",
+    "importlib",
+    "pkgutil",
+    "pydoc",
+    "runpy",
+    "zipimport",
+}
 INBOUND_HEADING = "## Inbound private-import debt"
 OUTBOUND_HEADING = "## AUTH outbound private-import debt"
 
@@ -52,13 +61,13 @@ def _module_name(path: Path, root: Path) -> str:
     return value.removesuffix(".__init__")
 
 
-def _resolve_from(node: ast.ImportFrom, current_module: str) -> str:
+def _resolve_from(node: ast.ImportFrom, current_module: str, *, is_package: bool) -> str:
     """Canonicalize an absolute or relative ImportFrom module."""
     if node.level == 0:
         if not node.module:
             raise AuthorizationBoundaryError("unresolved_import")
         return node.module
-    package = current_module.rpartition(".")[0]
+    package = current_module if is_package else current_module.rpartition(".")[0]
     package_parts = package.split(".") if package else []
     keep = len(package_parts) - (node.level - 1)
     if keep <= 0:
@@ -71,9 +80,11 @@ def _resolve_from(node: ast.ImportFrom, current_module: str) -> str:
     return ".".join(parts)
 
 
-def _import_from_targets(node: ast.ImportFrom, current_module: str) -> Iterable[str]:
+def _import_from_targets(
+    node: ast.ImportFrom, current_module: str, *, is_package: bool
+) -> Iterable[str]:
     """Yield canonical module targets represented by an ImportFrom node."""
-    base = _resolve_from(node, current_module)
+    base = _resolve_from(node, current_module, is_package=is_package)
     for alias in node.names:
         if alias.name == "*":
             raise AuthorizationBoundaryError("wildcard_import")
@@ -89,6 +100,7 @@ class _DynamicImportVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.importlib_names = {"importlib"}
         self.builtins_names = {"builtins"}
+        self.sys_names = {"sys"}
         self.import_call_names = {
             "__import__",
             "compile",
@@ -102,17 +114,30 @@ class _DynamicImportVisitor(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> None:
         """Reject reflection modules that can conceal computed imports."""
         for alias in node.names:
-            if alias.name == "builtins" or alias.name.startswith("importlib"):
+            root_module = alias.name.partition(".")[0]
+            if root_module in DYNAMIC_LOADING_MODULES:
                 raise AuthorizationBoundaryError("dynamic_import_surface")
+            if alias.name == "sys":
+                self.sys_names.add(alias.asname or alias.name)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         """Record aliases for importlib.import_module and builtins.__import__."""
         if node.level == 0 and node.module and node.module.startswith("importlib"):
             raise AuthorizationBoundaryError("dynamic_import_surface")
+        if (
+            node.level == 0
+            and node.module
+            and node.module.partition(".")[0] in DYNAMIC_LOADING_MODULES
+        ):
+            raise AuthorizationBoundaryError("dynamic_import_surface")
         if node.level == 0 and node.module == "builtins":
             for alias in node.names:
                 if alias.name == "__builtins__" or alias.name in self.import_call_names:
                     raise AuthorizationBoundaryError("dynamic_import_surface")
+        if node.level == 0 and node.module == "sys" and any(
+            alias.name == "modules" for alias in node.names
+        ):
+            raise AuthorizationBoundaryError("dynamic_import_surface")
 
     def visit_Name(self, node: ast.Name) -> None:
         """Reject loading or forwarding any dynamic execution capability."""
@@ -120,6 +145,17 @@ class _DynamicImportVisitor(ast.NodeVisitor):
             node.id == "__builtins__" or node.id in self.import_call_names
         ):
             raise AuthorizationBoundaryError("dynamic_import_surface")
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Reject loading the module registry through any recognized sys alias."""
+        if (
+            isinstance(node.ctx, ast.Load)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.sys_names
+            and node.attr == "modules"
+        ):
+            raise AuthorizationBoundaryError("dynamic_import_surface")
+        self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:
         """Track simple aliases of recognized import callables."""
@@ -133,6 +169,25 @@ class _DynamicImportVisitor(ast.NodeVisitor):
         """Fail for every recognized dynamic import call regardless of argument."""
         if self._is_import_callable(node.func) or self._is_computed_import_callable(node.func):
             raise AuthorizationBoundaryError("dynamic_import")
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and bool(node.args)
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id in self.sys_names
+        ):
+            raise AuthorizationBoundaryError("dynamic_import_surface")
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """Reject module-registry access that can recover import capabilities."""
+        if (
+            isinstance(node.value, ast.Attribute)
+            and isinstance(node.value.value, ast.Name)
+            and node.value.value.id in self.sys_names
+            and node.value.attr == "modules"
+        ):
+            raise AuthorizationBoundaryError("dynamic_import_surface")
         self.generic_visit(node)
 
     def _is_import_callable(self, node: ast.AST) -> bool:
@@ -170,7 +225,9 @@ def source_imports(path: Path, root: Path) -> set[str]:
         if isinstance(node, ast.Import):
             targets.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            targets.update(_import_from_targets(node, current_module))
+            targets.update(
+                _import_from_targets(node, current_module, is_package=path.name == "__init__.py")
+            )
     return targets
 
 
