@@ -491,6 +491,37 @@ def test_collection_rejects_duplicate_or_foreign_nodes(
         runner.collect_nodes((module,), tmp_path / "metadata", "a" * 40)
 
 
+def test_collection_accepts_a_minimal_base_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = "tests/test_alpha.py"
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+
+    class Result:
+        returncode = 0
+
+    def fake_run(*_args, **kwargs):
+        environment = kwargs["env"]
+        assert environment["PYTHONPATH"] == str(runner.ROOT)
+        assert "UNRELATED_SECRET" not in environment
+        Path(environment[runner.COLLECTED_ENV]).write_text(
+            json.dumps(f"{module}::test_alpha") + "\n", encoding="utf-8"
+        )
+        return Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    result = runner.collect_nodes(
+        (module,),
+        metadata,
+        "a" * 40,
+        base_environment={"PYTHONPATH": str(runner.ROOT)},
+    )
+
+    assert result == (0, [f"{module}::test_alpha"], [])
+
+
 def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
     lanes = [{"elapsed_seconds": value} for value in (1.125, 2.25, 0.5, 3.75, 1.0)]
 
