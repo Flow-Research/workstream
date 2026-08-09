@@ -88,9 +88,8 @@ scripts.behavior_ownership coverage: 91 percent.
 Ruff, Markdown links, stale wording, and diff integrity passed.
 ```
 
-The last clean-tree calibration completed 83 nodes in 29.71 seconds and emitted
-126,769 bytes. A final exact-head calibration will refresh this count after the
-external-review repair commit.
+The exact implementation-head calibration completed 90 nodes in 18.12 seconds
+and emitted 141,701 bytes, below both adoption limits.
 
 ## Acceptance Criteria Proof
 
@@ -122,7 +121,7 @@ external-review repair commit.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: pending final post-review-repair commit
+Reviewed implementation SHA: `836865b1d84d06f534c0c45f551e72f335d810aa`
 
 Reviewed at: 2026-08-09
 
