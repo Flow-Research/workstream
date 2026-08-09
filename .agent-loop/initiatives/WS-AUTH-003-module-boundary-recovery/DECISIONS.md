@@ -33,3 +33,9 @@ and ART ports must exist before its implementation begins.
 
 POL-03A remains preserved at `1a7242f2` until the foundation merges, then its
 exact boundary is repaired before its implementation continues.
+
+## D8: Tests prove one primary behavior
+
+Line limits are guardrails, not the definition of quality. New/changed tests
+must prove one primary invariant. Existing mixed/oversized proof is frozen and
+decomposed only as its capability is touched, with assertion parity.

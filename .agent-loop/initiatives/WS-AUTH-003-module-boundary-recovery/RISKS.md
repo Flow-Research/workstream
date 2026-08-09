@@ -9,4 +9,6 @@
 | Mechanical splitting hides cohesion | more files but same spaghetti | split only complete capabilities and transaction ownership |
 | POL-03A resumes on stale design | first proof fails | amend its contract after foundation and before implementation |
 | REV starts with temporary exceptions | new subsystem begins coupled | zero-exception precondition for REV's AUTH/ART dependencies |
+| Line limits create cosmetic splitting | assertions move into opaque helpers | primary-invariant review and prohibition on hidden behavior/assertions |
+| Test cleanup weakens proof | security regression is masked | frozen assertion mapping, no skip/xfail/deletion, test-delta review |
 | Other worktrees conflict | overwritten work | dedicated branches; reconcile current main before each PR |

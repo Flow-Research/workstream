@@ -13,6 +13,11 @@
   with a numeric Markdown entity and the planned validator must decode it before
   path comparison. The existing stale-authorization checker is unchanged.
 - PR description: expanded to the repository trust-bundle structure.
+- Test structure: `TEST_STRUCTURE_POLICY.md` now makes one primary observable
+  behavior the quality rule, with line limits only as guardrails. It names the
+  frozen `TEST_STRUCTURE_DEBT.json` schema, capability assertion-map schema,
+  security/concurrency proof dimensions, skip/xfail rejection, and incremental
+  touched-capability repair.
 
 ## Comments deferred
 
@@ -37,3 +42,5 @@ All passed.
 
 - The validator and architecture fixtures are deliberately implementation work
   for `WS-AUTH-003-01`; this planning PR specifies but does not implement them.
+- `TEST_STRUCTURE_DEBT.json` and capability assertion maps are likewise chunk
+  implementation evidence; this planning PR defines their required contracts.

@@ -30,6 +30,9 @@ growth.
 - Existing authorization, locking, replay, revocation, evidence, concealment,
   and transaction behavior remains unchanged.
 - AUTH tests are organized by behavior and retain assertion/coverage parity.
+- New and changed tests prove one primary behavior; existing oversized/mixed
+  tests are frozen and decomposed capability by capability without weakening
+  proof.
 
 ## Non-goals
 

@@ -71,7 +71,13 @@ One small PR:
 - add a static validator that rejects unlisted or newly added violations;
 - create the minimal `authorization.api` namespace and public-surface leak test;
 - add the consumer/API matrix;
-- make CI run the boundary validator;
+- capture current oversized AUTH test/function debt without rewriting it;
+- store that frozen baseline in `TEST_STRUCTURE_DEBT.json` with exact spans,
+  hashes, sizes, capability ownership, and removal chunks;
+- add a structural validator that rejects new debt, debt growth, new
+  skip/xfail mechanisms, malformed exceptions, and incomplete assertion maps;
+- make CI run both the import-boundary and test-structure validators for their
+  applicable backend changes;
 - move no product behavior and reorganize no large test suite.
 
 The existing debt is temporarily accepted only because it is frozen and
@@ -93,6 +99,8 @@ continues:
 
 POL-03A therefore becomes the first small real-world proof that the boundary is
 usable, not a reason to restructure all AUTH at once.
+It is also the first test-structure repair: only its affected tests receive a
+primary-invariant map and capability-focused decomposition.
 
 ### Later feature chunks
 
@@ -133,11 +141,15 @@ Changed/new code guardrails:
   records why extraction would break a transaction boundary;
 - helpers create state but do not hide the behavior or assertions under test.
 
+`TEST_STRUCTURE_POLICY.md` is normative for this recovery. Static limits
+support its primary-behavior rule; semantic reviewer tracks enforce cohesion.
+
 ## Foundation verification
 
 Exact commands for chunk 01 are defined in its contract. It proves import
-topology and public API safety, not runtime authorization behavior because no
-runtime behavior moves.
+topology and public API safety and prevents new AUTH test-structure debt. It
+does not prove runtime authorization behavior because no runtime behavior
+moves.
 
 Each later capability repair adds its own exact behavior-preservation ledger,
 focused PostgreSQL/concurrency proof, and GitHub-hosted full coverage. Full
