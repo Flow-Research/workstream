@@ -647,8 +647,15 @@ def build_context_evidence(
             backend_root,
         )
         collection = subprocess.run(
-            [sys.executable, "-m", "pytest", "--collect-only", "-q",
-             *test_lanes._plugin_args(), test_module],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                *test_lanes._plugin_args(),
+                test_module,
+            ],
             cwd=backend_root,
             env=collection_environment,
             check=False,
@@ -878,6 +885,8 @@ def validate_context_evidence(
                 )
             ):
                 raise BehaviorOwnershipError("invalid_context_callables")
+    if seen_callables != actual_callables:
+        raise BehaviorOwnershipError("incomplete_context_evidence")
     return {
         "schema": CONTEXT_EVIDENCE_SCHEMA,
         "authoritative": False,

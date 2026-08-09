@@ -605,6 +605,20 @@ def test_context_evidence_rejects_stale_partial_skip_and_deselect(
         ownership.validate_context_evidence(tmp_path, path)
 
 
+def test_context_evidence_rejects_missing_callable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "context.json"
+    _write_json(path, _context_artifact(callables=[]))
+    monkeypatch.setattr(ownership, "_git", lambda root, *arguments: "a" * 40)
+    _prepare_context_identity(tmp_path, monkeypatch)
+
+    with pytest.raises(
+        ownership.BehaviorOwnershipError, match="incomplete_context_evidence"
+    ):
+        ownership.validate_context_evidence(tmp_path, path)
+
+
 def test_context_evidence_rejects_digest_drift_and_overwrite(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
