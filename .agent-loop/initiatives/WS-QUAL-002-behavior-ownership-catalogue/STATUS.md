@@ -10,9 +10,10 @@ validator, examples, focused tests, and contributor documentation. It does not
 reactivate mutation or change any workflow, product behavior, coverage floor,
 lane, skip, or deselection.
 
-The next dependency-ordered boundary is `WS-QUAL-002-02` context evidence.
-Open pull requests, not this static file, determine whether that or any other
-chunk is currently under review.
+`WS-QUAL-002-02` implements local, non-authoritative coverage-context evidence
+with exact collection, completion, head, callable-line, digest, runtime, size,
+and privacy custody. It does not change catalogue records or hosted CI. GitHub
+is authoritative for its transient review and merge state.
 
 Current focused evidence:
 

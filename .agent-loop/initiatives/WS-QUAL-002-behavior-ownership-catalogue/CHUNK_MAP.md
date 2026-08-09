@@ -3,7 +3,7 @@
 | Chunk | Purpose | Dependency | Risk | State |
 |---|---|---|---|---|
 | `WS-QUAL-002-01` | Catalogue schema, inventory, generator, validation foundation | none | L1 | merged PR #297 |
-| `WS-QUAL-002-02` | Coverage-context candidate evidence and runtime calibration | 01 | L1 | pending |
+| `WS-QUAL-002-02` | Coverage-context candidate evidence and runtime calibration | 01 | L1 | implemented; GitHub is authoritative for merge state |
 | `WS-QUAL-002-03A` | AUTH, actors, API controls, audit ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-03B` | Artifacts, storage, extraction, external adapters ownership | 01, 02 | L1 | pending |
 | `WS-QUAL-002-03C` | Projects, tasks, checkers, reviews, contribution ownership | 01, 02 | L1 | pending |
