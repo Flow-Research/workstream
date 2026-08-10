@@ -22,6 +22,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = "workstream.auth-test-structure-debt.v1"
 MAP_SCHEMA = "workstream.auth-assertion-map.v1"
 PRODUCTION_ROOT = "backend/app/modules/authorization"
+POL_03A_PRODUCTION_ROOT = "backend/app/modules/projects/guide_compilation"
+POL_03A_TEST_ROOT = "backend/tests/projects/guide_compilation"
 RECOVERY_PATHS = (
     "backend/scripts/authorization_boundary.py",
     "backend/scripts/test_structure_boundary.py",
@@ -126,7 +128,7 @@ def _imports_authorization(tree: ast.Module) -> bool:
 
 
 def scoped_test_paths(root: Path) -> list[Path]:
-    """Return exact AUTH-related tests plus recovery architecture tests."""
+    """Return AUTH recovery tests and every focused POL-03A test."""
     tests_root = root / "backend" / "tests"
     result: set[Path] = set()
     for path in tests_root.rglob("*.py"):
@@ -140,6 +142,9 @@ def scoped_test_paths(root: Path) -> list[Path]:
         path = root / value
         if value.startswith("backend/tests/") and path.is_file():
             result.add(path)
+    pol03a_tests = root / POL_03A_TEST_ROOT
+    if pol03a_tests.is_dir():
+        result.update(pol03a_tests.rglob("*.py"))
     return sorted(result)
 
 
@@ -232,6 +237,7 @@ def _debt_for_path(path: Path, root: Path, *, test_file: bool) -> list[DebtItem]
 def observed_debt(root: Path) -> list[DebtItem]:
     """Inventory all current hard-limit violations in the AUTH recovery scope."""
     production = sorted((root / PRODUCTION_ROOT).rglob("*.py"))
+    production.extend(sorted((root / POL_03A_PRODUCTION_ROOT).rglob("*.py")))
     recovery_scripts = [
         root / value
         for value in RECOVERY_PATHS

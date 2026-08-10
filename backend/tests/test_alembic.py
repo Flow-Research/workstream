@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0061_submission_admission"
+HEAD_REVISION = "0062_guide_compilation"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -14072,8 +14072,7 @@ async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[st
             if has_lineage:
                 await connection.execute(
                     text(
-                        "update project_guides set status='draft',selected_review_policy_id=null,"
-                        "selected_review_policy_generation=null,selected_review_policy_hash=null,"
+                        "update project_guides set status='draft',selected_review_policy_id=null,selected_review_policy_generation=null,selected_review_policy_hash=null,"
                         "selected_revision_policy_id=null,"
                         "selected_revision_policy_generation=null,"
                         "selected_revision_policy_hash=null where id=:guide"

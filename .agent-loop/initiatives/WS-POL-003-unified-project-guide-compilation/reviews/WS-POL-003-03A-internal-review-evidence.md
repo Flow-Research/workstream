@@ -1,0 +1,51 @@
+# WS-POL-003-03A Internal Review Evidence
+
+Date: 2026-08-10. Risk: L1.
+
+## Deterministic evidence
+
+- Real-PostgreSQL focused compilation suite: 26 passed.
+- New guide-compilation subsystem coverage: 93.83 percent, above the required
+  90 percent floor.
+- Focused AUTH boundary, structure, behavior-ownership, and public contract
+  proof: passed; reviewer run recorded 184 passing tests.
+- Structure-boundary regression suite: 25 passed after explicitly placing
+  every POL-03A production and test file inside the zero-growth/skip gate.
+- Hosted-style semantic-lane collection: 3,764 tests collected and exact lane
+  evidence validated; lane inventory regression suite: 34 passed.
+- Empty upgrade/downgrade, non-empty downgrade refusal, real trigger,
+  concurrency, replay, immutability, and crash-recovery tests passed.
+- Scoped Ruff, authorization boundary, test structure, behavior ownership,
+  stale wording, Markdown links, and diff integrity checks passed.
+- GitHub now preserves the repository-wide 78 percent gate and adds an exact
+  90 percent guide-compilation subsystem gate. No workflow failure policy or
+  threshold was weakened.
+
+## Review results
+
+- Architecture: pass; the new Projects package depends only on the
+  dependency-free AUTH public API and creates no competing protocol or live
+  cross-module path.
+- Security/authorization: pass after exact canonical resource-context digest,
+  fixed service profile/link, action, permission, project, attempt, and audit
+  evidence binding were enforced at the database boundary.
+- QA: pass; exact attempt identity, crash replay, append-only root/child CAS,
+  concurrent fork prevention, stale predecessor denial, state shapes, guarded
+  downgrade, and hidden deny-only behavior are covered.
+- Product/operations: pass; `accepted` remains provider-result custody only and
+  creates no approval, activation, review, payment, contribution, or reputation
+  truth.
+- Senior engineering: pass; package files remain below structural limits and
+  the unsafe evidence-fixture default was removed.
+- Test delta: pass; tests are additive, behavior-focused, and contain no skip,
+  xfail, or weakened assertion path.
+- CI integrity: pass after all focused tests entered the semantic-lane and
+  structure inventories and the hosted 90 percent coverage gate was added.
+- Docs: pass after documenting that downgrade is empty-only and otherwise
+  requires forward recovery or separately reviewed destructive cleanup.
+- Reuse/dedup: pass; keeping the public digest implementation dependency-light
+  and the fixed service literal inside the boundary avoids introducing a
+  private cross-module dependency.
+
+All valid findings were corrected and re-reviewed. No reviewer session remains
+open.

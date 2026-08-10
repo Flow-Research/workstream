@@ -10,6 +10,13 @@ from .errors import (
 )
 from .facts import ActorIdentityFacts, ActorKind, JsonScalar, ResourceFacts, ResourceValue
 from .ports import AuthorizationPort, PreparedAuthorizationPort, PreparedHandleT
+from .project_guide_compilation import (
+    ProjectGuideCompilationAuthorizationPort,
+    ProjectGuideCompilationExecutePersistFacts,
+    ProjectGuideCompilationExecutePreflightFacts,
+    ProjectGuideCompilationRequestFacts,
+    project_guide_compilation_execute_resource_digest,
+)
 
 __all__ = (
     "ActionId",
@@ -26,6 +33,11 @@ __all__ = (
     "PreparedAuthorizationInvalid",
     "PreparedAuthorizationPort",
     "PreparedHandleT",
+    "ProjectGuideCompilationAuthorizationPort",
+    "ProjectGuideCompilationExecutePersistFacts",
+    "ProjectGuideCompilationExecutePreflightFacts",
+    "ProjectGuideCompilationRequestFacts",
+    "project_guide_compilation_execute_resource_digest",
     "ResourceFacts",
     "ResourceValue",
     "action_id",

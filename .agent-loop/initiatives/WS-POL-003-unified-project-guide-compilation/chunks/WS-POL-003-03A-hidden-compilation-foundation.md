@@ -1,6 +1,7 @@
 # Chunk Contract: WS-POL-003-03A - Hidden Compilation Foundation
 
-Status: Active after human start on merged AUTH boundary foundation. Risk: L1.
+Status: Implementation and internal review complete; awaiting hosted CI and
+human merge. Risk: L1.
 
 ## Goal
 
@@ -75,7 +76,8 @@ dataclasses and Protocol; it imports no Projects or AUTH-private type:
 
 - `ProjectGuideCompilationRequestFacts`: `project_id`, `guide_id`,
   `guide_version`, `source_snapshot_id`, `source_snapshot_hash`, `setup_run_id`,
-  `setup_generation`, `operation_id`, `request_id`, `idempotency_key`,
+  `setup_generation`, `canonical_input_hash`, `guide_material_hash`,
+  `operation_id`, `request_id`, `idempotency_key`,
   `pre_catalogue_id`, `pre_catalogue_version`, `pre_catalogue_schema_version`,
   `pre_catalogue_manifest_hash`, `post_catalogue_id`,
   `post_catalogue_version`, `post_catalogue_schema_version`,
@@ -85,8 +87,13 @@ dataclasses and Protocol; it imports no Projects or AUTH-private type:
   `attempt_id` and `provider_idempotency_key`.
 - `ProjectGuideCompilationExecutePersistFacts`: every execute-preflight fact
   plus `result_hash`, `sufficiency_component_hash`,
-  `artifact_policy_component_hash`, `pre_submit_policy_component_hash`, and
-  `post_submit_policy_component_hash`.
+  `artifact_policy_component_hash`, `requirement_inventory_component_hash`,
+  `pre_submit_policy_component_hash`, `post_submit_policy_component_hash`,
+  `capability_suggestions_component_hash`, and `setup_notes_component_hash`.
+- Final persist facts also carry `resource_context_digest`, which must equal
+  the canonical public-AUTH digest of the exact actor profile, identity link,
+  fixed service identity, action, lineage, request, attempt, accepted result,
+  and component facts.
 - `ProjectGuideCompilationAuthorizationPort[PreparedHandleT]`:
   `prepare_request`, `consume_request`, `authorize_execute_preflight`,
   `prepare_execute_persist`, and `consume_execute_persist`. Every method takes
@@ -109,8 +116,14 @@ Facts bind actor/identity link, exact project/guide/source/setup lineage,
 operation/request/idempotency identity, catalogue and agent/instruction
 identity, and—on final execute consumption—the accepted result/component
 hashes. The project-side default always raises a stable AUTH boundary denial.
-No handle is serializable or durable. No action, permission, evaluator,
-service-matrix row, or availability changes in 03A.
+No handle is serializable or durable. The migration admits the exact planned
+`project.guide_compilation.execute` action/permission pair and the bounded
+`project_guide_compilation_attempt` resource type only to the audit evidence,
+permission-registry, and privacy check constraints so an immutable hidden
+compilation cannot reference unrelated authority evidence. It does not
+register or activate that action in
+the catalogue, evaluator, service matrix, or runtime composition; execution
+remains unavailable until AUTH-12I.
 
 The generic handle parameter never defines or exposes a concrete handle.
 Production handles in AUTH-12I must be process-local, non-dataclass,
@@ -138,7 +151,7 @@ new module and prove it reaches no Projects or private AUTH module.
 ## Exact durable schema
 
 Migration file `0062_project_guide_compilation_foundation.py` has
-`revision = "0062_project_guide_compilation_foundation"` and
+`revision = "0062_guide_compilation"` and
 `down_revision = "0061_submission_admission"`; `HEAD_REVISION` changes to the
 same new revision. This is valid only while that remains the sole main head.
 
@@ -167,11 +180,20 @@ same new revision. This is valid only while that remains the sole main head.
 - a scoped predecessor FK that cannot cross project/guide, exact attempt and
   persisted-compilation linkage, positive strictly increasing setup generation,
   canonical hash checks, and fixed service/action custody values;
+- the canonical authorization resource-context digest, equal to the digest on
+  the exact allowed audit event; the digest itself binds the exact identity
+  link and final persist facts;
 - update/delete/truncate guards: compilation rows are insert-only.
 
 The database intentionally does not make `result_hash` globally unique: two
 later exact generations may compile to the same canonical result. Identity is
 the unique attempt; content integrity is enforced by hashes and revalidation.
+
+Downgrade from `0062_guide_compilation` is permitted only while both compilation
+custody tables are empty and no `project.guide_compilation.execute` audit
+evidence exists. Once any of that durable custody exists, the migration fails
+closed: operators must recover forward or use a separately reviewed retention
+and destructive-cleanup plan rather than silently deleting governed evidence.
 
 ## Allowed files
 
@@ -192,11 +214,14 @@ backend/tests/test_alembic.py
 backend/tests/conftest.py
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/auth/**
-.ci/behavior-ownership/projects/**
+.ci/behavior-ownership/lifecycle/**
 backend/scripts/behavior_ownership.py        # exact POL-03A additions only
 backend/tests/test_behavior_ownership.py     # exact transition proof only
 backend/scripts/test_structure_boundary.py   # add exact POL-03A scope only
 backend/tests/architecture/test_test_structure_boundary.py
+.github/workflows/backend.yml                  # exact POL-03A 90% coverage gate only
+backend/scripts/run_test_lanes.py              # assign exact POL-03A focused tests
+backend/tests/test_ci_test_lanes.py             # exact lane-inventory proof only
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/assertion-maps/**
@@ -208,8 +233,10 @@ Changes to `tests/conftest.py` are limited to generic database plumbing; changes
 to `test_alembic.py` are limited to exact migration registration/topology.
 All compilation fixtures and behavior assertions live under the new focused
 test package. The behavior-ownership transition accepts only the exact new
-eligible files named by this contract and rejects removal, reassignment, extra,
-or reordered custody. The structure validator adds the exact new package/tests
+callable-bearing eligible files named by this contract and rejects removal,
+reassignment, extra, or reordered custody. The declarative model module remains
+explicitly unresolved because the catalogue correctly rejects executable
+SQLAlchemy metadata as structural-only. The structure validator adds the exact new package/tests
 to its scope with zero permitted new debt.
 
 ## Not allowed
@@ -218,7 +245,9 @@ to its scope with zero permitted new debt.
   `interfaces/project_agents.py`, or existing project services/routes.
 - Model/provider calls, Celery/setup cutover, live composition, or endpoint
   changes.
-- AUTH runtime/evaluator/catalogue/permission/action/service-matrix changes.
+- AUTH runtime/evaluator/catalogue/action availability/service-matrix changes;
+  the exact planned execute pair in the audit-evidence constraint is the sole
+  vocabulary-only exception and grants no runtime authority.
 - Policy projection, approval, checker execution, guide activation, or ART,
   task, submission, review, revision, contribution, or compensation behavior.
 - Compatibility aliases, fallbacks, dual persistence paths, mutable-current
@@ -244,6 +273,9 @@ to its scope with zero permitted new debt.
 - Append-only CAS permits one root and one child for an expected predecessor;
   stale/concurrent forks fail closed. Update/delete/truncate and identity/key
   mutation are rejected by Postgres.
+- Every compilation references an exact allowed authority event for its own
+  attempt, project, actor, fixed service, permission, and execute action;
+  unrelated, denied, or borrowed audit evidence is rejected by Postgres.
 - Request and execute seams deny before repository mutation. Only AUTH public
   API imports are introduced; the private-import ledger count does not grow.
 - No transaction/lock spans provider I/O because 03A performs none and exposes

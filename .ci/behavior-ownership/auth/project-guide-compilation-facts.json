@@ -1,0 +1,22 @@
+{
+  "behavior_id": "auth.project_guide_compilation.facts",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.authorize_execute_preflight",
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.consume_execute_persist",
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.consume_request",
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.prepare_execute_persist",
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.prepare_request",
+    "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationRequestFacts.__post_init__",
+    "app.modules.authorization.api.project_guide_compilation._validate_common"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/project_guide_compilation.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_public_authorization.py::test_public_facts_reject_wrong_uuid_and_unbounded_token"
+  ]
+}

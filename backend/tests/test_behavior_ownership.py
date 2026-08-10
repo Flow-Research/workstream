@@ -369,6 +369,49 @@ def test_approved_foundation_target_cannot_remain_unresolved(
         ownership.validate_catalogue()
 
 
+def test_pol03a_targets_are_narrow_and_keep_declarative_model_unresolved() -> None:
+    """POL-03A admits only callable ownership while model metadata stays unresolved."""
+    assert ownership.POL_03A_CALLABLE_TARGETS == {
+        "backend/app/modules/authorization/api/project_guide_compilation.py",
+        "backend/app/modules/projects/guide_compilation/authorization.py",
+        "backend/app/modules/projects/guide_compilation/contracts.py",
+        "backend/app/modules/projects/guide_compilation/repository.py",
+        "backend/app/modules/projects/guide_compilation/validation.py",
+    }
+    assert ownership.POL_03A_DECLARATIVE_MODEL_TARGET not in (
+        ownership.POL_03A_CALLABLE_TARGETS
+    )
+
+
+def test_pol03a_partition_transition_accepts_only_declared_additions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing = "backend/scripts/existing.py"
+    additions = sorted(
+        ownership.POL_03A_CALLABLE_TARGETS
+        | {ownership.POL_03A_DECLARATIVE_MODEL_TARGET}
+    )
+    trusted = _partition([existing])
+    current = _partition(sorted([existing, *additions]))
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset())
+    ownership._validate_additive_partition_transition(current, trusted)
+
+
+def test_pol03a_partition_transition_rejects_undeclared_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    existing = "backend/scripts/existing.py"
+    additions = sorted(
+        ownership.POL_03A_CALLABLE_TARGETS
+        | {ownership.POL_03A_DECLARATIVE_MODEL_TARGET}
+    )
+    trusted = _partition([existing])
+    current = _partition(sorted([existing, *additions, "backend/scripts/extra.py"]))
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset())
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(current, trusted)
+
+
 def test_changed_callable_parity_delegates_to_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[object] = []
 
