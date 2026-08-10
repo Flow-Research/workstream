@@ -73,19 +73,16 @@ def test_0062_empty_round_trip_restores_exact_current_schema(
                 0,
                 0,
             )
-        finally:
             command.upgrade(config, "0062_guide_compilation")
-    try:
-        assert asyncio.run(_schema_state(isolated_database_env)) == (
-            "0062_guide_compilation",
-            True,
-            4,
-            1,
-            1,
-            1,
-        )
-    finally:
-        with migration_lock():
+            assert asyncio.run(_schema_state(isolated_database_env)) == (
+                "0062_guide_compilation",
+                True,
+                4,
+                1,
+                1,
+                1,
+            )
+        finally:
             command.upgrade(config, "head")
 
 
