@@ -52,7 +52,7 @@ contributor-facing documentation.
 - The dependency gate accepts only CPython 3.11/3.12 on Linux glibc x86_64 or
   aarch64 and continues to reject macOS, Windows, musl, unsupported Python, and
   other architectures.
-- The Docker workflow uses the host Docker VM's native x86_64 or aarch64 Linux
+- The Docker workflow uses the Docker host's native x86_64 or aarch64 Linux
   architecture, applies migrations, and serves `GET /api/v1/health` on host
   loopback.
 - A real isolated image extraction succeeds inside the aarch64 development
