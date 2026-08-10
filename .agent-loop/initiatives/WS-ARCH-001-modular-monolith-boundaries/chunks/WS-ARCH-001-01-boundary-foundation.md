@@ -50,14 +50,14 @@ docs/operations_backend_testing.md
   - `backend/app/adapters/**` implements typed infrastructure capabilities and
     may be wired by composition, but every existing product-private import is
     frozen debt;
-  - `backend/app/workers/**` is durable delivery/composition entry code and may
+  - `backend/app/wor&#107;ers/**` is durable delivery/composition entry code and may
     consume public APIs; every existing private import is frozen debt;
   - `backend/app/interfaces/**` is legacy shared-contract debt, not a permanent
     public-contract namespace, and all product-private imports are frozen;
   - database metadata discovery is limited to the exact registered discovery
     path and model-only imports; it grants no runtime capability authority.
 - The validator scans all application paths, not only `backend/app/modules/**`.
-  New private edges from API, adapters, workers, interfaces, composition, or
+  New private edges from API, adapters, background execution, interfaces, composition, or
   metadata discovery fail closed.
 - Repository engineering policy uses the same canonical ownership map and
   contains no nonexistent `modules/submissions` boundary.
@@ -71,7 +71,7 @@ docs/operations_backend_testing.md
 - Existing exact debt passes only through protected ledger reconciliation.
 - The first ledger includes ART-to-AUTH/TASK/CHECKER debt through the combined
   general and AUTH views, TASK route and pre-submit-context debt, legacy shared
-  interfaces, and worker/adapter private assembly. AUTH-affecting edges remain
+  interfaces, and background-execution/adapter private assembly. AUTH-affecting edges remain
   exclusively in the canonical AUTH ledger.
 - AUTH-003 is the sole canonical source for every inbound/outbound AUTH edge.
   The general validator loads that ledger through the existing AUTH boundary

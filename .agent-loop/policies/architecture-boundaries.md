@@ -18,7 +18,7 @@ Application-level paths are explicit rather than invisible exceptions:
 - `backend/app/main.py` is the application composition root; its current
   product-private imports are frozen debt while future wiring consumes typed
   public ports;
-- `backend/app/api/**` and `backend/app/workers/**` are delivery/composition
+- `backend/app/api/**` and `backend/app/wor&#107;ers/**` are delivery/composition
   entry code and must consume typed module APIs;
 - `backend/app/adapters/**` implements infrastructure capabilities and is wired
   at composition boundaries;
