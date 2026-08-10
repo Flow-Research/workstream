@@ -1,0 +1,58 @@
+{
+  "behavior_id": "shared.module_boundary.validator",
+  "boundaries": [],
+  "callables": [
+    "scripts.module_boundaries.Registry.names",
+    "scripts.module_boundaries._git_changed_paths",
+    "scripts.module_boundaries._git_document",
+    "scripts.module_boundaries._is_public_target",
+    "scripts.module_boundaries._load_json",
+    "scripts.module_boundaries._metadata_discovery_import",
+    "scripts.module_boundaries._module_from_target",
+    "scripts.module_boundaries._parse_ledger",
+    "scripts.module_boundaries._repair_owner",
+    "scripts.module_boundaries._source_module",
+    "scripts.module_boundaries._validate_acyclic",
+    "scripts.module_boundaries._validate_acyclic.visit",
+    "scripts.module_boundaries._validate_public_apis",
+    "scripts.module_boundaries.exact_source_imports",
+    "scripts.module_boundaries.inventory",
+    "scripts.module_boundaries.load_ledger",
+    "scripts.module_boundaries.load_registry",
+    "scripts.module_boundaries.main",
+    "scripts.module_boundaries.scan",
+    "scripts.module_boundaries.validate",
+    "scripts.module_boundaries.validate_protected_base"
+  ],
+  "group": "shared",
+  "outcomes": [
+    "return",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "WS-ARCH-001-01 required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/scripts/module_boundaries.py",
+  "tests": [
+    "backend/tests/architecture/test_module_boundaries.py::test_repository_matches_the_protected_module_boundary",
+    "backend/tests/architecture/test_module_boundaries.py::test_registry_names_exactly_nine_business_and_three_supporting_modules",
+    "backend/tests/architecture/test_module_boundaries.py::test_new_private_edge_fails_exact_ledger_comparison",
+    "backend/tests/architecture/test_module_boundaries.py::test_import_from_modules_package_resolves_registered_alias",
+    "backend/tests/architecture/test_module_boundaries.py::test_unregistered_top_level_module_file_fails_closed",
+    "backend/tests/architecture/test_module_boundaries.py::test_protected_base_rejects_new_or_expanded_debt",
+    "backend/tests/architecture/test_module_boundaries.py::test_bootstrap_rejects_runtime_source_changes",
+    "backend/tests/architecture/test_module_boundaries.py::test_bootstrap_allows_enforcement_only_install",
+    "backend/tests/architecture/test_module_boundaries.py::test_unknown_module_fails_closed",
+    "backend/tests/architecture/test_module_boundaries.py::test_auth_view_contains_only_cross_boundary_private_edges",
+    "backend/tests/architecture/test_module_boundaries.py::test_public_api_private_reexport_fails_closed",
+    "backend/tests/architecture/test_module_boundaries.py::test_cyclic_public_dependencies_fail_closed",
+    "backend/tests/architecture/test_module_boundaries.py::test_general_ledger_rejects_copied_authorization_edges",
+    "backend/tests/architecture/test_module_boundaries.py::test_general_ledger_allows_non_auth_security_triage_owner",
+    "backend/tests/architecture/test_module_boundaries.py::test_initial_ledgers_capture_high_risk_application_edges",
+    "backend/tests/architecture/test_module_boundaries.py::test_metadata_discovery_exception_is_exact_and_model_only",
+    "backend/tests/architecture/test_module_boundaries.py::test_auth_ledger_and_general_view_divergence_fails_closed",
+    "backend/tests/architecture/test_module_boundaries.py::test_dynamic_and_wildcard_imports_fail_repository_wide"
+  ]
+}

@@ -28,7 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Planning proposed; no runtime behavior changed | Review the canonical twelve-module map and incremental no-new-private-edge recovery before starting the boundary foundation |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Boundary foundation is implemented in PR #310 but is not durable on `main` until human merge; no product behavior changed | After merge, split WS-ARCH-001-02 into exact AUTH, ART, TASK, and composition-root submission capability contracts before implementation |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication and hidden preparation are merged through `04C2` | Replace the non-executable 05-wave XINT/ART contracts with WS-ARCH-001 split public-API contracts before activation, Submission consumption, or live cutover |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; foundations and project-policy authority are merged through `12F3` | Remaining activation chunks depend on exact merged POL, ART, and REV behavior; refresh each executable contract on current `main` |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; policy persistence and shared lifecycle audit are merged | Complete hidden services, contribution records, conditional awards, fulfillment, and reconciliation after named AUTH and REV gates |

@@ -39,3 +39,12 @@ sequence.
 AUTH edges are never copied into a WS-ARCH ledger. The general validator loads
 WS-AUTH-003's canonical ledger through its existing parser and fails if the
 AUTH-specific and general views diverge.
+
+## D7: Application wiring is classified, not exempted
+
+API delivery, adapters, durable workers, and legacy shared interfaces are all
+scanned. Their current private product imports are protected debt and may not
+grow. `backend/app/interfaces/**` is not a permanent public contract surface.
+Database metadata discovery is a distinct infrastructure concern: only the
+exact registered discovery path may import module model declarations, and that
+exception grants no runtime command, repository, service, or authority access.

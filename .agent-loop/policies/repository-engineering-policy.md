@@ -54,6 +54,11 @@ capabilities, and Protocol ports—not ORM models, repositories, sessions, or
 concrete services. The application composition root alone wires concrete
 cross-module implementations.
 
+The canonical registry and temporary exact private-edge recovery rules live in
+`architecture-boundaries.md`. CI rejects unknown modules, new or expanded
+private edges, public API private leaks, cyclic public dependencies, and any
+divergence from the sole WS-AUTH-003 AUTH ledger.
+
 ## Dependency Policy
 
 - Production dependencies require explicit human approval.
