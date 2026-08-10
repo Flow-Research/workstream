@@ -5766,13 +5766,13 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.XINT_002_07,
                             ActionOwner.XINT_003_08A,
                             ActionOwner.XINT_003_08B,
+                            ActionOwner.AUTH_12I,
                         }
                     ),
                 )
             )
             command.downgrade(config, "0021_auth_action_evidence")
             command.upgrade(config, "0022_bootstrap_admin_grants")
-
             proof = asyncio.run(_exercise_admin_authority_guards(isolated_database_env))
             assert proof == {
                 "service_target_rejected": True,
@@ -13576,7 +13576,7 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
     without_later_actions = upgraded["action_definition"].replace(additions, "")
     for action in ("project.guide_compilation.execute", "project.guide_compilation.request"):
         assert upgraded["action_definition"].count(" OR " + _xint003_02c_pair_token(action, action)) == 2
-        without_later_actions = without_later_actions.replace(" OR " + _xint003_02c_pair_token(action, action), "")
+        without_later_actions = without_later_actions.replace(" OR " + _xint003_02c_pair_token(action, action), "").replace(f", ('{action}'::character varying)::text", "")
     assert without_later_actions == prior["action_definition"]
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
     assert prior["identity_values"] == historical_identities

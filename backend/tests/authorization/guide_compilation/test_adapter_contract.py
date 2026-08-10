@@ -19,9 +19,10 @@ from app.modules.authorization.api import (
     project_guide_compilation_execute_resource_digest,
     project_guide_compilation_facts_digest,
 )
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import PreparedAuthorizationService
+from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.guide_compilation import (
     ProjectGuideCompilationAuthorizationAdapter,
 )
@@ -480,3 +481,16 @@ async def test_real_kernel_revoked_service_preflight_denies_without_evidence() -
     with pytest.raises(BoundaryAuthorizationDenied):
         await adapter.authorize_execute_preflight(actor=actor, facts=preflight)
     assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_exact_project_repository_scope_requires_a_project_identifier() -> None:
+    """Never fall back to a system grant for an incomplete exact-project query."""
+    repository = AdminAuthorizationRepository(SimpleNamespace())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="exact project scope requires"):
+        await repository.find_effective_grant(
+            uuid4(),
+            PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+            scope_project_id=None,
+            exact_project_scope=True,
+        )

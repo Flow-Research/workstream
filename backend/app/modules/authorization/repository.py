@@ -351,7 +351,9 @@ class AdminAuthorizationRepository:
             and (allowed_roles is None or role in allowed_roles)
         ]
         scope_guard = AdminRoleGrant.scope_type == "system"
-        if exact_project_scope and scope_project_id is not None:
+        if exact_project_scope:
+            if scope_project_id is None:
+                raise ValueError("exact project scope requires one project identifier")
             scope_guard = and_(
                 AdminRoleGrant.scope_type == "project",
                 AdminRoleGrant.scope_project_id == str(scope_project_id),

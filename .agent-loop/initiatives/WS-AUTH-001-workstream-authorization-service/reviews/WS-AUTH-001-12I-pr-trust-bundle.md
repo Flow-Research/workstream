@@ -20,7 +20,8 @@ lanes for repository-wide coverage.
 ## What changed
 
 - Added exact request/execute catalogue, policy, kernel, PREP, audit, and SQL
-  parity plus migration `0063_compilation_authority`.
+  parity plus migration `0063_guide_compilation_authority.py` (revision
+  `0063_compilation_authority`).
 - Added the production AUTH implementation of the public compilation port.
 - Added non-evidencing pre-provider authorization and fresh transaction-bound
   final PREP with AUTH-verified result digest.
@@ -87,7 +88,8 @@ Focused adapter/domain tests: 16 passed
 AUTH boundary plus focused non-DB tests: 65 passed (before final test additions)
 PostgreSQL 0063 roundtrip and retained-evidence downgrade tests: passed
 PostgreSQL compilation migration adoption/custody suite: 10 passed
-Changed adapter coverage: 98.36% (90% required)
+Changed adapter coverage: 98.36%; hosted per-file AUTH enforcement coverage
+and the complete AUTH-module coverage gate retain the 90% requirement
 Ruff: passed
 Authorization boundary: passed
 Test-structure boundary: passed
@@ -122,8 +124,12 @@ findings were fixed.
 The first hosted Backend run exposed a stale canonical schema fingerprint. The
 second exact-head run proved that correction and then exposed missing
 action-required SQL custody plus stale historical migration assertions. Those
-failures were fixed without weakening CI. Fresh GitHub Actions and a substantive
-CodeRabbit review remain required on the next pushed exact head.
+failures were fixed without weakening CI. After current main was merged, the
+next hosted run exposed two further historical assumptions: 0022 admitted later
+12I evidence, and 0049 parity omitted later permission-registry additions. Both
+were corrected, and the exact two PostgreSQL tests pass in a runner-owned
+disposable database. Fresh GitHub Actions and a substantive CodeRabbit review
+remain required on the next pushed exact head.
 
 ## Remaining risks
 

@@ -227,7 +227,7 @@ cd backend && .venv/bin/python -m scripts.authorization_boundary validate --ledg
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 PYTHONPATH=backend backend/.venv/bin/python backend/scripts/behavior_ownership.py validate
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p pytest_asyncio.plugin backend/tests/architecture/test_authorization_boundary.py backend/tests/authorization/guide_compilation
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin backend/tests/authorization/guide_compilation --cov=app.modules.authorization.guide_compilation --cov-report=term-missing --cov-fail-under=90
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin backend/tests/test_authorization.py backend/tests/authorization/guide_compilation --cov=app.modules.authorization --cov-branch --cov-report=term-missing --cov-fail-under=90
 PYTHONPATH=backend backend/.venv/bin/ruff check backend/app/modules/authorization backend/tests/authorization/guide_compilation backend/tests/architecture/test_authorization_boundary.py
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
