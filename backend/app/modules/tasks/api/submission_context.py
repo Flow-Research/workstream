@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, get_args
 from uuid import UUID
 
 TaskSubmissionContextKind = Literal["initial", "revision"]
@@ -18,10 +18,8 @@ class TaskSubmissionContextUnavailable(RuntimeError):
     """Report one stable failure without exposing TASK persistence."""
 
     def __init__(self, code: TaskSubmissionContextFailure) -> None:
-        if code not in {
-            "task_submission_context_invalid",
-            "task_submission_predecessor_changed",
-        }:
+        """Validate and retain one failure from the public closed set."""
+        if code not in get_args(TaskSubmissionContextFailure):
             raise ValueError("task submission context failure code is invalid")
         super().__init__(code)
         self.code = code
@@ -51,6 +49,7 @@ class TaskLockedProjectContextReferences:
     pre_submit_policy_bundle_hash: str
 
     def __post_init__(self) -> None:
+        """Reject incomplete locked string references."""
         values = (
             self.guide_version,
             self.source_snapshot_hash,
@@ -69,6 +68,7 @@ class SubmissionPredecessorFacts:
     version: int
 
     def __post_init__(self) -> None:
+        """Reject non-positive or non-integer Submission versions."""
         if type(self.version) is not int or self.version < 1:
             raise ValueError("submission predecessor version is invalid")
 
@@ -86,6 +86,7 @@ class TaskSubmissionContextFacts:
     locked_project_context: TaskLockedProjectContextReferences
 
     def __post_init__(self) -> None:
+        """Enforce the exact initial-or-revision lifecycle shape."""
         is_initial = (
             self.status == "in_progress"
             and self.kind == "initial"

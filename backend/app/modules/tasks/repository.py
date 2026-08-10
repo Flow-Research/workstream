@@ -119,7 +119,18 @@ class TaskRepository:
         self,
         request: TaskSubmissionContextRequest,
     ) -> TaskSubmissionContextFacts:
-        """Lock and project exact TASK-owned Submission lifecycle facts."""
+        """Lock and project exact TASK-owned Submission lifecycle facts.
+
+        Args:
+            request: Exact task, assignment, contributor, and predecessor selectors.
+
+        Returns:
+            Immutable TASK-owned context facts from the locked rows.
+
+        Raises:
+            TaskSubmissionContextUnavailable: When the context is invalid or the
+                requested predecessor is no longer the latest Submission.
+        """
         task = await self.get_task(str(request.task_id), for_update=True)
         assignment = await self._session.scalar(
             select(TaskAssignment)
@@ -262,6 +273,9 @@ class TaskRepository:
 
         Args:
             task_id: Task whose latest submission should be loaded.
+            for_update: Whether to lock the selected Submission row.
+            populate_existing: Whether to refresh an identity-mapped row from
+                PostgreSQL.
 
         Returns:
             Latest submission by version when present; otherwise ``None``.

@@ -198,9 +198,12 @@ def test_tasks_public_api_has_no_private_or_mutable_dependency() -> None:
     boundary._validate_public_apis(  # noqa: SLF001 - architecture proof
         ROOT, boundary.load_registry(REGISTRY)
     )
-    imports = set()
-    for path in (ROOT / "backend/app/modules/tasks/api").rglob("*.py"):
+    api_files = list((ROOT / "backend/app/modules/tasks/api").rglob("*.py"))
+    assert api_files
+    imports: set[str] = set()
+    for path in api_files:
         imports.update(boundary.exact_source_imports(path, ROOT))
+    assert imports
     assert all(
         not target.startswith("app.modules.")
         or target.startswith("app.modules.tasks.api")

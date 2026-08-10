@@ -53,6 +53,7 @@ backend/scripts/behavior_ownership.py
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02A-task-submission-context-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02A-task-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02A-external-review-response.md
 docs/architecture_lockdown.md
 ```
 

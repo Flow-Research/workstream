@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 from collections.abc import AsyncIterator, Iterator
+from contextlib import suppress
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -95,6 +96,7 @@ from app.schemas.auth import ActorContext
 
 
 def _locked_task_context_references() -> TaskLockedProjectContextReferences:
+    """Build complete immutable locked references for focused unit tests."""
     return TaskLockedProjectContextReferences(
         project_id=uuid4(),
         guide_version="v1",
@@ -108,6 +110,7 @@ def _locked_task_context_references() -> TaskLockedProjectContextReferences:
 
 
 def test_task_submission_context_public_facts_are_immutable_and_consistent() -> None:
+    """Reject mutation, invalid failures, and inconsistent lifecycle facts."""
     predecessor = SubmissionPredecessorFacts(submission_id=uuid4(), version=2)
     facts = TaskSubmissionContextFacts(
         task_id=uuid4(),
@@ -163,6 +166,7 @@ def test_task_submission_context_public_facts_are_immutable_and_consistent() -> 
 
 @pytest.mark.asyncio
 async def test_task_repository_locks_initial_and_revision_submission_context() -> None:
+    """Project exact initial and revision facts through the owner-local port."""
     contributor_id = uuid4()
     task_id = uuid4()
     assignment_id = uuid4()
@@ -261,6 +265,7 @@ async def test_task_repository_locks_initial_and_revision_submission_context() -
 
 @pytest.mark.asyncio
 async def test_task_repository_rejects_stale_submission_predecessor() -> None:
+    """Reject a predecessor selector that is no longer the latest Submission."""
     task_id = uuid4()
     contributor_id = uuid4()
     assignment_id = uuid4()
@@ -297,6 +302,7 @@ async def test_task_repository_rejects_stale_submission_predecessor() -> None:
 async def test_task_repository_rejects_invalid_revision_lineage(
     cross_contributor: bool,
 ) -> None:
+    """Reject crossed lifecycle state and cross-contributor predecessors."""
     task_id = uuid4()
     contributor_id = uuid4()
     assignment_id = uuid4()
@@ -1746,6 +1752,7 @@ async def test_task_repository_postgresql_submission_context_lock_serializes_rac
 
     holder = db_session.get_session_factory()()
     contender = db_session.get_session_factory()()
+    contender_call: asyncio.Task[TaskSubmissionContextFacts] | None = None
     try:
         held_facts = await TaskRepository(holder).lock_submission_context(request)
         assert held_facts.kind == "initial"
@@ -1762,6 +1769,10 @@ async def test_task_repository_postgresql_submission_context_lock_serializes_rac
         contender_facts = await contender_call
         assert contender_facts == held_facts
     finally:
+        if contender_call is not None:
+            contender_call.cancel()
+            with suppress(asyncio.CancelledError):
+                await contender_call
         await holder.close()
         await contender.close()
 
