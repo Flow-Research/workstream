@@ -153,6 +153,7 @@ capability ledger and explicit remaining work.
 
 ## Start Here
 
+- [Developer Quickstart](#developer-quickstart)
 - [Contribution Guide](CONTRIBUTING.md)
 - [Current v0.1 Status](docs/roadmap_status.md)
 - [Product Principles](docs/product_principles.md)
@@ -278,7 +279,111 @@ the repository is changed; it does not define runtime task or review records.
 Independent initiatives and branches may proceed concurrently. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md) before proposing repository work.
 
-## Local Backend Database
+## Developer Quickstart
+
+Workstream's image-extraction boundary is intentionally Linux-only. The
+supported runtime is CPython 3.11 or 3.12 on Linux glibc 2.27 or newer, using
+either x86_64 or aarch64. macOS and Windows contributors should run the backend
+through Docker; do not install a different Pillow build to bypass the approved
+artifact boundary.
+
+### Docker Workflow (Recommended)
+
+Prerequisites are Git, Docker Engine, and Docker Compose v2. From the repository
+root, build the native-architecture Linux image and start the API with healthy
+Postgres and Redis dependencies:
+
+```bash
+docker compose up --build --wait backend
+```
+
+Then verify the API with the command for your shell:
+
+```bash
+# macOS, Linux, or Git Bash
+curl --fail http://127.0.0.1:8000/api/v1/health
+```
+
+```powershell
+# PowerShell
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/health
+```
+
+The expected response is `{"status":"ok"}`. The backend service applies
+Alembic migrations before serving, binds the API only to host loopback, and
+uses explicit local-only development auth and key material. Artifact storage is
+disabled in this first-run profile; integration tests configure MinIO when they
+exercise the S3-compatible path.
+
+The image is Linux glibc on the Docker VM's native x86_64 or aarch64
+architecture. Do not force `--platform linux/amd64` on an ARM host: CPU
+emulation does not provide equivalent evidence for Workstream's inner seccomp
+isolation filter. If your shell sets `DOCKER_DEFAULT_PLATFORM`, clear it before
+building; the Dockerfile rejects a foreign target architecture.
+
+Run focused checks in the same containerized environment:
+
+```bash
+docker compose run --rm --no-deps backend python scripts/check_guide_extractor_dependencies.py
+docker compose run --rm --no-deps backend python -m pytest -q tests/test_app.py tests/test_guide_extractor_dependencies.py
+docker compose run --rm --no-deps backend ruff check app tests scripts
+```
+
+Dependency changes require a rebuild:
+
+```bash
+docker compose build backend
+```
+
+### Native Linux Workflow
+
+Use this path only with CPython 3.11 or 3.12 on Linux glibc 2.27 or newer and
+an x86_64 or aarch64 machine. Docker is still used for backing services.
+Confirm that `python3 --version` reports Python 3.11 or 3.12 before creating
+the environment. Native extraction also requires `libseccomp.so.2` and a normal
+Linux `/proc`; install `libseccomp2` on Debian/Ubuntu or the equivalent
+`libseccomp` package for your distribution. Install uv 0.12.3 and use the
+committed lockfile; an unconstrained pip install is not a supported setup path.
+
+```bash
+docker compose up -d --wait postgres redis
+cd backend
+cp .env.example .env
+python3 --version
+uv --version
+uv sync --locked --extra dev --python python3
+.venv/bin/python -m alembic upgrade head
+.venv/bin/python -m uvicorn app.main:app --reload
+```
+
+Verify the API from another terminal with:
+
+```bash
+curl --fail http://127.0.0.1:8000/api/v1/health
+```
+
+`backend/.env` is ignored. Its checked-in example contains only public,
+local-development values; replace those values when specifically testing key
+rotation, and never reuse them in a shared or hosted environment.
+
+### Logs, Shutdown, And Reset
+
+```bash
+docker compose logs -f backend
+docker compose down
+```
+
+For the native workflow, stop Uvicorn with `Ctrl+C` before running
+`docker compose down` for the backing services.
+
+To deliberately delete the local Postgres and MinIO volumes as well, run the
+following destructive reset command:
+
+```bash
+docker compose down --volumes
+```
+
+### Backing Services And Artifact Storage
 
 Workstream uses Postgres locally and in CI. It uses Celery with Redis for
 durable local project setup jobs and automatic pre-review checker gates. MinIO
@@ -286,8 +391,13 @@ provides the S3-compatible artifact protocol in local development and CI. Start
 the local services with:
 
 ```bash
-docker compose up -d postgres redis minio
+docker compose up -d --wait postgres redis minio
 ```
+
+If either default host port is already in use, set
+`WORKSTREAM_POSTGRES_HOST_PORT` or `WORKSTREAM_REDIS_HOST_PORT` before running
+Compose. Native-backend users must put the same selected ports in
+`backend/.env`; the containerized backend uses the internal service ports.
 
 MinIO uses the compose-only static credentials and the private
 `workstream-artifacts` bucket. The integration tests create that bucket

@@ -1452,7 +1452,9 @@ structural metadata. The OOXML adapters do not add `python-docx`,
 records exact wheel URLs and hashes, licenses, imports, format scopes, native-code and
 runtime-isolation facts, maintenance evidence, and an advisory snapshot. It
 approves no source distribution and only the named Python 3.11/3.12 manylinux
-x86_64 Pillow wheels.
+x86_64 and aarch64 Pillow wheels. The native boundary remains CPython on Linux
+glibc 2.27 or newer; macOS, Windows, musl, and other architectures are not
+approved parser runtimes.
 
 Changing that allowlist requires an independent protected GitHub approval on
 the exact PR head after the final byte change. The reviewer must be a human

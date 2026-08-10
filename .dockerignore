@@ -1,0 +1,15 @@
+*
+!backend/
+!backend/**
+!docker/
+!docker/backend/
+!docker/backend/Dockerfile.dev
+
+backend/.ci/
+backend/.coverage*
+backend/.env
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.pyc

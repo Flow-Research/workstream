@@ -1,4 +1,53 @@
 services:
+  backend:
+    profiles: ["backend"]
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        python -m alembic upgrade head
+        exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      WORKSTREAM_API_RATE_LIMIT_KEY_SECRET: ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8=
+      WORKSTREAM_ARTIFACT_STORE_BACKEND: disabled
+      WORKSTREAM_AUTH_PROVIDER: dev
+      WORKSTREAM_CELERY_BROKER_URL: redis://redis:6379/0
+      WORKSTREAM_DATABASE_URL: postgresql+asyncpg://workstream:workstream@postgres:5432/workstream
+      WORKSTREAM_DEBUG: "true"
+      WORKSTREAM_DEV_AUTH_ISSUER: https://workstream.local/development
+      WORKSTREAM_DEV_AUTH_SUBJECT: local-developer
+      WORKSTREAM_DEV_AUTH_TOKEN: workstream-local-dev-token
+      WORKSTREAM_ENVIRONMENT: local
+      WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+      WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART: "false"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/workspace/backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
   postgres:
     image: public.ecr.aws/docker/library/postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     environment:
@@ -6,7 +55,7 @@ services:
       POSTGRES_USER: workstream
       POSTGRES_PASSWORD: workstream
     ports:
-      - "5433:5432"
+      - "127.0.0.1:${WORKSTREAM_POSTGRES_HOST_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U workstream -d workstream"]
       interval: 5s
@@ -18,7 +67,7 @@ services:
   redis:
     image: redis:7@sha256:b2b95679e3b46fb51864949ed25ea976fc3a6bcc00a40a1bc00d568cb2822e50
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${WORKSTREAM_REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

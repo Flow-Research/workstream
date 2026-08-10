@@ -71,13 +71,29 @@
       "advisories": [],
       "approved_artifacts": [
         {
+          "filename": "pillow-12.3.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "machine": "aarch64",
+          "python_version": "3.11",
+          "sha256": "bcb46e2f9feff8d06323983bd83ed00c201fdcab3d74973e7072a889b3979fcd",
+          "url": "https://files.pythonhosted.org/packages/c8/98/766667a4be768150a202836acd9fad19c06824ca86c4286d3cf6b274964e/pillow-12.3.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl"
+        },
+        {
           "filename": "pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "machine": "x86_64",
           "python_version": "3.11",
           "sha256": "23d27a3e0307ec2244cc51e7287b919aa68d097504ebe19df4e76a98a3eea5bd",
           "url": "https://files.pythonhosted.org/packages/3b/2d/ede717bc1144f63886c21fd349bb95860b0d1a21149ff16f2bb362b612b6/pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
         },
         {
+          "filename": "pillow-12.3.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "machine": "aarch64",
+          "python_version": "3.12",
+          "sha256": "d9c7f76c0673154f044e9d78c8655fb4213f6ca31a836df48b40fe5d187717b9",
+          "url": "https://files.pythonhosted.org/packages/25/27/ac8f99618ffd3dde21db0f4d4b1d2ab00c0880595bfd17df103f7f39fd0c/pillow-12.3.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl"
+        },
+        {
           "filename": "pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "machine": "x86_64",
           "python_version": "3.12",
           "sha256": "78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91",
           "url": "https://files.pythonhosted.org/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
@@ -112,7 +128,18 @@
       "3.11",
       "3.12"
     ],
-    "approved_runtime_platform": "manylinux x86_64",
+    "approved_runtime_platforms": [
+      {
+        "libc": "glibc>=2.27",
+        "machine": "aarch64",
+        "system": "Linux"
+      },
+      {
+        "libc": "glibc>=2.27",
+        "machine": "x86_64",
+        "system": "Linux"
+      }
+    ],
     "index": "https://pypi.org/simple",
     "require_hashes": true
   },
@@ -123,5 +150,5 @@
     "python-pptx",
     "XlsxWriter"
   ],
-  "schema_version": 1
+  "schema_version": 2
 }

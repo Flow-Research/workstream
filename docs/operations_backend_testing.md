@@ -3,10 +3,18 @@
 ## Native guide-extractor runtime
 
 The approved v0.1 image extractor supports CPython 3.11 or 3.12 on Linux glibc
-x86_64. Its Pillow dependency is installed only from the approved hash-bound
-manylinux wheels. Python 3.13, macOS, ARM, and musl environments intentionally
-fail the guide-extractor dependency gate rather than resolving an unapproved
-native artifact.
+2.27 or newer, on x86_64 or aarch64. Its Pillow dependency is installed only
+from the four approved hash-bound manylinux wheels. Python 3.13, macOS,
+Windows, musl, and other architectures intentionally fail the guide-extractor
+dependency gate rather than resolving an unapproved native artifact.
+Native execution also requires `libseccomp.so.2` and the normal Linux `/proc`
+surface used by the fail-closed extraction child.
+
+macOS and Windows contributors use the repository's Docker backend service,
+which runs Linux on the Docker VM's native x86_64 or aarch64 architecture. Do
+not force amd64 emulation on an ARM host: a package install is not proof that
+the extraction child's inner seccomp boundary is available. See the
+[Developer Quickstart](../README.md#developer-quickstart).
 
 Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
