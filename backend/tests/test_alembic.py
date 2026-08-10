@@ -13580,9 +13580,18 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
     additions = " OR " + " OR ".join(
         _xint003_02c_pair_token(action, permission) for action, permission in _XINT003_02C_ACTIONS
     )
+    compilation_addition = " OR " + _xint003_02c_pair_token(
+        "project.guide_compilation.execute", "project.guide_compilation.execute"
+    )
     assert prior["profiles"] == upgraded["profiles"] == 0
     assert upgraded["action_definition"].count(additions) == 2
-    assert upgraded["action_definition"].replace(additions, "") == prior["action_definition"]
+    assert upgraded["action_definition"].count(compilation_addition) == 2
+    assert (
+        upgraded["action_definition"]
+        .replace(additions, "")
+        .replace(compilation_addition, "")
+        == prior["action_definition"]
+    )
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
     assert prior["identity_values"] == historical_identities
     assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)

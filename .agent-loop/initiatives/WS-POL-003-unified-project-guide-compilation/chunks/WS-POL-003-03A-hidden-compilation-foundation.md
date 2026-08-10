@@ -229,11 +229,13 @@ backend/tests/test_ci_test_lanes.py             # exact lane-inventory proof onl
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/**
 ```
 
-Changes to `tests/conftest.py` are limited to generic database plumbing; changes
-to `test_alembic.py` are limited to exact migration registration/topology.
-All compilation fixtures and behavior assertions live under the new focused
-test package. The behavior-ownership transition accepts only the exact new
-callable-bearing eligible files named by this contract and rejects removal,
+Changes to `tests/conftest.py` are limited to generic database plumbing. All
+compilation fixtures and behavior assertions live under the new focused test
+package. Changes to `test_alembic.py` are limited to exact migration
+registration, topology, and the historical round-trip assertion accounting
+for the new independently tested action-evidence token. The behavior-ownership
+transition accepts only the exact new callable-bearing eligible files named by
+this contract and rejects removal,
 reassignment, extra, or reordered custody. The declarative model module remains
 explicitly unresolved because the catalogue correctly rejects executable
 SQLAlchemy metadata as structural-only. The structure validator adds the exact new package/tests
