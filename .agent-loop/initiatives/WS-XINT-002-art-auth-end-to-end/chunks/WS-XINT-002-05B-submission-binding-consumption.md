@@ -1,10 +1,15 @@
 # Chunk Contract: WS-XINT-002-05B Submission Binding Consumption
 
+Status: Non-executable coordination evidence. WS-ARCH-001-02 must replace this
+file with split AUTH, ART, TASK, and composition contracts after 05A is
+reconciled.
+
 ## Goal
 
-Activate fresh human Submission creation and separate fixed artifact binding in
-one exactly-once Submission/binding transaction. It consumes the durable ready
-admission created by 05A; it does not re-admit the work.
+Activate fresh human TASK-owned Submission creation and separate fixed
+ART-owned artifact binding/admission consumption in one exactly-once
+composition-owned transaction. It consumes the durable ready admission created
+by 05A; it does not re-admit the work.
 
 ## Risk class
 
@@ -12,32 +17,25 @@ L1.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/**
-backend/app/modules/artifacts/authorization.py
-backend/app/modules/artifacts/service.py
-backend/app/modules/artifacts/repository.py
-backend/app/modules/tasks/**
-backend/tests/test_authorization.py
-backend/tests/test_submission_api.py
-backend/tests/test_submission_concurrency.py
-backend/tests/test_submission_history.py
-docs/spec_authorization_service.md
-docs/spec_artifact_storage_service.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-```
+None. The WS-ARCH-001-02 replacements must name exact capability-owned files,
+use only `authorization.api`, `artifacts.api`, and `tasks.api` across module
+boundaries, and wire concrete transaction-bound implementations only in the
+application composition root.
 
 ## Not allowed
 
 Revision obligations, checker/reviewer lifecycle changes, provider calls from
 product modules, compatibility paths, or new catalogue values.
+No private cross-module import, ART-created Submission, TASK-owned artifact
+binding/admission mutation, or new boundary-ledger edge.
 
 ## Acceptance criteria
 
 - Consume fresh human `submission.create` and independent fixed
   `artifact.submission.binding.create` capabilities in one transaction.
-- Lock exact admission/task/assignment/context/content, create one immutable
-  Submission/binding, consume admission, and commit once.
+- Lock exact admission/task/assignment/context/content; TASKS creates one
+  immutable Submission, ART creates one binding and consumes the admission,
+  and the composition-owned transaction commits once through public ports.
 - Wrong/revoked/stale/cross-resource/replayed/concurrent attempts create zero or
   exactly one complete result; denial precedes admission-state disclosure.
 
@@ -63,4 +61,5 @@ integrity, docs, reuse/dedup, and test delta.
 
 ## Human review focus
 
-Dual authority, one transaction, concealment, and exactly-once creation.
+Dual authority, module ownership, one transaction, concealment, and
+exactly-once creation. This file must not start implementation.

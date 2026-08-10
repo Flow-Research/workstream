@@ -1,14 +1,12 @@
 # Status
 
 - Initiative state: AUTH module-boundary recovery active
-- Current consumer repair branch: `codex/ws-pol-003-03a-hidden-compilation-resume`
 - Foundation merge: PR #305 at `3c260e20`
-- Current chunk: `WS-AUTH-003-01` boundary foundation
 - Chunk state: AUTH boundary foundation merged through PR #305
-- Implementation: public boundary foundation is merged; incremental capability
-  repair is active through POL-03A
+- First capability repair: POL-03A merged through PR #307 at `5e459a8f`
+- Implementation: public boundary foundation and its first real consumer proof
+  are merged; later feature chunks repair only their touched capabilities
 - Current import debt: inventoried in `IMPORT_LEDGER.md`
-- POL-03A: active on a fresh branch from merged main; preserved WIP `1a7242f2`
-  is reference evidence only and will not be replayed wholesale
+- Preserved POL-03A WIP `1a7242f2` is historical reference evidence only
 - REV rule: no private AUTH/ART import exception at `allow_reviews`
 - Human approval required: review and merge each incremental capability repair

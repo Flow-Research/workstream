@@ -34,10 +34,10 @@ they cross multiple L1 boundaries.
 | `WS-ART-001-04B2` | Materialize the sealed manifest tree once and execute the mandatory platform/default catalogue phases. | L1 | Merged PR #282 |
 | `WS-ART-001-04B3` | Execute locked project-policy rules through the same plan and persist one bounded immutable evidence set. | L1 | Merged PR #291 as `8f516e6d` |
 | `WS-ART-001-04C1` | Reauthorize and atomically persist the evidence-linked submission intent, capacity, and generic put attempt, then write the checked ZIP once. | L1 | Merged PR #296 |
-| `WS-ART-001-04C2` | Reuse verification/recovery to publish one capacity-charged ready admission and compose the hidden continuous endpoint. | L1 | Proposed after 04C1 |
-| `WS-ART-001-05A` | Atomically consume ready admission into one immutable Submission and binding under fresh human/service authority. | L1 | Proposed after XINT-05A |
-| `WS-ART-001-05B` | Atomically cut the live Submission API/dispatch to verified admission and remove the complete legacy standalone/internal precheck and caller-owned package contract. | L1 | Proposed after XINT-05B |
-| `WS-ART-001-06A` | Persist post-submit checker input snapshot and materialization bound to the unified compilation and compiled checker plan. | L1 | Proposed after 05B and POL-06B/07 |
+| `WS-ART-001-04C2` | Reuse verification/recovery to publish one capacity-charged ready admission and compose the hidden continuous endpoint. | L1 | Merged PR #300 as `b2e2c615` |
+| `WS-ART-001-05A` | Coordinate ART-owned admission/binding with TASK-owned immutable Submission under fresh human/service authority. | L1 | Superseded as executable; requires WS-ARCH-001-02 split replacement contracts |
+| `WS-ART-001-05B` | Cut the TASK-owned live Submission API/dispatch to ART verified admission and remove the complete legacy precheck/caller-owned package contract. | L1 | Superseded as executable; requires WS-ARCH-001-02 split replacement contracts |
+| `WS-ART-001-06A` | Persist post-submit checker input snapshot and materialization bound to the unified compilation and compiled checker plan. | L1 | Proposed after the replacement 05-wave cutover and POL-06B/07 |
 | `WS-ART-001-06B` | Store/bind checker outputs and preserve POL-owned single-port routing. | L1 | Proposed after 06A |
 | `WS-ART-001-07A` | Add lease-scoped exact-binding reviewer packet materialization without review lifecycle ownership. | L1 | Proposed after 06B plus hidden REV manifest |
 | `WS-ART-001-07B` | Bind accepted Submission/ART identity into the CON handoff without provider I/O. | L1 | Proposed after REV acceptance and CON hidden contract |
@@ -53,10 +53,11 @@ AUTH-04B implementation [merged PR #245]
 -> ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> 04B1 -> 04B2 -> 04B3
 -> XINT-06A pre-submit materializer activation
 -> ART-04C1 -> 04C2
--> XINT-05A contributor preparation activation
--> ART-05A
--> XINT-05B Submission/binding activation
--> ART-05B -> POL-06B -> POL-07 -> ART-06A -> ART-06B
+-> WS-ARCH-001-01 boundary foundation
+-> WS-ARCH-001-02 split public-API replacement contracts
+-> ownership-correct AUTH preparation + ART admission/binding + TASK Submission
+-> replacement activation/API cutover and complete legacy precheck removal
+-> POL-06B -> POL-07 -> ART-06A -> ART-06B
 -> XINT-06B post-submit/output activation
 -> ART/REV-07A hidden packet contract
 -> XINT-07A packet activation only

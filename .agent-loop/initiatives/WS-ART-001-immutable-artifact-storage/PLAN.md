@@ -742,10 +742,11 @@ AUTH-04B implementation/activation [merged PR #245]
 -> XINT-06A pre-submit materializer activation
 -> ART-04C1 durable intent + one provider write
 -> ART-04C2 verified ready-admission publication
--> XINT-05A contributor preparation activation
--> ART-05A atomic Submission/binding/admission consumption
--> XINT-05B Submission/binding activation
--> ART-05B admission-backed Submission/API/dispatch cutover plus complete legacy precheck removal
+-> WS-ARCH-001-01 general module-boundary enforcement foundation
+-> WS-ARCH-001-02 split ownership-correct 05-wave replacement contracts
+-> replacement AUTH preparation capability + ART admission/binding ports
+-> replacement TASK-owned Submission command + composition-owned transaction
+-> replacement activation/API/dispatch cutover + complete legacy precheck removal
 -> POL-06B deterministic unified post-submit projection
 -> POL-07 sole checker service port
 -> ART-06A post-submit checker snapshot/materialization
@@ -768,14 +769,17 @@ hidden endpoint after every internal dependency exists.
 PLAN5 supersedes the former early 04A4 removal. The legacy standalone precheck
 route and its internal `TaskService.create_submission` safety guard remain
 temporary legacy behavior only until the verified-admission Submission path is
-ready. They receive no new features or compatibility adapters. ART-05B then
-deletes the route, public schemas/service entry point, internal guard, and
-caller-owned package/hash/manifest contract in the same clean-cut transaction
+ready. They receive no new features or compatibility adapters. The future
+WS-ARCH-001-02 split cutover contracts must assign TASK-owned API/lifecycle,
+ART-owned admission/binding, AUTH public capability, and composition wiring;
+that cutover deletes the route, public schemas/service entry point, internal
+guard, and caller-owned package/hash/manifest contract in the same transaction
 and API migration that makes admission consumption authoritative. There is no
 interval in which unchecked legacy Submission creation is reachable.
 
 XINT-06 must split because live preparation requires the fixed pre-submit
-materializer before XINT-05A can safely activate the human preparation action.
+materializer before a replacement 05-wave contract can safely activate the
+human preparation action.
 The later 06B activation owns only post-submit materialization plus checker
 output write/binding. This removes the previous dependency cycle.
 

@@ -1,5 +1,8 @@
 # Chunk Contract: WS-XINT-002-05D Human-Review Revision Submission
 
+Status: Non-executable coordination evidence pending ownership-correct 05B and
+a split WS-ARCH-001 review/revision capability contract.
+
 ## Goal
 
 Activate the revision variant against one exact durable `needs_revision` obligation.
@@ -10,26 +13,14 @@ L1.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/**
-backend/app/modules/artifacts/authorization.py
-backend/app/modules/artifacts/service.py
-backend/app/modules/tasks/**
-backend/app/modules/reviews/**
-backend/tests/test_authorization.py
-backend/tests/test_submission_concurrency.py
-backend/tests/test_submission_history.py
-backend/tests/test_review_revision.py
-docs/spec_authorization_service.md
-docs/spec_review_lifecycle.md
-docs/reference_specs/WS-REV-001-review-lifecycle-specification.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-```
+None until replacement contracts name exact AUTH, ART, TASK, REV, and
+composition files and public capability surfaces.
 
 ## Not allowed
 
 Review decision semantics, reviewer-created revisions, checker remediation,
 initial-submission behavior changes, provider redesign, or new catalogue values.
+No private cross-module imports or implementation from this placeholder.
 
 ## Acceptance criteria
 

@@ -1,5 +1,8 @@
 # Chunk Contract: WS-XINT-002-07A — Reviewer Artifact Activation
 
+Status: Non-executable pending ART-07A, exact REV lease/packet evidence, and a
+split WS-ARCH-001 review capability contract.
+
 ## Goal
 
 Activate exact lease-scoped packet materialization only.

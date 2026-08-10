@@ -89,6 +89,10 @@ remain outside v0.1.
 - Guide materialization from persisted artifact-processing evidence.
 - Fixed-service guide-source reads and binding creation with authorization,
   custody, lineage, rate-control, and stale-generation enforcement.
+- Hidden unified Project Guide compilation custody with immutable attempt and
+  result lineage, crash-safe reservation/recovery states, append-only
+  supersession, and a deny-only public AUTH capability. Request/execute
+  authority and live compilation remain unavailable.
 ## Integration In Progress
 
 The following areas have merged planning, contracts, or partial foundations,
@@ -97,9 +101,11 @@ but are not all complete as one production path:
 - Hidden contributor-ZIP pre-submit execution: fixed-service authority precedes
   byte access; one manifest-verified callback-scoped scratch tree runs the
   platform/default and project-policy phases; cleanup precedes one immutable
-  combined evidence set. The evidence-linked durable put intent is merged.
-  Ready-admission publication, contributor preparation, and Submission
-  consumption are not yet part of the complete production path.
+  combined evidence set. Evidence-linked durable put intent, verification, and
+  capacity-charged ready-admission publication are merged. Contributor
+  preparation authority, admission consumption, TASK-owned Submission
+  creation, and final binding are not yet part of the complete production
+  path and require the public-module boundary reconciliation.
 
 - integration of the merged review/revision policy and authorization readiness
   contracts into hidden REV lifecycle behavior;

@@ -134,10 +134,13 @@ same plan and sealed tree and persists one immutable platform-plus-project
 evidence set. AUTH `WS-XINT-002-06A` merged through PR #293 as `1ddb941e` and
 activated only the mandatory fixed pre-submit materializer. ART-04C1 merged
 through PR #296 as `6e1d5c9f` and installed the evidence-bound durable put
-intent. ART-04C2 is active and owns verified ready-admission publication plus
-the still-hidden, fail-closed continuous preparation composition. AUTH action
-activation, admission consumption, Submission creation, and binding remain out
-of scope.
+intent. ART-04C2 merged through PR #300 as `b2e2c615` and added verified
+ready-admission publication plus the still-hidden, fail-closed continuous
+preparation composition. Contributor AUTH action activation, admission
+consumption, TASK-owned Submission creation, and final binding remain
+unavailable. The 05-wave XINT-05A-05D and ART-05A/05B executable contracts are
+non-executable coordination evidence pending WS-ARCH-001 split public-API
+replacement contracts.
 
 ## Gate
 
