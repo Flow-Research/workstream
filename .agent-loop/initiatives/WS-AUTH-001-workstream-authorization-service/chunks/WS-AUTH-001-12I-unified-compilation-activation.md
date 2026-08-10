@@ -1,7 +1,6 @@
 # Chunk Contract: WS-AUTH-001-12I - Unified Compilation Authorization Activation
 
-Status: Implemented on the bounded branch; evidence and L1 review pending after
-merged WS-POL-003-03A. Risk: L1.
+Status: Implemented and internally reviewed on the bounded branch. Risk: L1.
 
 ## Goal
 
