@@ -168,7 +168,9 @@ def exact_source_imports(path: Path, root: Path, *, source_validated: bool = Fal
                 node, current_module, is_package=path.name == "__init__.py"
             )
             parts = base.split(".")
-            expand = len(parts) == 3 and parts[:2] == ["app", "modules"]
+            expand = base == "app.modules" or (
+                len(parts) == 3 and parts[:2] == ["app", "modules"]
+            )
             for alias in node.names:
                 targets.add(f"{base}.{alias.name}" if expand else base)
     return targets
@@ -348,11 +350,16 @@ def validate(
     """Validate registry, exact debt, AUTH composition, leaks, and cycles."""
     registry = load_registry(registry_path)
     modules_root = root / "backend/app/modules"
+    if not modules_root.is_dir():
+        raise ModuleBoundaryError("module_directory_mismatch")
     discovered_modules = {
         path.name for path in modules_root.iterdir()
         if path.is_dir() and path.name != "__pycache__"
     }
-    if discovered_modules != registry.names:
+    unexpected_module_files = {
+        path.name for path in modules_root.glob("*.py")
+    } - {"__init__.py"}
+    if discovered_modules != registry.names or unexpected_module_files:
         raise ModuleBoundaryError("module_directory_mismatch")
     authorization_boundary.validate(root, auth_ledger)
     expected_auth = set().union(*authorization_boundary.load_ledger(auth_ledger))

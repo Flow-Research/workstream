@@ -46,18 +46,52 @@ def test_registry_names_exactly_nine_business_and_three_supporting_modules() -> 
     )
 
 
-def test_new_private_edge_fails_exact_ledger_comparison(tmp_path: Path) -> None:
+def test_new_private_edge_fails_exact_ledger_comparison(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A second import in an already indebted source is still new debt."""
-    _registry(tmp_path / "registry.json")
-    _write(
-        tmp_path / "backend/app/modules/tasks/service.py",
-        "from app.modules.projects import models, repository\n",
+    edge = boundary.PrivateEdge(
+        "backend/app/modules/tasks/service.py",
+        "projects",
+        "app.modules.projects.repository",
+        "WS-ARCH-001-03",
     )
-    registry = boundary.load_registry(tmp_path / "registry.json")
-    edges, _, _ = boundary.scan(tmp_path, registry)
-    assert {edge.imported_private_path for edge in edges} == {
-        "app.modules.projects.models", "app.modules.projects.repository"
-    }
+    graph = {name: set() for name in boundary.load_registry(REGISTRY).names}
+    monkeypatch.setattr(boundary.authorization_boundary, "validate", lambda *_: None)
+    monkeypatch.setattr(
+        boundary.authorization_boundary, "load_ledger", lambda *_: (set(), set())
+    )
+    monkeypatch.setattr(boundary, "scan", lambda *_: ({edge}, graph, set()))
+    monkeypatch.setattr(boundary, "load_ledger", lambda *_: set())
+    monkeypatch.setattr(boundary, "_validate_public_apis", lambda *_: None)
+    with pytest.raises(boundary.ModuleBoundaryError, match="private_edge_mismatch"):
+        boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
+
+
+def test_import_from_modules_package_resolves_registered_alias(tmp_path: Path) -> None:
+    """Package-level module aliases cannot disappear from dependency scanning."""
+    _registry(tmp_path / "registry.json")
+    path = tmp_path / "backend/app/modules/tasks/service.py"
+    _write(path, "from app.modules import projects\n")
+    assert boundary.exact_source_imports(path, tmp_path) == {"app.modules.projects"}
+
+
+def test_unregistered_top_level_module_file_fails_closed(tmp_path: Path) -> None:
+    """A file beside module packages cannot create an invisible pseudo-module."""
+    registry_path = tmp_path / "registry.json"
+    _registry(registry_path)
+    registry = boundary.load_registry(registry_path)
+    modules_root = tmp_path / "backend/app/modules"
+    for name in registry.names:
+        (modules_root / name).mkdir(parents=True)
+    _write(modules_root / "rogue.py", "value = 1\n")
+    with pytest.raises(boundary.ModuleBoundaryError, match="module_directory_mismatch"):
+        boundary.validate(
+            tmp_path,
+            registry_path,
+            tmp_path / "ledger.json",
+            tmp_path / "auth-ledger.md",
+        )
 
 
 def test_protected_base_rejects_new_or_expanded_debt(

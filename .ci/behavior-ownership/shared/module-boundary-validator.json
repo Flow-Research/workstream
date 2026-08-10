@@ -39,6 +39,8 @@
     "backend/tests/architecture/test_module_boundaries.py::test_repository_matches_the_protected_module_boundary",
     "backend/tests/architecture/test_module_boundaries.py::test_registry_names_exactly_nine_business_and_three_supporting_modules",
     "backend/tests/architecture/test_module_boundaries.py::test_new_private_edge_fails_exact_ledger_comparison",
+    "backend/tests/architecture/test_module_boundaries.py::test_import_from_modules_package_resolves_registered_alias",
+    "backend/tests/architecture/test_module_boundaries.py::test_unregistered_top_level_module_file_fails_closed",
     "backend/tests/architecture/test_module_boundaries.py::test_protected_base_rejects_new_or_expanded_debt",
     "backend/tests/architecture/test_module_boundaries.py::test_bootstrap_rejects_runtime_source_changes",
     "backend/tests/architecture/test_module_boundaries.py::test_bootstrap_allows_enforcement_only_install",
