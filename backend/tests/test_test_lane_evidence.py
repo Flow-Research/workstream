@@ -21,7 +21,8 @@ SPEC.loader.exec_module(validator)
 REAL_COLLECT_CURRENT_NODES = validator._collect_current_nodes
 HEAD = "a" * 40
 LANES = (
-    "shared_foundations",
+    "shared_foundations_a",
+    "shared_foundations_b",
     "schema_contracts_a",
     "schema_contracts_b",
     "project_lifecycle",
@@ -80,7 +81,11 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
                     "database_provisioned": True,
                     "database_role": f"role_{lane}",
                     "lane": lane,
-                    "minio_bucket": f"bucket-{lane.replace('_', '-')}",
+                    "minio_bucket": (
+                        validator.SHARED_S3_BUCKET
+                        if lane in validator.SHARED_S3_LANES
+                        else f"bucket-{lane.replace('_', '-')}"
+                    ),
                     "minio_cleanup_complete": True,
                     "minio_prefix": f"prefix/{lane}",
                     "minio_probe_complete": True,
@@ -118,8 +123,8 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
             }
         )
     summary = {
-        "aggregate_runner_seconds": 5.0,
-        "canonical_node_count": 6,
+        "aggregate_runner_seconds": float(len(LANES)),
+        "canonical_node_count": len(nodes),
         "elapsed_seconds": 2.0,
         "head_sha": HEAD,
         "lanes": lane_rows,
@@ -142,7 +147,7 @@ def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
         "_collect_current_nodes",
         lambda _root, _head: sorted(
             [
-                *(f"tests/test_{index}.py::test_ok" for index in range(5)),
+                *(f"tests/test_{index}.py::test_ok" for index in range(len(LANES))),
                 "tests/test_isolated_database_runner.py::test_admin_custody",
             ]
         ),
@@ -319,6 +324,42 @@ def test_rejects_recorded_database_environment_or_shared_coverage(tmp_path: Path
     summary["lanes"][1]["coverage_sha256"] = summary["lanes"][0]["coverage_sha256"]
     _write(summary_path, summary)
     with pytest.raises(validator.EvidenceError, match="shared_lane_artifact"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("target_index", "source_index", "field", "message"),
+    (
+        (2, 0, "minio_bucket", "invalid_isolation_metadata"),
+        (1, 0, "minio_prefix", "shared_isolation_namespace"),
+    ),
+)
+def test_rejects_unapproved_shared_minio_custody(
+    tmp_path: Path,
+    target_index: int,
+    source_index: int,
+    field: str,
+    message: str,
+) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+
+    def isolation_for(index: int) -> tuple[dict, Path, dict, dict]:
+        lane = summary["lanes"][index]
+        evidence_path = metadata / lane["evidence_file"]
+        evidence = json.loads(evidence_path.read_text())
+        isolation_path = metadata / evidence["isolation_metadata_file"]
+        isolation = json.loads(isolation_path.read_text())
+        return lane, evidence_path, evidence, isolation
+
+    source = isolation_for(source_index)[3]
+    lane, evidence_path, evidence, isolation = isolation_for(target_index)
+    isolation[field] = source[field]
+    isolation_path = metadata / evidence["isolation_metadata_file"]
+    evidence["isolation_metadata_sha256"] = _write(isolation_path, isolation)
+    lane["evidence_sha256"] = _write(evidence_path, evidence)
+    _write(summary_path, summary)
+
+    with pytest.raises(validator.EvidenceError, match=message):
         validator.validate_evidence(metadata, summary_path, tmp_path)
 
 

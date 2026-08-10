@@ -34,7 +34,7 @@ HEARTBEAT_SECONDS = 60.0
 MINIO_ENDPOINT_ENV = "WORKSTREAM_TEST_MINIO_ENDPOINT"
 MINIO_ACCESS_KEY = "workstream-minio"
 MINIO_SECRET_KEY = "workstream-minio-secret-key"
-S3_TRAFFIC_LANE = "shared_foundations"
+S3_TRAFFIC_LANES = frozenset(("shared_foundations_a", "shared_foundations_b"))
 S3_TRAFFIC_BUCKET = "workstream-artifacts"
 LANE_RE = re.compile(r"[a-z][a-z0-9_]{0,62}")
 BUCKET_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]{1,61}[a-z0-9])?")
@@ -199,7 +199,7 @@ def _minio_namespace(lane: str, suffix: str) -> tuple[str, str]:
     lane_component = lane.replace("_", "-")
     bucket = (
         S3_TRAFFIC_BUCKET
-        if lane == S3_TRAFFIC_LANE
+        if lane in S3_TRAFFIC_LANES
         else f"workstream-ci-{lane_component}-{suffix}"
     )
     if len(bucket) > 63 or BUCKET_RE.fullmatch(bucket) is None:
