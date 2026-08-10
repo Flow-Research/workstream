@@ -1,11 +1,17 @@
 # Chunk Contract: WS-XINT-002-05A Initial Submission Preparation
 
-Entry gate: merged `WS-XINT-002-06A` pre-submit materializer activation and
-complete hidden ART-04A1 through ART-04C2 evidence.
+Status: Requires modular-boundary reconciliation under WS-ARCH-001-02 before
+implementation. This existing file is not executable authority.
+
+Entry gate: merged `WS-XINT-002-06A` pre-submit materializer activation,
+complete hidden ART-04A1 through ART-04C2 evidence, and merged
+WS-ARCH-001-01 boundary foundation.
 
 ## Goal
 
-Activate one-ZIP preparation through one durable ready admission for an initial submission.
+Activate one-ZIP preparation through one durable ready admission for an
+initial submission using only module public APIs. AUTH owns preparation
+authority; ART owns admission preparation; TASKS owns task/assignment context.
 
 ## Risk class
 
@@ -13,27 +19,16 @@ L1.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/**
-backend/app/modules/artifacts/authorization.py
-backend/app/modules/artifacts/service.py
-backend/app/modules/artifacts/repository.py
-backend/app/modules/artifacts/router.py
-backend/app/modules/artifacts/schemas.py
-backend/app/modules/tasks/service.py
-backend/app/modules/tasks/repository.py
-backend/tests/test_authorization.py
-backend/tests/test_submission_bundle_admission.py
-backend/tests/test_submission_concurrency.py
-docs/spec_authorization_service.md
-docs/spec_artifact_storage_service.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-```
+None until WS-ARCH-001-02 replaces this file with an exact split contract.
+The replacement must use `authorization.api`, `artifacts.api`, and `tasks.api`
+for cross-module imports and name exact capability-owned internal files and
+composition-root wiring.
 
 ## Not allowed
 
 Submission creation/binding, revisions, reviewer behavior, upload sessions,
 provider I/O before committed intent, compatibility aliases, or new catalogue values.
+No private cross-module imports or new boundary-ledger edges.
 
 ## Acceptance criteria
 

@@ -1,29 +1,38 @@
 # Chunk Contract: WS-ART-001-05A — Admission Consumption And Submission Binding
 
-Parent initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after XINT-05A
+Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded as an executable
+contract by WS-ARCH-001-02; requires split replacement contracts after
+WS-ARCH-001-01 and XINT-05A reconciliation
 
 ## Goal
 
-Atomically consume one compatible `ready` admission, create the immutable
-Submission, and bind it to the exact verified artifact and semantic manifest.
+Preserve the intended atomic ready-admission-to-Submission outcome while
+restoring module ownership: ART exposes ready-admission consumption and exact
+binding capabilities; TASKS owns immutable Submission creation; AUTH owns
+prepared authority; application composition owns transaction wiring.
 
 ## Allowed Files
 
-Submission/admission/binding models and migration, transactional service and
-repository seams, canonical resource facts, focused tests/docs/CI evidence.
+No files are authorized by this superseded contract. WS-ARCH-001-02 must split
+the work into exact AUTH, ART, TASK, composition, migration, test, and cutover
+contracts before implementation.
 
 ## Not Allowed Changes
 
 Legacy API transport cutover, checker execution, review decisions or notes,
 contribution lifecycle, provider reads/writes, deletion, or AUTH activation.
+ART must not import TASK private models/context/repositories or create a
+Submission. TASKS must not import ART private models/repositories. Neither may
+import AUTH outside `authorization.api`.
 
 ## Acceptance Criteria
 
 - fresh human and fixed binding-service prepared authority is consumed in the
-  same transaction as the protected mutation;
+  same composition-owned transaction as the protected mutations;
 - actor, identity, project, task, assignment, predecessor, locked context,
   content, manifest, and checker evidence match under locks;
-- `ready -> consumed`, Submission creation, and binding commit once;
+- ART-owned `ready -> consumed`, TASK-owned Submission creation, and ART-owned
+  binding commit once through transaction-bound public ports;
 - mismatch proven during consumption makes the admission stale where specified;
 - concurrent attempts create one business effect and exact replay is stable;
 - denial or persistence failure rolls back every effect.
@@ -40,4 +49,5 @@ reuse/dedup, test delta, and docs.
 
 ## Human Review Focus And Stop Conditions
 
-Review the atomic boundary and immutable lineage. Stop before transport cutover.
+Review module ownership, the atomic boundary, and immutable lineage. This file
+is planning evidence only and must not start implementation.

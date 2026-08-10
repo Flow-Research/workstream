@@ -1,5 +1,8 @@
 # Chunk Contract: WS-XINT-002-05C Checker Remediation Submission
 
+Status: Non-executable coordination evidence pending ownership-correct 05B and
+a split WS-ARCH-001 checker capability contract.
+
 ## Goal
 
 Activate the submission variant rooted in one exact final `needs_revision` CheckerRun.
@@ -10,25 +13,14 @@ L1.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/**
-backend/app/modules/artifacts/authorization.py
-backend/app/modules/artifacts/service.py
-backend/app/modules/tasks/**
-backend/app/modules/checkers/**
-backend/tests/test_authorization.py
-backend/tests/test_submission_concurrency.py
-backend/tests/test_submission_history.py
-backend/tests/test_checkers.py
-docs/spec_authorization_service.md
-docs/spec_review_lifecycle.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-```
+None until replacement contracts name exact AUTH, ART, TASK, CHECKER, and
+composition files and public capability surfaces.
 
 ## Not allowed
 
 ReviewFinding responses, revision preparation/deadline/round consumption,
 reviewer contribution, synthetic human actors, review decision changes, or new catalogue values.
+No private cross-module imports or implementation from this placeholder.
 
 ## Acceptance criteria
 

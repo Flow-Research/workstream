@@ -1,24 +1,29 @@
 # Chunk Contract: WS-ART-001-05B — Submission API And Dispatch Cutover
 
-Parent initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after XINT-05B
+Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded as executable
+authority by WS-ARCH-001-02; requires an ownership-correct split cutover
+contract after XINT-05B reconciliation
 
 ## Goal
 
-Make verified admission consumption the only contributor Submission path,
-dispatch post-submit work using immutable identifiers rather than package data,
-and remove the complete legacy standalone and internal precheck path once and
-for all.
+Make verified admission consumption the only contributor Submission path while
+TASKS owns the Submission API/lifecycle, ART owns admission/binding, and the
+composition root wires the atomic command. Dispatch post-submit work using
+immutable identifiers and remove the complete legacy standalone/internal
+precheck path once and for all.
 
 ## Allowed Files
 
-Submission and checker schemas/routers/services, exact legacy field and precheck
-removal, post-submit dispatch payloads, API examples, focused tests/docs/CI
-evidence.
+None. Replacement contracts must assign exact TASK-owned API/lifecycle files,
+ART-owned admission/binding files, CHECKER public dispatch facts, composition
+wiring, legacy removal, tests, and documentation.
 
 ## Not Allowed Changes
 
 ZIP inspection, admission production, checker execution, review/contribution,
 generic artifact download, AUTH catalogue/availability, or compatibility paths.
+No ART ownership of TASK routes/services/Submission mutation and no private
+cross-module imports.
 
 ## Acceptance Criteria
 
@@ -65,4 +70,5 @@ reuse/dedup, test delta, and docs.
 
 Review the complete clean cut, proof that unchecked Submission creation is
 impossible, and API compatibility impact. Do not change authoritative catalogue
-definitions or checker semantics in this cutover.
+definitions or checker semantics in this cutover. This file must not start
+implementation.

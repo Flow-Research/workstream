@@ -1,5 +1,8 @@
 # Chunk Contract: WS-XINT-002-08 End-to-End Conformance
 
+Status: Non-executable until every activated v0.1 wave uses its owning module's
+public API and the relevant WS-ARCH capability repairs have merged.
+
 ## Goal
 
 Prove that the complete ART lifecycle uses only the frozen catalogue and denies
@@ -11,23 +14,9 @@ L1.
 
 ## Allowed files
 
-```text
-backend/app/modules/authorization/**
-backend/app/modules/artifacts/**
-backend/app/modules/tasks/**
-backend/app/modules/checkers/**
-backend/app/modules/reviews/**
-backend/tests/**
-backend/scripts/auth_api_e2e.py
-backend/scripts/api_contract_e2e.py
-scripts/check_stale_authorization_docs.py
-scripts/check_stale_artifact_contracts.py
-docs/spec_authorization_service.md
-docs/spec_artifact_storage_service.md
-docs/spec_review_lifecycle.md
-docs/operations_artifact_storage.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-```
+None. After every required WS-ARCH capability repair merges, this conformance
+contract must be replaced with exact public-API/composition-aware paths and
+focused proof files. Broad module globs are not implementation authority.
 
 ## Not allowed
 

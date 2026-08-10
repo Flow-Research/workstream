@@ -1,6 +1,7 @@
 # Chunk Contract: WS-XINT-002-06B — Post-Submit Checker Activation
 
-Parent initiative: `WS-XINT-002` | Risk: L1 | Status: Proposed after POL-06B/07 and ART-06A/06B
+Parent initiative: `WS-XINT-002` | Risk: L1 | Status: Non-executable pending
+POL-06B/07, ART-06A/06B, and a split WS-ARCH-001 checker capability contract
 
 ## Goal
 
@@ -9,8 +10,9 @@ actions after their complete hidden ART/CHECKER behavior exists.
 
 ## Allowed Files
 
-AUTH catalogue/matrix/composition, ART/CHECKER authorization adapters and exact
-resource facts, focused tests/docs/CI evidence.
+None. A split WS-ARCH-001 checker capability contract must replace this section
+with exact AUTH/CHECKER/ART public APIs, ownership-correct internal files,
+composition wiring, and focused proof files before implementation.
 
 ## Not Allowed Changes
 
