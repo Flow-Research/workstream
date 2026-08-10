@@ -315,11 +315,12 @@ uses explicit local-only development auth and key material. Artifact storage is
 disabled in this first-run profile; integration tests configure MinIO when they
 exercise the S3-compatible path.
 
-The image is Linux glibc on the Docker VM's native x86_64 or aarch64
-architecture. Do not force `--platform linux/amd64` on an ARM host: CPU
-emulation does not provide equivalent evidence for Workstream's inner seccomp
-isolation filter. If your shell sets `DOCKER_DEFAULT_PLATFORM`, clear it before
-building; the Dockerfile rejects a foreign target architecture.
+The image uses Linux glibc on the Docker host's native x86_64 or aarch64
+architecture. On Docker Desktop, this is the Docker VM's native architecture.
+Do not force `--platform linux/amd64` on an ARM host: CPU emulation does not
+provide equivalent evidence for Workstream's inner seccomp isolation filter. If
+your shell sets `DOCKER_DEFAULT_PLATFORM`, clear it before building; the
+Dockerfile rejects a foreign target architecture.
 
 Run focused checks in the same containerized environment:
 
