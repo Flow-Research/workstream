@@ -13,6 +13,12 @@
   tokens before comparing the current head to 0048. The assertion now also
   strips 0062's exact, independently tested compilation action token. Migration
   behavior and database guards are unchanged.
+- The first assertion-fix head was rejected by the zero-growth preflight because
+  it expanded the already oversized historical migration test. The correction
+  was reformatted to shrink that file from 14,096 to 14,093 lines; the debt
+  ledger records only that exact shrink and new content hash. CI-integrity
+  re-review and canonical structure validation pass with no exception or new
+  debt.
 
 ## Comments deferred
 
