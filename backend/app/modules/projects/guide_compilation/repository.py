@@ -42,6 +42,7 @@ class GuideCompilationRepository:
     """Persist one hidden attempt and append-only compilation graph."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind repository operations to the caller-owned transaction."""
         self._session = session
 
     async def reserve_attempt(
@@ -221,6 +222,7 @@ class GuideCompilationRepository:
     async def _transition(
         self, attempt_id: UUID, *, expected: tuple[str, ...], status: str, **values: object
     ) -> None:
+        """Apply one compare-and-set attempt transition or fail closed."""
         changed = await self._session.scalar(
             update(ProjectGuideCompilationAttempt)
             .where(
@@ -234,6 +236,7 @@ class GuideCompilationRepository:
             raise GuideCompilationIntegrityError("compilation transition lost")
 
     async def _lock_attempt(self, attempt_id: UUID) -> ProjectGuideCompilationAttempt:
+        """Lock and return the exact durable attempt."""
         attempt = await self._session.scalar(
             select(ProjectGuideCompilationAttempt)
             .where(ProjectGuideCompilationAttempt.id == attempt_id)
@@ -244,6 +247,7 @@ class GuideCompilationRepository:
         return attempt
 
     async def _required_attempt(self, attempt_id: UUID) -> ProjectGuideCompilationAttempt:
+        """Load one required attempt and refresh its database-owned state."""
         attempt = await self._session.get(ProjectGuideCompilationAttempt, attempt_id)
         if attempt is None:
             raise GuideCompilationIntegrityError("compilation attempt disappeared")
@@ -253,6 +257,7 @@ class GuideCompilationRepository:
     async def _compilation_for_attempt(
         self, attempt_id: UUID
     ) -> ProjectGuideCompilation | None:
+        """Return the immutable compilation already owned by an attempt."""
         return await self._session.scalar(
             select(ProjectGuideCompilation).where(
                 ProjectGuideCompilation.attempt_id == attempt_id
@@ -262,6 +267,7 @@ class GuideCompilationRepository:
     async def _current(
         self, project_id: UUID, guide_id: UUID, *, lock: bool
     ) -> ProjectGuideCompilation | None:
+        """Return the sole unsuperseded compilation, optionally locked."""
         child = ProjectGuideCompilation.__table__.alias("compilation_child")
         statement = select(ProjectGuideCompilation).where(
             ProjectGuideCompilation.project_id == str(project_id),
@@ -281,6 +287,7 @@ class GuideCompilationRepository:
 
 
 def _identity_values(identity: CompilationAttemptIdentity) -> dict[str, object]:
+    """Map validated attempt identity into explicit database values."""
     values = identity.model_dump(mode="json")
     values.update(
         project_id=str(identity.project_id),
@@ -294,12 +301,14 @@ def _identity_values(identity: CompilationAttemptIdentity) -> dict[str, object]:
 def _matches(
     attempt: ProjectGuideCompilationAttempt, identity: CompilationAttemptIdentity
 ) -> bool:
+    """Return whether a row retains the exact identity and provider key."""
     return identity_from_attempt(attempt) == identity and (
         attempt.provider_idempotency_key == identity.provider_idempotency_key()
     )
 
 
 def _compilation_identity_values(identity: CompilationAttemptIdentity) -> dict[str, object]:
+    """Map immutable compilation lineage fields from the attempt identity."""
     return {
         "project_id": str(identity.project_id),
         "guide_id": str(identity.guide_id),
