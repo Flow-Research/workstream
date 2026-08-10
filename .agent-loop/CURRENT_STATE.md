@@ -42,6 +42,7 @@ authority; these records do not grant or withhold it.
 | [WS-POL-001](initiatives/WS-POL-001-submission-artifact-policy-foundation/STATUS.md) | Foundation initiative complete | Follow-up behavior belongs to current ART, POL, REV, or CON initiatives |
 | [WS-QUAL-001](initiatives/WS-QUAL-001-backend-coverage-floor/STATUS.md) | Coverage closure complete; blocking mutation rollout retired | Preserve global 78 percent and protected-subsystem 90 percent floors; mutation needs a fresh changed-line-aware plan |
 | [WS-CI-001](initiatives/WS-CI-001-backend-ci-acceleration/STATUS.md) | Semantic distributed backend lanes complete | Treat further CI optimization as a fresh measured bounded change |
+| [WS-CI-002](initiatives/WS-CI-002-deterministic-agent-gates/STATUS.md) | Active bounded CI repair | Make Agent Gates deterministic per PR head while protected-branch review remains the approval authority |
 | [WS-DOCS-001](initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md) | Current v0.1 entry documentation complete | Keep current pages synchronized with merged capability changes |
 | [WS-DOCS-002](initiatives/WS-DOCS-002-workstream-definition/STATUS.md) | Canonical Workstream definition complete | Preserve terminology across current documentation and generated artifacts |
 | [WS-XINT-001](initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/STATUS.md) | Planning reconciliation complete and closed | Owner initiatives implement the resulting boundaries |

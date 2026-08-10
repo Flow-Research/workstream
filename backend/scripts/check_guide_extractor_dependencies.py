@@ -3,27 +3,19 @@
 
 from __future__ import annotations
 
-import argparse
 import ast
 import hashlib
 import json
-import os
 import platform
 import re
-import subprocess
 import sys
 import tomllib
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-REPOSITORY_ROOT = BACKEND_ROOT.parent
 ALLOWLIST_PATH = BACKEND_ROOT / "config" / "guide_extractor_dependencies.json"
 PYPROJECT_PATH = BACKEND_ROOT / "pyproject.toml"
-ALLOWLIST_REPOSITORY_PATH = ALLOWLIST_PATH.relative_to(REPOSITORY_ROOT).as_posix()
-APPROVED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 APPROVED_SCOPES = frozenset({"pdf", "ooxml", "image_metadata"})
 APPROVED_NATIVE_PYTHON_RANGE = ">=3.11,<3.13"
 APPROVED_NATIVE_MACHINES = frozenset({"aarch64", "x86_64"})
@@ -32,7 +24,6 @@ APPROVED_RUNTIME_PLATFORMS = [
     {"libc": "glibc>=2.27", "machine": "x86_64", "system": "Linux"},
 ]
 MINIMUM_GLIBC_VERSION = (2, 27)
-STATE_BEARING_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
 PARSER_MODULES = (
     "guide_pdf.py",
     "guide_ooxml.py",
@@ -481,128 +472,15 @@ def validate_parser_imports(allowlist: dict[str, dict[str, Any]]) -> None:
                 )
 
 
-def allowlist_changed(base_sha: str, head_sha: str) -> bool:
-    """Return whether the exact allowlist bytes differ across the PR range."""
-    require(bool(re.fullmatch(r"[0-9a-f]{40}", base_sha)), "guide_dependency_base_sha_invalid")
-    require(bool(re.fullmatch(r"[0-9a-f]{40}", head_sha)), "guide_dependency_head_sha_invalid")
-    result = subprocess.run(
-        ["git", "diff", "--quiet", f"{base_sha}...{head_sha}", "--", ALLOWLIST_REPOSITORY_PATH],
-        cwd=REPOSITORY_ROOT,
-        check=False,
-    )
-    require(result.returncode in {0, 1}, "guide_dependency_git_diff_failed")
-    return result.returncode == 1
-
-
-def validate_reviews(
-    reviews: list[dict[str, Any]], *, author: str, head_sha: str
-) -> dict[str, Any]:
-    """Return one current independent approval or fail closed."""
-    require(bool(author), "guide_dependency_pr_author_missing")
-    require(bool(re.fullmatch(r"[0-9a-f]{40}", head_sha)), "guide_dependency_head_sha_invalid")
-    latest_by_reviewer: dict[str, dict[str, Any]] = {}
-    for review in reviews:
-        require(isinstance(review, dict), "guide_dependency_review_shape_invalid")
-        user = review.get("user")
-        require(isinstance(user, dict), "guide_dependency_review_user_missing")
-        login = user.get("login")
-        require(isinstance(login, str) and login, "guide_dependency_review_login_missing")
-        if review.get("state") not in STATE_BEARING_REVIEW_STATES:
-            continue
-        latest_by_reviewer[login.casefold()] = review
-
-    candidates: list[dict[str, Any]] = []
-    for login, review in latest_by_reviewer.items():
-        user = review["user"]
-        if login == author.casefold():
-            continue
-        if user.get("type") != "User" or login.endswith("[bot]"):
-            continue
-        if review.get("author_association") not in APPROVED_ASSOCIATIONS:
-            continue
-        if review.get("state") != "APPROVED":
-            continue
-        if review.get("commit_id") != head_sha:
-            continue
-        candidates.append(review)
-    require(bool(candidates), "guide_dependency_independent_head_approval_missing")
-    return candidates[-1]
-
-
-def fetch_reviews(repository: str, pull_number: int, token: str) -> list[dict[str, Any]]:
-    """Read every PR review using the minimal read-only GitHub token."""
-    require(bool(re.fullmatch(r"[^/]+/[^/]+", repository)), "guide_dependency_repository_invalid")
-    require(pull_number > 0, "guide_dependency_pull_number_invalid")
-    require(bool(token), "guide_dependency_github_token_missing")
-    reviews: list[dict[str, Any]] = []
-    page = 1
-    while True:
-        request = urllib.request.Request(
-            f"https://api.github.com/repos/{repository}/pulls/{pull_number}/reviews?per_page=100&page={page}",
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "workstream-guide-dependency-gate",
-            },
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                payload = json.load(response)
-        except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
-            raise DependencyGateError("guide_dependency_github_reviews_unavailable") from exc
-        require(isinstance(payload, list), "guide_dependency_github_reviews_invalid")
-        reviews.extend(payload)
-        if len(payload) < 100:
-            return reviews
-        page += 1
-
-
-def validate_pr_approval(raw_allowlist: bytes) -> None:
-    """Validate live review authority when this PR changes the allowlist."""
-    base_sha = os.environ.get("WORKSTREAM_PR_BASE_SHA", "")
-    head_sha = os.environ.get("WORKSTREAM_PR_HEAD_SHA", "")
-    if not allowlist_changed(base_sha, head_sha):
-        return
-    repository = os.environ.get("GITHUB_REPOSITORY", "")
-    author = os.environ.get("WORKSTREAM_PR_AUTHOR", "")
-    pull_number_value = os.environ.get("WORKSTREAM_PR_NUMBER", "")
-    require(pull_number_value.isdigit(), "guide_dependency_pull_number_invalid")
-    reviews = fetch_reviews(
-        repository,
-        int(pull_number_value),
-        os.environ.get("GITHUB_TOKEN", ""),
-    )
-    approval = validate_reviews(reviews, author=author, head_sha=head_sha)
-    digest = hashlib.sha256(raw_allowlist).hexdigest()
-    print(
-        "Guide dependency approval: "
-        f"review={approval.get('id')} head={head_sha} allowlist_sha256={digest}"
-    )
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse the small CI-facing command surface."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--require-pr-approval",
-        action="store_true",
-        help="Require live exact-head review authority when the PR changes the allowlist.",
-    )
-    return parser.parse_args()
-
-
 def main() -> int:
-    """Run static validation and the optional live PR approval gate."""
-    args = parse_args()
+    """Run deterministic guide-extractor dependency validation."""
     try:
+        require(not sys.argv[1:], "guide_dependency_arguments_unsupported")
         data, raw = load_manifest()
         allowlist = validate_manifest(data)
         validate_declared_dependencies(allowlist, data["prohibited_packages"])
         validate_runtime_platform()
         validate_parser_imports(allowlist)
-        if args.require_pr_approval:
-            validate_pr_approval(raw)
     except DependencyGateError as exc:
         print(str(exc), file=sys.stderr)
         return 1

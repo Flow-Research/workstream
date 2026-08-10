@@ -112,10 +112,11 @@ nodes directly with the admin URL while stripping application database URLs;
 every ordinary node remains behind isolated-runner custody and never receives
 the admin credential.
 
-Backend does not run on review-state events. The narrow guide-extractor
-dependency approval check runs in Agent Gates instead, so submitting or
-dismissing the exceptional exact-head dependency approval refreshes a fast gate
-without repeating the full backend suite.
+Backend and Agent Gates do not run on review-state events. Agent Gates validates
+the guide-extractor dependency manifest deterministically for each PR head;
+protected-branch review rules independently enforce exact-head human approval.
+Superseded Agent Gates runs for the same PR are cancelled without repeating the
+full backend suite.
 
 Each matrix job uploads a fixed-name artifact bound to GitHub's checked-out PR
 merge-tree SHA, containing its manifest, lane evidence, isolation record, and coverage data. The final `test`

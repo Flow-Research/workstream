@@ -121,8 +121,17 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("include-hidden-files: true", workflow)
         self.assertIn("coverage report --precision=2 --fail-under=78", workflow)
         self.assertGreaterEqual(workflow.count("--fail-under=90"), 10)
-        self.assertIn("pull_request_review:", agent_gates)
-        self.assertIn("--require-pr-approval", agent_gates)
+        self.assertNotIn("pull_request_review:", agent_gates)
+        self.assertNotIn("--require-pr-approval", agent_gates)
+        self.assertNotIn("pull-requests: read", agent_gates)
+        self.assertNotIn("types: [opened, synchronize, reopened, edited]", agent_gates)
+        self.assertIn("types: [opened, synchronize, reopened]", agent_gates)
+        self.assertIn("group: agent-gates-${{ github.event.pull_request.number }}", agent_gates)
+        self.assertIn("cancel-in-progress: true", agent_gates)
+        self.assertIn(
+            "run: python3 backend/scripts/check_guide_extractor_dependencies.py",
+            agent_gates,
+        )
 
     def test_retired_behavior_mutation_gate_stays_out_of_required_ci(self) -> None:
         backend = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
