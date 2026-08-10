@@ -48,3 +48,38 @@ grow. `backend/app/interfaces/**` is not a permanent public contract surface.
 Database metadata discovery is a distinct infrastructure concern: only the
 exact registered discovery path may import module model declarations, and that
 exception grants no runtime command, repository, service, or authority access.
+
+## D8: Submission preparation requires PROJECT and CHECKER capabilities
+
+TASKS owns task, assignment, predecessor, and Submission lifecycle facts. It
+does not own locked Project Guide/policy persistence or effective checker-plan
+compilation. WS-ARCH-001-02 therefore includes explicit PROJECTS and CHECKERS
+prerequisite contracts rather than preserving those private imports behind a
+TASK facade.
+
+## D9: Activation follows hidden public-boundary proof
+
+Typed owner APIs merge first while operations remain hidden or deny-only.
+Contributor preparation activates only after its complete hidden path consumes
+public owner capabilities. Binding/human consumption authority activates only
+after the hidden TASK/ART transaction is proven. Public reachability changes
+last, in the same clean cut that removes legacy input and precheck behavior.
+
+## D10: Composition owns wiring, not lifecycle truth
+
+The application composition root opens the transaction and constructs
+transaction-bound port implementations. The TASK-owned application command
+sequences Submission creation through injected AUTH and ART ports. AUTH, ART,
+PROJECTS, CHECKERS, and TASKS retain their own locks and invariants; the
+composition layer contains no product-state branching or authorization policy.
+
+## D11: Public clean cut waits for all submission contexts
+
+Initial preparation may become live behind its hidden surface after 02G, and
+the hidden consumption transaction may receive exact authority after 02H. The
+public Submission route remains on its guarded legacy path until initial,
+checker-remediation, and reviewer-requested revision contexts all use the same
+admission-backed contract and post-submit checker/REV handoffs are live. 02I is
+therefore deferred across the required WS-ARCH-001-03/04/05 splits; it cannot
+strand `needs_revision` contributors or create Submissions that cannot reach
+visible checker and reviewer admission facts.

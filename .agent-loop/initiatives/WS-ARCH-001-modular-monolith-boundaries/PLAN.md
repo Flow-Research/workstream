@@ -47,20 +47,69 @@ feature contract touching `artifacts`, `authorization`, `projects`, `tasks`,
 - proof that debt does not grow;
 - behavior, transaction, authorization, replay, and denial preservation.
 
-## ART/TASK correction
+## Submission capability correction
 
-Before ART-05A implementation:
+Before contributor preparation activation or ART-05A replacement behavior:
 
-- XINT-05A exposes the exact public AUTH preparation capability;
-- ART exposes ready-admission validation/consumption and binding ports;
-- TASKS exposes the immutable Submission command and predecessor/context facts;
+- TASKS exposes immutable task, assignment, predecessor, and Submission facts;
+- PROJECTS exposes locked guide and project-policy lineage facts;
+- CHECKERS exposes effective-plan compilation and bounded execution-result
+  facts; ART retains durable evidence identity, persistence, pass capability,
+  and admission attachment;
+- ART exposes hidden preparation, ready-admission validation/consumption, and
+  binding ports;
+- AUTH exposes exact preparation and consumption capabilities and activates
+  them only after the corresponding hidden behavior is complete;
 - the composition root owns the transaction/unit-of-work boundary and invokes
   the TASK-owned application command with transaction-bound AUTH and ART
-  public ports;
+  public ports while PROJECT/CHECKER facts are already immutable inputs;
 - ART does not create or query TASK ORM rows;
 - TASKS does not query ART ORM rows;
+- TASKS does not become a facade over PROJECT or CHECKER private persistence;
+- ART does not compile checker plans or read PROJECT persistence;
 - POL-03A now owns merged migration `0062_guide_compilation`; every later
   migration identifier is chosen only after rebasing on then-current `main`.
+
+## WS-ARCH-001-02 delivery order
+
+The former single coordination placeholder is split into these PR boundaries:
+
+1. `02A`: TASKS preparation/Submission immutable fact and port contract.
+2. `02B`: PROJECTS locked-policy fact and port contract.
+3. `02C`: CHECKERS effective pre-submit plan/bounded execution-result contract.
+4. `02D`: ART hidden preparation public API migration using only owner APIs;
+   production stays deny-only and proves zero effect plus the exact resource
+   manifest, not successful AUTH consumption.
+5. `02E`: ART ready-admission consumption and binding public capability.
+6. `02F`: TASK-owned immutable Submission command plus composed atomic
+   transaction, hidden from the public route; production remains deny-only and
+   proves zero effect plus the exact transaction manifest.
+7. `02G`: AUTH production activation and positive end-to-end proof of
+   contributor preparation.
+8. `02H`: AUTH fixed binding/human consumption activation and positive
+   concurrency proof against the hidden transaction.
+9. `02I`: deferred admission-only public API/dispatch cutover and complete
+   legacy precheck/caller-package removal. It may run only after the separate
+   checker-remediation and human-review revision context extensions, post-submit
+   checker materialization/output visibility and repair, and REV admission
+   handoff are merged.
+
+All hidden owner behavior and transaction wiring through 02F must merge before
+02G may make contributor preparation live. Each contract is one PR. A
+foundation PR may add typed public contracts and
+their owner-local implementation/tests but may not activate behavior or modify
+the live Submission route unless its contract explicitly owns that boundary.
+No later chunk begins merely because an earlier public type exists; its entry
+gate requires the named merge and exact resource manifest.
+
+The initial-submission foundations through 02H do not remove the live legacy
+Submission path. Before 02I, WS-ARCH-001-03/04/05 must split and deliver the
+PROJECT/TASK, CHECKER, and REV public capabilities needed to replace
+XINT-002-05C/05D, ART-06A/06B, XINT-06B, and the exact reviewer-admission
+handoff. All three contributor contexts then use one admission-backed path:
+initial submission, checker remediation, and reviewer-requested revision. A
+review note remains REV-owned and relates to the exact predecessor Submission;
+the contributor response is a new complete ZIP and immutable Submission.
 
 ## Verification
 

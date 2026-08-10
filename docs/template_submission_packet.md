@@ -58,7 +58,8 @@ details, creates no
 submission row, no submission version, and no submission-created audit event,
 and does not return review decision values: `accept`, `needs_revision`, or
 `reject`. The frozen legacy standalone preflight endpoint remains temporary
-until ART-05B removes it with the legacy Submission path; it is not an
+until WS-ARCH-001-02I removes it with the legacy Submission path after every
+submission context and downstream prerequisite is live; it is not an
 authoritative result for this packet.
 
 The hidden default phase first validates ART's server-generated commitment,

@@ -784,7 +784,7 @@ The generated checker order is deterministic:
 8. contributor attestation validation
 9. low-quality artifact warnings
 
-At the ART-05B cutover, the legacy standalone
+At the deferred WS-ARCH-001-02I cutover, the legacy standalone
 `/tasks/{id}/submission-precheck` path is removed. Pre-submit then runs only
 inside the same process-local preparation request that owns the uploaded ZIP
 and bounded scratch generation:
@@ -1336,10 +1336,10 @@ Fields:
 - `artifact_binding_id` (target canonical byte binding after ART-05)
 - `submission_bundle_manifest_id` (target server-generated manifest identity)
 - `pre_submit_evidence_set_id` (target checker evidence identity)
-- `package_uri` (legacy caller transport removed by ART-05B)
-- `package_hash` (legacy caller input removed by ART-05B; never canonical)
-- `artifact_hash` (legacy transitional field replaced by exact binding/content identity)
-- `artifact_hash_manifest` (legacy caller manifest removed by ART-05B)
+- `package_uri` (legacy caller transport removed by WS-ARCH-001-02I, which implements the superseded WS-ART-001-05B cutover)
+- `package_hash` (legacy caller input removed by WS-ARCH-001-02I; never canonical)
+- `artifact_hash` (legacy transitional column replaced by exact binding/content identity and removed separately after all readers cut over)
+- `artifact_hash_manifest` (legacy caller manifest removed by WS-ARCH-001-02I)
 - `contributor_attestation`
 - `locked_guide_version`
 - `locked_guide_id`

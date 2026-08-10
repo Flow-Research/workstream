@@ -1,8 +1,8 @@
 # Chunk Contract: WS-ART-001-05A — Admission Consumption And Submission Binding
 
-Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded as an executable
-contract by WS-ARCH-001-02; requires split replacement contracts after
-WS-ARCH-001-01 and XINT-05A reconciliation
+Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable;
+replaced by WS-ARCH-001-02E ART admission/binding and 02F hidden TASK
+composition after 02A-02D public-capability prerequisites
 
 ## Goal
 
@@ -13,9 +13,8 @@ prepared authority; application composition owns transaction wiring.
 
 ## Allowed Files
 
-No files are authorized by this superseded contract. WS-ARCH-001-02 must split
-the work into exact AUTH, ART, TASK, composition, migration, test, and cutover
-contracts before implementation.
+No files are authorized by this superseded contract. Use WS-ARCH-001-02A
+through 02I.
 
 ## Not Allowed Changes
 

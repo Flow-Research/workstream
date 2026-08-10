@@ -229,7 +229,8 @@ do not derive or compile their own checker by default.
 Failed submission-bundle preparation returns
 `pre_submission_checker_failed` with bounded same-request status, eligibility,
 and pass/fail/warning details. The frozen legacy preflight endpoint remains
-non-authoritative until ART-05B removes it with the legacy Submission path; no
+non-authoritative until WS-ARCH-001-02I removes it with the legacy Submission
+path after every submission context and downstream prerequisite is live; no
 ID-addressed evidence-read route exists. These results never use review decision values:
 `accept`, `needs_revision`, or `reject`. After verified preparation,
 final Submission creation consumes the ready admission under fresh authority

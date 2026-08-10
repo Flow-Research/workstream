@@ -11,5 +11,6 @@
 - Completed foundation: WS-ARCH-001-01 installs the canonical registry, exact
   general debt ledger, AUTH-ledger composition, protected-base validator,
   public-API checks, behavior-ownership record, and hosted CI enforcement.
-- Next boundary: split WS-ARCH-001-02 into exact AUTH, ART, TASK, and
-  composition-root contracts after this foundation is human-merged.
+- Planning in review: WS-ARCH-001-02 is split into 02A-02I across TASKS,
+  PROJECTS, CHECKERS, ART, AUTH, composition, and the final API clean cut.
+- Next implementation boundary after plan approval: WS-ARCH-001-02A only.
