@@ -21,6 +21,7 @@ enforcement that composes with WS-AUTH-003.
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/shared/module-boundary-validator.json
 backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_behavior_ownership.py
 backend/scripts/module_boundaries.py
 backend/tests/architecture/test_module_boundaries.py
