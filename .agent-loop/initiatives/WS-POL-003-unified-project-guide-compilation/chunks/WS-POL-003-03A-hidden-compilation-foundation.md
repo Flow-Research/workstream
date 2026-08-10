@@ -49,17 +49,17 @@ snapshot identities and hashes, configured agent identity/version, instruction
 version, and one server-derived provider idempotency key.
 
 ```text
-reserved -> provider_uncertain -> accepted -> persisted
-reserved -----------------------> accepted
-reserved/provider_uncertain ----> invalid_terminal
+compilation_reserved -> compilation_provider_uncertain -> provider_result_accepted -> compilation_persisted
+compilation_reserved -------------------------------> provider_result_accepted
+compilation_reserved/compilation_provider_uncertain -> compilation_invalid_terminal
 ```
 
-`invalid_terminal` and `persisted` are terminal. Invalid or unsafe output
+`compilation_invalid_terminal` and `compilation_persisted` are terminal. Invalid or unsafe output
 consumes that generation. Transport uncertainty reconciles only under the
 original attempt and provider key. Reservation commits before any future
 provider I/O; this chunk performs no provider I/O.
 
-`accepted` means provider-result custody only. It is not Project Manager
+`provider_result_accepted` means provider-result custody only. It is not Project Manager
 approval, the Review decision `accept`, guide activation, effective policy,
 setup success, or contribution/reputation/compensation evidence.
 
@@ -138,7 +138,8 @@ wrong-session, and wrong-transaction real-handle denials before activation.
 
 Project Manager request/recovery can only create the first reservation or
 observe/resume the same exact attempt and provider key. Once an attempt is
-`provider_uncertain`, `accepted`, `persisted`, or `invalid_terminal`, it cannot
+`compilation_provider_uncertain`, `provider_result_accepted`,
+`compilation_persisted`, or `compilation_invalid_terminal`, it cannot
 allocate another key or bypass fixed-service execute custody.
 
 ## AUTH ledger delta
@@ -162,10 +163,11 @@ same new revision. This is valid only while that remains the sole main head.
 - positive generation, canonical `sha256:<64 lowercase hex>` checks for every
   identity/result/component hash, bounded identity/version fields, and bounded
   canonical JSON size;
-- a state-shape check: reserved/uncertain exclude accepted output;
-  `accepted` requires canonical result plus all hashes and no persisted
-  compilation; `persisted` requires the same accepted values plus
-  `persisted_compilation_id`; `invalid_terminal` excludes accepted/persisted
+- a state-shape check: compilation-reserved/uncertain exclude accepted output;
+  `provider_result_accepted` requires canonical result plus all hashes and no
+  persisted compilation; `compilation_persisted` requires the same accepted
+  values plus `persisted_compilation_id`; `compilation_invalid_terminal`
+  excludes accepted/persisted
   values and requires one bounded allowlisted failure code;
 - a transition trigger permitting only the closed state graph and rejecting
   identity, provider-key, accepted result/hash, timestamp, and terminal-state
@@ -220,6 +222,7 @@ backend/tests/test_behavior_ownership.py     # exact transition proof only
 backend/scripts/test_structure_boundary.py   # add exact POL-03A scope only
 backend/tests/architecture/test_test_structure_boundary.py
 .github/workflows/backend.yml                  # exact POL-03A 90% coverage gate only
+docker-compose.yml                             # pin local Postgres to CI digest
 backend/scripts/run_test_lanes.py              # assign exact POL-03A focused tests
 backend/tests/test_ci_test_lanes.py             # exact lane-inventory proof only
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
@@ -290,9 +293,10 @@ to its scope with zero permitted new debt.
   function exceeds the structural policy limits. The extended structure gate
   inventories the exact new package/tests and permits zero new debt; test-delta
   review maps every new test to one named primary invariant.
-- Recovery returns exactly one closed classification—`reserved`,
-  `provider_uncertain`, `accepted_not_persisted`, `persisted`, or
-  `invalid_terminal`—with bounded operator-safe reason codes. It never infers
+- Recovery returns exactly one closed classification—`compilation_reserved`,
+  `compilation_provider_uncertain`, `provider_result_accepted_not_persisted`,
+  `compilation_persisted`, or `compilation_invalid_terminal`—with bounded
+  operator-safe reason codes. It never infers
   setup success, effective policy, guide activation, contribution,
   compensation, or reputation effects.
 - Deny/attack proof uses an instrumented repository/session and covers PM

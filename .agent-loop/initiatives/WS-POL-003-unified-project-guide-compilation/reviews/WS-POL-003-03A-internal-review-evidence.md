@@ -4,8 +4,9 @@ Date: 2026-08-10. Risk: L1.
 
 ## Deterministic evidence
 
-- Real-PostgreSQL focused compilation suite: 26 passed.
-- New guide-compilation subsystem coverage: 93.83 percent, above the required
+- Real-PostgreSQL focused compilation suite: 31 passed after external-review
+  corrections.
+- New guide-compilation subsystem coverage: 93.08 percent, above the required
   90 percent floor.
 - Focused AUTH boundary, structure, behavior-ownership, and public contract
   proof: passed; reviewer run recorded 184 passing tests.
@@ -32,7 +33,7 @@ Date: 2026-08-10. Risk: L1.
 - QA: pass; exact attempt identity, crash replay, append-only root/child CAS,
   concurrent fork prevention, stale predecessor denial, state shapes, guarded
   downgrade, and hidden deny-only behavior are covered.
-- Product/operations: pass; `accepted` remains provider-result custody only and
+- Product/operations: pass; `provider_result_accepted` remains provider-result custody only and
   creates no approval, activation, review, payment, contribution, or reputation
   truth.
 - Senior engineering: pass; package files remain below structural limits and
@@ -46,6 +47,23 @@ Date: 2026-08-10. Risk: L1.
 - Reuse/dedup: pass; keeping the public digest implementation dependency-light
   and the fixed service literal inside the boundary avoids introducing a
   private cross-module dependency.
+
+Fresh corrective reviews after the CodeRabbit findings:
+
+- Architecture: pass with low risks; the suggested distinction for unexpected
+  storage failures was implemented as `GuideCompilationStorageError` while one
+  repository-domain base remains catchable.
+- Security: pass; state, authority evidence, lineage, migration, and deny-only
+  behavior remain fail closed.
+- QA: pass with low risks; the required PostgreSQL suite subsequently passed
+  locally against a runner-owned isolated database.
+- Test delta: initial fail was corrected, then pass with low risks after live
+  migrated-vocabulary proof, deterministic DB-error classification, and
+  trigger-cause plus durable-state assertions were added.
+- CI integrity: pass with low risks; no threshold, failure policy, lane, lint,
+  or test gate was weakened, and local PostgreSQL now matches CI's exact image.
+- Senior engineering: pass with low risks; its live-migration parity concern is
+  covered by the new `pg_get_constraintdef` and direct rejection test.
 
 All valid findings were corrected and re-reviewed. No reviewer session remains
 open.

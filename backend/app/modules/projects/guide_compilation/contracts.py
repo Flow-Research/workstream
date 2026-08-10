@@ -21,21 +21,21 @@ from app.interfaces.project_agents import (
 class CompilationAttemptStatus(StrEnum):
     """Closed provider-attempt states persisted by the crash fence."""
 
-    RESERVED = "reserved"
-    PROVIDER_UNCERTAIN = "provider_uncertain"
-    ACCEPTED = "accepted"
-    INVALID_TERMINAL = "invalid_terminal"
-    PERSISTED = "persisted"
+    RESERVED = "compilation_reserved"
+    PROVIDER_UNCERTAIN = "compilation_provider_uncertain"
+    ACCEPTED = "provider_result_accepted"
+    INVALID_TERMINAL = "compilation_invalid_terminal"
+    PERSISTED = "compilation_persisted"
 
 
 class CompilationRecoveryClassification(StrEnum):
     """Bounded hidden recovery outcomes safe for operator inspection."""
 
-    RESERVED = "reserved"
-    PROVIDER_UNCERTAIN = "provider_uncertain"
-    ACCEPTED_NOT_PERSISTED = "accepted_not_persisted"
-    PERSISTED = "persisted"
-    INVALID_TERMINAL = "invalid_terminal"
+    RESERVED = "compilation_reserved"
+    PROVIDER_UNCERTAIN = "compilation_provider_uncertain"
+    ACCEPTED_NOT_PERSISTED = "provider_result_accepted_not_persisted"
+    PERSISTED = "compilation_persisted"
+    INVALID_TERMINAL = "compilation_invalid_terminal"
 
 
 class CompilationAttemptIdentity(BaseModel):
@@ -133,7 +133,11 @@ class AcceptedCompilationResult(BaseModel):
         expected = accepted_compilation_result(
             ProjectGuideCompilationResult.model_validate(self.canonical_result)
         )
-        if self.result_hash != expected.result_hash or self.component_hashes != expected.component_hashes:
+        if (
+            self.canonical_result != expected.canonical_result
+            or self.result_hash != expected.result_hash
+            or self.component_hashes != expected.component_hashes
+        ):
             raise ValueError("accepted compilation result hashes are invalid")
         return self
 

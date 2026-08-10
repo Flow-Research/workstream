@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
+from app.modules.projects.guide_compilation.validation import TERMINAL_FAILURE_CODES
 
 from .helpers import context, identity, seed_database
 
@@ -37,7 +38,7 @@ async def test_invalid_terminal_rejects_an_accepted_timestamp(
                 await connection.execute(
                     text(
                         "update project_guide_compilation_attempts set "
-                        "status='invalid_terminal',failure_code='schema_invalid',"
+                        "status='compilation_invalid_terminal',failure_code='schema_invalid',"
                         "terminal_at=now(),accepted_at=now() where id=:id"
                     ),
                     {"id": attempt.id},
@@ -89,7 +90,7 @@ async def test_accepted_state_rejects_null_component_hashes(
             with pytest.raises(DBAPIError):
                 await connection.execute(
                     text(
-                        "update project_guide_compilation_attempts set status='accepted',"
+                        "update project_guide_compilation_attempts set status='provider_result_accepted',"
                         "accepted_at=now(),canonical_result='{}'::json,result_hash=:hash,"
                         "component_hashes=cast(:components as json) where id=:id"
                     ),
@@ -127,6 +128,50 @@ async def test_attempt_truncate_is_rejected(clean_postgres_database: str) -> Non
             with pytest.raises(DBAPIError):
                 await connection.execute(
                     text("truncate table project_guide_compilation_attempts")
+                )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_live_terminal_constraint_matches_closed_vocabulary(
+    clean_postgres_database: str,
+) -> None:
+    """Migrated PostgreSQL accepts exact reason codes and rejects legacy states."""
+    engine, attempt = await _reserved(clean_postgres_database)
+    try:
+        async with engine.connect() as connection:
+            definition = await connection.scalar(
+                text(
+                    "select pg_get_constraintdef(oid) from pg_constraint "
+                    "where conrelid='project_guide_compilation_attempts'::regclass "
+                    "and contype='c' and pg_get_constraintdef(oid) like '%failure_code%'"
+                )
+            )
+        assert definition is not None
+        assert all(f"'{code}'" in definition for code in TERMINAL_FAILURE_CODES)
+        assert "'accepted'" not in definition
+        assert "'invalid_terminal'" not in definition
+
+        for status in ("accepted", "invalid_terminal", "persisted"):
+            with pytest.raises(DBAPIError):
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "update project_guide_compilation_attempts "
+                            "set status=:status where id=:id"
+                        ),
+                        {"id": attempt.id, "status": status},
+                    )
+        with pytest.raises(DBAPIError):
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "update project_guide_compilation_attempts set "
+                        "status='compilation_invalid_terminal',terminal_at=now(),"
+                        "failure_code='not_allowlisted' where id=:id"
+                    ),
+                    {"id": attempt.id},
                 )
     finally:
         await engine.dispose()

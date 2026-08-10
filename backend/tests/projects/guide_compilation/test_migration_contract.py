@@ -32,7 +32,8 @@ async def _schema_state(database_url: str) -> tuple[str, bool, int, int, int, in
         )
         triggers = await connection.fetchval(
             "select count(*) from pg_trigger where not tgisinternal and tgrelid in "
-            "(select oid from pg_class where relname in "
+            "(select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace "
+            "where n.nspname='public' and c.relname in "
             "('project_guide_compilation_attempts','project_guide_compilations'))"
         )
         action_pairs = await connection.fetchval(
@@ -62,16 +63,18 @@ def test_0062_empty_round_trip_restores_exact_hidden_schema(
     """An empty 0062 downgrade/re-upgrade restores its tables and four guards."""
     config = _config()
     with migration_lock():
-        command.downgrade(config, "0061_submission_admission")
-        assert asyncio.run(_schema_state(isolated_database_env)) == (
-            "0061_submission_admission",
-            False,
-            0,
-            0,
-            0,
-            0,
-        )
-        command.upgrade(config, "0062_guide_compilation")
+        try:
+            command.downgrade(config, "0061_submission_admission")
+            assert asyncio.run(_schema_state(isolated_database_env)) == (
+                "0061_submission_admission",
+                False,
+                0,
+                0,
+                0,
+                0,
+            )
+        finally:
+            command.upgrade(config, "0062_guide_compilation")
     assert asyncio.run(_schema_state(isolated_database_env)) == (
         "0062_guide_compilation",
         True,
@@ -99,12 +102,10 @@ def test_0062_nonempty_attempt_blocks_downgrade(
             await engine.dispose()
 
     asyncio.run(seed_attempt())
-    try:
-        with migration_lock(), pytest.raises(
-            RuntimeError, match="cannot downgrade non-empty guide-compilation custody"
-        ):
-            command.downgrade(_config(), "0061_submission_admission")
-    finally:
-        assert asyncio.run(_schema_state(isolated_database_env))[0] == (
-            "0062_guide_compilation"
-        )
+    with migration_lock(), pytest.raises(
+        RuntimeError, match="cannot downgrade non-empty guide-compilation custody"
+    ):
+        command.downgrade(_config(), "0061_submission_admission")
+    assert asyncio.run(_schema_state(isolated_database_env))[0] == (
+        "0062_guide_compilation"
+    )

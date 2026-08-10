@@ -90,7 +90,7 @@ async def test_uncertain_to_invalid_terminal_preserves_one_attempt(
             terminal = await GuideCompilationRepository(session).mark_invalid_terminal(
                 attempt_id=attempt.id, failure_code="schema_invalid"
             )
-            assert terminal.status == "invalid_terminal"
+            assert terminal.status == "compilation_invalid_terminal"
         async with factory() as session, session.begin():
             with pytest.raises(GuideCompilationIntegrityError):
                 await GuideCompilationRepository(session).mark_provider_uncertain(attempt.id)

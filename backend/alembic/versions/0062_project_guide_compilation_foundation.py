@@ -169,7 +169,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("provider_idempotency_key", name="uq_compilation_attempt_provider_key"),
         sa.CheckConstraint("setup_generation > 0", name="ck_compilation_attempt_generation"),
         sa.CheckConstraint(
-            "status in ('reserved','provider_uncertain','accepted','invalid_terminal','persisted')",
+            "status in ('compilation_reserved','compilation_provider_uncertain','provider_result_accepted','compilation_invalid_terminal','compilation_persisted')",
             name="ck_compilation_attempt_status",
         ),
         sa.CheckConstraint(
@@ -201,11 +201,11 @@ def upgrade() -> None:
             name="ck_compilation_attempt_component_hashes",
         ),
         sa.CheckConstraint(
-            "(status='reserved' and provider_uncertain_at is null and accepted_at is null and terminal_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and failure_code is null and persisted_compilation_id is null) or "
-            "(status='provider_uncertain' and provider_uncertain_at is not null and accepted_at is null and terminal_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and failure_code is null and persisted_compilation_id is null) or "
-            "(status='accepted' and accepted_at is not null and terminal_at is null and persisted_at is null and canonical_result is not null and result_hash is not null and component_hashes is not null and failure_code is null and persisted_compilation_id is null) or "
-            "(status='persisted' and accepted_at is not null and persisted_at is not null and terminal_at is null and canonical_result is not null and result_hash is not null and component_hashes is not null and failure_code is null and persisted_compilation_id is not null) or "
-            "(status='invalid_terminal' and terminal_at is not null and accepted_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and persisted_compilation_id is null and failure_code in ('schema_invalid','unsafe_text','hash_mismatch','context_mismatch'))",
+            "(status='compilation_reserved' and provider_uncertain_at is null and accepted_at is null and terminal_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and failure_code is null and persisted_compilation_id is null) or "
+            "(status='compilation_provider_uncertain' and provider_uncertain_at is not null and accepted_at is null and terminal_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and failure_code is null and persisted_compilation_id is null) or "
+            "(status='provider_result_accepted' and accepted_at is not null and terminal_at is null and persisted_at is null and canonical_result is not null and result_hash is not null and component_hashes is not null and failure_code is null and persisted_compilation_id is null) or "
+            "(status='compilation_persisted' and accepted_at is not null and persisted_at is not null and terminal_at is null and canonical_result is not null and result_hash is not null and component_hashes is not null and failure_code is null and persisted_compilation_id is not null) or "
+            "(status='compilation_invalid_terminal' and terminal_at is not null and accepted_at is null and persisted_at is null and canonical_result is null and result_hash is null and component_hashes is null and persisted_compilation_id is null and failure_code in ('schema_invalid','unsafe_text','hash_mismatch','context_mismatch'))",
             name="ck_compilation_attempt_state_shape",
         ),
     )
@@ -333,34 +333,34 @@ def _install_guards() -> None:
             old.post_catalogue_schema_version,old.post_catalogue_manifest_hash,
             old.agent_identity,old.agent_version,old.instruction_version,
             old.provider_idempotency_key) then raise exception 'compilation attempt identity is immutable'; end if;
-          if old.status in ('persisted','invalid_terminal') then raise exception 'terminal compilation attempt is immutable'; end if;
+          if old.status in ('compilation_persisted','compilation_invalid_terminal') then raise exception 'terminal compilation attempt is immutable'; end if;
           if new.reserved_at is distinct from old.reserved_at then
             raise exception 'compilation reservation timestamp is immutable';
           end if;
           if new.provider_uncertain_at is distinct from old.provider_uncertain_at and
-            not (old.status='reserved' and new.status='provider_uncertain') then
+            not (old.status='compilation_reserved' and new.status='compilation_provider_uncertain') then
             raise exception 'provider uncertainty timestamp is immutable';
           end if;
           if new.accepted_at is distinct from old.accepted_at and
-            not (old.status in ('reserved','provider_uncertain') and new.status='accepted') then
+            not (old.status in ('compilation_reserved','compilation_provider_uncertain') and new.status='provider_result_accepted') then
             raise exception 'accepted timestamp is immutable';
           end if;
           if new.terminal_at is distinct from old.terminal_at and
-            not (old.status in ('reserved','provider_uncertain') and new.status='invalid_terminal') then
+            not (old.status in ('compilation_reserved','compilation_provider_uncertain') and new.status='compilation_invalid_terminal') then
             raise exception 'terminal timestamp is immutable';
           end if;
           if row(new.persisted_at,new.persisted_compilation_id) is distinct from
             row(old.persisted_at,old.persisted_compilation_id) and
-            not (old.status='accepted' and new.status='persisted') then
+            not (old.status='provider_result_accepted' and new.status='compilation_persisted') then
             raise exception 'persisted custody is immutable';
           end if;
-          if old.status='accepted' and row(new.canonical_result::jsonb,new.result_hash,new.component_hashes::jsonb,new.accepted_at)
+          if old.status='provider_result_accepted' and row(new.canonical_result::jsonb,new.result_hash,new.component_hashes::jsonb,new.accepted_at)
             is distinct from row(old.canonical_result::jsonb,old.result_hash,old.component_hashes::jsonb,old.accepted_at) then
             raise exception 'accepted compilation result is immutable';
           end if;
-          if not ((old.status='reserved' and new.status in ('provider_uncertain','accepted','invalid_terminal')) or
-                  (old.status='provider_uncertain' and new.status in ('accepted','invalid_terminal')) or
-                  (old.status='accepted' and new.status='persisted')) then
+          if not ((old.status='compilation_reserved' and new.status in ('compilation_provider_uncertain','provider_result_accepted','compilation_invalid_terminal')) or
+                  (old.status='compilation_provider_uncertain' and new.status in ('provider_result_accepted','compilation_invalid_terminal')) or
+                  (old.status='provider_result_accepted' and new.status='compilation_persisted')) then
             raise exception 'invalid compilation attempt transition';
           end if;
           return new;
@@ -386,7 +386,7 @@ def _install_guards() -> None:
         begin
           select * into source_attempt from project_guide_compilation_attempts
             where id=new.attempt_id for update;
-          if source_attempt.id is null or source_attempt.status <> 'accepted' or
+          if source_attempt.id is null or source_attempt.status <> 'provider_result_accepted' or
             row(new.project_id,new.guide_id,new.guide_version,new.source_snapshot_id,
               new.source_snapshot_hash,new.setup_run_id,new.setup_generation,
               new.canonical_input_hash,new.guide_material_hash,

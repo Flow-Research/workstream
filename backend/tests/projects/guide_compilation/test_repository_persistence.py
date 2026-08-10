@@ -11,8 +11,10 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.modules.projects.guide_compilation.repository import (
+    GuideCompilationConcurrencyError,
     GuideCompilationIntegrityError,
     GuideCompilationRepository,
+    GuideCompilationStorageError,
 )
 
 from .helpers import (
@@ -177,7 +179,7 @@ async def test_wrong_resource_authority_leaves_accepted_attempt_unpersisted(
             classification = await GuideCompilationRepository(
                 session
             ).recovery_classification(attempt.id)
-            assert classification == "accepted_not_persisted"
+            assert classification == "provider_result_accepted_not_persisted"
     finally:
         await engine.dispose()
 
@@ -204,7 +206,10 @@ async def test_unrelated_authority_event_cannot_create_compilation(
             resource_context_digest=facts.resource_context_digest,
         )
         async with factory() as session, session.begin():
-            with pytest.raises(DBAPIError):
+            with pytest.raises(
+                GuideCompilationStorageError,
+                match="failed before durable custody",
+            ) as caught:
                 await GuideCompilationRepository(session).persist_accepted(
                     attempt_id=attempt.id,
                     context=compilation_context,
@@ -213,6 +218,20 @@ async def test_unrelated_authority_event_cannot_create_compilation(
                     facts=facts,
                     authorization_decision_event_id=decision_id,
                 )
+        assert "authorization evidence is invalid" in str(caught.value.__cause__)
+        async with factory() as session:
+            assert await session.scalar(
+                text(
+                    "select count(*) from project_guide_compilations "
+                    "where attempt_id=:attempt_id"
+                ),
+                {"attempt_id": attempt.id},
+            ) == 0
+            assert await GuideCompilationRepository(
+                session
+            ).recovery_classification(attempt.id) == (
+                "provider_result_accepted_not_persisted"
+            )
     finally:
         await engine.dispose()
 
@@ -237,7 +256,10 @@ async def test_wrong_authority_digest_cannot_create_compilation(
             resource_context_digest="sha256:" + "b" * 64,
         )
         async with factory() as session, session.begin():
-            with pytest.raises(DBAPIError):
+            with pytest.raises(
+                GuideCompilationStorageError,
+                match="failed before durable custody",
+            ) as caught:
                 await GuideCompilationRepository(session).persist_accepted(
                     attempt_id=attempt.id,
                     context=compilation_context,
@@ -246,6 +268,20 @@ async def test_wrong_authority_digest_cannot_create_compilation(
                     facts=facts,
                     authorization_decision_event_id=decision_id,
                 )
+        assert "authorization evidence is invalid" in str(caught.value.__cause__)
+        async with factory() as session:
+            assert await session.scalar(
+                text(
+                    "select count(*) from project_guide_compilations "
+                    "where attempt_id=:attempt_id"
+                ),
+                {"attempt_id": attempt.id},
+            ) == 0
+            assert await GuideCompilationRepository(
+                session
+            ).recovery_classification(attempt.id) == (
+                "provider_result_accepted_not_persisted"
+            )
     finally:
         await engine.dispose()
 
@@ -353,7 +389,8 @@ async def test_concurrent_child_fork_allows_exactly_one_successor(
         failures = [value for value in outcomes if isinstance(value, Exception)]
         assert len(successes) == 1
         assert len(failures) == 1
-        assert isinstance(failures[0], (GuideCompilationIntegrityError, DBAPIError))
+        assert isinstance(failures[0], GuideCompilationConcurrencyError)
+        assert "reload the lineage tip and retry" in str(failures[0])
         assert successes[0].supersedes_compilation_id == root.id
     finally:
         await engine.dispose()

@@ -24,6 +24,28 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 _HASH_CHECK = "~ '^sha256:[0-9a-f]{64}$'"
+_COMPONENT_NAMES = (
+    "sufficiency_hash",
+    "artifact_policy_hash",
+    "requirement_inventory_hash",
+    "pre_submit_hash",
+    "post_submit_hash",
+    "capability_suggestions_hash",
+    "setup_notes_hash",
+)
+
+
+def _component_hashes_check(column: str) -> str:
+    """Return the exact seven-key JSON shape and digest checks."""
+    pairs = ",".join(f"'{name}',{column}->>'{name}'" for name in _COMPONENT_NAMES)
+    hashes = " and ".join(
+        f"coalesce(({column}->>'{name}') {_HASH_CHECK},false)"
+        for name in _COMPONENT_NAMES
+    )
+    return (
+        f"json_typeof({column})='object' and "
+        f"{column}::jsonb=jsonb_build_object({pairs}) and {hashes}"
+    )
 
 
 class ProjectGuideCompilationAttempt(Base):
@@ -68,8 +90,9 @@ class ProjectGuideCompilationAttempt(Base):
             "provider_idempotency_key", name="uq_compilation_attempt_provider_key"
         ),
         CheckConstraint(
-            "status in ('reserved','provider_uncertain','accepted',"
-            "'invalid_terminal','persisted')",
+            "status in ('compilation_reserved','compilation_provider_uncertain',"
+            "'provider_result_accepted','compilation_invalid_terminal',"
+            "'compilation_persisted')",
             name="ck_compilation_attempt_status",
         ),
         CheckConstraint(
@@ -94,42 +117,29 @@ class ProjectGuideCompilationAttempt(Base):
             name="ck_compilation_attempt_result_size",
         ),
         CheckConstraint(
-            "component_hashes is null or (json_typeof(component_hashes)='object' and "
-            "component_hashes::jsonb=jsonb_build_object("
-            "'sufficiency_hash',component_hashes->>'sufficiency_hash',"
-            "'artifact_policy_hash',component_hashes->>'artifact_policy_hash',"
-            "'requirement_inventory_hash',component_hashes->>'requirement_inventory_hash',"
-            "'pre_submit_hash',component_hashes->>'pre_submit_hash',"
-            "'post_submit_hash',component_hashes->>'post_submit_hash',"
-            "'capability_suggestions_hash',component_hashes->>'capability_suggestions_hash',"
-            "'setup_notes_hash',component_hashes->>'setup_notes_hash') and "
-            "coalesce((component_hashes->>'sufficiency_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'artifact_policy_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'requirement_inventory_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'pre_submit_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'post_submit_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'capability_suggestions_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'setup_notes_hash') " + _HASH_CHECK + ",false))",
+            "component_hashes is null or ("
+            + _component_hashes_check("component_hashes")
+            + ")",
             name="ck_compilation_attempt_component_hashes",
         ),
         CheckConstraint(
-            "(status='reserved' and provider_uncertain_at is null and accepted_at is null "
+            "(status='compilation_reserved' and provider_uncertain_at is null and accepted_at is null "
             "and terminal_at is null and persisted_at is null and canonical_result is null "
             "and result_hash is null and component_hashes is null and failure_code is null "
             "and persisted_compilation_id is null) or "
-            "(status='provider_uncertain' and provider_uncertain_at is not null "
+            "(status='compilation_provider_uncertain' and provider_uncertain_at is not null "
             "and accepted_at is null and terminal_at is null and persisted_at is null "
             "and canonical_result is null and result_hash is null and component_hashes is null "
             "and failure_code is null and persisted_compilation_id is null) or "
-            "(status='accepted' and accepted_at is not null and terminal_at is null "
+            "(status='provider_result_accepted' and accepted_at is not null and terminal_at is null "
             "and persisted_at is null and canonical_result is not null and result_hash is not null "
             "and component_hashes is not null and failure_code is null "
             "and persisted_compilation_id is null) or "
-            "(status='persisted' and accepted_at is not null and persisted_at is not null "
+            "(status='compilation_persisted' and accepted_at is not null and persisted_at is not null "
             "and terminal_at is null and canonical_result is not null and result_hash is not null "
             "and component_hashes is not null and failure_code is null "
             "and persisted_compilation_id is not null) or "
-            "(status='invalid_terminal' and terminal_at is not null and accepted_at is null and persisted_at is null "
+            "(status='compilation_invalid_terminal' and terminal_at is not null and accepted_at is null and persisted_at is null "
             "and canonical_result is null and result_hash is null and component_hashes is null "
             "and persisted_compilation_id is null and "
             "failure_code in ('schema_invalid','unsafe_text','hash_mismatch','context_mismatch'))",
@@ -229,22 +239,7 @@ class ProjectGuideCompilation(Base):
         ),
         CheckConstraint(
             "octet_length(canonical_result::text) <= 4194304 and "
-            "json_typeof(component_hashes)='object' and "
-            "component_hashes::jsonb=jsonb_build_object("
-            "'sufficiency_hash',component_hashes->>'sufficiency_hash',"
-            "'artifact_policy_hash',component_hashes->>'artifact_policy_hash',"
-            "'requirement_inventory_hash',component_hashes->>'requirement_inventory_hash',"
-            "'pre_submit_hash',component_hashes->>'pre_submit_hash',"
-            "'post_submit_hash',component_hashes->>'post_submit_hash',"
-            "'capability_suggestions_hash',component_hashes->>'capability_suggestions_hash',"
-            "'setup_notes_hash',component_hashes->>'setup_notes_hash') and "
-            "coalesce((component_hashes->>'sufficiency_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'artifact_policy_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'requirement_inventory_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'pre_submit_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'post_submit_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'capability_suggestions_hash') " + _HASH_CHECK + ",false) and "
-            "coalesce((component_hashes->>'setup_notes_hash') " + _HASH_CHECK + ",false)",
+            + _component_hashes_check("component_hashes"),
             name="ck_project_guide_compilation_result_shape",
         ),
     )

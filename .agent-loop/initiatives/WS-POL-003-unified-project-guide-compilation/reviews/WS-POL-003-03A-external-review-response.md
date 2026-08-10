@@ -2,7 +2,17 @@
 
 ## Comments addressed
 
-- No external review comment has required a code change yet.
+- All five substantive CodeRabbit threads were validated and corrected:
+  compilation attempt states are subsystem-specific; repository failures expose
+  one domain hierarchy with a retryable lineage-race subtype; the canonical
+  execute digest has explicit behavior ownership; deny-only coroutines are
+  created inside their assertion scopes; and local PostgreSQL uses CI's exact
+  image digest.
+- Valid review-body findings were also corrected: explicit public-fact test
+  construction, canonical-result equality, shared component-hash constraint
+  composition, full-result-hash coverage, fresh ORM reloads, fixed-service
+  narrowing, migration cleanup safety and schema-scoped trigger inspection,
+  and application/database terminal-code parity.
 - Initial exact-head GitHub backend lanes all stopped at the shared docstring
   gate before test execution. The nine new repository callables and six
   deny-only authorization methods now document their exact responsibilities;
@@ -22,7 +32,15 @@
 
 ## Comments deferred
 
-- None.
+- The suggested `NOT VALID` rewrite for the three `audit_events` constraints was
+  not applied. Migration 0062 deliberately locks and rewrites all three closed
+  registries in one transaction so no observer can see a partial catalogue.
+  PostgreSQL retains the `ACCESS EXCLUSIVE` lock until that transaction commits,
+  so adding and validating `NOT VALID` constraints inside the same transaction
+  would not shorten the lock and would weaken the single atomic registry change.
+- Test-only fixture consolidation suggestions are recorded as non-functional
+  cleanup, not mixed into this security correction; every affected test retains
+  explicit engine cleanup and focused behavior ownership.
 
 ## Human decisions needed
 
@@ -35,6 +53,10 @@
 - Repository `docstr-coverage --config .docstr.yaml`.
 - Test-structure validation and diff integrity.
 - Focused 0062 migration-contract tests: 2 passed against PostgreSQL.
+- Final isolated guide-compilation suite: 31 passed with 93.08 percent package
+  coverage against the unchanged 90 percent floor.
+- Structure, behavior-ownership, and lane-inventory regression bundle: 161
+  passed.
 - Test-delta re-review: pass; the historical assertion still requires both the
   0049 and 0062 additions exactly twice and rejects all other definition drift.
 - Hosted schema lane on the corrected head.
@@ -42,5 +64,5 @@
 ## Remaining risks
 
 - GitHub must rerun every backend lane and coverage gate on the corrected head.
-- CodeRabbit review remains external exact-head evidence and must be triaged
-  before merge readiness.
+- CodeRabbit must receive the corrective head and every resolved thread must be
+  verified through the thread-aware API before merge readiness.
