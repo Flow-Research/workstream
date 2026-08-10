@@ -31,6 +31,29 @@ def test_repository_structural_debt_equals_the_frozen_ledger() -> None:
     structure.validate(ROOT, POLICY, LEDGER)
 
 
+def test_pol03a_production_package_is_inside_zero_growth_scope() -> None:
+    """The modular compilation package cannot escape production size enforcement."""
+    scoped = ROOT / structure.POL_03A_PRODUCTION_ROOT
+    assert scoped == ROOT / "backend/app/modules/projects/guide_compilation"
+    assert scoped.is_dir()
+
+
+def test_every_pol03a_test_is_inside_zero_growth_scope() -> None:
+    """No focused compilation test can escape size or weakening detection."""
+    expected = set((ROOT / structure.POL_03A_TEST_ROOT).rglob("*.py"))
+    observed = set(structure.scoped_test_paths(ROOT))
+    assert expected
+    assert expected <= observed
+
+
+def test_pol03a_skip_or_xfail_is_detected(tmp_path: Path) -> None:
+    """A focused compilation test cannot disable its proof."""
+    path = tmp_path / structure.POL_03A_TEST_ROOT / "test_disabled.py"
+    _write(path, "import pytest\npytestmark = pytest.mark.skip\n")
+    assert path in structure.scoped_test_paths(tmp_path)
+    assert structure.weak_python(path)
+
+
 def test_inventory_records_one_oversized_production_function(tmp_path: Path) -> None:
     """A production callable beyond its hard limit enters the debt inventory."""
     body = "\n".join(f"    value_{index} = {index}" for index in range(101))

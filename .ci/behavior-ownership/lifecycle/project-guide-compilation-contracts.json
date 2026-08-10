@@ -1,0 +1,22 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.contracts",
+  "boundaries": [],
+  "callables": [
+    "app.modules.projects.guide_compilation.contracts.AcceptedCompilationResult.validate_hashes",
+    "app.modules.projects.guide_compilation.contracts.CompilationAttemptIdentity.from_context",
+    "app.modules.projects.guide_compilation.contracts.CompilationAttemptIdentity.provider_idempotency_key",
+    "app.modules.projects.guide_compilation.contracts.accepted_compilation_result",
+    "app.modules.projects.guide_compilation.contracts.validate_accepted_compilation_result"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/contracts.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_contracts.py::test_attempt_provider_key_is_deterministic_and_context_bound",
+    "backend/tests/projects/guide_compilation/test_contracts.py::test_accepted_result_rejects_component_or_full_hash_drift",
+    "backend/tests/projects/guide_compilation/test_contracts.py::test_accepted_result_revalidates_against_fresh_context"
+  ]
+}

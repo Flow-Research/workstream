@@ -158,6 +158,12 @@ LANES = (
     TestLane(
         "project_lifecycle",
         (
+            "tests/projects/guide_compilation/test_contracts.py",
+            "tests/projects/guide_compilation/test_database_guards.py",
+            "tests/projects/guide_compilation/test_migration_contract.py",
+            "tests/projects/guide_compilation/test_public_authorization.py",
+            "tests/projects/guide_compilation/test_repository_attempts.py",
+            "tests/projects/guide_compilation/test_repository_persistence.py",
             "tests/test_projects.py",
         ),
     ),

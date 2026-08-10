@@ -71,6 +71,18 @@ AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
         "backend/scripts/test_structure_boundary.py",
     }
 )
+POL_03A_CALLABLE_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/api/project_guide_compilation.py",
+        "backend/app/modules/projects/guide_compilation/authorization.py",
+        "backend/app/modules/projects/guide_compilation/contracts.py",
+        "backend/app/modules/projects/guide_compilation/repository.py",
+        "backend/app/modules/projects/guide_compilation/validation.py",
+    }
+)
+POL_03A_DECLARATIVE_MODEL_TARGET = (
+    "backend/app/modules/projects/guide_compilation/models.py"
+)
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -211,7 +223,10 @@ def _validate_additive_partition_transition(
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
-    expected_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS - set(trusted_targets)
+    approved_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS
+    expected_additions = (approved_additions & additions) - set(trusted_targets)
+    if POL_03A_DECLARATIVE_MODEL_TARGET in additions:
+        expected_additions = expected_additions | {POL_03A_DECLARATIVE_MODEL_TARGET}
     if additions != expected_additions:
         raise BehaviorOwnershipError("untrusted_partition_change")
     if any(
@@ -497,7 +512,7 @@ def validate_catalogue(
     covered = {item["target"] for item in records}
     expected = {target for target, assigned in partition.items() if group in (None, assigned)}
     unresolved = expected - covered
-    if unresolved.intersection(AUTH_BOUNDARY_FOUNDATION_TARGETS):
+    if unresolved.intersection(AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS):
         raise BehaviorOwnershipError("unresolved_auth_boundary_foundation")
     return {
         "schema": CATALOGUE_SCHEMA,

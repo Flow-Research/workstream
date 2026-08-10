@@ -1,0 +1,21 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.authorization",
+  "boundaries": [],
+  "callables": [
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization._deny",
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization.authorize_execute_preflight",
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization.consume_execute_persist",
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization.consume_request",
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization.prepare_execute_persist",
+    "app.modules.projects.guide_compilation.authorization.DenyProjectGuideCompilationAuthorization.prepare_request"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["denial"],
+  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/authorization.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_public_authorization.py::test_hidden_authorization_denies_before_touching_product_state"
+  ]
+}

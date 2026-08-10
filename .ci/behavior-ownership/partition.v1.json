@@ -342,6 +342,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/project_guide_compilation.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/catalogue.py"
     },
     {
@@ -515,6 +519,26 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/create_service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/authorization.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/contracts.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/models.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/repository.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/validation.py"
     },
     {
       "group": "lifecycle",
@@ -733,7 +757,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "36f63f2cb637dc92f32cacc37d69fe1dd05c99ae309ea8647441ee8e2bdd9efc",
+  "authority_digest": "225faaad98e3c22d6306b240aa933e5a58e879450d0f9ea67497ab698e5ecda7",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

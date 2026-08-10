@@ -1,0 +1,20 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.validation",
+  "boundaries": [],
+  "callables": [
+    "app.modules.projects.guide_compilation.validation.accepted_from_attempt",
+    "app.modules.projects.guide_compilation.validation.identity_from_attempt",
+    "app.modules.projects.guide_compilation.validation.validate_persistence_authority",
+    "app.modules.projects.guide_compilation.validation.validate_terminal_failure_code"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["return", "denial", "mapped_error"],
+  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/validation.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_accepted_crash_recovery_persists_exactly_once",
+    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_stale_predecessor_fails_closed"
+  ]
+}

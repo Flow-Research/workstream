@@ -448,6 +448,14 @@ jobs:
         working-directory: backend
         run: coverage report --include='app/modules/authorization/*' --precision=2 --fail-under=90
 
+      - name: Project guide compilation subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/projects/guide_compilation/*'
+          --precision=2
+          --fail-under=90
+
       - name: Project creation cutover per-file coverage
         working-directory: backend
         shell: bash

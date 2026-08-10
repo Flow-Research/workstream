@@ -57,6 +57,10 @@ from app.modules.projects.models import (  # noqa: F401
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.guide_compilation.models import (  # noqa: F401
+    ProjectGuideCompilation,
+    ProjectGuideCompilationAttempt,
+)
 from app.modules.reviews.models import (  # noqa: F401
     ReviewAdmissionIdempotencyRecord,
     ReviewLease,

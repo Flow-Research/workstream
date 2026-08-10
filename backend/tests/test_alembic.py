@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0061_submission_admission"
+HEAD_REVISION = "0062_guide_compilation"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -13543,25 +13543,20 @@ def test_xint003_02b_policy_authority_schema_and_roundtrip(
 _XINT003_02C_ACTIONS = (
     ("review.revision_context.repair", "project.task.manage"),
     ("review.revision_obligation.close", "project.task.manage"),
-    ("review.revision_context.legacy_close", "operations.reconcile.run"),
-    ("review.lifecycle.activation.manage", "operations.reconcile.run"),
+    ("review.revision_context.legacy_close", "operations.reconcile.run"), ("review.lifecycle.activation.manage", "operations.reconcile.run"),
 )
 _XINT003_02C_IDENTITIES = tuple(
     identity.value
     for identity in (
-        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY,
-        ServiceIdentity.REVIEW_LEASE_EXPIRY,
-        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION,
-        ServiceIdentity.REVIEW_RECONCILIATION,
-        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION,
-        ServiceIdentity.REVIEW_PROJECTION,
+        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY, ServiceIdentity.REVIEW_LEASE_EXPIRY,
+        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION, ServiceIdentity.REVIEW_RECONCILIATION,
+        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION, ServiceIdentity.REVIEW_PROJECTION,
     )
 )
 
 
 def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
-    isolated_database_env: str, migration_lock
-) -> None:
+    isolated_database_env: str, migration_lock) -> None:
     """0049 admits exact planned evidence and principals without seeding authority."""
     config = _alembic_config()
     with migration_lock():
@@ -13577,12 +13572,14 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
         finally:
             command.upgrade(config, "head")
 
-    additions = " OR " + " OR ".join(
-        _xint003_02c_pair_token(action, permission) for action, permission in _XINT003_02C_ACTIONS
-    )
+    additions = " OR " + " OR ".join(_xint003_02c_pair_token(*pair) for pair in _XINT003_02C_ACTIONS)
+    compilation_addition = " OR " + _xint003_02c_pair_token(
+        "project.guide_compilation.execute", "project.guide_compilation.execute")
     assert prior["profiles"] == upgraded["profiles"] == 0
     assert upgraded["action_definition"].count(additions) == 2
-    assert upgraded["action_definition"].replace(additions, "") == prior["action_definition"]
+    assert upgraded["action_definition"].count(compilation_addition) == 2
+    assert upgraded["action_definition"].replace(additions, "").replace(
+        compilation_addition, "") == prior["action_definition"]
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
     assert prior["identity_values"] == historical_identities
     assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)
@@ -14072,8 +14069,7 @@ async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[st
             if has_lineage:
                 await connection.execute(
                     text(
-                        "update project_guides set status='draft',selected_review_policy_id=null,"
-                        "selected_review_policy_generation=null,selected_review_policy_hash=null,"
+                        "update project_guides set status='draft',selected_review_policy_id=null,selected_review_policy_generation=null,selected_review_policy_hash=null,"
                         "selected_revision_policy_id=null,"
                         "selected_revision_policy_generation=null,"
                         "selected_revision_policy_hash=null where id=:guide"
