@@ -131,7 +131,6 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
     )
     assert denied.action_id is ActionId.ARTIFACT_BINDING_READ
     assert denied.permission_id is PermissionId.ARTIFACT_BINDING_READ
-
     with pytest.raises(ValidationError, match="action permission"):
         _authority_input(
             AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
@@ -196,9 +195,9 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST, ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_READ,
-        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-        ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE, ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,

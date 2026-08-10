@@ -126,6 +126,7 @@ backend/alembic/versions/0063_guide_compilation_authority.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/authorization/guide_compilation/**
 backend/tests/authorization/__init__.py
+backend/tests/test_audit.py
 backend/tests/test_alembic.py
 backend/tests/test_authorization.py
 backend/tests/conftest.py
