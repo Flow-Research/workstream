@@ -50,7 +50,8 @@ backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02D-art-preparation-public-api.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02D-resource-manifest.md
 docs/spec_artifact_storage_service.md
 ```
 
@@ -83,7 +84,7 @@ cross-module imports; serialized prepared handles; compatibility facades.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/artifacts app/modules/tasks/router.py app/adapters/artifacts tests/test_submission_bundle_admission.py)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_default_pre_submit_execution.py tests/architecture/test_module_boundaries.py --cov=app.modules.artifacts --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_default_pre_submit_execution.py tests/architecture/test_module_boundaries.py --cov=app.modules.artifacts --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py

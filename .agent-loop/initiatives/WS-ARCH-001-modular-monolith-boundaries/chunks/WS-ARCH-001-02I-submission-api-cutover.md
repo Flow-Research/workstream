@@ -64,9 +64,11 @@ backend/tests/test_review_queue_persistence.py
 backend/tests/architecture/**
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/**
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/AUTH_HANDOFF.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02I-submission-api-cutover.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02I-cutover.md
 docs/template_submission_packet.md
 docs/spec_artifact_storage_service.md
 docs/architecture_data_model.md
@@ -109,7 +111,7 @@ URI/manifest compatibility, or second checker registry.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters app/main.py tests/test_submission_api.py)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_api.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_auth.py tests/test_alembic.py tests/test_checkers.py tests/test_checker_materialization.py tests/test_review_queue_persistence.py --cov=app.modules.tasks --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_api.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_auth.py tests/test_alembic.py tests/test_checkers.py tests/test_checker_materialization.py tests/test_review_queue_persistence.py --cov=app.modules.tasks --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py

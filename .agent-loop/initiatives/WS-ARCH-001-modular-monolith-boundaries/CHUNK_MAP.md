@@ -13,11 +13,11 @@
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Proposed after 02F |
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Proposed after 02G |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
-| `WS-ARCH-001-03` | PROJECT/TASK guide, locked-context, task and assignment capability repairs | L1 | Non-executable placeholder; requires split contract |
-| `WS-ARCH-001-04` | ART/CHECKER materialization, run and result capability repairs | L1 | Non-executable placeholder; requires split contract |
-| `WS-ARCH-001-05` | ART/TASK/REV reviewer packet and revision capability repairs | L1 | Non-executable placeholder; requires split contract |
-| `WS-ARCH-001-06` | REV/CON/COMP accepted-work and award handoff capability repairs | L1 | Non-executable placeholder; requires split contract |
-| `WS-ARCH-001-07` | Supporting-module repairs and empty-ledger closure | L1 | Non-executable placeholder; requires split contract |
+| `WS-ARCH-001-03` | PROJECT/TASK guide, locked-context, task and assignment capability repairs | L1 | Non-executable placeholder; requires a split contract |
+| `WS-ARCH-001-04` | ART/CHECKER materialization, run and result capability repairs | L1 | Non-executable placeholder; requires a split contract |
+| `WS-ARCH-001-05` | ART/TASK/REV reviewer packet and revision capability repairs | L1 | Non-executable placeholder; requires a split contract |
+| `WS-ARCH-001-06` | REV/CON/COMP accepted-work and award handoff capability repairs | L1 | Non-executable placeholder; requires a split contract |
+| `WS-ARCH-001-07` | Supporting-module repairs and empty-ledger closure | L1 | Non-executable placeholder; requires a split contract |
 
 Parent chunks 02-06 are coordination contracts, not permission to combine an
 entire product milestone into one PR. Each is split further when its exact

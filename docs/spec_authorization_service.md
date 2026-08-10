@@ -426,8 +426,8 @@ The paired artifact hidden-behavior matrix is closed:
 WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation
 may execute that ActionId while it remains planned. The mandatory order is
-ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> 04B1 -> 04B2 -> 04B3 ->
-XINT-002-06A -> ART-04C1 -> 04C2 -> WS-ARCH-001-02A -> 02B -> 02C ->
+ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> ART-04B1 -> ART-04B2 ->
+ART-04B3 -> XINT-002-06A -> ART-04C1 -> ART-04C2 -> WS-ARCH-001-02A -> 02B -> 02C ->
 02D -> 02E -> 02F -> 02G. This ensures fixed-service pre-submit
 materialization and the complete hidden public-capability/transaction path are
 active before contributor preparation can become live. XINT-002-05A/05B are
@@ -481,6 +481,12 @@ A mapping is not a permission alias.
 | `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | `artifact.review_packet.materialize` only |
 | Future REV-owned activation, not approved for v0.1 | `artifact.review_evidence.binding.create` remains planned/unavailable |
+
+The table records the approved future activation custodian. The executable
+catalogue intentionally retains its legacy planned `AUTH_ART_05` owner until
+WS-ARCH-001-02H changes that registry row and availability together after the
+02F hidden transaction evidence exists; no earlier planning-only change may
+promote or reassign the action.
 
 The approved v0.1 review flow has a reviewer decision plus note/findings bound
 to the reviewed Submission. It does not include a reviewer-uploaded artifact.

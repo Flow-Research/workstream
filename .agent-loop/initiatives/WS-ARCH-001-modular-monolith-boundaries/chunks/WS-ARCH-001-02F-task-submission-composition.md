@@ -51,7 +51,8 @@ backend/tests/test_alembic.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02F-task-submission-composition.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02F-transaction-manifest.md
 docs/architecture_data_model.md
 ```
 
@@ -70,6 +71,11 @@ contribution dispatch; compatibility facade.
       transaction as every mutation and evidence row. Production wiring remains
       deny-only; this chunk proves denial/concealment and zero mutation, not a
       successful AUTH capability or complete business effect.
+- [ ] `PreparedBundlePreSubmitEvidenceService.persist(...)` joins that root
+      transaction through its public port and never opens or commits an
+      independent transaction; an integration test proves a final-stage failure
+      rolls back the Submission, binding, admission transition, evidence rows,
+      and authorization evidence together.
 - [ ] Composition opens one unit of work and wires ports only; TASK command owns
       sequencing and each owner enforces its invariants.
 - [ ] Denial, cancellation and persistence failure roll back all effects;
@@ -84,7 +90,7 @@ contribution dispatch; compatibility facade.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters app/main.py tests/test_submission_concurrency.py)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py

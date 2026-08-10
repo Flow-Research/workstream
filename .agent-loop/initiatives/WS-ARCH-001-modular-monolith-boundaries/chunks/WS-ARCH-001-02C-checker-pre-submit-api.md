@@ -49,7 +49,8 @@ backend/tests/test_default_pre_submit_execution.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02C-checker-pre-submit-api.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02C-checker-manifest.md
 docs/architecture_lockdown.md
 ```
 
@@ -63,8 +64,10 @@ session, concrete executor, or mutable internal result leakage.
 
 - [ ] One typed CHECKER API accepts immutable PROJECT/TASK lineage and returns
       a deterministic immutable effective-plan contract.
-- [ ] Execution results expose bounded result facts without ART scratch or
-      provider details.
+- [ ] Execution results expose bounded checker facts without
+      `PreSubmissionExecutionCustody`, `custody`, `storage_scheme`, ART scratch,
+      provider, or evidence-persistence details. An ART-owned adapter retains
+      custody facts, and a contract test rejects them from the public result.
 - [ ] ART remains the sole owner of durable evidence identity/persistence, pass
       capability, and admission attachment; CHECKERS creates no parallel
       evidence aggregate.

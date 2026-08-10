@@ -47,7 +47,8 @@ backend/tests/test_tasks.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02A-task-submission-context-api.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02A-task-manifest.md
 docs/architecture_lockdown.md
 ```
 

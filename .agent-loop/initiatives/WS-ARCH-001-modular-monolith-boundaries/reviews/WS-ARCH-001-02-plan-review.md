@@ -10,15 +10,15 @@ and eventual public clean-cut work into WS-ARCH-001-02A through 02I.
 
 | Track | Final result | Material correction |
 |---|---|---|
-| Architecture | PASS | Added PROJECTS and CHECKERS owner capabilities, explicit entry gates/manifests, and deny-only pre-activation proof. |
-| Security/auth | PASS WITH LOW RISKS | Moved successful prepared-handle and business-effect proof into 02G/02H; production remains unavailable through hidden 02D/02F. |
-| Product/operations | PASS WITH LOW RISKS | Deferred 02I until initial, checker-remediation, reviewer-requested revision, checker-output/repair, and REV-admission paths are live. |
-| QA | PASS | Added exact manifests, replay/concurrency/stale-state gates, downstream dispatch/repair, and revision-lineage proof. |
-| Senior engineering | PASS | Reconciled current ART/XINT/AUTH/canonical documentation and removed stale ART-05B execution guidance. |
-| CI integrity | PASS | Preserved hosted gates and added deterministic focused 90 percent coverage commands with explicit pytest plugins. |
-| Docs | PASS | Synchronized current state, ART/AUTH/XINT custody, specifications, templates, glossary, operating manual, and data-flow documentation. |
-| Reuse/dedup | PASS WITH LOW RISKS | Required migration from the legacy shared ART interface, retained ART durable-evidence ownership, and reused generic ArtifactBinding conventions. |
-| Test delta | PASS | No tests changed; each executable contract names additive focused regression and coverage proof. |
+| Architecture | pass | Added PROJECTS and CHECKERS owner capabilities, explicit entry gates/manifests, and deny-only pre-activation proof. |
+| Security/auth | pass | Moved successful prepared-handle and business-effect proof into 02G/02H; production remains unavailable through hidden 02D/02F. Low risks remain documented. |
+| Product/operations | pass | Deferred 02I until initial, checker-remediation, reviewer-requested revision, checker-output/repair, and REV-admission paths are live. Low risks remain documented. |
+| QA | pass | Added exact manifests, replay/concurrency/stale-state gates, downstream dispatch/repair, and revision-lineage proof. |
+| Senior engineering | pass | Reconciled current ART/XINT/AUTH/canonical documentation and removed stale ART-05B execution guidance. |
+| CI integrity | pass | Preserved hosted gates and added deterministic focused 90 percent coverage commands with explicit pytest plugins. |
+| Docs | pass | Synchronized current state, ART/AUTH/XINT custody, specifications, templates, glossary, operating manual, and data-flow documentation. |
+| Reuse/dedup | pass | Required migration from the legacy shared ART interface, retained ART durable-evidence ownership, and reused generic ArtifactBinding conventions. Low risks remain documented. |
+| Test delta | pass | No tests changed; each executable contract names additive, focused regression tests and coverage proof. |
 
 ## Governing corrections
 

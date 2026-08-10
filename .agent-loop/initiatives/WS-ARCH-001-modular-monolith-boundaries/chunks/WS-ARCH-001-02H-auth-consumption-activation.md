@@ -43,9 +43,11 @@ backend/alembic/versions/<next-current-main-revision>.py
 backend/tests/test_authorization.py
 backend/tests/test_submission_concurrency.py
 backend/tests/architecture/test_authorization_boundary.py
-.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02H-auth-consumption-activation.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02H-consumption-activation.md
 docs/spec_authorization_service.md
 ```
 
@@ -74,7 +76,7 @@ TASK persistence; human substitution for fixed service authority.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/authorization app/adapters/auth tests/test_authorization.py)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_concurrency.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_concurrency.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
 python3 scripts/check_stale_authorization_docs.py
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py

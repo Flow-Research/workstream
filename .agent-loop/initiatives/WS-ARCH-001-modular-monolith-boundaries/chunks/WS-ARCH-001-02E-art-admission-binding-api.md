@@ -32,7 +32,10 @@ P1
 ## Entry gate
 
 WS-ARCH-001-02D is merged with contributor preparation still unavailable and
-its exact resource manifest recorded.
+its exact resource manifest recorded. The merged 02A TASK API supplies the
+immutable task, assignment, predecessor-Submission, project, guide, snapshot,
+and policy lineage capability; ART must not remove its locked recheck until it
+can consume that capability instead of TASK persistence.
 
 ## Allowed files
 
@@ -51,7 +54,8 @@ backend/tests/test_alembic.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02E-art-admission-binding-api.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md
 docs/spec_artifact_storage_service.md
 docs/architecture_data_model.md
 ```
@@ -65,6 +69,9 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
 
 - [ ] Public inputs/outputs are immutable identifiers, digests, sizes, status,
       and stable errors only.
+- [ ] The ART port consumes the typed 02A TASK lineage capability and locks the
+      exact task, assignment, predecessor-Submission, project, guide, snapshot,
+      and policy facts without querying TASK persistence.
 - [ ] ART locks and validates ready admission/content/manifest/evidence lineage
       and accepts a server-owned Submission identity supplied by TASKS.
 - [ ] `ready -> consumed|stale` is terminal, unique, concurrency-safe, and
@@ -78,14 +85,14 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
       to `artifacts.api`; no parallel legacy/public ART contract remains.
 - [ ] Capability remains unreachable from the public route pending 02F-02I.
 - [ ] Record the exact admission/binding port, state, error, and resource
-      manifest in
+      manifest, including the complete TASK lineage resource facts, in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md`.
 
 ## Verification commands
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/artifacts tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
