@@ -475,18 +475,17 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
-| `WS-ARCH-001-02G` | `artifact.submission_bundle.prepare` |
+| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare`; registry custody retained while replacement implementation chunk WS-ARCH-001-02G performs activation |
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
-| `WS-ARCH-001-02H` | `artifact.submission.binding.create` |
+| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; registry custody retained while replacement implementation chunk WS-ARCH-001-02H performs activation |
 | `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | `artifact.review_packet.materialize` only |
 | Future REV-owned activation, not approved for v0.1 | `artifact.review_evidence.binding.create` remains planned/unavailable |
 
-The table records the approved future activation custodian. The executable
-catalogue intentionally retains its legacy planned `AUTH_ART_05` owner until
-WS-ARCH-001-02H changes that registry row and availability together after the
-02F hidden transaction evidence exists; no earlier planning-only change may
-promote or reassign the action.
+The table records the executable registry custodian. WS-ARCH-001-02G and 02H
+replace the superseded implementation chunks and may activate only their named
+action after the required hidden evidence exists; they do not rename the
+registry custodian. No planning-only change may promote or reassign an action.
 
 The approved v0.1 review flow has a reviewer decision plus note/findings bound
 to the reviewed Submission. It does not include a reviewer-uploaded artifact.
