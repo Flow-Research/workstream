@@ -38,6 +38,8 @@ class PermissionId(StrEnum):
     PROJECT_REVIEW_POLICY_MANAGE = "project.review_policy.manage"
     PROJECT_ROLE_GRANT_READ = "project.role_grant.read"
     PROJECT_ROLE_GRANT_MANAGE = "project.role_grant.manage"
+    PROJECT_GUIDE_COMPILATION_REQUEST = "project.guide_compilation.request"
+    PROJECT_GUIDE_COMPILATION_EXECUTE = "project.guide_compilation.execute"
     TASK_QUEUE_READ = "task.queue.read"
     TASK_CLAIM = "task.claim"
     SUBMISSION_CREATE = "submission.create"
@@ -129,6 +131,8 @@ class ActionId(StrEnum):
     PROJECT_GUIDE_CREATE = "project.guide.create"
     PROJECT_GUIDE_UPDATE = "project.guide.update"
     PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE = "project.guide_source_snapshot.create"
+    PROJECT_GUIDE_COMPILATION_REQUEST = "project.guide_compilation.request"
+    PROJECT_GUIDE_COMPILATION_EXECUTE = "project.guide_compilation.execute"
     PROJECT_REVIEW_POLICY_UPDATE = "project.review_policy.update"
     PROJECT_REVISION_POLICY_UPDATE = "project.revision_policy.update"
     PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE = "project.guide_sufficiency_report.create"
@@ -218,6 +222,7 @@ class ActionOwner(StrEnum):
     AUTH_12B2 = "WS-AUTH-001-12B2"
     AUTH_12C = "WS-AUTH-001-12C"
     AUTH_12D = "WS-AUTH-001-12D"
+    AUTH_12I = "WS-AUTH-001-12I"
     XINT_003_02B = "WS-XINT-003-02B"
     AUTH_12E = "WS-AUTH-001-12E"
     AUTH_12F = "WS-AUTH-001-12F"
@@ -457,6 +462,16 @@ ACTION_DEFINITIONS = (
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12D,
+    ),
+    _active(
+        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+        PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+        ActionOwner.AUTH_12I,
+    ),
+    _active(
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
+        PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
+        ActionOwner.AUTH_12I,
     ),
     _active(
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
@@ -763,6 +778,8 @@ NEW_PERMISSION_IDS = frozenset(
     {
         PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+        PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         PermissionId.OPERATIONS_TASK_START_OVERRIDE,
         PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         PermissionId.OPERATIONS_CHECKER_RETRY,
@@ -801,11 +818,11 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 100:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 102:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 22:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 24:
         raise RuntimeError("authorization permission boundary mismatch")
     active_actions = {
         ActionId.ACTOR_PROFILE_READ_SELF,
@@ -834,6 +851,8 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_CREATE,
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
@@ -905,6 +924,7 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset({ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}),
     ServiceIdentity.PROJECT_SETUP: frozenset(
         {
+            ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
             ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
             ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
@@ -923,55 +943,51 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
 }
 
+_EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
+    (identity, action)
+    for identity, action in (
+        (ServiceIdentity.ARTIFACT_VERIFIER, ActionId.ARTIFACT_VERIFICATION_EXECUTE),
+        (ServiceIdentity.ARTIFACT_PUT_RESOLVER, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE),
+        (ServiceIdentity.ARTIFACT_SCHEDULER, ActionId.ARTIFACT_PENDING_WORK_SCAN),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_GUIDE_READER, ActionId.ARTIFACT_GUIDE_SOURCE_READ),
+        (
+            ServiceIdentity.ARTIFACT_MATERIALIZER,
+            ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ),
+        (
+            ServiceIdentity.ARTIFACT_MATERIALIZER,
+            ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ),
+        (ServiceIdentity.ARTIFACT_MATERIALIZER, ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE),
+        (ServiceIdentity.ARTIFACT_CHECKER_OUTPUT, ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE),
+        (ServiceIdentity.PROJECT_SETUP, ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE),
+        (ServiceIdentity.PROJECT_SETUP, ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN),
+        (ServiceIdentity.PROJECT_SETUP, ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE),
+        (ServiceIdentity.PROJECT_SETUP, ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE),
+        (ServiceIdentity.PROJECT_SETUP, ActionId.PROJECT_SETUP_RUN_UPDATE),
+        (ServiceIdentity.REVIEW_PREFERENCE_EXPIRY, ActionId.REVIEW_PREFERENCE_EXPIRY_RUN),
+        (ServiceIdentity.REVIEW_LEASE_EXPIRY, ActionId.REVIEW_LEASE_EXPIRY_RUN),
+        (
+            ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION,
+            ActionId.REVIEW_RECONCILE_RUN,
+        ),
+        (ServiceIdentity.REVIEW_RECONCILIATION, ActionId.REVIEW_RECONCILE_RUN),
+        (
+            ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION,
+            ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE,
+        ),
+        (ServiceIdentity.REVIEW_PROJECTION, ActionId.REVIEW_PROJECTION_REBUILD),
+    )
+)
+
 
 def _index_service_actions(
     rows: dict[ServiceIdentity, frozenset[ActionId]],
 ) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
-    """Validate the exact fixed service matrix and return an immutable view."""
-    expected_rows = {
-        ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
-        ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
-        ServiceIdentity.ARTIFACT_SCHEDULER: frozenset({ActionId.ARTIFACT_PENDING_WORK_SCAN}),
-        ServiceIdentity.ARTIFACT_BINDING: frozenset(
-            {
-                ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-                ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
-                ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
-                ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
-            }
-        ),
-        ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset({ActionId.ARTIFACT_GUIDE_SOURCE_READ}),
-        ServiceIdentity.ARTIFACT_MATERIALIZER: frozenset(
-            {
-                ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-                ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-                ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
-            }
-        ),
-        ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
-            {ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}
-        ),
-        ServiceIdentity.PROJECT_SETUP: frozenset(
-            {
-                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
-                ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
-                ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
-                ActionId.PROJECT_SETUP_RUN_UPDATE,
-            }
-        ),
-        ServiceIdentity.REVIEW_PREFERENCE_EXPIRY: frozenset(
-            {ActionId.REVIEW_PREFERENCE_EXPIRY_RUN}
-        ),
-        ServiceIdentity.REVIEW_LEASE_EXPIRY: frozenset({ActionId.REVIEW_LEASE_EXPIRY_RUN}),
-        ServiceIdentity.REVIEW_AUTHORITY_INVALIDATION_RECONCILIATION: frozenset(
-            {ActionId.REVIEW_RECONCILE_RUN}
-        ),
-        ServiceIdentity.REVIEW_RECONCILIATION: frozenset({ActionId.REVIEW_RECONCILE_RUN}),
-        ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION: frozenset(
-            {ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE}
-        ),
-        ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
-    }
     expected_metadata = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
             PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -1025,6 +1041,10 @@ def _index_service_actions(
             PermissionId.PROJECT_GUIDE_MANAGE,
             ActionOwner.AUTH_12E,
         ),
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE: (
+            PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
+            ActionOwner.AUTH_12I,
+        ),
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
             ActionOwner.AUTH_12F3,
@@ -1060,7 +1080,7 @@ def _index_service_actions(
     }
     if set(rows) != SERVICE_IDENTITIES:
         raise RuntimeError("service action matrix identity mismatch")
-    if rows != expected_rows:
+    if frozenset((i, a) for i, actions in rows.items() for a in actions) != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS:
         raise RuntimeError("service action matrix row mismatch")
     if not FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
         action for actions in rows.values() for action in actions
@@ -1079,6 +1099,7 @@ def _index_service_actions(
                 ActionId.ARTIFACT_GUIDE_SOURCE_READ,
                 ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+                ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
                 ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
             }
             else ActionAvailability.PLANNED

@@ -714,8 +714,9 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 100 ActionIds, 48 active actions, and
-52 planned actions. AUTH-11C2 activates three current effective-policy and
+Catalogue totals are 73 PermissionIds, 102 ActionIds, 54 active actions, and
+48 planned actions. AUTH-12I adds and activates only the unified compilation
+request/execute pair. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
 route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
 activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
@@ -749,8 +750,9 @@ actions. Planned actions can record bounded denial evidence but cannot record an
 allowed decision through the typed writer.
 
 The historical permission set remains exactly 49 values. The post-`0020` set
-contains exactly 27 values, including `review.queue.override`,
-`project.setup_diagnostic.read`, and `project.effective_policy.read`; do not derive
+contains exactly 24 values, including `review.queue.override`, the two
+compilation permissions, `project.setup_diagnostic.read`, and
+`project.effective_policy.read`; do not derive
 historical status from identifier prefixes. All submission/review rows remain
 planned. Initial and revision submission share `submission.create`, and no
 revision-specific permission or preparation action exists.
@@ -895,7 +897,7 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has fourteen fixed-service identities and twenty-two
+The closed registry now has fourteen fixed-service identities and twenty-three
 matrix memberships: seven ART identities, project setup, and six exact REV
 identities. Missing provisioned rows deny without stopping the application.
 The REV actions remain unavailable, so registry membership alone grants no
@@ -903,12 +905,14 @@ authority. Do not create a shared review service or a database service-grant
 table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
-`workstream.project.setup`, with exactly four static memberships:
+`workstream.project.setup`, now with exactly five static memberships:
 `project.guide_sufficiency.run`,
+`project.guide_compilation.execute`,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
-AUTH-12E activates `project.guide_sufficiency.run`, and AUTH-12F3 activates
-`project.submission_artifact_policy.derive`; the other two memberships remain
+AUTH-12E activates `project.guide_sufficiency.run`, AUTH-12F3 activates
+`project.submission_artifact_policy.derive`, and AUTH-12I activates
+`project.guide_compilation.execute`; the remaining two memberships remain
 planned and unavailable. Each active action can be resolved
 for this fixed service only by an internal command carrying exact setup-run,
 expected-step, task/correlation, project, guide, snapshot, generation, stale
@@ -1375,6 +1379,13 @@ manual human create/update. Each update appends a separately authorized
 successor and supersedes its exact hash-selected predecessor atomically. 12F3
 activates derive only for the fixed `workstream.project.setup` service; approve
 remains planned. Operators must not treat the shared schema as wider activation.
+
+Migration `0063_compilation_authority` admits the request action, permission,
+and resource while preserving the earlier execute vocabulary. Empty downgrade
+to `0062_guide_compilation` is supported, but any allowed or denied audit
+evidence for either compilation action intentionally blocks downgrade. Do not
+delete authority evidence to force rollback; retain revision 0063 or apply an
+explicitly reviewed evidence-retention migration.
 
 ## Draft review and revision policy authorization
 

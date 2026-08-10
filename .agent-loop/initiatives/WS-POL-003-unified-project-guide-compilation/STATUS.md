@@ -29,8 +29,8 @@ determine transient implementation ownership.
 | Canonical CHECKER/POL post-submit registry | POL-01 | Present; remaining POL-002 work must be reframed as executor ownership, not inference |
 | POL-01 strict manifest | POL-02 | Merged PR #299 |
 | POL-02 adapter | POL-03A | Merged PR #301 |
-| Hidden POL-03A compilation custody | AUTH-12I compilation request/execute activation | POL-03A merged PR #307; AUTH-12I not implemented |
-| AUTH-12I | POL-03B authorized persistence | Not yet implemented |
+| Hidden POL-03A compilation custody | AUTH-12I compilation request/execute activation | POL-03A merged PR #307; AUTH-12I implemented pending review |
+| AUTH-12I | POL-03B authorized persistence | Implemented pending review; not merged |
 | Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | Not yet implemented |
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
@@ -46,6 +46,6 @@ explicit allowed/not-allowed paths, runnable verification commands, and named
 reviewer tracks. They cannot authorize implementation in their current form.
 
 `WS-POL-003-03A` merged through PR #307 at `5e459a8f`. It installs hidden
-compilation custody and the first public AUTH-capability consumer proof without
-activating request/execute authority. AUTH-12I is the next dependency gate;
-later chunks and AUTH gates remain planned and inactive.
+compilation custody and the first public AUTH-capability consumer proof. AUTH-12I
+now implements the exact request/execute activation on its review branch; POL-03B
+remains blocked until that activation is reviewed and merged.

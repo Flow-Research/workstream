@@ -83,6 +83,16 @@ POL_03A_CALLABLE_TARGETS = frozenset(
 POL_03A_DECLARATIVE_MODEL_TARGET = (
     "backend/app/modules/projects/guide_compilation/models.py"
 )
+AUTH_12I_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/domain/audit.py",
+        "backend/app/modules/authorization/domain/guide_compilation.py",
+        "backend/app/modules/authorization/domain/prepared_compilation.py",
+        "backend/app/modules/authorization/domain/prepared_service.py",
+        "backend/app/modules/authorization/domain/project_create.py",
+        "backend/app/modules/authorization/guide_compilation.py",
+    }
+)
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -223,7 +233,9 @@ def _validate_additive_partition_transition(
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
-    approved_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS
+    approved_additions = (
+        AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS | AUTH_12I_TARGETS
+    )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:
         expected_additions = expected_additions | {POL_03A_DECLARATIVE_MODEL_TARGET}

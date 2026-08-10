@@ -163,6 +163,8 @@ project.effective_policy.read
 project.update
 project.archive
 project.guide.manage
+project.guide_compilation.request
+project.guide_compilation.execute
 project.effective_policy.manage
 project.task.manage
 project.review_policy.manage
@@ -236,12 +238,13 @@ registration, hidden ART behavior/resource composition, then dedicated AUTH
 evaluator integration and activation. ART never writes availability. AUTH-12,
 AUTH-14, and AUTH-15 are not alternate artifact activation paths.
 
-These are 71 approved `PermissionId` values. `ActionId` values are a separate
+These are 73 approved `PermissionId` values. `ActionId` values are a separate
 closed registry layer and are not included in that permission count. AUTH-05A's
 typed and PostgreSQL audit registry accepts the exact historical 49. The three
 approved Operator recovery identifiers, 16 artifact identifiers,
 `review.queue.override`, and the two AUTH-11A read-only project inspection
-permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
+permissions plus the two compilation permissions are the exact 24 post-`0020`
+permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
@@ -250,8 +253,9 @@ and 41 planned rows before AUTH-12A. AUTH-12A added eighteen planned
 project-mutation rows, producing the historical 96-row state of 37 active and
 59 planned. Later project-mutation and ART activation chunks advanced the
 pre-02C state to 45 active and 51 planned. WS-XINT-003-02C adds four planned
-REV rows, and AUTH-12E activates three existing rows, producing the current
-100-row state of 48 active and 52 planned.
+REV rows. Subsequent approved activations advanced the pre-12I catalogue to 52
+active and 48 planned rows. AUTH-12I adds and activates the two compilation
+request/execute rows, producing 102 rows: 54 active and 48 planned.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -540,7 +544,7 @@ closed:
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
-| `workstream.project.setup` | `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
+| `workstream.project.setup` | `project.guide_compilation.execute`, `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
 | `workstream.review.preference_expiry` | `review.preference_expiry.run` |
 | `workstream.review.lease_expiry` | `review.lease_expiry.run` |
 | `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` |
@@ -562,10 +566,11 @@ facts because `TaskAssignment` uses a new immutable ID for replacement rather
 than a separate generation counter.
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
-02C expands the current registry to fourteen identities. AUTH-12E activates only
-`project.guide_sufficiency.run` for the exact internal setup-service command;
-the other three project-setup actions and all six REV rows remain planned and
-unavailable. Registration makes the
+02C expands the current registry to fourteen identities. AUTH-12E activates
+`project.guide_sufficiency.run`, AUTH-12F3 activates policy derivation, and
+AUTH-12I activates exact unified compilation execution; the remaining two
+project-setup actions and all six REV rows remain planned and unavailable.
+Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
 itself; migration `0043_project_setup_service` only expands the closed database
@@ -1082,6 +1087,19 @@ outside any prepared handle; persistence obtains fresh authority. The fixed
 `workstream.project.setup` service may resolve only the run action internally
 with exact setup custody and no matched human grant.
 
+Unified guide compilation separates human dispatch from provider execution.
+`project.guide_compilation.request` requires a current exact-project Project
+Manager grant; system-scoped grants do not substitute. Transaction-bound PREP
+binds the actor, identity link, matched grant, immutable guide/setup lineage,
+catalogue manifests, agent/instruction versions, and operation/request facts.
+`project.guide_compilation.execute` belongs only to `workstream.project.setup`.
+Its pre-provider check validates the complete typed attempt and provider key
+without issuing a handle or writing allowed evidence. After provider I/O, fresh
+PREP recomputes and verifies the complete result/component digest and commits
+its allowed event only with POL-03B's immutable result transition. AUTH-12I
+activates these authority boundaries only; it exposes no route, dispatches no
+execution task, calls no provider, and does not make the hidden POL workflow live.
+
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
@@ -1092,6 +1110,8 @@ with exact setup custody and no matched human grant.
 | `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_compilation.request` (active) | `project.guide_compilation.request` | `WS-AUTH-001-12I` |
+| `project.guide_compilation.execute` (active) | `project.guide_compilation.execute` | `WS-AUTH-001-12I` |
 | `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.submission_artifact_policy.create` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
 | `project.submission_artifact_policy.derive` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |

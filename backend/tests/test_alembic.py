@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0062_guide_compilation"
+HEAD_REVISION = "0063_compilation_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -14050,15 +14050,12 @@ async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[st
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
-            has_lineage = bool(
-                await connection.scalar(
-                    text(
-                        "select exists(select 1 from information_schema.columns "
-                        "where table_schema='public' and table_name='project_guides' "
-                        "and column_name='selected_review_policy_id')"
-                    )
-                )
+            lineage_query = text(
+                "select exists(select 1 from information_schema.columns "
+                "where table_schema='public' and table_name='project_guides' "
+                "and column_name='selected_review_policy_id')"
             )
+            has_lineage = bool(await connection.scalar(lineage_query))
             for table in (
                 "projects",
                 "project_guides",
