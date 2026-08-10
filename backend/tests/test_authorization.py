@@ -13362,7 +13362,6 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         with pytest.raises(asyncio.CancelledError):
             await wait_task
         await locker.rollback()
-
         retry_reservation = await ProjectRoleGrantMutationService(waiter).reserve(
             key=waiting_key,
             actor_profile_id=caller_id,
