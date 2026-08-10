@@ -48,6 +48,7 @@ backend/app/modules/tasks/service.py
 backend/tests/architecture/test_module_boundaries.py
 backend/tests/test_tasks.py
 backend/tests/test_submission_bundle_admission.py
+backend/scripts/behavior_ownership.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02A-task-submission-context-api.md

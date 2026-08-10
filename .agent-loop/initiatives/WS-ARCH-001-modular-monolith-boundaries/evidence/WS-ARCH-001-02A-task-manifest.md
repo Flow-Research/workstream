@@ -46,7 +46,9 @@ version, and contributor; every crossed state fails closed.
 
 This chunk adds no cross-module edge and changes no live route, schema,
 Submission persistence, authorization availability, or ART behavior. The
-legacy mixed `tasks.pre_submit_context` path remains frozen until 02B and 02C
+new eligible TASK public implementation is registered in the existing
+behavior-ownership lifecycle partition and its additive-transition allowlist.
+The legacy mixed `tasks.pre_submit_context` path remains frozen until 02B and 02C
 provide the PROJECT and CHECKER public capabilities; 02D then migrates ART
 consumers and removes the relevant private TASK edges. Unrelated frozen TASK
 debt is unchanged.
