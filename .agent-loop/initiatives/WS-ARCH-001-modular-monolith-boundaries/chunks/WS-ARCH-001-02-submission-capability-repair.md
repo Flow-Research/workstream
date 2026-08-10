@@ -1,21 +1,20 @@
-# Chunk Contract: WS-ARCH-001-02 Submission Capability Repair
+# Chunk Contract: WS-ARCH-001-02 — Submission Capability Repair Coordination
 
-Status: Proposed after 01 and XINT-05A contract reconciliation. Risk: L1.
+Status: Split coordination record; non-executable. Risk: L1.
 
 ## Goal
 
-Provide the exact AUTH, ART, and TASK public capabilities needed for hidden
-submission preparation and atomic ready-admission consumption while preserving
-module ownership and reducing the touched private-import ledger.
+Coordinate the exact owner capabilities needed for hidden submission
+preparation and atomic ready-admission consumption while preserving module
+ownership and reducing the touched private-import ledger.
 
 ## Required split before implementation
 
-This coordination contract must be split into reviewable PR contracts for:
-
-1. AUTH public preparation capability and production activation;
-2. ART ready-admission/binding public API and private-edge migration;
-3. TASK immutable Submission command and composed atomic transaction;
-4. live API cutover and legacy-path removal.
+This coordination contract is split into executable 02A-02I contracts for
+TASKS facts, PROJECTS locked-policy facts, CHECKERS plan/bounded-result facts, ART
+preparation, AUTH preparation activation, ART consumption/binding, TASK
+Submission composition, AUTH consumption activation, and the final live clean
+cut.
 
 No split may activate behavior whose required public capability is absent.
 
@@ -24,6 +23,9 @@ No split may activate behavior whose required public capability is absent.
 - AUTH owns authority facts, opaque handles, decisions and evidence.
 - ART owns admission locks, compatibility/staleness, consumption and bindings.
 - TASKS owns task/assignment/predecessor facts and immutable Submission.
+- PROJECTS owns locked guide and project-policy lineage.
+- CHECKERS owns effective pre-submit plan and bounded execution-result facts;
+  ART owns durable evidence identity and persistence.
 - The application composition root opens the SQLAlchemy transaction/unit of
   work and constructs transaction-bound AUTH, ART, and TASK public-port
   implementations. The TASK-owned application command coordinates those ports
@@ -37,6 +39,8 @@ No split may activate behavior whose required public capability is absent.
 - Either module importing AUTH outside `authorization.api`.
 - New ledger edges, compatibility facades, dual paths, or migration-number
   assumptions before rebase.
+- Implementation under this parent record. Only 02A-02I authorize bounded work
+  after their entry gates and human approval.
 
 ## Acceptance criteria
 

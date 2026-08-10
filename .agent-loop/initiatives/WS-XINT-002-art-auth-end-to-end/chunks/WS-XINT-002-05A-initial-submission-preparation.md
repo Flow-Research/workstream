@@ -1,7 +1,9 @@
 # Chunk Contract: WS-XINT-002-05A Initial Submission Preparation
 
-Status: Requires modular-boundary reconciliation under WS-ARCH-001-02 before
-implementation. This existing file is not executable authority.
+Status: Superseded/non-executable historical coordination evidence. The
+replacement sequence is WS-ARCH-001-02A through 02I; preparation activation is
+owned only by 02G after the TASK, PROJECT, CHECKER, ART, and hidden composition
+prerequisites through 02F merge.
 
 Entry gate: merged `WS-XINT-002-06A` pre-submit materializer activation,
 complete hidden ART-04A1 through ART-04C2 evidence, and merged
@@ -19,10 +21,8 @@ L1.
 
 ## Allowed files
 
-None until WS-ARCH-001-02 replaces this file with an exact split contract.
-The replacement must use `authorization.api`, `artifacts.api`, and `tasks.api`
-for cross-module imports and name exact capability-owned internal files and
-composition-root wiring.
+None. Use the reviewed WS-ARCH-001-02A through 02I contracts. This file never
+authorizes implementation.
 
 ## Not allowed
 

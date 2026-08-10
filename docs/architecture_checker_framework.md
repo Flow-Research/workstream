@@ -270,9 +270,10 @@ contributor pipeline. Tasks lock references to the shared project's compiled che
 bundle hash. It runs inside continuous submission-bundle preparation before
 Workstream creates a submission. Failures return the bounded same-request code
 `pre_submission_checker_failed` with status, eligibility, and structured
-pass/fail/warning details. Until ART-05B, the old standalone preflight route is
+pass/fail/warning details. Until deferred WS-ARCH-001-02I, the old standalone preflight route is
 frozen legacy behavior and is not an authoritative result for the new path.
-ART-05B removes it completely; this result is not a review decision value.
+WS-ARCH-001-02I removes it completely after every submission context and
+downstream prerequisite is live; this result is not a review decision value.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.

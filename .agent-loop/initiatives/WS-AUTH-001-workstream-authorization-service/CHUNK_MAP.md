@@ -94,8 +94,8 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
 | `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | Merged through PR #293; ART-04C1 is its next ART consumer |
-| `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A1-04C2 hidden behavior and 06A |
-| `WS-XINT-002-05B` | Submission Binding Activation | L1 | Feature-gated on hidden ART-05A |
+| `WS-XINT-002-05A` | Historical Submission Bundle Preparation Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02G requires 02A-02F |
+| `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H requires hidden 02F transaction and 02G |
 | `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on POL-06B/07 unified plan plus ART-06A/06B evidence |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |
