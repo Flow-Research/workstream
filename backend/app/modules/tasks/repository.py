@@ -4,12 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.audit.repository import AuditRepository
+from app.modules.tasks.api import (
+    SubmissionPredecessorFacts,
+    TaskLockedProjectContextReferences,
+    TaskSubmissionContextFacts,
+    TaskSubmissionContextRequest,
+    TaskSubmissionContextUnavailable,
+)
 from app.modules.tasks.models import (
     AuditEvent,
     EvidenceItem,
@@ -107,6 +115,102 @@ class TaskRepository:
         )
         return result.scalar_one_or_none()
 
+    async def lock_submission_context(
+        self,
+        request: TaskSubmissionContextRequest,
+    ) -> TaskSubmissionContextFacts:
+        """Lock and project exact TASK-owned Submission lifecycle facts."""
+        task = await self.get_task(str(request.task_id), for_update=True)
+        assignment = await self._session.scalar(
+            select(TaskAssignment)
+            .where(TaskAssignment.id == str(request.assignment_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        latest_submission = await self.get_latest_submission_for_task(
+            str(request.task_id),
+            for_update=True,
+            populate_existing=True,
+        )
+        contributor_id = str(request.contributor_id)
+        if (
+            task is None
+            or assignment is None
+            or assignment.task_id != str(request.task_id)
+            or assignment.contributor_id != contributor_id
+            or assignment.status != "active"
+            or task.assigned_to != contributor_id
+            or task.status not in {"in_progress", "needs_revision"}
+        ):
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+
+        latest_id = latest_submission.id if latest_submission is not None else None
+        requested_predecessor_id = (
+            str(request.predecessor_submission_id)
+            if request.predecessor_submission_id is not None
+            else None
+        )
+        if latest_id != requested_predecessor_id:
+            raise TaskSubmissionContextUnavailable("task_submission_predecessor_changed")
+        if (
+            (task.status == "in_progress" and latest_submission is not None)
+            or (task.status == "needs_revision" and latest_submission is None)
+            or (
+                latest_submission is not None
+                and latest_submission.contributor_id != contributor_id
+            )
+        ):
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+
+        locked_values = (
+            task.project_id,
+            task.locked_guide_version,
+            task.locked_guide_source_snapshot_id,
+            task.locked_guide_source_snapshot_hash,
+            task.locked_effective_project_submission_artifact_policy_id,
+            task.locked_effective_project_submission_artifact_policy_hash,
+            task.locked_pre_submit_checker_policy_id,
+            task.locked_pre_submit_checker_bundle_hash,
+        )
+        if any(value is None for value in locked_values):
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        try:
+            locked_project_context = TaskLockedProjectContextReferences(
+                project_id=UUID(task.project_id),
+                guide_version=task.locked_guide_version,
+                source_snapshot_id=UUID(task.locked_guide_source_snapshot_id),
+                source_snapshot_hash=task.locked_guide_source_snapshot_hash,
+                effective_policy_id=UUID(
+                    task.locked_effective_project_submission_artifact_policy_id
+                ),
+                effective_policy_hash=(
+                    task.locked_effective_project_submission_artifact_policy_hash
+                ),
+                pre_submit_policy_id=UUID(task.locked_pre_submit_checker_policy_id),
+                pre_submit_policy_bundle_hash=task.locked_pre_submit_checker_bundle_hash,
+            )
+            predecessor = (
+                SubmissionPredecessorFacts(
+                    submission_id=UUID(latest_submission.id),
+                    version=latest_submission.version,
+                )
+                if latest_submission is not None
+                else None
+            )
+            return TaskSubmissionContextFacts(
+                task_id=request.task_id,
+                assignment_id=request.assignment_id,
+                contributor_id=request.contributor_id,
+                status=task.status,
+                kind="revision" if predecessor is not None else "initial",
+                predecessor=predecessor,
+                locked_project_context=locked_project_context,
+            )
+        except (TypeError, ValueError) as exc:
+            raise TaskSubmissionContextUnavailable(
+                "task_submission_context_invalid"
+            ) from exc
+
     async def add_submission(self, submission: Submission) -> Submission:
         """Persist a submission packet and its evidence items.
 
@@ -147,7 +251,13 @@ class TaskRepository:
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def get_latest_submission_for_task(self, task_id: str) -> Submission | None:
+    async def get_latest_submission_for_task(
+        self,
+        task_id: str,
+        *,
+        for_update: bool = False,
+        populate_existing: bool = False,
+    ) -> Submission | None:
         """Load the latest submission version for a task.
 
         Args:
@@ -156,12 +266,17 @@ class TaskRepository:
         Returns:
             Latest submission by version when present; otherwise ``None``.
         """
-        result = await self._session.execute(
+        statement = (
             select(Submission)
             .where(Submission.task_id == task_id)
             .order_by(Submission.version.desc(), Submission.submitted_at.desc())
             .limit(1)
         )
+        if for_update:
+            statement = statement.with_for_update()
+        if populate_existing:
+            statement = statement.execution_options(populate_existing=True)
+        result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
     async def list_submissions_for_task(self, task_id: str) -> Sequence[Submission]:
