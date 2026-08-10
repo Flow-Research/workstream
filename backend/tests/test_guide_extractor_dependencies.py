@@ -22,6 +22,16 @@ def _manifest() -> dict[str, object]:
     return data
 
 
+def _dependency(data: dict[str, object], name: str) -> dict[str, object]:
+    dependencies = data["dependencies"]
+    assert isinstance(dependencies, list)
+    return next(
+        dependency
+        for dependency in dependencies
+        if isinstance(dependency, dict) and dependency.get("name", "").casefold() == name.casefold()
+    )
+
+
 def _review(
     login: str = "maintainer",
     *,
@@ -64,51 +74,59 @@ def test_unreadable_allowlist_fails_closed(tmp_path: Path) -> None:
     ("mutation", "failure"),
     [
         (
-            lambda data: data["dependencies"][0].update(version=">=6"),
+            lambda data: _dependency(data, "pypdf").update(version=">=6"),
             "guide_dependency_version_unpinned",
         ),
         (
-            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(sha256="0" * 63),
+            lambda data: _dependency(data, "pypdf")["approved_artifacts"][0].update(
+                sha256="0" * 63
+            ),
             "guide_dependency_artifact_hash_invalid",
         ),
         (
-            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(sha256=None),
+            lambda data: _dependency(data, "pypdf")["approved_artifacts"][0].update(sha256=None),
             "guide_dependency_artifact_hash_invalid",
         ),
         (
-            lambda data: data["dependencies"][0]["maintenance"].update(release_uploaded_at=None),
+            lambda data: _dependency(data, "pypdf")["maintenance"].update(release_uploaded_at=None),
             "guide_dependency_release_timestamp_invalid",
         ),
         (
-            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(
+            lambda data: _dependency(data, "pypdf")["approved_artifacts"][0].update(
                 filename="other-6.14.2-py3-none-any.whl"
             ),
             "guide_dependency_artifact_identity_mismatch",
         ),
         (
-            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(
+            lambda data: _dependency(data, "pypdf")["approved_artifacts"][0].update(
                 filename="pypdf-6.13.0-py3-none-any.whl"
             ),
             "guide_dependency_artifact_identity_mismatch",
         ),
         (
-            lambda data: data["dependencies"][2]["approved_artifacts"][0].update(
+            lambda data: _dependency(data, "pillow")["approved_artifacts"][0].update(
                 python_version="3.13"
             ),
             "guide_dependency_artifact_platform_mismatch",
         ),
         (
-            lambda data: data["dependencies"][0]["approved_artifacts"][0].update(
+            lambda data: _dependency(data, "pillow")["approved_artifacts"][0].update(
+                machine="riscv64"
+            ),
+            "guide_dependency_artifact_platform_mismatch",
+        ),
+        (
+            lambda data: _dependency(data, "pypdf")["approved_artifacts"][0].update(
                 url="https://example.invalid/pypdf.whl"
             ),
             "guide_dependency_artifact_url_invalid",
         ),
         (
-            lambda data: data["dependencies"][0].update(format_scopes=["submission_zip"]),
+            lambda data: _dependency(data, "pypdf").update(format_scopes=["submission_zip"]),
             "guide_dependency_scope_unknown",
         ),
         (
-            lambda data: data["dependencies"][0].update(source_index="https://example.invalid"),
+            lambda data: _dependency(data, "pypdf").update(source_index="https://example.invalid"),
             "guide_dependency_source_index_invalid",
         ),
         (
@@ -124,6 +142,53 @@ def test_manifest_rejects_unpinned_hash_drifted_or_wrong_scope_entries(
     mutation(data)  # type: ignore[operator]
 
     with pytest.raises(gate.DependencyGateError, match=failure):
+        gate.validate_manifest(data)
+
+
+def test_native_artifacts_cover_every_approved_python_and_machine() -> None:
+    data = copy.deepcopy(_manifest())
+    pillow = _dependency(data, "pillow")
+    artifacts = pillow["approved_artifacts"]
+    assert isinstance(artifacts, list)
+    artifacts.pop()
+
+    with pytest.raises(
+        gate.DependencyGateError,
+        match="guide_dependency_artifact_platform_coverage_incomplete",
+    ):
+        gate.validate_manifest(data)
+
+
+def test_native_artifact_rejects_a_wheel_with_a_higher_glibc_floor() -> None:
+    data = copy.deepcopy(_manifest())
+    pillow = _dependency(data, "pillow")
+    artifact = pillow["approved_artifacts"][0]
+    filename = artifact["filename"].replace("manylinux_2_27", "manylinux_2_39")
+    artifact["filename"] = filename
+    artifact["url"] = artifact["url"].rsplit("/", 1)[0] + f"/{filename}"
+
+    with pytest.raises(
+        gate.DependencyGateError,
+        match="guide_dependency_artifact_platform_mismatch",
+    ):
+        gate.validate_manifest(data)
+
+
+def test_native_artifacts_reject_an_extra_platform_artifact() -> None:
+    data = copy.deepcopy(_manifest())
+    pillow = _dependency(data, "pillow")
+    artifacts = pillow["approved_artifacts"]
+    assert isinstance(artifacts, list)
+    extra_artifact = copy.deepcopy(artifacts[0])
+    filename = extra_artifact["filename"].replace("-cp311-", "-1-cp311-")
+    extra_artifact["filename"] = filename
+    extra_artifact["url"] = extra_artifact["url"].rsplit("/", 1)[0] + f"/{filename}"
+    artifacts.append(extra_artifact)
+
+    with pytest.raises(
+        gate.DependencyGateError,
+        match="guide_dependency_artifact_platform_coverage_incomplete",
+    ):
         gate.validate_manifest(data)
 
 
@@ -157,11 +222,13 @@ def test_approved_conditional_wheel_requirements_are_valid_pep508() -> None:
     allowlist = gate.validate_manifest(_manifest())
     requirements = gate._approved_requirements(allowlist["pillow"])
 
-    assert len(requirements) == 2
+    assert len(requirements) == 4
     parsed = [Requirement(requirement) for requirement in requirements]
     assert {str(requirement.marker) for requirement in parsed} == {
-        'python_version == "3.11"',
-        'python_version == "3.12"',
+        'python_version == "3.11" and sys_platform == "linux" and platform_machine == "aarch64" and platform_python_implementation == "CPython"',
+        'python_version == "3.11" and sys_platform == "linux" and platform_machine == "x86_64" and platform_python_implementation == "CPython"',
+        'python_version == "3.12" and sys_platform == "linux" and platform_machine == "aarch64" and platform_python_implementation == "CPython"',
+        'python_version == "3.12" and sys_platform == "linux" and platform_machine == "x86_64" and platform_python_implementation == "CPython"',
     }
 
 
@@ -188,9 +255,11 @@ def test_native_parser_rejects_project_python_outside_approved_wheels(
     "facts,failure",
     [
         ({"python_version": (3, 13)}, "guide_dependency_runtime_python_unsupported"),
+        ({"implementation": "PyPy"}, "guide_dependency_runtime_platform_unsupported"),
         ({"system": "Darwin"}, "guide_dependency_runtime_platform_unsupported"),
-        ({"machine": "aarch64"}, "guide_dependency_runtime_platform_unsupported"),
+        ({"machine": "riscv64"}, "guide_dependency_runtime_platform_unsupported"),
         ({"libc": "musl"}, "guide_dependency_runtime_platform_unsupported"),
+        ({"libc_version": "2.26"}, "guide_dependency_runtime_platform_unsupported"),
     ],
 )
 def test_native_parser_runtime_fails_outside_approved_wheel_platform(
@@ -198,18 +267,36 @@ def test_native_parser_runtime_fails_outside_approved_wheel_platform(
 ) -> None:
     runtime = {
         "python_version": (3, 12),
+        "implementation": "CPython",
         "system": "Linux",
         "machine": "x86_64",
         "libc": "glibc",
+        "libc_version": "2.36",
     }
     runtime.update(facts)
     with pytest.raises(gate.DependencyGateError, match=failure):
         gate.validate_runtime_platform(**runtime)  # type: ignore[arg-type]
 
 
-def test_approved_native_runtime_platform_passes() -> None:
+@pytest.mark.parametrize(
+    ("python_version", "machine"),
+    [
+        ((3, 11), "aarch64"),
+        ((3, 11), "x86_64"),
+        ((3, 12), "aarch64"),
+        ((3, 12), "x86_64"),
+    ],
+)
+def test_approved_native_runtime_platform_passes(
+    python_version: tuple[int, int], machine: str
+) -> None:
     gate.validate_runtime_platform(
-        python_version=(3, 12), system="Linux", machine="x86_64", libc="glibc"
+        python_version=python_version,
+        implementation="CPython",
+        system="Linux",
+        machine=machine,
+        libc="glibc",
+        libc_version="2.36",
     )
 
 

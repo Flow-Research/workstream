@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
+
+# Workstream's approved Pillow artifacts and extractor isolation contract require
+# CPython 3.11/3.12 on Linux glibc. This digest-pinned multi-architecture image
+# selects native x86_64 or aarch64 so the inner seccomp filter is not emulated.
+FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc \
+    /uv /uvx /bin/
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    OPENSSL_armcap=0 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_HTTP_TIMEOUT=120 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never
+
+# Docker Desktop ARM VMs can advertise OpenSSL acceleration capabilities that
+# still SIGILL when PyCA's bundled OpenSSL dispatches to them. The generic
+# implementation is slower but deterministic and sufficient for local dev.
+
+# The extractor's inner seccomp filter is not valid evidence under CPU
+# emulation. BuildKit exposes both values; fail before installing dependencies
+# when a host default or explicit flag requests a foreign target architecture.
+RUN if [ -z "$BUILDPLATFORM" ] || [ "$BUILDPLATFORM" != "$TARGETPLATFORM" ]; then \
+        echo "Workstream backend builds require native Docker architecture." >&2; \
+        exit 1; \
+    fi
+
+RUN groupadd --gid 1000 workstream \
+    && useradd --uid 1000 --gid workstream --create-home --shell /bin/bash workstream
+
+WORKDIR /workspace/backend
+
+COPY backend/ ./
+
+# Install the committed resolution into a virtual environment outside the
+# bind-mounted source tree. The pyproject and lock bind parser dependencies to
+# their approved hash-addressed wheels.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --extra dev \
+    && python scripts/check_guide_extractor_dependencies.py \
+    && chown -R workstream:workstream /workspace /opt/venv
+
+USER workstream
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

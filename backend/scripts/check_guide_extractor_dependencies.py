@@ -26,6 +26,12 @@ ALLOWLIST_REPOSITORY_PATH = ALLOWLIST_PATH.relative_to(REPOSITORY_ROOT).as_posix
 APPROVED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 APPROVED_SCOPES = frozenset({"pdf", "ooxml", "image_metadata"})
 APPROVED_NATIVE_PYTHON_RANGE = ">=3.11,<3.13"
+APPROVED_NATIVE_MACHINES = frozenset({"aarch64", "x86_64"})
+APPROVED_RUNTIME_PLATFORMS = [
+    {"libc": "glibc>=2.27", "machine": "aarch64", "system": "Linux"},
+    {"libc": "glibc>=2.27", "machine": "x86_64", "system": "Linux"},
+]
+MINIMUM_GLIBC_VERSION = (2, 27)
 STATE_BEARING_REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
 PARSER_MODULES = (
     "guide_pdf.py",
@@ -106,7 +112,7 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         },
         "guide_dependency_allowlist_top_level_shape_invalid",
     )
-    require(data["schema_version"] == 1, "guide_dependency_allowlist_schema_unsupported")
+    require(data["schema_version"] == 2, "guide_dependency_allowlist_schema_unsupported")
 
     advisory = _object(data["advisory_snapshot"], "guide_dependency_advisory_invalid")
     require(
@@ -133,7 +139,7 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         == {
             "allow_source_distributions",
             "approved_python_versions",
-            "approved_runtime_platform",
+            "approved_runtime_platforms",
             "index",
             "require_hashes",
         },
@@ -147,7 +153,7 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "guide_dependency_python_versions_invalid",
     )
     require(
-        policy["approved_runtime_platform"] == "manylinux x86_64",
+        policy["approved_runtime_platforms"] == APPROVED_RUNTIME_PLATFORMS,
         "guide_dependency_platform_invalid",
     )
     prohibited_packages = _string_list(
@@ -250,11 +256,12 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
         artifacts = entry["approved_artifacts"]
         require(isinstance(artifacts, list) and artifacts, "guide_dependency_artifacts_missing")
         filenames: set[str] = set()
+        native_platforms: set[tuple[str, str]] = set()
         for artifact_value in artifacts:
             artifact = _object(artifact_value, "guide_dependency_artifact_invalid")
             expected_artifact_keys = {"filename", "sha256", "url"}
             if entry["native_code"]:
-                expected_artifact_keys.add("python_version")
+                expected_artifact_keys.update({"machine", "python_version"})
             require(
                 set(artifact) == expected_artifact_keys, "guide_dependency_artifact_shape_invalid"
             )
@@ -282,19 +289,37 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 python_version = _string(
                     artifact["python_version"], "guide_dependency_artifact_python_invalid"
                 )
+                machine = _string(
+                    artifact["machine"], "guide_dependency_artifact_platform_mismatch"
+                )
                 compact_python = python_version.replace(".", "")
+                expected_wheel_suffix = (
+                    f"-cp{compact_python}-cp{compact_python}-"
+                    f"manylinux_2_27_{machine}.manylinux_2_28_{machine}.whl"
+                )
                 require(
                     python_version in policy["approved_python_versions"]
-                    and f"-cp{compact_python}-cp{compact_python}-" in filename
-                    and "manylinux" in filename
-                    and filename.endswith("x86_64.whl"),
+                    and machine in APPROVED_NATIVE_MACHINES
+                    and filename.endswith(expected_wheel_suffix),
                     "guide_dependency_artifact_platform_mismatch",
                 )
+                native_platforms.add((python_version, machine))
             else:
                 require(
                     filename.endswith("-none-any.whl"),
                     "guide_dependency_artifact_platform_mismatch",
                 )
+        if entry["native_code"]:
+            expected_native_platforms = {
+                (python_version, machine)
+                for python_version in policy["approved_python_versions"]
+                for machine in APPROVED_NATIVE_MACHINES
+            }
+            require(
+                native_platforms == expected_native_platforms
+                and len(artifacts) == len(expected_native_platforms),
+                "guide_dependency_artifact_platform_coverage_incomplete",
+            )
         by_name[canonical_name] = entry
 
     require(observed_scopes == APPROVED_SCOPES, "guide_dependency_scope_incomplete")
@@ -315,7 +340,12 @@ def _approved_requirements(entry: dict[str, Any]) -> set[str]:
     for artifact in entry["approved_artifacts"]:
         requirement = f"{entry['name']} @ {artifact['url']}#sha256={artifact['sha256']}"
         if python_version := artifact.get("python_version"):
-            requirement += f' ; python_version == "{python_version}"'
+            requirement += (
+                f' ; python_version == "{python_version}"'
+                ' and sys_platform == "linux"'
+                f' and platform_machine == "{artifact["machine"]}"'
+                ' and platform_python_implementation == "CPython"'
+            )
         requirements.add(requirement)
     return requirements
 
@@ -370,23 +400,35 @@ def validate_declared_dependencies(
 def validate_runtime_platform(
     *,
     python_version: tuple[int, int] | None = None,
+    implementation: str | None = None,
     system: str | None = None,
     machine: str | None = None,
     libc: str | None = None,
+    libc_version: str | None = None,
 ) -> None:
     """Fail unless this process matches the approved native-wheel runtime."""
     current_python = python_version or sys.version_info[:2]
     current_system = system or platform.system()
     current_machine = machine or platform.machine()
-    current_libc = libc or platform.libc_ver()[0]
+    current_implementation = implementation or platform.python_implementation()
+    detected_libc, detected_libc_version = platform.libc_ver()
+    current_libc = libc or detected_libc
+    current_libc_version = libc_version or detected_libc_version
     require(
         current_python in {(3, 11), (3, 12)},
         "guide_dependency_runtime_python_unsupported",
     )
     require(
-        current_system == "Linux"
-        and current_machine in {"x86_64", "AMD64"}
+        current_implementation == "CPython"
+        and current_system == "Linux"
+        and current_machine in APPROVED_NATIVE_MACHINES
         and current_libc == "glibc",
+        "guide_dependency_runtime_platform_unsupported",
+    )
+    glibc_match = re.fullmatch(r"(\d+)\.(\d+)(?:\.\d+)?", current_libc_version)
+    require(
+        glibc_match is not None
+        and tuple(int(part) for part in glibc_match.groups()) >= MINIMUM_GLIBC_VERSION,
         "guide_dependency_runtime_platform_unsupported",
     )
 
