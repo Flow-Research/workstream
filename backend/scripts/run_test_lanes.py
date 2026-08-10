@@ -92,6 +92,7 @@ LANES = (
             "tests/test_app.py",
             "tests/test_artifact_architecture.py",
             "tests/architecture/test_authorization_boundary.py",
+            "tests/architecture/test_module_boundaries.py",
             "tests/architecture/test_test_structure_boundary.py",
             "tests/test_artifact_authorization.py",
             "tests/test_artifact_internal_authorization.py",

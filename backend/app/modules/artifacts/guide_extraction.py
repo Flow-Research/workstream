@@ -121,7 +121,12 @@ class GuideExtractionRunner:
         payload = reader.read(MAXIMUM_INPUT_BYTES + 1)
         if len(payload) > MAXIMUM_INPUT_BYTES:
             return self._result(detected_format, "limit_exceeded", "input_limit", None)
-        environment = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": "/usr/bin:/bin"}
+        environment = {
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "OPENSSL_armcap": "0",
+            "PATH": "/usr/bin:/bin",
+        }
         process = None
         try:
             process = subprocess.Popen(

@@ -917,7 +917,12 @@ def test_runner_launch_is_secret_free_and_process_isolated(
     assert observed["cwd"] == tmp_path
     environment = observed["env"]
     assert isinstance(environment, dict)
-    assert set(environment) == {"LANG", "LC_ALL", "PATH"}
+    assert environment == {
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "OPENSSL_armcap": "0",
+        "PATH": "/usr/bin:/bin",
+    }
 
 
 @pytest.mark.parametrize(

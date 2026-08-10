@@ -49,7 +49,7 @@ jobs:
           python -m pip install ruff==0.15.22
           test "$(ruff --version)" = "ruff 0.15.22"
 
-      - name: Validate AUTH module and test boundaries
+      - name: Validate module, AUTH, and test boundaries
         working-directory: backend
         shell: bash
         run: |
@@ -57,9 +57,17 @@ jobs:
           ruff check \
             app/modules/authorization/api \
             scripts/authorization_boundary.py \
+            scripts/module_boundaries.py \
             scripts/test_structure_boundary.py \
             tests/architecture/test_authorization_boundary.py \
+            tests/architecture/test_module_boundaries.py \
             tests/architecture/test_test_structure_boundary.py
+          python -m scripts.module_boundaries validate \
+            --protected-base "${{ github.event.pull_request.base.sha || github.event.before }}"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q \
+            -p pytest_asyncio.plugin \
+            tests/architecture/test_module_boundaries.py \
+            tests/architecture/test_authorization_boundary.py
           python -m scripts.authorization_boundary validate \
             --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
           python -m scripts.test_structure_boundary validate \

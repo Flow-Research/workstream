@@ -219,6 +219,39 @@ def test_partition_rejects_reordered_trusted_assignments(
         ownership.validate_partition(tmp_path, trusted_revision="main")
 
 
+def test_partition_allows_the_module_boundary_foundation_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The reviewed general boundary validator has one exact additive slot."""
+    existing = "backend/scripts/existing.py"
+    addition = "backend/scripts/module_boundaries.py"
+    trusted = _partition([existing])
+    current = _partition([existing, addition])
+    _write_json(tmp_path / ownership.PARTITION_PATH, current)
+    monkeypatch.setattr(ownership, "AUTH_BOUNDARY_FOUNDATION_TARGETS", frozenset())
+    monkeypatch.setattr(
+        ownership, "MODULE_BOUNDARY_FOUNDATION_TARGETS", frozenset({addition})
+    )
+    monkeypatch.setattr(ownership, "POL_03A_CALLABLE_TARGETS", frozenset())
+    monkeypatch.setattr(
+        ownership, "eligible_targets", lambda root=ownership.ROOT: [existing, addition]
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git",
+        lambda root, *arguments: "a" * 40 if arguments[0] == "rev-parse" else "",
+    )
+    monkeypatch.setattr(
+        ownership,
+        "_git_show_optional",
+        lambda root, revision, path: json.dumps(trusted),
+    )
+    assert ownership.validate_partition(tmp_path, trusted_revision="main") == {
+        existing: "shared",
+        addition: "shared",
+    }
+
+
 @pytest.mark.parametrize("case", ("extra", "removal", "reassignment", "trusted_digest", "base"))
 def test_partition_additive_transition_rejects_custody_drift(
     tmp_path: Path,

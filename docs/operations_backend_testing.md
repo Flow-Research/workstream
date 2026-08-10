@@ -3,10 +3,18 @@
 ## Native guide-extractor runtime
 
 The approved v0.1 image extractor supports CPython 3.11 or 3.12 on Linux glibc
-x86_64. Its Pillow dependency is installed only from the approved hash-bound
-manylinux wheels. Python 3.13, macOS, ARM, and musl environments intentionally
-fail the guide-extractor dependency gate rather than resolving an unapproved
-native artifact.
+2.27 or newer, on x86_64 or aarch64. Its Pillow dependency is installed only
+from the four approved hash-bound manylinux wheels. Python 3.13, macOS,
+Windows, musl, and other architectures intentionally fail the guide-extractor
+dependency gate rather than resolving an unapproved native artifact.
+Native execution also requires `libseccomp.so.2` and the normal Linux `/proc`
+surface used by the fail-closed extraction child.
+
+macOS and Windows contributors use the repository's Docker backend service,
+which runs Linux on the Docker VM's native x86_64 or aarch64 architecture. Do
+not force amd64 emulation on an ARM host: a package install is not proof that
+the extraction child's inner seccomp boundary is available. See the
+[Developer Quickstart](../README.md#developer-quickstart).
 
 Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
@@ -104,10 +112,11 @@ nodes directly with the admin URL while stripping application database URLs;
 every ordinary node remains behind isolated-runner custody and never receives
 the admin credential.
 
-Backend does not run on review-state events. The narrow guide-extractor
-dependency approval check runs in Agent Gates instead, so submitting or
-dismissing the exceptional exact-head dependency approval refreshes a fast gate
-without repeating the full backend suite.
+Backend and Agent Gates do not run on review-state events. Agent Gates validates
+the guide-extractor dependency manifest deterministically for each PR head;
+protected-branch review rules independently enforce exact-head human approval.
+Superseded Agent Gates runs for the same PR are cancelled without repeating the
+full backend suite.
 
 Each matrix job uploads a fixed-name artifact bound to GitHub's checked-out PR
 merge-tree SHA, containing its manifest, lane evidence, isolation record, and coverage data. The final `test`
@@ -245,3 +254,17 @@ required check invokes the command.
 Only pytest `|run` coverage contexts count as callable-execution evidence.
 Fixture setup and teardown coverage is intentionally excluded because it does
 not prove that the test body exercised the callable.
+
+## Module-boundary validation
+
+Run the modular-monolith boundary gate from the repository root:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/module_boundaries.py validate --protected-base origin/main
+```
+
+It checks the canonical 12-module registry, exact protected non-AUTH private
+edges, public API leaks, unknown modules, cyclic public dependencies,
+dynamic-import hiding, and agreement with the WS-AUTH-003 ledger. The edge
+inventory is temporary recovery evidence; do not add an edge to make a feature
+pass. Remove the dependency through the owning module's typed public API.

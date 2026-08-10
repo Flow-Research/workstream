@@ -99,13 +99,17 @@ immutable historical records and the deterministic deletion proof. They are
 not an active design, grant, route, compatibility alias, or permission to
 implement a second intake path.
 
-ART-04A1 through 04C2, with 04B split into 04B1-04B3, implement one hidden
-continuous surface and publish
-its exact route/resource/guard manifest. After 04C, a separate reviewed AUTH
-activation contract may integrate the evaluator and change only
-`artifact.submission_bundle.prepare` to active. ART-05 cannot start until that
-activation merges. Before XINT-05A, XINT-06A must separately activate the fixed
-pre-submit materializer required by the locked-guide checker boundary.
+ART-04A1 through 04C2, with 04B split into 04B1-04B3, implemented one hidden
+continuous surface and published its exact route/resource/guard manifest. That
+history does not authorize immediate activation. Contributor preparation stays
+planned and unavailable until `WS-ARCH-001-02` splits and establishes the exact
+AUTH preparation capability, ART admission/binding ports, TASK-owned
+Submission command, and composition-owned transaction wiring. Only the
+replacement reviewed cross-module activation contract may then change
+`artifact.submission_bundle.prepare` to active. ART-05 remains non-executable
+until that sequence merges. XINT-06A separately activated the fixed pre-submit
+materializer required by the locked-guide checker boundary; it does not grant
+contributor preparation authority.
 
 The preparation surface authorizes before scratch intake, but the initial
 decision cannot authorize the later durable mutation. Immediately before

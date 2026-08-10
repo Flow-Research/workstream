@@ -754,6 +754,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/module_boundaries.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/mutation_policy.py"
     },
     {
@@ -781,7 +785,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "20a412b5717f54102889e1e259cac3f8eb589eaddafafe35ea14f316e1272ced",
+  "authority_digest": "69d51d52e715e9f44cd9a47822c0ba05c6fecd826cfcbcb8aa7c4a05b4a93a63",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
