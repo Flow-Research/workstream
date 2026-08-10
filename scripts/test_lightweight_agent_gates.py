@@ -123,11 +123,12 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertGreaterEqual(workflow.count("--fail-under=90"), 10)
         self.assertNotIn("pull_request_review:", agent_gates)
         self.assertNotIn("--require-pr-approval", agent_gates)
-        self.assertNotIn("pull-requests: read", agent_gates)
+        self.assertNotIn("pull-requests:", agent_gates)
         self.assertNotIn("types: [opened, synchronize, reopened, edited]", agent_gates)
         self.assertIn("types: [opened, synchronize, reopened]", agent_gates)
         self.assertIn("group: agent-gates-${{ github.event.pull_request.number }}", agent_gates)
         self.assertIn("cancel-in-progress: true", agent_gates)
+        self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", agent_gates)
         self.assertIn(
             "run: python3 backend/scripts/check_guide_extractor_dependencies.py",
             agent_gates,
