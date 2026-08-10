@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-01 Boundary Foundation
 
-Status: Proposed. Risk: L1.
+Status: Complete. Risk: L1.
 
 ## Goal
 
@@ -14,9 +14,14 @@ enforcement that composes with WS-AUTH-003.
 ```text
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/**
 .agent-loop/CURRENT_STATE.md
+.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/AUTH_HANDOFF.md
 .agent-loop/policies/architecture-boundaries.md
 .agent-loop/policies/repository-engineering-policy.md
 .ci/module-boundaries/**
+.ci/behavior-ownership/partition.v1.json
+.ci/behavior-ownership/shared/module-boundary-validator.json
+backend/scripts/behavior_ownership.py
+backend/tests/test_behavior_ownership.py
 backend/scripts/module_boundaries.py
 backend/tests/architecture/test_module_boundaries.py
 .github/workflows/backend.yml
@@ -37,6 +42,23 @@ docs/operations_backend_testing.md
 ## Acceptance criteria
 
 - Registry names exactly nine business and three supporting modules.
+- Registry classifies application-level paths explicitly:
+  - `backend/app/main.py` is the exact application composition root and its
+    existing private implementation imports remain frozen debt;
+  - `backend/app/api/**` is delivery/composition entry code and may consume
+    module public APIs; every existing private import remains frozen debt;
+  - `backend/app/adapters/**` implements typed infrastructure capabilities and
+    may be wired by composition, but every existing product-private import is
+    frozen debt;
+  - `backend/app/workers/**` is durable delivery/composition entry code and may
+    consume public APIs; every existing private import is frozen debt;
+  - `backend/app/interfaces/**` is legacy shared-contract debt, not a permanent
+    public-contract namespace, and all product-private imports are frozen;
+  - database metadata discovery is limited to the exact registered discovery
+    path and model-only imports; it grants no runtime capability authority.
+- The validator scans all application paths, not only `backend/app/modules/**`.
+  New private edges from API, adapters, workers, interfaces, composition, or
+  metadata discovery fail closed.
 - Repository engineering policy uses the same canonical ownership map and
   contains no nonexistent `modules/submissions` boundary.
 - Ledger records exact source file, target module, imported private path, and
@@ -47,6 +69,10 @@ docs/operations_backend_testing.md
 - Validator rejects a new edge, expanded existing edge, public API private
   leak, unknown module, and cyclic public dependency.
 - Existing exact debt passes only through protected ledger reconciliation.
+- The first ledger includes ART-to-AUTH/TASK/CHECKER debt through the combined
+  general and AUTH views, TASK route and pre-submit-context debt, legacy shared
+  interfaces, and worker/adapter private assembly. AUTH-affecting edges remain
+  exclusively in the canonical AUTH ledger.
 - AUTH-003 is the sole canonical source for every inbound/outbound AUTH edge.
   The general validator loads that ledger through the existing AUTH boundary
   parser and combines it by reference; the general ledger contains no copied
@@ -57,7 +83,7 @@ docs/operations_backend_testing.md
 ## Verification commands
 
 ```text
-PYTHONPATH=backend backend/.venv/bin/python backend/scripts/module_boundaries.py validate
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/module_boundaries.py validate --protected-base origin/main
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend backend/.venv/bin/python -m pytest -q -p pytest_asyncio.plugin backend/tests/architecture/test_module_boundaries.py backend/tests/architecture/test_authorization_boundary.py
 PYTHONPATH=backend backend/.venv/bin/ruff check backend/scripts/module_boundaries.py backend/tests/architecture/test_module_boundaries.py
 git diff --check

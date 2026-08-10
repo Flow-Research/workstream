@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "business_modules": [
+    "actors",
+    "authorization",
+    "projects",
+    "tasks",
+    "artifacts",
+    "checkers",
+    "reviews",
+    "contributions",
+    "compensation"
+  ],
+  "supporting_modules": [
+    "audit",
+    "outbox",
+    "api_controls"
+  ],
+  "application_surfaces": [
+    {"path": "backend/app/main.py", "classification": "application-composition-root-debt-tracked"},
+    {"path": "backend/app/api", "classification": "delivery-composition-debt-tracked"},
+    {"path": "backend/app/adapters", "classification": "adapter-debt-tracked"},
+    {"path": "backend/app/workers", "classification": "durable-delivery-debt-tracked"},
+    {"path": "backend/app/interfaces", "classification": "legacy-interface-debt-tracked"},
+    {"path": "backend/app/db/models.py", "classification": "metadata-discovery-model-only"}
+  ]
+}

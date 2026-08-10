@@ -254,3 +254,17 @@ required check invokes the command.
 Only pytest `|run` coverage contexts count as callable-execution evidence.
 Fixture setup and teardown coverage is intentionally excluded because it does
 not prove that the test body exercised the callable.
+
+## Module-boundary validation
+
+Run the modular-monolith boundary gate from the repository root:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/module_boundaries.py validate --protected-base origin/main
+```
+
+It checks the canonical 12-module registry, exact protected non-AUTH private
+edges, public API leaks, unknown modules, cyclic public dependencies,
+dynamic-import hiding, and agreement with the WS-AUTH-003 ledger. The edge
+inventory is temporary recovery evidence; do not add an edge to make a feature
+pass. Remove the dependency through the owning module's typed public API.

@@ -1,29 +1,48 @@
-# Architecture Boundaries
+# Modular Monolith Architecture Boundaries
 
-Workstream is a modular monolith. Boundaries exist so product rules remain
-auditable and later adapters can be added without rewriting the core loop.
+Workstream has nine business modules: `actors`, `authorization`, `projects`,
+`tasks`, `artifacts`, `checkers`, `reviews`, `contributions`, and
+`compensation`. It has three supporting modules: `audit`, `outbox`, and
+`api_controls`. The machine-readable canonical registry is
+`.ci/module-boundaries/registry.v1.json`.
 
-## Non-Negotiable Boundaries
+Cross-module runtime imports target only `app.modules.<module>.api`. A public
+API may expose immutable facts, commands/results, stable errors, opaque
+capability protocols, and ports. It may not expose ORM models, repositories,
+routers, database sessions, concrete services, kernels, registries, or other
+private implementation surfaces. Concrete implementations meet only in the
+application composition root.
 
-- Routers translate HTTP to service calls; they do not own business rules.
-- Services own lifecycle rules, permission checks, and domain decisions.
-- Repositories own persistence queries and do not make policy decisions.
-- Adapters isolate external systems such as Flow auth and future object storage.
-- Workstream product contracts remain distinct: project guide, submission
-  artifact policy, checker policy, review policy, revision policy, and
-  contribution policy are not engineering-loop policy files.
-- `.agent-loop/policies/repository-engineering-policy.md` governs this
-  repository's engineering loop; it does not replace or rename the product
-  project guide.
-- Pre-submit checks and post-submit/internal checker runs remain separate phases.
-- Workstream engineering loop artifacts under `.agent-loop/` do not define
-  Workstream product runtime behavior.
+Application-level paths are explicit rather than invisible exceptions:
 
-## Review Questions
+- `backend/app/main.py` is the application composition root; its current
+  product-private imports are frozen debt while future wiring consumes typed
+  public ports;
+- `backend/app/api/**` and `backend/app/workers/**` are delivery/composition
+  entry code and must consume typed module APIs;
+- `backend/app/adapters/**` implements infrastructure capabilities and is wired
+  at composition boundaries;
+- `backend/app/interfaces/**` is legacy shared-contract debt, not a permanent
+  public-contract namespace;
+- `backend/app/db/models.py` is the sole metadata-discovery path and may import
+  only module model declarations for SQLAlchemy registration. It gains no
+  runtime service, repository, command, or authorization capability.
 
-- Did this mix engineering process state with product runtime state?
-- Did this bypass service-layer lifecycle rules?
-- Did this hide a policy decision inside persistence, tests, or UI copy?
-- Did this create vague naming that could confuse operators, contributors,
-  reviewers, or engineering reviewers?
-- Did this preserve locked v0.1 scope?
+All current private imports in the first four surfaces are frozen exact debt.
+Every application path is scanned, including paths outside `modules/`.
+The one-time bootstrap is permitted only when the protected base contains
+neither registry nor ledger and the installing change touches no
+`backend/app/**` runtime source. After bootstrap, the current ledger must be a
+subset of the protected-base ledger, so code and ledger cannot grow together.
+
+The JSON private-edge ledger is an exact, temporary recovery inventory—not an
+allowlist. Every entry binds a source file, target module, imported private
+path, and repair owner. New or expanded edges fail CI. An unresolved ordinary
+edge uses `owner-unresolved`; an authorization-affecting edge without ownership
+requires `security-triage-required` and blocks the touched capability.
+
+AUTH private edges are never copied into the general ledger. WS-AUTH-003 is
+their sole canonical source; the general validator directly loads and verifies
+that ledger through the existing AUTH parser and fails closed on disagreement.
+Recovery is complete only when both protected debt ledgers are empty while the
+validators remain enabled.

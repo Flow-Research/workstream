@@ -71,6 +71,9 @@ AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
         "backend/scripts/test_structure_boundary.py",
     }
 )
+MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
+    {"backend/scripts/module_boundaries.py"}
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -223,7 +226,11 @@ def _validate_additive_partition_transition(
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
-    approved_additions = AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS
+    approved_additions = (
+        AUTH_BOUNDARY_FOUNDATION_TARGETS
+        | MODULE_BOUNDARY_FOUNDATION_TARGETS
+        | POL_03A_CALLABLE_TARGETS
+    )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:
         expected_additions = expected_additions | {POL_03A_DECLARATIVE_MODEL_TARGET}

@@ -17,6 +17,12 @@ or revises Workstream identity, authority, submission, Review, or
 `ContributionRecord` truth. Flow Identity remains the current v0.1 external
 authentication adapter, not the product boundary.
 
+The backend is a modular monolith governed by the canonical module map and
+public-API dependency rules in
+[`../.agent-loop/policies/architecture-boundaries.md`](../.agent-loop/policies/architecture-boundaries.md).
+Cross-module runtime imports use only the target module's typed `api` package;
+the composition root alone wires concrete implementations.
+
 The ADR files under `docs/decision_*.md` are the decision record for this lockdown. When a locked rule changes, update or add an ADR before changing implementation specs.
 
 Repository changes use the Repository-Native Human-Agent SDLC documented in
