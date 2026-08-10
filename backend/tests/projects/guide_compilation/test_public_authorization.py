@@ -69,11 +69,12 @@ async def test_hidden_authorization_denies_before_touching_product_state() -> No
     facts = persistence_facts(values, uuid4(), attempt_identity)
     actor = service_actor(values)
     denial = DenyProjectGuideCompilationAuthorization()
+    request_facts = _request_facts()
 
     with pytest.raises(AuthorizationUnavailable):
-        await denial.prepare_request(actor=actor, facts=facts)
+        await denial.prepare_request(actor=actor, facts=request_facts)
     with pytest.raises(AuthorizationUnavailable):
-        await denial.consume_request(handle=object(), actor=actor, facts=facts)
+        await denial.consume_request(handle=object(), actor=actor, facts=request_facts)
     with pytest.raises(AuthorizationUnavailable):
         await denial.authorize_execute_preflight(actor=actor, facts=facts)
     with pytest.raises(AuthorizationUnavailable):

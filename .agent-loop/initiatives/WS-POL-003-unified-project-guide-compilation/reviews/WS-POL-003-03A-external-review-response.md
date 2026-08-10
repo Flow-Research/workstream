@@ -16,8 +16,9 @@
 - Initial exact-head GitHub backend lanes all stopped at the shared docstring
   gate before test execution. The nine new repository callables and six
   deny-only authorization methods now document their exact responsibilities;
-  the repository-wide result is 80.4 percent, above the unchanged 80 percent
-  threshold.
+  repository-wide docstring coverage is 80.4 percent, above the unchanged 80
+  percent docstring gate. This is distinct from the 78 percent repository test
+  coverage floor.
 - On the corrected head, four semantic lanes passed. `schema_contracts_a`
   exposed a stale 0049 round-trip assertion: it stripped only 0049 action
   tokens before comparing the current head to 0048. The assertion now also
@@ -41,6 +42,10 @@
 - Test-only fixture consolidation suggestions are recorded as non-functional
   cleanup, not mixed into this security correction; every affected test retains
   explicit engine cleanup and focused behavior ownership.
+- The request to express internal engineering reviewer results as
+  `accept`/`needs_revision`/`reject` was not applied. Those values are reserved
+  for Workstream product review decisions; engineering review evidence remains
+  pass/fail with residual risk recorded separately, as required by `AGENTS.md`.
 
 ## Human decisions needed
 

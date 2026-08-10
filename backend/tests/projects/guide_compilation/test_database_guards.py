@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from sqlalchemy import text
@@ -149,7 +150,11 @@ async def test_live_terminal_constraint_matches_closed_vocabulary(
                 )
             )
         assert definition is not None
-        assert all(f"'{code}'" in definition for code in TERMINAL_FAILURE_CODES)
+        allowlist = re.search(r"failure_code.*?ARRAY\[(.*?)\]", definition)
+        assert allowlist is not None
+        assert set(re.findall(r"'([^']+)'", allowlist.group(1))) == (
+            TERMINAL_FAILURE_CODES
+        )
         assert "'accepted'" not in definition
         assert "'invalid_terminal'" not in definition
 

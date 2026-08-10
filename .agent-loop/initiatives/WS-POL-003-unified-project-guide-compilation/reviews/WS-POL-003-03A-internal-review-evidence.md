@@ -65,5 +65,6 @@ Fresh corrective reviews after the CodeRabbit findings:
 - Senior engineering: pass with low risks; its live-migration parity concern is
   covered by the new `pg_get_constraintdef` and direct rejection test.
 
-All valid findings were corrected and re-reviewed. No reviewer session remains
-open.
+All valid findings were corrected and re-reviewed. No internal reviewer session
+remains open; external CodeRabbit thread verification is tracked separately in
+the external review response.
