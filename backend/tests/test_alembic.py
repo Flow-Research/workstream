@@ -5605,11 +5605,11 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.XINT_002_07,
                             ActionOwner.XINT_003_08A,
                             ActionOwner.XINT_003_08B,
+                            ActionOwner.AUTH_12I,
                         }
                     ),
                 )
             )
-
             action_event = asyncio.run(_insert_authorization_action_event(isolated_database_env))
             with pytest.raises(
                 RuntimeError,
@@ -5617,7 +5617,6 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
             ):
                 command.downgrade(config, "0020_canonical_actor_profile")
             asyncio.run(_remove_authorization_action_events(isolated_database_env, [action_event]))
-
             permission_event = asyncio.run(
                 _insert_authorization_action_event(isolated_database_env)
             )
@@ -13571,15 +13570,14 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
             repeated = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
         finally:
             command.upgrade(config, "head")
-
     additions = " OR " + " OR ".join(_xint003_02c_pair_token(*pair) for pair in _XINT003_02C_ACTIONS)
-    compilation_addition = " OR " + _xint003_02c_pair_token(
-        "project.guide_compilation.execute", "project.guide_compilation.execute")
     assert prior["profiles"] == upgraded["profiles"] == 0
     assert upgraded["action_definition"].count(additions) == 2
-    assert upgraded["action_definition"].count(compilation_addition) == 2
-    assert upgraded["action_definition"].replace(additions, "").replace(
-        compilation_addition, "") == prior["action_definition"]
+    without_later_actions = upgraded["action_definition"].replace(additions, "")
+    for action in ("project.guide_compilation.execute", "project.guide_compilation.request"):
+        assert upgraded["action_definition"].count(" OR " + _xint003_02c_pair_token(action, action)) == 2
+        without_later_actions = without_later_actions.replace(" OR " + _xint003_02c_pair_token(action, action), "")
+    assert without_later_actions == prior["action_definition"]
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
     assert prior["identity_values"] == historical_identities
     assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)

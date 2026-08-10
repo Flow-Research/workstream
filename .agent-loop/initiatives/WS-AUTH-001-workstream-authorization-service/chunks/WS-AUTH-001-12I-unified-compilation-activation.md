@@ -130,6 +130,7 @@ backend/tests/authorization/__init__.py
 backend/tests/test_alembic.py
 backend/tests/test_authorization.py
 backend/tests/conftest.py
+backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/scripts/authorization_boundary.py
 .ci/behavior-ownership/auth/**
 .ci/behavior-ownership/partition.v1.json

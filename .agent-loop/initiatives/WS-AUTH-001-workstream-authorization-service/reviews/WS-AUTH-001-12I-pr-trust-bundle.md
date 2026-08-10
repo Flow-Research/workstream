@@ -29,6 +29,10 @@ lanes for repository-wide coverage.
   debt and preserving the cross-module import ledger.
 - Added focused runtime, actor-matrix, replay, strict-facts, migration, and
   downgrade-refusal proof.
+- Corrected the hosted schema fingerprint and strengthened migration `0063` so
+  both compilation permissions require exact action evidence, historical
+  permission-only execute evidence blocks upgrade, and every removed request
+  registry/resource reference blocks downgrade.
 
 ## Why it changed
 
@@ -82,6 +86,7 @@ the port and product transaction.
 Focused adapter/domain tests: 16 passed
 AUTH boundary plus focused non-DB tests: 65 passed (before final test additions)
 PostgreSQL 0063 roundtrip and retained-evidence downgrade tests: passed
+PostgreSQL compilation migration adoption/custody suite: 10 passed
 Changed adapter coverage: 98.36% (90% required)
 Ruff: passed
 Authorization boundary: passed
@@ -114,8 +119,11 @@ findings were fixed.
 
 ## External review
 
-GitHub Actions and CodeRabbit remain pending until the branch is pushed and the
-ready PR exists.
+The first hosted Backend run exposed a stale canonical schema fingerprint. The
+second exact-head run proved that correction and then exposed missing
+action-required SQL custody plus stale historical migration assertions. Those
+failures were fixed without weakening CI. Fresh GitHub Actions and a substantive
+CodeRabbit review remain required on the next pushed exact head.
 
 ## Remaining risks
 
