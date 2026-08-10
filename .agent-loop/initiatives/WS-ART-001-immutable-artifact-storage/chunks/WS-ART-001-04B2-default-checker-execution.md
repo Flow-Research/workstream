@@ -98,7 +98,8 @@ rules or persist the final evidence set yet.
   extraction implementation outside `submission_archive.py`;
 - tests prove 04B2 does not call the legacy checker registry, standalone
   precheck service, or `pre_submit_static_feedback`; those paths remain frozen
-  legacy behavior until 05B removes them;
+  legacy behavior until deferred WS-ARCH-001-02I removes them after every
+  submission context and downstream prerequisite is live;
 - pure packet/attestation/quality predicates are shared where their semantics
   match, but the platform sensitive-path adapter uses the narrow
   high-confidence default set and never inherits the legacy runner's broad
@@ -169,7 +170,7 @@ AUTH wording in:
   review evidence after implementation.
 
 These updates describe hidden 04B2 execution only. They must not change the
-legacy public standalone precheck contract before 05B or imply contributor
+legacy public standalone precheck contract before deferred WS-ARCH-001-02I or imply contributor
 preparation, durable evidence, admission, or Submission is active.
 
 ## Required Reviewers

@@ -139,8 +139,10 @@ and a bounded ordered list of catalogue ID/version plus stable outcome code.
 It excludes filenames, archive paths, scratch/provider references, credentials,
 raw checker output, evidence content, and free-form or unbounded messages. This
 is audit evidence, not a product review decision. The independently invocable
-legacy preflight route remains frozen until ART-05B removes it together with the
-legacy Submission path; it is never an alternate authority for this flow.
+legacy preflight route remains frozen until WS-ARCH-001-02I removes it together
+with the legacy Submission path after all initial, checker-remediation,
+reviewer-requested revision, checker-output, and REV-admission prerequisites;
+it is never an alternate authority for this flow.
 
 Hidden ART-04B2 uses XINT-06A's two-stage fixed-materializer PREP. It locks the
 service/action and scalar lineage before ZIP inspection, then consumes the same

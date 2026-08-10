@@ -417,7 +417,7 @@ The paired artifact hidden-behavior matrix is closed:
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`, and `artifact.guide_source.binding.create -> artifact.binding.create`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
 | `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
-| `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04B1-04B3 implement the sole catalogue/materialization/evidence path, XINT-002-06A activates its fixed pre-submit materializer before 04C1, and the contributor action remains unavailable until complete 04C2 evidence and WS-XINT-002-05A; 05B removes the frozen legacy precheck only when admission-backed Submission becomes authoritative |
+| `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04B1-04B3 implement the sole catalogue/materialization/evidence path and XINT-002-06A activates its fixed pre-submit materializer before 04C1; contributor preparation remains unavailable until WS-ARCH-001-02A-02F establish the complete public owner path, 02G activates preparation, 02H activates consumption/binding, and 02I removes the frozen legacy precheck in the live clean cut |
 | `WS-ART-001-04B2` and `04B3` | hidden `artifact.pre_submit.checker_input.materialize` resource/guard usage mapped to `artifact.checker_input.materialize`; 04B2 owns exact sealed materialization and 04B3 consumes it in the complete effective plan |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
@@ -426,9 +426,12 @@ The paired artifact hidden-behavior matrix is closed:
 WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation
 may execute that ActionId while it remains planned. The mandatory order is
-ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> 04B1 -> 04B2 -> 04B3 ->
-XINT-002-06A -> ART-04C1 -> 04C2 -> XINT-002-05A. This ensures fixed-service pre-submit materialization is active
-before contributor preparation can become live.
+ART-04A1 -> 04A2 -> 04A3 -> PLAN4 -> PLAN5 -> ART-04B1 -> ART-04B2 ->
+ART-04B3 -> XINT-002-06A -> ART-04C1 -> ART-04C2 -> WS-ARCH-001-02A -> 02B -> 02C ->
+02D -> 02E -> 02F -> 02G. This ensures fixed-service pre-submit
+materialization and the complete hidden public-capability/transaction path are
+active before contributor preparation can become live. XINT-002-05A/05B are
+superseded historical records.
 
 WS-XINT-002-04A activates only `artifact.guide_source.ingest`. The existing
 permission belongs only to the Project Manager role and is evaluated through an
@@ -472,12 +475,17 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
-| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
+| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare`; registry custody retained while replacement implementation chunk WS-ARCH-001-02G performs activation |
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
-| `WS-XINT-002-05B` | `artifact.submission.binding.create` |
+| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; registry custody retained while replacement implementation chunk WS-ARCH-001-02H performs activation |
 | `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | `artifact.review_packet.materialize` only |
 | Future REV-owned activation, not approved for v0.1 | `artifact.review_evidence.binding.create` remains planned/unavailable |
+
+The table records the executable registry custodian. WS-ARCH-001-02G and 02H
+replace the superseded implementation chunks and may activate only their named
+action after the required hidden evidence exists; they do not rename the
+registry custodian. No planning-only change may promote or reassign an action.
 
 The approved v0.1 review flow has a reviewer decision plus note/findings bound
 to the reviewed Submission. It does not include a reviewer-uploaded artifact.

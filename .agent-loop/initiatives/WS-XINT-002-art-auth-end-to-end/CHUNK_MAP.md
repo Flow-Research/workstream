@@ -8,10 +8,10 @@
 | `04A` | Activate Project Manager guide ingest. | L1 | Merged/active |
 | `04B` | Activate fixed-service guide binding and read. | L1 | Merged/active in PR #245 (`6babf81b`) |
 | `06A` | Activate only pre-submit checker-input materialization. | L1 | Merged through PR #293; precedes ART-04C1 and 05A |
-| `05A` | Activate initial contributor preparation only over hidden ART ready-admission behavior. | L1 | Non-executable pending WS-ARCH-001-02 split public-API contract |
-| `05B` | Activate TASK-owned Submission creation with ART-owned binding/consumption. | L1 | Non-executable pending WS-ARCH-001-02 split public-API contracts |
-| `05C` | Activate checker-remediation submission context. | L1 | Non-executable pending 05B plus WS-ARCH-001 checker capability contract |
-| `05D` | Activate human-review revision context. | L1 | Non-executable pending 05B plus WS-ARCH-001 review capability contract |
+| `05A` | Historical initial contributor preparation activation proposal. | L1 | Superseded/non-executable; replacement activation is WS-ARCH-001-02G after 02A-02F |
+| `05B` | Historical Submission binding/consumption proposal. | L1 | Superseded/non-executable; replacement activation/cutover is WS-ARCH-001-02H/02I |
+| `05C` | Historical checker-remediation submission context proposal. | L1 | Superseded/non-executable; future exact WS-ARCH-001-04 replacement requires 02H and must merge before 02I |
+| `05D` | Historical human-review revision context proposal. | L1 | Superseded/non-executable; future exact WS-ARCH-001-05 replacement requires 02H and must merge before 02I |
 | `06B` | Activate post-submit materialization and checker output write/binding. | L1 | Non-executable pending POL/ART evidence plus WS-ARCH-001 checker capability contract |
 | `07A` | Activate lease-scoped reviewer packet materialization only. | L1 | Non-executable pending ART/REV evidence plus WS-ARCH-001 review capability contract |
 | `07B` | Reserved review-evidence binding gate; keep unavailable absent new approved REV intent. | L1 | Future approved REV evidence-upload contract, if any |

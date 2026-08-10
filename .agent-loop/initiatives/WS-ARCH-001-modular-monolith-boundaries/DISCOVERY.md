@@ -26,11 +26,12 @@ capability family; guide compilation and locked policy custody remain in
 
 ## Existing public surfaces
 
-Only `backend/app/modules/authorization/api/` currently provides an explicit
-module public API. PRs #304 and #305 established its minimal surface, exact
+`backend/app/modules/authorization/api/` provides the first explicit module
+public API. PRs #304 and #305 established its minimal surface, exact
 private-import ledger, and no-new-AUTH-violation gate. PR #307 subsequently
 merged the first capability proof: hidden project-guide compilation uses the
-public AUTH surface without adding private AUTH debt.
+public AUTH surface without adding private AUTH debt. PR #310 added the
+repository-wide registry, exact general debt ledger, and protected-base gate.
 
 ## Observed cross-module topology
 
@@ -60,6 +61,34 @@ though `tasks` owns the Submission lifecycle. This planning change resolves
 that conflict by superseding ART-05A as executable authority until
 WS-ARCH-001-02 produces split, ownership-correct contracts.
 
+## Submission-path reconciliation after PR #310
+
+The hidden preparation route is TASK-delivered but imports private ART request,
+error, and command types. Application adapter wiring imports ART concrete
+implementations. ART's `submission_admission.py` imports TASK's private
+`pre_submit_context` and CHECKER private catalogue/execution types. TASK's
+`pre_submit_context.py` in turn reads ACTOR and PROJECT ORM rows and compiles a
+CHECKER-owned effective plan.
+
+Therefore the earlier four-part AUTH/ART/TASK/composition description is
+incomplete. Activating that shape would preserve circular authority and move
+PROJECT/CHECKER behavior behind a TASK facade. The ownership-correct graph is:
+
+```text
+AUTH -> actor/identity/grant decision and opaque prepared authority
+TASKS -> task, assignment, predecessor and Submission lifecycle facts
+PROJECTS -> locked guide and project-policy lineage facts
+CHECKERS -> effective pre-submit plan and bounded execution-result facts
+ART -> ZIP custody, manifest, verified admission, consumption and binding
+application composition -> transaction-bound concrete wiring only
+```
+
+No public capability may return an ORM row, repository, session, mutable policy
+body, scratch path, provider credential, or another module's private type.
+Preparation activation must wait until the TASKS, PROJECTS, CHECKERS, ART, and
+AUTH public contracts it exercises are present and the corresponding private
+edges are removed.
+
 ## Conventions to preserve
 
 - The target module exposes immutable facts, commands/results, stable errors,
@@ -80,12 +109,28 @@ WS-ARCH-001-02 produces split, ownership-correct contracts.
   AUTH public surface.
 - `backend/scripts/behavior_ownership.py` and `.ci/behavior-ownership/` protect
   behavior ownership, not general runtime import direction.
-- There is no repository-wide module-public-API ledger or validator yet.
+- PR #310 installed the repository-wide module registry, exact private-edge
+  ledger, public API leak/cycle checks, and protected-base validator that govern
+  every split contract below.
+
+## Resolved sequencing constraints for submission capability
+
+- Preparation and admission consumption are distinct authorization boundaries.
+- Public fact/port foundations may merge while behavior remains hidden and
+  deny-only.
+- The contributor preparation action activates only after the hidden path uses
+  public capabilities end to end.
+- ART admission/binding and TASK Submission mutations may be implemented behind
+  public ports before the route cutover, but their composed transaction must be
+  proven before fixed-service activation or public reachability.
+- The public cutover removes legacy package URI/hash/manifest input and the
+  standalone precheck path in the same PR; no dual path or compatibility alias
+  is permitted.
 
 ## Unknowns to resolve per capability
 
-- Which module owns the application command when one transaction spans public
-  ports?
+- Which exact owner-local lock/fact methods each implementation chunk can reuse
+  without widening its public contract?
 - Which exact immutable facts are sufficient without exposing an ORM row?
 - Which legacy edges can be removed in the same feature chunk without changing
   behavior?

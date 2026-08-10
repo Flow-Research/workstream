@@ -138,9 +138,11 @@ intent. ART-04C2 merged through PR #300 as `b2e2c615` and added verified
 ready-admission publication plus the still-hidden, fail-closed continuous
 preparation composition. Contributor AUTH action activation, admission
 consumption, TASK-owned Submission creation, and final binding remain
-unavailable. The 05-wave XINT-05A-05D and ART-05A/05B executable contracts are
-non-executable coordination evidence pending WS-ARCH-001 split public-API
-replacement contracts.
+unavailable. The old 05-wave XINT-05A-05D and ART-05A/05B contracts are
+non-executable; initial preparation/consumption foundations are replaced by
+WS-ARCH-001-02A-02H. Final 02I cutover is deferred until the later
+remediation/review-revision, checker-output, and REV-admission replacement
+contracts merge.
 
 ## Gate
 

@@ -1802,7 +1802,7 @@ ART_ACTIVATION_CUSTODY_EXPECTATIONS = {
     "artifact.guide_source.binding.create": "WS-XINT-002-04B",
     "artifact.submission_bundle.prepare": "WS-XINT-002-05A",
     "artifact.pre_submit.checker_input.materialize": "WS-XINT-002-06A",
-    "artifact.submission.binding.create": "WS-XINT-002-05B",
+    "artifact.submission.binding.create": "WS-AUTH-001-ART-05",
     "artifact.post_submit.checker_input.materialize": "WS-XINT-002-06B",
     "artifact.checker_output.write": "WS-XINT-002-06B",
     "artifact.review_packet.materialize": "WS-XINT-002-07A",
@@ -2871,7 +2871,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
         "WS-XINT-002-04A": 1,
         "WS-XINT-002-05A": 1,
         "WS-XINT-002-06A": 1,
-        "WS-XINT-002-05B": 1,
+        "WS-AUTH-001-ART-05": 1,
         "WS-XINT-002-06B": 3,
         "WS-XINT-002-07A": 1,
         "Future REV-owned activation, not approved for v0.1": 1,
@@ -13362,7 +13362,6 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         with pytest.raises(asyncio.CancelledError):
             await wait_task
         await locker.rollback()
-
         retry_reservation = await ProjectRoleGrantMutationService(waiter).reserve(
             key=waiting_key,
             actor_profile_id=caller_id,

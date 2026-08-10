@@ -284,9 +284,10 @@ Before locking a submission packet:
 - effective project submission artifact policy is loaded
 - generated project pre-submit checker policy runs
 - failed submission-bundle preparation returns `pre_submission_checker_failed` with bounded same-request status, eligibility, and pass/fail/warning details
-- until ART-05B, the frozen legacy preflight endpoint remains non-authoritative;
-  after the cutover no standalone endpoint or client-owned manifest can
-  reproduce the authoritative result
+- until deferred WS-ARCH-001-02I, the frozen legacy preflight endpoint remains
+  non-authoritative; after every submission context and downstream prerequisite
+  is live, the cutover leaves no standalone endpoint or client-owned manifest
+  that can reproduce the authoritative result
 - no submission row is created until blocking pre-submit checks pass
 - successful submission creation stamps the immutable submission boundary and queues the Celery pre-review gate
 - `/finalize` is an Operator repair/requeue endpoint under

@@ -58,8 +58,8 @@ only, and every command prepares fresh authority inside its transaction.
 |---|---|---|---|
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed ART materializer; exact active-lease packet | runtime `WS-XINT-002-07`; activation sub-wave `07A` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | future fixed ART binding service only | runtime catalogue custody `WS-XINT-002-07`; no approved activation wave |
-| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor; exact human-revision preparation | availability `WS-XINT-002-05A`; revision-context evaluator extension `05D` |
-| `submission.create` | `submission.create` | assigned contributor; exact prepared human revision | availability `WS-XINT-002-05B`; revision-context evaluator extension `05D` |
+| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor; exact human-revision preparation | base availability `WS-ARCH-001-02G`; human-revision extension requires the future exact WS-ARCH-001-05 replacement for superseded XINT-002-05D before 02I |
+| `submission.create` | `submission.create` | assigned contributor; exact prepared human revision | base hidden availability `WS-ARCH-001-02H`; human-revision extension requires the future exact WS-ARCH-001-05 replacement for superseded XINT-002-05D before 02I |
 
 These actions are not XINT-003 custody. Generic artifact download, adjudication, automated routing, reputation, settlement, and agent workspace authority are out of scope.
 
@@ -119,5 +119,5 @@ actions remain reference-only external handoffs.
 | `review.projection.rebuild` | merged REV-12P2 derived-projection command |
 | `artifact.review_packet.materialize` | XINT-002-07A after hidden ART packet behavior and REV active-lease manifest |
 | `artifact.review_evidence.binding.create` | future only; remains planned/unavailable in v0.1 |
-| `artifact.submission_bundle.prepare` | XINT-002-05D after merged REV-09A1-09B human-revision preparation and replay behavior |
-| `submission.create` | XINT-002-05D after merged REV-09A1-09B verified, consumable human-revision admission |
+| `artifact.submission_bundle.prepare` | Future exact WS-ARCH-001-05 replacement after merged REV-09A1-09B human-revision preparation and replay behavior; required before 02I |
+| `submission.create` | Future exact WS-ARCH-001-05 replacement after merged REV-09A1-09B verified, consumable human-revision admission; required before 02I |

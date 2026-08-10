@@ -11,19 +11,23 @@ evidence-gated activation waves:
    their evidence-backed activation chunks.
 3. Activate fixed internal recovery services before any durable provider work.
 4. Activate guide ingest/use only after the matching hidden ART behavior.
-5. Activate pre-submit checker materialization after hidden ART-04B, then
-   activate initial contributor preparation only after the complete hidden
-   ready-admission path exists.
-6. Activate atomic Submission/binding consumption, then post-submit checker
-   materialization/output after exact ART/CHECKER behavior; remediation and
-   human-review revision contexts remain separate gates.
+5. Activate pre-submit checker materialization after hidden ART-04B. The old
+   XINT-05A/05B activation records are superseded: WS-ARCH-001-02A-02F first
+   establish the complete public owner path and hidden atomic transaction,
+   02G/02H activate preparation and consumption/binding, and 02I performs the
+   live clean cut.
+6. Before the 02I clean cut, activate post-submit checker materialization and
+   output after exact ART/CHECKER behavior, then deliver the separate
+   checker-remediation and human-review revision context gates plus REV
+   admission handoff. Only then may the admission-only public path replace the
+   guarded legacy path.
 7. Activate reviewer packet materialization only after ART and REV provide the
    hidden typed facts and lease guards. Keep evidence binding unavailable.
 8. Run end-to-end conformance and crossed-state proof.
 
-The 2026-08-02 ART audit corrects two future waves: split chunk 06 into 06A
-pre-submit materialization before XINT-05A and 06B post-submit/output after
-ART-06A/06B; activate reviewer packet materialization independently while
+The historical ART audit split chunk 06 into 06A pre-submit materialization,
+which is merged before replacement preparation activation 02G, and 06B
+post-submit/output after ART-06A/06B; activate reviewer packet materialization independently while
 review-evidence binding remains planned absent separately approved REV intent.
 
 Registration is deliberately complete up front. Activation remains separate

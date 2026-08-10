@@ -74,7 +74,7 @@ PreSubmitCheckerPolicy =
 Failed continuous submission-bundle preparation returns
 `DomainError(code="pre_submission_checker_failed")` with bounded same-request
 status, eligibility, and pass/fail/warning details. The old standalone
-preflight route remains frozen until ART-05B removes it with the legacy
+preflight route remains frozen until WS-ARCH-001-02I removes it with the legacy
 Submission path; it is not part of this effective policy. Pre-submit failures do not create durable
 `CheckerRun` records and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.

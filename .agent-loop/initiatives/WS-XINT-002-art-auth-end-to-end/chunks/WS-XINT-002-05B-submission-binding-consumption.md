@@ -1,8 +1,8 @@
 # Chunk Contract: WS-XINT-002-05B Submission Binding Consumption
 
-Status: Non-executable coordination evidence. WS-ARCH-001-02 must replace this
-file with split AUTH, ART, TASK, and composition contracts after 05A is
-reconciled.
+Status: Superseded/non-executable historical coordination evidence. ART
+consumption/binding is replaced by WS-ARCH-001-02E, hidden TASK composition by
+02F, AUTH activation by 02G/02H, and the live clean cut by 02I.
 
 ## Goal
 
@@ -17,10 +17,8 @@ L1.
 
 ## Allowed files
 
-None. The WS-ARCH-001-02 replacements must name exact capability-owned files,
-use only `authorization.api`, `artifacts.api`, and `tasks.api` across module
-boundaries, and wire concrete transaction-bound implementations only in the
-application composition root.
+None. Use the reviewed WS-ARCH-001-02A through 02I contracts. This file never
+authorizes implementation.
 
 ## Not allowed
 

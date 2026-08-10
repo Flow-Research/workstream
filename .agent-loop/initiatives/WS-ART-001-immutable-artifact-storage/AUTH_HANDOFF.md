@@ -18,11 +18,12 @@ fixed-service guide binding/read are active, and ART-03C completed the verified
 guide-pipeline cutover. Submission actions remain governed by the later split
 activation order below.
 
-The remaining AUTH order requires one correction before submission work can go
-live: split XINT-06 into `06A` (pre-submit materializer only, after hidden
-ART-04B1-04B3 and before XINT-05A) and `06B` (post-submit materializer plus checker
-output write/binding, after ART-06A/06B). This prevents contributor preparation
-from activating while its mandatory fixed materializer still denies.
+The historical XINT-06 split placed `06A` pre-submit materialization after
+hidden ART-04B1-04B3 and before contributor preparation; it is merged. `06B`
+remains the later post-submit materializer plus checker output write/binding
+after ART-06A/06B. Contributor preparation now activates only in
+WS-ARCH-001-02G after the complete 02A-02F public-capability/hidden-transaction
+path, so its mandatory fixed materializer is already active.
 
 ## Guide Source Sequence
 
@@ -102,14 +103,14 @@ implement a second intake path.
 ART-04A1 through 04C2, with 04B split into 04B1-04B3, implemented one hidden
 continuous surface and published its exact route/resource/guard manifest. That
 history does not authorize immediate activation. Contributor preparation stays
-planned and unavailable until `WS-ARCH-001-02` splits and establishes the exact
-AUTH preparation capability, ART admission/binding ports, TASK-owned
-Submission command, and composition-owned transaction wiring. Only the
-replacement reviewed cross-module activation contract may then change
-`artifact.submission_bundle.prepare` to active. ART-05 remains non-executable
-until that sequence merges. XINT-06A separately activated the fixed pre-submit
-materializer required by the locked-guide checker boundary; it does not grant
-contributor preparation authority.
+planned and unavailable until `WS-ARCH-001-02A` through `02F` establish the
+TASK, PROJECT, CHECKER, ART, and hidden composition capabilities and their exact
+resource manifests. Only `WS-ARCH-001-02G` may then activate
+`artifact.submission_bundle.prepare`; `02H` separately activates the human
+consumption/fixed binding authority, and `02I` performs the live clean cut.
+The old ART/XINT 05A/05B contracts remain non-executable. XINT-06A separately
+activated the fixed pre-submit materializer required by the locked-guide
+checker boundary; it does not grant contributor preparation authority.
 
 The preparation surface authorizes before scratch intake, but the initial
 decision cannot authorize the later durable mutation. Immediately before

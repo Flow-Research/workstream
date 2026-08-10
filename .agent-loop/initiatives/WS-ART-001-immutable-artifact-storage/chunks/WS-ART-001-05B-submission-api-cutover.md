@@ -1,8 +1,8 @@
 # Chunk Contract: WS-ART-001-05B — Submission API And Dispatch Cutover
 
-Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded as executable
-authority by WS-ARCH-001-02; requires an ownership-correct split cutover
-contract after XINT-05B reconciliation
+Parent initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable;
+replaced by WS-ARCH-001-02I after 02A-02H establish owner APIs, hidden atomic
+composition, and exact AUTH activation
 
 ## Goal
 
@@ -14,9 +14,7 @@ precheck path once and for all.
 
 ## Allowed Files
 
-None. Replacement contracts must assign exact TASK-owned API/lifecycle files,
-ART-owned admission/binding files, CHECKER public dispatch facts, composition
-wiring, legacy removal, tests, and documentation.
+None. Use WS-ARCH-001-02A through 02I; this file authorizes no implementation.
 
 ## Not Allowed Changes
 

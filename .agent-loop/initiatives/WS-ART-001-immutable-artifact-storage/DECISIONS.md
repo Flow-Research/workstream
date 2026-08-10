@@ -506,8 +506,9 @@ new snapshot. None creates a sufficiency decision.
 
 The continuous submission-bundle request cannot become live while its fixed
 pre-submit materializer is unavailable. AUTH therefore splits checker
-activation: pre-submit materialization activates after hidden ART-04B1-04B3 evidence
-and before XINT-05A activates contributor preparation. Post-submit
+activation: pre-submit materialization activates after hidden ART-04B1-04B3
+evidence and before WS-ARCH-001-02G activates contributor preparation after
+the complete 02A-02F public-capability/hidden-transaction path. Post-submit
 materialization and checker output/binding activate later after ART-06A/06B.
 
 ## D48 - Remaining L1 Submission Work Is Split By Durable Boundary
@@ -585,8 +586,10 @@ cutover. Removing its shared service before admission-backed Submission creation
 exists would either permit unchecked legacy Submission creation or preserve a
 hidden compatibility seam. PLAN5 therefore supersedes early chunk 04A4. The
 legacy route and the mandatory internal legacy Submission guard remain frozen
-while 04B1-04C2 and 05A build the replacement. ART-05B removes the route,
-schemas, public service entry point, internal guard, and caller-owned package
-contract together when verified admission consumption becomes the only live
-Submission path. No alias, redirect, fallback, or caller-manifest adapter is
-allowed.
+while 04B1-04C2 and WS-ARCH-001-02A-02H build the hidden replacement. After
+checker-remediation, reviewer-requested revision, post-submit checker-output,
+repair, and REV-admission prerequisites merge, WS-ARCH-001-02I removes the
+route, schemas, public service entry point, internal guard, and caller-owned
+package contract together when verified admission consumption becomes the only
+live Submission path. No alias, redirect, fallback, or caller-manifest adapter
+is allowed.

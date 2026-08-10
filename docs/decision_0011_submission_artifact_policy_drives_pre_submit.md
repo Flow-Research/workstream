@@ -253,7 +253,7 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
   structured checker result for project operators
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
-At the ART-05B cutover, the legacy standalone
+At the deferred WS-ARCH-001-02I cutover, the legacy standalone
 `/tasks/{id}/submission-precheck` contract is removed. Pre-submit checks then
 run only inside the continuous submission-bundle preparation request against
 the exact uploaded ZIP in bounded scratch:

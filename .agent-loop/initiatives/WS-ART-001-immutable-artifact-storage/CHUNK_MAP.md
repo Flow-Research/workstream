@@ -29,15 +29,15 @@ they cross multiple L1 boundaries.
 | `WS-ART-001-04A1` | Remove legacy multi-step contributor intake reachability and schema without adding the replacement route. | L1 | Merged PR #264 |
 | `WS-ART-001-04A2` | Add bounded one-outer-ZIP intake and archive-safety inspection in private scratch. | L1 | Merged PR #266 |
 | `WS-ART-001-04A3` | Add canonical semantic manifest, executable normalization, and unchanged-work gate. | L1 | Merged PR #268 |
-| `WS-ART-001-04A4` | Former early removal of the legacy independently invocable caller-owned submission-precheck route and contract. | L1 | Superseded by PLAN5; complete removal belongs to 05B |
+| `WS-ART-001-04A4` | Former early removal of the legacy independently invocable caller-owned submission-precheck route and contract. | L1 | Superseded by PLAN5; complete removal belongs to deferred WS-ARCH-001-02I |
 | `WS-ART-001-04B1` | Add the single versioned checker catalogue and compile one effective execution plan from platform defaults plus locked project policy. | L1 | Merged PR #276 |
 | `WS-ART-001-04B2` | Materialize the sealed manifest tree once and execute the mandatory platform/default catalogue phases. | L1 | Merged PR #282 |
 | `WS-ART-001-04B3` | Execute locked project-policy rules through the same plan and persist one bounded immutable evidence set. | L1 | Merged PR #291 as `8f516e6d` |
 | `WS-ART-001-04C1` | Reauthorize and atomically persist the evidence-linked submission intent, capacity, and generic put attempt, then write the checked ZIP once. | L1 | Merged PR #296 |
 | `WS-ART-001-04C2` | Reuse verification/recovery to publish one capacity-charged ready admission and compose the hidden continuous endpoint. | L1 | Merged PR #300 as `b2e2c615` |
-| `WS-ART-001-05A` | Coordinate ART-owned admission/binding with TASK-owned immutable Submission under fresh human/service authority. | L1 | Superseded as executable; requires WS-ARCH-001-02 split replacement contracts |
-| `WS-ART-001-05B` | Cut the TASK-owned live Submission API/dispatch to ART verified admission and remove the complete legacy precheck/caller-owned package contract. | L1 | Superseded as executable; requires WS-ARCH-001-02 split replacement contracts |
-| `WS-ART-001-06A` | Persist post-submit checker input snapshot and materialization bound to the unified compilation and compiled checker plan. | L1 | Proposed after the replacement 05-wave cutover and POL-06B/07 |
+| `WS-ART-001-05A` | Historical ART admission/binding plus Submission coordination proposal. | L1 | Superseded/non-executable; replaced by WS-ARCH-001-02E/02F |
+| `WS-ART-001-05B` | Historical live Submission API/dispatch cutover proposal. | L1 | Superseded/non-executable; replaced by WS-ARCH-001-02I after 02A-02H |
+| `WS-ART-001-06A` | Persist post-submit checker input snapshot and materialization bound to the unified compilation and compiled checker plan. | L1 | Proposed after WS-ARCH-001-02H and POL-06B/07; required before deferred 02I |
 | `WS-ART-001-06B` | Store/bind checker outputs and preserve POL-owned single-port routing. | L1 | Proposed after 06A |
 | `WS-ART-001-07A` | Add lease-scoped exact-binding reviewer packet materialization without review lifecycle ownership. | L1 | Proposed after 06B plus hidden REV manifest |
 | `WS-ART-001-07B` | Bind accepted Submission/ART identity into the CON handoff without provider I/O. | L1 | Proposed after REV acceptance and CON hidden contract |
@@ -54,11 +54,12 @@ AUTH-04B implementation [merged PR #245]
 -> XINT-06A pre-submit materializer activation
 -> ART-04C1 -> 04C2
 -> WS-ARCH-001-01 boundary foundation
--> WS-ARCH-001-02 split public-API replacement contracts
--> ownership-correct AUTH preparation + ART admission/binding + TASK Submission
--> replacement activation/API cutover and complete legacy precheck removal
+-> WS-ARCH-001-02A-02F hidden public-capability/transaction foundations
+-> WS-ARCH-001-02G/02H exact AUTH activation
 -> POL-06B -> POL-07 -> ART-06A -> ART-06B
 -> XINT-06B post-submit/output activation
+-> WS-ARCH-001-03/04/05 split remediation, review-revision, checker, and REV-admission prerequisites
+-> WS-ARCH-001-02I live admission-only clean cut
 -> ART/REV-07A hidden packet contract
 -> XINT-07A packet activation only
 -> REV acceptance -> ART/CON-07B identity handoff
