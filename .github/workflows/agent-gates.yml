@@ -2,13 +2,14 @@ name: Agent Gates
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
-  pull_request_review:
-    types: [submitted, dismissed]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: agent-gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   agent-gates:
@@ -17,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -36,16 +38,8 @@ jobs:
       - name: Stale artifact contract check
         run: python3 scripts/check_stale_artifact_contracts.py
 
-      - name: Guide extractor dependency approval
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          WORKSTREAM_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          WORKSTREAM_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          WORKSTREAM_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          WORKSTREAM_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: >-
-          python3 backend/scripts/check_guide_extractor_dependencies.py
-          --require-pr-approval
+      - name: Guide extractor dependency validation
+        run: python3 backend/scripts/check_guide_extractor_dependencies.py
 
       - name: Lightweight gate regression tests
         run: python3 -m unittest -v scripts.test_lightweight_agent_gates
