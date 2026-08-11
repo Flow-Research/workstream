@@ -2913,7 +2913,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 100 ActionIds, 48 active actions, and\n52 planned actions" in operations
+        "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
     )
 
 
@@ -3036,8 +3036,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
             audit.read""".split(),
         AdminRole.PROJECT_MANAGER: """project.create project.read project.setup_diagnostic.read
-            project.effective_policy.read project.update project.archive
-            project.guide.manage project.effective_policy.manage project.task.manage
+            project.effective_policy.read project.update project.archive project.guide.manage
+            project.guide_compilation.request project.effective_policy.manage project.task.manage
             project.review_policy.manage project.role_grant.read project.role_grant.manage
             artifact.guide_source.ingest
             review.queue.inspect contribution.read_project compensation.award.read
@@ -3069,9 +3069,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
         for permission in ADMIN_ROLE_PERMISSIONS[AdminRole.AUDIT_AUTHORITY]
     )
 
-    permission_response = AdminRoleGrantService.permission_definitions()
-    role_response = AdminRoleGrantService.role_definitions()
-    assert permission_response.total == 71
+    permission_response, role_response = AdminRoleGrantService.permission_definitions(), AdminRoleGrantService.role_definitions()
+    assert permission_response.total == 73
     assert [item.permission_id.value for item in permission_response.items] == sorted(
         permission.value for permission in PermissionId
     )
@@ -3945,16 +3944,16 @@ class _GuideMutationAuthorityFacts:
         scope_project_id,
         for_update,
         allowed_roles,
+        exact_project_scope=False,
     ):
         assert actor_profile_id == self.context.actor_profile_id
         assert permission_id is self.permission_id
         assert scope_project_id is not None
         assert for_update is True
         assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
-        if self.grant is None or self.grant.scope_project_id not in {
-            None,
-            scope_project_id,
-        }:
+        if self.grant is None or self.grant.scope_project_id not in {None, scope_project_id}:
+            return None
+        if exact_project_scope and self.grant.scope_project_id != scope_project_id:
             return None
         return self.grant
 

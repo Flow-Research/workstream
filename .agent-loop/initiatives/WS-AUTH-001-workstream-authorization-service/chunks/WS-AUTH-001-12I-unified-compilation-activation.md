@@ -112,6 +112,7 @@ never copied, reconstructed, persisted, logged, or placed in Celery.
 ```text
 backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/project_guide_compilation.py
+backend/app/modules/authorization/admin_schemas.py
 backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/guide_compilation.py
 backend/app/modules/authorization/domain/**
@@ -128,6 +129,7 @@ backend/tests/authorization/guide_compilation/**
 backend/tests/authorization/__init__.py
 backend/tests/test_audit.py
 backend/tests/test_alembic.py
+backend/tests/test_auth.py
 backend/tests/test_authorization.py
 backend/tests/conftest.py
 backend/tests/projects/guide_compilation/test_migration_contract.py
@@ -137,11 +139,18 @@ backend/scripts/authorization_boundary.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
 backend/scripts/run_test_lanes.py
+backend/scripts/run_isolated_tests.py
+backend/scripts/validate_test_lane_evidence.py
 backend/tests/test_ci_test_lanes.py
+backend/tests/test_isolated_database_runner.py
+backend/tests/test_merge_test_lane_evidence.py
+backend/tests/test_test_lane_evidence.py
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .github/workflows/backend.yml
+scripts/test_lightweight_agent_gates.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
+docs/operations_backend_testing.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/**
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md
