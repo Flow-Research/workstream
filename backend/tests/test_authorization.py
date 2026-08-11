@@ -2904,13 +2904,12 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     )
     assert "all 22 ART rows to ten exact activation custodians" in operations
     assert "the original 19 REV\nrows to seven exact AUTH custodians" in operations
-    assert "transfer adds no migration; the later WS-XINT-002-01" in operations
+    assert "v0.1 baseline.\nThe REV transfer adds no migration." in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
         "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
     )
-
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
     repository_root = Path(__file__).resolve().parents[2]
