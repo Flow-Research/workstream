@@ -22,7 +22,7 @@ schema baseline. No old database is upgradeable.
 
 ## Not allowed
 
-- Product model, API, permission, action, role, lifecycle, or worker behavior
+- Product model, API, permission, action, role, lifecycle, or background-job behavior
 - Compatibility stamps, aliases, bridge revisions, dual baselines, or retained
   old revision files
 - CI timeout or coverage-floor weakening
