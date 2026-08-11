@@ -1,6 +1,6 @@
 # Architecture Lockdown
 
-Last updated: 2026-07-14
+Last updated: 2026-08-11
 
 ## Purpose
 
@@ -22,6 +22,13 @@ public-API dependency rules in
 [`../.agent-loop/policies/architecture-boundaries.md`](../.agent-loop/policies/architecture-boundaries.md).
 Cross-module runtime imports use only the target module's typed `api` package;
 the composition root alone wires concrete implementations.
+
+The TASKS public boundary exposes immutable task, assignment, immediate
+Submission predecessor, and locked project-context reference selectors through
+`app.modules.tasks.api`. It exposes no TASK ORM row, repository, session,
+mutable policy body, or PROJECT/CHECKER/ACTOR persistence. Those locked
+references are inputs to their owning public capabilities; they do not transfer
+policy or identity ownership into TASKS.
 
 The ADR files under `docs/decision_*.md` are the decision record for this lockdown. When a locked rule changes, update or add an ADR before changing implementation specs.
 

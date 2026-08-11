@@ -74,6 +74,9 @@ AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
 MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
     {"backend/scripts/module_boundaries.py"}
 )
+TASK_BOUNDARY_FOUNDATION_TARGETS = frozenset(
+    {"backend/app/modules/tasks/api/submission_context.py"}
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -229,6 +232,7 @@ def _validate_additive_partition_transition(
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
+        | TASK_BOUNDARY_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

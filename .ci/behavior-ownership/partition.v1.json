@@ -630,6 +630,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/submission_context.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/authorization.py"
     },
     {
@@ -761,7 +765,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "a5eda4a48b564b685080c6a387a3563c638b0e46bda0ac1b5b06d28f2f4b13ea",
+  "authority_digest": "b1e7516a8ceb1eccff47d177a665b5fe9c971b9cab9d420c828b7537f34e44b9",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

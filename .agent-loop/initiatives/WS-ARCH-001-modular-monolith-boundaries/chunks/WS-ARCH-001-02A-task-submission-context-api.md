@@ -1,5 +1,8 @@
 # Chunk Contract: WS-ARCH-001-02A — TASK Submission Context Public API
 
+Implementation state: in review; on merge, this chunk is complete and
+WS-ARCH-001-02B becomes the next eligible implementation boundary.
+
 ## Parent initiative
 
 WS-ARCH-001 — Modular Monolith Boundaries
@@ -45,10 +48,12 @@ backend/app/modules/tasks/service.py
 backend/tests/architecture/test_module_boundaries.py
 backend/tests/test_tasks.py
 backend/tests/test_submission_bundle_admission.py
+backend/scripts/behavior_ownership.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02A-task-submission-context-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02A-task-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02A-external-review-response.md
 docs/architecture_lockdown.md
 ```
 
@@ -73,7 +78,7 @@ mutable dictionaries in the public API; new private edges.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/tasks tests/architecture/test_module_boundaries.py tests/test_tasks.py)
-(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_tasks.py tests/test_submission_bundle_admission.py --cov=app.modules.tasks.api --cov-report=term-missing --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_tasks.py tests/test_submission_bundle_admission.py --cov=app.modules.tasks.api --cov-report=term-missing --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py
 git diff --check
