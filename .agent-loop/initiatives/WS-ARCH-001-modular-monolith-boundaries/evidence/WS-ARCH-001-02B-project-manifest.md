@@ -66,6 +66,8 @@ existing ownership partition and exact additive-transition allowlist.
   prove all five selected queries use `FOR UPDATE`;
 - focused public API coverage is 100 percent;
 - protected-base module-boundary and behavior-ownership validation pass;
+- the focused capability tests live in a bounded PROJECT test module, and the
+  frozen test-structure ledger records no new or grown structural debt;
 - Ruff, Markdown-link, stale-wording, and diff checks pass.
 
 The PostgreSQL cases run in hosted Backend/Agent Gates because this worktree
