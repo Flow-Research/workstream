@@ -4,9 +4,9 @@
 
 - Replaced the stale AUTH-only transition-validator wording with the exact
   module public-API foundation terminology.
-- Extracted exact locked-policy persistence from the legacy 1,300-line PROJECT
-  repository into `ProjectLockedPolicyRepository` and added that bounded module
-  to the chunk's 90 percent coverage command.
+- Extracted exact historical-lineage resolution from the legacy 1,300-line
+  PROJECT repository into `ProjectLockedPolicyRepository` and added that
+  bounded module to the chunk's 90 percent coverage command.
 - Replaced iteration-count PostgreSQL lock polling with a wall-clock deadline
   and a bounded positive polling interval.
 
