@@ -50,7 +50,6 @@ backend/app/modules/tasks/pre_submit_context.py
 backend/app/modules/artifacts/submission_admission.py
 backend/scripts/behavior_ownership.py
 backend/tests/architecture/test_module_boundaries.py
-backend/tests/checkers/test_pre_submit_public_api.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
@@ -89,8 +88,8 @@ session, concrete executor, or mutable internal result leakage.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/checkers app/modules/artifacts/submission_admission.py app/modules/tasks/pre_submit_context.py tests/architecture/test_module_boundaries.py tests/checkers/test_pre_submit_public_api.py)
-(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/checkers/test_pre_submit_public_api.py tests/test_submission_bundle_admission.py --cov=app.modules.checkers.api --cov-report=term-missing --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/checkers app/modules/artifacts/submission_admission.py app/modules/tasks/pre_submit_context.py tests/architecture/test_module_boundaries.py)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_submission_bundle_admission.py --cov=app.modules.checkers.api --cov-report=term-missing --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py
 git diff --check
