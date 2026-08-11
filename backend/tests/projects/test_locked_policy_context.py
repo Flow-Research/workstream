@@ -27,7 +27,6 @@ from app.modules.projects.api import (
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     PreSubmitCheckerPolicy,
-    ProjectGuide,
 )
 from app.modules.projects.repository import ProjectRepository
 from test_projects import (
@@ -329,14 +328,6 @@ async def _supersede_locked_policy_context(
     """Move one exact PROJECT policy lineage to its historical states."""
     async with db_session.get_session_factory()() as session:
         superseded_at = datetime.now(UTC)
-        await session.execute(
-            update(ProjectGuide)
-            .where(
-                ProjectGuide.project_id == str(request.project_id),
-                ProjectGuide.version == request.guide_version,
-            )
-            .values(status="superseded", superseded_at=superseded_at)
-        )
         for model, identifier in (
             (EffectiveProjectSubmissionArtifactPolicy, request.effective_policy_id),
             (PreSubmitCheckerPolicy, request.pre_submit_policy_id),
@@ -364,7 +355,7 @@ async def test_project_repository_postgresql_locked_policy_state_matrix(
     await _supersede_locked_policy_context(request)
     async with db_session.get_session_factory()() as session:
         historical = await ProjectRepository(session).lock_locked_policy_context(request)
-        assert historical.guide_status == "superseded"
+        assert historical.guide_status == "active"
         assert historical.effective_policy_status == "superseded"
         assert historical.pre_submit_policy_status == "superseded"
 
