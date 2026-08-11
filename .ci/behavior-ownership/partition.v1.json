@@ -158,10 +158,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/modules/actors/service_identity_migration.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/app/modules/api_controls/models.py"
     },
     {
@@ -774,7 +770,11 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/service_actor_identity_mapping.py"
+      "target": "backend/scripts/schema_baseline_manifest.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/scripts/schema_baseline_sql.py"
     },
     {
       "group": "shared",
@@ -789,7 +789,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "980703d737c30d6579d96d01bb348116af9bfbc772a1d74ad15131d9e2388597",
+  "authority_digest": "a26548020ee449fb68a72c86e17bd1f98a6d47804e55d09a5f1a9f3b4c5fb095",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

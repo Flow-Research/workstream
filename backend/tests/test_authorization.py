@@ -2667,10 +2667,6 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
         ".agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md"
     )
     allowed = {
-        "backend/alembic/versions/0021_authorization_action_evidence.py",
-        "backend/alembic/versions/0022_bootstrap_admin_grants.py",
-        "backend/alembic/versions/0023_service_actor_identity.py",
-        "backend/alembic/versions/0036_art_auth_catalogue_reconciliation.py",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-07A-closed-permission-action-catalogue.md",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09-actor-state-service-actors.md",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09A-service-identity-foundation.md",
@@ -2908,13 +2904,12 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     )
     assert "all 22 ART rows to ten exact activation custodians" in operations
     assert "the original 19 REV\nrows to seven exact AUTH custodians" in operations
-    assert "transfer adds no migration; the later WS-XINT-002-01" in operations
+    assert "v0.1 baseline.\nThe REV transfer adds no migration." in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
         "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
     )
-
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
     repository_root = Path(__file__).resolve().parents[2]

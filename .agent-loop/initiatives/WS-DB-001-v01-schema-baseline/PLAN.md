@@ -22,14 +22,16 @@
 3. Build one root Alembic revision, `0001_v01_baseline`, from reviewed
    deterministic schema and seed resources.
 4. Commit deterministic resources under `backend/alembic/baseline/`:
-   `v01_schema.sql`, `v01_reference_data.sql`, and
-   `v01_source_manifest.json`. The SQL must contain no owner, database,
+   `v01_schema.sql`, `v01_reference_data.sql`, the raw
+   `v01_pre_reset_source_manifest.json`, the installed
+   `v01_baseline_manifest.json`, and `v01_approved_manifest_delta.json`. The SQL must contain no owner, database,
    credential, session authorization, or environment-specific statement. It
    emits grants against the allowlisted target-role mapping and applies
    deterministic `setval`/identity restart state after seeded inserts.
 5. Provision a second empty database from only the new baseline.
-6. Compare normalized old-head and new-baseline manifests byte-for-byte, then
-   run ORM, runtime catalogue, fixed-service, mutation-guard, and API proof.
+6. Machine-check that normalized old-head and new-baseline manifests differ
+   only by the approved two-sequence collision repair, then run ORM, runtime
+   catalogue, fixed-service, mutation-guard, and API proof.
 7. Delete the 63 old revisions and replace historical-transition tests with
    current-state baseline and enforcement tests.
 8. Delete `backend/migration_contracts/**`, the revision-0023-only service
@@ -63,7 +65,8 @@ change.
 
 - Alembic reports exactly one head/root revision.
 - Empty database upgrade succeeds twice on independent databases.
-- Normalized old-head and new-baseline object/reference manifests match.
+- Normalized old-head and new-baseline object/reference manifests differ only
+  by the committed, approved sequence-state repair.
 - Sequence runtime/identity restart state matches, and the first generated key
   after baseline installation cannot collide with a seeded row.
 - For every canonical ACL entry, effective privileges queried under each

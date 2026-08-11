@@ -87,7 +87,6 @@ class TestLane:
 
 SHARED_FOUNDATION_MODULES = (
     "tests/test_actor_legacy_classification.py",
-    "tests/test_actor_migration_tools.py",
     "tests/test_agent_runtime.py",
     "tests/test_api_contract_e2e.py",
     "tests/test_api_controls.py",

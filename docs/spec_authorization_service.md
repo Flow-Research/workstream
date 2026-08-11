@@ -127,7 +127,7 @@ The active model has no `both`, replacement field, replacement event, or
 replacement reason. Qualification evidence is bound to the same actor, project,
 and exact requested role. One active row is permitted per
 actor/project/role. Issue idempotency includes the requested role; revoke derives
-the role from the locked grant. Migration `0031` refuses upgrade when obsolete
+the role from the locked grant. The v0.1 baseline excludes obsolete
 combined or replacement evidence exists and never converts or deletes those
 rows. It replaces current typed and PostgreSQL validators without changing
 historical migrations.
@@ -292,7 +292,7 @@ AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.
 AUTH-08 activates exactly seven administrative actions through migration
 `0022`; all other registered actions remain planned.
 
-AUTH-09A registers these exact planned actions through migration `0023`:
+AUTH-09A registers these exact planned actions in the v0.1 baseline:
 
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
@@ -407,7 +407,7 @@ Artifact verification recovery remains the existing
 registered. Shared outbox dispatch/retry remains owned by the shared-outbox
 subsystem and is not represented as a REV-owned projection action.
 
-Migration `0021` is availability-neutral. PostgreSQL enforces the closed
+The v0.1 baseline is availability-neutral for this surface. PostgreSQL enforces the closed
 ActionId set, authorization-decision event shape, exact ActionId-to-PermissionId
 mapping, and the requirement that every post-`0018` permission carry a mapped
 action. Typed catalogue validation separately rejects allowed evidence until the
@@ -501,12 +501,12 @@ Operator grant or entitlement. WS-XINT-002-03 activates the three internal
 service actions, WS-XINT-002-04A activates guide-source ingest, and
 WS-XINT-002-04B activates the two fixed-service guide binding/read actions; the
 other 16 ART actions remain planned and unavailable.
-Migration `0037` admits the exact privacy-bounded ART resource-context digest
+The v0.1 baseline admits the exact privacy-bounded ART resource-context digest
 in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
 independent activation proof; read/status proof cannot activate retry. The
 historical ART transfer added no migration; WS-XINT-002-01 reconciles the
-closed catalogue through migration `0036`. The separately started REV custody
+closed catalogue in the v0.1 baseline. The separately started REV custody
 transfer is also complete: all 19 REV rows now name exact AUTH custodians,
 remain planned and unavailable, and add no migration.
 
@@ -581,7 +581,7 @@ project-setup actions and all six REV rows remain planned and unavailable.
 Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
-itself; migration `0043_project_setup_service` only expands the closed database
+itself; the v0.1 baseline only expands the closed database
 identity constraint.
 
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer
@@ -1131,12 +1131,11 @@ execution task, calls no provider, and does not make the hidden POL workflow liv
 | `project.setup_run.update` | `project.guide.manage` | `WS-AUTH-001-12B2` |
 | `project.guide.activate` | `project.guide.manage` | `WS-AUTH-001-12H` |
 
-Migration `0054_guide_sufficiency_authority` preserves historical sufficiency
+The v0.1 baseline preserves historical sufficiency
 rows as readable, unattributed records while requiring complete creation or
 acknowledgement authority provenance for new 12E mutations. Its replay ledger
-is append-only, and downgrade is refused after any 12E replay or provenance
-exists. Operators must not delete authority or product evidence to force a
-rollback.
+is append-only. Operators must preserve authority and product evidence and
+recover forward.
 
 `WS-AUTH-001-12F` is a planning-only parent and activates nothing. 12F1 owns
 the zero-activation PREP/replay/provenance foundation; 12F2 owns explicitly
@@ -1156,7 +1155,7 @@ idempotency from fixed setup-service task custody. Manual mutations permit only
 `reserved -> pending -> committed` state machine: `reserved` is committed before
 material or agent I/O, while the final two transitions commit atomically with
 the derived policy, final AUTH evidence, and setup output.
-Migration `0057_submission_policy_authority` preserves existing product rows in
+The v0.1 baseline preserves existing product rows in
 the all-null unattributed shape until their owning route cutovers. 12F2 now
 activates only manual human create/update. Manual update appends a separately
 authorized successor, binds predecessor hash and successor identity through
@@ -1165,14 +1164,12 @@ Diagnostic sufficiency, legacy role strings, services, contributors, and
 agent-derived rows cannot authorize this exception. Fixed-service derive is
 active under 12F3; human approval remains planned for 12F4. Any durable
 execution claim or replay row—including reserved or pending—or attributed
-provenance blocks downgrade. Any submission-policy
-authorization audit event, including denied evidence, also blocks downgrade so
-the admitted evidence vocabulary is never removed while referenced.
+provenance must be preserved. Submission-policy authorization audit events,
+including denied evidence, must also be preserved.
 
-Migration `0041_project_mutation_evidence` extends only the closed audit
-action-to-permission evidence constraint. It follows ART migration
-`0040_guide_materialization`, adds no permission, and refuses downgrade after
-direct or idempotency-linked evidence uses any new action.
+The v0.1 baseline extends only the closed audit action-to-permission evidence
+constraint. It includes the verified guide-materialization schema, adds no
+permission, and requires direct or idempotency-linked evidence to be preserved.
 
 The two collection routes return and transactionally bind at most the newest
 100 canonical rows in deterministic newest-first order. Older retained records
@@ -1243,7 +1240,7 @@ where existence itself is sensitive.
 
 First access and administrative mutations are rate-controlled through
 Postgres-backed fail-closed controls before their public APIs become available.
-Migration `0033_authorization_read_rate` extends that same durable
+The v0.1 baseline extends that same durable
 counter with the closed `authorization_read` scope. Its dependency remains
 unattached and activates no action until AUTH-10B2. The dedicated default is
 120 requests per 60 seconds per verified issuer/subject digest, independently

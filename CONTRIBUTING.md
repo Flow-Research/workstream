@@ -50,6 +50,10 @@ progress. Calendar plans, early chunk specifications, imported files under
 are useful history unless a current document explicitly adopts them; they are
 not by themselves current sequencing or proof that behavior is live.
 
+The active migration graph is the clean v0.1 baseline. A local database with a
+removed pre-v0.1 revision must be recreated; do not add a compatibility stamp,
+bridge migration, or second baseline.
+
 Roadmaps and status documents must use capability milestones and evidence. Do
 not introduce delivery promises such as day plans, numbered weeks, or rolling
 time windows as repository authority.

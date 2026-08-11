@@ -35,7 +35,9 @@ schema baseline. No old database is upgradeable.
    `0001_v01_baseline`, with `down_revision = None`.
 2. A fresh database reaches the single head and exposes exact current tables,
    columns, keys, checks, indexes, sequences, types, functions, and triggers.
-3. Normalized source-head and baseline manifests match byte-for-byte.
+3. The raw normalized source-head manifest and installed-baseline manifest
+   differ only by the committed, machine-checked correction that advances the
+   two singleton-row sequences past their seeded keys.
 4. Canonical authorization catalogue and fixed-service reference rows match
    runtime definitions exactly.
 5. Database immutability, append-only, evidence-linkage, and lifecycle guards
@@ -57,7 +59,10 @@ schema baseline. No old database is upgradeable.
     rows remain unchanged.
 12. The committed manifest extractor covers a closed list of PostgreSQL object
     classes and has sentinel tests for each class. Source and baseline manifests
-    are committed at `backend/alembic/baseline/v01_source_manifest.json` and
+    are committed at
+    `backend/alembic/baseline/v01_pre_reset_source_manifest.json` and
+    `backend/alembic/baseline/v01_baseline_manifest.json`, with the sole
+    approved difference recorded in `v01_approved_manifest_delta.json` and
     compared by the hosted suite.
     Sequence runtime state (`last_value`/`is_called` and equivalent identity
     restart state) is included; seed SQL restores it deterministically and a

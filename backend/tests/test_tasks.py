@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, call
 from uuid import UUID, uuid4
 
 import pytest  # type: ignore[import-not-found]
-from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, inspect, select, text, update
@@ -2424,33 +2423,6 @@ async def test_chunk4_migration_creates_expected_tables(task_database_env: str) 
     }.issubset(table_names)
 
 
-@pytest.mark.postgres_schema_contract
-def test_chunk4_migration_downgrade_removes_task_tables(task_database_env: str) -> None:
-    config = alembic_config()
-    asyncio.run(db_session.dispose_engine())
-    command.downgrade(config, "0002_project_guide_foundation")
-
-    async def inspect_tables() -> set[str]:
-        async with db_session.get_engine().connect() as connection:
-            return await connection.run_sync(
-                lambda sync_connection: set(inspect(sync_connection).get_table_names())
-            )
-
-    table_names = asyncio.run(inspect_tables())
-
-    assert "projects" in table_names
-    assert {
-        "actor_identities",
-        "actor_profiles",
-        "workstream_tasks",
-        "task_assignments",
-        "submissions",
-        "evidence_items",
-        "audit_events",
-    }.isdisjoint(table_names)
-
-    asyncio.run(db_session.dispose_engine())
-    command.upgrade(config, "head")
 
 
 def test_task_assignment_partial_unique_index_metadata_compiles() -> None:
