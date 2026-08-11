@@ -230,11 +230,11 @@
     },
     {
       "capability": "unassigned_legacy_auth",
-      "content_sha256": "026a8a0125bb3b854b9134a77951cce0963f9674aae514802cd6cb26ce47a35e",
-      "end_line": 13440,
+      "content_sha256": "dccb6b375f33912a43ae12fed6d27c385720b517878c59b947758a65430dfca1",
+      "end_line": 13439,
       "hard_limit": 1200,
       "kind": "test_file",
-      "observed_lines": 13440,
+      "observed_lines": 13439,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -699,58 +699,58 @@
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "951b44cc07e36002118fe93b7974e8d65851b0e2c3cec89a3031cbe42b014e2d",
-      "end_line": 8540,
+      "end_line": 8539,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 140,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_actor_lifecycle_service_applies_success_and_guards_conflicts",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 8401
+      "start_line": 8400
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "569084d6de89ff9eae71d526fc6c157aea7638f55ca93ad128b721fbda339be6",
-      "end_line": 9030,
+      "end_line": 9029,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 122,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_admin_resource_digest_alone_rejects_substituted_role_and_disposition",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 8909
+      "start_line": 8908
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "90b8b670b4d277209617cc1aa794188b4fb3cd9d894b69d5dc3d0adfc885f6ed",
-      "end_line": 9258,
+      "end_line": 9257,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 132,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_admin_revoke_stages_complete_state_and_evidence",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 9127
+      "start_line": 9126
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "78d9bf3df08e5633e9a75720b1e4bf5b7d7b24019bc392b4cb7496a9ac5e5e8e",
-      "end_line": 11092,
+      "end_line": 11091,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 122,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_authorization_locks_refresh_cached_actor_lifecycle_state",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 10971
+      "start_line": 10970
     },
     {
       "capability": "unassigned_legacy_auth",
-      "content_sha256": "a11662d105c5c297e72572ca126f71a2f63d04d7b0d7c22f89d0b2c54ce1556b",
-      "end_line": 2253,
+      "content_sha256": "aab80cce1a72714c4ec2e95b0596031e59a463459c69a4079627070f79edf349",
+      "end_line": 2252,
       "hard_limit": 120,
       "kind": "test_function",
-      "observed_lines": 328,
+      "observed_lines": 327,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_closed_permission_and_action_catalogue_is_exact_and_non_executable",
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -759,134 +759,134 @@
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "df1df6ec2ba6aa55445e21cfcf4e4e3ad9664c9504313484a495b6a6df1e9047",
-      "end_line": 3487,
+      "end_line": 3486,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 126,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_identity_link_lifecycle_route_preserves_outcome_transaction_contract",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 3362
+      "start_line": 3361
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "05d1b020ecff0f9bc0a0567adc07f5b31a2f9dfb7828ae3ad34d4e1e7757797c",
-      "end_line": 8693,
+      "end_line": 8692,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 151,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_identity_link_lifecycle_service_applies_success_and_guards_conflicts",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 8543
+      "start_line": 8542
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "a45270573154ce2f298221169a3d55530059598bc976263feafc349c77c6ea46",
-      "end_line": 6345,
+      "end_line": 6344,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 121,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_pre_submit_materializer_adapter_binds_every_fact_and_service",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 6225
+      "start_line": 6224
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "c5d6d0d480ced964354915614f15202c0159bfbb281658da0d44186dffd17848",
-      "end_line": 7488,
+      "end_line": 7487,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 142,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_prepared_actor_authority_crossed_mutations_complete_in_both_orders",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 7347
+      "start_line": 7346
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "ebb76e63671195aa4d806ac602bfe58cb22bf82d00c8a70ab186785f3acd7f9b",
-      "end_line": 7829,
+      "end_line": 7828,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 336,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_prepared_crosses_real_lifecycle_service_transactions",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 7494
+      "start_line": 7493
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "9ea4fc0ddbab4c7262a43bc3f498ee1afea3318e9a0b6c93c87763f9f22aae9c",
-      "end_line": 7319,
+      "end_line": 7318,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 518,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_prepared_postgresql_failure_and_cancellation_are_atomic",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 6802
+      "start_line": 6801
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "46e0b031394da6fee856e48615732a17ff8d2276d9cedfb0ecaa3a6879410adb",
-      "end_line": 4692,
+      "end_line": 4691,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 157,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_11c2_reads_require_exact_admin_context_and_role_allowlist",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 4536
+      "start_line": 4535
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "e95d2a03e3829df89c43210a9de92efca31a25905c9648c3179d17b078386b17",
-      "end_line": 2654,
+      "end_line": 2653,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 397,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_mutation_resources_and_prepared_scopes_are_closed",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 2258
+      "start_line": 2257
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "105667302ed6e8f2fd16ea7e95d642e72e41514673e1152503536e0520f9c362",
-      "end_line": 10967,
+      "end_line": 10966,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 204,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_read_permissions_have_postgresql_role_scope_matrix",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 10764
+      "start_line": 10763
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "756b7f99f9a743284934b4d85ce263617710d9b8119792ccb4526a1de04070a1",
-      "end_line": 12469,
+      "end_line": 12468,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 233,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_and_all_operation_mappings_commit_one_linked_pair",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 12237
+      "start_line": 12236
     },
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "2e1d7db74ddb955b90a0ee12e4fb72b651a0f85d2746c76e09079c05b0b85252",
-      "end_line": 13440,
+      "end_line": 13439,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 681,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_issue_postgresql_prep_binds_target_role_and_scope",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 12760
+      "start_line": 12759
     },
     {
       "capability": "unassigned_legacy_auth",
@@ -915,14 +915,14 @@
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "05621e885ed2f88d0ba1a072c1f263fc923939f7ce755a514e9872112aa830a1",
-      "end_line": 11986,
+      "end_line": 11985,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 163,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_service_actor_replay_fails_closed_on_committed_state_drift",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 11824
+      "start_line": 11823
     },
     {
       "capability": "unassigned_legacy_auth",
@@ -1359,14 +1359,14 @@
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "1a0a9f3e2be6965e29f76aa74272ccfa2fe4b99e4e0c3bde5ec8ba2c374b369b",
-      "end_line": 11300,
+      "end_line": 11299,
       "hard_limit": 100,
       "kind": "test_helper",
       "observed_lines": 169,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "_operation_success",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 11132
+      "start_line": 11131
     },
     {
       "capability": "unassigned_legacy_auth",

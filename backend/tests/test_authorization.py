@@ -2150,8 +2150,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE, ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -2802,12 +2801,12 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
     assert approval.owner is ActionOwner.AUTH_12F
     assert approval.availability is ActionAvailability.PLANNED
     active_internal = {
-        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
     }
