@@ -418,7 +418,7 @@ def validate_evidence(
 
     all_collected: list[str] = []
     all_completed: list[str] = []
-    isolation_namespaces: list[tuple[str, str, str, str]] = []
+    isolation_namespaces: list[tuple[str, str, str, str, str]] = []
     coverage_files: list[str] = []
     isolation_files: list[str] = []
     lane_elapsed_seconds: list[float] = []
