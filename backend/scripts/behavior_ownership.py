@@ -220,7 +220,7 @@ def _validate_additive_partition_transition(
     current: dict[str, Any],
     trusted: Any,
 ) -> None:
-    """Allow only the exact approved AUTH boundary-foundation additions."""
+    """Allow only the approved module public-API foundation additions."""
     keys = {"schema", "protected_base_commit", "assignments", "authority_digest"}
     if not isinstance(trusted, dict) or set(trusted) != keys:
         raise BehaviorOwnershipError("invalid_trusted_partition")

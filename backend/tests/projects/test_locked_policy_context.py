@@ -305,7 +305,8 @@ async def _wait_for_project_database_lock(
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
-            for _ in range(5000):
+            deadline = asyncio.get_running_loop().time() + 30.0
+            while asyncio.get_running_loop().time() < deadline:
                 waiting = await connection.scalar(
                     text(
                         "select exists(select 1 from pg_stat_activity where "
@@ -316,7 +317,7 @@ async def _wait_for_project_database_lock(
                 )
                 if waiting:
                     return
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.01)
     finally:
         await engine.dispose()
     raise AssertionError(f"{application_name} never reached the PostgreSQL lock")
