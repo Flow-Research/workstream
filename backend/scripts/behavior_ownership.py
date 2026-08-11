@@ -74,8 +74,12 @@ AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
 MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
     {"backend/scripts/module_boundaries.py"}
 )
-TASK_BOUNDARY_FOUNDATION_TARGETS = frozenset(
-    {"backend/app/modules/tasks/api/submission_context.py"}
+MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
+    {
+        "backend/app/modules/projects/api/locked_policy.py",
+        "backend/app/modules/projects/locked_policy_repository.py",
+        "backend/app/modules/tasks/api/submission_context.py",
+    }
 )
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
@@ -217,7 +221,7 @@ def _validate_additive_partition_transition(
     current: dict[str, Any],
     trusted: Any,
 ) -> None:
-    """Allow only the exact approved AUTH boundary-foundation additions."""
+    """Allow only the exact approved module public-API foundation additions."""
     keys = {"schema", "protected_base_commit", "assignments", "authority_digest"}
     if not isinstance(trusted, dict) or set(trusted) != keys:
         raise BehaviorOwnershipError("invalid_trusted_partition")
@@ -260,7 +264,7 @@ def _validate_additive_partition_transition(
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
-        | TASK_BOUNDARY_FOUNDATION_TARGETS
+        | MODULE_PUBLIC_API_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
         | AUTH_12I_TARGETS
         | V01_BASELINE_ADDED_TARGETS
