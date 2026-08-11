@@ -192,6 +192,21 @@ def test_partition_accepts_only_the_approved_additive_foundation_transition(
     }
 
 
+def test_partition_accepts_only_the_v01_migration_tool_removals() -> None:
+    retained = "backend/app/core/config.py"
+    removed = sorted(ownership.V01_BASELINE_REMOVED_TARGETS)
+    trusted = _partition(sorted([retained, *removed]))
+    current = _partition([retained])
+
+    ownership._validate_additive_partition_transition(current, trusted)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            current,
+            _partition(sorted([retained, *removed, "backend/scripts/extra.py"])),
+        )
+
+
 def test_partition_rejects_reordered_trusted_assignments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
