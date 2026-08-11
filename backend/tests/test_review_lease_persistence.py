@@ -5,11 +5,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import UUID, uuid4
 
-from alembic import command
-from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy import text, update
@@ -507,84 +504,3 @@ async def test_terminal_attempt_is_immutable_and_cannot_reopen(
                 text("update review_leases set status='active' where id=:id"),
                 {"id": value.id},
             )
-
-
-@pytest.mark.postgres_schema_contract
-@pytest.mark.asyncio
-async def test_populated_lease_persistence_refuses_downgrade(
-    review_lease_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-    migration_lock,
-) -> None:
-    _, queue, reviewer_id, version_id = await _seed_queue_and_policy(
-        review_lease_client, monkeypatch
-    )
-    value = _lease_input(queue, reviewer_id, version_id)
-    async with db_session.get_session_factory()() as session:
-        await ReviewQueueRepository(session).add_lease(value)
-        await session.execute(
-            update(ReviewQueueEntry)
-            .where(ReviewQueueEntry.id == queue.id)
-            .values(queue_state="leased", active_lease_id=value.id, lifecycle_generation=2)
-        )
-        await session.commit()
-        starting_revision = await session.scalar(text("select version_num from alembic_version"))
-    await db_session.dispose_engine()
-
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
-
-    def downgrade() -> None:
-        with migration_lock():
-            command.downgrade(config, "0055_contribution_policy")
-
-    # The newest irreversible authority boundary must stop the multi-revision
-    # downgrade before Alembic reaches the older review-lease guard.
-    with pytest.raises(
-        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
-    ):
-        await asyncio.to_thread(downgrade)
-
-    async with db_session.get_session_factory()() as session:
-        assert (
-            await session.scalar(text("select version_num from alembic_version"))
-            == starting_revision
-        )
-        assert await session.get(ReviewLease, value.id) is not None
-
-
-@pytest.mark.postgres_schema_contract
-@pytest.mark.asyncio
-async def test_newer_submission_policy_authority_precedes_preference_downgrade(
-    review_lease_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-    migration_lock,
-) -> None:
-    _, queue, _, _ = await _seed_queue_and_policy(review_lease_client, monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        service_id = await _service_actor(session)
-        await session.commit()
-        starting_revision = await session.scalar(text("select version_num from alembic_version"))
-    await db_session.dispose_engine()
-
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
-
-    def downgrade() -> None:
-        with migration_lock():
-            command.downgrade(config, "0055_contribution_policy")
-
-    with pytest.raises(
-        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
-    ):
-        await asyncio.to_thread(downgrade)
-
-    async with db_session.get_session_factory()() as session:
-        assert (
-            await session.scalar(text("select version_num from alembic_version"))
-            == starting_revision
-        )
-        assert await session.get(ActorProfile, service_id) is not None
-        assert await session.get(ReviewQueueEntry, queue.id) is not None

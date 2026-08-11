@@ -93,8 +93,8 @@ lane ownership remains repository-defined and exact.
 The lanes are balanced by measured dependency ownership: `project_lifecycle`
 owns project tests, `task_lifecycle` owns task and checker tests,
 `schema_contracts_a`, `schema_contracts_b`, and `schema_contracts_c`
-deterministically partition exact
-node IDs from the measured 12-minute `test_alembic.py` hotspot;
+deterministically partition exact node IDs from the baseline and PostgreSQL
+schema-contract suites;
 `schema_contracts_a` also owns reset and isolated-runner contracts. The
 `shared_foundations_a` and `shared_foundations_b` lanes deterministically
 partition exact node IDs from the remaining authorization, artifact, API, and

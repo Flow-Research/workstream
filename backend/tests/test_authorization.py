@@ -2667,10 +2667,6 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
         ".agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md"
     )
     allowed = {
-        "backend/alembic/versions/0021_authorization_action_evidence.py",
-        "backend/alembic/versions/0022_bootstrap_admin_grants.py",
-        "backend/alembic/versions/0023_service_actor_identity.py",
-        "backend/alembic/versions/0036_art_auth_catalogue_reconciliation.py",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-07A-closed-permission-action-catalogue.md",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09-actor-state-service-actors.md",
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09A-service-identity-foundation.md",

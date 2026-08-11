@@ -1218,7 +1218,7 @@ database uniqueness constraint permits one set for that identity. Exact replay
 returns the existing durable evidence set but never returns a new pass
 capability; the caller must re-prepare the exact bundle before a later
 submission attempt. Changed facts or changed deterministic results conflict.
-Migration `0058_pre_submit_evidence` installs the normalized set and
+The v0.1 baseline installs the normalized set and
 result tables plus composite identity-link, assignment, task/project, locked
 guide/policy and predecessor lineage constraints. Set and result rows reject
 update, delete and truncate; result membership closes with the creating
@@ -1260,7 +1260,7 @@ execution, which produces a new prepared generation, evidence identity, and
 single-use pass capability. If the process dies after intent commit, the
 existing generic put-attempt observation and recovery machinery owns the
 technical obligation without another submission-specific recovery aggregate.
-Migration `0060_submission_bundle_intent` installs the immutable join
+The v0.1 baseline installs the immutable join
 and extends only the existing generic put-attempt and receipt producer shapes
 needed for submission bundles.
 
@@ -1710,51 +1710,35 @@ Implementation is a clean cut:
   normal submission creation still enters evaluation automatically;
 - no dual write, nullable shadow field, fake verified backfill, fallback
   adapter, compatibility constructor, or second factory remains;
-- migration `0025` refuses every populated v1 artifact table before DDL and
-  leaves the prior schema and rows unchanged. It performs no automated rebuild
-  or fabricated backfill. Because this is a pre-production clean cut, the
-  Operator must reprovision an empty database/storage namespace out of band and
-  reingest authoritative bytes through v2; records whose authoritative bytes
-  are unavailable are not migrated.
-- migration `0028_artifact_admission` installs the durable admission ledger and prepared
-  put-attempt tables. Its downgrade locks every owned table and refuses to
-  remove the foundation when any admission scope, charge, attempt, or
-  attempt-charge link exists; downgrade is permitted only while all four
-  tables are empty.
-- migration `0030_artifact_verification` adds polymorphic contract-v2 operation
+- the v0.1 baseline contains no v1 artifact schema or fabricated backfill;
+  pre-v0.1 development databases/storage namespaces are reprovisioned and
+  authoritative bytes are reingested through v2;
+- the v0.1 baseline installs the durable admission ledger and prepared
+  put-attempt tables;
+- the v0.1 baseline includes polymorphic contract-v2 operation
   receipts, typed put-observation receipts, verification jobs and receipts, and
-  execution-mode/observation fencing. Existing contributor receipt rows remain
-  readable as contract v1. Downgrade refuses when verification evidence or a
-  non-contributor receipt cannot be represented by the prior schema.
-- migration `0039_guide_source_bindings` deterministically backfills positive,
-  guide-local setup generations ordered by creation time and stable row ID,
+  execution-mode/observation fencing;
+- the v0.1 baseline installs positive guide-local setup generations,
   installs exact guide/snapshot/item/setup-run/content/replica lineage
-  constraints, and creates immutable guide-source bindings. Downgrade is
-  permitted only while the binding table is empty; populated binding evidence
-  is never discarded.
-- migration `0040_guide_materialization` adds immutable exact-binding format
+  constraints, and creates immutable guide-source bindings;
+- the v0.1 baseline adds immutable exact-binding format
   classifications and bounded ART custody incidents. Composite foreign keys
   prevent either table from naming different binding/content/replica/generation
-  facts, and closed status/code checks reject unknown outcomes. Downgrade locks
-  both tables and refuses while either contains evidence. This hidden chunk
+  facts, and closed status/code checks reject unknown outcomes. This hidden chunk
   adds no Operator route or generic artifact-read API; future authorized
   operational visibility must project these bounded records without exposing
   provider references or document content.
-- migration `0042_guide_extraction` adds bounded extraction attempts,
+- the v0.1 baseline adds bounded extraction attempts,
   successful canonical content, exact usage provenance, and a durable
   exact-lineage two-slot materialization budget. Composite constraints prevent
   cross-binding/classification/content/generation usage and require usage to
-  reference an `extracted` attempt. Downgrade locks the four tables and refuses
-  while any extraction or retry-budget evidence exists.
-- migration `0050_guide_source_v2` requires an empty guide-source snapshot
-  namespace, renames the non-authoritative declaration field to `source_label`,
+  reference an `extracted` attempt;
+- the v0.1 baseline uses `source_label` for the non-authoritative declaration,
   removes caller-owned hash/content-id fields, installs the exact v2 manifest
-  trigger, and refuses downgrade when guide-source rows exist rather than
-  fabricating legacy byte identity.
+  trigger, and never fabricates legacy byte identity.
 
-Every migration proves fresh upgrade, prior-head upgrade, populated-state
-preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact
-bytes in PostgreSQL.
+The baseline proves fresh installation, fail-closed refusal of old/nonempty
+databases, and no artifact bytes in PostgreSQL. It is not downgradable.
 
 ## Verification Strategy
 

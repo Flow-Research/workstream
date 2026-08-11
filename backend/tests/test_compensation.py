@@ -5,16 +5,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from pathlib import Path
 from uuid import uuid4
 
-from alembic import command
-from alembic.config import Config
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import inspect, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_settings
 from app.db import session as db_session
@@ -301,53 +297,3 @@ async def test_active_binding_duplicate_race_has_one_winner(
     async with db_session.get_session_factory()() as session:
         rows = (await session.scalars(select(ProjectCompensationAdapterBinding))).all()
         assert len(rows) == 1
-
-
-@pytest.mark.postgres_schema_contract
-def test_0053_binding_migration_round_trip(
-    compensation_database_env: str,
-) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option(
-        "script_location",
-        str(Path(__file__).resolve().parents[1] / "alembic"),
-    )
-    command.downgrade(config, "0052_legacy_intake_removal")
-
-    async def table_names() -> set[str]:
-        engine = create_async_engine(compensation_database_env)
-        try:
-            async with engine.connect() as connection:
-                return set(await connection.run_sync(lambda sync: inspect(sync).get_table_names()))
-        finally:
-            await engine.dispose()
-
-    async def binding_columns() -> set[str]:
-        engine = create_async_engine(compensation_database_env)
-        try:
-            async with engine.connect() as connection:
-                columns = await connection.run_sync(
-                    lambda sync: inspect(sync).get_columns("project_compensation_adapter_bindings")
-                )
-                return {column["name"] for column in columns}
-        finally:
-            await engine.dispose()
-
-    assert "project_compensation_adapter_bindings" not in asyncio.run(table_names())
-    command.upgrade(config, "0053_compensation_bindings")
-    assert "project_compensation_adapter_bindings" in asyncio.run(table_names())
-    assert asyncio.run(binding_columns()) == {
-        "id",
-        "project_id",
-        "instrument_type",
-        "adapter_actor_id",
-        "route_key",
-        "status",
-        "binding_lifecycle_version",
-        "created_by",
-        "created_at",
-        "suspended_by",
-        "suspended_at",
-        "retired_by",
-        "retired_at",
-    }

@@ -1,2 +1,7 @@
 Alembic migration environment for the Workstream backend.
 
+The active graph begins at the single 0001_v01_baseline root. Databases stamped
+with a removed development revision must be recreated; they are never stamped
+or upgraded across the v0.1 clean cut. New revisions begin at 0002.
+Offline SQL generation is intentionally disabled because the clean-database
+preflight requires a live PostgreSQL target.

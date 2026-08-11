@@ -7,7 +7,6 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import UTC, datetime
 import hashlib
-import importlib.util
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,8 +17,6 @@ import zipfile
 import pytest
 from PIL import Image
 from pypdf import PdfWriter
-from alembic import command
-from alembic.config import Config
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -111,42 +108,6 @@ from app.schemas.auth import ActorContext
 from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 
 
-@pytest.mark.parametrize(
-    ("revision_file", "expected_guard"),
-    [
-        (
-            "0039_guide_source_bindings.py",
-            "cannot downgrade populated guide source artifact bindings",
-        ),
-        (
-            "0040_guide_materialization.py",
-            "cannot downgrade populated guide materialization evidence",
-        ),
-        (
-            "0042_guide_extraction.py",
-            "cannot downgrade populated guide extraction evidence",
-        ),
-    ],
-)
-def test_superseded_guide_migration_populated_guards_remain_enforced(
-    monkeypatch: pytest.MonkeyPatch,
-    revision_file: str,
-    expected_guard: str,
-) -> None:
-    """Keep each older guard covered even though 0049 now refuses first."""
-    revision_path = Path(__file__).resolve().parents[1] / "alembic/versions" / revision_file
-    spec = importlib.util.spec_from_file_location(f"guard_{revision_file}", revision_path)
-    assert spec is not None and spec.loader is not None
-    revision = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(revision)
-    populated_result = SimpleNamespace(scalar_one=lambda: True)
-    bind = SimpleNamespace(execute=lambda _statement: populated_result)
-    monkeypatch.setattr(revision.op, "get_bind", lambda: bind)
-
-    with pytest.raises(RuntimeError, match=expected_guard):
-        revision.downgrade()
-
-
 def test_sufficiency_material_limit_accepts_exact_boundary_and_rejects_one_over() -> None:
     base = GuideSourceMaterial(
         project_id="p",
@@ -170,67 +131,6 @@ def test_sufficiency_material_limit_accepts_exact_boundary_and_rejects_one_over(
     assert exc_info.value.code == "guide_source_limit_exceeded"
 
 
-@pytest.mark.asyncio
-@pytest.mark.postgres_schema_contract
-async def test_guide_sufficiency_provenance_migration_round_trip(
-    isolated_database_env: str,
-    migration_lock,
-) -> None:
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
-    with migration_lock():
-        engine = None
-        try:
-            await asyncio.to_thread(command.downgrade, config, "0045_guide_metadata_authority")
-            engine = create_async_engine(isolated_database_env)
-            async with engine.connect() as connection:
-                absent = await connection.scalar(
-                    text("select to_regclass('guide_sufficiency_report_source_usages')")
-                )
-            assert absent is None
-            # Do not reuse a connection pool established against the downgraded
-            # schema when asserting the freshly upgraded constraint catalogue.
-            await engine.dispose()
-            await asyncio.to_thread(command.upgrade, config, "head")
-            engine = create_async_engine(isolated_database_env)
-            async with engine.connect() as connection:
-                present = await connection.scalar(
-                    text("select to_regclass('guide_sufficiency_report_source_usages')")
-                )
-                columns = set(
-                    (
-                        await connection.execute(
-                            text(
-                                "select column_name from information_schema.columns "
-                                "where table_name='guide_sufficiency_reports'"
-                            )
-                        )
-                    ).scalars()
-                )
-            assert present == "guide_sufficiency_report_source_usages"
-            assert {
-                "project_setup_run_id",
-                "setup_generation",
-                "agent_material_sha256",
-                "agent_material_byte_count",
-            }.issubset(columns)
-            async with engine.connect() as connection:
-                setup_columns = set(
-                    (
-                        await connection.execute(
-                            text(
-                                "select column_name from information_schema.columns "
-                                "where table_name='project_setup_runs'"
-                            )
-                        )
-                    ).scalars()
-                )
-            assert "error_artifact_incident_id" in setup_columns
-        finally:
-            await asyncio.to_thread(command.upgrade, config, "head")
-            if engine is not None:
-                await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -1227,11 +1127,6 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
     expected_output: str,
     expected_omissions: dict[str, bool],
 ) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "alembic"))
-    with migration_lock():
-        await asyncio.to_thread(command.downgrade, config, "0042_guide_extraction")
-        await asyncio.to_thread(command.upgrade, config, "head")
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -1301,20 +1196,6 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                         ),
                         {"usage_id": str(result.usage_id)},
                     )
-        with (
-            migration_lock(),
-            pytest.raises(
-                RuntimeError,
-                # The v2 clean-cut is the first downgrade boundary and must
-                # refuse this populated lineage before older evidence guards.
-                match="guide source v2 downgrade requires empty guide-source tables",
-            ),
-        ):
-            await asyncio.to_thread(
-                command.downgrade,
-                config,
-                "0041_project_mutation_evidence",
-            )
     finally:
         if prepared is not None:
             await prepared.close()
@@ -2436,27 +2317,6 @@ async def test_next_generation_explicitly_supersedes_prior_binding(
         await engine.dispose()
 
 
-@pytest.mark.postgres_schema_contract
-def test_0039_refuses_populated_binding_downgrade(
-    isolated_database_env: str,
-    migration_lock,
-) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option(
-        "script_location",
-        str(Path(__file__).resolve().parents[1] / "alembic"),
-    )
-    asyncio.run(_create_populated_binding(isolated_database_env))
-    with (
-        migration_lock(),
-        pytest.raises(
-            RuntimeError,
-            # The v2 clean-cut supersedes the older binding guard whenever
-            # authoritative guide-source lineage exists.
-            match="guide source v2 downgrade requires empty guide-source tables",
-        ),
-    ):
-        command.downgrade(config, "0038_guide_source_ingest")
 
 
 async def _create_populated_binding(database_url: str) -> None:
@@ -2474,27 +2334,6 @@ async def _create_populated_binding(database_url: str) -> None:
         await engine.dispose()
 
 
-@pytest.mark.postgres_schema_contract
-def test_0040_refuses_populated_classification_downgrade(
-    isolated_database_env: str,
-    migration_lock,
-) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option(
-        "script_location",
-        str(Path(__file__).resolve().parents[1] / "alembic"),
-    )
-    asyncio.run(_create_populated_classification(isolated_database_env))
-    with (
-        migration_lock(),
-        pytest.raises(
-            RuntimeError,
-            # Classification evidence is anchored to populated v2 source
-            # lineage, so the outer clean-cut guard must fire first.
-            match="guide source v2 downgrade requires empty guide-source tables",
-        ),
-    ):
-        command.downgrade(config, "0039_guide_source_bindings")
 
 
 async def _create_populated_classification(database_url: str) -> None:
@@ -2526,27 +2365,6 @@ async def _create_populated_classification(database_url: str) -> None:
         await engine.dispose()
 
 
-@pytest.mark.postgres_schema_contract
-def test_0040_refuses_incident_only_downgrade(
-    isolated_database_env: str,
-    migration_lock,
-) -> None:
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option(
-        "script_location",
-        str(Path(__file__).resolve().parents[1] / "alembic"),
-    )
-    asyncio.run(_create_populated_incident(isolated_database_env))
-    with (
-        migration_lock(),
-        pytest.raises(
-            RuntimeError,
-            # Incident evidence is anchored to populated v2 source lineage,
-            # so the outer clean-cut guard must fire first.
-            match="guide source v2 downgrade requires empty guide-source tables",
-        ),
-    ):
-        command.downgrade(config, "0039_guide_source_bindings")
 
 
 async def _create_populated_incident(database_url: str) -> None:

@@ -357,6 +357,11 @@ uv sync --locked --extra dev --python python3
 .venv/bin/python -m uvicorn app.main:app --reload
 ```
 
+The v0.1 schema starts at the single `0001_v01_baseline` Alembic revision.
+Development databases stamped with any earlier revision are intentionally not
+upgradeable: delete and recreate the local database, then run `alembic upgrade
+head`. Workstream never rewrites or compatibility-stamps an old database.
+
 Verify the API from another terminal with:
 
 ```bash

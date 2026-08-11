@@ -17,3 +17,11 @@
 8. The revision-0023 frozen Python contract, service-identity migration helper,
    and its CLI are obsolete after the clean cut and are deleted. The current
    runtime service-identity registry remains authoritative.
+9. The two singleton seed sequences are advanced to their seeded maximum with
+   `is_called = true`. The old development chain left both at `(1, false)`,
+   which would make the first generated key collide with row `1`; preserving
+   that unsafe runtime state would contradict the approved collision guard.
+10. The raw pre-reset source manifest is retained unchanged. A separate
+    installed-baseline manifest and machine-checked approved-delta record make
+    the two sequence repairs visible; parity proof must never mutate the source
+    evidence until it appears identical to the safer target.

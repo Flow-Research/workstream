@@ -6,6 +6,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import get_settings
@@ -19,6 +20,12 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+_BASELINE_REVISION = "0001_v01_baseline"
+_RECREATE_GUIDANCE = (
+    "Workstream v0.1 requires a fresh database; recreate this database before "
+    "running the 0001_v01_baseline migration"
+)
+
 
 def get_database_url() -> str:
     database_url = get_settings().database_url
@@ -28,18 +35,28 @@ def get_database_url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(
-        url=get_database_url(),
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+    raise RuntimeError(
+        "offline migration generation is disabled because the v0.1 fresh-database "
+        "preflight requires a live PostgreSQL target"
     )
-
-    with context.begin_transaction():
-        context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
+    version_table_exists = bool(
+        connection.scalar(text("select to_regclass('public.alembic_version') is not null"))
+    )
+    if version_table_exists:
+        revisions = tuple(
+            connection.execute(text("select version_num from public.alembic_version"))
+            .scalars()
+            .all()
+        )
+        if revisions not in ((), (_BASELINE_REVISION,)):
+            raise RuntimeError(_RECREATE_GUIDANCE)
+    # The read-only preflight autobegins a SQLAlchemy transaction. End that
+    # transaction before Alembic establishes the migration transaction;
+    # otherwise connection disposal would roll back a successful migration.
+    connection.commit()
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
