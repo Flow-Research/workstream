@@ -1,8 +1,8 @@
 # Chunk Contract: WS-ARCH-001-02C — CHECKER Pre-Submit Public API
 
-Implementation state: implemented locally; deterministic non-database evidence
-passes, while hosted database-backed proof and remaining review are pending. No
-contributor preparation action or public route is active.
+Merge disposition: this contract and its projections record `complete`, the
+state that will become durable only if this pull request is human-merged. No
+contributor preparation action or public route is activated by this chunk.
 
 ## Parent initiative
 
@@ -53,6 +53,9 @@ backend/tests/checkers/test_pre_submit_public_api.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
+.agent-loop/CURRENT_STATE.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02C-checker-pre-submit-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02C-checker-manifest.md
 docs/architecture_lockdown.md
@@ -105,3 +108,7 @@ policy ownership drift.
 
 Stop if the change invents another catalogue/executor, requires raw artifact
 bytes in public types, or changes checker semantics.
+
+## Merge state
+
+- Outcome on merge: `complete`
