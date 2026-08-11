@@ -1,62 +1,22 @@
-# Status: WS-POL-002 - Post-Submit Checker Foundation
+# Status: WS-POL-002 Post-Submit Checker Foundation
 
-`WS-POL-003` is authoritative for future guide inference. Remaining runtime
-work consumes its stored post-submit component and performs no standalone
-derivation.
+## Durable state on `main`
 
-## Current Status
+WS-POL-002-01 through WS-POL-002-03 are merged. They established the trusted
+post-submit compiler contract, setup-time derivation and persistence,
+pre-review handoff, server-owned approval/correction history, and bounded setup
+visibility.
 
-Planning completed and merged through PR #85 as
-`3fc1a688743f13476d6092078d40792592823d27`.
+WS-POL-003 is authoritative for all future Project Guide inference. The old
+POL-002-04 standalone inference/hardening sequence is not executable as written.
+Any remaining executor behavior must be reframed as a bounded consumer of the
+stored WS-POL-003 post-submit component and the current checker public API.
 
-Chunk 03 merged through PR #90 as `a7aa474` on 2026-07-11. This authorization
-worktree only reconciles that merged behavior with the active authorization
-baseline. Post-merge memory merged through PR #94 as `b1270d7`. No later chunk
-may start until the relevant authorization foundation exists and the user
-provides a separate explicit start signal.
-`WS-POL-002-01` merged through PR #87 as `ed52c21` on 2026-07-09. It
-implemented the version-stamped trusted post-submit compiler contract,
-default-checker snapshot validation, canonical policy hashing, and tests around
-default-drift safety.
+## Remaining boundary
 
-`WS-POL-002-02` merged through PR #88 as `32af6a7` on 2026-07-11. It
-implemented setup-time post-submit checker derivation, resumable setup
-continuation, generated project `PostSubmitCheckerPolicy` persistence, automatic
-contributor submission handoff to the pre-review gate, and repair-only
-`/finalize` semantics.
+No POL-002 implementation is active. A future executor-only change requires a
+fresh contract against current `main`; it may not restore a second inference
+path or rely on historical explicit-start and post-merge-memory instructions.
 
-`WS-POL-002-03` merged through PR #90 as `a7aa474` on 2026-07-11. It
-implemented server-owned post-submit checker policy approval and correction,
-append-only correction history, exact-context replacement linkage, immutable
-approval provenance, and bounded setup visibility APIs. Required internal
-review, CodeRabbit, and GitHub checks passed before the explicit human merge.
-
-## Active Planning Chunk
-
-None.
-
-## Active Implementation Chunk
-
-None. `WS-POL-002-04` remains inactive until authorization proof and a separate
-explicit user start.
-
-## Current Implementation Branch
-
-None for implementation. Post-merge memory is complete through PR #94.
-
-## Chunk Status
-
-| Chunk | Status | Branch | PR | Notes |
-|---|---|---|---:|---|
-| `WS-POL-002-PLAN` | Merged | `codex/ws-pol-002-post-submit-checker-planning` | #85 | Defines intent, discovery, design, risks, decisions, and implementation chunks. |
-| `WS-POL-002-01` | Merged | `codex/ws-pol-002-01-post-submit-compiler` | #87 | Post-Submit Compiler Contract; merged as `ed52c21`. |
-| `WS-POL-002-02` | Merged | `codex/ws-pol-002-02-post-submit-derivation` | #88 | Post-submit derivation agent and resumable setup integration; merged as `32af6a7`. |
-| `WS-POL-002-03` | Merged | `codex/ws-pol-002-03-post-submit-approval-visibility` | #90 | Server-owned approval, correction audit history, and setup visibility APIs; merged as `a7aa474`. |
-| `WS-POL-002-04` | Inactive | - | - | Runtime hardening remains gated by authorization proof and a separate user start. |
-| `WS-POL-002-05` | Planning skeleton | - | - | Unified zero-model-call live proof; not executable until its full contract is expanded and reviewed. |
-
-## Blockers
-
-| Blocker | Owner | Next action |
-|---|---|---|
-| `WS-AUTH-001` foundation | Authorization proof must precede chunk 04 runtime hardening | Complete the relevant auth cutover, then require an explicit chunk 04 start |
+Open pull requests show transient work. Historical contracts and reviews remain
+evidence for their exact changes, not an active queue.

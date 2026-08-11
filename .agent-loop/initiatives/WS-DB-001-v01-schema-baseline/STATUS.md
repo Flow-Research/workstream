@@ -1,10 +1,10 @@
-# Status
+# Status: WS-DB-001 v0.1 Schema Baseline
 
-- Initiative: `WS-DB-001-v01-schema-baseline`
-- State: `WS-DB-001-01` local implementation and internal review complete;
-  hosted CI pending
-- Source head: `1ad50f4f`
-- Current Alembic head: `0001_v01_baseline`
-- Next action: publish the single PR and complete hosted Backend and Agent Gates
-- Product work remains paused until the baseline reset is merged and a clean
-  database passes the full hosted backend gate.
+- Initiative state: complete
+- Planning merged through PR #316.
+- `WS-DB-001-01` merged through PR #317 as `64f28bcf`.
+- The active Alembic graph starts at the single `0001_v01_baseline` root.
+- Hosted Backend passed on the merge commit and product work is not paused by
+  this initiative.
+- Any future migration extends the baseline through an ordinary bounded change;
+  this initiative has no remaining chunk.

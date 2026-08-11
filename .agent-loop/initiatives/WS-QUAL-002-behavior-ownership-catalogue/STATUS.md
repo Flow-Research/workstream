@@ -10,7 +10,8 @@ validator, examples, focused tests, and contributor documentation. It does not
 reactivate mutation or change any workflow, product behavior, coverage floor,
 lane, skip, or deselection.
 
-`WS-QUAL-002-02` implements local, non-authoritative coverage-context evidence
+`WS-QUAL-002-02` merged through PR #303 and implements local,
+non-authoritative coverage-context evidence
 with exact collection, completion, head, callable-line, digest, runtime, size,
 and privacy custody. It does not change catalogue records or hosted CI. GitHub
 is authoritative for its transient review and merge state.
@@ -26,7 +27,7 @@ Current focused evidence:
 - The real local context probe completed 90 exact nodes in 18.12 seconds and
   emitted a 141,701-byte digest-bound artifact, below both adoption limits.
 - The initial catalogue is explicitly incomplete and candidate output remains
-  non-authoritative while subsystem population has not started.
+  non-authoritative while subsystem population remains pending in 03A-03D.
 
 ## Plan review
 
