@@ -12,6 +12,7 @@ from app.core.hashing import canonical_json_hash
 from app.modules.checkers.api import (
     EffectivePreSubmissionExecutionPlan,
     EffectivePreSubmissionPlanLineage,
+    EffectivePreSubmissionPlanningPort,
 )
 from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
 from app.modules.checkers.compiler import compile_effective_project_submission_artifact_policy
@@ -258,7 +259,8 @@ def test_checkers_public_api_has_no_private_or_mutable_dependency() -> None:
     assert imports
     assert all(
         not target.startswith("app.modules.")
-        or target.startswith("app.modules.checkers.api")
+        or target == "app.modules.checkers.api"
+        or target.startswith("app.modules.checkers.api.")
         for target in imports
     )
 
@@ -293,12 +295,18 @@ def test_checkers_public_planning_port_uses_the_canonical_compiler() -> None:
         pre_submit_policy_id=uuid4(),
         pre_submit_policy_bundle_hash=compiled.compiled_bundle_hash,
     )
-    plan = build_pre_submission_checker_catalogue().compile_effective_plan(
+    port: EffectivePreSubmissionPlanningPort = build_pre_submission_checker_catalogue()
+    plan = port.compile_effective_plan(
+        lineage=lineage, effective_policy=policy, compiled_bundle=compiled.compiled_bundle
+    )
+    repeated = port.compile_effective_plan(
         lineage=lineage, effective_policy=policy, compiled_bundle=compiled.compiled_bundle
     )
     assert type(plan) is EffectivePreSubmissionExecutionPlan
     assert plan.lineage is lineage
     assert plan.plan_sha256 == canonical_json_hash(plan.as_dict())
+    assert repeated.as_dict() == plan.as_dict()
+    assert repeated.plan_sha256 == plan.plan_sha256
 
 
 def test_checkers_public_execution_facts_exclude_artifact_custody() -> None:
@@ -326,12 +334,27 @@ def test_checkers_public_execution_facts_exclude_artifact_custody() -> None:
             phase="custody", order=10, classification="mandatory_security",
             severity="blocking", status=PreSubmissionResultStatus.PASSED,
             failure_code=None, message_code="passed",
+            metadata=(
+                ("entry_count", 2),
+                ("finding_count", -1),
+                ("matched_category_count", True),
+                ("custody_id", 3),
+                ("archive_sha256", 5),
+                ("scratch_path", 4),
+                ("provider_key", 9),
+                ("evidence_id", 6),
+            ),
         ),),
     )
     facts = execution.bounded_facts()
-    assert (facts.plan_sha256, facts.eligible, facts.entries[0].status) == (
+    assert (
+        facts.plan_sha256,
+        facts.eligible,
+        facts.entries[0].checker_execution_status,
+    ) == (
         execution.plan_sha256, True, "passed"
     )
+    assert facts.entries[0].metadata == (("entry_count", 2),)
     assert not hasattr(facts, "custody")
     assert not hasattr(facts, "storage_scheme")
 

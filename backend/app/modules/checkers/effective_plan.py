@@ -165,7 +165,7 @@ def _entry_from_definition(
         order=definition.order,
         dependencies=definition.dependencies,
         classification=definition.classification.value,
-        state=definition.state.value,
+        checker_definition_state=definition.state.value,
         disabled_behavior=definition.disabled_behavior.value,
         dispatch_kind=definition.dispatch_kind.value,
         dispatch_capability=definition.dispatch_capability,

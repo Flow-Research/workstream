@@ -89,7 +89,7 @@ class EffectivePreSubmissionPlanEntry:
     order: int
     dependencies: tuple[str, ...]
     classification: str
-    state: str
+    checker_definition_state: str
     disabled_behavior: str
     dispatch_kind: str
     dispatch_capability: str
@@ -111,7 +111,7 @@ class EffectivePreSubmissionPlanEntry:
             "order": self.order,
             "dependencies": list(self.dependencies),
             "classification": self.classification,
-            "state": self.state,
+            "checker_definition_state": self.checker_definition_state,
             "disabled_behavior": self.disabled_behavior,
             "dispatch_kind": self.dispatch_kind,
             "dispatch_capability": self.dispatch_capability,
@@ -191,7 +191,7 @@ class PreSubmissionExecutionEntryFacts:
     order: int
     classification: str
     severity: str
-    status: str
+    checker_execution_status: str
     failure_code: str | None
     message_code: str
     metadata: tuple[tuple[str, int], ...]

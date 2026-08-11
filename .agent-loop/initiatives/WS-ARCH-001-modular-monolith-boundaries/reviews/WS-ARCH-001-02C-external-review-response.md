@@ -12,6 +12,11 @@
   the canonical semantic-lane inventory. Its two tests were moved into the
   already-touched architecture module, preserving the proof without changing
   lane topology or oversized lane-catalogue tests.
+- CodeRabbit requested CHECKER-specific lifecycle names, an exact dotted public
+  namespace assertion, deterministic repeated compilation through the public
+  planning port, and explicit metadata-boundary proof. All four were applied.
+  Public metadata projection now independently retains only the exact allowed
+  keys whose values are non-negative integers.
 
 ## Comments deferred
 
@@ -26,6 +31,7 @@ Human maintainers retain review and merge authority.
 ```bash
 (cd backend && .venv/bin/python -m scripts.behavior_ownership validate)
 (cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin tests/test_behavior_ownership.py tests/architecture/test_module_boundaries.py)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin tests/architecture/test_module_boundaries.py tests/test_checker_catalogue.py tests/test_effective_pre_submit_execution.py)
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 ```
 

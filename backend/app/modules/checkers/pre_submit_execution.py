@@ -172,10 +172,16 @@ class PreSubmissionExecutionResult:
                     order=entry.order,
                     classification=entry.classification,
                     severity=entry.severity,
-                    status=entry.status.value,
+                    checker_execution_status=entry.status.value,
                     failure_code=entry.failure_code,
                     message_code=entry.message_code,
-                    metadata=entry.metadata,
+                    metadata=tuple(
+                        (key, value)
+                        for key, value in entry.metadata
+                        if key in _RESULT_METADATA_KEYS
+                        and type(value) is int
+                        and value >= 0
+                    ),
                 )
                 for entry in self.entries
             ),
@@ -266,7 +272,8 @@ class EffectivePreSubmissionProcessor:
             if entry.definition_id in statuses:
                 raise PreSubmissionInfrastructureUnavailable("pre_submission_duplicate_result")
             if (
-                entry.state == PreSubmissionCheckerState.DISABLED.value
+                entry.checker_definition_state
+                == PreSubmissionCheckerState.DISABLED.value
                 and definition.classification.mandatory
             ):
                 raise PreSubmissionInfrastructureUnavailable(
@@ -276,7 +283,7 @@ class EffectivePreSubmissionProcessor:
                 entry.definition_version != definition.version
                 or entry.dispatch_capability != definition.dispatch_capability
                 or entry.classification != definition.classification.value
-                or entry.state != definition.state.value
+                or entry.checker_definition_state != definition.state.value
             ):
                 raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_entry_stale")
             if any(dependency not in executed_ids for dependency in entry.dependencies):
@@ -296,7 +303,10 @@ class EffectivePreSubmissionProcessor:
                     PreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
                     message_code="dependency_not_run",
                 )
-            elif entry.state == PreSubmissionCheckerState.DISABLED.value:
+            elif (
+                entry.checker_definition_state
+                == PreSubmissionCheckerState.DISABLED.value
+            ):
                 result = self._result(
                     entry,
                     PreSubmissionResultStatus.ADVISORY_DISABLED,
