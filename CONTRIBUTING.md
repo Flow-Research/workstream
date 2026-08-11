@@ -25,10 +25,11 @@ host setup is supported only on the Linux/glibc/Python matrix documented there.
 Do not replace the approved Pillow artifacts to make an unsupported host install
 pass.
 
-For a small change, record the intent and scope in the pull request. For larger
-or higher-risk work, add a short initiative plan and chunk contract under
-`.agent-loop/initiatives/`. Existing planning artifacts are useful context, not
-runtime locks.
+For a documentation-only small change, record the intent and scope in the pull
+request. Every implementation change uses one bounded chunk contract under
+`.agent-loop/initiatives/`; larger or higher-risk work also adds a short
+initiative plan. Existing planning artifacts are useful context, not runtime
+locks.
 
 ## Find The Current Contract
 
@@ -77,6 +78,17 @@ active queue or approval gate.
 - Preserve security defaults and existing coverage floors.
 - Record important reviewer findings and how they were resolved.
 - Reconcile with current `main` and rerun affected checks.
+- For a chunk PR, declare `Outcome on merge` in the chunk contract and update
+  its initiative `CHUNK_MAP.md`, initiative `STATUS.md`, and
+  `.agent-loop/CURRENT_STATE.md` to the state that will exist after human
+  merge. Code and durable state land together; there is no second pre-merge or
+  post-merge memory PR.
+
+Run the same atomic check locally before pushing:
+
+```bash
+python3 scripts/check_chunk_state_sync.py --base-ref origin/main
+```
 
 Security, authorization, payments, workflow, architecture, and other high-risk
 changes require focused internal review before they are ready to merge. Small
