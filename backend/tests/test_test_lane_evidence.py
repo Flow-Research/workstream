@@ -25,6 +25,7 @@ LANES = (
     "shared_foundations_b",
     "schema_contracts_a",
     "schema_contracts_b",
+    "schema_contracts_c",
     "project_lifecycle",
     "task_lifecycle",
 )

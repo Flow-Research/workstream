@@ -112,6 +112,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertEqual(workflow.count("          - shared_foundations_b\n"), 1)
         self.assertEqual(workflow.count("          - schema_contracts_a"), 1)
         self.assertEqual(workflow.count("          - schema_contracts_b"), 1)
+        self.assertEqual(workflow.count("          - schema_contracts_c"), 1)
         self.assertIn("  test:\n    if: ${{ always() }}\n    needs: lanes", workflow)
         self.assertIn("Require every semantic lane", workflow)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)

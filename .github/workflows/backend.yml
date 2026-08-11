@@ -87,6 +87,7 @@ jobs:
           - shared_foundations_b
           - schema_contracts_a
           - schema_contracts_b
+          - schema_contracts_c
           - project_lifecycle
           - task_lifecycle
 
@@ -320,6 +321,13 @@ jobs:
           name: backend-lane-${{ github.sha }}-schema_contracts_b
           path: backend/.ci/download/schema_contracts_b
 
+      - name: Download schema contracts C evidence
+        if: ${{ always() }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: backend-lane-${{ github.sha }}-schema_contracts_c
+          path: backend/.ci/download/schema_contracts_c
+
       - name: Download project lifecycle evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -361,7 +369,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           coverage_files=(.ci/test-lanes/run/.coverage.*)
-          test "${#coverage_files[@]}" -eq 6
+          test "${#coverage_files[@]}" -eq 7
           for source in "${coverage_files[@]}"; do
             destination="$(basename "${source}")"
             test -f "${source}"
@@ -619,7 +627,7 @@ jobs:
               raise SystemExit("hosted evidence head drift")
 
           lanes = summary.get("lanes")
-          if not isinstance(lanes, list) or len(lanes) != 6:
+          if not isinstance(lanes, list) or len(lanes) != 7:
               raise SystemExit("invalid hosted lane inventory")
           collected: list[str] = []
           completed: list[str] = []
@@ -692,6 +700,7 @@ jobs:
               "shared_foundations_b",
               "schema_contracts_a",
               "schema_contracts_b",
+              "schema_contracts_c",
               "project_lifecycle",
               "task_lifecycle",
           ):

@@ -23,15 +23,18 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 6
+    assert len(LANES) == 7
     assert all(lane.requires_postgres for lane in LANES)
-    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 2
-    expected_partitioned = {
-        runner.PARTITIONED_SCHEMA_MODULE,
-        *runner.SHARED_FOUNDATION_MODULES,
-    }
+    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 3
     assert all(
-        count == (2 if module in expected_partitioned else 1)
+        count
+        == (
+            len(runner.PARTITIONED_SCHEMA_LANES)
+            if module == runner.PARTITIONED_SCHEMA_MODULE
+            else 2
+            if module in runner.SHARED_FOUNDATION_MODULES
+            else 1
+        )
         for module, count in Counter(assigned).items()
     )
     assert set(assigned) == set(discovered)
@@ -72,6 +75,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         runner.ADMIN_RUNNER_MODULE,
     } == modules_by_lane["schema_contracts_a"]
     assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_b"]
+    assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_c"]
     assert {
         "tests/test_actors.py",
         "tests/test_artifact_admission.py",
@@ -572,11 +576,11 @@ def test_collection_accepts_a_minimal_base_environment(
 
 
 def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
-    elapsed = (1.125, 2.25, 0.5, 3.75, 1.0, 0.75)
+    elapsed = (1.125, 2.25, 0.5, 3.75, 1.0, 0.75, 0.625)
     lanes = [{"elapsed_seconds": value} for value in elapsed]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 9.375,
+        "aggregate_runner_seconds": 10.0,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):

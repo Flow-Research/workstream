@@ -40,7 +40,11 @@ HEAD_ENV = "WORKSTREAM_LANE_HEAD_SHA"
 SCHEMA_VERSION = 1
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
 PARTITIONED_SCHEMA_MODULE = "tests/test_alembic.py"
-PARTITIONED_SCHEMA_LANES = ("schema_contracts_a", "schema_contracts_b")
+PARTITIONED_SCHEMA_LANES = (
+    "schema_contracts_a",
+    "schema_contracts_b",
+    "schema_contracts_c",
+)
 PARTITIONED_SHARED_LANES = ("shared_foundations_a", "shared_foundations_b")
 ORDINARY_KIND = "ordinary_isolated"
 ADMIN_KIND = "admin_runner_self_test"
@@ -160,6 +164,7 @@ LANES = (
         ),
     ),
     TestLane("schema_contracts_b", (PARTITIONED_SCHEMA_MODULE,)),
+    TestLane("schema_contracts_c", (PARTITIONED_SCHEMA_MODULE,)),
     TestLane(
         "project_lifecycle",
         (
