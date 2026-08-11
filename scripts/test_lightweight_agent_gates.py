@@ -136,6 +136,9 @@ class LightweightAgentGateTests(unittest.TestCase):
             "run: python3 backend/scripts/check_guide_extractor_dependencies.py",
             agent_gates,
         )
+        self.assertIn("python3 scripts/check_chunk_state_sync.py", agent_gates)
+        self.assertIn('WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}', agent_gates)
+        self.assertIn("scripts.test_chunk_state_sync", agent_gates)
 
     def test_retired_behavior_mutation_gate_stays_out_of_required_ci(self) -> None:
         backend = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

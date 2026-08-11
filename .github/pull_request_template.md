@@ -7,6 +7,10 @@ in sync when the trust-bundle structure changes.
 
 `<chunk-id or small-change>` - `<title>`
 
+For a chunk PR, confirm its contract contains `## Merge state` with one
+`Outcome on merge`, and that the chunk map, initiative status, and current
+engineering state already describe the result that will land on `main`.
+
 ## Goal
 
 ## Intent And Planning Context
