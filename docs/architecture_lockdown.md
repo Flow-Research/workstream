@@ -30,6 +30,14 @@ mutable policy body, or PROJECT/CHECKER/ACTOR persistence. Those locked
 references are inputs to their owning public capabilities; they do not transfer
 policy or identity ownership into TASKS.
 
+The PROJECTS public boundary resolves exact task-locked guide, source-snapshot,
+effective-policy, and pre-submit-policy lineage through
+`app.modules.projects.api`. Historical rows remain valid after canonical
+`superseded` transitions when every exact selector and recomputed hash still
+matches; current successors are never substituted. Policy bodies cross this
+boundary only as canonical immutable JSON, never as ORM rows, sessions,
+repositories, mutable mappings, or a public mutable projection helper.
+
 The ADR files under `docs/decision_*.md` are the decision record for this lockdown. When a locked rule changes, update or add an ADR before changing implementation specs.
 
 Repository changes use the Repository-Native Human-Agent SDLC documented in

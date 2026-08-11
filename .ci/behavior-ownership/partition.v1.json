@@ -506,6 +506,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/locked_policy.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/authorization_reads.py"
     },
     {
@@ -765,7 +769,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "b1e7516a8ceb1eccff47d177a665b5fe9c971b9cab9d420c828b7537f34e44b9",
+  "authority_digest": "5d33e6a8587a14c24d6bfd0cc36b07ec71a9f380ae5f90889cd04909a7debf69",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
