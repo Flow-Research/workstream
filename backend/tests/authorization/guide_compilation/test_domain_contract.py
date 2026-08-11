@@ -6,7 +6,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import (
+    ActionId,
+    SERVICE_ACTIONS_BY_IDENTITY,
+    ServiceIdentity,
+    _index_service_actions,
+)
 from app.modules.authorization.api import project_guide_compilation_request_resource_digest
 from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationExecuteResourceContext,
@@ -31,6 +36,14 @@ from app.modules.authorization.runtime import (
 )
 
 from .test_adapter_contract import _actor, _request
+
+
+def test_fixed_service_matrix_rejects_an_empty_identity_row() -> None:
+    rows = dict(SERVICE_ACTIONS_BY_IDENTITY)
+    rows[ServiceIdentity.PROJECT_SETUP] = frozenset()
+
+    with pytest.raises(RuntimeError, match="service action matrix row mismatch"):
+        _index_service_actions(rows)
 
 
 def test_request_context_rejects_an_operation_selector_mismatch() -> None:

@@ -985,9 +985,7 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
 )
 
 
-def _index_service_actions(
-    rows: dict[ServiceIdentity, frozenset[ActionId]],
-) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
+def _index_service_actions(rows: dict[ServiceIdentity, frozenset[ActionId]]) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
     expected_metadata = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
             PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -1080,6 +1078,8 @@ def _index_service_actions(
     }
     if set(rows) != SERVICE_IDENTITIES:
         raise RuntimeError("service action matrix identity mismatch")
+    if any(not actions for actions in rows.values()):
+        raise RuntimeError("service action matrix row mismatch")
     if frozenset((i, a) for i, actions in rows.items() for a in actions) != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS:
         raise RuntimeError("service action matrix row mismatch")
     if not FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
