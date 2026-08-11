@@ -5,16 +5,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Protocol
+import json
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.interfaces.artifact_operations import (
-    PreparedBundleMaterializationRequest,
-    SubmissionBundlePreparationPort,
+from app.modules.artifacts.api import (
+    SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
+    SubmissionBundlePreparationResult,
+    SubmissionBundlePreparationUnavailable,
 )
 from app.modules.artifacts.models import (
     ArtifactContent,
@@ -32,6 +33,7 @@ from app.modules.artifacts.pre_submit_evidence import PreSubmitPassCapability
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
+    ArtifactAuthorityDeniedError,
     SubmissionBundleArtifactAdmissionRequest,
 )
 from app.modules.artifacts.submission_authorization import (
@@ -53,18 +55,27 @@ from app.modules.artifacts.submission_manifest import (
     evaluate_submission_change,
 )
 from app.modules.artifacts.submission_materialization import (
+    PreparedBundleMaterializationRequest,
     PreparedBundleMaterializationService,
     PreparedBundlePreSubmitEvidenceService,
 )
-from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.checkers.api import (
+    EffectivePreSubmissionExecutionPlan,
+    EffectivePreSubmissionPlanLineage,
     EffectivePreSubmissionPlanningPort,
     SubmissionPacketView,
 )
-from app.modules.tasks.pre_submit_context import (
-    compile_locked_pre_submit_plan,
-    load_canonical_submission_version,
-    load_locked_pre_submit_context,
+from app.modules.projects.api import (
+    ProjectLockedPolicyContextFacts,
+    ProjectLockedPolicyContextPort,
+    ProjectLockedPolicyContextRequest,
+    ProjectLockedPolicyContextUnavailable,
+)
+from app.modules.tasks.api import (
+    TaskSubmissionContextFacts,
+    TaskSubmissionContextPort,
+    TaskSubmissionContextRequest,
+    TaskSubmissionContextUnavailable,
 )
 
 
@@ -72,7 +83,7 @@ from app.modules.tasks.pre_submit_context import (
 class SubmissionBundleDurablePutRequest:
     """Exact live custody and opaque authority for one final durable handoff."""
 
-    prepared_authorization: PreparedAuthorizationHandle
+    prepared_authorization: object
     prepared_artifact: PreparedArtifact
     pass_capability: PreSubmitPassCapability
     replay_durable_intent_id: UUID | None = None
@@ -119,7 +130,6 @@ class SubmissionBundleDurablePutService:
             transaction is None
             or not transaction.is_active
             or self._session.in_nested_transaction()
-            or type(request.prepared_authorization) is not PreparedAuthorizationHandle
             or type(prepared) is not PreparedArtifact
             or type(request.pass_capability) is not PreSubmitPassCapability
         ):
@@ -403,18 +413,6 @@ async def current_submission_bundle_admission_id(
     return UUID(value) if value is not None else None
 
 
-class SubmissionBundlePreparationRejected(RuntimeError):
-    """The complete effective pre-submit execution did not produce passing custody."""
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionBundlePreparationResult:
-    put_attempt_id: UUID
-    admission_id: UUID | None
-    status: str
-    replayed: bool
-
-
 @dataclass(frozen=True, slots=True)
 class SubmissionBundlePreparationRuntime:
     preparation: ArtifactPreparationService
@@ -425,12 +423,6 @@ class SubmissionBundlePreparationRuntime:
     durable_put: SubmissionBundleDurablePutService
 
 
-class SubmissionBundlePreparationCommand(SubmissionBundlePreparationPort, Protocol):
-    async def prepare(
-        self, request: SubmissionBundlePreparationRequest
-    ) -> SubmissionBundlePreparationResult: ...
-
-
 class PreparedSubmissionBundlePreparationCommand:
     """Keep every process-local capability within one hidden request."""
 
@@ -439,12 +431,16 @@ class PreparedSubmissionBundlePreparationCommand:
         *,
         session: AsyncSession,
         authority: SubmissionBundlePreparationAuthorization,
+        task_contexts: TaskSubmissionContextPort,
+        project_contexts: ProjectLockedPolicyContextPort,
         runtime_factory: Callable[
             [], AbstractAsyncContextManager[SubmissionBundlePreparationRuntime]
         ],
     ) -> None:
         self._session = session
         self._authority = authority
+        self._task_contexts = task_contexts
+        self._project_contexts = project_contexts
         self._runtime_factory = runtime_factory
 
     async def prepare(
@@ -454,28 +450,18 @@ class PreparedSubmissionBundlePreparationCommand:
             raise TypeError("invalid submission bundle preparation request")
         prepared = None
         try:
-            await self._authority.preflight(
-                authorization_context=request.authorization_context,
-                task_id=request.task_id,
-                assignment_id=request.assignment_id,
-                predecessor_submission_id=request.predecessor_submission_id,
-                idempotency_key=request.idempotency_key,
-            )
+            await self._authority.preflight(request=request)
             if request.media_type.partition(";")[0].strip().lower() != "application/zip":
                 raise SubmissionBundlePreparationRejected("submission_bundle_media_type_invalid")
             async with self._runtime_factory() as runtime:
                 async with self._session.begin():
-                    locked = await load_locked_pre_submit_context(
-                        self._session,
-                        actor_profile_id=request.authorization_context.actor_profile_id,
-                        identity_link_id=request.authorization_context.identity_link_id,
-                        task_id=request.task_id,
-                        assignment_id=request.assignment_id,
-                        predecessor_submission_id=request.predecessor_submission_id,
-                        include_actor_identity_locks=False,
+                    task_context, project_context = await self._lock_context(request)
+                    plan = self._compile_plan(
+                        task_context,
+                        project_context,
+                        runtime.catalogue,
                     )
-                    plan = compile_locked_pre_submit_plan(locked, runtime.catalogue)
-                    predecessor = await self._load_predecessor(request.predecessor_submission_id)
+                    predecessor = await self._load_predecessor(task_context)
                 prepared = await runtime.preparation.prepare(
                     request.byte_source,
                     media_type="application/zip",
@@ -484,8 +470,8 @@ class PreparedSubmissionBundlePreparationCommand:
                     materialization_handle = await runtime.materialization.prepare_authorization(
                         task_id=request.task_id,
                         assignment_id=request.assignment_id,
-                        submission_artifact_policy_id=locked.effective_policy_id,
-                        checker_policy_id=locked.pre_submit_policy_id,
+                        submission_artifact_policy_id=project_context.effective_policy_id,
+                        checker_policy_id=project_context.pre_submit_policy_id,
                         prepared_artifact=prepared,
                         effective_plan=plan,
                         idempotency_key=request.idempotency_key,
@@ -503,8 +489,8 @@ class PreparedSubmissionBundlePreparationCommand:
                         prepared_authorization=materialization_handle,
                         task_id=request.task_id,
                         assignment_id=request.assignment_id,
-                        submission_artifact_policy_id=locked.effective_policy_id,
-                        checker_policy_id=locked.pre_submit_policy_id,
+                        submission_artifact_policy_id=project_context.effective_policy_id,
+                        checker_policy_id=project_context.pre_submit_policy_id,
                         prepared_artifact=prepared,
                         effective_plan=plan,
                         inspection=inspection,
@@ -519,9 +505,7 @@ class PreparedSubmissionBundlePreparationCommand:
                 evidence = await runtime.evidence.persist(
                     materialization_request,
                     execution=execution,
-                    actor_profile_id=request.authorization_context.actor_profile_id,
-                    identity_link_id=request.authorization_context.identity_link_id,
-                    predecessor_submission_id=request.predecessor_submission_id,
+                    preparation_request=request,
                 )
                 if evidence.pass_capability is None:
                     replay = await self._existing_durable_result(evidence.evidence.evidence_set_id)
@@ -536,13 +520,7 @@ class PreparedSubmissionBundlePreparationCommand:
                     evidence.evidence.evidence_set_id
                 )
                 async with self._authority.transaction():
-                    final_handle = await self._authority.prepare_final(
-                        authorization_context=request.authorization_context,
-                        task_id=request.task_id,
-                        assignment_id=request.assignment_id,
-                        predecessor_submission_id=request.predecessor_submission_id,
-                        idempotency_key=request.idempotency_key,
-                    )
+                    final_handle = await self._authority.prepare_final(request=request)
                     retained, _, durable = await runtime.durable_put.admit_in_transaction(
                         SubmissionBundleDurablePutRequest(
                             prepared_authorization=final_handle,
@@ -558,6 +536,10 @@ class PreparedSubmissionBundlePreparationCommand:
                     durable,
                 )
                 return self._result(result)
+        except ArtifactAuthorityDeniedError as exc:
+            raise SubmissionBundlePreparationUnavailable(
+                "submission bundle preparation is unavailable"
+            ) from exc
         finally:
             if prepared is not None:
                 await prepared.close()
@@ -633,6 +615,84 @@ class PreparedSubmissionBundlePreparationCommand:
             value = await self._session.scalar(statement)
             return UUID(value) if value is not None else None
 
+    async def _lock_context(
+        self,
+        request: SubmissionBundlePreparationRequest,
+    ) -> tuple[TaskSubmissionContextFacts, ProjectLockedPolicyContextFacts]:
+        """Lock exact TASK then PROJECT facts through their public ports."""
+        try:
+            task_context = await self._task_contexts.lock_submission_context(
+                TaskSubmissionContextRequest(
+                    task_id=request.task_id,
+                    assignment_id=request.assignment_id,
+                    contributor_id=request.actor.actor_profile_id,
+                    predecessor_submission_id=request.predecessor_submission_id,
+                )
+            )
+            references = task_context.locked_project_context
+            project_context = await self._project_contexts.lock_locked_policy_context(
+                ProjectLockedPolicyContextRequest(
+                    project_id=references.project_id,
+                    guide_version=references.guide_version,
+                    source_snapshot_id=references.source_snapshot_id,
+                    source_snapshot_hash=references.source_snapshot_hash,
+                    effective_policy_id=references.effective_policy_id,
+                    effective_policy_hash=references.effective_policy_hash,
+                    pre_submit_policy_id=references.pre_submit_policy_id,
+                    pre_submit_policy_bundle_hash=references.pre_submit_policy_bundle_hash,
+                )
+            )
+        except (TaskSubmissionContextUnavailable, ProjectLockedPolicyContextUnavailable) as exc:
+            raise SubmissionBundlePreparationRejected(
+                "submission_bundle_preparation_context_changed"
+            ) from exc
+        return task_context, project_context
+
+    @staticmethod
+    def _compile_plan(
+        task_context: TaskSubmissionContextFacts,
+        project_context: ProjectLockedPolicyContextFacts,
+        planner: EffectivePreSubmissionPlanningPort,
+    ) -> EffectivePreSubmissionExecutionPlan:
+        """Compile the sole CHECKER plan from exact public PROJECT facts."""
+        guide_version = project_context.guide_version.removeprefix("v")
+        try:
+            numeric_guide_version = int(guide_version)
+            effective_policy = json.loads(project_context.effective_policy.value)
+            compiled_bundle = json.loads(
+                project_context.compiled_pre_submit_bundle.value
+            )
+        except (TypeError, ValueError) as exc:
+            raise SubmissionBundlePreparationRejected(
+                "submission_bundle_preparation_context_changed"
+            ) from exc
+        if (
+            project_context.project_id
+            != task_context.locked_project_context.project_id
+            or not isinstance(effective_policy, dict)
+            or not isinstance(compiled_bundle, dict)
+        ):
+            raise SubmissionBundlePreparationRejected(
+                "submission_bundle_preparation_context_changed"
+            )
+        return planner.compile_effective_plan(
+            lineage=EffectivePreSubmissionPlanLineage(
+                project_id=project_context.project_id,
+                guide_id=project_context.guide_id,
+                guide_version=numeric_guide_version,
+                source_snapshot_id=project_context.source_snapshot_id,
+                source_snapshot_hash=project_context.source_snapshot_hash,
+                effective_policy_id=project_context.effective_policy_id,
+                effective_policy_hash=project_context.effective_policy_hash,
+                pre_submit_policy_id=project_context.pre_submit_policy_id,
+                pre_submit_policy_bundle_hash=(
+                    project_context.pre_submit_policy_bundle_hash
+                ),
+            ),
+            effective_policy=effective_policy,
+            compiled_bundle=compiled_bundle,
+        )
+
     async def _existing_durable_result(
         self, evidence_id: UUID
     ) -> SubmissionBundlePreparationResult | None:
@@ -669,26 +729,26 @@ class PreparedSubmissionBundlePreparationCommand:
             )
 
     async def _load_predecessor(
-        self, submission_id: UUID | None
+        self,
+        task_context: TaskSubmissionContextFacts,
     ) -> SubmissionCanonicalPredecessor | None:
-        if submission_id is None:
+        predecessor = task_context.predecessor
+        if predecessor is None:
             return None
         admission = await self._session.scalar(
             select(SubmissionBundleAdmission).where(
-                SubmissionBundleAdmission.consumed_by_submission_id == str(submission_id),
+                SubmissionBundleAdmission.consumed_by_submission_id
+                == str(predecessor.submission_id),
                 SubmissionBundleAdmission.status == "consumed",
             )
         )
-        version = await load_canonical_submission_version(
-            self._session, submission_id=submission_id
-        )
-        if admission is None or version is None:
+        if admission is None:
             raise SubmissionBundlePreparationRejected(
                 "submission_canonical_predecessor_unavailable"
             )
         return SubmissionCanonicalPredecessor(
-            submission_id=submission_id,
-            submission_version=version,
+            submission_id=predecessor.submission_id,
+            submission_version=predecessor.version,
             archive_sha256=admission.archive_sha256,
             semantic_manifest_sha256=admission.semantic_manifest_sha256,
         )

@@ -85,6 +85,29 @@ def test_new_private_edge_fails_exact_ledger_comparison(
         boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
 
 
+def test_owner_adapter_may_bind_only_its_own_private_implementation(
+    tmp_path: Path,
+) -> None:
+    """Owner adapters are composition; cross-owner private imports remain debt."""
+    _registry(tmp_path / "registry.json")
+    _write(
+        tmp_path / "backend/app/adapters/tasks/__init__.py",
+        "from app.modules.tasks.repository import TaskRepository\n"
+        "from app.modules.projects.repository import ProjectRepository\n",
+    )
+    private, _, _ = boundary.scan(
+        tmp_path, boundary.load_registry(tmp_path / "registry.json")
+    )
+    assert private == {
+        boundary.PrivateEdge(
+            "backend/app/adapters/tasks/__init__.py",
+            "projects",
+            "app.modules.projects.repository",
+            "WS-ARCH-001-03",
+        )
+    }
+
+
 def test_import_from_modules_package_resolves_registered_alias(tmp_path: Path) -> None:
     """Package-level module aliases cannot disappear from dependency scanning."""
     _registry(tmp_path / "registry.json")
@@ -416,12 +439,16 @@ def test_initial_ledgers_capture_high_risk_application_edges() -> None:
     assert (
         "backend/app/interfaces/artifact_operations.py",
         "app.modules.checkers.pre_submit_execution",
-    ) in actual
-    assert any(
+    ) not in actual
+    assert not any(
         source.startswith("backend/app/adapters/artifacts/")
         and target.startswith("app.modules.artifacts.")
         for source, target in actual
     )
+    assert (
+        "backend/app/adapters/artifacts/__init__.py",
+        "app.modules.actors.service_identities",
+    ) in actual
     assert any(
         source.startswith("backend/app/workers/")
         and target.startswith("app.modules.projects.")

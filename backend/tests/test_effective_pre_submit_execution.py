@@ -13,12 +13,18 @@ from app.modules.tasks.pre_submit_context import (
     load_locked_pre_submit_context,
 )
 from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitExecutionCustody,
+    PreSubmitExecutionResult,
     PreSubmitEvidenceConflict,
     PreSubmitEvidenceContext,
     PreSubmitEvidenceService,
     PersistedPreSubmitEvidence,
     pre_submit_failure_audit_payload,
     semantic_manifest_identity,
+)
+from app.modules.checkers.api import (
+    PreSubmissionExecutionEntryFacts,
+    PreSubmissionExecutionFacts,
 )
 from app.modules.checkers.compiler import (
     PreSubmitCheckerCompilerError,
@@ -89,7 +95,11 @@ def test_semantic_manifest_identity_is_server_deterministic() -> None:
 def test_pass_capability_is_generation_bound_and_single_use() -> None:
     evidence_set_id = uuid4()
     generation_id = uuid4()
-    capability = PreSubmitEvidenceService(SimpleNamespace())._mint_pass_capability(
+    capability = PreSubmitEvidenceService(
+        SimpleNamespace(),
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
+    )._mint_pass_capability(
         evidence_set_id=evidence_set_id,
         prepared_generation_id=generation_id,
         predecessor_submission_id=None,
@@ -348,39 +358,36 @@ def test_failure_audit_projection_is_bounded_and_path_free() -> None:
     task_id = uuid4()
     generation_id = uuid4()
     evidence = PersistedPreSubmitEvidence(uuid4(), _sha("1"), False)
-    execution = PreSubmissionExecutionResult(
-        plan_sha256=_sha("2"),
-        custody=PreSubmissionExecutionCustody(
+    execution = PreSubmitExecutionResult(
+        custody=PreSubmitExecutionCustody(
             prepared_generation_id=generation_id,
             archive_sha256=_sha("5"),
             archive_byte_count=1,
             semantic_manifest_sha256=_sha("6"),
             storage_scheme="s3",
         ),
-        eligible=False,
-        entries=(
-            PreSubmissionEntryResult(
-                schema_version="pre_submission_checker_result.v1",
-                definition=PreSubmissionResultDefinition(
+        checker_facts=PreSubmissionExecutionFacts(
+            plan_sha256=_sha("2"),
+            eligible=False,
+            entries=(
+                PreSubmissionExecutionEntryFacts(
                     dispatch_authority="workstream.pre_submission_checker_catalogue",
                     definition_id="policy.file.require",
                     definition_version="v1",
                     public_name="check_required_files",
-                    source="locked_effective_project_submission_artifact_policy",
-                ),
-                policy_trace=PreSubmissionResultPolicyTrace(
+                    policy_source="locked_effective_project_submission_artifact_policy",
                     effective_plan_sha256=_sha("2"),
                     rule_instance_id=_sha("3"),
                     locked_policy_sha256=_sha("4"),
+                    phase="project_policy",
+                    order=10,
+                    classification="mandatory_accountability",
+                    severity="blocking",
+                    checker_execution_status="failed",
+                    failure_code="pre_submission_checker_failed",
+                    message_code="required_file_missing",
+                    metadata=(("finding_count", 1),),
                 ),
-                phase="project_policy",
-                order=10,
-                classification="mandatory_accountability",
-                severity="blocking",
-                status=PreSubmissionResultStatus.FAILED,
-                failure_code="pre_submission_checker_failed",
-                message_code="required_file_missing",
-                metadata=(("finding_count", 1),),
             ),
         ),
     )

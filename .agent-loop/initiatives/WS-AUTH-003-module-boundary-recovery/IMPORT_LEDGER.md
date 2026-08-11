@@ -66,14 +66,6 @@ backend/app/modules/artifacts/service.py
   app.modules.authorization.catalogue
   app.modules.authorization.prepared
   app.modules.authorization.runtime
-backend/app/modules/artifacts/submission_admission.py
-  app.modules.authorization.prepared
-backend/app/modules/artifacts/submission_authorization.py
-  app.modules.authorization.prepared
-  app.modules.authorization.runtime
-backend/app/modules/artifacts/submission_materialization.py
-  app.modules.authorization.catalogue
-  app.modules.authorization.prepared
 backend/app/modules/projects/authorization_reads.py
   app.modules.authorization.catalogue
   app.modules.authorization.kernel
@@ -115,8 +107,6 @@ backend/app/modules/projects/sufficiency_mutation_service.py
   app.modules.authorization.runtime
 backend/app/work&#101;rs/project_setup.py
   app.modules.authorization.prepared
-backend/app/modules/tasks/router.py
-  app.modules.authorization.runtime
 ```
 
 The ledger validator decodes numeric Markdown entities before comparing exact

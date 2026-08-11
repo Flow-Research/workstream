@@ -11,8 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.api_controls import request_ids
+from app.api.deps.authorization import get_authorization_actor_identity
+from app.adapters.checkers import PreSubmitCheckerExecutionAdapter
+from app.adapters.projects import project_locked_policy_context_port
+from app.adapters.tasks import task_submission_context_port
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import GuideArtifactIngestCommand
+from app.modules.artifacts.api import SubmissionBundlePreparationCommand
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactConfigurationError,
@@ -30,7 +35,6 @@ from app.modules.artifacts.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_authorization import (
     SubmissionBundlePreparationAuthorization,
 )
-from app.modules.artifacts.submission_admission import SubmissionBundlePreparationCommand
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
 )
@@ -40,6 +44,15 @@ from app.modules.artifacts.authorization import (
     get_guide_artifact_prepared_authorization,
 )
 from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.authorization.api import ActorIdentityFacts
+async def get_submission_bundle_preparation_actor(
+    actor: Annotated[
+        ActorIdentityFacts,
+        Depends(get_authorization_actor_identity),
+    ],
+) -> ActorIdentityFacts:
+    """Return dependency-safe AUTH facts to the route-facing ART command."""
+    return actor
 
 
 def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstrap:
@@ -249,9 +262,10 @@ def get_submission_bundle_preparation_command(
         PreparedSubmissionBundlePreparationCommand,
         SubmissionBundlePreparationRuntime,
     )
-
     settings = request.app.state.settings
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    task_contexts = task_submission_context_port(session)
+    project_contexts = project_locked_policy_context_port(session)
 
     @asynccontextmanager
     async def runtime():
@@ -273,6 +287,11 @@ def get_submission_bundle_preparation_command(
             )
             preparation = ArtifactPreparationService(manager)
             catalogue = request.app.state.pre_submission_checker_catalogue
+            inspector = SubmissionArchiveInspector(submission_archive_limits(settings))
+            checker_execution = PreSubmitCheckerExecutionAdapter(
+                catalogue=catalogue,
+                archive_inspector=inspector,
+            )
             storage_schemes = {"local": "local", "s3_compatible": "s3"}
             try:
                 storage_scheme = storage_schemes[settings.artifact_store_backend]
@@ -281,8 +300,7 @@ def get_submission_bundle_preparation_command(
             materialization = PreparedBundleMaterializationService(
                 authorization=materialization_authority,
                 preparation=preparation,
-                archive_inspector=SubmissionArchiveInspector(submission_archive_limits(settings)),
-                catalogue=catalogue,
+                checker_execution=checker_execution,
                 storage_scheme=storage_scheme,
             )
             admission = ArtifactAdmissionService(session, settings, namespace)
@@ -295,12 +313,15 @@ def get_submission_bundle_preparation_command(
             )
             yield SubmissionBundlePreparationRuntime(
                 preparation=preparation,
-                inspector=SubmissionArchiveInspector(submission_archive_limits(settings)),
+                inspector=inspector,
                 catalogue=catalogue,
                 materialization=materialization,
                 evidence=PreparedBundlePreSubmitEvidenceService(
                     session=session,
                     materialization=materialization,
+                    preparation_authorization=authority,
+                    task_contexts=task_contexts,
+                    project_contexts=project_contexts,
                 ),
                 durable_put=SubmissionBundleDurablePutService(
                     session=session,
@@ -317,6 +338,8 @@ def get_submission_bundle_preparation_command(
     return PreparedSubmissionBundlePreparationCommand(
         session=session,
         authority=authority,
+        task_contexts=task_contexts,
+        project_contexts=project_contexts,
         runtime_factory=runtime,
     )
 

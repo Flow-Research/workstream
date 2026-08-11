@@ -540,17 +540,10 @@ class PreparedPreSubmitMaterializationAuthorization:
     async def consume(
         self,
         *,
-        service_identity: ServiceIdentity,
-        action_id: ActionId,
-        prepared_authorization: PreparedAuthorizationHandle,
+        prepared_authorization: object,
         facts: PreSubmitMaterializationAuthorityFacts,
     ) -> None:
         """Consume authority only for the exact materializer and final facts."""
-        if (
-            service_identity is not ServiceIdentity.ARTIFACT_MATERIALIZER
-            or action_id is not ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
-        ):
-            raise ArtifactAuthorityDeniedError("pre-submit materialization authority is invalid")
         await self._delegate.consume(
             prepared_authorization=prepared_authorization,
             facts=facts,

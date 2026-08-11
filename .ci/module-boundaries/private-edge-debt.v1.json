@@ -8,94 +8,10 @@
       "repair_owner": "WS-ARCH-001-03"
     },
     {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.authorization",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.preparation",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.schemas",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.service",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_admission",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_archive",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_authorization",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/__init__.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_materialization",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
       "source_file": "backend/app/adapters/artifacts/internal_workers.py",
       "target_module": "actors",
       "imported_private_path": "app.modules.actors.service_identities",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.authorization",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.guide_setup",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.models",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.preparation",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.schemas",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.service",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/adapters/artifacts/internal_workers.py",
@@ -108,30 +24,6 @@
       "target_module": "projects",
       "imported_private_path": "app.modules.projects.models",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/local.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.preparation",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/local.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.sources",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/s3_compatible.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.preparation",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/s3_compatible.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.sources",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/api/deps/api_controls.py",
@@ -234,36 +126,6 @@
       "target_module": "projects",
       "imported_private_path": "app.modules.projects.service",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/interfaces/artifact_operations.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.sources",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/interfaces/artifact_operations.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_archive",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/interfaces/artifact_operations.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_manifest",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/interfaces/artifact_operations.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.effective_plan",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/interfaces/artifact_operations.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.pre_submit_execution",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/interfaces/artifacts.py",
@@ -374,24 +236,6 @@
       "repair_owner": "WS-ARCH-001-03"
     },
     {
-      "source_file": "backend/app/modules/artifacts/pre_submit_evidence.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.effective_plan",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/pre_submit_evidence.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.pre_submit_execution",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/pre_submit_evidence.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.pre_submit_context",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
       "source_file": "backend/app/modules/artifacts/repository.py",
       "target_module": "checkers",
       "imported_private_path": "app.modules.checkers.models",
@@ -444,36 +288,6 @@
       "target_module": "tasks",
       "imported_private_path": "app.modules.tasks.pre_submit_context",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_admission.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.pre_submit_context",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_materialization.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.service_identities",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_materialization.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.catalogue",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_materialization.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.effective_plan",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_materialization.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.pre_submit_execution",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/modules/audit/repository.py",
@@ -720,24 +534,6 @@
       "target_module": "actors",
       "imported_private_path": "app.modules.actors.service",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/router.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.authorization",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/router.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.schemas",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/router.py",
-      "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.submission_admission",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/modules/tasks/service.py",

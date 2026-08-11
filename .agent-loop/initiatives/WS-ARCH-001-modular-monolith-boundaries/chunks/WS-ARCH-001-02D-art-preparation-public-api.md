@@ -39,21 +39,53 @@ PROJECT, and CHECKER public fact manifests.
 
 ```text
 backend/app/modules/artifacts/api/**
+backend/app/modules/artifacts/authorization.py
+backend/app/modules/artifacts/router.py
+backend/app/modules/artifacts/pre_submit_evidence.py
 backend/app/modules/artifacts/submission_admission.py
 backend/app/modules/artifacts/submission_authorization.py
+backend/app/modules/artifacts/submission_materialization.py
 backend/app/modules/artifacts/schemas.py
 backend/app/adapters/artifacts/__init__.py
+backend/app/adapters/checkers/__init__.py
+backend/app/adapters/projects/__init__.py
+backend/app/adapters/tasks/__init__.py
+backend/app/api/deps/authorization.py
 backend/app/interfaces/artifact_operations.py
 backend/app/modules/tasks/router.py
+backend/app/api/router.py
+backend/app/api/routes/artifact_submissions.py
 backend/tests/architecture/test_module_boundaries.py
+backend/scripts/module_boundaries.py
+backend/tests/test_artifact_architecture.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
+backend/tests/pre_submit_test_helpers.py
 .ci/module-boundaries/private-edge-debt.v1.json
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .ci/behavior-ownership/**
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02D-art-preparation-public-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02D-resource-manifest.md
 docs/spec_artifact_storage_service.md
 ```
+
+## Public and private contract split
+
+- `artifacts.api` owns only dependency-safe route-facing request/result/error
+  values and capability ports. It does not re-export private ART scratch,
+  inspection, custody, manifest, pass-capability, repository, session, or
+  provider types.
+- Process-local sealed preparation and materialization values move out of the
+  repository-global `app.interfaces.artifact_operations` surface and remain
+  ART-private with one physical definition.
+- AUTH handles remain opaque `object` values at ART seams. ART does not import,
+  reconstruct, serialize, or inspect AUTH's private handle class; the concrete
+  transaction-bound AUTH adapter owns validation and consumption.
+- The composition root may import concrete TASK, PROJECT, CHECKER, AUTH, and
+  ART implementations to construct public ports. Route-facing and product
+  module code may depend only on owner public APIs.
 
 ## Not allowed
 
@@ -64,7 +96,9 @@ cross-module imports; serialized prepared handles; compatibility facades.
 ## Acceptance criteria
 
 - [ ] The route and composition code depend on `artifacts.api`; ART depends on
-      owner public APIs only.
+      owner public APIs only. The composition root may instantiate concrete
+      implementations but may not hide a service locator or second factory
+      behind the public API.
 - [ ] The public port shape places preflight before byte acceptance and final
       prepared-authority consumption in the durable-intent transaction before
       capacity, put attempt, or provider I/O, but production remains deny-only
@@ -74,9 +108,19 @@ cross-module imports; serialized prepared handles; compatibility facades.
 - [ ] `artifact.submission_bundle.prepare` remains planned/unavailable and the
       route remains hidden.
 - [ ] Every touched private edge is removed.
-- [ ] Submission-preparation types in
-      `app.interfaces.artifact_operations` migrate to `artifacts.api`; no
-      parallel legacy/public ART contract remains.
+- [ ] Route-facing submission-preparation types in
+      `app.interfaces.artifact_operations` migrate to `artifacts.api`.
+      Process-local sealed types become ART-private; no parallel legacy/public
+      ART contract remains.
+- [ ] After byte materialization and before evidence persistence, ART re-locks
+      TASK assignment/predecessor facts and PROJECT locked-policy facts through
+      their public ports and compares them with the original CHECKER plan
+      lineage. Stale lineage fails before durable evidence or provider I/O.
+- [ ] CHECKER execution is injected at the composition root and returns only
+      public CHECKER result facts. ART constructs and retains its own custody
+      facts; neither module imports the other's private implementation.
+- [ ] `artifacts.api` imports no private module and exposes no ORM, session,
+      repository, provider, scratch path, byte buffer, or serialized handle.
 - [ ] Record the exact preparation resource/port manifest in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02D-resource-manifest.md`.
 

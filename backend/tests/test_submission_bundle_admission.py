@@ -19,6 +19,12 @@ from app.modules.artifacts.pre_submit_evidence import (
     PreSubmitEvidenceService,
     PreSubmitPassCapability,
 )
+from app.modules.artifacts.api import (
+    SubmissionBundlePreparationRejected,
+    SubmissionBundlePreparationRequest,
+    SubmissionBundlePreparationResult,
+    SubmissionBundlePreparationUnavailable,
+)
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
@@ -42,25 +48,40 @@ from app.modules.artifacts.service import ArtifactAdmissionService
 from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
 from app.modules.artifacts.submission_admission import (
     PreparedSubmissionBundlePreparationCommand,
-    SubmissionBundlePreparationRejected,
-    SubmissionBundlePreparationResult,
 )
-from app.interfaces.artifact_operations import SubmissionBundlePreparationRequest
-from app.modules.authorization.runtime import (
-    ActorKind,
-    ActorStatus,
-    HumanAuthorizationContext,
-    IdentityLinkStatus,
-)
+from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
 from app.main import create_app
-from app.modules.tasks.router import (
+from app.api.routes.artifact_submissions import (
     _require_ascii_submission_packet_headers,
     prepare_submission_bundle,
-    router as tasks_router,
+    router as submission_router,
 )
-from app.modules.tasks.pre_submit_context import PreSubmitLockedContextInvalid
+
+
+def _actor() -> ActorIdentityFacts:
+    return ActorIdentityFacts(
+        actor_profile_id=uuid4(),
+        identity_link_id=uuid4(),
+        actor_kind=ActorKind.HUMAN,
+    )
+
+
+def _preparation_request(*, byte_source, media_type: str = "application/zip"):
+    return SubmissionBundlePreparationRequest(
+        actor=_actor(),
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+        task_id=uuid4(),
+        assignment_id=uuid4(),
+        predecessor_submission_id=None,
+        idempotency_key=uuid4(),
+        summary="summary",
+        contributor_attestation="attestation",
+        media_type=media_type,
+        byte_source=byte_source,
+    )
 
 
 def _sha(character: str) -> str:
@@ -71,7 +92,7 @@ def test_submission_bundle_preparation_route_is_hidden() -> None:
     app = create_app()
     route = next(
         route
-        for route in tasks_router.routes
+        for route in submission_router.routes
         if getattr(route, "name", None) == "prepare_submission_bundle"
     )
     assert route.include_in_schema is False
@@ -93,16 +114,11 @@ def test_submission_packet_headers_reject_non_ascii() -> None:
 @pytest.mark.asyncio
 async def test_hidden_preparation_maps_locked_context_race_to_bounded_conflict() -> None:
     command = SimpleNamespace(
-        prepare=AsyncMock(side_effect=PreSubmitLockedContextInvalid("changed"))
-    )
-    context = HumanAuthorizationContext(
-        actor_profile_id=uuid4(),
-        actor_kind=ActorKind.HUMAN,
-        actor_status=ActorStatus.ACTIVE,
-        identity_link_id=uuid4(),
-        identity_link_status=IdentityLinkStatus.ACTIVE,
-        request_id=uuid4(),
-        correlation_id=uuid4(),
+        prepare=AsyncMock(
+            side_effect=SubmissionBundlePreparationRejected(
+                "submission_bundle_preparation_context_changed"
+            )
+        )
     )
     request = Request(
         {
@@ -117,7 +133,7 @@ async def test_hidden_preparation_maps_locked_context_race_to_bounded_conflict()
         await prepare_submission_bundle(
             task_id=str(uuid4()),
             request=request,
-            context=context,
+            actor=_actor(),
             command=command,
             assignment_id=str(uuid4()),
             idempotency_key=str(uuid4()),
@@ -161,30 +177,12 @@ async def test_hidden_preparation_denies_before_reading_uploaded_bytes() -> None
     command = PreparedSubmissionBundlePreparationCommand(
         session=SimpleNamespace(),
         authority=DenySubmissionBundlePreparationAuthorization(),
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
         runtime_factory=runtime_factory,
     )
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await command.prepare(
-            SubmissionBundlePreparationRequest(
-                authorization_context=HumanAuthorizationContext(
-                    actor_profile_id=uuid4(),
-                    actor_kind=ActorKind.HUMAN,
-                    actor_status=ActorStatus.ACTIVE,
-                    identity_link_id=uuid4(),
-                    identity_link_status=IdentityLinkStatus.ACTIVE,
-                    request_id=uuid4(),
-                    correlation_id=uuid4(),
-                ),
-                task_id=uuid4(),
-                assignment_id=uuid4(),
-                predecessor_submission_id=None,
-                idempotency_key=uuid4(),
-                summary="summary",
-                contributor_attestation="attestation",
-                media_type="application/zip",
-                byte_source=bytes_source(),
-            )
-        )
+    with pytest.raises(SubmissionBundlePreparationUnavailable):
+        await command.prepare(_preparation_request(byte_source=bytes_source()))
     assert reads == 0
 
 
@@ -197,6 +195,8 @@ async def test_hidden_preparation_closes_authority_after_invalid_media_type() ->
     command = PreparedSubmissionBundlePreparationCommand(
         session=SimpleNamespace(),
         authority=authority,
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
         runtime_factory=Mock(side_effect=AssertionError("runtime must stay closed")),
     )
     with pytest.raises(
@@ -204,24 +204,8 @@ async def test_hidden_preparation_closes_authority_after_invalid_media_type() ->
         match="submission_bundle_media_type_invalid",
     ):
         await command.prepare(
-            SubmissionBundlePreparationRequest(
-                authorization_context=HumanAuthorizationContext(
-                    actor_profile_id=uuid4(),
-                    actor_kind=ActorKind.HUMAN,
-                    actor_status=ActorStatus.ACTIVE,
-                    identity_link_id=uuid4(),
-                    identity_link_status=IdentityLinkStatus.ACTIVE,
-                    request_id=uuid4(),
-                    correlation_id=uuid4(),
-                ),
-                task_id=uuid4(),
-                assignment_id=uuid4(),
-                predecessor_submission_id=None,
-                idempotency_key=uuid4(),
-                summary="summary",
-                contributor_attestation="attestation",
-                media_type="application/json",
-                byte_source=artifact_byte_stream(b"{}"),
+            _preparation_request(
+                byte_source=artifact_byte_stream(b"{}"), media_type="application/json"
             )
         )
     authority.close.assert_called_once_with()
@@ -242,6 +226,8 @@ async def test_existing_durable_preparation_projects_exact_ready_admission() -> 
     command = PreparedSubmissionBundlePreparationCommand(
         session=session,
         authority=SimpleNamespace(),
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
         runtime_factory=Mock(),
     )
 
@@ -296,16 +282,6 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
 
     monkeypatch.setattr(
         submission_admission_module,
-        "load_locked_pre_submit_context",
-        AsyncMock(return_value=locked),
-    )
-    monkeypatch.setattr(
-        submission_admission_module,
-        "compile_locked_pre_submit_plan",
-        Mock(return_value=object()),
-    )
-    monkeypatch.setattr(
-        submission_admission_module,
         "build_submission_manifest",
         Mock(return_value=object()),
     )
@@ -318,22 +294,24 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
     command = PreparedSubmissionBundlePreparationCommand(
         session=SimpleNamespace(begin=_transaction),
         authority=authority,
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
         runtime_factory=runtime_factory,
     )
+    command._lock_context = AsyncMock(return_value=(object(), locked))
+    command._compile_plan = Mock(return_value=object())
     command._load_predecessor = AsyncMock(return_value=None)
     command._existing_durable_result = AsyncMock(return_value=expected)
 
     result = await command.prepare(
         SubmissionBundlePreparationRequest(
-            authorization_context=HumanAuthorizationContext(
+            actor=ActorIdentityFacts(
                 actor_profile_id=actor_id,
-                actor_kind=ActorKind.HUMAN,
-                actor_status=ActorStatus.ACTIVE,
                 identity_link_id=uuid4(),
-                identity_link_status=IdentityLinkStatus.ACTIVE,
-                request_id=uuid4(),
-                correlation_id=uuid4(),
+                actor_kind=ActorKind.HUMAN,
             ),
+            request_id=uuid4(),
+            correlation_id=uuid4(),
             task_id=task_id,
             assignment_id=assignment_id,
             predecessor_submission_id=None,
@@ -374,7 +352,11 @@ def test_durable_put_result_projects_without_losing_replay_state() -> None:
 
 
 def _capability(prepared, evidence_set_id):
-    service = PreSubmitEvidenceService(SimpleNamespace())
+    service = PreSubmitEvidenceService(
+        SimpleNamespace(),
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
+    )
     return service._mint_pass_capability(
         evidence_set_id=evidence_set_id,
         prepared_generation_id=prepared.generation_id,

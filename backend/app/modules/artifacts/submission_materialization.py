@@ -10,29 +10,88 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.interfaces.artifact_operations import PreparedBundleMaterializationRequest
-from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.sources import PreparedArtifact
 from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitExecutionCustody,
+    PreSubmitExecutionResult,
     PreSubmitEvidencePersistenceRequest,
     PreSubmitEvidencePersistenceResult,
     PreSubmitEvidenceService,
 )
-from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
-from app.modules.artifacts.submission_manifest import build_submission_manifest
-from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.prepared import PreparedAuthorizationHandle
-from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
-from app.modules.checkers.effective_plan import EffectivePreSubmissionExecutionPlan
-from app.modules.checkers.pre_submit_execution import (
-    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
-    DefaultPreSubmissionExecutionInput,
-    EffectivePreSubmissionProcessor,
-    PreSubmissionExecutionResult,
-    PreSubmissionInfrastructureUnavailable,
+from app.modules.artifacts.submission_archive import (
+    SubmissionArchiveInspectionResult,
 )
+from app.modules.artifacts.submission_manifest import (
+    SubmissionChangeGateResult,
+    SubmissionManifest,
+    build_submission_manifest,
+)
+from app.modules.artifacts.submission_authorization import (
+    SubmissionBundlePreparationAuthorization,
+)
+from app.modules.checkers.api import (
+    EffectivePreSubmissionExecutionPlan,
+    PreSubmissionExecutionFacts,
+    PreSubmissionInfrastructureUnavailableError,
+    SubmissionPacketView,
+)
+from app.modules.projects.api import ProjectLockedPolicyContextPort
+from app.modules.tasks.api import TaskSubmissionContextPort
+
+ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedBundleMaterializationRequest:
+    """ART-private process-local prepared bytes and exact execution facts."""
+
+    prepared_authorization: object
+    task_id: UUID
+    assignment_id: UUID
+    submission_artifact_policy_id: UUID
+    checker_policy_id: UUID
+    prepared_artifact: PreparedArtifact
+    effective_plan: EffectivePreSubmissionExecutionPlan
+    inspection: SubmissionArchiveInspectionResult
+    manifest: SubmissionManifest
+    change_gate: SubmissionChangeGateResult
+    packet: SubmissionPacketView
+
+
+@dataclass(frozen=True, slots=True)
+class PreSubmitCheckerExecutionRequest:
+    """Exact process-local input supplied to the composition CHECKER adapter."""
+
+    plan: EffectivePreSubmissionExecutionPlan
+    commitment: object
+    inspection: SubmissionArchiveInspectionResult
+    manifest: SubmissionManifest
+    change_gate: SubmissionChangeGateResult
+    packet: SubmissionPacketView
+    prepared_generation_id: UUID
+    storage_scheme: str
+
+
+class PreSubmitCheckerProcessor(Protocol):
+    """Blocking processor built by the composition-root CHECKER adapter."""
+
+    def abort(self) -> None: ...
+
+    def process_blocking(
+        self, reader: object, workspace: object
+    ) -> PreSubmissionExecutionFacts: ...
+
+
+class PreSubmitCheckerExecutionFactory(Protocol):
+    """Build one process-local CHECKER processor without private imports in ART."""
+
+    @property
+    def catalogue_manifest_sha256(self) -> str: ...
+
+    def build(self, request: PreSubmitCheckerExecutionRequest) -> PreSubmitCheckerProcessor: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,16 +156,14 @@ class PreSubmitMaterializationAuthorization(Protocol):
         *,
         facts: PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle:
+    ) -> object:
         """Prepare an opaque capability before any submitted byte is inspected."""
         ...
 
     async def consume(
         self,
         *,
-        service_identity: ServiceIdentity,
-        action_id: ActionId,
-        prepared_authorization: PreparedAuthorizationHandle,
+        prepared_authorization: object,
         facts: PreSubmitMaterializationAuthorityFacts,
     ) -> None:
         """Consume the capability against the server-computed final facts."""
@@ -121,7 +178,7 @@ class DenyPreSubmitMaterializationAuthorization:
         *,
         facts: PreSubmitMaterializationPreparationFacts,
         idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle:
+    ) -> object:
         """Deny capability preparation while the production adapter is absent."""
         del facts, idempotency_key
         raise ArtifactAuthorityDeniedError(
@@ -131,13 +188,11 @@ class DenyPreSubmitMaterializationAuthorization:
     async def consume(
         self,
         *,
-        service_identity: ServiceIdentity,
-        action_id: ActionId,
-        prepared_authorization: PreparedAuthorizationHandle,
+        prepared_authorization: object,
         facts: PreSubmitMaterializationAuthorityFacts,
     ) -> None:
         """Deny capability consumption while the production adapter is absent."""
-        del service_identity, action_id, prepared_authorization, facts
+        del prepared_authorization, facts
         raise ArtifactAuthorityDeniedError(
             "pre-submit checker input materialization is unavailable"
         )
@@ -151,15 +206,13 @@ class PreparedBundleMaterializationService:
         *,
         authorization: PreSubmitMaterializationAuthorization,
         preparation: ArtifactPreparationService,
-        archive_inspector: SubmissionArchiveInspector,
-        catalogue: PreSubmissionCheckerCatalogue,
+        checker_execution: PreSubmitCheckerExecutionFactory,
         storage_scheme: str,
     ) -> None:
         """Compose the bounded materializer from its AUTH and ART dependencies."""
         self._authorization = authorization
         self._preparation = preparation
-        self._archive_inspector = archive_inspector
-        self._catalogue = catalogue
+        self._checker_execution = checker_execution
         if storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES:
             raise ValueError("pre-submit materializer storage scheme is invalid")
         self._storage_scheme = storage_scheme
@@ -167,19 +220,15 @@ class PreparedBundleMaterializationService:
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
-    ) -> PreSubmissionExecutionResult:
+    ) -> PreSubmitExecutionResult:
         """Consume fixed-service authority before any byte or workspace access."""
         facts = self._authority_facts(request)
         await self._authorization.consume(
-            service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
-            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
             prepared_authorization=request.prepared_authorization,
             facts=facts,
         )
-        processor = EffectivePreSubmissionProcessor(
-            archive_inspector=self._archive_inspector,
-            catalogue=self._catalogue,
-            execution_input=DefaultPreSubmissionExecutionInput(
+        processor = self._checker_execution.build(
+            PreSubmitCheckerExecutionRequest(
                 plan=request.effective_plan,
                 commitment=request.prepared_artifact.commitment,
                 inspection=request.inspection,
@@ -192,11 +241,21 @@ class PreparedBundleMaterializationService:
         )
         # Intentional friend call: this is the sole authority-gated caller, and
         # the preparation byte-access surface must remain private.
-        return await self._preparation._process_prepared_submission(
+        checker_facts = await self._preparation._process_prepared_submission(
             request.prepared_artifact,
             processor,
             reserved_bytes=request.manifest.total_expanded_bytes,
             maximum_entries=request.manifest.entry_count,
+        )
+        return PreSubmitExecutionResult(
+            custody=PreSubmitExecutionCustody(
+                prepared_generation_id=request.prepared_artifact.generation_id,
+                archive_sha256=request.prepared_artifact.commitment.sha256,
+                archive_byte_count=request.prepared_artifact.commitment.byte_count,
+                semantic_manifest_sha256=request.manifest.sha256,
+                storage_scheme=self._storage_scheme,
+            ),
+            checker_facts=checker_facts,
         )
 
     async def prepare_authorization(
@@ -209,7 +268,7 @@ class PreparedBundleMaterializationService:
         prepared_artifact: PreparedArtifact,
         effective_plan: EffectivePreSubmissionExecutionPlan,
         idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle:
+    ) -> object:
         """Deny unavailable service authority before inspecting the ZIP."""
         facts = self._preparation_facts(
             task_id=task_id,
@@ -245,7 +304,7 @@ class PreparedBundleMaterializationService:
             or request.prepared_artifact.commitment.byte_count
             != request.change_gate.archive_byte_count
         ):
-            raise PreSubmissionInfrastructureUnavailable(
+            raise PreSubmissionInfrastructureUnavailableError(
                 "pre_submission_materialization_context_invalid"
             )
         return PreSubmitMaterializationAuthorityFacts(
@@ -266,13 +325,16 @@ class PreparedBundleMaterializationService:
         """Build pre-inspection facts from locked lineage and byte commitment."""
         plan = effective_plan
         if plan.plan_sha256 != canonical_json_hash(plan.as_dict()):
-            raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_identity_invalid")
+            raise PreSubmissionInfrastructureUnavailableError(
+                "pre_submission_plan_identity_invalid"
+            )
         if (
             submission_artifact_policy_id != plan.lineage.effective_policy_id
             or checker_policy_id != plan.lineage.pre_submit_policy_id
-            or plan.catalogue_manifest_sha256 != self._catalogue.manifest_sha256
+            or plan.catalogue_manifest_sha256
+            != self._checker_execution.catalogue_manifest_sha256
         ):
-            raise PreSubmissionInfrastructureUnavailable(
+            raise PreSubmissionInfrastructureUnavailableError(
                 "pre_submission_materialization_context_invalid"
             )
         commitment = prepared_artifact.commitment
@@ -305,18 +367,22 @@ class PreparedBundlePreSubmitEvidenceService:
         *,
         session: AsyncSession,
         materialization: PreparedBundleMaterializationService,
+        preparation_authorization: SubmissionBundlePreparationAuthorization,
+        task_contexts: TaskSubmissionContextPort,
+        project_contexts: ProjectLockedPolicyContextPort,
     ) -> None:
         """Bind execution to the transaction used for durable evidence."""
         self._session = session
         self._materialization = materialization
+        self._preparation_authorization = preparation_authorization
+        self._task_contexts = task_contexts
+        self._project_contexts = project_contexts
 
     async def execute(
         self,
         request: PreparedBundleMaterializationRequest,
         *,
-        actor_profile_id: UUID,
-        identity_link_id: UUID,
-        predecessor_submission_id: UUID | None,
+        preparation_request: SubmissionBundlePreparationRequest,
     ) -> PreSubmitEvidencePersistenceResult:
         """Persist only after materialization has returned and cleaned its scratch lease."""
         if self._session.in_transaction():
@@ -327,14 +393,12 @@ class PreparedBundlePreSubmitEvidenceService:
         return await self.persist(
             request,
             execution=execution,
-            actor_profile_id=actor_profile_id,
-            identity_link_id=identity_link_id,
-            predecessor_submission_id=predecessor_submission_id,
+            preparation_request=preparation_request,
         )
 
     async def materialize(
         self, request: PreparedBundleMaterializationRequest
-    ) -> PreSubmissionExecutionResult:
+    ) -> PreSubmitExecutionResult:
         """Consume fixed-service authority while its owning transaction is active."""
         return await self._materialization.materialize_prepared_bundle(request)
 
@@ -342,10 +406,8 @@ class PreparedBundlePreSubmitEvidenceService:
         self,
         request: PreparedBundleMaterializationRequest,
         *,
-        execution: PreSubmissionExecutionResult,
-        actor_profile_id: UUID,
-        identity_link_id: UUID,
-        predecessor_submission_id: UUID | None,
+        execution: PreSubmitExecutionResult,
+        preparation_request: SubmissionBundlePreparationRequest,
     ) -> PreSubmitEvidencePersistenceResult:
         """Persist completed, cleaned execution evidence in a fresh transaction."""
         if self._session.in_transaction():
@@ -356,13 +418,20 @@ class PreparedBundlePreSubmitEvidenceService:
         prepared_generation_id = request.prepared_artifact.generation_id
         async with self._session.begin():
             await self._session.execute(text("set transaction isolation level read committed"))
-            return await PreSubmitEvidenceService(self._session).persist(
+            await self._preparation_authorization.revalidate(request=preparation_request)
+            return await PreSubmitEvidenceService(
+                self._session,
+                task_contexts=self._task_contexts,
+                project_contexts=self._project_contexts,
+            ).persist(
                 PreSubmitEvidencePersistenceRequest(
-                    actor_profile_id=actor_profile_id,
-                    identity_link_id=identity_link_id,
+                    actor_profile_id=preparation_request.actor.actor_profile_id,
+                    identity_link_id=preparation_request.actor.identity_link_id,
                     task_id=request.task_id,
                     assignment_id=request.assignment_id,
-                    predecessor_submission_id=predecessor_submission_id,
+                    predecessor_submission_id=(
+                        preparation_request.predecessor_submission_id
+                    ),
                     prepared_generation_id=prepared_generation_id,
                     archive_sha256=commitment.sha256,
                     archive_byte_count=commitment.byte_count,

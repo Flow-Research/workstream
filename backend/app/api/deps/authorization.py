@@ -29,6 +29,7 @@ from app.modules.actors.service import (
 )
 from app.modules.api_controls.service import FIRST_ACCESS_SCOPE, RateControlService
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.api import ActorIdentityFacts, ActorKind as PublicActorKind
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
@@ -83,6 +84,23 @@ async def get_authorization_actor(
 ) -> ResolvedActor:
     """Resolve an exact human or fixed-service target before kernel lifecycle denial."""
     return await resolve_authorization_actor(request, result, session, rate_control)
+
+
+async def get_authorization_actor_identity(
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+) -> ActorIdentityFacts:
+    """Project the resolved request actor into the dependency-safe AUTH facts."""
+    service_identity = resolved.profile.service_identity
+    return ActorIdentityFacts(
+        actor_profile_id=UUID(resolved.profile.id),
+        identity_link_id=UUID(resolved.identity_link.id),
+        actor_kind=(
+            PublicActorKind.SERVICE
+            if resolved.profile.actor_kind == ActorKind.SERVICE
+            else PublicActorKind.HUMAN
+        ),
+        service_identity=service_identity,
+    )
 
 
 async def resolve_authorization_actor(

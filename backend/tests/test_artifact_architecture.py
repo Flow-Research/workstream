@@ -13,12 +13,14 @@ from app.main import create_app
 BACKEND_ROOT = Path(__file__).parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 ARTIFACT_OPERATIONS = APP_ROOT / "interfaces" / "artifact_operations.py"
+SUBMISSION_PREPARATION_API = (
+    APP_ROOT / "modules" / "artifacts" / "api" / "submission_preparation.py"
+)
 COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
 S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
 CLOSED_PORTS = {
     "GuideArtifactIngestCommand",
     "GuideArtifactIngestPort",
-    "SubmissionBundlePreparationPort",
     "ArtifactBindingPort",
     "ArtifactMaterializationPort",
     "CheckerArtifactOutputPort",
@@ -32,8 +34,6 @@ CANONICAL_REQUESTS = {
     "GuideSourceMaterializationRequest",
     "SubmissionBindingRequest",
     "CheckerOutputBindingRequest",
-    "SubmissionBundlePreparationRequest",
-    "PreparedBundleMaterializationRequest",
     "BindingMaterializationRequest",
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
@@ -58,7 +58,6 @@ PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
     "ArtifactRecoveryRequest",
     "GuideSufficiencyMaterialRequest",
     "GuideSourceMaterializationRequest",
-    "SubmissionBundlePreparationRequest",
 }
 PREPARED_HANDLE_FORBIDDEN_ROOTS = (
     APP_ROOT / "adapters",
@@ -515,14 +514,12 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
 
     expected_methods = {
         "GuideArtifactIngestPort": {"ingest"},
-        "SubmissionBundlePreparationPort": {"prepare"},
         "ArtifactBindingPort": {
             "bind_guide_source",
             "bind_submission",
             "bind_checker_output",
         },
         "ArtifactMaterializationPort": {
-            "materialize_prepared_bundle",
             "materialize_guide_source",
             "materialize_bindings",
         },
@@ -530,11 +527,9 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
     }
     expected_request_by_method = {
         "ingest": "GuideArtifactIngestRequest",
-        "prepare": "SubmissionBundlePreparationRequest",
         "bind_guide_source": "GuideSourceBindingRequest",
         "bind_submission": "SubmissionBindingRequest",
         "bind_checker_output": "CheckerOutputBindingRequest",
-        "materialize_prepared_bundle": "PreparedBundleMaterializationRequest",
         "materialize_guide_source": "GuideSourceMaterializationRequest",
         "materialize_bindings": "BindingMaterializationRequest",
         "store": "CheckerOutputArtifactRequest",
@@ -567,7 +562,7 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
 
 
 def test_submission_preparation_http_request_never_carries_prepared_authority() -> None:
-    tree = _tree(ARTIFACT_OPERATIONS)
+    tree = _tree(SUBMISSION_PREPARATION_API)
     request_class = next(
         node
         for node in tree.body
@@ -579,7 +574,9 @@ def test_submission_preparation_http_request_never_carries_prepared_authority() 
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     }
     assert "prepared_authorization" not in fields
-    assert fields["authorization_context"] == {"AuthorizationContext"}
+    assert fields["actor"] == {"ActorIdentityFacts"}
+    assert fields["request_id"] == {"UUID"}
+    assert fields["correlation_id"] == {"UUID"}
     assert fields["idempotency_key"] == {"UUID"}
 
 

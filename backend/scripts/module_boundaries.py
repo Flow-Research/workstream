@@ -122,6 +122,14 @@ def _source_module(source: str) -> str | None:
     return source.removeprefix(prefix).split("/", 1)[0]
 
 
+def _source_owner_adapter(source: str) -> str | None:
+    """Return the module owned by one explicit adapter package."""
+    prefix = "backend/app/adapters/"
+    if not source.startswith(prefix):
+        return None
+    return source.removeprefix(prefix).split("/", 1)[0]
+
+
 def _is_public_target(target: str, module: str) -> bool:
     public = f"{MODULE_PREFIX}{module}.api"
     return target == public or target.startswith(f"{public}.")
@@ -187,6 +195,7 @@ def scan(root: Path, registry: Registry) -> tuple[set[PrivateEdge], dict[str, se
     for path in sorted(app_root.rglob("*.py")):
         source = path.relative_to(root).as_posix()
         source_module = _source_module(source)
+        source_owner_adapter = _source_owner_adapter(source)
         canonical_imports = authorization_boundary.source_imports(path, root)
         exact_imports = exact_source_imports(path, root, source_validated=True)
         for target in canonical_imports:
@@ -196,6 +205,8 @@ def scan(root: Path, registry: Registry) -> tuple[set[PrivateEdge], dict[str, se
             if target_module not in registry.names:
                 raise ModuleBoundaryError("unknown_module")
             if source_module == target_module:
+                continue
+            if source_owner_adapter == target_module:
                 continue
             edge = authorization_boundary.ImportEdge(source, target)
             if source_module == "authorization" or target_module == "authorization":
@@ -208,6 +219,8 @@ def scan(root: Path, registry: Registry) -> tuple[set[PrivateEdge], dict[str, se
             if target_module not in registry.names:
                 raise ModuleBoundaryError("unknown_module")
             if source_module == target_module:
+                continue
+            if source_owner_adapter == target_module:
                 continue
             if source_module == "authorization" or target_module == "authorization":
                 continue
