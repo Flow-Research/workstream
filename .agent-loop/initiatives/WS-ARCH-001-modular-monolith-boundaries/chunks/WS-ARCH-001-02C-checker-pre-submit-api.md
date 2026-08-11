@@ -89,7 +89,12 @@ session, concrete executor, or mutable internal result leakage.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/checkers app/modules/artifacts/submission_admission.py app/modules/tasks/pre_submit_context.py tests/architecture/test_module_boundaries.py)
-(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_submission_bundle_admission.py --cov=app.modules.checkers.api --cov-report=term-missing --cov-fail-under=90)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_submission_bundle_admission.py tests/test_checker_catalogue.py tests/test_effective_pre_submit_execution.py \
+  --cov=app.modules.checkers.api \
+  --cov=app.modules.checkers.catalogue \
+  --cov=app.modules.checkers.effective_plan \
+  --cov=app.modules.checkers.pre_submit_execution \
+  --cov-report=term-missing --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py
 git diff --check
