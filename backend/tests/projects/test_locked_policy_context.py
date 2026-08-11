@@ -1,5 +1,7 @@
 """PROJECT public locked-policy context capability tests."""
 
+# ruff: noqa: F401, F811 -- imported pytest fixtures must remain module globals.
+
 from __future__ import annotations
 
 import asyncio
@@ -34,6 +36,8 @@ from test_projects import (
     create_approved_policy_bundle,
     create_guide,
     create_project,
+    project_client,
+    project_database_env,
 )
 
 
