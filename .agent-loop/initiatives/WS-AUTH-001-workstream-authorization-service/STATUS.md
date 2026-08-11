@@ -186,7 +186,7 @@ Open pull requests, not this file, are the transient review view.
 | `WS-AUTH-001-12F1` | Merged | `codex/ws-auth-001-12f1-submission-policy-foundation` | #286 | Submission-policy PREP, replay, provenance, and audit custody foundation merged as `5a4186cc`; zero activation. |
 | `WS-AUTH-001-12F2` | Merged | `codex/ws-auth-001-12f2-manual-submission-policy` | #292 | Governed Project Manager append-only manual-draft create/update cutover merged as `81f281bd`. |
 | `WS-AUTH-001-12F3` | Merged; transitional | `codex/ws-auth-001-12f3-service-derivation` | #295 | Merged as `99c0aaf0`; authority/provenance is reused, while its separate inference entry point is removed at POL-04B. |
-| `WS-AUTH-001-12I` | Implemented; review pending | `codex/ws-auth-001-12i-unified-compilation-activation` | - | Exact Project Manager request/recovery and fixed project-setup execution activation; POL remains hidden until 03B. |
+| `WS-AUTH-001-12I` | Merged | `codex/ws-auth-001-12i-unified-compilation-activation` | #312 | Exact Project Manager request/recovery and fixed project-setup execution activation merged as `98eae13e`; POL remains hidden until 03B. |
 | `WS-AUTH-001-12F4` | Proposed | - | - | Activates approval of the stored unified pre-submit component; no inference. |
 | `WS-AUTH-001-12G` | Proposed | - | - | Activates deterministic stored post-submit projection; zero model calls. |
 | `WS-AUTH-001-12H` | Proposed | - | - | Activates only a complete approved unified guide lineage. |

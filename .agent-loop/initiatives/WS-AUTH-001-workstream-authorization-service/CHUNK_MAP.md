@@ -72,7 +72,7 @@ stopped.
 | `WS-AUTH-001-12F1` | Submission Policy Authority Foundation | L1 | Merged through PR #286; zero activation |
 | `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Merged through PR #292 as `81f281bd` |
 | `WS-AUTH-001-12F3` | Transitional Fixed-Service Policy Derivation | L1 | Merged through PR #295 as `99c0aaf0`; superseded at POL-04B live cutover |
-| `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Proposed after hidden POL-03A; before POL-03B |
+| `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Merged through PR #312 as `98eae13e`; POL-03B is the next consumer |
 | `WS-AUTH-001-12F4` | Unified Pre-Submit Approval Activation | L1 | Proposed after hidden POL-05A; before POL-05B |
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
 | `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |

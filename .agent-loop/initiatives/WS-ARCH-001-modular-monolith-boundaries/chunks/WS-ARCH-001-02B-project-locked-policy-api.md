@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ARCH-001-02B — PROJECT Locked Policy Public API
 
-Implementation state: in review; on merge, this chunk is complete and
-WS-ARCH-001-02C becomes the next eligible implementation boundary.
+Implementation state: merged through PR #315. This contract is historical
+scope evidence; WS-ARCH-001-02C is the next eligible implementation boundary.
 
 ## Parent initiative
 

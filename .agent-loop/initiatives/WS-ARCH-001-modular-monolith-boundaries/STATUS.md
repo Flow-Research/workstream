@@ -11,6 +11,14 @@
 - Completed foundation: WS-ARCH-001-01 installs the canonical registry, exact
   general debt ledger, AUTH-ledger composition, protected-base validator,
   public-API checks, behavior-ownership record, and hosted CI enforcement.
-- Planning in review: WS-ARCH-001-02 is split into 02A-02I across TASKS,
+- Approved split: WS-ARCH-001-02 is divided into 02A-02I across TASKS,
   PROJECTS, CHECKERS, ART, AUTH, composition, and the final API clean cut.
-- Next implementation boundary after plan approval: WS-ARCH-001-02A only.
+- Completed capability foundations: TASKS `02A` merged through PR #314 and
+  PROJECTS `02B` merged through PR #315.
+- Next implementation boundary: WS-ARCH-001-02C only. It exposes CHECKER-owned
+  effective-plan and bounded execution-result contracts without activating the
+  contributor preparation route.
+- Repository housekeeping after PR #315 found no competing clean-up
+  initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
+  AUTH-specific debt, and test-structure repairs remain incremental with the
+  capability being touched.
