@@ -50,9 +50,12 @@ backend/app/modules/tasks/pre_submit_context.py
 backend/app/modules/artifacts/submission_admission.py
 backend/scripts/behavior_ownership.py
 backend/tests/architecture/test_module_boundaries.py
+backend/tests/test_checker_catalogue.py
+backend/tests/test_default_pre_submit_execution.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
@@ -95,6 +98,7 @@ session, concrete executor, or mutable internal result leakage.
   --cov=app.modules.checkers.effective_plan \
   --cov=app.modules.checkers.pre_submit_execution \
   --cov-report=term-missing --cov-fail-under=90)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin tests/test_default_pre_submit_execution.py::test_disabled_mandatory_executor_state_fails_closed)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py
 git diff --check
