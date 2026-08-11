@@ -91,8 +91,10 @@ def test_merge_bundles_emits_complete_run_summary(tmp_path: Path) -> None:
     summary = json.loads((tmp_path / "summary.json").read_text(encoding="utf-8"))
     assert summary["mode"] == "run"
     assert [row["name"] for row in summary["lanes"]] == [lane.name for lane in LANES]
-    assert summary["aggregate_runner_seconds"] == 15.0
-    assert summary["slowest_lane_seconds"] == 5.0
+    assert summary["aggregate_runner_seconds"] == sum(
+        float(index) for index in range(1, len(LANES) + 1)
+    )
+    assert summary["slowest_lane_seconds"] == float(len(LANES))
     assert len(list((tmp_path / "merged").glob(".coverage.*"))) == len(LANES)
 
 

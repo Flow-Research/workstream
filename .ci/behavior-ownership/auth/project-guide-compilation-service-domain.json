@@ -1,0 +1,15 @@
+{
+  "behavior_id": "auth.project_guide_compilation.service_domain",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.domain.prepared_service.is_project_setup_scope",
+    "app.modules.authorization.domain.prepared_service.project_setup_resource_matches"
+  ],
+  "group": "auth",
+  "outcomes": ["return"],
+  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/domain/prepared_service.py",
+  "tests": ["backend/tests/authorization/guide_compilation/test_domain_contract.py::test_project_setup_scope_and_resource_guard_are_action_specific"]
+}

@@ -17,11 +17,11 @@ owning implementation chunks.
 | JWKS endpoint, cache, and rotation | Platform security/on-call | Rotation drill, cache bounds, outage behavior, alerts. |
 | Introspection/revocation policy | Platform security | Approved mode, endpoint trust policy, timeout/failure proof. |
 | First Access Administrator bootstrap | Restricted deployment operator | Dry-run, target verification, one-time result, authority event. |
-| Legacy actor classification | Data migration owner plus security reviewer | Versioned manifest, live-row digest, checksum, dry-run report. |
+| Pre-v0.1 production remediation | Data owner plus security reviewer | Separately approved forward migration and evidence-preservation proof. |
 | Actor/grant administration | Access Administrator | Supported API/command, reason, idempotency, evidence. |
 | Project contributor grants | Covered Project Manager | Exact-project target and privacy-bounded candidate lookup. |
 | Recovery operations | Operator or covered Project Manager as specified | Matched permission, reason, resource scope, immutable evidence. |
-| Rollout and rollback | Release owner | Migration round trip, compatibility inventory, rollback stop conditions. |
+| Rollout and recovery | Release owner | Fresh-baseline proof, compatibility inventory, and forward-recovery stop conditions. |
 | Live authorization proof | Release owner plus security/QA | API-visible drill with redacted committed evidence. |
 
 ## Required Configuration
@@ -197,48 +197,15 @@ unavailable until merged feature behavior exists and the dedicated AUTH
 activation custodian integrates its evaluator and changes only that action's
 availability.
 
-### Existing Service Identity Mapping Custody
+### Existing Service Identity Custody
 
-This procedure applies only when service ActorProfiles already exist before
-migration `0023`. The data-migration owner prepares a private draft containing
-the exact existing ActorProfile ID, issuer, opaque subject, and proposed fixed
-service identity for every row. A security reviewer verifies each choice from
-authoritative ownership records. Neither the tool nor an operator may infer a
-value from subject syntax, email, display name, token role, or adapter
-provenance.
-
-Run the supported tool against the exact target database. Draft and envelope
-files must be regular, non-symlink, owner-only mode `0600` files in a controlled
-directory outside the checkout, every linked worktree, and shared Git metadata.
-Zero existing service rows require no file; otherwise the envelope must cover
-the complete locked service projection and select unique values from the seven
-closed identities.
-
-```bash
-chmod 600 /secure/workstream/service-identity-draft-v1.json
-.venv/bin/python scripts/service_actor_identity_mapping.py validate \
-  --draft /secure/workstream/service-identity-draft-v1.json
-.venv/bin/python scripts/service_actor_identity_mapping.py bind \
-  --draft /secure/workstream/service-identity-draft-v1.json \
-  --output /secure/workstream/service-identity-envelope-v1.json
-chmod 600 /secure/workstream/service-identity-envelope-v1.json
-.venv/bin/python scripts/service_actor_identity_mapping.py verify \
-  --envelope /secure/workstream/service-identity-envelope-v1.json
-```
-
-`validate` and `verify` never modify PostgreSQL. `bind` refuses an existing
-output path. The tool prints only stable codes, bounded counts, and non-secret
-digests. Inject `WORKSTREAM_SERVICE_ACTOR_IDENTITY_MAPPING_FILE` only into the
-migration process immediately before `alembic upgrade head`; never commit or
-log the path or confidential contents.
-
-Migration `0023` consumes the packaged versioned contract, locks the complete
-actor/link source projection, and refuses missing, extra, stale, duplicate, or
-ambiguous mappings atomically. It retains only bounded counts and non-secret
-source, manifest, envelope, and database-binding digests. After database
-verification and the approved rollback window, securely delete the draft and
-envelope. If any row cannot truthfully map, remain on `0022` and open a reviewed
-data-remediation decision; never guess, delete history, or use manual SQL.
+The v0.1 baseline and runtime fixed-service registry are the only current
+service-identity installation paths. The former pre-v0.1 mapping utility and
+revision-specific mapping procedure are historical and have been removed.
+Existing development databases are not upgraded or mapped forward: recreate
+the database and install `0001_v01_baseline`. Operators must never infer a
+service identity from subject syntax, email, display name, token role, or
+adapter provenance.
 
 The [approved AUTH-06 chunk contract](../.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md)
 records the exact deprecated compatibility identifier. That temporary,
@@ -249,25 +216,19 @@ intake. Operator start override does not use the bridge. AUTH-13 removes the
 claim and start consumers; AUTH-14 removes the final submission consumer,
 compatibility route, and adapter.
 
-## Contributor Attribution Migration And Runtime Guard
+## Contributor Attribution Runtime Guard
 
-Migration `0027_contributor_foundation` clean-cuts the retired assignment and
-submission human-owner columns to `contributor_id`. Before any DDL, it locks
-`actor_profiles`, `task_assignments`, and `submissions` and independently
-classifies every old value as malformed UUID, missing ActorProfile, or service
-ActorProfile. Failure reports only bounded row/profile ID pairs and counts. It
-redacts malformed source values completely while retaining safe row IDs and
-well-formed missing/service profile IDs. It does not inspect issuer, subject,
-email, token claims, current assignment, or another table to infer a
-replacement.
+The v0.1 baseline uses canonical `contributor_id` attribution. It does not
+inspect issuer, subject, email, token claims, current assignment, or another
+table to infer a replacement for invalid attribution.
 
 Remediate a refusal only from authoritative canonical-actor evidence. Create or
 repair the canonical human ActorProfile through its owning reviewed process,
 or correct a demonstrably wrong attribution through a separately reviewed data
 repair. Do not map by email or display name, select a latest profile, convert a
 service identity, fabricate an ActorProfile, or edit immutable audit history.
-Rerun from exact head `0026_actor_profile_lifecycle` and retain the bounded
-preflight result with the deployment evidence.
+Pre-v0.1 transition preflights are historical only. Current deployments install
+the canonical contributor shape from `0001_v01_baseline`.
 
 The reusable primitive is
 `public.require_human_actor_profile_reference()`. Exact triggers
@@ -278,12 +239,10 @@ human lineage. Exact foreign keys
 indexes `ix_task_assignments_contributor_id` and
 `ix_submissions_contributor_id` preserve lookup behavior.
 
-After upgrade, both columns are non-null `varchar(36)` foreign keys. PostgreSQL
+Both columns are non-null `varchar(36)` foreign keys. PostgreSQL
 rejects a missing profile with SQLSTATE `23503` and a service profile with
 `23514`. Suspended and deactivated human profiles remain valid historical
-references. Downgrade first locks the same tables and refuses before DDL when
-any non-owned dependency uses the shared lineage function; remove or migrate
-that dependent schema through its owning release before retrying.
+references. The v0.1 baseline has no downgrade path.
 
 Claim and submission also revalidate current identity inside their mutation
 transaction in lock order ActorProfile, exact issuer/subject identity link,
@@ -317,11 +276,9 @@ an authentication or pagination-cursor key. Missing key or database access
 returns the same retryable 503 when a later route attaches the dependency.
 Exhaustion returns 429 with `Retry-After`.
 
-Before upgrading to `0033_authorization_read_rate`, confirm migration
-`0032_artifact_recovery` is current and that no unreviewed constraint changes
-exist. This migration requires PostgreSQL major version 16, matching the
-CI-pinned database used to freeze the exact `pg_get_expr` rendering. Confirm
-the target before either direction:
+The current authorization-read constraint requires PostgreSQL major version
+16, matching the CI-pinned database used to freeze the exact `pg_get_expr`
+rendering. Confirm the target before deployment:
 
 ```sql
 SELECT current_setting('server_version_num')::integer / 10000
@@ -330,7 +287,7 @@ SELECT current_setting('server_version_num')::integer / 10000
 
 Stop if the result is not `16`; validate a different major version through a
 reviewed forward migration change rather than bypassing the drift check.
-Inspect the exact database-owned expression before either direction:
+Inspect the exact current database-owned expression:
 
 ```sql
 SELECT pg_get_expr(conbin, conrelid) AS scope_constraint
@@ -339,24 +296,14 @@ WHERE conrelid = 'api_rate_control_counters'::regclass
   AND conname = 'ck_api_rate_control_counters_scope_token';
 ```
 
-Before upgrade, the returned scope set must be exactly `first_access` and
-`admin_mutation`. Before downgrade, it must be exactly `first_access`,
-`admin_mutation`, and `authorization_read`. PostgreSQL may render these as an
+The returned scope set must be exactly `first_access`, `admin_mutation`, and
+`authorization_read`. PostgreSQL may render these as an
 `ANY (ARRAY[...])` expression with text casts; compare the complete expression
-and values, not a substring. Upgrade takes an access-exclusive lock on
-`api_rate_control_counters`, replaces only its closed scope constraint, and
-preserves every existing counter. The dependency remains deliberately
-unattached after this migration.
+and values, not a substring.
 
-If either direction reports `unexpected API rate-control scope constraint`, it
-leaves the Alembic revision, constraint, and counter rows unchanged. Do not
-drop, bypass, or force the constraint. Compare the live definition with the
-reviewed migrations that actually ran, reconcile it to the canonical expected
-definition through a reviewed forward repair, and then retry the migration.
-Prefer forward recovery when the provenance of the drift is uncertain.
-
-Downgrade also takes the table lock before preflight and refuses while any live
-or expired `authorization_read` row exists:
+If validation reports `unexpected API rate-control scope constraint`, do not
+drop, bypass, or force the constraint. Reconcile it to the canonical expected
+definition through a reviewed forward repair. Diagnose current rows with:
 
 ```sql
 SELECT count(*) AS authorization_read_rows
@@ -364,11 +311,7 @@ FROM api_rate_control_counters
 WHERE control_scope = 'authorization_read';
 ```
 
-Do not delete an unexpired row merely to force rollback. Prefer forward
-recovery. If rollback is required before AUTH-10B2 attaches the dependency,
-verify the count is zero, quiesce deployments that could run the new scope,
-then downgrade. After 10B2, wait for the largest configured window to expire,
-quiesce every reader, delete only expired rows using PostgreSQL time, and retry.
+Do not delete an unexpired row. Recover forward.
 
 Generate the secret outside the repository and store it in the deployment
 secret manager:
@@ -400,10 +343,7 @@ WHERE window_expires_at <= statement_timestamp();
 
 Runtime consumption opportunistically deletes at most 100 expired other rows.
 On idle systems, operators may run the same expired-only SQL cleanup. Never
-delete active rows to recover capacity, and never downgrade migration `0017`
-while the table is nonempty; the guarded downgrade takes an exclusive table
-lock, refuses, and rolls back. Quiesce every protected write before attempting
-the downgrade so waiting writers cannot resume against a removed table.
+delete active rows to recover capacity. The v0.1 baseline is not downgradable.
 
 ## JWKS Rotation And Outage
 
@@ -487,172 +427,16 @@ fabricated human/system role.
 
 ## Legacy Actor Classification
 
-Non-empty legacy registries require the supported classification tool and a
-versioned JSON manifest. Each entry binds the exact legacy actor ID, issuer,
-opaque subject, and subject kind.
+The former AUTH-06 classification migration and private envelope workflow are
+historical and must not be run against v0.1. Recreate development databases
+from the baseline; production remediation requires a separately reviewed
+forward migration.
 
-Platform security owns the manifest and envelope. Both files contain
-confidential identity-linking evidence even though the command report is
-redacted. Store them in an environment-specific owner-only directory outside
-the repository, every linked worktree, and the Git common directory. Do not
-attach either file to tickets, CI logs, PRs, or engineering-loop evidence.
-
-Manifest schema version 1 has exactly this shape:
-
-```json
-{
-  "schema_version": 1,
-  "classifications": [
-    {
-      "actor_id": "00000000-0000-5000-8000-000000000000",
-      "issuer": "https://issuer.example.invalid",
-      "subject": "opaque-subject-from-the-legacy-row",
-      "subject_kind": "human"
-    }
-  ]
-}
-```
-
-`subject_kind` is only `human` or `service`. The actor ID must be the canonical
-UUIDv5 derived by the existing registry from the byte-exact HTTPS issuer and
-case-sensitive opaque subject. Operators must classify from authoritative
-issuer records; email, subject syntax, token roles, profile rows, and manual SQL
-are not classification evidence.
-
-The tool must:
-
-- support dry-run;
-- reject unknown fields/kinds, duplicates, missing rows, extra rows, stale
-  rows, mismatched issuer/subject, invalid UUIDs, and ambiguous classification;
-- compute a complete live-row digest and manifest checksum;
-- bind evidence to a non-secret database/environment identifier;
-- write no grants;
-- emit a bounded remediation report.
-
-Prepare a restricted directory and validate without writing an envelope:
-
-```bash
-cd backend
-WORKSTREAM_DATABASE_URL='<target async Postgres URL>' \
-  .venv/bin/python scripts/legacy_actor_classification.py \
-  --manifest /secure/workstream/prod/legacy-actor-manifest-v1.json
-```
-
-Dry-run is the default. An empty registry needs no manifest and returns an
-explicit empty proof. A non-empty registry without a manifest fails closed. The
-JSON report contains only row count, mode, empty status, checksums, and the
-non-secret database binding; stderr uses stable error codes and does not render
-identity values, paths, database names, or connection URLs.
-
-After the dry-run report is reviewed, export one write-once envelope:
-
-```bash
-cd backend
-WORKSTREAM_DATABASE_URL='<target async Postgres URL>' \
-  .venv/bin/python scripts/legacy_actor_classification.py \
-  --manifest /secure/workstream/prod/legacy-actor-manifest-v1.json \
-  --output /secure/workstream/prod/legacy-actor-classification-v1.json \
-  --generated-at 2026-07-13T12:30:00Z
-```
-
-`--generated-at` is an explicit UTC RFC3339 second so the same reviewed inputs
-produce byte-identical evidence. Export writes mode `0600` through a
-crash-safe, atomic no-overwrite publish. Repeating the exact command is
-idempotent only when the existing regular file has identical bytes and private
-permissions. A different existing file, symlink, relative path, repository
-path, or Git-directory path fails closed.
-
-The envelope contains schema version, sorted classifications, live source-row
-digest, canonical manifest digest, generated-at, database binding, and a digest
-over the complete envelope. The binding hashes PostgreSQL database name and
-database OID. It is a non-secret same-cluster wrong-database guard, not a
-globally unique deployment identity. A clone, restore, or database recreation
-requires a fresh dry run and envelope even when the human environment label is
-unchanged.
-
-The canonical actor-schema migration locates this envelope only through:
-
-```bash
-export WORKSTREAM_LEGACY_ACTOR_CLASSIFICATION_FILE=/secure/workstream/prod/legacy-actor-classification-v1.json
-```
-
-Set the variable only on the reviewed AUTH-06 migration runner. The migration
-loads the strict envelope, recomputes the complete live row-set digest and
-database binding inside its transaction, and aborts on checksum, TOCTOU,
-missing/extra row, identity, or binding mismatch. The envelope never creates
-grants and is not a supported ad hoc migration path.
-
-On validation failure, correct the authoritative manifest or target database,
-rerun dry-run, and export to a new secure path when the evidence bytes change.
-Never edit an envelope or bypass the failure with SQL.
-
-Deploy AUTH-06 only in a quiesced maintenance window after the dry-run report
-and envelope have been reviewed:
-
-1. Drain in-flight API requests and jobs.
-2. Stop every old-version API replica and asynchronous writer.
-3. Run the migration from the reviewed AUTH-06 release artifact.
-4. Start only replicas and jobs containing the matching AUTH-06 code.
-5. Complete the checks below before resuming traffic.
-
-```bash
-cd backend
-export WORKSTREAM_LEGACY_ACTOR_CLASSIFICATION_FILE=/secure/workstream/prod/legacy-actor-classification-v1.json
-.venv/bin/alembic upgrade 0020_canonical_actor_profile
-```
-
-Verify one durable migration-state row before serving traffic. Record only the
-schema version, classified count, and checksums; do not export identity rows:
-
-```sql
-select schema_version, classified_count, source_row_set_sha256,
-       manifest_sha256, envelope_sha256, migrated_at
-from actor_profile_migration_state where id = 1;
-
-select
-  (select count(*) from actor_profiles) as profile_count,
-  (select count(*) from actor_identity_links) as identity_link_count,
-  not exists (
-    select 1 from actor_profiles p
-    full join actor_identity_links l on l.actor_profile_id = p.id
-    where p.id is null or l.id is null
-  ) as exact_one_link_per_profile,
-  to_regclass('public.admin_role_grants') is null as no_admin_grant_table,
-  to_regclass('public.project_role_grants') is null as no_project_grant_table;
-```
-
-Confirm every canonical profile has exactly one identity link, the classified
-count matches the reviewed report, and no grants were created by the migration.
-Retain the manifest and envelope only through verification and the approved
-rollback window. Then delete both identity-bearing files from operator storage
-and retain only the bounded report and durable checksum record.
-
-Rollback to `0019_authority_idempotency` uses the same quiescence sequence: drain
-requests and jobs, stop all AUTH-06 writers, run the downgrade, deploy only the
-matching pre-AUTH-06 code, verify, and then resume traffic. The downgrade is
-envelope-independent because its required state is in PostgreSQL. It refuses
-while any profile is suspended or any identity link is revoked; those states
-may be repaired only through their reviewed lifecycle operations, never direct
-SQL. Deactivation is terminal: if any actor is deactivated, downgrade is
-unavailable and operators must recover forward on AUTH-06. A non-empty registry
-restored to 0019 cannot be upgraded again from deleted evidence: run the
-classification tool against the exact restored rows and obtain a newly reviewed
-envelope. The migration never guesses a subject kind or bypasses this
-fresh-evidence requirement.
-
-Run the exact rollback only after those checks pass:
-
-```bash
-cd backend
-.venv/bin/alembic downgrade 0019_authority_idempotency
-```
-
-Rollback restores every canonical identity to legacy identity storage and
-copies the current canonical `display_name` and `contact_email`, including
-`null`, into the restored row. This prevents a cleared canonical contact email
-from being resurrected by pre-AUTH-06 code. Because canonical migration does
-not import legacy display fields, rollback intentionally scrubs retained legacy
-display data unless it was set through `PATCH /api/v1/actors/me` after AUTH-06.
+Rollback across the removed pre-v0.1 revision graph is unsupported. Production
+recovery must move forward through a reviewed corrective migration that
+preserves actor and authorization evidence. Non-production databases may be
+recreated from `0001_v01_baseline`. Never rewrite the Alembic stamp, delete
+authority evidence, or restore the retired identity-storage shape.
 
 ## Staged Rollout
 
@@ -661,7 +445,7 @@ For each chunk:
 1. Confirm allowed files and stop conditions.
 2. Run focused tests plus the full backend suite/API drill required by the
    contract.
-3. Run migration upgrade, downgrade-one, and re-upgrade where applicable.
+3. Run the current migration's forward and refusal tests where applicable.
 4. Confirm the obsolete-path allowlist only shrinks and no compatibility path
    was added or restored.
 5. Run required internal reviewers and repair valid findings.
@@ -694,12 +478,8 @@ availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
 authority; all 23 REV actions remain planned and unavailable. WS-XINT-003-02C
 registers the four additional actions and six closed service identities but
 adds no evaluator, route, job, principal row, or lifecycle behavior.
-Migration `0049_rev_auth_readiness` takes protected locks on authority
-idempotency evidence, audit evidence, and actor profiles before replacing the
-closed constraints. It seeds no ActorProfile, identity link, grant, route, or
-job. Downgrade refuses after any new action has direct or idempotency-linked
-audit evidence, or while any new REV service identity is in use; otherwise it
-restores the exact `0048` constraints.
+The v0.1 baseline seeds no ActorProfile, identity link, grant, route, or job for
+REV readiness. Its closed catalogue constraints are installed directly.
 Their owning feature must publish the approved principal/resource/guard/surface/
 transaction contract before activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
@@ -709,19 +489,20 @@ PR #139 historically required availability-neutral transfer of 25 ART and 19
 REV owner rows before feature activation. Both transfers completed;
 WS-XINT-002-01 then reconciles the live ART set to 22 planned rows by deleting
 six obsolete upload actions and adding three bundle/review actions. The ART
-transfer adds no migration; the later WS-XINT-002-01 catalogue
-reconciliation uses migration `0036`.
+transfer and later WS-XINT-002-01 catalogue reconciliation are included in the
+v0.1 baseline.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 100 ActionIds, 48 active actions, and
-52 planned actions. AUTH-11C2 activates three current effective-policy and
+Catalogue totals are 73 PermissionIds, 102 ActionIds, 54 active actions, and
+48 planned actions. AUTH-12I adds and activates only the unified compilation
+request/execute pair. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
 route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
 activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
 only the fixed-service guide binding and read actions. The other 16 ART actions
 remain planned, including every Operator artifact action.
-Migration `0037` keeps each allowed or denied internal ART decision bound to
+The v0.1 schema keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
 
 AUTH-11A adds read-only `project.setup_diagnostic.read` and
@@ -740,17 +521,18 @@ review-evidence binding. v0.1 reviewer findings/notes and contributor responses
 are REV-owned records with no artifact upload. Any future uploaded evidence
 requires separate approved REV-owned intent plus exact ART and AUTH owner work.
 
-Migration `0021` preserves historical audit rows with null `action_id`. Inspect
+The v0.1 schema permits historical audit rows with null `action_id`. Inspect
 non-null action evidence only by bounded ActionId, request/correlation IDs, and
 resource references; do not export event payloads or actor identity-link data
 for routine diagnosis. Every action must carry its catalogue-mapped PermissionId,
-and every permission added after migration `0018` must carry one of its mapped
+and every current permission must carry one of its mapped
 actions. Planned actions can record bounded denial evidence but cannot record an
 allowed decision through the typed writer.
 
 The historical permission set remains exactly 49 values. The post-`0020` set
-contains exactly 27 values, including `review.queue.override`,
-`project.setup_diagnostic.read`, and `project.effective_policy.read`; do not derive
+contains exactly 24 values, including `review.queue.override`, the two
+compilation permissions, `project.setup_diagnostic.read`, and
+`project.effective_policy.read`; do not derive
 historical status from identifier prefixes. All submission/review rows remain
 planned. Initial and revision submission share `submission.create`, and no
 revision-specific permission or preparation action exists.
@@ -834,59 +616,19 @@ Still-planned fixed-service actions produce no handle. ProjectRoleGrant
 preparation is unsupported until AUTH-10 supplies and proves its canonical lock
 path.
 
-Downgrade is allowed only while every action ID remains null and no permission
-outside migration `0018`'s historical 49-value set exists in the decision,
-target-reference, or invalidation-reference fields. The migration takes an
-exclusive audit-table lock before these checks and keeps it through destructive
-DDL. If any forward evidence exists, stop and recover forward rather than
-discarding it.
+The pre-v0.1 downgrade path is removed. Preserve action evidence and recover
+forward rather than discarding it.
 
 Canonical actor self-read/self-update, the seven AUTH-08 administrative
 actions, AUTH-09B controlled service provisioning, and the two AUTH-09C
 actor-registry reads are active. Project capability context waits for AUTH-10
 exact-project grants and canonical project composition.
 
-AUTH-10 is a clean cut to independent `submitter`, `reviewer`, and
-`adjudicator` grants. Before rollout, scan current typed schemas, audit facts,
-idempotency records, and PostgreSQL validators for `both`, replacement fields,
-replacement events, and replacement reasons. Migration `0031` must stop on any
-incompatible evidence; operators must remediate through a separately approved
-data decision, never an automatic conversion. A safe downgrade also refuses
-rather than deleting adjudicator or new exact-role evidence.
-
-Before upgrading to `0031`, run the following read-only preflight against the
-same database. Both counts must be zero:
-
-```sql
-select count(*) from audit_events where event_domain='authority' and (
-  before_facts->>'role'='both' or after_facts->>'role'='both' or
-  before_facts::jsonb ? 'replaced_grant_id' or
-  after_facts::jsonb ? 'replaced_grant_id' or
-  event_type='ProjectRoleGrantReplaced' or reason='authority_replacement');
-select count(*) from authority_idempotency_records where operation in
-  ('project_role_grant.issue','project_role_grant.revoke');
-```
-
-Before downgrading from `0031`, both new tables must be empty and this count
-must be zero:
-
-```sql
-select count(*) from project_role_grants;
-select count(*) from project_role_qualification_snapshots;
-select count(*) from audit_events where event_domain='authority' and (
-  before_facts->>'role'='adjudicator' or after_facts->>'role'='adjudicator' or
-  action_id in ('project.contributor_candidate.list','project_role_grant.list',
-    'project_role_grant.read','project_role_grant.issue','project_role_grant.revoke') or
-  denial_code in ('project_role_grant_already_revoked',
-    'project_role_grant_replay_state_changed'));
-```
-
-The migration repeats these checks while holding `ACCESS EXCLUSIVE` locks on
-the affected authority tables, so schedule a maintenance window that prevents
-authority writes. A refusal occurs before schema mutation. Keep the database at
-its current revision, investigate the exact nonzero predicate, and recover
-forward through a separately reviewed data decision; never delete or convert
-authority evidence merely to make the migration proceed.
+AUTH-10 uses independent `submitter`, `reviewer`, and `adjudicator` grants. The
+retired `both` role and replacement-event migration states are not accepted by
+the v0.1 baseline. Recreate pre-v0.1 development databases. Production
+remediation requires a separately approved evidence-preserving data decision;
+never automatically convert or delete authority evidence.
 
 Project-role revocation is routed by exact role. Submitter invalidation may
 reach task assignment; reviewer invalidation reaches only REV; adjudicator
@@ -895,7 +637,7 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has fourteen fixed-service identities and twenty-two
+The closed registry now has fourteen fixed-service identities and twenty-three
 matrix memberships: seven ART identities, project setup, and six exact REV
 identities. Missing provisioned rows deny without stopping the application.
 The REV actions remain unavailable, so registry membership alone grants no
@@ -903,21 +645,20 @@ authority. Do not create a shared review service or a database service-grant
 table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
-`workstream.project.setup`, with exactly four static memberships:
+`workstream.project.setup`, now with exactly five static memberships:
 `project.guide_sufficiency.run`,
+`project.guide_compilation.execute`,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
-AUTH-12E activates `project.guide_sufficiency.run`, and AUTH-12F3 activates
-`project.submission_artifact_policy.derive`; the other two memberships remain
+AUTH-12E activates `project.guide_sufficiency.run`, AUTH-12F3 activates
+`project.submission_artifact_policy.derive`, and AUTH-12I activates
+`project.guide_compilation.execute`; the remaining two memberships remain
 planned and unavailable. Each active action can be resolved
 for this fixed service only by an internal command carrying exact setup-run,
 expected-step, task/correlation, project, guide, snapshot, generation, stale
 output, and material custody. It is not admitted through the public HTTP route,
-and it never receives a fabricated human grant. Migration
-`0043_project_setup_service` seeds no profile, link, AdminRoleGrant, or
-ProjectRoleGrant. It takes an `ACCESS EXCLUSIVE` lock on `actor_profiles` while
-replacing the closed service-identity constraint, and downgrade refuses once a
-`workstream.project.setup` ActorProfile exists. An Access Administrator may use the existing controlled
+and it never receives a fabricated human grant. The baseline seeds no profile,
+link, AdminRoleGrant, or ProjectRoleGrant. An Access Administrator may use the existing controlled
 service-actor provisioning route only when the deployment supplies the exact
 issuer and opaque subject; that actor still has no executable setup action
 until each owning activation chunk merges.
@@ -1224,7 +965,7 @@ log the key, a cursor, or distinctions hidden by the shared 404. Authorization
 read exhaustion returns 429 with `Retry-After`, and unavailable rate/evidence
 persistence returns retryable 503 before private row lookup.
 
-AUTH-10C adds migration `0034_project_role_issue_evidence`. It performs no
+AUTH-10C adds project-role issue evidence. It performs no
 product-row rewrite: it replaces only the three frozen authority evidence
 function bodies, adds `qualification_snapshot` to the existing privacy resource
 registry, and leaves the existing fact constraint and trigger identities in
@@ -1265,8 +1006,7 @@ database owner must:
 6. retain redacted change evidence and return credentials to controlled storage.
 
 Do not use owner maintenance to revise authority history, erase a denial, or
-fabricate evidence. Normal migration downgrade refuses while authority rows
-exist; destructive cleanup requires a separately reviewed retention or legal
+fabricate evidence. Destructive cleanup requires a separately reviewed retention or legal
 procedure and is not an application operation.
 
 ## Incident Response
@@ -1345,36 +1085,34 @@ still be updated. Embedded review, revision, retired payout/economic, and
 contribution-record configuration fields correctly return 422; do not reintroduce a
 compatibility payload or direct product-service authorization path.
 
-Migration `0045_guide_metadata_authority` leaves pre-existing guide, source
-snapshot, and setup-run rows readable with null authorization provenance; it
-does not invent or backfill historical custody. Every new covered mutation must
-commit its complete replay, decision, and row provenance atomically. Once any
-12D custody or attributed mutation exists, downgrade is intentionally refused;
-operators must not delete authority evidence merely to force rollback.
+The v0.1 guide-metadata schema does not invent or backfill historical custody.
+Every new covered mutation must
+commit its complete replay, decision, and row provenance atomically. Operators
+must preserve authority evidence and recover forward.
 
-Migration `0054_guide_sufficiency_authority` leaves historical sufficiency
-reports readable with null authorization provenance. New 12E mutations record
+The v0.1 schema leaves historical sufficiency reports readable with null
+authorization provenance. New 12E mutations record
 complete creation or acknowledgement provenance and use the append-only
-`guide_sufficiency_mutation_idempotency_records` replay ledger. Downgrade is
-refused after any 12E replay or attributed sufficiency provenance exists; do
-not delete replay, product, or authority evidence to force rollback.
+`guide_sufficiency_mutation_idempotency_records` replay ledger. Do not delete
+replay, product, or authority evidence; recover forward.
 
-Migration `0057_submission_policy_authority` installs submission-policy
-PREP, replay, and nullable provenance custody. Migration
-`0059_policy_execution_claim` adds the fixed-service derivation execution claim.
-Existing submission,
-effective, and pre-submit policy rows remain readable with all authority fields
-null; do not backfill invented authority. Human replay custody permits only
+The v0.1 baseline installs submission-policy PREP, replay, nullable provenance
+custody, and the fixed-service derivation execution claim. Human replay custody permits only
 `pending -> committed`. Fixed-service derivation commits `reserved` before
 material or agent I/O, then uses fresh final PREP and atomically advances
 `reserved -> pending -> committed` with the protected product mutation. A
-reserved or pending row is durable custody and intentionally blocks downgrade.
+reserved or pending row is durable custody.
 Any audit event using the submission-policy mutation resource type,
-including denied evidence, blocks downgrade independently. 12F2 activates only
+including denied evidence, must be preserved. 12F2 activates only
 manual human create/update. Each update appends a separately authorized
 successor and supersedes its exact hash-selected predecessor atomically. 12F3
 activates derive only for the fixed `workstream.project.setup` service; approve
 remains planned. Operators must not treat the shared schema as wider activation.
+
+The v0.1 baseline admits the guide-compilation request action, permission, and
+resource while preserving the execute vocabulary. The baseline cannot be
+downgraded. Recreate a development database instead of deleting authority
+evidence or attempting revision-specific rollback.
 
 ## Draft review and revision policy authorization
 
@@ -1392,8 +1130,8 @@ only the corresponding draft-guide selector in the same transaction. The two
 policies may be attached in either order. Never repair an active guide by
 changing these selectors: active and superseded guide selections remain frozen.
 
-Migration `0048_policy_authority` adds nullable historical provenance columns
-and the `policy_mutation_idempotency_records` custody ledger. Historical
+The v0.1 baseline includes nullable historical provenance columns and the
+`policy_mutation_idempotency_records` custody ledger. Historical
 `legacy_incomplete` rows remain grandfathered and are not attributed. Downgrade
 is refused after any 02B mutation/replay custody exists; do not delete policy or
 authorization evidence to force rollback. A populated rollback requires an

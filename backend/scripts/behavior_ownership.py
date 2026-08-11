@@ -92,6 +92,28 @@ POL_03A_CALLABLE_TARGETS = frozenset(
 POL_03A_DECLARATIVE_MODEL_TARGET = (
     "backend/app/modules/projects/guide_compilation/models.py"
 )
+AUTH_12I_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/domain/audit.py",
+        "backend/app/modules/authorization/domain/guide_compilation.py",
+        "backend/app/modules/authorization/domain/prepared_compilation.py",
+        "backend/app/modules/authorization/domain/prepared_service.py",
+        "backend/app/modules/authorization/domain/project_create.py",
+        "backend/app/modules/authorization/guide_compilation.py",
+    }
+)
+V01_BASELINE_REMOVED_TARGETS = frozenset(
+    {
+        "backend/app/modules/actors/service_identity_migration.py",
+        "backend/scripts/service_actor_identity_mapping.py",
+    }
+)
+V01_BASELINE_ADDED_TARGETS = frozenset(
+    {
+        "backend/scripts/schema_baseline_manifest.py",
+        "backend/scripts/schema_baseline_sql.py",
+    }
+)
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -226,9 +248,15 @@ def _validate_additive_partition_transition(
         raise BehaviorOwnershipError("invalid_trusted_partition")
     current_assignments = current["assignments"]
     current_by_target = {item["target"]: item for item in current_assignments}
+    removed = set(trusted_targets) - set(current_by_target)
+    retained_trusted = [
+        item for item in trusted_assignments if item["target"] not in removed
+    ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or [current_by_target.get(target) for target in trusted_targets] != trusted_assignments
+        or removed - V01_BASELINE_REMOVED_TARGETS
+        or [current_by_target[item["target"]] for item in retained_trusted]
+        != retained_trusted
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
@@ -237,6 +265,8 @@ def _validate_additive_partition_transition(
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
+        | AUTH_12I_TARGETS
+        | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:

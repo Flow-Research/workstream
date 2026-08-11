@@ -72,10 +72,9 @@ expected, confirm that its parent scopes have capacity, and compare the
 configured limit with the persisted scope limit. Do not delete admission
 charges or edit counters in PostgreSQL.
 
-Migration `0061_submission_admission` installs immutable ready-admission
-custody. Downgrade is intentionally refused once admission rows exist; rollback
-planning must preserve those facts and move forward with a corrective migration
-rather than deleting or bypassing them.
+The v0.1 baseline installs immutable ready-admission custody. Recovery planning
+must preserve those facts and move forward with a corrective migration rather
+than deleting or bypassing them; the baseline cannot be downgraded.
 
 ## Quota expansion and rollback
 
@@ -98,15 +97,10 @@ These routes do not delete, retain, release, or mutate provider objects; change
 admission configuration; activate AWS; or cut over any guide, task, submission,
 checker, review, contribution, payment, or reputation lifecycle.
 
-## Legacy contributor-intake migration
+## Contributor-intake baseline invariant
 
-Migration `0051_legacy_intake_removal` is a safe-empty cut. Before deploying,
-confirm that the legacy upload-session/item tables contain no rows and that no
-put attempt or operation receipt carries contributor/upload-item lineage or a
-version-1 receipt contract. The migration takes exclusive locks and refuses
-before changing schema when any such evidence exists.
-
-Do not delete, detach, or rewrite those rows to force deployment. Preserve the
-database at revision `0050_guide_source_v2` and escalate for a separately
-approved maintenance and audit migration. A refusal is an expected evidence-
-preservation outcome, not permission to bypass the preflight.
+The v0.1 baseline contains only the current contributor-intake schema. The
+retired upload-session/item shape and version-1 receipt contract are not an
+upgrade source. Recreate pre-v0.1 development databases; for production data,
+use a separately reviewed evidence-preserving maintenance migration rather
+than deleting, detaching, rewriting, or restamping rows.

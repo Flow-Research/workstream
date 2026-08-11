@@ -22,6 +22,16 @@ from app.modules.authorization.kernel import (
     AuthorizationService,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization.domain.guide_compilation import (
+    COMPILATION_RESOURCE_BY_ACTION,
+    ProjectGuideCompilationExecuteResourceContext,
+    ProjectGuideCompilationRequestResourceContext,
+)
+from app.modules.authorization.domain.prepared_compilation import (
+    parse_prepared_compilation,
+    prepared_compilation_matches,
+)
+from app.modules.authorization.domain.prepared_service import project_setup_resource_matches
 from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
     ActorKind,
@@ -155,6 +165,8 @@ class _PreparedAuthorizationBinding:
     submission_policy_resource_digest: str | None = None
     exact_artifact_context: dict | None = None
     exact_artifact_resource_digest: str | None = None
+    guide_compilation_context: dict | None = None
+    guide_compilation_resource_digest: str | None = None
 
 
 @dataclass(slots=True)
@@ -334,6 +346,35 @@ class PreparedAuthorizationService:
         self._issued[handle] = _Issuance(binding, transaction, authority)
         return handle
 
+    async def preflight(
+        self,
+        action_id: ActionId,
+        caller_input: PreparedAuthorizationInput,
+        scope: PreparedAuthorityScope,
+        resource: AuthorizationResourceContext,
+    ) -> None:
+        """Revalidate current authority without issuing a handle or staging evidence."""
+        self._root_transaction()
+        binding = self._binding(action_id, caller_input, scope)
+        if self._scope_from_resource(action_id, resource) != scope or not prepared_compilation_matches(
+            binding.guide_compilation_context,
+            binding.guide_compilation_resource_digest,
+            resource,
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization preflight")
+        authority = await self._authorization._prepare_prelocked(
+            self._consumer_token, action_id, scope
+        )
+        try:
+            if project_setup_resource_matches(
+                action_id, resource, authority.scope_project_id
+            ) is not True:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                )
+        finally:
+            self._authorization._discard_prelocked(authority)
+
     async def consume(
         self,
         handle: PreparedAuthorizationHandle,
@@ -389,6 +430,18 @@ class PreparedAuthorizationService:
         if isinstance(
             final_resource_context, PreSubmitCheckerInputResourceContext
         ) and not _exact_artifact_binding_matches(issuance.binding, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
+            final_resource_context,
+            (
+                ProjectGuideCompilationRequestResourceContext,
+                ProjectGuideCompilationExecuteResourceContext,
+            ),
+        ) and not prepared_compilation_matches(
+            issuance.binding.guide_compilation_context,
+            issuance.binding.guide_compilation_resource_digest,
+            final_resource_context,
+        ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
@@ -481,10 +534,8 @@ class PreparedAuthorizationService:
         policy_mutation_predecessor_id = None
         policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
-        submission_policy_context: dict | None = None
-        submission_policy_resource_digest: str | None = None
-        exact_artifact_context: dict | None = None
-        exact_artifact_resource_digest: str | None = None
+        submission_policy_context = submission_policy_resource_digest = exact_artifact_context = exact_artifact_resource_digest = None
+        compilation_binding = parse_prepared_compilation(action_id, caller_input.request_value)
         if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
             try:
                 value = dict(caller_input.request_value)
@@ -747,6 +798,7 @@ class PreparedAuthorizationService:
             submission_policy_resource_digest=submission_policy_resource_digest,
             exact_artifact_context=exact_artifact_context,
             exact_artifact_resource_digest=exact_artifact_resource_digest,
+            **compilation_binding,
         )
 
     @staticmethod
@@ -791,7 +843,9 @@ class PreparedAuthorizationService:
                 role=role,
                 grant_id=grant_id,
             )
-        expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
+        expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
+            action_id
+        ) or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
         if action_id in {
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,

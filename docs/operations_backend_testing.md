@@ -41,7 +41,7 @@ unset WORKSTREAM_TEST_ADMIN_DATABASE_URL
 ```
 
 Run both phases for the legacy sequential local diagnostic. Hosted CI instead
-uses five independent matrix jobs, one per semantic lane, with a 20-minute lane
+uses seven independent matrix jobs, one per semantic lane, with a 20-minute lane
 limit and a separate fail-closed fan-in job.
 
 The runner removes the admin URL before child launch, overwrites both child database URLs,
@@ -84,7 +84,7 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 
 ## Hosted semantic-lane full-suite proof
 
-The required GitHub check remains `Backend / test`. Five matrix jobs each own a
+The required GitHub check remains `Backend / test`. Seven matrix jobs each own a
 digest-pinned PostgreSQL service container, a digest-pinned MinIO container,
 and exactly one dependency lane. A step-level curl health loop admits MinIO
 before collection. This is semantic fan-out, not arbitrary test-count sharding:
@@ -92,20 +92,22 @@ lane ownership remains repository-defined and exact.
 
 The lanes are balanced by measured dependency ownership: `project_lifecycle`
 owns project tests, `task_lifecycle` owns task and checker tests,
-`schema_contracts_a` and `schema_contracts_b` deterministically partition exact
-node IDs from the measured 12-minute `test_alembic.py` hotspot;
-`schema_contracts_a` also owns reset and isolated-runner contracts, and
-`shared_foundations` owns the remaining authorization, artifact, API, and
-infrastructure tests. Every non-partitioned module belongs to exactly one lane;
-every collected test node, including each Alembic node, belongs to exactly one
-lane.
+`schema_contracts_a`, `schema_contracts_b`, and `schema_contracts_c`
+deterministically partition exact node IDs from the baseline and PostgreSQL
+schema-contract suites;
+`schema_contracts_a` also owns reset and isolated-runner contracts. The
+`shared_foundations_a` and `shared_foundations_b` lanes deterministically
+partition exact node IDs from the remaining authorization, artifact, API, and
+infrastructure modules. Every collected test node, including each Alembic and
+shared-foundation node, belongs to exactly one lane.
 
 Each matrix job binds its checkout to `GITHUB_SHA`, installs and asserts exact
 Ruff `0.15.22`, runs lint and docstrings, starts MinIO, and validates the full
 canonical inventory before executing its one lane. Each lane receives a distinct
-runner-created database and role plus a distinct MinIO bucket/prefix custody
-record. `shared_foundations` owns the actual `workstream-artifacts` test bucket
-and a unique run prefix; other lanes create, probe, and remove distinct buckets.
+runner-created database and role plus a distinct MinIO prefix custody record.
+Both shared-foundation jobs run in separate MinIO containers, use the actual
+`workstream-artifacts` test bucket, and receive distinct run prefixes; other
+lanes create, probe, and remove distinct buckets.
 The isolated-runner self-tests remain in the canonical manifest as the explicit
 `admin_runner_self_test` execution kind. The lane orchestrator runs only those
 nodes directly with the admin URL while stripping application database URLs;
@@ -122,14 +124,14 @@ Each matrix job uploads a fixed-name artifact bound to GitHub's checked-out PR
 merge-tree SHA, containing its manifest, lane evidence, isolation record, and coverage data. The final `test`
 job runs with `if: always()`, downloads available diagnostic bundles, then
 rejects any failed, cancelled, or skipped matrix result before fan-in. Fan-in
-accepts exactly the five declared lane directories,
+accepts exactly the seven declared lane directories,
 requires byte-identical manifests and heads, verifies every bound digest, and
 rejects symlinks or surplus lanes.
 
 After fan-in, independent validation rejects missing, duplicated, foreign,
 deselected, unexpectedly skipped, interrupted, or partially completed nodes.
 It also binds the exact head, manifest, per-lane isolation metadata, evidence,
-and coverage-file SHA-256 digests. Only then are exactly five regular,
+and coverage-file SHA-256 digests. Only then are exactly seven regular,
 non-symlink coverage files copied byte-for-byte for one literal
 `coverage combine`. The 78 percent global floor and every protected 90 percent
 subsystem floor remain blocking. The real API contract drill remains a separate
@@ -139,7 +141,7 @@ isolated invocation inside the final required job.
 
 Each lane uploads one seven-day bundle, and the final job uploads the reconciled
 `.ci/test-lanes` tree. Its summary
-records the exact head, canonical node count, five lane results, elapsed time,
+records the exact head, canonical node count, seven lane results, elapsed time,
 and raw-file digests. Per-lane evidence records collected, completed, skipped,
 and deselected exact node IDs plus the bound resource-isolation metadata and
 coverage digest. Resource metadata is mode `0600`, omits credentials, and proves

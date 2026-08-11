@@ -1,0 +1,15 @@
+{
+  "behavior_id": "auth.project_guide_compilation.prepared_domain",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.domain.prepared_compilation.parse_prepared_compilation",
+    "app.modules.authorization.domain.prepared_compilation.prepared_compilation_matches"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/domain/prepared_compilation.py",
+  "tests": ["backend/tests/authorization/guide_compilation/test_domain_contract.py::test_prepared_parser_round_trips_exact_request_and_rejects_bad_uuid"]
+}

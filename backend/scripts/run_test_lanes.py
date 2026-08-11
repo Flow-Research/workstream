@@ -40,7 +40,12 @@ HEAD_ENV = "WORKSTREAM_LANE_HEAD_SHA"
 SCHEMA_VERSION = 1
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
 PARTITIONED_SCHEMA_MODULE = "tests/test_alembic.py"
-PARTITIONED_SCHEMA_LANES = ("schema_contracts_a", "schema_contracts_b")
+PARTITIONED_SCHEMA_LANES = (
+    "schema_contracts_a",
+    "schema_contracts_b",
+    "schema_contracts_c",
+)
+PARTITIONED_SHARED_LANES = ("shared_foundations_a", "shared_foundations_b")
 ORDINARY_KIND = "ordinary_isolated"
 ADMIN_KIND = "admin_runner_self_test"
 ADMIN_REDACTING_WRAPPER = """
@@ -80,73 +85,75 @@ class TestLane:
     requires_postgres: bool = True
 
 
+SHARED_FOUNDATION_MODULES = (
+    "tests/test_actor_legacy_classification.py",
+    "tests/test_agent_runtime.py",
+    "tests/test_api_contract_e2e.py",
+    "tests/test_api_controls.py",
+    "tests/test_app.py",
+    "tests/test_artifact_architecture.py",
+    "tests/architecture/test_authorization_boundary.py",
+    "tests/architecture/test_module_boundaries.py",
+    "tests/architecture/test_test_structure_boundary.py",
+    "tests/test_artifact_authorization.py",
+    "tests/test_artifact_internal_authorization.py",
+    "tests/test_artifact_cleanup_wiring.py",
+    "tests/test_checker_materialization.py",
+    "tests/test_artifact_preparation.py",
+    "tests/test_artifact_store_conformance.py",
+    "tests/test_artifact_verification.py",
+    "tests/test_artifacts.py",
+    "tests/test_assertion_helpers.py",
+    "tests/test_aws_credential_isolation.py",
+    "tests/test_ci_test_lanes.py",
+    "tests/test_config.py",
+    "tests/test_compensation.py",
+    "tests/test_contributions.py",
+    "tests/test_coverage_contract.py",
+    "tests/test_external_service_adapters.py",
+    "tests/test_guide_artifacts.py",
+    "tests/test_guide_bindings.py",
+    "tests/test_guide_setup.py",
+    "tests/test_guide_formats.py",
+    "tests/test_guide_extraction.py",
+    "tests/test_guide_images.py",
+    "tests/test_guide_xlsx.py",
+    "tests/test_guide_docx.py",
+    "tests/test_guide_extractor_dependencies.py",
+    "tests/test_guide_ooxml.py",
+    "tests/test_guide_pdf.py",
+    "tests/test_guide_pptx.py",
+    "tests/test_local_artifact_store.py",
+    "tests/test_merge_test_lane_evidence.py",
+    "tests/test_mutation_policy.py",
+    "tests/test_s3_artifact_store.py",
+    "tests/test_submission_archive.py",
+    "tests/test_submission_change_gate.py",
+    "tests/test_submission_manifest.py",
+    "tests/test_test_lane_evidence.py",
+    "tests/test_actors.py",
+    "tests/test_api_rate_controls.py",
+    "tests/test_audit.py",
+    "tests/test_auth.py",
+    "tests/test_authorization.py",
+    "tests/authorization/guide_compilation/test_adapter_contract.py",
+    "tests/authorization/guide_compilation/test_domain_contract.py",
+    "tests/authorization/guide_compilation/test_migration_contract.py",
+    "tests/test_behavior_ownership.py",
+    "tests/test_artifact_admission.py",
+    "tests/test_submission_bundle_admission.py",
+    "tests/test_artifact_operator_api.py",
+    "tests/test_artifact_recovery.py",
+    "tests/test_db_session.py",
+    "tests/test_outbox.py",
+    "tests/test_policy_identity_lineage.py",
+    "tests/test_project_policy_mutations.py",
+    "tests/test_review_authorization_contracts.py",
+)
+
 LANES = (
-    TestLane(
-        "shared_foundations",
-        (
-            "tests/test_actor_legacy_classification.py",
-            "tests/test_actor_migration_tools.py",
-            "tests/test_agent_runtime.py",
-            "tests/test_api_contract_e2e.py",
-            "tests/test_api_controls.py",
-            "tests/test_app.py",
-            "tests/test_artifact_architecture.py",
-            "tests/architecture/test_authorization_boundary.py",
-            "tests/architecture/test_module_boundaries.py",
-            "tests/architecture/test_test_structure_boundary.py",
-            "tests/test_artifact_authorization.py",
-            "tests/test_artifact_internal_authorization.py",
-            "tests/test_artifact_cleanup_wiring.py",
-            "tests/test_checker_materialization.py",
-            "tests/test_artifact_preparation.py",
-            "tests/test_artifact_store_conformance.py",
-            "tests/test_artifact_verification.py",
-            "tests/test_artifacts.py",
-            "tests/test_assertion_helpers.py",
-            "tests/test_aws_credential_isolation.py",
-            "tests/test_ci_test_lanes.py",
-            "tests/test_config.py",
-            "tests/test_compensation.py",
-            "tests/test_contributions.py",
-            "tests/test_coverage_contract.py",
-            "tests/test_external_service_adapters.py",
-            "tests/test_guide_artifacts.py",
-            "tests/test_guide_bindings.py",
-            "tests/test_guide_setup.py",
-            "tests/test_guide_formats.py",
-            "tests/test_guide_extraction.py",
-            "tests/test_guide_images.py",
-            "tests/test_guide_xlsx.py",
-            "tests/test_guide_docx.py",
-            "tests/test_guide_extractor_dependencies.py",
-            "tests/test_guide_ooxml.py",
-            "tests/test_guide_pdf.py",
-            "tests/test_guide_pptx.py",
-            "tests/test_local_artifact_store.py",
-            "tests/test_merge_test_lane_evidence.py",
-            "tests/test_mutation_policy.py",
-            "tests/test_s3_artifact_store.py",
-            "tests/test_submission_archive.py",
-            "tests/test_submission_change_gate.py",
-            "tests/test_submission_manifest.py",
-            "tests/test_test_lane_evidence.py",
-            "tests/test_actors.py",
-            "tests/test_api_rate_controls.py",
-            "tests/test_audit.py",
-            "tests/test_auth.py",
-            "tests/test_authorization.py",
-            "tests/test_behavior_ownership.py",
-            "tests/test_artifact_admission.py",
-            "tests/test_submission_bundle_admission.py",
-            "tests/test_artifact_operator_api.py",
-            "tests/test_artifact_recovery.py",
-            "tests/test_db_session.py",
-            "tests/test_outbox.py",
-            "tests/test_policy_identity_lineage.py",
-            "tests/test_project_policy_mutations.py",
-            "tests/test_review_authorization_contracts.py",
-        ),
-    ),
+    TestLane(PARTITIONED_SHARED_LANES[0], SHARED_FOUNDATION_MODULES),
+    TestLane(PARTITIONED_SHARED_LANES[1], SHARED_FOUNDATION_MODULES),
     TestLane(
         "schema_contracts_a",
         (
@@ -156,6 +163,7 @@ LANES = (
         ),
     ),
     TestLane("schema_contracts_b", (PARTITIONED_SCHEMA_MODULE,)),
+    TestLane("schema_contracts_c", (PARTITIONED_SCHEMA_MODULE,)),
     TestLane(
         "project_lifecycle",
         (
@@ -183,6 +191,8 @@ LANES = (
         ),
     ),
 )
+
+
 @dataclass
 class ActiveLane:
     key: str
@@ -326,9 +336,8 @@ def _restore_uuid4() -> None:
         except (OSError, ValueError):
             continue
         for name, value in tuple(vars(module).items()):
-            if (
-                value is _deterministic_uuid4
-                and not (module is sys.modules.get(__name__) and name == "_deterministic_uuid4")
+            if value is _deterministic_uuid4 and not (
+                module is sys.modules.get(__name__) and name == "_deterministic_uuid4"
             ):
                 setattr(module, name, original)
     _ORIGINAL_UUID4 = None
@@ -353,7 +362,7 @@ def discover_test_modules(tests_dir: Path = TESTS_DIR, root: Path = ROOT) -> tup
                 continue
             path = current / name
             if path.is_symlink() or not path.is_file():
-                    raise LaneError("symlinked_test_module")
+                raise LaneError("symlinked_test_module")
             try:
                 modules.append(path.relative_to(root).as_posix())
             except ValueError as exc:
@@ -391,28 +400,32 @@ def validate_lane_inventory(
     declared = [module for lane in lanes for module in lane.modules]
     if any(not _safe_module_path(module) for module in declared):
         raise LaneError("invalid_lane_module")
-    duplicates = {
-        module: count for module, count in Counter(declared).items() if count != 1
-    }
-    expected_duplicates = (
-        {PARTITIONED_SCHEMA_MODULE: len(PARTITIONED_SCHEMA_LANES)}
-        if PARTITIONED_SCHEMA_MODULE in discovered
-        else {}
-    )
-    if duplicates != expected_duplicates:
-        raise LaneError(f"duplicate_lane_modules:{','.join(duplicates)}")
     missing = sorted(set(discovered) - set(declared))
     foreign = sorted(set(declared) - set(discovered))
     if missing:
         raise LaneError(f"missing_lane_modules:{','.join(missing)}")
     if foreign:
         raise LaneError(f"foreign_lane_modules:{','.join(foreign)}")
+    duplicates = {module: count for module, count in Counter(declared).items() if count != 1}
+    expected_duplicates = {
+        module: len(PARTITIONED_SHARED_LANES)
+        for module in SHARED_FOUNDATION_MODULES
+        if module in discovered
+    }
+    if PARTITIONED_SCHEMA_MODULE in discovered:
+        expected_duplicates[PARTITIONED_SCHEMA_MODULE] = len(PARTITIONED_SCHEMA_LANES)
+    if duplicates != expected_duplicates:
+        raise LaneError(f"duplicate_lane_modules:{','.join(duplicates)}")
 
 
 def _tree_sha() -> str:
     value = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, text=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     ).stdout.strip()
     if SHA_RE.fullmatch(value) is None:
         raise LaneError("invalid_tree_sha")
@@ -424,7 +437,9 @@ def _read_nodes(path: Path, *, allow_empty: bool = False) -> list[str]:
         values = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise LaneError("invalid_node_evidence") from exc
-    if (not allow_empty and not values) or any(not isinstance(value, str) or "::" not in value for value in values):
+    if (not allow_empty and not values) or any(
+        not isinstance(value, str) or "::" not in value for value in values
+    ):
         raise LaneError("invalid_node_evidence")
     return values
 
@@ -437,7 +452,14 @@ def _module_from_node(node_id: str) -> str:
 
 
 def _plugin_args() -> list[str]:
-    return ["-p", "pytest_asyncio.plugin", "-p", "pytest_cov.plugin", "-p", "scripts.run_test_lanes"]
+    return [
+        "-p",
+        "pytest_asyncio.plugin",
+        "-p",
+        "pytest_cov.plugin",
+        "-p",
+        "scripts.run_test_lanes",
+    ]
 
 
 def _collection_environment(
@@ -485,7 +507,9 @@ def collect_nodes(
     deselected_nodes = _read_nodes(deselected, allow_empty=True)
     if result.returncode == 0:
         expected = set(modules)
-        if len(nodes) != len(set(nodes)) or any(_module_from_node(node) not in expected for node in nodes):
+        if len(nodes) != len(set(nodes)) or any(
+            _module_from_node(node) not in expected for node in nodes
+        ):
             raise LaneError("invalid_collected_nodes")
         if set(_module_from_node(node) for node in nodes) != expected:
             raise LaneError("zero_collected_module")
@@ -505,9 +529,14 @@ def build_manifest(tree_sha: str, nodes: list[str]) -> dict[str, Any]:
     def lane_for_node(node: str) -> str:
         module = _module_from_node(node)
         candidates = lanes_by_module[module]
+        partition_lanes: tuple[str, ...] | None = None
         if module == PARTITIONED_SCHEMA_MODULE:
-            if tuple(candidates) != PARTITIONED_SCHEMA_LANES:
-                raise LaneError("invalid_schema_partition_lanes")
+            partition_lanes = PARTITIONED_SCHEMA_LANES
+        elif module in SHARED_FOUNDATION_MODULES:
+            partition_lanes = PARTITIONED_SHARED_LANES
+        if partition_lanes is not None:
+            if tuple(candidates) != partition_lanes:
+                raise LaneError("invalid_partition_lanes")
             digest = hashlib.sha256(node.encode("utf-8")).digest()
             return candidates[digest[0] % len(candidates)]
         if len(candidates) != 1:
@@ -576,28 +605,55 @@ def lane_command(
     tree_sha: str,
 ) -> list[str]:
     pytest_command = [
-        sys.executable, "-m", "pytest", "-q", *_plugin_args(), "--cov=app", "--cov-report=",
-        "--durations=25", *nodes,
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        *_plugin_args(),
+        "--cov=app",
+        "--cov-report=",
+        "--durations=25",
+        *nodes,
     ]
     return [
-        sys.executable, str(ISOLATED_RUNNER), "--metadata-json",
-        str(metadata_dir / f"{lane.name}.database.json"), "--lane", lane.name,
-        "--tree-sha", tree_sha, "--timeout-seconds", f"{timeout_seconds:g}",
-        "--", *pytest_command,
+        sys.executable,
+        str(ISOLATED_RUNNER),
+        "--metadata-json",
+        str(metadata_dir / f"{lane.name}.database.json"),
+        "--lane",
+        lane.name,
+        "--tree-sha",
+        tree_sha,
+        "--timeout-seconds",
+        f"{timeout_seconds:g}",
+        "--",
+        *pytest_command,
     ]
 
 
 def admin_runner_command(nodes: list[str]) -> list[str]:
     """Run isolation-runner self-tests directly, never inside an owned database."""
     pytest_command = [
-        sys.executable, "-m", "pytest", "-q", *_plugin_args(), "--cov=app",
-        "--cov-report=", "--durations=25", *nodes,
+        sys.executable,
+        "-m",
+        "pytest",
+        "-q",
+        *_plugin_args(),
+        "--cov=app",
+        "--cov-report=",
+        "--durations=25",
+        *nodes,
     ]
     return [sys.executable, "-c", ADMIN_REDACTING_WRAPPER, *pytest_command]
 
 
 def _prepare_outputs(metadata_dir: Path, summary_json: Path) -> None:
-    if metadata_dir.exists() or metadata_dir.is_symlink() or summary_json.exists() or summary_json.is_symlink():
+    if (
+        metadata_dir.exists()
+        or metadata_dir.is_symlink()
+        or summary_json.exists()
+        or summary_json.is_symlink()
+    ):
         raise LaneError("invalid_lane_outputs")
     if not metadata_dir.parent.is_dir() or not summary_json.parent.is_dir():
         raise LaneError("invalid_lane_outputs")
@@ -631,14 +687,20 @@ def _print_redacted_exception(exc: BaseException) -> None:
 def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str, Any]:
     active.log.flush()
     active.log.close()
-    collected = _read_nodes(active.evidence_path.with_name(f"{active.key}.collected.jsonl"), allow_empty=True)
-    completed = _read_nodes(active.evidence_path.with_name(f"{active.key}.completed.jsonl"), allow_empty=True)
-    skipped = _read_nodes(active.evidence_path.with_name(f"{active.key}.skipped.jsonl"), allow_empty=True)
-    deselected = _read_nodes(active.evidence_path.with_name(f"{active.key}.deselected.jsonl"), allow_empty=True)
+    collected = _read_nodes(
+        active.evidence_path.with_name(f"{active.key}.collected.jsonl"), allow_empty=True
+    )
+    completed = _read_nodes(
+        active.evidence_path.with_name(f"{active.key}.completed.jsonl"), allow_empty=True
+    )
+    skipped = _read_nodes(
+        active.evidence_path.with_name(f"{active.key}.skipped.jsonl"), allow_empty=True
+    )
+    deselected = _read_nodes(
+        active.evidence_path.with_name(f"{active.key}.deselected.jsonl"), allow_empty=True
+    )
     return {
-        "collection_exit_code": 0
-        if sorted(collected) == sorted(active.expected_nodes)
-        else 1,
+        "collection_exit_code": 0 if sorted(collected) == sorted(active.expected_nodes) else 1,
         "collected_nodes": collected,
         "completed_nodes": completed,
         "coverage_path": active.coverage_path,
@@ -659,9 +721,17 @@ def _combine_coverage(sources: list[Path], destination: Path) -> None:
         shutil.copyfile(regular[0], destination)
         return
     result = subprocess.run(
-        [sys.executable, "-m", "coverage", "combine", "--data-file", str(destination),
-         *(str(path) for path in regular)],
-        cwd=ROOT, check=False,
+        [
+            sys.executable,
+            "-m",
+            "coverage",
+            "combine",
+            "--data-file",
+            str(destination),
+            *(str(path) for path in regular),
+        ],
+        cwd=ROOT,
+        check=False,
     )
     if result.returncode != 0:
         raise LaneError("lane_coverage_combine_failed")
@@ -673,13 +743,9 @@ def _finalize_lane(
     evidence_path = metadata_dir / f"{lane.name}.json"
     isolation_path = metadata_dir / f"{lane.name}.database.json"
     coverage_path = metadata_dir / f".coverage.{lane.name}"
-    execution_exit_code = _aggregate_exit_codes(
-        [unit["execution_exit_code"] for unit in units]
-    )
+    execution_exit_code = _aggregate_exit_codes([unit["execution_exit_code"] for unit in units])
     ordinary_coverage = [
-        unit["coverage_path"]
-        for unit in units
-        if unit["execution_kind"] == ORDINARY_KIND
+        unit["coverage_path"] for unit in units if unit["execution_kind"] == ORDINARY_KIND
     ]
     if execution_exit_code == 0 and not ordinary_coverage:
         raise LaneError("missing_ordinary_lane_coverage")
@@ -701,7 +767,9 @@ def _finalize_lane(
     evidence = {
         "collected_nodes": sorted(node for unit in units for node in unit["collected_nodes"]),
         "completed_nodes": sorted(node for unit in units for node in unit["completed_nodes"]),
-        "deselected_nodes": sorted(set(node for unit in units for node in unit["deselected_nodes"])),
+        "deselected_nodes": sorted(
+            set(node for unit in units for node in unit["deselected_nodes"])
+        ),
         "isolation_metadata_file": isolation_path.name if isolation_is_regular else None,
         "isolation_metadata_sha256": (
             _sha256(isolation_path.read_bytes()) if isolation_is_regular else None
@@ -720,7 +788,8 @@ def _finalize_lane(
         ),
         "coverage_file": coverage_path.name,
         "coverage_sha256": _sha256(coverage_path.read_bytes())
-        if coverage_path.is_file() and not coverage_path.is_symlink() else None,
+        if coverage_path.is_file() and not coverage_path.is_symlink()
+        else None,
         "elapsed_seconds": round(max(unit["elapsed_seconds"] for unit in units), 3),
         "evidence_file": evidence_path.name,
         "evidence_sha256": _sha256(evidence_path.read_bytes()),
@@ -743,9 +812,7 @@ def _timing_summary(lanes: list[dict[str, Any]]) -> dict[str, float]:
         raise LaneError("invalid_lane_timing_inventory")
     elapsed = [row["elapsed_seconds"] for row in lanes]
     if any(
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or value < 0
+        not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0
         for value in elapsed
     ):
         raise LaneError("invalid_lane_timing")
@@ -786,21 +853,42 @@ def run_lanes(
         for lane in LANES:
             lane_nodes = [row["nodeid"] for row in manifest["nodes"] if row["lane"] == lane.name]
             evidence_path = metadata_dir / f"{lane.name}.json"
-            evidence_path.write_bytes(_json_bytes({
-                "collected_nodes": lane_nodes, "completed_nodes": [], "deselected_nodes": [],
-                "isolation_metadata_file": None, "isolation_metadata_sha256": None,
-                "skipped_nodes": [],
-            }))
-            lane_rows.append({
-                "collection_exit_code": 0, "coverage_file": None, "coverage_sha256": None,
-                "elapsed_seconds": 0.0, "evidence_file": evidence_path.name,
-                "evidence_sha256": _sha256(evidence_path.read_bytes()), "execution_exit_code": None,
-                "interrupted": False, "name": lane.name,
-            })
-        summary = {"canonical_node_count": len(nodes), "elapsed_seconds": 0.0,
-                   "head_sha": tree_sha, "lanes": lane_rows, "manifest_file": manifest_path.name,
-                   "manifest_sha256": manifest_digest, "mode": "collect", "schema_version": SCHEMA_VERSION,
-                   **_timing_summary(lane_rows)}
+            evidence_path.write_bytes(
+                _json_bytes(
+                    {
+                        "collected_nodes": lane_nodes,
+                        "completed_nodes": [],
+                        "deselected_nodes": [],
+                        "isolation_metadata_file": None,
+                        "isolation_metadata_sha256": None,
+                        "skipped_nodes": [],
+                    }
+                )
+            )
+            lane_rows.append(
+                {
+                    "collection_exit_code": 0,
+                    "coverage_file": None,
+                    "coverage_sha256": None,
+                    "elapsed_seconds": 0.0,
+                    "evidence_file": evidence_path.name,
+                    "evidence_sha256": _sha256(evidence_path.read_bytes()),
+                    "execution_exit_code": None,
+                    "interrupted": False,
+                    "name": lane.name,
+                }
+            )
+        summary = {
+            "canonical_node_count": len(nodes),
+            "elapsed_seconds": 0.0,
+            "head_sha": tree_sha,
+            "lanes": lane_rows,
+            "manifest_file": manifest_path.name,
+            "manifest_sha256": manifest_digest,
+            "mode": "collect",
+            "schema_version": SCHEMA_VERSION,
+            **_timing_summary(lane_rows),
+        }
         summary_json.write_bytes(_json_bytes(summary))
         return 0
     execution_lanes = (
@@ -814,9 +902,7 @@ def run_lanes(
         raise LaneError("missing_admin_database_url")
 
     active: dict[str, ActiveLane] = {}
-    unit_results: dict[str, list[dict[str, Any]]] = {
-        lane.name: [] for lane in execution_lanes
-    }
+    unit_results: dict[str, list[dict[str, Any]]] = {lane.name: [] for lane in execution_lanes}
     started = time.monotonic()
     stopping = False
     run_error: BaseException | None = None
@@ -840,20 +926,31 @@ def run_lanes(
                 coverage_path = metadata_dir / f".coverage.unit.{key}"
                 if kind == ADMIN_KIND:
                     command = admin_runner_command(unit_nodes)
-                    env = admin_runner_environment(
-                        lane, metadata_dir, coverage_path, key, tree_sha
-                    )
+                    env = admin_runner_environment(lane, metadata_dir, coverage_path, key, tree_sha)
                 else:
-                    command = lane_command(lane, unit_nodes, metadata_dir, timeout_seconds, tree_sha)
+                    command = lane_command(
+                        lane, unit_nodes, metadata_dir, timeout_seconds, tree_sha
+                    )
                     env = lane_environment(lane, metadata_dir, coverage_path, key, tree_sha)
                 process = subprocess.Popen(
-                    command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
+                    command,
+                    cwd=ROOT,
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
                     start_new_session=True,
                 )
                 active[key] = ActiveLane(
-                    key, lane, kind, tuple(unit_nodes), process, log, log_path,
+                    key,
+                    lane,
+                    kind,
+                    tuple(unit_nodes),
+                    process,
+                    log,
+                    log_path,
                     metadata_dir / f"{key}.json",
-                    coverage_path, time.monotonic(),
+                    coverage_path,
+                    time.monotonic(),
                 )
         while active:
             now = time.monotonic()
@@ -868,7 +965,10 @@ def run_lanes(
                     item.timed_out = True
                     item.interrupted_at = now
                     _signal_lane(item, signal.SIGINT)
-                elif item.interrupted_at is not None and now - item.interrupted_at >= CLEANUP_GRACE_SECONDS:
+                elif (
+                    item.interrupted_at is not None
+                    and now - item.interrupted_at >= CLEANUP_GRACE_SECONDS
+                ):
                     _signal_lane(item, signal.SIGKILL)
                 code = item.process.poll()
                 if code is None:
@@ -892,9 +992,7 @@ def run_lanes(
                 item.interrupted_at = now
             _signal_lane(item, signal.SIGKILL)
             code = item.process.wait()
-            unit_results[item.lane.name].append(
-                _finish_unit(item, code, now - item.started_at)
-            )
+            unit_results[item.lane.name].append(_finish_unit(item, code, now - item.started_at))
             del active[key]
         signal.signal(signal.SIGINT, old_int)
         signal.signal(signal.SIGTERM, old_term)
@@ -902,28 +1000,32 @@ def run_lanes(
         for lane in execution_lanes:
             if unit_results[lane.name]:
                 continue
-            unit_results[lane.name].append({
-                "collection_exit_code": 1,
-                "collected_nodes": [],
-                "completed_nodes": [],
-                "coverage_path": metadata_dir / f".coverage.unit.{lane.name}",
-                "deselected_nodes": [],
-                "elapsed_seconds": 0.0,
-                "execution_kind": ORDINARY_KIND,
-                "execution_exit_code": 1,
-                "interrupted": True,
-                "skipped_nodes": [],
-            })
+            unit_results[lane.name].append(
+                {
+                    "collection_exit_code": 1,
+                    "collected_nodes": [],
+                    "completed_nodes": [],
+                    "coverage_path": metadata_dir / f".coverage.unit.{lane.name}",
+                    "deselected_nodes": [],
+                    "elapsed_seconds": 0.0,
+                    "execution_kind": ORDINARY_KIND,
+                    "execution_exit_code": 1,
+                    "interrupted": True,
+                    "skipped_nodes": [],
+                }
+            )
     results = {
         lane.name: _finalize_lane(lane, unit_results[lane.name], metadata_dir)
         for lane in execution_lanes
         if unit_results[lane.name]
     }
     summary = {
-        "canonical_node_count": len(nodes), "elapsed_seconds": round(time.monotonic() - started, 3),
+        "canonical_node_count": len(nodes),
+        "elapsed_seconds": round(time.monotonic() - started, 3),
         "head_sha": tree_sha,
         "lanes": [results[lane.name] for lane in execution_lanes if lane.name in results],
-        "manifest_file": manifest_path.name, "manifest_sha256": manifest_digest,
+        "manifest_file": manifest_path.name,
+        "manifest_sha256": manifest_digest,
         "mode": "run" if selected_lane is None else "lane",
         "schema_version": SCHEMA_VERSION,
     }
@@ -936,11 +1038,15 @@ def run_lanes(
             slowest_lane_seconds=elapsed,
         )
     summary_json.write_bytes(_json_bytes(summary))
-    return 0 if (
-        run_error is None
-        and len(results) == len(execution_lanes)
-        and all(row["execution_exit_code"] == 0 for row in results.values())
-    ) else 1
+    return (
+        0
+        if (
+            run_error is None
+            and len(results) == len(execution_lanes)
+            and all(row["execution_exit_code"] == 0 for row in results.values())
+        )
+        else 1
+    )
 
 
 def main() -> int:

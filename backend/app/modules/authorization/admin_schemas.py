@@ -35,7 +35,7 @@ class PermissionDefinitionsResponse(BaseModel):
 
     model_config = _STRICT
     items: tuple[PermissionDefinitionResponse, ...]
-    total: Literal[71]
+    total: Literal[73]
 
 
 class AdminRoleDefinitionResponse(BaseModel):

@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
-from alembic import command
-from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy import select, text
@@ -555,86 +551,3 @@ async def test_preferred_shape_is_storage_only_and_lease_shape_is_impossible(
                 {"id": preferred.id},
             )
         await session.rollback()
-
-
-@pytest.mark.postgres_schema_contract
-@pytest.mark.asyncio
-async def test_later_authority_preserves_populated_review_admission_on_downgrade(
-    review_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-    migration_lock,
-) -> None:
-    project, task, submission = await _reviewable_lineage(review_client, monkeypatch)
-    reservation_value = _reservation_input(project, task, submission)
-    async with db_session.get_session_factory()() as session:
-        await ReviewQueueRepository(session).reserve_admission(reservation_value)
-        await session.commit()
-        initial_revision = await session.scalar(text("select version_num from alembic_version"))
-    await db_session.dispose_engine()
-
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
-
-    def downgrade() -> None:
-        with migration_lock():
-            command.downgrade(config, "0050_guide_source_v2")
-
-    # Downgrades are newest-first; submission-policy evidence is the first
-    # irreversible boundary and must preserve the older review admission too.
-    with pytest.raises(
-        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
-    ):
-        await asyncio.to_thread(downgrade)
-
-    async with db_session.get_session_factory()() as session:
-        assert (
-            await session.scalar(text("select version_num from alembic_version"))
-            == initial_revision
-        )
-        assert (
-            await session.scalar(
-                select(ReviewAdmissionIdempotencyRecord.id).where(
-                    ReviewAdmissionIdempotencyRecord.id == reservation_value.id
-                )
-            )
-            == reservation_value.id
-        )
-
-
-@pytest.mark.postgres_schema_contract
-@pytest.mark.asyncio
-async def test_later_authority_preserves_populated_review_queue_on_downgrade(
-    review_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-    migration_lock,
-) -> None:
-    project, task, submission = await _reviewable_lineage(review_client, monkeypatch)
-    queue_value = _queue_input(project, task, submission)
-    async with db_session.get_session_factory()() as session:
-        await ReviewQueueRepository(session).add_queue_entry(queue_value)
-        await session.commit()
-        initial_revision = await session.scalar(text("select version_num from alembic_version"))
-    await db_session.dispose_engine()
-
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
-
-    def downgrade() -> None:
-        with migration_lock():
-            command.downgrade(config, "0050_guide_source_v2")
-
-    # Downgrades are newest-first; submission-policy evidence is the first
-    # irreversible boundary and must preserve the older queue entry too.
-    with pytest.raises(
-        RuntimeError, match="cannot downgrade submission-policy authority with evidence"
-    ):
-        await asyncio.to_thread(downgrade)
-
-    async with db_session.get_session_factory()() as session:
-        assert (
-            await session.scalar(text("select version_num from alembic_version"))
-            == initial_revision
-        )
-        assert await session.get(ReviewQueueEntry, queue_value.id) is not None

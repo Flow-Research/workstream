@@ -93,9 +93,7 @@ class ProjectGuideCompilationExecutePreflightFacts(ProjectGuideCompilationReques
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ProjectGuideCompilationExecutePersistFacts(
-    ProjectGuideCompilationExecutePreflightFacts
-):
+class ProjectGuideCompilationExecutePersistFacts(ProjectGuideCompilationExecutePreflightFacts):
     """Exact accepted-result hashes consumed with immutable persistence."""
 
     result_hash: str
@@ -126,6 +124,75 @@ def project_guide_compilation_execute_resource_digest(
                 key: str(value) if isinstance(value, UUID) else value
                 for key, value in fact_values.items()
             },
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+def project_guide_compilation_request_resource_digest(
+    actor: ActorIdentityFacts,
+    grant_id: UUID,
+    facts: ProjectGuideCompilationRequestFacts,
+) -> str:
+    """Hash the complete Project Manager request/recovery authority context."""
+    if actor.actor_kind.value != "human" or actor.service_identity is not None:
+        raise ValueError("compilation requests require a human actor")
+    if not isinstance(grant_id, UUID):
+        raise ValueError("grant_id must be a UUID")
+    facts_digest = project_guide_compilation_facts_digest(facts)
+    return project_guide_compilation_request_authority_digest(
+        actor_profile_id=actor.actor_profile_id,
+        identity_link_id=actor.identity_link_id,
+        grant_id=grant_id,
+        project_id=facts.project_id,
+        operation_id=facts.operation_id,
+        request_facts_digest=facts_digest,
+    )
+
+
+def project_guide_compilation_facts_digest(
+    facts: ProjectGuideCompilationRequestFacts,
+) -> str:
+    """Hash the complete dependency-free compilation facts envelope."""
+    canonical = json.dumps(
+        {
+            "domain": "workstream.project_guide_compilation.facts.v1",
+            "facts": {
+                key: str(value) if isinstance(value, UUID) else value
+                for key, value in asdict(facts).items()
+            },
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+def project_guide_compilation_request_authority_digest(
+    *,
+    actor_profile_id: UUID,
+    identity_link_id: UUID,
+    grant_id: UUID,
+    project_id: UUID,
+    operation_id: UUID,
+    request_facts_digest: str,
+) -> str:
+    """Hash server-selected request authority with caller-owned facts."""
+    canonical = json.dumps(
+        {
+            "action_id": "project.guide_compilation.request",
+            "permission_id": "project.guide_compilation.request",
+            "resource_type": "project_guide_compilation_request",
+            "resource_id": str(operation_id),
+            "scope_project_id": str(project_id),
+            "actor_profile_id": str(actor_profile_id),
+            "identity_link_id": str(identity_link_id),
+            "project_manager_grant_id": str(grant_id),
+            "request_facts_digest": request_facts_digest,
         },
         sort_keys=True,
         separators=(",", ":"),

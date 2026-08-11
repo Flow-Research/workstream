@@ -1,0 +1,17 @@
+{
+  "reason": "Prevent generated-key collisions after the two singleton reference rows are seeded.",
+  "sequence_state_changes": [
+    {
+      "field": "is_called",
+      "from": false,
+      "name": "actor_profile_migration_state_id_seq",
+      "to": true
+    },
+    {
+      "field": "is_called",
+      "from": false,
+      "name": "authority_control_id_seq",
+      "to": true
+    }
+  ]
+}

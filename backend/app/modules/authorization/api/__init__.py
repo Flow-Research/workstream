@@ -16,6 +16,9 @@ from .project_guide_compilation import (
     ProjectGuideCompilationExecutePreflightFacts,
     ProjectGuideCompilationRequestFacts,
     project_guide_compilation_execute_resource_digest,
+    project_guide_compilation_facts_digest,
+    project_guide_compilation_request_authority_digest,
+    project_guide_compilation_request_resource_digest,
 )
 
 __all__ = (
@@ -38,6 +41,9 @@ __all__ = (
     "ProjectGuideCompilationExecutePreflightFacts",
     "ProjectGuideCompilationRequestFacts",
     "project_guide_compilation_execute_resource_digest",
+    "project_guide_compilation_facts_digest",
+    "project_guide_compilation_request_authority_digest",
+    "project_guide_compilation_request_resource_digest",
     "ResourceFacts",
     "ResourceValue",
     "action_id",

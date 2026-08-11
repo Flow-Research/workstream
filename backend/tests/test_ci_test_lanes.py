@@ -23,11 +23,18 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 5
+    assert len(LANES) == 7
     assert all(lane.requires_postgres for lane in LANES)
-    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 2
+    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 3
     assert all(
-        count == (2 if module == runner.PARTITIONED_SCHEMA_MODULE else 1)
+        count
+        == (
+            len(runner.PARTITIONED_SCHEMA_LANES)
+            if module == runner.PARTITIONED_SCHEMA_MODULE
+            else 2
+            if module in runner.SHARED_FOUNDATION_MODULES
+            else 1
+        )
         for module, count in Counter(assigned).items()
     )
     assert set(assigned) == set(discovered)
@@ -60,12 +67,16 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/test_review_queue_persistence.py",
         "tests/test_tasks.py",
     }
+    shared_a = modules_by_lane[runner.PARTITIONED_SHARED_LANES[0]]
+    shared_b = modules_by_lane[runner.PARTITIONED_SHARED_LANES[1]]
+    assert shared_a == shared_b == set(runner.SHARED_FOUNDATION_MODULES)
     assert {
         "tests/test_alembic.py",
         "tests/test_database_reset.py",
         runner.ADMIN_RUNNER_MODULE,
     } == modules_by_lane["schema_contracts_a"]
     assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_b"]
+    assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_c"]
     assert {
         "tests/test_actors.py",
         "tests/test_artifact_admission.py",
@@ -73,7 +84,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/test_authorization.py",
         "tests/test_guide_artifacts.py",
         "tests/test_mutation_policy.py",
-    } <= modules_by_lane["shared_foundations"]
+    } <= shared_a
 
 
 def test_discovery_is_recursive_and_lexically_canonical(tmp_path: Path) -> None:
@@ -108,9 +119,13 @@ def test_discovery_rejects_symlinks(tmp_path: Path, kind: str) -> None:
 
 @pytest.mark.parametrize(
     ("mutation", "error"),
-    (("missing", "missing_lane_modules"), ("duplicate", "duplicate_lane_modules"),
-     ("foreign", "foreign_lane_modules"), ("unsafe", "invalid_lane_module"),
-     ("name", "invalid_lane_names")),
+    (
+        ("missing", "missing_lane_modules"),
+        ("duplicate", "duplicate_lane_modules"),
+        ("foreign", "foreign_lane_modules"),
+        ("unsafe", "invalid_lane_module"),
+        ("name", "invalid_lane_names"),
+    ),
 )
 def test_inventory_fails_closed(mutation: str, error: str) -> None:
     discovered = runner.discover_test_modules()
@@ -118,6 +133,7 @@ def test_inventory_fails_closed(mutation: str, error: str) -> None:
     first = lanes[0]
     if mutation == "missing":
         lanes[0] = replace(first, modules=first.modules[1:])
+        lanes[1] = replace(lanes[1], modules=lanes[1].modules[1:])
     elif mutation == "duplicate":
         lanes[0] = replace(first, modules=(*first.modules, lanes[1].modules[0]))
     elif mutation == "foreign":
@@ -145,7 +161,7 @@ def test_manifest_contains_sorted_exact_node_ids() -> None:
 
 
 def test_manifest_classifies_only_runner_self_tests_as_admin_kind() -> None:
-    ordinary = f"{LANES[1].modules[0]}::test_migration"
+    ordinary = f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration"
     admin = f"{runner.ADMIN_RUNNER_MODULE}::test_admin_owner"
     rows = runner.build_manifest("a" * 40, sorted((ordinary, admin)))["nodes"]
 
@@ -157,10 +173,7 @@ def test_manifest_classifies_only_runner_self_tests_as_admin_kind() -> None:
 
 
 def test_alembic_nodes_partition_deterministically_across_schema_lanes() -> None:
-    nodes = [
-        f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration_{index}"
-        for index in range(100)
-    ]
+    nodes = [f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration_{index}" for index in range(100)]
 
     first = runner.build_manifest("a" * 40, nodes)
     second = runner.build_manifest("a" * 40, list(reversed(nodes)))
@@ -169,9 +182,20 @@ def test_alembic_nodes_partition_deterministically_across_schema_lanes() -> None
 
     assert first_by_node == second_by_node
     assert set(first_by_node.values()) == set(runner.PARTITIONED_SCHEMA_LANES)
-    assert all(
-        lane in runner.PARTITIONED_SCHEMA_LANES for lane in first_by_node.values()
-    )
+    assert all(lane in runner.PARTITIONED_SCHEMA_LANES for lane in first_by_node.values())
+
+
+def test_shared_nodes_partition_deterministically_across_shared_lanes() -> None:
+    module = runner.SHARED_FOUNDATION_MODULES[0]
+    nodes = [f"{module}::test_shared_{index}" for index in range(100)]
+
+    first = runner.build_manifest("a" * 40, nodes)
+    second = runner.build_manifest("a" * 40, list(reversed(nodes)))
+    first_by_node = {row["nodeid"]: row["lane"] for row in first["nodes"]}
+    second_by_node = {row["nodeid"]: row["lane"] for row in second["nodes"]}
+
+    assert first_by_node == second_by_node
+    assert set(first_by_node.values()) == set(runner.PARTITIONED_SHARED_LANES)
 
 
 def test_manifest_has_no_exclusion_escape_hatch() -> None:
@@ -179,12 +203,14 @@ def test_manifest_has_no_exclusion_escape_hatch() -> None:
     manifest = runner.build_manifest("a" * 40, [admin])
 
     assert "excluded_modules" not in manifest
-    assert manifest["nodes"] == [{
-        "execution_kind": runner.ADMIN_KIND,
-        "lane": "schema_contracts_a",
-        "module": runner.ADMIN_RUNNER_MODULE,
-        "nodeid": admin,
-    }]
+    assert manifest["nodes"] == [
+        {
+            "execution_kind": runner.ADMIN_KIND,
+            "lane": "schema_contracts_a",
+            "module": runner.ADMIN_RUNNER_MODULE,
+            "nodeid": admin,
+        }
+    ]
 
 
 def test_deterministic_uuid_nodeids_match_across_full_subset_and_repeat(
@@ -276,9 +302,15 @@ def test_lane_environment_uses_private_evidence_and_coverage(tmp_path: Path) -> 
     env = runner.lane_environment(LANES[0], tmp_path, coverage)
 
     assert env["COVERAGE_FILE"] == str(coverage.resolve())
-    paths = [Path(env[name]) for name in (
-        runner.COLLECTED_ENV, runner.COMPLETED_ENV, runner.SKIPPED_ENV, runner.DESELECTED_ENV,
-    )]
+    paths = [
+        Path(env[name])
+        for name in (
+            runner.COLLECTED_ENV,
+            runner.COMPLETED_ENV,
+            runner.SKIPPED_ENV,
+            runner.DESELECTED_ENV,
+        )
+    ]
     assert len(set(paths)) == 4
     assert all(path.parent == tmp_path for path in paths)
 
@@ -288,7 +320,9 @@ def test_admin_runner_environment_retains_only_admin_database_url(
 ) -> None:
     monkeypatch.setenv(runner.ADMIN_ENV, "postgresql+asyncpg://admin:secret@localhost/postgres")
     monkeypatch.setenv("WORKSTREAM_DATABASE_URL", "postgresql+asyncpg://app:secret@localhost/app")
-    monkeypatch.setenv("WORKSTREAM_TEST_DATABASE_URL", "postgresql+asyncpg://test:secret@localhost/test")
+    monkeypatch.setenv(
+        "WORKSTREAM_TEST_DATABASE_URL", "postgresql+asyncpg://test:secret@localhost/test"
+    )
     lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
 
     env = runner.admin_runner_environment(lane, tmp_path, tmp_path / ".coverage", "admin")
@@ -392,18 +426,20 @@ def test_failed_lane_preserves_evidence_without_isolation_metadata(
 ) -> None:
     """A provisioning failure remains observable before metadata exists."""
     lane = LANES[0]
-    units = [{
-        "collection_exit_code": 1,
-        "collected_nodes": [],
-        "completed_nodes": [],
-        "coverage_path": tmp_path / ".coverage.unit.missing",
-        "deselected_nodes": [],
-        "elapsed_seconds": 1.0,
-        "execution_kind": runner.ORDINARY_KIND,
-        "execution_exit_code": 2,
-        "interrupted": False,
-        "skipped_nodes": [],
-    }]
+    units = [
+        {
+            "collection_exit_code": 1,
+            "collected_nodes": [],
+            "completed_nodes": [],
+            "coverage_path": tmp_path / ".coverage.unit.missing",
+            "deselected_nodes": [],
+            "elapsed_seconds": 1.0,
+            "execution_kind": runner.ORDINARY_KIND,
+            "execution_exit_code": 2,
+            "interrupted": False,
+            "skipped_nodes": [],
+        }
+    ]
 
     row = runner._finalize_lane(lane, units, tmp_path)
     evidence = json.loads((tmp_path / row["evidence_file"]).read_text())
@@ -441,8 +477,15 @@ def test_collect_only_writes_raw_digest_bound_validator_schema(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     manifest_bytes = (metadata / summary["manifest_file"]).read_bytes()
     assert set(summary) == {
-        "aggregate_runner_seconds", "canonical_node_count", "elapsed_seconds", "head_sha",
-        "lanes", "manifest_file", "manifest_sha256", "mode", "schema_version",
+        "aggregate_runner_seconds",
+        "canonical_node_count",
+        "elapsed_seconds",
+        "head_sha",
+        "lanes",
+        "manifest_file",
+        "manifest_sha256",
+        "mode",
+        "schema_version",
         "slowest_lane_seconds",
     }
     assert summary["mode"] == "collect"
@@ -534,10 +577,11 @@ def test_collection_accepts_a_minimal_base_environment(
 
 
 def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
-    lanes = [{"elapsed_seconds": value} for value in (1.125, 2.25, 0.5, 3.75, 1.0)]
+    elapsed = (1.125, 2.25, 0.5, 3.75, 1.0, 0.75, 0.625)
+    lanes = [{"elapsed_seconds": value} for value in elapsed]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 8.625,
+        "aggregate_runner_seconds": 10.0,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):
@@ -565,10 +609,10 @@ def test_finalized_lanes_leave_one_public_coverage_file_per_lane(tmp_path: Path)
             "collection_exit_code": 0,
             "completed_nodes": [f"{lane.modules[0]}::test_one"],
             "coverage_path": source,
-                "deselected_nodes": [],
-                "elapsed_seconds": float(index + 1),
-                "execution_kind": runner.ORDINARY_KIND,
-                "execution_exit_code": 0,
+            "deselected_nodes": [],
+            "elapsed_seconds": float(index + 1),
+            "execution_kind": runner.ORDINARY_KIND,
+            "execution_exit_code": 0,
             "interrupted": False,
             "skipped_nodes": [],
         }
@@ -630,8 +674,7 @@ def test_unexpected_runner_failure_force_kills_and_records_every_lane(
 ) -> None:
     """Cleanup preserves four-lane evidence and the orchestration traceback."""
     lanes = tuple(
-        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",))
-        for index in range(4)
+        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",)) for index in range(4)
     )
     modules = tuple(lane.modules[0] for lane in lanes)
     nodes = [f"{module}::test_one" for module in modules]
@@ -670,8 +713,7 @@ def test_partial_startup_failure_records_exactly_four_failed_lanes(
 ) -> None:
     """A process-launch failure cannot erase lanes that never started."""
     lanes = tuple(
-        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",))
-        for index in range(4)
+        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",)) for index in range(4)
     )
     modules = tuple(lane.modules[0] for lane in lanes)
     nodes = [f"{module}::test_one" for module in modules]

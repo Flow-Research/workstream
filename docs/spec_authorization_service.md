@@ -127,7 +127,7 @@ The active model has no `both`, replacement field, replacement event, or
 replacement reason. Qualification evidence is bound to the same actor, project,
 and exact requested role. One active row is permitted per
 actor/project/role. Issue idempotency includes the requested role; revoke derives
-the role from the locked grant. Migration `0031` refuses upgrade when obsolete
+the role from the locked grant. The v0.1 baseline excludes obsolete
 combined or replacement evidence exists and never converts or deletes those
 rows. It replaces current typed and PostgreSQL validators without changing
 historical migrations.
@@ -163,6 +163,8 @@ project.effective_policy.read
 project.update
 project.archive
 project.guide.manage
+project.guide_compilation.request
+project.guide_compilation.execute
 project.effective_policy.manage
 project.task.manage
 project.review_policy.manage
@@ -236,12 +238,13 @@ registration, hidden ART behavior/resource composition, then dedicated AUTH
 evaluator integration and activation. ART never writes availability. AUTH-12,
 AUTH-14, and AUTH-15 are not alternate artifact activation paths.
 
-These are 71 approved `PermissionId` values. `ActionId` values are a separate
+These are 73 approved `PermissionId` values. `ActionId` values are a separate
 closed registry layer and are not included in that permission count. AUTH-05A's
 typed and PostgreSQL audit registry accepts the exact historical 49. The three
 approved Operator recovery identifiers, 16 artifact identifiers,
 `review.queue.override`, and the two AUTH-11A read-only project inspection
-permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
+permissions plus the two compilation permissions are the exact 24 post-`0020`
+permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
@@ -250,8 +253,9 @@ and 41 planned rows before AUTH-12A. AUTH-12A added eighteen planned
 project-mutation rows, producing the historical 96-row state of 37 active and
 59 planned. Later project-mutation and ART activation chunks advanced the
 pre-02C state to 45 active and 51 planned. WS-XINT-003-02C adds four planned
-REV rows, and AUTH-12E activates three existing rows, producing the current
-100-row state of 48 active and 52 planned.
+REV rows. Subsequent approved activations advanced the pre-12I catalogue to 52
+active and 48 planned rows. AUTH-12I adds and activates the two compilation
+request/execute rows, producing 102 rows: 54 active and 48 planned.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -288,7 +292,7 @@ AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.
 AUTH-08 activates exactly seven administrative actions through migration
 `0022`; all other registered actions remain planned.
 
-AUTH-09A registers these exact planned actions through migration `0023`:
+AUTH-09A registers these exact planned actions in the v0.1 baseline:
 
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
@@ -403,7 +407,7 @@ Artifact verification recovery remains the existing
 registered. Shared outbox dispatch/retry remains owned by the shared-outbox
 subsystem and is not represented as a REV-owned projection action.
 
-Migration `0021` is availability-neutral. PostgreSQL enforces the closed
+The v0.1 baseline is availability-neutral for this surface. PostgreSQL enforces the closed
 ActionId set, authorization-decision event shape, exact ActionId-to-PermissionId
 mapping, and the requirement that every post-`0018` permission carry a mapped
 action. Typed catalogue validation separately rejects allowed evidence until the
@@ -497,12 +501,12 @@ Operator grant or entitlement. WS-XINT-002-03 activates the three internal
 service actions, WS-XINT-002-04A activates guide-source ingest, and
 WS-XINT-002-04B activates the two fixed-service guide binding/read actions; the
 other 16 ART actions remain planned and unavailable.
-Migration `0037` admits the exact privacy-bounded ART resource-context digest
+The v0.1 baseline admits the exact privacy-bounded ART resource-context digest
 in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
 independent activation proof; read/status proof cannot activate retry. The
 historical ART transfer added no migration; WS-XINT-002-01 reconciles the
-closed catalogue through migration `0036`. The separately started REV custody
+closed catalogue in the v0.1 baseline. The separately started REV custody
 transfer is also complete: all 19 REV rows now name exact AUTH custodians,
 remain planned and unavailable, and add no migration.
 
@@ -548,7 +552,7 @@ closed:
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
-| `workstream.project.setup` | `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
+| `workstream.project.setup` | `project.guide_compilation.execute`, `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
 | `workstream.review.preference_expiry` | `review.preference_expiry.run` |
 | `workstream.review.lease_expiry` | `review.lease_expiry.run` |
 | `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` |
@@ -570,13 +574,14 @@ facts because `TaskAssignment` uses a new immutable ID for replacement rather
 than a separate generation counter.
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
-02C expands the current registry to fourteen identities. AUTH-12E activates only
-`project.guide_sufficiency.run` for the exact internal setup-service command;
-the other three project-setup actions and all six REV rows remain planned and
-unavailable. Registration makes the
+02C expands the current registry to fourteen identities. AUTH-12E activates
+`project.guide_sufficiency.run`, AUTH-12F3 activates policy derivation, and
+AUTH-12I activates exact unified compilation execution; the remaining two
+project-setup actions and all six REV rows remain planned and unavailable.
+Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
-itself; migration `0043_project_setup_service` only expands the closed database
+itself; the v0.1 baseline only expands the closed database
 identity constraint.
 
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer
@@ -1090,6 +1095,19 @@ outside any prepared handle; persistence obtains fresh authority. The fixed
 `workstream.project.setup` service may resolve only the run action internally
 with exact setup custody and no matched human grant.
 
+Unified guide compilation separates human dispatch from provider execution.
+`project.guide_compilation.request` requires a current exact-project Project
+Manager grant; system-scoped grants do not substitute. Transaction-bound PREP
+binds the actor, identity link, matched grant, immutable guide/setup lineage,
+catalogue manifests, agent/instruction versions, and operation/request facts.
+`project.guide_compilation.execute` belongs only to `workstream.project.setup`.
+Its pre-provider check validates the complete typed attempt and provider key
+without issuing a handle or writing authorization evidence. After provider I/O, fresh
+PREP recomputes and verifies the complete result/component digest and commits
+its allowed event only with POL-03B's immutable result transition. AUTH-12I
+activates these authority boundaries only; it exposes no route, dispatches no
+execution task, calls no provider, and does not make the hidden POL workflow live.
+
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
@@ -1100,6 +1118,8 @@ with exact setup custody and no matched human grant.
 | `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_compilation.request` (active) | `project.guide_compilation.request` | `WS-AUTH-001-12I` |
+| `project.guide_compilation.execute` (active) | `project.guide_compilation.execute` | `WS-AUTH-001-12I` |
 | `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.submission_artifact_policy.create` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
 | `project.submission_artifact_policy.derive` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |
@@ -1111,12 +1131,11 @@ with exact setup custody and no matched human grant.
 | `project.setup_run.update` | `project.guide.manage` | `WS-AUTH-001-12B2` |
 | `project.guide.activate` | `project.guide.manage` | `WS-AUTH-001-12H` |
 
-Migration `0054_guide_sufficiency_authority` preserves historical sufficiency
+The v0.1 baseline preserves historical sufficiency
 rows as readable, unattributed records while requiring complete creation or
 acknowledgement authority provenance for new 12E mutations. Its replay ledger
-is append-only, and downgrade is refused after any 12E replay or provenance
-exists. Operators must not delete authority or product evidence to force a
-rollback.
+is append-only. Operators must preserve authority and product evidence and
+recover forward.
 
 `WS-AUTH-001-12F` is a planning-only parent and activates nothing. 12F1 owns
 the zero-activation PREP/replay/provenance foundation; 12F2 owns explicitly
@@ -1136,7 +1155,7 @@ idempotency from fixed setup-service task custody. Manual mutations permit only
 `reserved -> pending -> committed` state machine: `reserved` is committed before
 material or agent I/O, while the final two transitions commit atomically with
 the derived policy, final AUTH evidence, and setup output.
-Migration `0057_submission_policy_authority` preserves existing product rows in
+The v0.1 baseline preserves existing product rows in
 the all-null unattributed shape until their owning route cutovers. 12F2 now
 activates only manual human create/update. Manual update appends a separately
 authorized successor, binds predecessor hash and successor identity through
@@ -1145,14 +1164,12 @@ Diagnostic sufficiency, legacy role strings, services, contributors, and
 agent-derived rows cannot authorize this exception. Fixed-service derive is
 active under 12F3; human approval remains planned for 12F4. Any durable
 execution claim or replay row—including reserved or pending—or attributed
-provenance blocks downgrade. Any submission-policy
-authorization audit event, including denied evidence, also blocks downgrade so
-the admitted evidence vocabulary is never removed while referenced.
+provenance must be preserved. Submission-policy authorization audit events,
+including denied evidence, must also be preserved.
 
-Migration `0041_project_mutation_evidence` extends only the closed audit
-action-to-permission evidence constraint. It follows ART migration
-`0040_guide_materialization`, adds no permission, and refuses downgrade after
-direct or idempotency-linked evidence uses any new action.
+The v0.1 baseline extends only the closed audit action-to-permission evidence
+constraint. It includes the verified guide-materialization schema, adds no
+permission, and requires direct or idempotency-linked evidence to be preserved.
 
 The two collection routes return and transactionally bind at most the newest
 100 canonical rows in deterministic newest-first order. Older retained records
@@ -1223,7 +1240,7 @@ where existence itself is sensitive.
 
 First access and administrative mutations are rate-controlled through
 Postgres-backed fail-closed controls before their public APIs become available.
-Migration `0033_authorization_read_rate` extends that same durable
+The v0.1 baseline extends that same durable
 counter with the closed `authorization_read` scope. Its dependency remains
 unattached and activates no action until AUTH-10B2. The dedicated default is
 120 requests per 60 seconds per verified issuer/subject digest, independently

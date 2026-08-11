@@ -81,7 +81,7 @@ Fields include:
 - permitted display/profile metadata
 - database-time creation/update fields
 - bounded suspension and reactivation attribution plus immutable terminal
-  deactivation attribution after AUTH-09D-A migration `0026`
+  deactivation attribution in the v0.1 baseline
 
 Profile status is a guard, not a role or project grant.
 Lifecycle invalidation effectiveness is component-scoped. Reactivating a
@@ -93,7 +93,7 @@ make the whole actor effective.
 
 An identity link binds one canonical external issuer and opaque subject to one
 ActorProfile. It has active/revoked state plus state-transition-guarded current
-revocation and reactivation attribution. AUTH-09D-A migration `0026` enforces
+revocation and reactivation attribution. The v0.1 baseline enforces
 complete attribution and bounded lifecycle reasons. AUTH-09D-B activates exact
 link revoke/reactivate mutations. Append-only audit evidence preserves immutable
 transition history; the current row carries only the latest state-compatible attribution.
@@ -1004,26 +1004,19 @@ Example:
 
 Post-submit checker policy governs durable internal checker runs after a submission is finalized. It does not replace the generated project pre-submit checker policy.
 
-Migration note: the `0008_post_submit_checker_policy` migration adds explicit
-post-submit policy hash, body, and lock columns. Existing local v0.1 checker
-policy rows without policy hashes are intentionally not backfilled into
-authority. They must be recreated or repaired through the project setup
-lifecycle. Existing non-draft task, submission, or checker-run rows from the
-construction database block the migration with an explicit preflight error
-because Workstream cannot truthfully infer which post-submit policy body and
-hash governed those runtime records. After the migration, runtime records fail
+Baseline invariant: post-submit policy hash, body, and lock columns are
+explicit. Pre-v0.1 development rows without policy hashes are not backfilled
+into authority; recreate the database and use the project setup lifecycle.
+Runtime records fail
 closed when a task, submission, or checker run lacks valid
 `locked_post_submit_checker_policy_*` context.
 
-Migration note: the `0014_post_submit_setup` migration adds required
-post-submit policy provenance fields that bind a compiled policy to guide,
-source snapshot, effective project policy, and pre-submit checker bundle
-context. Existing construction-era `checker_policies` rows cannot be truthfully
-backfilled into that provenance, so the migration fails closed until those local
-draft-era rows are reset and recreated through project setup.
+Baseline invariant: required post-submit policy provenance binds a compiled
+policy to guide, source snapshot, effective project policy, and pre-submit
+checker bundle context. Construction-era rows are not an upgrade source.
 
-Migration note: the `0015_post_submit_correction` migration replaces the
-single-row project/guide-version uniqueness rule with uniqueness for current
+Baseline invariant: the single-row project/guide-version uniqueness rule is
+replaced by uniqueness for current
 `compiled` or `approved` rows. Superseded rows remain append-only and retain
 their policy body/hash, supersession kind/reason, actor/role/time provenance,
 and any same-context correction replacement link. Correction lookup is scoped
@@ -1312,7 +1305,7 @@ Fields:
 - `released_at`
 - `status`
 
-Migration `0027_contributor_foundation` clean-cuts the retired persisted human
+The v0.1 baseline excludes the retired persisted human
 owner to `contributor_id`. The non-null `varchar(36)` value is protected by
 foreign key `fk_task_assignments_contributor_id_actor_profiles`, index
 `ix_task_assignments_contributor_id`, and trigger

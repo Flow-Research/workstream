@@ -20,11 +20,13 @@ import uuid
 
 
 SCHEMA_VERSION = 1
-LANE_COUNT = 5
+LANE_COUNT = 7
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LANE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
+SHARED_S3_LANES = frozenset(("shared_foundations_a", "shared_foundations_b"))
+SHARED_S3_BUCKET = "workstream-artifacts"
 ORDINARY_KIND = "ordinary_isolated"
 ADMIN_KIND = "admin_runner_self_test"
 DATABASE_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -416,7 +418,7 @@ def validate_evidence(
 
     all_collected: list[str] = []
     all_completed: list[str] = []
-    isolation_namespaces: list[tuple[str, str, str, str]] = []
+    isolation_namespaces: list[tuple[str, str, str, str, str]] = []
     coverage_files: list[str] = []
     isolation_files: list[str] = []
     lane_elapsed_seconds: list[float] = []
@@ -564,7 +566,13 @@ def validate_evidence(
                 or ".." in PurePosixPath(isolation["minio_prefix"]).parts
             ):
                 raise EvidenceError("invalid_isolation_metadata")
-            isolation_namespaces.append(tuple(isolation[field] for field in namespace_fields))
+            if (name in SHARED_S3_LANES) != (
+                isolation["minio_bucket"] == SHARED_S3_BUCKET
+            ):
+                raise EvidenceError("invalid_isolation_metadata")
+            isolation_namespaces.append(
+                (name, *(isolation[field] for field in namespace_fields))
+            )
         all_collected.extend(collected)
         all_completed.extend(completed)
 
@@ -572,11 +580,33 @@ def validate_evidence(
         raise EvidenceError("global_collection_reconciliation_failed")
     if mode == "run" and Counter(all_completed) != Counter(canonical_ids):
         raise EvidenceError("global_completion_reconciliation_failed")
-    if mode == "run" and any(
-        len({namespace[index] for namespace in isolation_namespaces}) != LANE_COUNT
-        for index in range(4)
-    ):
-        raise EvidenceError("shared_isolation_namespace")
+    if mode == "run":
+        database_names = {namespace[1] for namespace in isolation_namespaces}
+        database_roles = {namespace[2] for namespace in isolation_namespaces}
+        minio_prefixes = {namespace[4] for namespace in isolation_namespaces}
+        bucket_owners: dict[str, set[str]] = {}
+        for lane_name, _database, _role, bucket, _prefix in isolation_namespaces:
+            bucket_owners.setdefault(bucket, set()).add(lane_name)
+        expected_bucket_owners = {
+            SHARED_S3_BUCKET: set(SHARED_S3_LANES),
+            **{
+                bucket: owners
+                for bucket, owners in bucket_owners.items()
+                if bucket != SHARED_S3_BUCKET
+            },
+        }
+        if (
+            len(database_names) != LANE_COUNT
+            or len(database_roles) != LANE_COUNT
+            or len(minio_prefixes) != LANE_COUNT
+            or bucket_owners != expected_bucket_owners
+            or any(
+                len(owners) != 1
+                for bucket, owners in bucket_owners.items()
+                if bucket != SHARED_S3_BUCKET
+            )
+        ):
+            raise EvidenceError("shared_isolation_namespace")
     if mode == "run" and (
         len(set(coverage_files)) != LANE_COUNT or len(set(isolation_files)) != LANE_COUNT
     ):

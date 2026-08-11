@@ -2142,8 +2142,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             headers=admin_headers,
         )
         assert permissions.status_code == definitions.status_code == 200
-        assert permissions.json()["total"] == 71
-        assert len(permissions.json()["items"]) == 71
+        assert (permissions.json()["total"], len(permissions.json()["items"])) == (73, 73)
         assert definitions.json()["total"] == 5
         assert [item["role"] for item in definitions.json()["items"]] == [
             "access_administrator",
@@ -2445,7 +2444,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             ),
         ]
         assert [response.status_code for response in system_audit_reads] == [200] * 6
-        assert system_audit_reads[0].json()["total"] == 71
+        assert system_audit_reads[0].json()["total"] == 73
         assert system_audit_reads[1].json()["total"] == 5
         assert system_audit_reads[2].json()["total"] == 2
         assert system_audit_reads[3].json()["total"] == 1

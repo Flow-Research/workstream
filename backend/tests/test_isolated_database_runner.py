@@ -64,20 +64,25 @@ def _mock_successful_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drop)
 
 
 def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None:
-    """Only the S3 lane receives the application's hardcoded integration bucket."""
-    s3_bucket, s3_prefix = runner._minio_namespace("shared_foundations", "012345abcdef")
+    """Only shared lanes receive the application's hardcoded integration bucket."""
+    shared_a = runner._minio_namespace("shared_foundations_a", "012345abcdef")
+    shared_b = runner._minio_namespace("shared_foundations_b", "012345abcdef")
     control_bucket, control_prefix = runner._minio_namespace(
         "project_lifecycle", "012345abcdef"
     )
     execution_bucket, execution_prefix = runner._minio_namespace(
         "task_lifecycle", "fedcba543210"
     )
-    assert (s3_bucket, s3_prefix) == (
+    assert shared_a == (
         "workstream-artifacts",
-        "ci/shared_foundations/012345abcdef",
+        "ci/shared_foundations_a/012345abcdef",
     )
-    assert len({s3_bucket, control_bucket, execution_bucket}) == 3
-    assert len({s3_prefix, control_prefix, execution_prefix}) == 3
+    assert shared_b == (
+        "workstream-artifacts",
+        "ci/shared_foundations_b/012345abcdef",
+    )
+    assert len({shared_a[0], control_bucket, execution_bucket}) == 3
+    assert len({shared_a[1], shared_b[1], control_prefix, execution_prefix}) == 4
     with pytest.raises(runner.RunnerError, match="invalid_lane"):
         runner._minio_namespace("../foreign", "012345abcdef")
 
@@ -179,7 +184,8 @@ def test_minio_probe_cleans_up_and_preserves_async_cancellation(
 @pytest.mark.parametrize(
     ("lane", "expected_bucket"),
     [
-        ("shared_foundations", "workstream-artifacts"),
+        ("shared_foundations_a", "workstream-artifacts"),
+        ("shared_foundations_b", "workstream-artifacts"),
         ("schema_contracts", "workstream-ci-schema-contracts-012345abcdef"),
         ("project_lifecycle", "workstream-ci-project-lifecycle-012345abcdef"),
         ("task_lifecycle", "workstream-ci-task-lifecycle-012345abcdef"),
@@ -202,14 +208,15 @@ def test_lane_namespaces_do_not_collide_across_lanes_or_runner_suffixes() -> Non
     namespaces = {
         runner._minio_namespace(lane, suffix)
         for lane in (
-            "shared_foundations",
+            "shared_foundations_a",
+            "shared_foundations_b",
             "schema_contracts",
             "project_lifecycle",
             "task_lifecycle",
         )
         for suffix in ("012345abcdef", "fedcba543210")
     }
-    assert len(namespaces) == 8
+    assert len(namespaces) == 10
     with pytest.raises(runner.RunnerError, match="invalid_lane"):
         runner._minio_namespace("project_lifecycle", "not-hex")
     with pytest.raises(runner.RunnerError, match="invalid_minio_namespace"):

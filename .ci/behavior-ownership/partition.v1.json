@@ -158,10 +158,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/modules/actors/service_identity_migration.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/app/modules/api_controls/models.py"
     },
     {
@@ -347,6 +343,30 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/catalogue.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/audit.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/guide_compilation.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/prepared_compilation.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/prepared_service.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/project_create.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/guide_compilation.py"
     },
     {
       "group": "auth",
@@ -754,7 +774,11 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/service_actor_identity_mapping.py"
+      "target": "backend/scripts/schema_baseline_manifest.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/scripts/schema_baseline_sql.py"
     },
     {
       "group": "shared",
@@ -769,7 +793,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "5d33e6a8587a14c24d6bfd0cc36b07ec71a9f380ae5f90889cd04909a7debf69",
-  "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
+  "authority_digest": "7d9ac782dbf32857699e0b2d48f97cf34142398e7ec2bbc219b10cf7780aa7b0",
+  "protected_base_commit": "64f28bcffc01d8ac8f5270dc3136b28599d08254",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
