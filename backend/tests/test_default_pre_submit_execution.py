@@ -44,11 +44,9 @@ from app.modules.artifacts.service import (
     ArtifactStorageNamespaceSpec,
 )
 from app.modules.artifacts.submission_admission import (
+    SubmissionBundleAdmissionPublisher,
     SubmissionBundleDurablePutRequest,
     SubmissionBundleDurablePutService,
-)
-from app.modules.artifacts.submission_admission import (
-    SubmissionBundleAdmissionPublisher,
 )
 from app.modules.artifacts.operator import ArtifactOperatorService
 from app.modules.artifacts.metrics import artifact_admission_metrics
@@ -453,8 +451,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("review_policies", "review_policy_mutation_custody"),
         ("revision_policies", "revision_policy_mutation_custody"),
     )
-    blocked_prepared = None
-    replay_prepared = None
+    blocked_prepared = replay_prepared = None
     drift_prepared = None
     denied_prepared = None
     original_prepared_closed = False
@@ -1397,7 +1394,7 @@ async def test_disabled_mandatory_executor_state_fails_closed(tmp_path: Path) ->
         disabled_entry_ids=frozenset({"artifact.outer_zip.valid"})
     )
     entries = [
-        replace(entry, state="disabled")
+        replace(entry, checker_definition_state="disabled")
         if entry.definition_id == "artifact.outer_zip.valid"
         else entry
         for entry in request.effective_plan.entries

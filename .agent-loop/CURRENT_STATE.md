@@ -28,7 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Boundary foundation and the TASK/PROJECT public facts are merged through PRs #310, #314, and #315; no product behavior was activated | `02C` remains the next CHECKERS public-API boundary until merged; check open PRs for transient ownership |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Boundary foundation and TASK, PROJECT, and CHECKER public facts are merged through PR #320; no product behavior was activated | `02D`, the ART hidden-preparation public API and private-edge migration, is the next durable boundary |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication and hidden preparation are merged through `04C2` | Replace the non-executable 05-wave XINT/ART contracts with WS-ARCH-001 split public-API contracts before activation, Submission consumption, or live cutover |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; policy persistence and shared lifecycle audit are merged | Complete hidden services, contribution records, conditional awards, fulfillment, and reconciliation after named AUTH and REV gates |

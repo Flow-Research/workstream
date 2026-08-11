@@ -447,18 +447,6 @@
     },
     {
       "source_file": "backend/app/modules/artifacts/submission_admission.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.catalogue",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_admission.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.pre_submit_execution",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/artifacts/submission_admission.py",
       "target_module": "tasks",
       "imported_private_path": "app.modules.tasks.pre_submit_context",
       "repair_owner": "WS-ARCH-001-03"
@@ -708,18 +696,6 @@
       "target_module": "actors",
       "imported_private_path": "app.modules.actors.models",
       "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/pre_submit_context.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.catalogue",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/pre_submit_context.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.effective_plan",
-      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/modules/tasks/pre_submit_context.py",

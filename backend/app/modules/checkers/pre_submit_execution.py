@@ -12,6 +12,13 @@ from fnmatch import fnmatchcase
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.api import (
+    EffectivePreSubmissionExecutionPlan,
+    EffectivePreSubmissionPlanEntry,
+    PreSubmissionExecutionEntryFacts,
+    PreSubmissionExecutionFacts,
+    SubmissionPacketView,
+)
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.artifacts.submission_archive import (
     SealedSubmissionTree,
@@ -29,10 +36,6 @@ from app.modules.checkers.catalogue import (
     PreSubmissionCheckerState,
     PreSubmissionPlatformCapability,
     PreSubmissionPolicyPrimitive,
-)
-from app.modules.checkers.effective_plan import (
-    EffectivePreSubmissionExecutionPlan,
-    EffectivePreSubmissionPlanEntry,
 )
 from app.modules.checkers.pre_submit_defaults import (
     attestation_validation_facts,
@@ -94,20 +97,6 @@ class PreSubmissionResultStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionPacketView:
-    """Bounded contributor-authored text accompanying server-owned ZIP facts."""
-
-    summary: str
-    contributor_attestation: str
-
-    def __post_init__(self) -> None:
-        """Reject unbounded or malformed contributor packet text."""
-        for value in (self.summary, self.contributor_attestation):
-            if type(value) is not str or len(value.encode("utf-8")) > 64 * 1024:
-                raise ValueError("submission packet text is invalid")
-
-
-@dataclass(frozen=True, slots=True)
 class PreSubmissionResultDefinition:
     """Authority-neutral identity for one catalogue-owned definition."""
 
@@ -163,6 +152,40 @@ class PreSubmissionExecutionResult:
     custody: PreSubmissionExecutionCustody
     eligible: bool
     entries: tuple[PreSubmissionEntryResult, ...]
+
+    def bounded_facts(self) -> PreSubmissionExecutionFacts:
+        """Project CHECKER outcomes without leaking ART-owned custody."""
+        return PreSubmissionExecutionFacts(
+            plan_sha256=self.plan_sha256,
+            eligible=self.eligible,
+            entries=tuple(
+                PreSubmissionExecutionEntryFacts(
+                    dispatch_authority=entry.definition.dispatch_authority,
+                    definition_id=entry.definition.definition_id,
+                    definition_version=entry.definition.definition_version,
+                    public_name=entry.definition.public_name,
+                    policy_source=entry.definition.source,
+                    effective_plan_sha256=entry.policy_trace.effective_plan_sha256,
+                    rule_instance_id=entry.policy_trace.rule_instance_id,
+                    locked_policy_sha256=entry.policy_trace.locked_policy_sha256,
+                    phase=entry.phase,
+                    order=entry.order,
+                    classification=entry.classification,
+                    severity=entry.severity,
+                    checker_execution_status=entry.status.value,
+                    failure_code=entry.failure_code,
+                    message_code=entry.message_code,
+                    metadata=tuple(
+                        (key, value)
+                        for key, value in entry.metadata
+                        if key in _RESULT_METADATA_KEYS
+                        and type(value) is int
+                        and value >= 0
+                    ),
+                )
+                for entry in self.entries
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,7 +272,8 @@ class EffectivePreSubmissionProcessor:
             if entry.definition_id in statuses:
                 raise PreSubmissionInfrastructureUnavailable("pre_submission_duplicate_result")
             if (
-                entry.state == PreSubmissionCheckerState.DISABLED.value
+                entry.checker_definition_state
+                == PreSubmissionCheckerState.DISABLED.value
                 and definition.classification.mandatory
             ):
                 raise PreSubmissionInfrastructureUnavailable(
@@ -259,7 +283,7 @@ class EffectivePreSubmissionProcessor:
                 entry.definition_version != definition.version
                 or entry.dispatch_capability != definition.dispatch_capability
                 or entry.classification != definition.classification.value
-                or entry.state != definition.state.value
+                or entry.checker_definition_state != definition.state.value
             ):
                 raise PreSubmissionInfrastructureUnavailable("pre_submission_plan_entry_stale")
             if any(dependency not in executed_ids for dependency in entry.dependencies):
@@ -279,7 +303,10 @@ class EffectivePreSubmissionProcessor:
                     PreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
                     message_code="dependency_not_run",
                 )
-            elif entry.state == PreSubmissionCheckerState.DISABLED.value:
+            elif (
+                entry.checker_definition_state
+                == PreSubmissionCheckerState.DISABLED.value
+            ):
                 result = self._result(
                     entry,
                     PreSubmissionResultStatus.ADVISORY_DISABLED,
