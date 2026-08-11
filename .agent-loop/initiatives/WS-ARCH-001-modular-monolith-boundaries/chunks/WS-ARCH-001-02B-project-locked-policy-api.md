@@ -50,6 +50,7 @@ backend/app/modules/projects/api/**
 backend/app/modules/projects/repository.py
 backend/app/modules/projects/service.py
 backend/tests/architecture/test_module_boundaries.py
+backend/tests/test_ci_test_lanes.py
 backend/tests/test_projects.py
 backend/tests/projects/test_locked_policy_context.py
 backend/scripts/behavior_ownership.py
