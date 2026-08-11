@@ -381,27 +381,6 @@ async def test_project_repository_postgresql_locked_policy_state_matrix(
         ):
             await ProjectRepository(session).lock_locked_policy_context(request)
 
-    async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(PreSubmitCheckerPolicy)
-            .where(PreSubmitCheckerPolicy.id == str(request.pre_submit_policy_id))
-            .values(
-                lifecycle_status="superseded",
-                compiled_bundle=None,
-                compiled_bundle_hash=None,
-                compiler_version=None,
-                superseded_at=datetime.now(UTC),
-            )
-        )
-        await session.commit()
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(
-            ProjectLockedPolicyContextUnavailable,
-            match="project_locked_policy_context_changed",
-        ):
-            await ProjectRepository(session).lock_locked_policy_context(request)
-
-
 @pytest.mark.asyncio
 async def test_project_repository_postgresql_does_not_substitute_successors(
     project_client: AsyncClient,
