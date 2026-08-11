@@ -135,3 +135,25 @@ edges are removed.
 - Which legacy edges can be removed in the same feature chunk without changing
   behavior?
 - Which next migration identifier is free on then-current `main`?
+
+## Post-02B repository housekeeping
+
+PRs #314 and #315 merged the TASKS and PROJECTS public capability foundations.
+The PROJECTS change also extracted locked-policy persistence from the legacy
+repository into `projects/locked_policy_repository.py`; this is the intended
+capability-sized recovery pattern rather than a repository-wide rewrite.
+
+The post-merge inventory confirms that large legacy production and test
+containers remain, including `projects/service.py`, `artifacts/service.py`,
+`tests/test_projects.py`, and `tests/test_authorization.py`. Their size is
+evidence of frozen structural debt, not permission for a bulk split. Each
+executable capability chunk must extract the behavior and tests it touches,
+preserve old-to-new assertion coverage where required, and leave unrelated
+containers unchanged.
+
+Local worktree state is operational rather than repository authority. At the
+post-02B audit, dirty worktrees existed for CON lifecycle evidence,
+pre-start-assurance planning, and QUAL test-structure planning. They must not
+be removed or overwritten. Dead temporary registrations and clean merged
+worktrees may be pruned only after confirming no process owns them, their HEAD
+is contained in `origin/main`, and they contain no uncommitted or unique work.

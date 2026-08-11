@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ARCH-001-02A — TASK Submission Context Public API
 
-Implementation state: in review; on merge, this chunk is complete and
-WS-ARCH-001-02B becomes the next eligible implementation boundary.
+Implementation state: merged through PR #314. This contract is historical
+scope evidence; current sequencing lives in `STATUS.md` and `CHUNK_MAP.md`.
 
 ## Parent initiative
 

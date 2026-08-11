@@ -3,10 +3,11 @@
 | Chunk | Goal | Risk | State |
 |---|---|---:|---|
 | `WS-ARCH-001-01` | Canonical module map, exact general edge ledger, public-API validator, and CI foundation | L1 | Complete |
+| `WS-ARCH-001-HK1` | Post-02B durable-state and local-worktree housekeeping | L2 | In review; documentation and local operations only |
 | `WS-ARCH-001-02` | Coordination record for the split submission preparation/consumption capability sequence | L1 | Split; non-executable parent |
-| `WS-ARCH-001-02A` | TASKS task/assignment/predecessor and Submission public facts/ports | L1 | Proposed first implementation chunk after plan approval |
-| `WS-ARCH-001-02B` | PROJECTS locked guide and submission-policy public facts/ports | L1 | Proposed after 02A |
-| `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Proposed after 02B |
+| `WS-ARCH-001-02A` | TASKS task/assignment/predecessor and Submission public facts/ports | L1 | Merged PR #314 |
+| `WS-ARCH-001-02B` | PROJECTS locked guide and submission-policy public facts/ports | L1 | Merged PR #315 |
+| `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Next executable chunk; entry gate satisfied |
 | `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Proposed after 02A-02C |
 | `WS-ARCH-001-02E` | ART ready-admission consumption and binding public capability | L1 | Proposed after 02D |
 | `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Proposed after 02E |
