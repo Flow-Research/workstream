@@ -9,16 +9,20 @@
     "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationAuthorizationPort.prepare_request",
     "app.modules.authorization.api.project_guide_compilation.ProjectGuideCompilationRequestFacts.__post_init__",
     "app.modules.authorization.api.project_guide_compilation._validate_common",
-    "app.modules.authorization.api.project_guide_compilation.project_guide_compilation_execute_resource_digest"
+    "app.modules.authorization.api.project_guide_compilation.project_guide_compilation_execute_resource_digest",
+    "app.modules.authorization.api.project_guide_compilation.project_guide_compilation_facts_digest",
+    "app.modules.authorization.api.project_guide_compilation.project_guide_compilation_request_authority_digest",
+    "app.modules.authorization.api.project_guide_compilation.project_guide_compilation_request_resource_digest"
   ],
   "group": "auth",
   "outcomes": ["return", "mapped_error"],
-  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "reviewed_by": ["WS-POL-003-03A and WS-AUTH-001-12I required reviewers"],
   "schema": "workstream.behavior-ownership.v1",
   "status": "reviewed",
   "target": "backend/app/modules/authorization/api/project_guide_compilation.py",
   "tests": [
     "backend/tests/projects/guide_compilation/test_public_authorization.py::test_public_facts_reject_wrong_uuid_and_unbounded_token",
-    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_wrong_resource_authority_leaves_accepted_attempt_unpersisted"
+    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_wrong_resource_authority_leaves_accepted_attempt_unpersisted",
+    "backend/tests/authorization/guide_compilation/test_domain_contract.py::test_request_digest_requires_a_grant_and_binds_it"
   ]
 }

@@ -10,12 +10,17 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.modules.authorization.domain.guide_compilation import (
+    ProjectGuideCompilationExecuteResourceContext,
+    ProjectGuideCompilationRequestResourceContext,
+    persisted_result_digest,
+)
+from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
-
 PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SETUP_RUN_READ: "setup_run",
     ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST: "sufficiency_report_collection",
@@ -453,24 +458,6 @@ class ProjectActiveGuideReadResourceContext(BaseModel):
             )
         ):
             raise ValueError("missing active-guide target cannot carry policy facts")
-        return self
-
-
-class ProjectCreateResourceContext(BaseModel):
-    """Server-owned facts for one system-scoped project creation."""
-
-    model_config = _STRICT_FROZEN
-
-    resource_type: Literal["project_create"]
-    resource_id: UUID
-    requested_project_id: UUID
-    operation_generation: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def require_operation_identity(self):
-        """Keep the idempotent operation distinct from the future project."""
-        if self.resource_id == self.requested_project_id:
-            raise ValueError("project creation operation must not impersonate project identity")
         return self
 
 
@@ -1504,6 +1491,8 @@ AuthorizationResourceContext = (
     | ProjectPostSubmitCheckerPolicyMutationResourceContext
     | ProjectSetupRunMutationResourceContext
     | ProjectGuideActivationResourceContext
+    | ProjectGuideCompilationRequestResourceContext
+    | ProjectGuideCompilationExecuteResourceContext
     | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
@@ -1533,14 +1522,14 @@ AuthorizationResourceContext = (
 
 
 def authorization_resource_digest(resource: AuthorizationResourceContext) -> str:
-    """Bind a decision to every scalar fact in its typed resource context."""
+    if exact_digest := persisted_result_digest(resource):
+        return exact_digest
     return canonical_json_hash(
         {"resource_context": resource.model_dump(mode="json", exclude_none=True)}
     )
 
 
 def authorization_resource_selector_id(resource_type: str, raw_id: str) -> UUID:
-    """Return a bounded UUID selector for missing-resource decision evidence."""
     try:
         return UUID(raw_id)
     except (TypeError, ValueError, AttributeError):
@@ -1600,6 +1589,8 @@ class AuthorizationDecision(BaseModel):
         "project_policy_mutation_request",
         "project_guide_sufficiency_mutation",
         "project_submission_artifact_policy_mutation",
+        "project_guide_compilation_request",
+        "project_guide_compilation_attempt",
         "actor_identity_link",
         "system",
         "permission_catalogue",

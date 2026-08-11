@@ -1,0 +1,22 @@
+{
+  "behavior_id": "auth.project_guide_compilation.domain",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.domain.guide_compilation.ProjectGuideCompilationExecuteResourceContext.require_attempt_selector_and_phase",
+    "app.modules.authorization.domain.guide_compilation.ProjectGuideCompilationRequestResourceContext.require_operation_selector",
+    "app.modules.authorization.domain.guide_compilation.persisted_result_digest",
+    "app.modules.authorization.domain.guide_compilation.request_authority_digest"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/domain/guide_compilation.py",
+  "tests": [
+    "backend/tests/authorization/guide_compilation/test_domain_contract.py::test_request_context_rejects_an_operation_selector_mismatch",
+    "backend/tests/authorization/guide_compilation/test_domain_contract.py::test_execute_context_requires_phase_appropriate_result_digest",
+    "backend/tests/authorization/guide_compilation/test_domain_contract.py::test_compilation_resource_contexts_reject_scalar_coercion",
+    "backend/tests/authorization/guide_compilation/test_domain_contract.py::test_request_digest_requires_a_grant_and_binds_it"
+  ]
+}

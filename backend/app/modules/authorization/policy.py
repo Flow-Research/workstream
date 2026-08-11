@@ -63,6 +63,7 @@ ADMIN_ROLE_PERMISSIONS = MappingProxyType(
             PermissionId.PROJECT_UPDATE,
             PermissionId.PROJECT_ARCHIVE,
             PermissionId.PROJECT_GUIDE_MANAGE,
+            PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
             PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
             PermissionId.PROJECT_TASK_MANAGE,
             PermissionId.PROJECT_REVIEW_POLICY_MANAGE,

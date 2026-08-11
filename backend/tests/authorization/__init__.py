@@ -1,0 +1,1 @@
+"""Focused authorization capability tests."""

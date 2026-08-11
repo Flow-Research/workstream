@@ -1,0 +1,34 @@
+{
+  "behavior_id": "auth.project_guide_compilation.adapter",
+  "boundaries": ["postgresql"],
+  "callables": [
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.__init__",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter._assert_actor",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter._assert_result_digest",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter._invoke",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.authorize_execute_preflight",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.consume_execute_persist",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.consume_request",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.prepare_execute_persist",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.prepare_request",
+    "app.modules.authorization.guide_compilation._execute_context",
+    "app.modules.authorization.guide_compilation._input",
+    "app.modules.authorization.guide_compilation._request_context"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/guide_compilation.py",
+  "tests": [
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_request_prepare_and_consume_bind_the_exact_project_context",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_preflight_is_non_durable_and_final_digest_is_exact",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_actor_mismatch_denies_before_prepared_service_access",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_system_project_manager_grant_cannot_request_compilation",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_exact_project_manager_request_succeeds_and_replay_denies",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_actor_matrix_denies_without_evidence",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_preflight_is_non_evidencing_and_final_is_single_use",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_revoked_service_preflight_denies_without_evidence"
+  ]
+}

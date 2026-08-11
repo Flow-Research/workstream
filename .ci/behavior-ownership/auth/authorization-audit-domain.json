@@ -1,0 +1,9 @@
+{
+  "behavior_id": "auth.audit.domain",
+  "group": "auth",
+  "reason": "Closed immutable audit resource registry contains no executable callables.",
+  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "structural_only",
+  "target": "backend/app/modules/authorization/domain/audit.py"
+}

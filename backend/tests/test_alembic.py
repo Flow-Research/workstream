@@ -73,7 +73,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0062_guide_compilation"
+HEAD_REVISION = "0063_compilation_authority"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -5605,11 +5605,11 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.XINT_002_07,
                             ActionOwner.XINT_003_08A,
                             ActionOwner.XINT_003_08B,
+                            ActionOwner.AUTH_12I,
                         }
                     ),
                 )
             )
-
             action_event = asyncio.run(_insert_authorization_action_event(isolated_database_env))
             with pytest.raises(
                 RuntimeError,
@@ -5617,7 +5617,6 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
             ):
                 command.downgrade(config, "0020_canonical_actor_profile")
             asyncio.run(_remove_authorization_action_events(isolated_database_env, [action_event]))
-
             permission_event = asyncio.run(
                 _insert_authorization_action_event(isolated_database_env)
             )
@@ -5767,13 +5766,13 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.XINT_002_07,
                             ActionOwner.XINT_003_08A,
                             ActionOwner.XINT_003_08B,
+                            ActionOwner.AUTH_12I,
                         }
                     ),
                 )
             )
             command.downgrade(config, "0021_auth_action_evidence")
             command.upgrade(config, "0022_bootstrap_admin_grants")
-
             proof = asyncio.run(_exercise_admin_authority_guards(isolated_database_env))
             assert proof == {
                 "service_target_rejected": True,
@@ -13571,15 +13570,14 @@ def test_xint003_02c_rev_auth_readiness_schema_and_roundtrip(
             repeated = asyncio.run(_xint003_02c_readiness_state(isolated_database_env))
         finally:
             command.upgrade(config, "head")
-
     additions = " OR " + " OR ".join(_xint003_02c_pair_token(*pair) for pair in _XINT003_02C_ACTIONS)
-    compilation_addition = " OR " + _xint003_02c_pair_token(
-        "project.guide_compilation.execute", "project.guide_compilation.execute")
     assert prior["profiles"] == upgraded["profiles"] == 0
     assert upgraded["action_definition"].count(additions) == 2
-    assert upgraded["action_definition"].count(compilation_addition) == 2
-    assert upgraded["action_definition"].replace(additions, "").replace(
-        compilation_addition, "") == prior["action_definition"]
+    without_later_actions = upgraded["action_definition"].replace(additions, "")
+    for action in ("project.guide_compilation.execute", "project.guide_compilation.request"):
+        assert upgraded["action_definition"].count(" OR " + _xint003_02c_pair_token(action, action)) == 2
+        without_later_actions = without_later_actions.replace(" OR " + _xint003_02c_pair_token(action, action), "").replace(f", ('{action}'::character varying)::text", "")
+    assert without_later_actions == prior["action_definition"]
     historical_identities = (*FROZEN_SERVICE_IDENTITY_VALUES, ServiceIdentity.PROJECT_SETUP.value)
     assert prior["identity_values"] == historical_identities
     assert upgraded["identity_values"] == (*historical_identities, *_XINT003_02C_IDENTITIES)
@@ -14050,15 +14048,12 @@ async def _remove_xint003_02a_immutable_policies(database_url: str, ids: dict[st
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
-            has_lineage = bool(
-                await connection.scalar(
-                    text(
-                        "select exists(select 1 from information_schema.columns "
-                        "where table_schema='public' and table_name='project_guides' "
-                        "and column_name='selected_review_policy_id')"
-                    )
-                )
+            lineage_query = text(
+                "select exists(select 1 from information_schema.columns "
+                "where table_schema='public' and table_name='project_guides' "
+                "and column_name='selected_review_policy_id')"
             )
+            has_lineage = bool(await connection.scalar(lineage_query))
             for table in (
                 "projects",
                 "project_guides",

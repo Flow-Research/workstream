@@ -1,4 +1,4 @@
-"""Alembic topology and downgrade custody for migration 0062."""
+"""Alembic topology and downgrade custody for compilation persistence."""
 
 from __future__ import annotations
 
@@ -57,10 +57,10 @@ async def _schema_state(database_url: str) -> tuple[str, bool, int, int, int, in
         await connection.close()
 
 
-def test_0062_empty_round_trip_restores_exact_hidden_schema(
+def test_0062_empty_round_trip_restores_exact_current_schema(
     isolated_database_env: str, migration_lock
 ) -> None:
-    """An empty 0062 downgrade/re-upgrade restores its tables and four guards."""
+    """An empty 0062 downgrade/re-upgrade restores the current schema head."""
     config = _config()
     with migration_lock():
         try:
@@ -73,16 +73,17 @@ def test_0062_empty_round_trip_restores_exact_hidden_schema(
                 0,
                 0,
             )
-        finally:
             command.upgrade(config, "0062_guide_compilation")
-    assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0062_guide_compilation",
-        True,
-        4,
-        1,
-        1,
-        1,
-    )
+            assert asyncio.run(_schema_state(isolated_database_env)) == (
+                "0062_guide_compilation",
+                True,
+                4,
+                1,
+                1,
+                1,
+            )
+        finally:
+            command.upgrade(config, "head")
 
 
 def test_0062_nonempty_attempt_blocks_downgrade(
@@ -107,5 +108,5 @@ def test_0062_nonempty_attempt_blocks_downgrade(
     ):
         command.downgrade(_config(), "0061_submission_admission")
     assert asyncio.run(_schema_state(isolated_database_env))[0] == (
-        "0062_guide_compilation"
+        "0063_compilation_authority"
     )

@@ -1951,7 +1951,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         artifact.verification.execute artifact.pending_work.scan artifact.put_attempt.resolve
         artifact.guide_source.read artifact.checker_input.materialize
         artifact.checker_output.write artifact.review_packet.materialize
-        review.queue.override""".split()
+        review.queue.override project.guide_compilation.request project.guide_compilation.execute""".split()
     )
     expected = {
         "actor.profile.read_self": ("actor.profile.read_self", "WS-AUTH-001-07B"),
@@ -2038,10 +2038,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         "project.create": ("project.create", "WS-AUTH-001-12C"),
         "project.guide.create": ("project.guide.manage", "WS-AUTH-001-12D"),
         "project.guide.update": ("project.guide.manage", "WS-AUTH-001-12D"),
-        "project.guide_source_snapshot.create": (
-            "project.guide.manage",
-            "WS-AUTH-001-12D",
-        ),
+        "project.guide_source_snapshot.create": ("project.guide.manage", "WS-AUTH-001-12D"),
+        "project.guide_compilation.request": ("project.guide_compilation.request", "WS-AUTH-001-12I"),
+        "project.guide_compilation.execute": ("project.guide_compilation.execute", "WS-AUTH-001-12I"),
         "project.review_policy.update": (
             "project.review_policy.manage",
             "WS-XINT-003-02B",
@@ -2096,7 +2095,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 100
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 102
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -2130,6 +2129,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_GUIDE_CREATE,
         ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST, ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
         ActionId.PROJECT_REVISION_POLICY_UPDATE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
@@ -2150,8 +2150,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE, ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -2237,7 +2236,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 52
+        == 54
     )
     assert (
         sum(
@@ -2246,13 +2245,13 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         )
         == 48
     )
-    assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
-        PermissionId.ACTOR_PROFILE_READ_SELF
-    )
+    assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
         resolve_executable_action(ActionId.REVIEW_QUEUE_READ)
     with pytest.raises(TypeError):
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
+
+
 
 
 def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
@@ -2705,9 +2704,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
     expected = {
         ServiceIdentity.ARTIFACT_VERIFIER: {"artifact.verification.execute"},
         ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
-        ServiceIdentity.ARTIFACT_SCHEDULER: {
-            "artifact.pending_work.scan",
-        },
+        ServiceIdentity.ARTIFACT_SCHEDULER: {"artifact.pending_work.scan"},
         ServiceIdentity.ARTIFACT_BINDING: {
             "artifact.guide_source.binding.create",
             "artifact.submission.binding.create",
@@ -2722,6 +2719,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         },
         ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: {"artifact.checker_output.write"},
         ServiceIdentity.PROJECT_SETUP: {
+            "project.guide_compilation.execute",
             "project.guide_sufficiency.run",
             "project.submission_artifact_policy.derive",
             "project.post_submit_checker_policy.derive",
@@ -2741,7 +2739,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 22
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 23
     assert FUTURE_INTENT_REQUIRED_ACTIONS == {
         ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
         ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
@@ -2762,6 +2760,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         )
         for action in project_setup_actions
     } == {
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE: (PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE, ActionOwner.AUTH_12I, ActionAvailability.ACTIVE),
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: (
             PermissionId.PROJECT_GUIDE_MANAGE,
             ActionOwner.AUTH_12E,
@@ -2802,12 +2801,12 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
     assert approval.owner is ActionOwner.AUTH_12F
     assert approval.availability is ActionAvailability.PLANNED
     active_internal = {
-        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
     }
@@ -2913,7 +2912,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 100 ActionIds, 48 active actions, and\n52 planned actions" in operations
+        "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
     )
 
 
@@ -3036,8 +3035,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
             audit.read""".split(),
         AdminRole.PROJECT_MANAGER: """project.create project.read project.setup_diagnostic.read
-            project.effective_policy.read project.update project.archive
-            project.guide.manage project.effective_policy.manage project.task.manage
+            project.effective_policy.read project.update project.archive project.guide.manage
+            project.guide_compilation.request project.effective_policy.manage project.task.manage
             project.review_policy.manage project.role_grant.read project.role_grant.manage
             artifact.guide_source.ingest
             review.queue.inspect contribution.read_project compensation.award.read
@@ -3069,9 +3068,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
         for permission in ADMIN_ROLE_PERMISSIONS[AdminRole.AUDIT_AUTHORITY]
     )
 
-    permission_response = AdminRoleGrantService.permission_definitions()
-    role_response = AdminRoleGrantService.role_definitions()
-    assert permission_response.total == 71
+    permission_response, role_response = AdminRoleGrantService.permission_definitions(), AdminRoleGrantService.role_definitions()
+    assert permission_response.total == 73
     assert [item.permission_id.value for item in permission_response.items] == sorted(
         permission.value for permission in PermissionId
     )
@@ -3945,16 +3943,16 @@ class _GuideMutationAuthorityFacts:
         scope_project_id,
         for_update,
         allowed_roles,
+        exact_project_scope=False,
     ):
         assert actor_profile_id == self.context.actor_profile_id
         assert permission_id is self.permission_id
         assert scope_project_id is not None
         assert for_update is True
         assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
-        if self.grant is None or self.grant.scope_project_id not in {
-            None,
-            scope_project_id,
-        }:
+        if self.grant is None or self.grant.scope_project_id not in {None, scope_project_id}:
+            return None
+        if exact_project_scope and self.grant.scope_project_id != scope_project_id:
             return None
         return self.grant
 
@@ -12763,13 +12761,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
     authorization_factory,
     monkeypatch,
 ) -> None:
-    caller_id, caller_link_id, target_id, target_link_id, project_id = (
-        uuid4(),
-        uuid4(),
-        uuid4(),
-        uuid4(),
-        uuid4(),
-    )
+    caller_id, caller_link_id, target_id, target_link_id, project_id = (uuid4(), uuid4(), uuid4(), uuid4(), uuid4())
     manager_grant_id = uuid4()
     bootstrap_grant_id = uuid4()
     now = datetime.now(UTC)

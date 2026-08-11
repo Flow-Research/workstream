@@ -1,0 +1,12 @@
+{
+  "behavior_id": "auth.project_create.domain",
+  "boundaries": [],
+  "callables": ["app.modules.authorization.domain.project_create.ProjectCreateResourceContext.require_operation_identity"],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-AUTH-003 incremental boundary reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/domain/project_create.py",
+  "tests": ["backend/tests/test_authorization.py::test_project_mutation_resources_and_prepared_scopes_are_closed"]
+}
