@@ -48,6 +48,7 @@ backend/app/modules/checkers/effective_plan.py
 backend/app/modules/checkers/pre_submit_execution.py
 backend/app/modules/tasks/pre_submit_context.py
 backend/app/modules/artifacts/submission_admission.py
+backend/scripts/behavior_ownership.py
 backend/tests/architecture/test_module_boundaries.py
 backend/tests/checkers/test_pre_submit_public_api.py
 backend/tests/test_submission_bundle_admission.py
@@ -58,6 +59,7 @@ backend/tests/test_submission_bundle_admission.py
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02C-checker-pre-submit-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02C-checker-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02C-external-review-response.md
 docs/architecture_lockdown.md
 ```
 

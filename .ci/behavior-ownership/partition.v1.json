@@ -442,6 +442,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/pre_submit.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/catalogue.py"
     },
     {
@@ -797,7 +801,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "6025c45a4c93c4fbe7039f2730f1f97176b985ebf0700d15d15ad82a9f095a78",
+  "authority_digest": "ffaf4c71c39ad59d241f5526862800d870941a300d2f5810bb0ad33e30cb3b66",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
