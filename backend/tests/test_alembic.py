@@ -120,6 +120,16 @@ def test_manifest_covers_every_required_object_class() -> None:
     assert manifest["auxiliary_objects"] == []
 
 
+@pytest.mark.parametrize(
+    "name", ("v01_pre_reset_source_manifest.json", "v01_baseline_manifest.json")
+)
+def test_committed_schema_manifests_are_compact_canonical_json(name: str) -> None:
+    path = _manifest_path().with_name(name)
+    payload = path.read_bytes()
+    assert payload == canonical_bytes(json.loads(payload))
+    assert payload.count(b"\n") == 1
+
+
 def test_source_to_baseline_delta_is_exactly_the_approved_sequence_repair() -> None:
     baseline_dir = _manifest_path().parent
     source = json.loads((baseline_dir / "v01_pre_reset_source_manifest.json").read_text())

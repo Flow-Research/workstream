@@ -12,7 +12,8 @@ the deleted graph.
 
 - One root/head revision installs deterministic schema and reference-data SQL.
 - Canonical manifests prove the baseline against the pre-reset schema, with one
-  explicit sequence-state delta.
+  explicit sequence-state delta. They are compact sorted JSON machine evidence
+  so generated formatting does not obscure the human-reviewable SQL and delta.
 - Fresh empty databases are supported; old stamps and nonempty schemas fail
   closed; downgrade is unsupported.
 - Product behavior, authorization, module-boundary, and coverage tests remain in
@@ -22,7 +23,8 @@ the deleted graph.
 
 - Alembic reports exactly one root/head.
 - Focused baseline, reset, behavior-ownership, authorization documentation, and
-  test-structure tests pass locally.
+  test-structure tests pass locally. Compact-manifest tests also prove exact
+  deterministic serialization and unchanged approved-delta semantics.
 - Ruff, boundary checks, stale-wording scan, markdown-link checks, and diff
   whitespace checks pass locally.
 - Required architecture, security, QA, test-delta, CI-integrity, reuse, senior,

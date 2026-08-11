@@ -2,6 +2,11 @@
 
 ## Comments addressed
 
+- Human review identified that pretty-printing the two generated schema
+  manifests inflated the PR by 53,844 presentation-only lines. The canonical
+  serializer and committed manifests now use compact, sorted JSON, with a
+  regression test requiring exact compact bytes. Manifest content and schema
+  parity proof are unchanged.
 - GitHub Backend `shared_foundations_a` exposed one stale documentation assertion
   that still required the removed revision-specific ART catalogue wording. The
   test now proves that the catalogue reconciliation is part of the v0.1
@@ -24,6 +29,7 @@
 ## Commands rerun
 
 - Focused authorization documentation contract test.
+- Compact-manifest canonicalization and approved-delta tests.
 - Frozen test-structure debt validation.
 - Ruff on the corrected test file.
 - Git diff whitespace validation.

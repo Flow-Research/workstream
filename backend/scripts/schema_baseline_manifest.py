@@ -234,8 +234,8 @@ async def build_manifest(database_url: str) -> dict[str, Any]:
 
 
 def canonical_bytes(manifest: dict[str, Any]) -> bytes:
-    """Serialize a manifest deterministically."""
-    return (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    """Serialize a manifest as compact deterministic machine evidence."""
+    return (json.dumps(manifest, separators=(",", ":"), sort_keys=True) + "\n").encode()
 
 
 async def _run(args: argparse.Namespace) -> None:
