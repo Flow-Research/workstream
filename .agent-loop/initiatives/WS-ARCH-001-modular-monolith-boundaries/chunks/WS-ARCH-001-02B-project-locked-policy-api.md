@@ -53,6 +53,7 @@ backend/tests/architecture/test_module_boundaries.py
 backend/tests/test_projects.py
 backend/tests/projects/test_locked_policy_context.py
 backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02B-project-locked-policy-api.md

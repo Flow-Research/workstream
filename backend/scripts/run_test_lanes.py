@@ -165,6 +165,7 @@ LANES = (
             "tests/projects/guide_compilation/test_public_authorization.py",
             "tests/projects/guide_compilation/test_repository_attempts.py",
             "tests/projects/guide_compilation/test_repository_persistence.py",
+            "tests/projects/test_locked_policy_context.py",
             "tests/test_projects.py",
         ),
     ),
