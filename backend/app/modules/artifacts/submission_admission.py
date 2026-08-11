@@ -57,8 +57,10 @@ from app.modules.artifacts.submission_materialization import (
     PreparedBundlePreSubmitEvidenceService,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
-from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
-from app.modules.checkers.pre_submit_execution import SubmissionPacketView
+from app.modules.checkers.api import (
+    EffectivePreSubmissionPlanningPort,
+    SubmissionPacketView,
+)
 from app.modules.tasks.pre_submit_context import (
     compile_locked_pre_submit_plan,
     load_canonical_submission_version,
@@ -417,7 +419,7 @@ class SubmissionBundlePreparationResult:
 class SubmissionBundlePreparationRuntime:
     preparation: ArtifactPreparationService
     inspector: SubmissionArchiveInspector
-    catalogue: PreSubmissionCheckerCatalogue
+    catalogue: EffectivePreSubmissionPlanningPort
     materialization: PreparedBundleMaterializationService
     evidence: PreparedBundlePreSubmitEvidenceService
     durable_put: SubmissionBundleDurablePutService

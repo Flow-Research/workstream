@@ -290,7 +290,7 @@ def test_mandatory_disabled_fails_closed_and_advisory_disabled_stays_visible() -
     entry = next(
         item for item in plan.entries if item.definition_id == "artifact.quality.placeholder_signal"
     )
-    assert entry.state == PreSubmissionCheckerState.DISABLED.value
+    assert entry.checker_definition_state == PreSubmissionCheckerState.DISABLED.value
     assert entry.disabled_behavior == "record_disabled_and_continue"
 
 

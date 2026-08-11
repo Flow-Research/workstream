@@ -12,6 +12,10 @@ from app.interfaces.project_agents import (
     PreSubmissionCapabilityDefinition,
     PreSubmissionCapabilityProjection,
 )
+from app.modules.checkers.api import (
+    EffectivePreSubmissionExecutionPlan,
+    EffectivePreSubmissionPlanLineage,
+)
 
 
 PRE_SUBMISSION_CATALOGUE_ID = "workstream.pre_submission_checkers"
@@ -292,6 +296,25 @@ class PreSubmissionCheckerCatalogue:
             if entry.primitive == primitive:
                 return entry
         raise PreSubmissionCatalogueError("catalogue primitive is unknown")
+
+    def compile_effective_plan(
+        self,
+        *,
+        lineage: EffectivePreSubmissionPlanLineage,
+        effective_policy: Mapping[str, object],
+        compiled_bundle: Mapping[str, object],
+    ) -> EffectivePreSubmissionExecutionPlan:
+        """Implement the public deterministic CHECKER planning capability."""
+        from app.modules.checkers.effective_plan import (
+            compile_effective_pre_submission_execution_plan,
+        )
+
+        return compile_effective_pre_submission_execution_plan(
+            lineage=lineage,
+            effective_policy=dict(effective_policy),
+            compiled_bundle=dict(compiled_bundle),
+            catalogue=self,
+        )
 
 
 def build_pre_submission_checker_catalogue(

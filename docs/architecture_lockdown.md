@@ -263,6 +263,22 @@ An active ReviewLease authorizes artifact bytes only for its immutable
 ReviewPacketManifest and exact Submission. Authorized chain history is bounded
 metadata only. Decision and contribution creation perform no ART call.
 
+### Pre-Submission Checker Boundary
+
+CHECKERS owns the single deterministic effective pre-submission plan. The 02C
+boundary exposes its public planning port and bounded result facts and migrates
+the touched TASK and ART admission call path away from the catalogue, compiler,
+and executor internals. ART retains exclusive ownership of byte custody,
+storage scheme, evidence persistence, pass capability, and admission attachment.
+
+Public CHECKER results contain the plan identity, eligibility outcome, and
+bounded per-definition facts only. They never expose prepared-artifact custody,
+scratch state, provider details, or durable evidence identity. Concrete
+catalogue and executor implementations remain CHECKER-private and meet callers
+only through application composition. Existing ART materialization and evidence
+imports that have not yet migrated remain frozen private-edge debt; the next
+ART boundary chunk must move those exact consumers to this public surface.
+
 ### Contribution Records
 
 Every valid recorded human Review creates an immutable reviewer

@@ -76,6 +76,7 @@ MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
 )
 MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
     {
+        "backend/app/modules/checkers/api/pre_submit.py",
         "backend/app/modules/projects/api/locked_policy.py",
         "backend/app/modules/projects/locked_policy_repository.py",
         "backend/app/modules/tasks/api/submission_context.py",
