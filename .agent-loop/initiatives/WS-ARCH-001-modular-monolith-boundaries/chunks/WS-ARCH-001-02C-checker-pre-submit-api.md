@@ -1,5 +1,9 @@
 # Chunk Contract: WS-ARCH-001-02C — CHECKER Pre-Submit Public API
 
+Implementation state: implemented locally; deterministic non-database evidence
+passes, while hosted database-backed proof and remaining review are pending. No
+contributor preparation action or public route is active.
+
 ## Parent initiative
 
 WS-ARCH-001 — Modular Monolith Boundaries
@@ -45,7 +49,7 @@ backend/app/modules/checkers/pre_submit_execution.py
 backend/app/modules/tasks/pre_submit_context.py
 backend/app/modules/artifacts/submission_admission.py
 backend/tests/architecture/test_module_boundaries.py
-backend/tests/test_default_pre_submit_execution.py
+backend/tests/checkers/test_pre_submit_public_api.py
 backend/tests/test_submission_bundle_admission.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
@@ -62,26 +66,26 @@ session, concrete executor, or mutable internal result leakage.
 
 ## Acceptance criteria
 
-- [ ] One typed CHECKER API accepts immutable PROJECT/TASK lineage and returns
+- [x] One typed CHECKER API accepts immutable PROJECT/TASK lineage and returns
       a deterministic immutable effective-plan contract.
-- [ ] Execution results expose bounded checker facts without
+- [x] Execution results expose bounded checker facts without
       `PreSubmissionExecutionCustody`, `custody`, `storage_scheme`, ART scratch,
       provider, or evidence-persistence details. An ART-owned adapter retains
       custody facts, and a contract test rejects them from the public result.
-- [ ] ART remains the sole owner of durable evidence identity/persistence, pass
+- [x] ART remains the sole owner of durable evidence identity/persistence, pass
       capability, and admission attachment; CHECKERS creates no parallel
       evidence aggregate.
-- [ ] Existing platform-default plus project-specific effective policy remains
+- [x] Existing platform-default plus project-specific effective policy remains
       one checker plan and one execution path.
-- [ ] Touched ART/TASK private CHECKER edges are removed with no new edge.
-- [ ] Record the exact CHECKER fact/port manifest in
+- [x] Touched ART/TASK private CHECKER edges are removed with no new edge.
+- [x] Record the exact CHECKER fact/port manifest in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02C-checker-manifest.md`.
 
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/checkers app/modules/artifacts/submission_admission.py app/modules/tasks/pre_submit_context.py)
-(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/test_default_pre_submit_execution.py tests/test_submission_bundle_admission.py --cov=app.modules.checkers.api --cov-report=term-missing --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/checkers app/modules/artifacts/submission_admission.py app/modules/tasks/pre_submit_context.py tests/architecture/test_module_boundaries.py tests/checkers/test_pre_submit_public_api.py)
+(cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/checkers/test_pre_submit_public_api.py tests/test_submission_bundle_admission.py --cov=app.modules.checkers.api --cov-report=term-missing --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py
 git diff --check

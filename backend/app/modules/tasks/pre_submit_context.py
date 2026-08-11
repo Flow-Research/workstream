@@ -9,11 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
-from app.modules.checkers.effective_plan import (
+from app.modules.checkers.api import (
     EffectivePreSubmissionExecutionPlan,
     EffectivePreSubmissionPlanLineage,
-    compile_effective_pre_submission_execution_plan,
+    EffectivePreSubmissionPlanningPort,
 )
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.projects.models import (
@@ -190,7 +189,7 @@ async def load_locked_pre_submit_context(
 
 def compile_locked_pre_submit_plan(
     context: LockedPreSubmitContext,
-    catalogue: PreSubmissionCheckerCatalogue,
+    planner: EffectivePreSubmissionPlanningPort,
 ) -> EffectivePreSubmissionExecutionPlan:
     """Compile one exact plan from TASK-locked policy rows and the fixed catalogue."""
     guide_version_text = context.guide_version
@@ -200,7 +199,7 @@ def compile_locked_pre_submit_plan(
         guide_version = int(guide_version_text)
     except ValueError as exc:
         raise PreSubmitLockedContextInvalid("pre_submit_guide_version_invalid") from exc
-    return compile_effective_pre_submission_execution_plan(
+    return planner.compile_effective_plan(
         lineage=EffectivePreSubmissionPlanLineage(
             project_id=context.project_id,
             guide_id=context.guide_id,
@@ -214,7 +213,6 @@ def compile_locked_pre_submit_plan(
         ),
         effective_policy=context.effective_policy,
         compiled_bundle=context.compiled_pre_submit_bundle,
-        catalogue=catalogue,
     )
 
 

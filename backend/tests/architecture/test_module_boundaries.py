@@ -229,6 +229,24 @@ def test_projects_public_api_has_no_private_or_mutable_dependency() -> None:
     )
 
 
+def test_checkers_public_api_has_no_private_or_mutable_dependency() -> None:
+    """CHECKER plans and result facts remain dependency-safe contracts."""
+    boundary._validate_public_apis(  # noqa: SLF001 - architecture proof
+        ROOT, boundary.load_registry(REGISTRY)
+    )
+    api_files = list((ROOT / "backend/app/modules/checkers/api").rglob("*.py"))
+    assert api_files
+    imports: set[str] = set()
+    for path in api_files:
+        imports.update(boundary.exact_source_imports(path, ROOT))
+    assert imports
+    assert all(
+        not target.startswith("app.modules.")
+        or target.startswith("app.modules.checkers.api")
+        for target in imports
+    )
+
+
 def test_cyclic_public_dependencies_fail_closed() -> None:
     """Typed public facades cannot form an architectural dependency cycle."""
     graph = {name: set() for name in boundary.load_registry(REGISTRY).names}

@@ -12,6 +12,13 @@ from fnmatch import fnmatchcase
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.api import (
+    EffectivePreSubmissionExecutionPlan,
+    EffectivePreSubmissionPlanEntry,
+    PreSubmissionExecutionEntryFacts,
+    PreSubmissionExecutionFacts,
+    SubmissionPacketView,
+)
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.artifacts.submission_archive import (
     SealedSubmissionTree,
@@ -29,10 +36,6 @@ from app.modules.checkers.catalogue import (
     PreSubmissionCheckerState,
     PreSubmissionPlatformCapability,
     PreSubmissionPolicyPrimitive,
-)
-from app.modules.checkers.effective_plan import (
-    EffectivePreSubmissionExecutionPlan,
-    EffectivePreSubmissionPlanEntry,
 )
 from app.modules.checkers.pre_submit_defaults import (
     attestation_validation_facts,
@@ -94,20 +97,6 @@ class PreSubmissionResultStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionPacketView:
-    """Bounded contributor-authored text accompanying server-owned ZIP facts."""
-
-    summary: str
-    contributor_attestation: str
-
-    def __post_init__(self) -> None:
-        """Reject unbounded or malformed contributor packet text."""
-        for value in (self.summary, self.contributor_attestation):
-            if type(value) is not str or len(value.encode("utf-8")) > 64 * 1024:
-                raise ValueError("submission packet text is invalid")
-
-
-@dataclass(frozen=True, slots=True)
 class PreSubmissionResultDefinition:
     """Authority-neutral identity for one catalogue-owned definition."""
 
@@ -163,6 +152,34 @@ class PreSubmissionExecutionResult:
     custody: PreSubmissionExecutionCustody
     eligible: bool
     entries: tuple[PreSubmissionEntryResult, ...]
+
+    def bounded_facts(self) -> PreSubmissionExecutionFacts:
+        """Project CHECKER outcomes without leaking ART-owned custody."""
+        return PreSubmissionExecutionFacts(
+            plan_sha256=self.plan_sha256,
+            eligible=self.eligible,
+            entries=tuple(
+                PreSubmissionExecutionEntryFacts(
+                    dispatch_authority=entry.definition.dispatch_authority,
+                    definition_id=entry.definition.definition_id,
+                    definition_version=entry.definition.definition_version,
+                    public_name=entry.definition.public_name,
+                    policy_source=entry.definition.source,
+                    effective_plan_sha256=entry.policy_trace.effective_plan_sha256,
+                    rule_instance_id=entry.policy_trace.rule_instance_id,
+                    locked_policy_sha256=entry.policy_trace.locked_policy_sha256,
+                    phase=entry.phase,
+                    order=entry.order,
+                    classification=entry.classification,
+                    severity=entry.severity,
+                    status=entry.status.value,
+                    failure_code=entry.failure_code,
+                    message_code=entry.message_code,
+                    metadata=entry.metadata,
+                )
+                for entry in self.entries
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
