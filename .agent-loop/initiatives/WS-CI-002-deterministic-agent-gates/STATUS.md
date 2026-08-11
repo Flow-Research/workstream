@@ -1,7 +1,7 @@
 # STATUS: WS-CI-002 — Deterministic Agent Gates
 
-- Phase: ready for human review
-- Completed chunk: `WS-CI-002-01`
+- Phase: complete; merged through PR #311
+- Completed chunk: `WS-CI-002-01` merged through PR #311
 - Goal: make the required `agent-gates` result deterministic for each PR head
   while leaving independent human approval to protected-branch review rules.
 - Trigger: PR #309 remained blocked by several pre-approval failures after its

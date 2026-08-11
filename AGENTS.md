@@ -78,6 +78,11 @@ definition or ownership boundary of Workstream.
   paths.
 - Every non-trivial task starts with the smallest applicable loop artifact: an initiative plan for large work, or a chunk contract for bounded work.
 - Do not implement a chunk until its allowed files, not-allowed changes, acceptance criteria, risk class, verification commands, and required reviewers are explicit.
+- One implementation chunk equals one pull request. The chunk contract must
+  declare its outcome on merge, and the same pull request must update the
+  initiative chunk map, initiative status, and `.agent-loop/CURRENT_STATE.md`
+  to that final state. Do not use `in review`, `pending review`, or `ready for
+  review` as the state that will land on `main`.
 - Do not begin the next chunk automatically after finishing the current chunk.
 - Use internal sub-agent review proportionate to risk. Security, authorization,
   payment, architecture, workflow, and broad product changes require focused

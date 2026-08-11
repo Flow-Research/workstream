@@ -41,5 +41,15 @@ jobs:
       - name: Guide extractor dependency validation
         run: python3 backend/scripts/check_guide_extractor_dependencies.py
 
+      - name: Atomic chunk state validation
+        env:
+          WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          python3 scripts/check_chunk_state_sync.py
+          --base-ref "${WORKSTREAM_BASE_SHA}"
+
       - name: Lightweight gate regression tests
-        run: python3 -m unittest -v scripts.test_lightweight_agent_gates
+        run: >-
+          python3 -m unittest -v
+          scripts.test_chunk_state_sync
+          scripts.test_lightweight_agent_gates

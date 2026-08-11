@@ -7,6 +7,10 @@ in sync with this template.
 
 `<CHUNK_ID or small-change>` — `<TITLE>`
 
+For a chunk PR, confirm its contract contains `## Merge state` with one
+`Outcome on merge`, and that the chunk map, initiative status, and current
+engineering state already describe the result that will land on `main`.
+
 ## Goal
 
 What this PR is meant to accomplish.
