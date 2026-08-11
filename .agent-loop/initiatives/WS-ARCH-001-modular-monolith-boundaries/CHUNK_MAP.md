@@ -3,12 +3,12 @@
 | Chunk | Goal | Risk | State |
 |---|---|---:|---|
 | `WS-ARCH-001-01` | Canonical module map, exact general edge ledger, public-API validator, and CI foundation | L1 | Complete |
-| `WS-ARCH-001-HK1` | Post-02B durable-state and local-worktree housekeeping | L2 | In review; documentation and local operations only |
+| `WS-ARCH-001-HK1` | Post-02B durable-state and local-worktree housekeeping | L2 | Merged PR #318; documentation and local operations only |
 | `WS-ARCH-001-02` | Coordination record for the split submission preparation/consumption capability sequence | L1 | Split; non-executable parent |
 | `WS-ARCH-001-02A` | TASKS task/assignment/predecessor and Submission public facts/ports | L1 | Merged PR #314 |
 | `WS-ARCH-001-02B` | PROJECTS locked guide and submission-policy public facts/ports | L1 | Merged PR #315 |
-| `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Complete on merge of this change; no contributor preparation action or public route activated |
-| `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Next executable chunk after 02C merges |
+| `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Merged PR #320; no contributor preparation action or public route activated |
+| `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Next durable boundary |
 | `WS-ARCH-001-02E` | ART ready-admission consumption and binding public capability | L1 | Proposed after 02D |
 | `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Proposed after 02E |
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Proposed after 02F |

@@ -9,12 +9,11 @@ The complete ART-facing catalogue and runtime dependency is now planned in
 entries in this file remain baseline identifiers only until that planning
 amendment is approved and its first reconciliation chunk merges.
 
-## Rule
+## Current use
 
-Only one chunk may be active at a time. Do not start the next chunk until the
-current chunk is implemented, verified, internally reviewed, externally
-reviewed, merged by explicit human approval, followed by a memory update, and
-stopped.
+This map preserves merged outcomes and dependency order. It is not an active
+queue or authorization source. Distinct initiatives and non-overlapping chunks
+may proceed concurrently; open pull requests show transient ownership.
 
 ## Chunks
 
@@ -85,7 +84,7 @@ stopped.
 
 These identifiers are exact future gates, not executable chunk contracts or
 automatic successors. AUTH materializes each contract only after its immutable
-feature manifest exists, then requires a separate explicit start.
+feature manifest exists and then uses the ordinary bounded contribution loop.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
@@ -234,53 +233,12 @@ WS-AUTH-001-PLAN
   merged has its matching AUTH activation and every unimplemented registered
   action still denies as planned. It does not backfill missing audit or
   idempotency evidence.
-- `WS-POL-002-03` merged separately through PR #90 as `a7aa474`. This initiative
-  does not own it; post-merge memory completed through PR #94. `WS-POL-002-04`
-  remains inactive until the relevant project authorization cutover is complete
-  and the user explicitly starts it.
+- `WS-POL-002-03` merged separately through PR #90 as `a7aa474`. Future guide
+  inference belongs to WS-POL-003; any remaining POL-002 executor work requires
+  a fresh bounded contract against current `main`.
 
-## Stop condition
+## Current boundary
 
-AUTH-03 post-merge memory merged through PR #110 as `1864867`. The user
-explicitly started parent AUTH-04. Required plan review split it before runtime
-implementation. AUTH-04A merged through PR #111 as `90c9a28`, and its
-post-merge memory merged through PR #112 as `7749f54`. The user explicitly
-started AUTH-04B. Its repaired contract passed at `b5dceb1`; bounded
-implementation and all required internal review tracks passed, and PR #113
-merged as `05a63c8` after Backend, Agent Gates, CodeRabbit, and explicit human
-approval passed. AUTH-04B post-merge memory then merged through PR #114 as
-`97cd0f5`, and the user explicitly started AUTH-05. Required plan review
-rejected the combined contract before runtime edits and required 05A/05B.
-The first 05A implementation review proved the original numeric ceiling
-incompatible with readable typed/database privacy parity. Repaired 05A contract
-review passed at `7cc6058`; the user subsequently replaced the line cap with
-the semantic AUTH-05A boundary. Required reviews and checks passed, and explicit
-human approval merged PR #115 as `8e1cde6` on 2026-07-14, followed by merged
-post-merge memory. `WS-AUTH-001-CAT` then merged through PR #117 as `4c5d4fc`
-after Backend, Agent Gates, CodeRabbit, and explicit human approval passed. The
-CAT post-merge memory merged through PR #118 as `eba7e2b`; AUTH-05B then merged
-through PR #119 as `ad71c7e`. AUTH-06 merged through PR #124 as `f599551`, its
-signed automated memory completed, and the user explicitly started AUTH-07.
-Required L1 review rejected the combined contract before runtime edits and
-required 07A/07B. AUTH-07B merged through PR #130 as `90eca12`; AUTH-08 merged
-through PR #131 as `aa0fdcd`. Parent AUTH-09 was split before implementation.
-PR #140 merged the required XINT planning reconciliation as `d541521`. PR #132
-then merged seven identities, eleven static matrix memberships, eight planned
-actions, and migration `0023` as `299363a`; signed memory stopped. The user
-explicitly started AUTH-09B. PR #143 merged it as `053242b`; signed memory
-stopped, and the user explicitly started AUTH-09C. PR #146 merged it as
-`0ffdabf`; signed memory at `eeb3dc2` stopped. The user explicitly started
-AUTH-09D. Required preimplementation review rejected the combined lifecycle
-contract before runtime edits, so it was split into 09D-A and 09D-B. PR #148
-merged 09D-A as `99ae4c9`; signed memory `cf8a3e8` stopped and named 09D-B. The
-user explicitly started 09D-B; exact contract `9ec6390b` passed required L1
-review. PR #152 merged it as `93dd392`; signed memory `912a6254` passed and
-stopped. The user explicitly started the contributor foundation. Its first L1
-review rejected the underspecified contract before runtime edits; PR #153 later
-merged its repaired implementation as `8d5eb15`. PR #157 merged AUTH-09E as
-`42a89b2d`, and PR #158 merged the availability-neutral ART custody transfer as
-`be2a79a2`, PR #160 merged the availability-neutral REV custody transfer as
-`fe0e4492`, and PR #162 merged AUTH-PREP as `c559d556`; WS-XINT-002-01 later
-reconciles the historical 25 ART rows to 22 planned ART actions, while all 19
-REV actions remain planned and inactive, and PREP adds no feature consumer.
-POL-002-04 remains inactive pending its own gate and explicit start.
+AUTH-12I is merged. POL-03B is its next product consumer. Later AUTH activation
+chunks wait for the exact hidden owner behavior named above; no static row in
+this map starts work automatically.

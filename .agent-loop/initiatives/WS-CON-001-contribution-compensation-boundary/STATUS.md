@@ -1,9 +1,9 @@
 # Status: WS-CON-001 Contribution And Compensation
 
-## Current baseline
+## Durable state on `main`
 
-- Reconciled main: `9865456b3fb1f6048f4c7b7aef4dac71fbf3323e`.
-- Alembic head on main: `0056_review_lease_preference`.
+- The active Alembic graph begins at `0001_v01_baseline`; historical migration
+  identifiers below describe the original merge sequence, not the current root.
 - CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
 - PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
   `needs_revision` rebase rule.
@@ -11,8 +11,6 @@
   compensation binding foundation, contribution-policy persistence, and the
   02C shared lifecycle-audit participant merged through PR #277. Contribution-record,
   dispatcher, fulfillment, operations, and CON API behavior remain absent.
-- The pre-existing local deletion of the archival reference PDF is user-owned
-  and excluded from this runtime change.
 
 ## Current external work inspected
 

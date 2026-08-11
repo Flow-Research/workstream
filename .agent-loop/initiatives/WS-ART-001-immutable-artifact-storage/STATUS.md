@@ -1,6 +1,6 @@
 # Status: WS-ART-001 Immutable Artifact Storage
 
-## Audited Durable State At 2026-08-02
+## Durable state on `main`
 
 ART-03A and every split ART-03B chunk through 03B4 are merged. The complete
 verified guide binding, materialization, classification, extraction, and hidden

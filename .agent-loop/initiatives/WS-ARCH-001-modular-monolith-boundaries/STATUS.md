@@ -15,11 +15,11 @@
   PROJECTS, CHECKERS, ART, AUTH, composition, and the final API clean cut.
 - Completed capability foundations: TASKS `02A` merged through PR #314 and
   PROJECTS `02B` merged through PR #315.
-- WS-ARCH-001-02C is complete on merge of this change: it exposes CHECKER-owned
+- WS-ARCH-001-02C merged through PR #320. It exposes CHECKER-owned
   effective-plan and bounded execution-result contracts without activating the
   contributor preparation route.
-- Next implementation boundary after that merge: WS-ARCH-001-02D only, the ART
-  hidden-preparation public API and private-edge migration.
+- Next durable boundary: WS-ARCH-001-02D only, the ART hidden-preparation public
+  API and private-edge migration. Open pull requests show transient ownership.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the
