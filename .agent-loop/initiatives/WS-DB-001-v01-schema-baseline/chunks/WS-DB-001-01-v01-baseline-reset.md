@@ -59,13 +59,23 @@ schema baseline. No old database is upgradeable.
     classes and has sentinel tests for each class. Source and baseline manifests
     are committed at `backend/alembic/baseline/v01_source_manifest.json` and
     compared by the hosted suite.
+    Sequence runtime state (`last_value`/`is_called` and equivalent identity
+    restart state) is included; seed SQL restores it deterministically and a
+    generated-key collision test proves correctness.
 13. `MIGRATION_TEST_CUSTODY.md` maps every removed migration test to replacement
     current-invariant proof or an explicit obsolete-intermediate-state reason.
 14. No runtime/test/script import of `backend/migration_contracts` or the
     revision-0023 mapping helper remains.
 15. Unknown old revision stamps receive recreate guidance through Alembic
-    environment preflight, because revision resolution may occur before the new
-    root migration body. No stamp is rewritten or accepted.
+    environment preflight in `backend/alembic/env.py`, which reads and validates
+    `alembic_version` before `context.run_migrations()` can calculate a revision
+    path. No stamp is rewritten or accepted, and rejection leaves schema and
+    data unchanged.
+16. ACL manifests use only canonical `owner`, `PUBLIC`, and explicitly
+    allowlisted stable application-principal names. Unknown grantees fail
+    extraction. Baseline installation maps those names to configured target
+    roles, and hosted parity tests compare effective privileges under every
+    mapped principal rather than comparing role-name text alone.
 
 ## Verification commands
 
@@ -83,7 +93,8 @@ cd backend && .venv/bin/python -m scripts.behavior_ownership validate
 cd backend && .venv/bin/ruff check app tests scripts
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
-gh pr checks <PR> --watch
+PR_NUMBER="${PR_NUMBER:?Set PR_NUMBER to the pull request number}"
+gh pr checks "$PR_NUMBER" --watch
 ```
 
 ## Risk
