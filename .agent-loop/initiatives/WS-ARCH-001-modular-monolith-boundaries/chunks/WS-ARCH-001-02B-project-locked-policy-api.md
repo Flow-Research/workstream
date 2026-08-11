@@ -47,6 +47,7 @@ WS-ARCH-001-02A is merged and its exact TASK fact manifest is recorded.
 
 ```text
 backend/app/modules/projects/api/**
+backend/app/modules/projects/locked_policy_repository.py
 backend/app/modules/projects/repository.py
 backend/app/modules/projects/service.py
 backend/tests/architecture/test_module_boundaries.py
@@ -59,6 +60,7 @@ backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02B-project-locked-policy-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02B-project-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02B-external-review-response.md
 docs/architecture_lockdown.md
 ```
 
@@ -92,8 +94,9 @@ new private edges; live TASK/ART/CHECKER caller cutover or composition wiring.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/projects tests/architecture/test_module_boundaries.py tests/projects/test_locked_policy_context.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/projects/test_locked_policy_context.py --cov=app.modules.projects.api --cov-report=term-missing --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest -q -p pytest_asyncio.plugin -p pytest_cov.plugin tests/architecture/test_module_boundaries.py tests/projects/test_locked_policy_context.py --cov=app.modules.projects.api --cov=app.modules.projects.locked_policy_repository --cov-report=term-missing --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
+(cd backend && .venv/bin/python -m scripts.behavior_ownership validate)
 python3 scripts/check_markdown_links.py
 git diff --check
 ```

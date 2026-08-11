@@ -24,7 +24,8 @@ source-item metadata, actor provenance, or audit evidence.
 
 ## Owner-local implementation
 
-`ProjectRepository.lock_locked_policy_context(...)` locks rows in this order:
+`ProjectLockedPolicyRepository.lock_locked_policy_context(...)` locks rows in
+this order:
 
 1. exact project;
 2. exact project guide by project and version;
@@ -64,7 +65,7 @@ existing ownership partition and exact additive-transition allowlist.
 - PostgreSQL state-matrix tests exercise exact historical resolution, a
   two-session test proves pre-submit-row contention, and unit SQL assertions
   prove all five selected queries use `FOR UPDATE`;
-- focused public API coverage is 100 percent;
+- focused public API and locked-policy repository coverage is 100 percent;
 - protected-base module-boundary and behavior-ownership validation pass;
 - the focused capability tests live in a bounded PROJECT test module, and the
   frozen test-structure ledger records no new or grown structural debt;

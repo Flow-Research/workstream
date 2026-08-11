@@ -28,7 +28,7 @@ from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     PreSubmitCheckerPolicy,
 )
-from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
 from test_projects import (
     activate_guide_for_downstream_test,
     complete_guide_payload,
@@ -159,7 +159,7 @@ def test_project_locked_policy_public_facts_are_deeply_immutable() -> None:
     ("guide_status", "effective_status", "pre_submit_status"),
     (("active", "approved", "compiled"), ("superseded", "superseded", "superseded")),
 )
-async def test_project_repository_resolves_exact_current_and_superseded_locked_policy(
+async def test_locked_policy_repository_resolves_exact_current_and_superseded_policy(
     guide_status: str,
     effective_status: str,
     pre_submit_status: str,
@@ -180,7 +180,9 @@ async def test_project_repository_resolves_exact_current_and_superseded_locked_p
             statements.append(statement)
             return next(self.rows)
 
-    facts = await ProjectRepository(cast(Any, Session())).lock_locked_policy_context(request)
+    facts = await ProjectLockedPolicyRepository(cast(Any, Session())).lock_locked_policy_context(
+        request
+    )
     assert facts == ProjectLockedPolicyContextFacts(
         project_id=request.project_id,
         guide_id=UUID(rows[1].id),
@@ -215,12 +217,14 @@ async def test_project_repository_resolves_exact_current_and_superseded_locked_p
         "hash",
         "cross_project",
         "effective_link",
+        "non_canonical",
+        "invalid_guide_id",
         "snapshot_array",
         "effective_array",
         "bundle_array",
     ),
 )
-async def test_project_repository_rejects_invalid_locked_policy_lineage(
+async def test_locked_policy_repository_rejects_invalid_lineage(
     failure: str,
 ) -> None:
     """Fail closed for draft, pending, drifted, or cross-project lineage."""
@@ -235,6 +239,13 @@ async def test_project_repository_rejects_invalid_locked_policy_lineage(
         rows[2].project_id = str(uuid4())
     elif failure == "effective_link":
         rows[4].effective_policy_id = str(uuid4())
+    elif failure == "non_canonical":
+        rows[3].effective_policy = {"invalid": float("nan")}
+    elif failure == "invalid_guide_id":
+        rows[1].id = "invalid-guide-id"
+        rows[2].guide_id = rows[1].id
+        rows[3].guide_id = rows[1].id
+        rows[4].guide_id = rows[1].id
     elif failure == "snapshot_array":
         drift_hash = canonical_json_hash(cast(Any, []))
         request = replace(request, source_snapshot_hash=drift_hash)
@@ -265,7 +276,9 @@ async def test_project_repository_rejects_invalid_locked_policy_lineage(
         ProjectLockedPolicyContextUnavailable,
         match="project_locked_policy_context_changed",
     ):
-        await ProjectRepository(cast(Any, Session())).lock_locked_policy_context(request)
+        await ProjectLockedPolicyRepository(cast(Any, Session())).lock_locked_policy_context(
+            request
+        )
 
 
 async def create_locked_policy_context_fixture(
@@ -342,20 +355,22 @@ async def _supersede_locked_policy_context(
 
 
 @pytest.mark.asyncio
-async def test_project_repository_postgresql_locked_policy_state_matrix(
+async def test_locked_policy_repository_postgresql_state_matrix(
     project_client: AsyncClient,
 ) -> None:
     """Prove exact and superseded lineage semantics against PostgreSQL."""
     request = await create_locked_policy_context_fixture(project_client)
     async with db_session.get_session_factory()() as session:
-        current = await ProjectRepository(session).lock_locked_policy_context(request)
+        current = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
         assert current.guide_status == "active"
         assert current.effective_policy_status == "approved"
         assert current.pre_submit_policy_status == "compiled"
 
     await _supersede_locked_policy_context(request)
     async with db_session.get_session_factory()() as session:
-        historical = await ProjectRepository(session).lock_locked_policy_context(request)
+        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
+            request
+        )
         assert historical.guide_status == "active"
         assert historical.effective_policy_status == "superseded"
         assert historical.pre_submit_policy_status == "superseded"
@@ -366,7 +381,7 @@ async def test_project_repository_postgresql_locked_policy_state_matrix(
             ProjectLockedPolicyContextUnavailable,
             match="project_locked_policy_context_changed",
         ):
-            await ProjectRepository(session).lock_locked_policy_context(wrong_successor)
+            await ProjectLockedPolicyRepository(session).lock_locked_policy_context(wrong_successor)
 
     async with db_session.get_session_factory()() as session:
         await session.execute(
@@ -380,10 +395,11 @@ async def test_project_repository_postgresql_locked_policy_state_matrix(
             ProjectLockedPolicyContextUnavailable,
             match="project_locked_policy_context_changed",
         ):
-            await ProjectRepository(session).lock_locked_policy_context(request)
+            await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
+
 
 @pytest.mark.asyncio
-async def test_project_repository_postgresql_does_not_substitute_successors(
+async def test_locked_policy_repository_postgresql_does_not_substitute_successors(
     project_client: AsyncClient,
 ) -> None:
     """Keep resolving exact historical IDs after current successors exist."""
@@ -439,13 +455,15 @@ async def test_project_repository_postgresql_does_not_substitute_successors(
         )
         await session.commit()
     async with db_session.get_session_factory()() as session:
-        historical = await ProjectRepository(session).lock_locked_policy_context(request)
+        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
+            request
+        )
         assert historical.effective_policy_id == request.effective_policy_id
         assert historical.pre_submit_policy_id == request.pre_submit_policy_id
 
 
 @pytest.mark.asyncio
-async def test_project_repository_postgresql_locked_policy_serializes_race(
+async def test_locked_policy_repository_postgresql_serializes_race(
     project_client: AsyncClient,
     project_database_env: str,
 ) -> None:
@@ -456,7 +474,7 @@ async def test_project_repository_postgresql_locked_policy_serializes_race(
     contender = db_session.get_session_factory()()
     contender_call: asyncio.Task[Any] | None = None
     try:
-        held = await ProjectRepository(holder).lock_locked_policy_context(request)
+        held = await ProjectLockedPolicyRepository(holder).lock_locked_policy_context(request)
         await contender.execute(
             text("select set_config('application_name', :application_name, true)"),
             {"application_name": contender_name},
