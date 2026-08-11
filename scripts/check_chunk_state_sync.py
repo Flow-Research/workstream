@@ -11,7 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CHUNK_PATH = re.compile(r"^\.agent-loop/initiatives/([^/]+)/chunks/([^/]+)\.md$")
-OUTCOME = re.compile(r"^- Outcome on merge: `(planned|complete|cancelled|superseded)`\s*$", re.MULTILINE)
+OUTCOME = re.compile(r"^- Outcome on merge: `(planned|complete|cancelled|superseded)`\s*$")
+MERGE_STATE_SECTION = re.compile(
+    r"^## Merge state\s*$\n(?P<body>.*?)(?=^##\s|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 CHUNK_ID = re.compile(r"^([A-Z]+-[A-Z]+-[0-9]+-[A-Z0-9]+)(?:-|$)")
 IMPLEMENTATION_PREFIXES = (
     ".ci/",
@@ -60,7 +64,40 @@ def _chunk_row(chunk_map: str, chunk_id: str) -> str:
 
 
 def _projection_lines(projection: str, chunk_id: str) -> list[str]:
-    return [line for line in projection.splitlines() if chunk_id in line]
+    identifier = re.compile(rf"(?<![A-Z0-9-]){re.escape(chunk_id)}(?![A-Z0-9-])")
+    return [line for line in projection.splitlines() if identifier.search(line)]
+
+
+def _declared_outcome(contract: str, chunk_id: str) -> str:
+    sections = list(MERGE_STATE_SECTION.finditer(contract))
+    declarations = [
+        match
+        for line in contract.splitlines()
+        if (match := OUTCOME.fullmatch(line)) is not None
+    ]
+    if len(sections) != 1 or len(declarations) != 1:
+        raise ChunkStateError(f"CHUNK_STATE_OUTCOME_INVALID: {chunk_id}")
+    section_declarations = [
+        match
+        for line in sections[0].group("body").splitlines()
+        if (match := OUTCOME.fullmatch(line)) is not None
+    ]
+    if len(section_declarations) != 1:
+        raise ChunkStateError(f"CHUNK_STATE_OUTCOME_INVALID: {chunk_id}")
+    return section_declarations[0].group(1)
+
+
+def _has_outcome(line: str, outcome: str) -> bool:
+    """Return whether a line asserts, rather than merely contains, an outcome."""
+    folded = line.casefold()
+    for word in OUTCOME_WORDS[outcome]:
+        token = re.compile(rf"(?<![a-z0-9_]){re.escape(word)}(?![a-z0-9_])")
+        for match in token.finditer(folded):
+            prefix = folded[max(0, match.start() - 32) : match.start()]
+            if re.search(r"\b(?:not(?:\s+yet)?|never)\s+$", prefix):
+                continue
+            return True
+    return False
 
 
 def _requires_contract(paths: set[str]) -> bool:
@@ -77,10 +114,7 @@ def _validate_chunk(chunk_path: str, changed: set[str]) -> str:
         raise ChunkStateError(f"CHUNK_STATE_ID_INVALID: {chunk_filename}")
     chunk_id = chunk_id_match.group(1)
     contract = _read(chunk_path)
-    outcome_match = OUTCOME.search(contract)
-    if outcome_match is None:
-        raise ChunkStateError(f"CHUNK_STATE_OUTCOME_MISSING: {chunk_id}")
-    outcome = outcome_match.group(1)
+    outcome = _declared_outcome(contract, chunk_id)
 
     initiative_root = f".agent-loop/initiatives/{initiative_directory}"
     chunk_map_path = f"{initiative_root}/CHUNK_MAP.md"
@@ -95,8 +129,7 @@ def _validate_chunk(chunk_path: str, changed: set[str]) -> str:
     status = _read(status_path)
     current_state = _read(current_state_path)
     row = _chunk_row(chunk_map, chunk_id)
-    outcome_words = OUTCOME_WORDS[outcome]
-    if not any(word in row.casefold() for word in outcome_words):
+    if not _has_outcome(row, outcome):
         raise ChunkStateError(f"CHUNK_STATE_MAP_OUTCOME_MISMATCH: {chunk_id}")
     if outcome == "complete" and any(word in row.casefold() for word in REVIEW_ONLY_WORDS):
         raise ChunkStateError(f"CHUNK_STATE_REVIEW_WORDING: {chunk_id}")
@@ -107,11 +140,7 @@ def _validate_chunk(chunk_path: str, changed: set[str]) -> str:
         lines = _projection_lines(projection, chunk_id)
         if not lines:
             raise ChunkStateError(f"CHUNK_STATE_ID_MISSING: {projection_path}: {chunk_id}")
-        if not any(
-            word in line.casefold()
-            for line in lines
-            for word in outcome_words
-        ):
+        if not any(_has_outcome(line, outcome) for line in lines):
             raise ChunkStateError(f"CHUNK_STATE_OUTCOME_MISMATCH: {projection_path}: {chunk_id}")
     return outcome
 

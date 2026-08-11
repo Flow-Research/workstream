@@ -89,7 +89,22 @@ class ChunkStateSyncTests(unittest.TestCase):
 
     def test_missing_merge_outcome_fails(self) -> None:
         self._write(self.chunk, "# Chunk Contract\n")
-        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_MISSING"):
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_INVALID"):
+            self._validate()
+
+    def test_duplicate_merge_outcome_fails(self) -> None:
+        self._write(
+            self.chunk,
+            "## Merge state\n\n"
+            "- Outcome on merge: `complete`\n"
+            "- Outcome on merge: `cancelled`\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_INVALID"):
+            self._validate()
+
+    def test_outcome_outside_merge_state_fails(self) -> None:
+        self._write(self.chunk, "## Notes\n\n- Outcome on merge: `complete`\n")
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_INVALID"):
             self._validate()
 
     def test_outcome_must_share_projection_line_with_chunk(self) -> None:
@@ -98,6 +113,30 @@ class ChunkStateSyncTests(unittest.TestCase):
             "WS-EXAMPLE-001-01 remains active.\nAnother chunk is complete.\n",
         )
         with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_MISMATCH"):
+            self._validate()
+
+    def test_outcome_substring_does_not_pass(self) -> None:
+        self._write(
+            f"{self.initiative}/CHUNK_MAP.md",
+            "| `WS-EXAMPLE-001-01` | Example | L1 | Incomplete |\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_MAP_OUTCOME_MISMATCH"):
+            self._validate()
+
+    def test_negated_outcome_does_not_pass(self) -> None:
+        self._write(
+            f"{self.initiative}/STATUS.md",
+            "WS-EXAMPLE-001-01 is not complete.\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_OUTCOME_MISMATCH"):
+            self._validate()
+
+    def test_longer_chunk_identifier_does_not_match(self) -> None:
+        self._write(
+            f"{self.initiative}/STATUS.md",
+            "WS-EXAMPLE-001-010 is complete.\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_ID_MISSING"):
             self._validate()
 
     def test_complete_chunk_cannot_remain_in_review(self) -> None:
