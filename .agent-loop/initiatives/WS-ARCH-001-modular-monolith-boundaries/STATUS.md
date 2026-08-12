@@ -32,6 +32,9 @@
   transaction; production remains deny-only and route-unreachable.
 - Complete on merge: WS-ARCH-001-02G AUTH contributor-preparation
   activation. Open pull requests show transient ownership.
+- Complete on merge: WS-ARCH-001-02H activates exact human Submission
+  consumption and fixed ART binding authority against the hidden atomic
+  transaction. The public route remains unchanged.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the

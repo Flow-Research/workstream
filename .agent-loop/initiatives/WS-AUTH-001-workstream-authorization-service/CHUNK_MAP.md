@@ -94,7 +94,7 @@ feature manifest exists and then uses the ordinary bounded contribution loop.
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
 | `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | Merged through PR #293; ART-04C1 is its next ART consumer |
 | `WS-XINT-002-05A` | Historical Submission Bundle Preparation Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02G requires 02A-02F |
-| `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H requires the hidden 02F transaction and 02G |
+| `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H is complete on merge |
 | `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on POL-06B/07 unified plan plus ART-06A/06B evidence |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |

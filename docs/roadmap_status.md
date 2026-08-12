@@ -62,8 +62,8 @@ remain outside v0.1.
   fail-closed PREP/read handoff required for hidden REV implementation. These
   foundations merged through PRs #242, #248, #255, and #257 respectively.
   Contributor bundle preparation now uses the exact assigned-contributor AUTH
-  PREP boundary from WS-ARCH-001-02G; Submission consumption and binding remain
-  separately gated by 02H.
+  PREP boundary from WS-ARCH-001-02G; Submission consumption and binding are
+  activated through 02H; the public clean cut remains separately gated.
   These readiness contracts do not make the review lifecycle available.
 - Project Manager-authorized guide-sufficiency creation, asynchronous agent-run
   requests, and warning acknowledgement with UUID replay custody; automatic
@@ -107,8 +107,8 @@ but are not all complete as one production path:
   combined evidence set. Evidence-linked durable put intent, verification, and
   capacity-charged ready-admission publication are merged. Contributor
   preparation authority is active through WS-ARCH-001-02G; admission
-  consumption, TASK-owned Submission creation, and final binding remain
-  separately gated by 02H and the later clean cut.
+  consumption, TASK-owned Submission creation, and final binding are activated
+  through 02H; the later public clean cut remains gated.
 
 - integration of the merged review/revision policy and authorization readiness
   contracts into hidden REV lifecycle behavior;

@@ -38,17 +38,37 @@ admission/binding, and 02F transaction manifests against current `main`.
 ```text
 backend/app/modules/authorization/api/**
 backend/app/modules/authorization/**/submission*.py
+backend/app/modules/authorization/catalogue.py
+backend/app/modules/authorization/artifact_project_authority.py
+backend/app/modules/authorization/kernel.py
+backend/app/modules/authorization/prepared.py
+backend/app/modules/authorization/runtime.py
 backend/app/adapters/auth/**
+backend/app/adapters/tasks/__init__.py
+backend/app/adapters/artifacts/__init__.py
+backend/app/api/deps/authorization.py
+backend/app/modules/artifacts/authorization.py
+backend/app/modules/tasks/api/submission_command.py
+backend/app/modules/tasks/submission_composition.py
+backend/app/main.py
 backend/alembic/versions/<next-current-main-revision>.py
 backend/tests/test_authorization.py
-backend/tests/test_submission_concurrency.py
+backend/tests/test_submission_composition.py
+backend/tests/test_submission_preparation_authorization.py
+backend/tests/test_artifact_bindings.py
+backend/tests/test_artifact_bindings_db.py
 backend/tests/architecture/test_authorization_boundary.py
+.agent-loop/CURRENT_STATE.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02H-auth-consumption-activation.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02H-consumption-activation.md
 docs/spec_authorization_service.md
+docs/operations_authorization_service.md
+docs/roadmap_status.md
 ```
 
 ## Not allowed
@@ -75,8 +95,8 @@ TASK persistence; human substitution for fixed service authority.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/adapters/auth tests/test_authorization.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_concurrency.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/artifacts/authorization.py app/modules/tasks/api/submission_command.py app/modules/tasks/submission_composition.py app/adapters/auth app/adapters/tasks app/adapters/artifacts app/api/deps/authorization.py app/main.py tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/architecture/test_authorization_boundary.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
 python3 scripts/check_stale_authorization_docs.py
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py

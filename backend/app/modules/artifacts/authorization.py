@@ -32,11 +32,14 @@ from app.modules.artifacts.submission_materialization import (
     PreSubmitMaterializationAuthorityFacts,
     PreSubmitMaterializationPreparationFacts,
 )
+from app.modules.artifacts.submission_bindings import SubmissionBindingAuthorityFacts
+from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
 from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
     PreparedAuthorizationService,
+    fixed_service_action_context,
     fixed_service_authorization_context,
     fixed_service_context_revalidator,
 )
@@ -62,6 +65,7 @@ from app.modules.authorization.runtime import (
     AuthorizationContext,
     SubmissionBundlePreparationPreflightResourceContext,
     SubmissionBundlePreparationResourceContext,
+    SubmissionBindingResourceContext,
 )
 
 
@@ -570,6 +574,7 @@ class _PreparedArtifactServiceAuthorization:
             | GuideSourceReadAuthorityFacts
             | PreSubmitMaterializationAuthorityFacts
             | PreSubmitMaterializationPreparationFacts
+            | SubmissionBindingAuthorityFacts
             | None
         ) = None
 
@@ -578,7 +583,8 @@ class _PreparedArtifactServiceAuthorization:
         *,
         facts: GuideSourceBindingAuthorityFacts
         | GuideSourceReadAuthorityFacts
-        | PreSubmitMaterializationPreparationFacts,
+        | PreSubmitMaterializationPreparationFacts
+        | SubmissionBindingAuthorityFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
         """Prepare one process-local capability bound to every canonical fact."""
@@ -639,7 +645,8 @@ class _PreparedArtifactServiceAuthorization:
         prepared_authorization: PreparedAuthorizationHandle,
         facts: GuideSourceBindingAuthorityFacts
         | GuideSourceReadAuthorityFacts
-        | PreSubmitMaterializationAuthorityFacts,
+        | PreSubmitMaterializationAuthorityFacts
+        | SubmissionBindingAuthorityFacts,
     ) -> None:
         """Consume only the exact handle and facts prepared by this adapter."""
         if (
@@ -687,6 +694,52 @@ class PreparedGuideSourceBindingAuthorization(_PreparedArtifactServiceAuthorizat
             request_id=request_id,
             correlation_id=correlation_id,
         )
+
+
+class PreparedSubmissionBindingAuthorization:
+    """Prepare and consume exact authority for the fixed artifact binding service."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        self._session = session
+        self._request_id = request_id
+        self._correlation_id = correlation_id
+        self._delegate = _PreparedArtifactServiceAuthorization(
+            session,
+            service_identity=ServiceIdentity.ARTIFACT_BINDING,
+            action_id=ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+
+    async def authorize(self, request) -> None:
+        """Resolve the exact active fixed service before ART state is revealed."""
+        del request
+        try:
+            await fixed_service_action_context(
+                self._session,
+                service_identity=ServiceIdentity.ARTIFACT_BINDING,
+                action_id=ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+                request_id=self._request_id,
+                correlation_id=self._correlation_id,
+            )
+        except PreparedAuthorizationUnsupported as exc:
+            raise SubmissionAdmissionConsumptionError(
+                "submission_bundle_admission_unavailable"
+            ) from exc
+
+    async def consume(self, facts: SubmissionBindingAuthorityFacts) -> None:
+        """Prepare and immediately consume within the protected transaction."""
+        try:
+            handle = await self._delegate.prepare(
+                facts=facts, idempotency_key=facts.admission_id
+            )
+            await self._delegate.consume(prepared_authorization=handle, facts=facts)
+        except ArtifactAuthorityDeniedError as exc:
+            raise SubmissionAdmissionConsumptionError(
+                "submission_bundle_admission_unavailable"
+            ) from exc
+        finally:
+            self._delegate.close()
 
 
 class PreparedGuideSourceReadAuthorization(_PreparedArtifactServiceAuthorization):
@@ -745,7 +798,8 @@ def _artifact_service_resource_context(
     facts: GuideSourceBindingAuthorityFacts
     | GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationAuthorityFacts
-    | PreSubmitMaterializationPreparationFacts,
+    | PreSubmitMaterializationPreparationFacts
+    | SubmissionBindingAuthorityFacts,
 ) -> (
     GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
@@ -774,6 +828,12 @@ def _artifact_service_resource_context(
             resource_id=facts.guide_source_item_id,
             **values,
         )
+    if isinstance(facts, SubmissionBindingAuthorityFacts):
+        return SubmissionBindingResourceContext(
+            resource_type="submission_binding",
+            resource_id=facts.admission_id,
+            **asdict(facts),
+        )
     return GuideSourceReadResourceContext(
         resource_type="guide_source_read",
         resource_id=facts.binding_id,
@@ -785,10 +845,12 @@ def _prepared_artifact_facts_match(
     prepared: GuideSourceBindingAuthorityFacts
     | GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationPreparationFacts
-    | PreSubmitMaterializationAuthorityFacts,
+    | PreSubmitMaterializationAuthorityFacts
+    | SubmissionBindingAuthorityFacts,
     final: GuideSourceBindingAuthorityFacts
     | GuideSourceReadAuthorityFacts
-    | PreSubmitMaterializationAuthorityFacts,
+    | PreSubmitMaterializationAuthorityFacts
+    | SubmissionBindingAuthorityFacts,
 ) -> bool:
     """Require final facts to preserve every fact bound during preparation."""
     if isinstance(prepared, PreSubmitMaterializationPreparationFacts):

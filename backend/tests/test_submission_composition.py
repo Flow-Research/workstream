@@ -14,6 +14,13 @@ from app.modules.tasks.api import (
     TaskSubmissionContextFacts,
 )
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
+from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.adapters.tasks import TransactionalSubmissionCreationCommand
+from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
+from app.modules.artifacts.authorization import PreparedSubmissionBindingAuthorization
+from app.modules.authorization.prepared import (
+    PreparedSubmissionCreationAuthorization,
+)
 
 
 class _Session:
@@ -138,6 +145,50 @@ async def test_final_authority_failure_remains_inside_caller_transaction():
     with pytest.raises(SubmissionCreationUnavailable):
         await service.create(request)
     assert len(persisted) == 1
+
+
+@pytest.mark.asyncio
+async def test_invalid_admission_result_denies_before_lineage_and_final_authority():
+    request = _request()
+    events = []
+
+    class Authority:
+        async def authorize(self, facts): events.append("authorize")
+        async def consume(self, facts): events.append("final")
+
+    class Admissions:
+        async def consume(self, value):
+            events.append("art")
+            return SimpleNamespace(binding_id=None, content_id=uuid4())
+
+    service = TaskSubmissionCreationService(
+        _Session(), authorization=Authority(), admissions=Admissions()
+    )
+    persisted = []
+
+    class Repository:
+        async def lock_submission_context(self, value): return _context(request)
+        async def get_task(self, task_id): return _task()
+        async def add_submission(self, submission): persisted.append(submission)
+
+    service._repository = Repository()
+    with pytest.raises(RuntimeError, match="exact binding facts"):
+        await service.create(request)
+    assert events == ["authorize", "art"]
+    assert len(persisted) == 1
+    assert persisted[0].artifact_binding_id is None
+
+
+def test_hidden_composition_uses_both_active_authority_adapters() -> None:
+    session = SimpleNamespace()
+    context = SimpleNamespace()
+    command = compose_hidden_submission_creation_command(
+        session, context, request_id=uuid4(), correlation_id=uuid4()
+    )
+    assert type(command) is TransactionalSubmissionCreationCommand
+    assert type(command._authorization) is PreparedSubmissionCreationAuthorization
+    assert type(command._admissions) is SubmissionAdmissionConsumptionService
+    assert type(command._admissions._authorization) is PreparedSubmissionBindingAuthorization
 
 
 @pytest.mark.asyncio

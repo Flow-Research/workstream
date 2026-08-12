@@ -558,7 +558,7 @@ ACTION_DEFINITIONS = (
         PermissionId.OPERATIONS_CHECKER_RETRY,
         ActionOwner.AUTH_14,
     ),
-    _planned(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
+    _active(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
     _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(
         ActionId.REVIEW_QUEUE_INSPECT,
@@ -714,7 +714,7 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.XINT_002_04B,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.AUTH_ART_05,
@@ -876,6 +876,8 @@ def _index_actions(
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.SUBMISSION_CREATE,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1097,6 +1099,7 @@ def _index_service_actions(rows: dict[ServiceIdentity, frozenset[ActionId]]) -> 
                 ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 ActionId.ARTIFACT_PENDING_WORK_SCAN,
                 ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+                ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
                 ActionId.ARTIFACT_GUIDE_SOURCE_READ,
                 ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,

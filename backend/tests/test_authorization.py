@@ -1755,7 +1755,7 @@ ART_CUSTODY_EXPECTATIONS = {
     "artifact.submission.binding.create": (
         "artifact.binding.create",
         "WS-AUTH-001-ART-05",
-        "planned",
+        "active",
     ),
     "artifact.post_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
@@ -2153,6 +2153,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
     }
     assert {
         definition.action_id.value: (
@@ -2233,13 +2234,13 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         sum(
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
-        ) == 55
+        ) == 57
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
-        ) == 47
+        ) == 45
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -2797,6 +2798,7 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
@@ -2904,7 +2906,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
+            "73 PermissionIds, 102 ActionIds, 57 active actions, and\n45 planned actions" in operations
     )
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -6348,6 +6350,55 @@ async def test_fixed_service_context_rejects_mismatched_loaded_identity(
             uuid4(),
             uuid4(),
         )
+
+
+@pytest.mark.parametrize(
+    ("context_status", "link_status", "action_id", "should_allow"),
+    [
+        (ActorStatus.ACTIVE, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, True),
+        (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, False),
+        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, False),
+        (ActorStatus.ACTIVE, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE, False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_fixed_service_action_context_enforces_lifecycle_and_matrix(
+    context_status: ActorStatus,
+    link_status: IdentityLinkStatus,
+    action_id: ActionId,
+    should_allow: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=ServiceIdentity.ARTIFACT_BINDING,
+    ).model_copy(
+        update={
+            "actor_status": context_status,
+            "identity_link_status": link_status,
+        }
+    )
+
+    async def fixed_context(*_args):
+        return context
+
+    monkeypatch.setattr(
+        authorization_prepared,
+        "fixed_service_authorization_context",
+        fixed_context,
+    )
+    operation = authorization_prepared.fixed_service_action_context(
+        _PreparedTestSession(),  # type: ignore[arg-type]
+        service_identity=ServiceIdentity.ARTIFACT_BINDING,
+        action_id=action_id,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    if should_allow:
+        assert await operation is context
+    else:
+        with pytest.raises(PreparedAuthorizationUnsupported):
+            await operation
 
 
 @pytest.mark.parametrize(

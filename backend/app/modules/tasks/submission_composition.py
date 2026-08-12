@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.api import (
     SubmissionArtifactAdmissionPort,
     SubmissionArtifactAdmissionRequest,
+    SubmissionArtifactAdmissionResult,
     SubmissionCreationAuthorizationPort,
     SubmissionCreationAuthorityFacts,
     SubmissionCreationPreparationFacts,
@@ -133,6 +134,12 @@ class TaskSubmissionCreationService:
                 task_context=context,
             )
         )
+        if (
+            type(consumed) is not SubmissionArtifactAdmissionResult
+            or not isinstance(consumed.binding_id, UUID)
+            or not isinstance(consumed.content_id, UUID)
+        ):
+            raise RuntimeError("artifact admission did not produce exact binding facts")
         submission.submission_bundle_admission_id = str(request.admission_id)
         submission.task_assignment_id = str(request.assignment_id)
         submission.artifact_binding_id = str(consumed.binding_id)
@@ -146,6 +153,7 @@ class TaskSubmissionCreationService:
             predecessor_submission_id=preliminary.predecessor_submission_id,
             submission_id=submission_id,
             submission_version=version,
+            task_context=context,
         )
         await self._authorization.consume(final)
         return SubmissionCreationResult(

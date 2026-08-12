@@ -47,10 +47,23 @@ class SubmissionCreationAuthorityFacts(SubmissionCreationPreparationFacts):
 
     submission_id: UUID
     submission_version: int
+    task_context: TaskSubmissionContextFacts
 
     def __post_init__(self) -> None:
         if self.submission_version < 1:
             raise ValueError("submission version is invalid")
+        if (
+            self.task_context.task_id != self.task_id
+            or self.task_context.assignment_id != self.assignment_id
+            or self.task_context.contributor_id != self.contributor_id
+            or (
+                self.task_context.predecessor.submission_id
+                if self.task_context.predecessor is not None
+                else None
+            )
+            != self.predecessor_submission_id
+        ):
+            raise ValueError("submission authority context is inconsistent")
 
 
 class SubmissionCreationAuthorizationPort(Protocol):

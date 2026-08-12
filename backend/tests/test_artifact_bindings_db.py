@@ -24,7 +24,19 @@ from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
 from app.adapters.tasks import TransactionalSubmissionCreationCommand
 from app.modules.tasks.api import SubmissionCreationRequest, SubmissionCreationUnavailable
 from app.modules.tasks.models import Submission
+from app.modules.tasks.models import AuditEvent
 from app.modules.tasks.repository import TaskRepository
+from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization.runtime import (
+    ActorKind,
+    ActorStatus,
+    HumanAuthorizationContext,
+    IdentityLinkStatus,
+    ServiceAuthorizationContext,
+)
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.artifacts import authorization as artifact_authorization
 from test_artifact_bindings import _Allow, _lineage, _request
 
 
@@ -34,6 +46,7 @@ _TABLES = (
     SubmissionBundleAdmission.__table__,
     ArtifactBinding.__table__,
     Submission.__table__,
+    AuditEvent.__table__,
 )
 
 
@@ -316,3 +329,143 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
             )
             assert status == "ready"
             assert bindings == 0
+
+
+@pytest.mark.asyncio
+async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
+    isolated_database_env: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    art_request = _request()
+    context = art_request.task_context
+    request_id, correlation_id, human_link_id, service_actor_id, service_link_id = (
+        uuid4() for _ in range(5)
+    )
+    human = HumanAuthorizationContext(
+        actor_profile_id=context.contributor_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=human_link_id,
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=request_id,
+        correlation_id=correlation_id,
+    )
+    service = ServiceAuthorizationContext(
+        actor_profile_id=service_actor_id,
+        actor_kind=ActorKind.SERVICE,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=service_link_id,
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        service_identity=ServiceIdentity.ARTIFACT_BINDING,
+        request_id=request_id,
+        correlation_id=correlation_id,
+    )
+    task = type("LockedTask", (), {
+        "id": str(context.task_id), "locked_guide_version": "1",
+        "locked_post_submit_checker_policy_id": str(uuid4()),
+        "locked_post_submit_checker_policy_version": "1",
+        "locked_post_submit_checker_policy_hash": "sha256:" + "4" * 64,
+        "locked_post_submit_checker_policy_body": {},
+        "locked_review_policy_id": str(uuid4()), "locked_review_policy_generation": 1,
+        "locked_review_policy_hash": "sha256:" + "5" * 64,
+        "locked_revision_policy_id": str(uuid4()), "locked_revision_policy_generation": 1,
+        "locked_revision_policy_hash": "sha256:" + "6" * 64,
+        "locked_payment_policy_version": "1",
+        "locked_guide_source_snapshot_id": str(context.locked_project_context.source_snapshot_id),
+        "locked_guide_source_snapshot_hash": context.locked_project_context.source_snapshot_hash,
+        "locked_effective_project_submission_artifact_policy_id": str(context.locked_project_context.effective_policy_id),
+        "locked_effective_project_submission_artifact_policy_hash": context.locked_project_context.effective_policy_hash,
+        "locked_pre_submit_checker_policy_id": str(context.locked_project_context.pre_submit_policy_id),
+        "locked_pre_submit_checker_bundle_hash": context.locked_project_context.pre_submit_policy_bundle_hash,
+    })()
+
+    async def lock_context(_self, _request): return context
+    async def get_task(_self, _task_id, **_kwargs): return task
+    async def lock_actor(_self, link_id, actor_id):
+        return (
+            type("Link", (), {"id": str(link_id), "actor_profile_id": str(actor_id), "status": "active"})(),
+            type("Profile", (), {"id": str(actor_id), "actor_kind": ("service" if actor_id == service_actor_id else "human"), "status": "active"})(),
+        )
+    async def find_role(_self, **_kwargs):
+        return type("Grant", (), {"id": uuid4(), "status": "active", "scope_project_id": None})()
+    async def fixed_context(*_args, **_kwargs): return service
+
+    monkeypatch.setattr(TaskRepository, "lock_submission_context", lock_context)
+    monkeypatch.setattr(TaskRepository, "get_task", get_task)
+    monkeypatch.setattr(AdminAuthorizationRepository, "lock_request_actor", lock_actor)
+    monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", find_role)
+    monkeypatch.setattr(artifact_authorization, "fixed_service_action_context", fixed_context)
+
+    async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
+        async with factory.begin() as seed:
+            await _seed(seed, schema, art_request)
+        request = SubmissionCreationRequest(
+            admission_id=art_request.admission_id, task_id=context.task_id,
+            assignment_id=context.assignment_id, contributor_id=context.contributor_id,
+            predecessor_submission_id=None, summary="summary",
+            contributor_attestation="attestation",
+        )
+
+        async def create_once(value: SubmissionCreationRequest = request):
+            async with factory() as session:
+                await session.execute(text(f'set search_path to "{schema}"'))
+                await session.commit()
+                command = compose_hidden_submission_creation_command(
+                    session, human, request_id=request_id, correlation_id=correlation_id
+                )
+                try:
+                    return await command.create(value)
+                except Exception as exc:
+                    return exc
+
+        outcomes = await asyncio.gather(create_once(), create_once())
+        assert sum(not isinstance(value, Exception) for value in outcomes) == 1
+        failures = [value for value in outcomes if isinstance(value, Exception)]
+        assert len(failures) == 1
+        assert isinstance(failures[0], SubmissionAdmissionConsumptionError)
+        assert failures[0].code == "submission_bundle_admission_already_consumed"
+        async with factory() as session:
+            await _set_schema(session, schema)
+            assert await session.scalar(text("select count(*) from submissions")) == 1
+            assert await session.scalar(text("select count(*) from artifact_bindings")) == 1
+            assert await session.scalar(
+                text("select count(*) from audit_events where event_domain='authority' and event_type='sensitive_authorization_allowed'")
+            ) == 2
+
+        denied_art_request = replace(
+            art_request,
+            admission_id=uuid4(),
+            submission_id=uuid4(),
+        )
+        async with factory.begin() as seed:
+            await _seed(seed, schema, denied_art_request)
+        revoked_service = replace(
+            service,
+            identity_link_status=IdentityLinkStatus.REVOKED,
+        )
+
+        async def revoked_context(*_args, **_kwargs):
+            return revoked_service
+
+        monkeypatch.setattr(
+            artifact_authorization,
+            "fixed_service_action_context",
+            revoked_context,
+        )
+        denied_request = replace(request, admission_id=denied_art_request.admission_id)
+        denied = await create_once(denied_request)
+        assert isinstance(denied, SubmissionAdmissionConsumptionError)
+        assert denied.code == "submission_bundle_admission_unavailable"
+        async with factory() as session:
+            await _set_schema(session, schema)
+            assert await session.scalar(text("select count(*) from submissions")) == 1
+            assert await session.scalar(text("select count(*) from artifact_bindings")) == 1
+            assert await session.scalar(
+                text(
+                    "select count(*) from submission_bundle_admissions "
+                    "where id=:id and status='ready'"
+                ),
+                {"id": str(denied_art_request.admission_id)},
+            ) == 1
+            assert await session.scalar(
+                text("select count(*) from audit_events")
+            ) == 2
