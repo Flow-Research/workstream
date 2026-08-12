@@ -16,7 +16,7 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
 )
-from app.modules.authorization.submission_preparation import (
+from app.modules.authorization.runtime import (
     SubmissionBundlePreparationPreflightResourceContext,
     SubmissionBundlePreparationResourceContext,
 )
