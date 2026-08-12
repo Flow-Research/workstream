@@ -522,7 +522,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 text(
                     "insert into project_guides "
                     "(id,project_id,version,status,content_markdown,created_by) values "
-                    "(:guide,:project,'1','active','# Guide','test')"
+                    "(:guide,:project,'1','draft','# Guide','test')"
                 ),
                 params,
             )
@@ -606,6 +606,19 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     "allowed_resubmission_states) values "
                     "(:revision_policy,:project,'1',1,:revision_policy_hash,"
                     "'legacy_incomplete',1,24,'[]'::json)"
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    "update project_guides set status='active',"
+                    "selected_review_policy_id=:review_policy,"
+                    "selected_review_policy_generation=1,"
+                    "selected_review_policy_hash=:review_policy_hash,"
+                    "selected_revision_policy_id=:revision_policy,"
+                    "selected_revision_policy_generation=1,"
+                    "selected_revision_policy_hash=:revision_policy_hash "
+                    "where id=:guide"
                 ),
                 params,
             )
