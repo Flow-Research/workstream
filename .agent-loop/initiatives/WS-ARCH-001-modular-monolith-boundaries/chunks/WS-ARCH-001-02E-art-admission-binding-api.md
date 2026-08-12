@@ -48,6 +48,7 @@ backend/app/modules/artifacts/submission_bindings.py
 backend/app/modules/artifacts/guide_bindings.py
 backend/app/interfaces/artifact_operations.py
 backend/alembic/versions/0002_submission_admission_consumed_version.py
+backend/alembic/env.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_artifact_bindings.py
 backend/tests/test_artifact_bindings_db.py
