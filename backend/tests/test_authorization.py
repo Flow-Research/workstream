@@ -2154,6 +2154,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
     }
     assert {
         definition.action_id.value: (

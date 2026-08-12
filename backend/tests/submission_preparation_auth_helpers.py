@@ -14,16 +14,32 @@ from app.modules.authorization.runtime import (
 
 
 async def install_submitter_grant(connection, params) -> None:
+    authorizer_id = str(uuid4())
     admin_grant_id, qualification_id, project_grant_id = uuid4(), uuid4(), uuid4()
     await connection.execute(
         text(
-            "insert into admin_role_grants "
-            "(id,target_actor_profile_id,role,scope_type,scope_project_id,status,version,"
-            "granted_by_system_principal,grant_reason) values "
-            "(:admin_grant,:actor,'project_manager','project',:project,'active',1,"
-            "'test','submission preparation test')"
+            "insert into actor_profiles "
+            "(id,actor_kind,status,provisioning_method,created_by) values "
+            "(:authorizer,'human','active','administrative','test')"
         ),
-        {**params, "admin_grant": admin_grant_id},
+        {"authorizer": authorizer_id},
+    )
+    await connection.execute(
+        text(
+            "insert into admin_role_grants "
+            "(id,target_actor_profile_id,role,scope_type,status,version,"
+            "granted_by_system_principal,grant_reason) values "
+            "(:admin_grant,:authorizer,'access_administrator','system','active',1,"
+            "'workstream:system:bootstrap','submission preparation test bootstrap')"
+        ),
+        {"admin_grant": admin_grant_id, "authorizer": authorizer_id},
+    )
+    await connection.execute(
+        text(
+            "update authority_control set bootstrap_completed=true, version=1, "
+            "bootstrap_grant_id=:admin_grant, updated_at=clock_timestamp() where id=1"
+        ),
+        {"admin_grant": admin_grant_id},
     )
     await connection.execute(
         text(
@@ -32,9 +48,14 @@ async def install_submitter_grant(connection, params) -> None:
             "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
             "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
             "(:qualification,:project,:actor,'submitter','{}'::json,'{}'::json,"
-            "'[]'::json,'[]'::json,:actor,:admin_grant)"
+            "'[]'::json,'[]'::json,:authorizer,:admin_grant)"
         ),
-        {**params, "qualification": qualification_id, "admin_grant": admin_grant_id},
+        {
+            **params,
+            "authorizer": authorizer_id,
+            "qualification": qualification_id,
+            "admin_grant": admin_grant_id,
+        },
     )
     await connection.execute(
         text(
@@ -43,10 +64,11 @@ async def install_submitter_grant(connection, params) -> None:
             "qualification_snapshot_id,granted_by_actor_profile_id,"
             "granted_by_admin_role_grant_id,grant_reason) values "
             "(:project_grant,:project,:actor,'submitter','active',1,'manual',"
-            ":qualification,:actor,:admin_grant,'submission preparation test')"
+            ":qualification,:authorizer,:admin_grant,'submission preparation test')"
         ),
         {
             **params,
+            "authorizer": authorizer_id,
             "project_grant": project_grant_id,
             "qualification": qualification_id,
             "admin_grant": admin_grant_id,
