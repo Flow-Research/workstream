@@ -33,4 +33,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Workstream v0.1 migrations are forward-only; recreate the database")
+    raise RuntimeError(
+        "Workstream v0.1 migrations cannot be downgraded; recreate the database"
+    )
