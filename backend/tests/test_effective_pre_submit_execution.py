@@ -576,7 +576,11 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         (("finding_count", "1"),),
         (("finding_count", -1),),
     ):
-        malformed_entry = replace(forged.entries[0], metadata=metadata)  # type: ignore[arg-type]
+        malformed_entry = replace(
+            forged.entries[0],
+            failure_code=None,
+            metadata=metadata,  # type: ignore[arg-type]
+        )
         malformed = replace(
             forged,
             entries=(malformed_entry, *forged.entries[1:]),
