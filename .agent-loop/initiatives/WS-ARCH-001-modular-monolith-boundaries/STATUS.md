@@ -22,14 +22,16 @@
   route to delivery composition, exposes the bounded ART request/result/command
   API, consumes TASK/PROJECT/CHECKER public capabilities, keeps AUTH handles
   opaque, and preserves deny-only availability.
-- WS-ARCH-001-02E is complete in this change. ART exposes one deny-by-default
+- WS-ARCH-001-02E is complete. ART exposes one deny-by-default
   ready-admission consumption port, validates exact TASK and ART lineage,
   serializes binding identity, persists the consumed Submission id/version,
   creates one provider-neutral generic binding, and proves replay, concurrency,
   rollback, and stable conflicts without activating a route or AUTH action.
-- Next durable boundary: WS-ARCH-001-02F only, the TASK-owned immutable
-  Submission command and hidden composed transaction. Open pull requests show
-  transient ownership.
+- WS-ARCH-001-02F is complete in this change. TASK owns the immutable
+  admission-backed Submission command and the adapter owns one hidden root
+  transaction; production remains deny-only and route-unreachable.
+- Next durable boundary: WS-ARCH-001-02G only, AUTH contributor-preparation
+  activation. Open pull requests show transient ownership.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the

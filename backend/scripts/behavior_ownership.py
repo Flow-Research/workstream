@@ -86,6 +86,12 @@ MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
         "backend/app/modules/tasks/api/submission_context.py",
     }
 )
+ARCH_02F_SUBMISSION_COMPOSITION_TARGETS = frozenset(
+    {
+        "backend/app/modules/tasks/api/submission_command.py",
+        "backend/app/modules/tasks/submission_composition.py",
+    }
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -272,6 +278,7 @@ def _validate_additive_partition_transition(
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
         | AUTH_12I_TARGETS
+        | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

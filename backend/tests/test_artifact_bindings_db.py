@@ -21,6 +21,10 @@ from app.modules.artifacts.submission_bindings import (
     SubmissionAdmissionConsumptionService,
 )
 from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
+from app.adapters.tasks import TransactionalSubmissionCreationCommand
+from app.modules.tasks.api import SubmissionCreationRequest, SubmissionCreationUnavailable
+from app.modules.tasks.models import Submission
+from app.modules.tasks.repository import TaskRepository
 from test_artifact_bindings import _Allow, _lineage, _request
 
 
@@ -29,6 +33,7 @@ _TABLES = (
     PreSubmitEvidenceSet.__table__,
     SubmissionBundleAdmission.__table__,
     ArtifactBinding.__table__,
+    Submission.__table__,
 )
 
 
@@ -118,18 +123,86 @@ async def _seed(session, schema: str, request) -> None:
     )
     await session.execute(
         SubmissionBundleAdmission.__table__.insert().values(
-            **vars(admission),
-            durable_intent_id=str(uuid4()),
-            put_attempt_id=str(uuid4()),
-            verified_replica_id=str(uuid4()),
-            verification_receipt_id=str(uuid4()),
-            put_operation_receipt_id=str(uuid4()),
-            put_observation_receipt_id=None,
+            **vars(admission), durable_intent_id=str(uuid4()), put_attempt_id=str(uuid4()),
+            verified_replica_id=str(uuid4()), verification_receipt_id=str(uuid4()),
+            put_operation_receipt_id=str(uuid4()), put_observation_receipt_id=None,
             ready_at=text("now()"),
         )
     )
 
 
+class _FinalDeny:
+    async def authorize(self, facts) -> None:
+        del facts
+
+    async def consume(self, facts) -> None:
+        del facts
+        raise SubmissionCreationUnavailable("submission creation is unavailable")
+
+
+@pytest.mark.asyncio
+async def test_composed_final_denial_rolls_back_task_and_art_rows(
+    isolated_database_env: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    art_request = _request()
+    context = art_request.task_context
+    task = type("LockedTask", (), {
+        "id": str(context.task_id),
+        "locked_guide_version": "1",
+        "locked_post_submit_checker_policy_id": str(uuid4()),
+        "locked_post_submit_checker_policy_version": "1",
+        "locked_post_submit_checker_policy_hash": "sha256:" + "4" * 64,
+        "locked_post_submit_checker_policy_body": {},
+        "locked_review_policy_id": str(uuid4()), "locked_review_policy_generation": 1,
+        "locked_review_policy_hash": "sha256:" + "5" * 64,
+        "locked_revision_policy_id": str(uuid4()), "locked_revision_policy_generation": 1,
+        "locked_revision_policy_hash": "sha256:" + "6" * 64,
+        "locked_payment_policy_version": "1",
+        "locked_guide_source_snapshot_id": str(context.locked_project_context.source_snapshot_id),
+        "locked_guide_source_snapshot_hash": context.locked_project_context.source_snapshot_hash,
+        "locked_effective_project_submission_artifact_policy_id": str(context.locked_project_context.effective_policy_id),
+        "locked_effective_project_submission_artifact_policy_hash": context.locked_project_context.effective_policy_hash,
+        "locked_pre_submit_checker_policy_id": str(context.locked_project_context.pre_submit_policy_id),
+        "locked_pre_submit_checker_bundle_hash": context.locked_project_context.pre_submit_policy_bundle_hash,
+    })()
+
+    async def lock_context(self, request):
+        del self, request
+        return context
+
+    async def get_task(self, task_id, **kwargs):
+        del self, task_id, kwargs
+        return task
+
+    monkeypatch.setattr(TaskRepository, "lock_submission_context", lock_context)
+    monkeypatch.setattr(TaskRepository, "get_task", get_task)
+    async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
+        async with factory.begin() as seed:
+            await _seed(seed, schema, art_request)
+        request = SubmissionCreationRequest(
+            admission_id=art_request.admission_id, task_id=context.task_id,
+            assignment_id=context.assignment_id, contributor_id=context.contributor_id,
+            predecessor_submission_id=None, summary="summary",
+            contributor_attestation="attestation",
+        )
+        async with factory() as session:
+            await session.execute(text(f'set search_path to "{schema}"'))
+            await session.commit()
+            command = TransactionalSubmissionCreationCommand(
+                session, authorization=_FinalDeny(),
+                admissions=SubmissionAdmissionConsumptionService(session, _Allow()),
+            )
+            with pytest.raises(SubmissionCreationUnavailable):
+                await command.create(request)
+        async with factory() as session:
+            await _set_schema(session, schema)
+            assert await session.scalar(text("select count(*) from submissions")) == 0
+            assert await session.scalar(text("select count(*) from artifact_bindings")) == 0
+            status = await session.scalar(
+                text("select status from submission_bundle_admissions where id=:id"),
+                {"id": str(request.admission_id)},
+            )
+            assert status == "ready"
 @pytest.mark.asyncio
 async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
     isolated_database_env: str,

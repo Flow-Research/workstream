@@ -10,8 +10,8 @@
 | `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Merged PR #320; no contributor preparation action or public route activated |
 | `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Complete; production remains deny-only |
 | `WS-ARCH-001-02E` | ART ready-admission consumption and binding hidden module-level capability | L1 | Complete; production remains deny-only and route-unreachable |
-| `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Next durable boundary |
-| `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Proposed after 02F |
+| `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Complete; production remains deny-only and route-unreachable |
+| `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Next durable boundary |
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Proposed after 02G |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
 | `WS-ARCH-001-03` | PROJECT/TASK guide, locked-context, task and assignment capability repairs | L1 | Non-executable placeholder; requires a split contract |

@@ -60,7 +60,7 @@ def test_current_schema_preserves_exact_compilation_registries(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_registry_state(isolated_database_env)) == (
-        "0002_admission_version",
+        "0003_submission_lineage",
         1,
         1,
         1,

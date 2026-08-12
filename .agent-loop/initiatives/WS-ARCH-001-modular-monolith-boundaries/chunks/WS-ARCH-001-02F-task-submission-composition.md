@@ -7,8 +7,9 @@ WS-ARCH-001 — Modular Monolith Boundaries
 ## Goal
 
 Implement the TASK-owned immutable Submission command and hidden application
-composition that atomically consumes fresh human AUTH, fixed ART-binding AUTH,
-ART admission/binding, and TASK persistence through public ports.
+composition that atomically consumes deny-only human AUTH, deny-only fixed
+ART-binding AUTH, the already-ready ART admission/binding, and TASK persistence
+through public ports.
 
 ## Why this chunk exists
 
@@ -41,18 +42,29 @@ backend/app/modules/tasks/api/**
 backend/app/modules/tasks/models.py
 backend/app/modules/tasks/repository.py
 backend/app/modules/tasks/service.py
-backend/app/adapters/**/submission*.py
+backend/app/modules/tasks/submission_composition.py
+backend/app/adapters/tasks/__init__.py
 backend/app/main.py
 backend/alembic/versions/<next-current-main-revision>.py
+backend/alembic/env.py
 backend/tests/test_tasks.py
-backend/tests/test_submission_concurrency.py
-backend/tests/test_submission_history.py
+backend/tests/test_submission_composition.py
+backend/tests/test_artifact_bindings_db.py
+backend/scripts/run_test_lanes.py
+backend/scripts/behavior_ownership.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
+backend/tests/authorization/guide_compilation/test_migration_contract.py
+backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02F-task-submission-composition.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
+.agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02F-transaction-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02F-external-review-response.md
 docs/architecture_data_model.md
 ```
 
@@ -71,11 +83,15 @@ contribution dispatch; compatibility facade.
       transaction as every mutation and evidence row. Production wiring remains
       deny-only; this chunk proves denial/concealment and zero mutation, not a
       successful AUTH capability or complete business effect.
-- [ ] `PreparedBundlePreSubmitEvidenceService.persist(...)` joins that root
-      transaction through its public port and never opens or commits an
-      independent transaction; an integration test proves a final-stage failure
-      rolls back the Submission, binding, admission transition, evidence rows,
-      and authorization evidence together.
+- [ ] The command accepts only typed TASK-owned authority ports. It never
+      receives an AUTH prepared handle, raw authorization context, AUTH
+      repository/session, or private ART service. The deny-only implementations
+      conceal the unavailable capability before any protected mutation.
+- [ ] Pre-submit evidence and the ready admission are immutable prerequisites
+      produced by the earlier preparation path; 02F neither re-persists nor
+      mutates checker evidence. An integration test proves a final-stage failure
+      rolls back the Submission, binding, admission transition, and any
+      transaction-local authorization evidence together.
 - [ ] Composition opens one unit of work and wires ports only; TASK command owns
       sequencing and each owner enforces its invariants.
 - [ ] Denial, cancellation and persistence failure roll back all effects;
@@ -86,11 +102,30 @@ contribution dispatch; compatibility facade.
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02F-transaction-manifest.md`.
 - [ ] The new command remains hidden/unreachable pending 02G-02I.
 
+## Required lock and operation order
+
+1. Open one root transaction in the application composition adapter.
+2. Consume/conceal the human `submission.create` authority through its typed
+   deny-only TASK-facing port before protected state is revealed or mutated.
+3. Lock TASK, active assignment, and latest predecessor through TASK ownership.
+4. Allocate the immutable Submission id and next version from the locked facts.
+5. Insert and flush the provisional TASK-owned Submission identity/version so
+   ART's admission foreign key can be validated inside the same transaction.
+6. Call the ART admission-consumption public port with that exact id, version,
+   and TASK context; ART locks its lineage and consumes fixed binding authority.
+7. Attach the exact ART admission/content/binding references to the Submission
+   and flush the complete immutable row.
+8. Consume/record any final TASK-owned authority evidence inside the same root
+   transaction, then let the composition adapter commit once.
+
+No step may commit independently. Denial or failure at any step rolls back the
+whole root transaction.
+
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters app/main.py tests/test_submission_concurrency.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters/tasks tests/test_submission_composition.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_composition.py tests/test_tasks.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
@@ -112,3 +147,7 @@ lock order, deny-only zero effect, and absence of orchestration-domain drift.
 
 Stop if transaction atomicity requires public sessions/repositories, if ART
 must create Submission, or if the live route must change early.
+
+## Merge state
+
+- Outcome on merge: `complete`
