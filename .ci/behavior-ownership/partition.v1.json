@@ -49,6 +49,10 @@
       "target": "backend/app/api/router.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/routes/artifact_submissions.py"
+    },
+    {
       "group": "auth",
       "target": "backend/app/api/routes/auth.py"
     },
@@ -167,6 +171,10 @@
     {
       "group": "shared",
       "target": "backend/app/modules/api_controls/service.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_preparation.py"
     },
     {
       "group": "artifacts",
@@ -801,7 +809,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "ffaf4c71c39ad59d241f5526862800d870941a300d2f5810bb0ad33e30cb3b66",
+  "authority_digest": "ac50305ca09484ea683478e5a703056402892f61f0368b1a5ce5dee2e3d5ab15",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

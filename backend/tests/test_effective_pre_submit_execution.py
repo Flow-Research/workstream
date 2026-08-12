@@ -13,12 +13,24 @@ from app.modules.tasks.pre_submit_context import (
     load_locked_pre_submit_context,
 )
 from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitExecutionCustody,
+    PreSubmitExecutionResult,
     PreSubmitEvidenceConflict,
     PreSubmitEvidenceContext,
     PreSubmitEvidenceService,
     PersistedPreSubmitEvidence,
     pre_submit_failure_audit_payload,
     semantic_manifest_identity,
+    validate_predecessor_lineage,
+)
+from app.modules.tasks.api import (
+    SubmissionPredecessorFacts,
+    TaskLockedProjectContextReferences,
+    TaskSubmissionContextFacts,
+)
+from app.modules.checkers.api import (
+    PreSubmissionExecutionEntryFacts,
+    PreSubmissionExecutionFacts,
 )
 from app.modules.checkers.compiler import (
     PreSubmitCheckerCompilerError,
@@ -81,6 +93,38 @@ def test_evidence_operation_identity_binds_every_custody_fact() -> None:
     assert identity != context.operation_identity(effective_plan_sha256=_sha("8"))
 
 
+def test_post_byte_relock_rejects_advanced_predecessor_version() -> None:
+    predecessor_id = uuid4()
+    task_context = TaskSubmissionContextFacts(
+        task_id=uuid4(),
+        assignment_id=uuid4(),
+        contributor_id=uuid4(),
+        status="needs_revision",
+        kind="revision",
+        predecessor=SubmissionPredecessorFacts(
+            submission_id=predecessor_id,
+            version=2,
+        ),
+        locked_project_context=TaskLockedProjectContextReferences(
+            project_id=uuid4(),
+            guide_version="1",
+            source_snapshot_id=uuid4(),
+            source_snapshot_hash=_sha("1"),
+            effective_policy_id=uuid4(),
+            effective_policy_hash=_sha("2"),
+            pre_submit_policy_id=uuid4(),
+            pre_submit_policy_bundle_hash=_sha("3"),
+        ),
+    )
+
+    with pytest.raises(PreSubmitEvidenceConflict, match="pre_submit_locked_context_changed"):
+        validate_predecessor_lineage(
+            task_context,
+            predecessor_submission_id=predecessor_id,
+            predecessor_submission_version=1,
+        )
+
+
 def test_semantic_manifest_identity_is_server_deterministic() -> None:
     assert semantic_manifest_identity(_sha("a")) == semantic_manifest_identity(_sha("a"))
     assert semantic_manifest_identity(_sha("a")) != semantic_manifest_identity(_sha("b"))
@@ -89,7 +133,11 @@ def test_semantic_manifest_identity_is_server_deterministic() -> None:
 def test_pass_capability_is_generation_bound_and_single_use() -> None:
     evidence_set_id = uuid4()
     generation_id = uuid4()
-    capability = PreSubmitEvidenceService(SimpleNamespace())._mint_pass_capability(
+    capability = PreSubmitEvidenceService(
+        SimpleNamespace(),
+        task_contexts=SimpleNamespace(),
+        project_contexts=SimpleNamespace(),
+    )._mint_pass_capability(
         evidence_set_id=evidence_set_id,
         prepared_generation_id=generation_id,
         predecessor_submission_id=None,
@@ -348,39 +396,36 @@ def test_failure_audit_projection_is_bounded_and_path_free() -> None:
     task_id = uuid4()
     generation_id = uuid4()
     evidence = PersistedPreSubmitEvidence(uuid4(), _sha("1"), False)
-    execution = PreSubmissionExecutionResult(
-        plan_sha256=_sha("2"),
-        custody=PreSubmissionExecutionCustody(
+    execution = PreSubmitExecutionResult(
+        custody=PreSubmitExecutionCustody(
             prepared_generation_id=generation_id,
             archive_sha256=_sha("5"),
             archive_byte_count=1,
             semantic_manifest_sha256=_sha("6"),
             storage_scheme="s3",
         ),
-        eligible=False,
-        entries=(
-            PreSubmissionEntryResult(
-                schema_version="pre_submission_checker_result.v1",
-                definition=PreSubmissionResultDefinition(
+        checker_facts=PreSubmissionExecutionFacts(
+            plan_sha256=_sha("2"),
+            eligible=False,
+            entries=(
+                PreSubmissionExecutionEntryFacts(
                     dispatch_authority="workstream.pre_submission_checker_catalogue",
                     definition_id="policy.file.require",
                     definition_version="v1",
                     public_name="check_required_files",
-                    source="locked_effective_project_submission_artifact_policy",
-                ),
-                policy_trace=PreSubmissionResultPolicyTrace(
+                    policy_source="locked_effective_project_submission_artifact_policy",
                     effective_plan_sha256=_sha("2"),
                     rule_instance_id=_sha("3"),
                     locked_policy_sha256=_sha("4"),
+                    phase="project_policy",
+                    order=10,
+                    classification="mandatory_accountability",
+                    severity="blocking",
+                    checker_execution_status="failed",
+                    failure_code="pre_submission_checker_failed",
+                    message_code="required_file_missing",
+                    metadata=(("finding_count", 1),),
                 ),
-                phase="project_policy",
-                order=10,
-                classification="mandatory_accountability",
-                severity="blocking",
-                status=PreSubmissionResultStatus.FAILED,
-                failure_code="pre_submission_checker_failed",
-                message_code="required_file_missing",
-                metadata=(("finding_count", 1),),
             ),
         ),
     )
@@ -524,3 +569,26 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         match="pre_submission_result_context_invalid",
     ):
         validate_pre_submission_execution_result(plan, replace(forged, eligible=1))  # type: ignore[arg-type]
+
+    for metadata in (
+        (("finding_count",),),
+        ((["finding_count"], 1),),
+        (("unknown_count", 1),),
+        (("finding_count", 1), ("finding_count", 2)),
+        (("finding_count", "1"),),
+        (("finding_count", -1),),
+    ):
+        malformed_entry = replace(
+            forged.entries[0],
+            failure_code=None,
+            metadata=metadata,  # type: ignore[arg-type]
+        )
+        malformed = replace(
+            forged,
+            entries=(malformed_entry, *forged.entries[1:]),
+        )
+        with pytest.raises(
+            PreSubmissionInfrastructureUnavailable,
+            match="pre_submission_result_context_invalid",
+        ):
+            validate_pre_submission_execution_result(plan, malformed)

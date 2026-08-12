@@ -85,6 +85,51 @@ def test_new_private_edge_fails_exact_ledger_comparison(
         boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
 
 
+def test_owner_adapter_may_bind_only_its_own_private_implementation(
+    tmp_path: Path,
+) -> None:
+    """Owner adapters are composition; cross-owner private imports remain debt."""
+    _registry(tmp_path / "registry.json")
+    _write(
+        tmp_path / "backend/app/adapters/tasks/__init__.py",
+        "from app.modules.tasks.repository import TaskRepository\n"
+        "from app.modules.projects.repository import ProjectRepository\n",
+    )
+    private, _, _ = boundary.scan(
+        tmp_path, boundary.load_registry(tmp_path / "registry.json")
+    )
+    assert private == {
+        boundary.PrivateEdge(
+            "backend/app/adapters/tasks/__init__.py",
+            "projects",
+            "app.modules.projects.repository",
+            "WS-ARCH-001-03",
+        )
+    }
+
+
+def test_non_root_adapter_keeps_same_owner_private_debt_visible(
+    tmp_path: Path,
+) -> None:
+    """Only the exact owner composition root receives the wiring exemption."""
+    _registry(tmp_path / "registry.json")
+    _write(
+        tmp_path / "backend/app/adapters/tasks/worker.py",
+        "from app.modules.tasks.repository import TaskRepository\n",
+    )
+    private, _, _ = boundary.scan(
+        tmp_path, boundary.load_registry(tmp_path / "registry.json")
+    )
+    assert private == {
+        boundary.PrivateEdge(
+            "backend/app/adapters/tasks/worker.py",
+            "tasks",
+            "app.modules.tasks.repository",
+            "WS-ARCH-001-03",
+        )
+    }
+
+
 def test_import_from_modules_package_resolves_registered_alias(tmp_path: Path) -> None:
     """Package-level module aliases cannot disappear from dependency scanning."""
     _registry(tmp_path / "registry.json")
@@ -416,12 +461,22 @@ def test_initial_ledgers_capture_high_risk_application_edges() -> None:
     assert (
         "backend/app/interfaces/artifact_operations.py",
         "app.modules.checkers.pre_submit_execution",
-    ) in actual
-    assert any(
-        source.startswith("backend/app/adapters/artifacts/")
+    ) not in actual
+    assert not any(
+        source == "backend/app/adapters/artifacts/__init__.py"
         and target.startswith("app.modules.artifacts.")
         for source, target in actual
     )
+    assert any(
+        source.startswith("backend/app/adapters/artifacts/")
+        and source != "backend/app/adapters/artifacts/__init__.py"
+        and target.startswith("app.modules.artifacts.")
+        for source, target in actual
+    )
+    assert (
+        "backend/app/adapters/artifacts/__init__.py",
+        "app.modules.actors.service_identities",
+    ) in actual
     assert any(
         source.startswith("backend/app/workers/")
         and target.startswith("app.modules.projects.")
@@ -473,6 +528,25 @@ def test_auth_ledger_and_general_view_divergence_fails_closed(
     )
     with pytest.raises(boundary.ModuleBoundaryError, match="authorization_edge_divergence"):
         boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
+
+
+def test_authorization_adapter_root_is_present_in_canonical_auth_view(
+    tmp_path: Path,
+) -> None:
+    """Both scanners retain AUTH-private imports from its exact adapter root."""
+    _registry(tmp_path / "registry.json")
+    source = tmp_path / "backend/app/adapters/authorization/__init__.py"
+    _write(source, "import app.modules.authorization.runtime\n")
+    registry = boundary.load_registry(tmp_path / "registry.json")
+
+    _, _, actual_auth = boundary.scan(tmp_path, registry)
+
+    assert actual_auth == {
+        boundary.authorization_boundary.ImportEdge(
+            "backend/app/adapters/authorization/__init__.py",
+            "app.modules.authorization.runtime",
+        )
+    }
 
 
 @pytest.mark.parametrize(

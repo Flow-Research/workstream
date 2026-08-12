@@ -207,6 +207,27 @@ def test_partition_accepts_only_the_v01_migration_tool_removals() -> None:
         )
 
 
+def test_partition_accepts_only_exact_02d_behavior_targets() -> None:
+    """02D registers its route and public contract without wildcard authority."""
+    retained = "backend/app/core/config.py"
+    additions = {
+        "backend/app/api/routes/artifact_submissions.py",
+        "backend/app/modules/artifacts/api/submission_preparation.py",
+    }
+    trusted = _partition([retained])
+    current = _partition(sorted({retained, *additions}))
+
+    ownership._validate_additive_partition_transition(current, trusted)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(
+                sorted({retained, *additions, "backend/app/api/routes/extra.py"})
+            ),
+            trusted,
+        )
+
+
 def test_partition_rejects_reordered_trusted_assignments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

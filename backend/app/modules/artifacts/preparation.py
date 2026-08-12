@@ -56,10 +56,10 @@ _ROOT_MARKER_PREFIX = b"workstream-artifact-scratch-v1:"
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
-    """Blocking projection capability used only by the bounded async adapter."""
+    """Async projection capability used by bounded submission preparation."""
 
-    def process_blocking(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
-        """Return bounded results while executing outside the event loop."""
+    async def process(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
+        """Return bounded results without blocking the event loop."""
 
     def abort(self) -> None:
         """Deny checker access after cancellation or deadline expiry."""
@@ -1714,18 +1714,18 @@ class ArtifactPreparationService:
         if active is None or not active.handle_issued or active.stream_claimed:
             raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
 
-        def process_and_cleanup() -> _InspectionResult:
+        async def process_and_cleanup() -> _InspectionResult:
             with self._manager.extraction_workspace(
                 reserved_bytes=reserved_bytes,
                 maximum_entries=maximum_entries,
             ) as workspace:
                 active.reader.seek(0)
                 try:
-                    return processor.process_blocking(active.reader, workspace)
+                    return await processor.process(active.reader, workspace)
                 finally:
                     active.reader.seek(0)
 
-        operation = asyncio.create_task(self._run_io(process_and_cleanup))
+        operation = asyncio.create_task(process_and_cleanup())
         try:
             async with asyncio.timeout_at(active.deadline):
                 return await asyncio.shield(operation)

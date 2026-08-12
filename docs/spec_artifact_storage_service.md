@@ -351,11 +351,10 @@ Product modules receive only these narrow asynchronous capabilities:
 
 ```text
 GuideArtifactIngestPort.ingest(GuideArtifactIngestRequest)
-SubmissionBundlePreparationPort.prepare(SubmissionBundlePreparationRequest)
+SubmissionBundlePreparationCommand.prepare(SubmissionBundlePreparationRequest)
 ArtifactBindingPort.bind_guide_source(GuideSourceBindingRequest)
 ArtifactBindingPort.bind_submission(SubmissionBindingRequest)
 ArtifactBindingPort.bind_checker_output(CheckerOutputBindingRequest)
-ArtifactMaterializationPort.materialize_prepared_bundle(PreparedBundleMaterializationRequest)
 ArtifactMaterializationPort.materialize_bindings(BindingMaterializationRequest)
 CheckerArtifactOutputPort.store(CheckerOutputArtifactRequest)
 ArtifactOperatorReadPort.list_bindings/list_replicas/list_receipts/
@@ -365,8 +364,10 @@ ArtifactOperatorRecoveryPort.retry_verification(ArtifactRecoveryRequest)
 
 Every protected durable mutation in this port family consumes one opaque,
 process-local `PreparedAuthorizationHandle` at its transaction boundary. The
-hidden HTTP submission-bundle preparation request carries authenticated request
-context rather than a prepared handle; ART obtains separate prepared handles
+hidden HTTP submission-bundle preparation request carries immutable
+`ActorIdentityFacts`, request and correlation IDs, contributor selectors,
+packet metadata, and an asynchronous byte source rather than a prepared handle;
+ART obtains separate prepared handles
 immediately before materialization and durable put intent. The typed methods fix
 their expected actions, and handles never enter route schemas, outbox/Celery
 payloads, provider interfaces, or serialized contracts.
@@ -378,12 +379,18 @@ reference. `GuideSourceMaterializationRequest` contains an idempotency key and
 the exact guide, source, setup-generation, and binding identifiers; it contains
 no prepared handle. The materializer creates and consumes fresh fixed-reader
 authority inside the same root transaction that locks the canonical read facts.
-`SubmissionBundlePreparationRequest` contains authenticated request context,
-contributor task/assignment selectors, and one outer ZIP byte source. There is
-no upload-session compatibility port.
+`SubmissionBundlePreparationRequest` is exported only from
+`app.modules.artifacts.api`. It contains authenticated actor/identity-link
+facts, request and correlation IDs, contributor task/assignment/predecessor and
+idempotency selectors, packet metadata, and one outer ZIP byte source. It
+exposes neither raw authorization context nor a prepared handle. There is no
+upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
-only prepared authority, the exact task/assignment context, the current
-`PreparedArtifact` generation, and exact policy/checker selectors.
+opaque prepared authority, the exact task/assignment context, the current
+`PreparedArtifact` generation, the effective plan, inspection, manifest,
+change gate, packet, and exact policy/checker selectors. It is not a
+product capability port and may not cross a route, background execution,
+provider, or module public boundary.
 `BindingMaterializationRequest` contains task/submission/checker-run context and
 immutable binding IDs. `CheckerOutputArtifactRequest` contains the fixed
 service's prepared authority, task/submission/checker-run IDs, logical role,

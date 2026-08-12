@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
-from uuid import UUID
-
+from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     SubmissionBundleDurableIntentAuthorityFacts,
 )
-from app.modules.authorization.prepared import PreparedAuthorizationHandle
-from app.modules.authorization.runtime import AuthorizationContext
 
 
 class SubmissionBundlePreparedAuthorization(Protocol):
@@ -20,7 +17,7 @@ class SubmissionBundlePreparedAuthorization(Protocol):
     async def consume(
         self,
         *,
-        prepared_authorization: PreparedAuthorizationHandle,
+        prepared_authorization: object,
         facts: SubmissionBundleDurableIntentAuthorityFacts,
     ) -> None: ...
 
@@ -31,11 +28,13 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
     async def preflight(
         self,
         *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        assignment_id: UUID,
-        predecessor_submission_id: UUID | None,
-        idempotency_key: UUID,
+        request: SubmissionBundlePreparationRequest,
+    ) -> None: ...
+
+    async def revalidate(
+        self,
+        *,
+        request: SubmissionBundlePreparationRequest,
     ) -> None: ...
 
     def transaction(self) -> AbstractAsyncContextManager[object]: ...
@@ -43,12 +42,8 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
     async def prepare_final(
         self,
         *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        assignment_id: UUID,
-        predecessor_submission_id: UUID | None,
-        idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle: ...
+        request: SubmissionBundlePreparationRequest,
+    ) -> object: ...
 
     def close(self) -> None: ...
 
@@ -59,7 +54,7 @@ class DenySubmissionBundlePreparedAuthorization:
     async def consume(
         self,
         *,
-        prepared_authorization: PreparedAuthorizationHandle,
+        prepared_authorization: object,
         facts: SubmissionBundleDurableIntentAuthorityFacts,
     ) -> None:
         del prepared_authorization, facts
@@ -73,10 +68,14 @@ class DenySubmissionBundlePreparationAuthorization(DenySubmissionBundlePreparedA
         del values
         raise ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
 
+    async def revalidate(self, **values: object) -> None:
+        del values
+        raise ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
+
     def transaction(self) -> AbstractAsyncContextManager[object]:
         raise ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
 
-    async def prepare_final(self, **values: object) -> PreparedAuthorizationHandle:
+    async def prepare_final(self, **values: object) -> object:
         del values
         raise ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
 

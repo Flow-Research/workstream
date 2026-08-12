@@ -10,8 +10,9 @@ Cross-module runtime imports target only `app.modules.<module>.api`. A public
 API may expose immutable facts, commands/results, stable errors, opaque
 capability protocols, and ports. It may not expose ORM models, repositories,
 routers, database sessions, concrete services, kernels, registries, or other
-private implementation surfaces. Concrete implementations meet only in the
-application composition root.
+private implementation surfaces. Concrete implementations meet only in an
+explicit composition root: the application root or the exact owner adapter
+root `backend/app/adapters/<owner>/__init__.py`.
 
 Application-level paths are explicit rather than invisible exceptions:
 
@@ -20,15 +21,22 @@ Application-level paths are explicit rather than invisible exceptions:
   public ports;
 - `backend/app/api/**` and `backend/app/wor&#107;ers/**` are delivery/composition
   entry code and must consume typed module APIs;
-- `backend/app/adapters/**` implements infrastructure capabilities and is wired
-  at composition boundaries;
+- the exact `backend/app/adapters/<owner>/__init__.py` file is that owner's
+  adapter composition root and may import its own private implementation solely
+  to construct typed public ports; this exception does not apply to nested
+  adapter files, cross-owner private imports, product services, or delivery
+  code;
+- other `backend/app/adapters/**` files implement infrastructure capabilities
+  and must consume module public APIs; their existing private imports remain
+  frozen debt;
 - `backend/app/interfaces/**` is legacy shared-contract debt, not a permanent
   public-contract namespace;
 - `backend/app/db/models.py` is the sole metadata-discovery path and may import
   only module model declarations for SQLAlchemy registration. It gains no
   runtime service, repository, command, or authorization capability.
 
-All current private imports in the first four surfaces are frozen exact debt.
+Except for the exact same-owner adapter-root rule above, all current private
+imports in the first four surfaces are frozen exact debt.
 Every application path is scanned, including paths outside `modules/`.
 The one-time bootstrap is permitted only when the protected base contains
 neither registry nor ledger and the installing change touches no

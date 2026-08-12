@@ -20,8 +20,12 @@ authentication adapter, not the product boundary.
 The backend is a modular monolith governed by the canonical module map and
 public-API dependency rules in
 [`../.agent-loop/policies/architecture-boundaries.md`](../.agent-loop/policies/architecture-boundaries.md).
-Cross-module runtime imports use only the target module's typed `api` package;
-the composition root alone wires concrete implementations.
+Cross-module runtime imports use only the target module's typed `api` package.
+Concrete implementations are wired only by the application composition root or
+the exact same-owner adapter root `backend/app/adapters/<owner>/__init__.py`.
+That narrow adapter-root rule permits construction of the owner's public ports;
+it does not permit nested adapter files or any adapter to import another
+module's private implementation.
 
 The TASKS public boundary exposes immutable task, assignment, immediate
 Submission predecessor, and locked project-context reference selectors through

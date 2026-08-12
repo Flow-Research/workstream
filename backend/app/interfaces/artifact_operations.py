@@ -7,19 +7,8 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
-from app.modules.artifacts.sources import PreparedArtifact
-from app.modules.artifacts.submission_archive import SubmissionArchiveInspectionResult
-from app.modules.artifacts.submission_manifest import (
-    SubmissionChangeGateResult,
-    SubmissionManifest,
-)
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.runtime import AuthorizationContext
-from app.modules.checkers.effective_plan import EffectivePreSubmissionExecutionPlan
-from app.modules.checkers.pre_submit_execution import (
-    PreSubmissionExecutionResult,
-    SubmissionPacketView,
-)
 
 __all__ = (
     "ArtifactAuditResourceType",
@@ -47,9 +36,6 @@ __all__ = (
     "GuideSufficiencyMaterialUnavailable",
     "GuideSufficiencySourceItem",
     "GuideSufficiencyExtractionProvenance",
-    "PreparedBundleMaterializationRequest",
-    "SubmissionBundlePreparationPort",
-    "SubmissionBundlePreparationRequest",
     "SubmissionBindingRequest",
 )
 
@@ -256,38 +242,6 @@ class CheckerOutputBindingRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionBundlePreparationRequest:
-    """One authorized continuous contributor ZIP request without local handles."""
-
-    authorization_context: AuthorizationContext
-    task_id: UUID
-    assignment_id: UUID
-    predecessor_submission_id: UUID | None
-    idempotency_key: UUID
-    summary: str
-    contributor_attestation: str
-    media_type: str
-    byte_source: AsyncIterable[bytes]
-
-
-@dataclass(frozen=True, slots=True)
-class PreparedBundleMaterializationRequest:
-    """Process-local prepared bytes and exact 04A/04B1 execution facts."""
-
-    prepared_authorization: PreparedAuthorizationHandle
-    task_id: UUID
-    assignment_id: UUID
-    submission_artifact_policy_id: UUID
-    checker_policy_id: UUID
-    prepared_artifact: PreparedArtifact
-    effective_plan: EffectivePreSubmissionExecutionPlan
-    inspection: SubmissionArchiveInspectionResult
-    manifest: SubmissionManifest
-    change_gate: SubmissionChangeGateResult
-    packet: SubmissionPacketView
-
-
-@dataclass(frozen=True, slots=True)
 class BindingMaterializationRequest:
     """Immutable bindings selected by exact execution context."""
 
@@ -348,13 +302,6 @@ class GuideArtifactIngestCommand(Protocol):
         """Prepare authority before delegating to durable byte ingestion."""
 
 
-class SubmissionBundlePreparationPort(Protocol):
-    """Prepare one continuous contributor bundle without upload sessions."""
-
-    async def prepare(self, request: SubmissionBundlePreparationRequest) -> object:
-        """Prepare one authorized outer ZIP in bounded private scratch."""
-
-
 class ArtifactBindingPort(Protocol):
     """Create exact action-bound bindings from verified content."""
 
@@ -372,12 +319,6 @@ class ArtifactBindingPort(Protocol):
 
 class ArtifactMaterializationPort(Protocol):
     """Materialize only canonical immutable source forms."""
-
-    async def materialize_prepared_bundle(
-        self,
-        request: PreparedBundleMaterializationRequest,
-    ) -> PreSubmissionExecutionResult:
-        """Materialize one process-local prepared bundle generation."""
 
     async def materialize_guide_source(
         self,
