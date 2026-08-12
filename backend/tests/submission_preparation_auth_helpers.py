@@ -47,7 +47,11 @@ async def install_submitter_grant(connection, params) -> None:
             "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
             "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
             "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
-            "(:qualification,:project,:actor,'submitter','{}'::json,'{}'::json,"
+            "(:qualification,:project,:actor,'submitter',"
+            "'{\"availability\":\"available\",\"reference_ids\":[\"skill:test\"],"
+            "\"unavailable_reason\":null}'::json,"
+            "'{\"availability\":\"unavailable\",\"reference_ids\":[],"
+            "\"unavailable_reason\":\"no_record\"}'::json,"
             "'[]'::json,'[]'::json,:authorizer,:admin_grant)"
         ),
         {
