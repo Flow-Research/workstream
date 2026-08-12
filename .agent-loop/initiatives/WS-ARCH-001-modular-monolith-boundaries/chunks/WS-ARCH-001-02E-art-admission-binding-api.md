@@ -53,6 +53,7 @@ backend/tests/test_artifact_bindings.py
 backend/tests/test_artifact_bindings_db.py
 backend/tests/test_artifact_architecture.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
