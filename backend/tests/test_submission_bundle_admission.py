@@ -123,6 +123,23 @@ async def test_artifact_adapter_stale_scratch_cleanup_closes_manager(
     manager.close.assert_called_once_with()
 
 
+def test_artifact_adapter_maps_preparation_limits_from_settings() -> None:
+    settings = Settings()
+
+    preparation = artifact_adapters.artifact_preparation_limits(settings)
+    archive = artifact_adapters.submission_archive_limits(settings)
+
+    assert preparation.maximum_source_bytes == settings.artifact_maximum_bytes
+    assert preparation.maximum_files == settings.artifact_scratch_maximum_files
+    assert preparation.stream_buffer_bytes == settings.artifact_stream_buffer_bytes
+    assert archive.maximum_entries == settings.artifact_submission_zip_maximum_entries
+    assert archive.maximum_entry_bytes == settings.artifact_submission_zip_maximum_entry_bytes
+    assert (
+        archive.maximum_compression_ratio
+        == settings.artifact_submission_zip_maximum_compression_ratio
+    )
+
+
 def test_submission_bundle_preparation_route_is_hidden() -> None:
     app = create_app()
     route = next(
