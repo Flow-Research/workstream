@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
@@ -16,6 +17,16 @@ class SubmissionBundlePreparationRejected(RuntimeError):
 
 class SubmissionBundlePreparationUnavailable(RuntimeError):
     """Conceal unavailable or denied preparation authority."""
+
+
+class SubmissionBundlePreparationStatus(StrEnum):
+    """Closed public state vocabulary for one ART preparation operation."""
+
+    PREPARED = "prepared"
+    PUT_IN_FLIGHT = "put_in_flight"
+    OBJECT_CONFIRMED = "object_confirmed"
+    ABSENT_REPLAY_REQUIRED = "absent_replay_required"
+    READY = "ready"
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +52,7 @@ class SubmissionBundlePreparationResult:
 
     put_attempt_id: UUID
     admission_id: UUID | None
-    status: str
+    submission_bundle_preparation_status: SubmissionBundlePreparationStatus
     replayed: bool
 
 

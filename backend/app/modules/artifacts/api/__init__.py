@@ -5,6 +5,7 @@ from app.modules.artifacts.api.submission_preparation import (
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
     SubmissionBundlePreparationResult,
+    SubmissionBundlePreparationStatus,
     SubmissionBundlePreparationUnavailable,
 )
 
@@ -13,5 +14,6 @@ __all__ = (
     "SubmissionBundlePreparationRejected",
     "SubmissionBundlePreparationRequest",
     "SubmissionBundlePreparationResult",
+    "SubmissionBundlePreparationStatus",
     "SubmissionBundlePreparationUnavailable",
 )

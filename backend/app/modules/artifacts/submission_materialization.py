@@ -75,11 +75,11 @@ class PreSubmitCheckerExecutionRequest:
 
 
 class PreSubmitCheckerProcessor(Protocol):
-    """Blocking processor built by the composition-root CHECKER adapter."""
+    """Async processor built by the composition-root CHECKER adapter."""
 
     def abort(self) -> None: ...
 
-    def process_blocking(
+    async def process(
         self, reader: object, workspace: object
     ) -> PreSubmissionExecutionFacts: ...
 

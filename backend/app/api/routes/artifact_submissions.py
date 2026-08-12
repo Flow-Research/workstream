@@ -15,6 +15,7 @@ from app.modules.artifacts.api import (
     SubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
+    SubmissionBundlePreparationStatus,
     SubmissionBundlePreparationUnavailable,
 )
 from app.modules.authorization.api import ActorIdentityFacts
@@ -29,7 +30,7 @@ class SubmissionBundlePreparationResponse(BaseModel):
 
     put_attempt_id: UUID
     admission_id: UUID | None
-    status: str
+    submission_bundle_preparation_status: SubmissionBundlePreparationStatus
     replayed: bool
 
 

@@ -283,7 +283,7 @@ async def test_existing_durable_preparation_projects_exact_ready_admission() -> 
     assert result == SubmissionBundlePreparationResult(
         put_attempt_id=attempt_id,
         admission_id=admission_id,
-        status="ready",
+        submission_bundle_preparation_status="ready",
         replayed=True,
     )
 
@@ -297,7 +297,7 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
     expected = SubmissionBundlePreparationResult(
         put_attempt_id=uuid4(),
         admission_id=uuid4(),
-        status="ready",
+        submission_bundle_preparation_status="ready",
         replayed=True,
     )
     locked = SimpleNamespace(effective_policy_id=uuid4(), pre_submit_policy_id=uuid4())
@@ -393,7 +393,7 @@ def test_durable_put_result_projects_without_losing_replay_state() -> None:
         SubmissionBundlePreparationResult(
             put_attempt_id=durable.put_attempt_id,
             admission_id=None,
-            status="prepared",
+            submission_bundle_preparation_status="prepared",
             replayed=True,
         )
     )

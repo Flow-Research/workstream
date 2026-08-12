@@ -209,12 +209,12 @@ def scan(root: Path, registry: Registry) -> tuple[set[PrivateEdge], dict[str, se
                 raise ModuleBoundaryError("unknown_module")
             if source_module == target_module:
                 continue
-            if source_owner_adapter == target_module:
-                continue
             edge = authorization_boundary.ImportEdge(source, target)
             if source_module == "authorization" or target_module == "authorization":
                 if not _is_public_target(target, target_module):
                     auth_edges.add(edge)
+            if source_owner_adapter == target_module:
+                continue
         for target in exact_imports:
             target_module = _module_from_target(target)
             if target_module is None:

@@ -15,6 +15,7 @@ from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
     SubmissionBundlePreparationResult,
+    SubmissionBundlePreparationStatus,
     SubmissionBundlePreparationUnavailable,
 )
 from app.modules.artifacts.models import (
@@ -758,7 +759,9 @@ class PreparedSubmissionBundlePreparationCommand:
             return SubmissionBundlePreparationResult(
                 put_attempt_id=UUID(attempt.id),
                 admission_id=UUID(admission.id) if admission is not None else None,
-                status="ready" if admission is not None else attempt.status,
+                submission_bundle_preparation_status=SubmissionBundlePreparationStatus(
+                    "ready" if admission is not None else attempt.status
+                ),
                 replayed=True,
             )
 
@@ -792,6 +795,8 @@ class PreparedSubmissionBundlePreparationCommand:
         return SubmissionBundlePreparationResult(
             put_attempt_id=result.put_attempt_id,
             admission_id=result.admission_id,
-            status=result.status,
+            submission_bundle_preparation_status=SubmissionBundlePreparationStatus(
+                result.status
+            ),
             replayed=result.replayed,
         )

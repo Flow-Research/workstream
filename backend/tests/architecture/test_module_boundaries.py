@@ -530,6 +530,25 @@ def test_auth_ledger_and_general_view_divergence_fails_closed(
         boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
 
 
+def test_authorization_adapter_root_is_present_in_canonical_auth_view(
+    tmp_path: Path,
+) -> None:
+    """Both scanners retain AUTH-private imports from its exact adapter root."""
+    _registry(tmp_path / "registry.json")
+    source = tmp_path / "backend/app/adapters/authorization/__init__.py"
+    _write(source, "import app.modules.authorization.runtime\n")
+    registry = boundary.load_registry(tmp_path / "registry.json")
+
+    _, _, actual_auth = boundary.scan(tmp_path, registry)
+
+    assert actual_auth == {
+        boundary.authorization_boundary.ImportEdge(
+            "backend/app/adapters/authorization/__init__.py",
+            "app.modules.authorization.runtime",
+        )
+    }
+
+
 @pytest.mark.parametrize(
     "source",
     (

@@ -1,5 +1,6 @@
 """CHECKER-owned composition adapters."""
 
+import asyncio
 from typing import Any, BinaryIO, Protocol
 from pathlib import Path
 
@@ -9,9 +10,9 @@ from app.modules.checkers.api import (
 )
 from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
 from app.modules.checkers.pre_submit_execution import (
+    DefaultPreSubmissionExecutionError,
     DefaultPreSubmissionExecutionInput,
     EffectivePreSubmissionProcessor,
-    PreSubmissionInfrastructureUnavailable,
 )
 
 
@@ -35,12 +36,15 @@ class _PublicFactsCheckerProcessor:
     def abort(self) -> None:
         self._processor.abort()
 
-    def process_blocking(
+    async def process(
         self, reader: BinaryIO, workspace: Path
     ) -> PreSubmissionExecutionFacts:
         try:
-            return self._processor.process_blocking(reader, workspace).bounded_facts()
-        except PreSubmissionInfrastructureUnavailable as exc:
+            result = await asyncio.to_thread(
+                self._processor.process_blocking, reader, workspace
+            )
+            return result.bounded_facts()
+        except DefaultPreSubmissionExecutionError as exc:
             raise PreSubmissionInfrastructureUnavailableError(str(exc)) from exc
 
 

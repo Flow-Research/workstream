@@ -386,8 +386,9 @@ idempotency selectors, packet metadata, and one outer ZIP byte source. It
 exposes neither raw authorization context nor a prepared handle. There is no
 upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
-only opaque prepared authority, the exact task/assignment context, the current
-`PreparedArtifact` generation, and exact policy/checker selectors. It is not a
+opaque prepared authority, the exact task/assignment context, the current
+`PreparedArtifact` generation, the effective plan, inspection, manifest,
+change gate, packet, and exact policy/checker selectors. It is not a
 product capability port and may not cross a route, background execution,
 provider, or module public boundary.
 `BindingMaterializationRequest` contains task/submission/checker-run context and

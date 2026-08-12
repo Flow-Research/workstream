@@ -315,8 +315,10 @@ def _validate_execution(
                 entries=execution.entries,
             ),
         )
-    except PreSubmissionInfrastructureUnavailableError:
-        raise PreSubmitEvidenceConflict("pre_submission_result_context_invalid")
+    except PreSubmissionInfrastructureUnavailableError as exc:
+        raise PreSubmitEvidenceConflict(
+            "pre_submission_result_context_invalid"
+        ) from exc
 
 
 _PRE_SUBMIT_PASS_CAPABILITY_SEAL = object()
