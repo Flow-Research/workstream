@@ -88,7 +88,6 @@ MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
 )
 ARCH_02F_SUBMISSION_COMPOSITION_TARGETS = frozenset(
     {
-        "backend/app/adapters/tasks/submission_composition.py",
         "backend/app/modules/tasks/api/submission_command.py",
         "backend/app/modules/tasks/submission_composition.py",
     }

@@ -43,7 +43,6 @@ backend/app/modules/tasks/models.py
 backend/app/modules/tasks/repository.py
 backend/app/modules/tasks/service.py
 backend/app/modules/tasks/submission_composition.py
-backend/app/adapters/tasks/submission_composition.py
 backend/app/adapters/tasks/__init__.py
 backend/app/main.py
 backend/alembic/versions/<next-current-main-revision>.py

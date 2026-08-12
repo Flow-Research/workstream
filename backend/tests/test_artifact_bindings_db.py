@@ -21,7 +21,7 @@ from app.modules.artifacts.submission_bindings import (
     SubmissionAdmissionConsumptionService,
 )
 from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
-from app.adapters.tasks.submission_composition import TransactionalSubmissionCreationCommand
+from app.adapters.tasks import TransactionalSubmissionCreationCommand
 from app.modules.tasks.api import SubmissionCreationRequest, SubmissionCreationUnavailable
 from app.modules.tasks.models import Submission
 from app.modules.tasks.repository import TaskRepository
