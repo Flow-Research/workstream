@@ -44,11 +44,11 @@ async def _schema_state(database_url: str) -> tuple[str, bool, int, int, int, in
         await connection.close()
 
 
-def test_v01_baseline_preserves_guide_compilation_schema(
+def test_current_schema_preserves_guide_compilation_schema(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0001_v01_baseline",
+        "0002_admission_version",
         True,
         4,
         1,
