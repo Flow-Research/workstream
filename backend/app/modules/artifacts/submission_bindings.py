@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.artifacts.api import (
@@ -159,6 +159,7 @@ class SubmissionAdmissionConsumptionService:
             await self._session.flush()
             return self._result(admission, request, binding=None, replayed=False)
 
+        await self._lock_binding_scope(admission, request)
         existing = await self._session.scalar(
             select(ArtifactBinding)
             .where(
@@ -166,7 +167,7 @@ class SubmissionAdmissionConsumptionService:
                 ArtifactBinding.resource_type == "submission",
                 ArtifactBinding.resource_id == str(request.submission_id),
                 ArtifactBinding.logical_role == _LOGICAL_ROLE,
-                ArtifactBinding.scope_version == request.submission_version,
+                ArtifactBinding.scope_version == 1,
             )
             .with_for_update()
         )
@@ -186,7 +187,7 @@ class SubmissionAdmissionConsumptionService:
             resource_type="submission",
             resource_id=str(request.submission_id),
             logical_role=_LOGICAL_ROLE,
-            scope_version=request.submission_version,
+            scope_version=1,
             actor_id=admission.actor_profile_id,
             attribution_type="contributor",
             supersedes_binding_id=None,
@@ -196,8 +197,28 @@ class SubmissionAdmissionConsumptionService:
         admission.status = "consumed"
         admission.consumed_at = now
         admission.consumed_by_submission_id = str(request.submission_id)
+        admission.consumed_by_submission_version = request.submission_version
         await self._session.flush()
         return self._result(admission, request, binding=binding, replayed=False)
+
+    async def _lock_binding_scope(
+        self,
+        admission: SubmissionBundleAdmission,
+        request: SubmissionAdmissionConsumptionRequest,
+    ) -> None:
+        key = ":".join(
+            (
+                admission.project_id,
+                "submission",
+                str(request.submission_id),
+                _LOGICAL_ROLE,
+                "1",
+            )
+        )
+        await self._session.execute(
+            text("select pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": key},
+        )
 
     async def _consumed_replay(
         self,
@@ -211,10 +232,14 @@ class SubmissionAdmissionConsumptionService:
                 ArtifactBinding.resource_type == "submission",
                 ArtifactBinding.resource_id == str(request.submission_id),
                 ArtifactBinding.logical_role == _LOGICAL_ROLE,
-                ArtifactBinding.scope_version == request.submission_version,
+                ArtifactBinding.scope_version == 1,
             )
         )
-        if binding is None or binding.content_id != admission.artifact_content_id:
+        if (
+            admission.consumed_by_submission_version != request.submission_version
+            or binding is None
+            or binding.content_id != admission.artifact_content_id
+        ):
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_context_changed"
             )

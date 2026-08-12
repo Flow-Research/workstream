@@ -77,6 +77,7 @@ def _lineage(request: SubmissionAdmissionConsumptionRequest):
         archive_byte_count=9,
         consumed_at=None,
         consumed_by_submission_id=None,
+        consumed_by_submission_version=None,
         stale_at=None,
         stale_reason=None,
     )
@@ -134,6 +135,7 @@ def _session(*values):
         in_transaction=lambda: True,
         in_nested_transaction=lambda: False,
         scalar=AsyncMock(side_effect=values),
+        execute=AsyncMock(),
         add=Mock(),
         flush=AsyncMock(),
     )
@@ -170,9 +172,10 @@ async def test_ready_admission_creates_exact_binding_and_consumes_once() -> None
     assert binding.resource_type == "submission"
     assert binding.resource_id == str(request.submission_id)
     assert binding.logical_role == "submission_bundle_original"
-    assert binding.scope_version == request.submission_version
+    assert binding.scope_version == 1
     assert binding.content_id == admission.artifact_content_id
     assert admission.consumed_by_submission_id == str(request.submission_id)
+    assert admission.consumed_by_submission_version == request.submission_version
     assert admission.consumed_at == now
     facts = authority.consume.await_args.args[0]
     assert facts.admission_id == request.admission_id
@@ -270,6 +273,7 @@ async def test_matching_consumed_admission_replays_exact_binding() -> None:
     admission, evidence, content = _lineage(request)
     admission.status = "consumed"
     admission.consumed_by_submission_id = str(request.submission_id)
+    admission.consumed_by_submission_version = request.submission_version
     binding = SimpleNamespace(id=str(uuid4()), content_id=admission.artifact_content_id)
     session = _session(admission, evidence, content, binding)
 
@@ -290,6 +294,7 @@ async def test_consumed_admission_rejects_different_submission() -> None:
     admission, _, _ = _lineage(request)
     admission.status = "consumed"
     admission.consumed_by_submission_id = str(uuid4())
+    admission.consumed_by_submission_version = request.submission_version
     session = _session(admission)
 
     with pytest.raises(
@@ -314,6 +319,7 @@ async def test_consumed_admission_rejects_wrong_submission_version() -> None:
     admission, evidence, content = _lineage(original)
     admission.status = "consumed"
     admission.consumed_by_submission_id = str(original.submission_id)
+    admission.consumed_by_submission_version = original.submission_version
     session = _session(admission, evidence, content, None)
 
     with pytest.raises(

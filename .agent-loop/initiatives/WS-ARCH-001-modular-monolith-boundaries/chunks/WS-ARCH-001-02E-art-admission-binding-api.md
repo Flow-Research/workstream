@@ -47,7 +47,7 @@ backend/app/modules/artifacts/submission_admission.py
 backend/app/modules/artifacts/submission_bindings.py
 backend/app/modules/artifacts/guide_bindings.py
 backend/app/interfaces/artifact_operations.py
-backend/alembic/versions/<next-current-main-revision>.py
+backend/alembic/versions/0002_submission_admission_consumed_version.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_artifact_bindings.py
 backend/tests/test_artifact_bindings_db.py
@@ -99,8 +99,8 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/artifacts tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/artifacts tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py

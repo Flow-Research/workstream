@@ -19,6 +19,7 @@ from app.modules.artifacts.models import (
 from app.modules.artifacts.submission_bindings import (
     SubmissionAdmissionConsumptionService,
 )
+from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
 from test_artifact_bindings import _Allow, _lineage, _request
 
 
@@ -54,6 +55,14 @@ async def _isolated_binding_schema(database_url: str):
                 text(
                     f'create unique index uq_binding_scope on "{schema}".artifact_bindings '
                     "(project_id, resource_type, resource_id, logical_role, scope_version)"
+                )
+            )
+            await connection.execute(
+                text(
+                    f'alter table "{schema}".artifact_bindings add constraint '
+                    "scope_version_predecessor check "
+                    "((scope_version=1 and supersedes_binding_id is null) or "
+                    "(scope_version>1 and supersedes_binding_id is not null))"
                 )
             )
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -100,6 +109,12 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
     isolated_database_env: str,
 ) -> None:
     request = _request()
+    request = type(request)(
+        admission_id=request.admission_id,
+        submission_id=request.submission_id,
+        submission_version=2,
+        task_context=request.task_context,
+    )
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         async with factory.begin() as seed:
             await _seed(seed, schema, request)
@@ -114,6 +129,32 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
 
         first, second = await asyncio.gather(consume_once(), consume_once())
         assert sorted(result.replayed for result in (first, second)) == [False, True]
+        async with factory() as session:
+            await _set_schema(session, schema)
+            status = await session.scalar(
+                text("select status from submission_bundle_admissions where id=:id"),
+                {"id": str(request.admission_id)},
+            )
+            binding_count = await session.scalar(
+                text("select count(*) from artifact_bindings where resource_id=:id"),
+                {"id": str(request.submission_id)},
+            )
+            assert status == "consumed"
+            assert binding_count == 1
+
+        competing = _request(submission_id=request.submission_id)
+        async with factory.begin() as seed:
+            await _seed(seed, schema, competing)
+        async with factory() as session:
+            async with session.begin():
+                await _set_schema(session, schema)
+                with pytest.raises(
+                    SubmissionAdmissionConsumptionError,
+                    match="submission_bundle_admission_context_changed",
+                ):
+                    await SubmissionAdmissionConsumptionService(
+                        session, _Allow()
+                    ).consume(competing)
 
         rollback_request = _request()
         async with factory.begin() as seed:

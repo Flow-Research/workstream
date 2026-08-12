@@ -1109,10 +1109,13 @@ class SubmissionBundleAdmission(Base):
         ),
         CheckConstraint(
             "(status='ready' and consumed_at is null and consumed_by_submission_id is null "
+            "and consumed_by_submission_version is null "
             "and stale_at is null and stale_reason is null) or "
             "(status='consumed' and consumed_at is not null and "
-            "consumed_by_submission_id is not null and stale_at is null and stale_reason is null) or "
+            "consumed_by_submission_id is not null and consumed_by_submission_version > 0 "
+            "and stale_at is null and stale_reason is null) or "
             "(status='stale' and consumed_at is null and consumed_by_submission_id is null "
+            "and consumed_by_submission_version is null "
             "and stale_at is not null and octet_length(stale_reason) between 1 and 500)",
             name="terminal_shape",
         ),
@@ -1173,6 +1176,7 @@ class SubmissionBundleAdmission(Base):
     consumed_by_submission_id: Mapped[str | None] = mapped_column(
         ForeignKey("submissions.id", ondelete="RESTRICT")
     )
+    consumed_by_submission_version: Mapped[int | None] = mapped_column(Integer)
     stale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stale_reason: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(
