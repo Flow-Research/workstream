@@ -1,5 +1,9 @@
 # Chunk Contract: WS-ARCH-001-02H — AUTH Submission Consumption Activation
 
+## Merge state
+
+- Outcome on merge: `complete`
+
 ## Parent initiative
 
 WS-ARCH-001 — Modular Monolith Boundaries
