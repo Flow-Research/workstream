@@ -45,6 +45,7 @@ authority; these records do not grant or withhold it.
 | [WS-CI-002](initiatives/WS-CI-002-deterministic-agent-gates/STATUS.md) | `WS-CI-002-01` complete through PR #311; Agent Gates is deterministic per PR head | Preserve protected-branch review as the independent approval authority |
 | [WS-CI-003](initiatives/WS-CI-003-atomic-chunk-state/STATUS.md) | `WS-CI-003-01` complete | Require every chunk PR to land its final contract and initiative state atomically |
 | [WS-DB-001](initiatives/WS-DB-001-v01-schema-baseline/STATUS.md) | v0.1 schema baseline complete through PRs #316 and #317 | Extend `0001_v01_baseline` only through future bounded migrations |
+| [WS-SEC-001](initiatives/WS-SEC-001-dependency-alert-remediation/STATUS.md) | `WS-SEC-001-01` complete on merge with patched runtime and tooling dependencies | Handle future security alerts through fresh bounded dependency changes |
 | [WS-DOCS-001](initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md) | Current v0.1 entry documentation complete | Keep current pages synchronized with merged capability changes |
 | [WS-DOCS-002](initiatives/WS-DOCS-002-workstream-definition/STATUS.md) | Canonical Workstream definition complete | Preserve terminology across current documentation and generated artifacts |
 | [WS-XINT-001](initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/STATUS.md) | Planning reconciliation complete and closed | Owner initiatives implement the resulting boundaries |

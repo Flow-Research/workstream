@@ -1455,7 +1455,7 @@ with no tool, secret, provider, or instruction authority. Unsupported,
 ambiguous, malformed, stale, or failed required material stops setup internally.
 
 Complex-format parser dependencies are a closed, CI-owned supply-chain
-boundary. v0.1 approves only `pypdf==6.14.2` for PDF, `defusedxml==0.7.1` for
+boundary. v0.1 approves only `pypdf==6.15.0` for PDF, `defusedxml==0.7.1` for
 the shared OOXML safety boundary, and `Pillow==12.3.0` for PNG/JPEG/WebP
 structural metadata. The OOXML adapters do not add `python-docx`,
 `python-pptx`, `openpyxl`, `lxml`, or `XlsxWriter`. The canonical allowlist
@@ -1597,7 +1597,7 @@ sorted compact JSON; CSV is strict fixed-dialect row data serialized as compact
 JSON. Failed outcomes may retain bounded status evidence but never canonical
 output, successful usage, or a sufficiency report.
 
-PDF extraction uses only the exact approved `pypdf==6.14.2` wheel inside that
+PDF extraction uses only the exact approved `pypdf==6.15.0` wheel inside that
 same isolated child. The adapter requires the server-classified `pdf` format,
 accepts at most 500 pages, and emits compact canonical JSON containing one text
 entry per page so page boundaries remain explicit. Recursive object inspection
