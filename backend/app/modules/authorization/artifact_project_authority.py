@@ -14,6 +14,7 @@ from app.modules.authorization.runtime import (
 
 
 async def lock_guide_ingest_authority(repository, context, scope, permission_id, locked_context):
+    """Lock the exact human identity and project-scoped guide-ingest grant."""
     if (
         not isinstance(context, HumanAuthorizationContext)
         or scope.kind is not PreparedAuthorityScopeKind.PROJECT
@@ -34,6 +35,7 @@ async def lock_guide_ingest_authority(repository, context, scope, permission_id,
 
 
 def evaluate_guide_ingest_authority(action, authority, resource, lifecycle_denial):
+    """Evaluate guide-ingest facts against the locked project authority."""
     from app.modules.authorization.runtime import GuideSourceIngestResourceContext
 
     denial = lifecycle_denial

@@ -13,6 +13,7 @@ _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class SubmissionBundlePreparationRequestContext(BaseModel):
+    """Contributor selectors known before reading submission bytes."""
     model_config = _STRICT_FROZEN
     scope_project_id: UUID
     actor_profile_id: UUID
@@ -25,11 +26,13 @@ class SubmissionBundlePreparationRequestContext(BaseModel):
 class SubmissionBundlePreparationPreflightResourceContext(
     SubmissionBundlePreparationRequestContext
 ):
+    """Exact selectors revalidated before submission bytes are read."""
     resource_type: Literal["submission_bundle_preparation_preflight"]
     resource_id: UUID
 
 
 class SubmissionBundlePreparationResourceContext(SubmissionBundlePreparationRequestContext):
+    """Exact final contributor, policy, evidence, and artifact facts."""
     resource_type: Literal["submission_bundle_preparation"]
     resource_id: UUID
     predecessor_submission_version: int | None = Field(default=None, ge=1)
@@ -55,6 +58,7 @@ class SubmissionBundlePreparationResourceContext(SubmissionBundlePreparationRequ
 
     @model_validator(mode="after")
     def require_exact_identity_and_predecessor(self):
+        """Require a complete generation and predecessor identity."""
         if self.resource_id != self.prepared_generation_id:
             raise ValueError("submission preparation resource must match generation")
         if (self.predecessor_submission_id is None) != (
@@ -111,6 +115,7 @@ def parse_submission_preparation(
 
 
 def parse_submission_preparation_or_invalid(raw: dict, invalid_error):
+    """Map parsing errors to the opaque prepared-handle failure."""
     try:
         return parse_submission_preparation(raw)
     except (KeyError, TypeError, ValueError) as exc:
@@ -118,6 +123,7 @@ def parse_submission_preparation_or_invalid(raw: dict, invalid_error):
 
 
 def submission_preparation_binding_fields(values: tuple) -> dict:
+    """Name canonical preparation values for the PREP binding record."""
     request_context, request_digest, final_context, final_digest = values
     return {
         "submission_preparation_context": request_context,

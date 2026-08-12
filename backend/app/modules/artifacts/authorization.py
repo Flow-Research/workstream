@@ -69,6 +69,7 @@ class PreparedSubmissionBundlePreparationAuthorization:
     """Translate ART facts into AUTH's existing request-local PREP protocol."""
 
     def __init__(self, session: AsyncSession, context: AuthorizationContext) -> None:
+        """Compose one request-local ART-to-AUTH preparation adapter."""
         self._session = session
         self._context = context
         self._repository = AdminAuthorizationRepository(session)
@@ -82,6 +83,7 @@ class PreparedSubmissionBundlePreparationAuthorization:
 
     @staticmethod
     def _deny(exc: BaseException | None = None) -> NoReturn:
+        """Conceal every internal authorization failure from ART callers."""
         denial = ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
         if exc is None:
             raise denial
@@ -89,6 +91,7 @@ class PreparedSubmissionBundlePreparationAuthorization:
 
     @staticmethod
     def _request_input(request, project_id: UUID) -> PreparedAuthorizationInput:
+        """Build immutable preliminary selectors from the ART request."""
         return PreparedAuthorizationInput(
             idempotency_key=request.idempotency_key,
             request_value={
@@ -106,6 +109,7 @@ class PreparedSubmissionBundlePreparationAuthorization:
         )
 
     def _final_input(self, facts) -> PreparedAuthorizationInput:
+        """Build exact final request facts for transaction-bound PREP."""
         request_value = self._final_values(facts, json=True)
         return PreparedAuthorizationInput(
             idempotency_key=self._input.idempotency_key,

@@ -7,6 +7,7 @@ from app.modules.authorization.runtime import PreSubmitCheckerInputPreparationCo
 
 
 def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
+    """Parse and digest exact checker-materialization preparation facts."""
     try:
         value = dict(raw)
         for field in (
@@ -23,14 +24,17 @@ def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
 
 
 def initialize_artifact_bindings() -> tuple[None, None, None, None, None, None]:
+    """Return empty prepared-artifact binding slots."""
     return None, None, None, None, None, None
 
 
 def parse_submission_binding(raw: dict, invalid_error, parser) -> tuple:
+    """Delegate submission preparation parsing through its bounded parser."""
     return parser(raw, invalid_error)
 
 
 def parse_project_create_binding(raw: dict, invalid_error):
+    """Parse and validate exact project-create operation selectors."""
     try:
         operation_id = UUID(str(raw["operation_id"]))
         project_id = UUID(str(raw["project_id"]))
