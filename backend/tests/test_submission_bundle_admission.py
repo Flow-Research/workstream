@@ -105,19 +105,31 @@ async def test_artifact_adapter_preserves_public_actor_facts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_artifact_adapter_default_preparation_authority_denies() -> None:
-    authority = artifact_adapters.get_submission_bundle_preparation_authorization()
+async def test_explicit_deny_preparation_authority_denies() -> None:
+    from app.modules.artifacts.submission_authorization import (
+        DenySubmissionBundlePreparationAuthorization,
+    )
+
+    authority = DenySubmissionBundlePreparationAuthorization()
     request = _preparation_request(byte_source=object())
 
     with pytest.raises(ArtifactAuthorityDeniedError):
         await authority.preflight(request=request)
     with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.revalidate(request=request)
+        await authority.revalidate(request=request, project_id=uuid4())
     with pytest.raises(ArtifactAuthorityDeniedError):
         authority.transaction()
     with pytest.raises(ArtifactAuthorityDeniedError):
         await authority.prepare_final(request=request)
     authority.close()
+
+
+@pytest.mark.asyncio
+async def test_explicit_deny_durable_authority_denies_final_preparation() -> None:
+    authority = DenySubmissionBundlePreparedAuthorization()
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.prepare_final(facts=object())  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -216,7 +228,7 @@ def test_artifact_adapter_composes_submission_command_from_owner_ports(
     )
     session = object()
     internal_authority = object()
-    authority = artifact_adapters.get_submission_bundle_preparation_authorization()
+    authority = SimpleNamespace(close=Mock())
     task_contexts = object()
     project_contexts = object()
     monkeypatch.setattr(
@@ -459,8 +471,17 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
         inspect=AsyncMock(return_value=object()),
         close=AsyncMock(),
     )
+    events: list[str] = []
+
+    async def prepare_bytes(*_args, **_kwargs):
+        events.append("prepare_bytes")
+        return prepared
+
+    async def revalidate(**_kwargs):
+        events.append("revalidate")
+
     runtime = SimpleNamespace(
-        preparation=SimpleNamespace(prepare=AsyncMock(return_value=prepared)),
+        preparation=SimpleNamespace(prepare=AsyncMock(side_effect=prepare_bytes)),
         inspector=object(),
         catalogue=object(),
         materialization=SimpleNamespace(prepare_authorization=AsyncMock(return_value=object())),
@@ -490,7 +511,10 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
         "evaluate_submission_change",
         Mock(return_value=object()),
     )
-    authority = SimpleNamespace(preflight=AsyncMock(), close=Mock())
+    project_id = uuid4()
+    authority = SimpleNamespace(
+        preflight=AsyncMock(), revalidate=AsyncMock(side_effect=revalidate), close=Mock()
+    )
     command = PreparedSubmissionBundlePreparationCommand(
         session=SimpleNamespace(begin=_transaction),
         authority=authority,
@@ -499,14 +523,19 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
         runtime_factory=runtime_factory,
     )
     command._lock_context = AsyncMock(
-        return_value=(SimpleNamespace(predecessor=None), locked)
+        return_value=(
+            SimpleNamespace(
+                predecessor=None,
+                locked_project_context=SimpleNamespace(project_id=project_id),
+            ),
+            locked,
+        )
     )
     command._compile_plan = Mock(return_value=object())
     command._load_predecessor = AsyncMock(return_value=None)
     command._existing_durable_result = AsyncMock(return_value=expected)
 
-    result = await command.prepare(
-        SubmissionBundlePreparationRequest(
+    request = SubmissionBundlePreparationRequest(
             actor=ActorIdentityFacts(
                 actor_profile_id=actor_id,
                 identity_link_id=uuid4(),
@@ -523,10 +552,12 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
             media_type="application/zip",
             byte_source=artifact_byte_stream(b"PK\x03\x04replay"),
         )
-    )
+    result = await command.prepare(request)
 
     assert result == expected
     runtime.preparation.prepare.assert_awaited_once()
+    authority.revalidate.assert_awaited_once_with(request=request, project_id=project_id)
+    assert events[:2] == ["revalidate", "prepare_bytes"]
     runtime.evidence.materialize.assert_awaited_once()
     runtime.evidence.persist.assert_awaited_once()
     prepared.close.assert_awaited_once()
@@ -844,6 +875,8 @@ async def test_durable_put_admits_in_transaction_then_publishes(tmp_path) -> Non
         assert request.custody.prepared_generation_id == prepared.generation_id
         assert type(request.custody.pass_capability) is PreSubmitPassCapability
         assert values["existing_transaction"] is True
+        assert values["prepared_authorization"] is None
+        assert values["submission_prepared_authorization"] is service._authorization
         return admission_result
 
     admission = SimpleNamespace(admit=admit)
@@ -857,11 +890,10 @@ async def test_durable_put_admits_in_transaction_then_publishes(tmp_path) -> Non
         storage=storage,
         authorization=object(),
     )
-    handle = object.__new__(PreparedAuthorizationHandle)
     try:
         retained, selected_evidence_id, durable = await service.admit_in_transaction(
             SubmissionBundleDurablePutRequest(
-                prepared_authorization=handle,
+                prepared_authorization=None,
                 prepared_artifact=prepared,
                 pass_capability=_capability(prepared, evidence_set_id),
             )

@@ -704,7 +704,7 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionOwner.XINT_002_04B,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         PermissionId.SUBMISSION_CREATE,
         ActionOwner.XINT_002_05A,
@@ -875,6 +875,7 @@ def _index_actions(
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,

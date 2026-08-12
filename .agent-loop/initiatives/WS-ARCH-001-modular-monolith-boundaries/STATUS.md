@@ -27,10 +27,10 @@
   serializes binding identity, persists the consumed Submission id/version,
   creates one provider-neutral generic binding, and proves replay, concurrency,
   rollback, and stable conflicts without activating a route or AUTH action.
-- WS-ARCH-001-02F is complete in this change. TASK owns the immutable
+- WS-ARCH-001-02F is complete. TASK owns the immutable
   admission-backed Submission command and the adapter owns one hidden root
   transaction; production remains deny-only and route-unreachable.
-- Next durable boundary: WS-ARCH-001-02G only, AUTH contributor-preparation
+- Complete on merge: WS-ARCH-001-02G AUTH contributor-preparation
   activation. Open pull requests show transient ownership.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns

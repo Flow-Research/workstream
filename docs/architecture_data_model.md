@@ -837,7 +837,7 @@ and route-unreachable until the later TASK composition and AUTH activation
 chunks.
 The hidden preparation route keeps scratch and prepared handles process-local,
 returns before durable verification finishes, and remains excluded from OpenAPI
-and unavailable until AUTH activates `artifact.submission_bundle.prepare`.
+and crosses the active `artifact.submission_bundle.prepare` PREP boundary before durable intent.
 
 Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no

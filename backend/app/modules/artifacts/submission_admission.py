@@ -481,6 +481,10 @@ class PreparedSubmissionBundlePreparationCommand:
                         runtime.catalogue,
                     )
                     predecessor = await self._load_predecessor(task_context)
+                    await self._authority.revalidate(
+                        request=request,
+                        project_id=task_context.locked_project_context.project_id,
+                    )
                 prepared = await runtime.preparation.prepare(
                     request.byte_source,
                     media_type="application/zip",
@@ -544,10 +548,9 @@ class PreparedSubmissionBundlePreparationCommand:
                     evidence.evidence.evidence_set_id
                 )
                 async with self._authority.transaction():
-                    final_handle = await self._authority.prepare_final(request=request)
                     retained, _, durable = await runtime.durable_put.admit_in_transaction(
                         SubmissionBundleDurablePutRequest(
-                            prepared_authorization=final_handle,
+                            prepared_authorization=None,
                             prepared_artifact=prepared,
                             pass_capability=evidence.pass_capability,
                             replay_durable_intent_id=replay_intent_id,

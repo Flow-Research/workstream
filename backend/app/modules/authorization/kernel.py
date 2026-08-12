@@ -66,7 +66,6 @@ from app.modules.authorization.runtime import (
     AuthorizationEvidenceUnavailable,
     AuthorizationResourceContext,
     HumanAuthorizationContext,
-    GuideSourceIngestResourceContext,
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
@@ -90,6 +89,12 @@ from app.modules.authorization.runtime import (
     ServiceAuthorizationContext,
     ServiceActorProvisionResourceContext,
     authorization_resource_digest,
+)
+from app.modules.authorization.artifact_project_authority import (
+    evaluate_guide_ingest_authority,
+    evaluate_submitter_authority,
+    lock_guide_ingest_authority,
+    lock_submitter_authority,
 )
 
 ContextRevalidator = Callable[
@@ -518,7 +523,8 @@ class AuthorizationService:
                 action.permission_id,
                 scope_project_id=scope.project_id,
                 for_update=True,
-                allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}), exact_project_scope=action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+                allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}),
+                exact_project_scope=action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
             )
             if grant is None:
                 raise PreparedAuthorizationUnsupported(
@@ -553,26 +559,13 @@ class AuthorizationService:
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
-            if (
-                not isinstance(context, HumanAuthorizationContext)
-                or scope.kind is not PreparedAuthorityScopeKind.PROJECT
-                or scope.project_id is None
-            ):
-                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
-            locked = await self._admin.lock_request_actor(
-                context.identity_link_id, context.actor_profile_id
+            context, grant = await lock_guide_ingest_authority(
+                self._admin, context, scope, action.permission_id, self._locked_human_context
             )
-            context = self._locked_human_context(locked, context)
-            grant = await self._admin.find_effective_grant(
-                context.actor_profile_id,
-                action.permission_id,
-                scope_project_id=scope.project_id,
-                for_update=True,
+        elif action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
+            context, grant = await lock_submitter_authority(
+                self._admin, context, scope, self._locked_human_context
             )
-            if grant is None:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
         else:
             raise PreparedAuthorizationUnsupported(
                 AuthorizationDenialCode.PERMISSION_NOT_GRANTED
@@ -1084,23 +1077,17 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
-            denial = self._lifecycle_denial(context)
-            if denial is None and action.availability is not ActionAvailability.ACTIVE:
-                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if denial is None and not isinstance(
-                resource_context, GuideSourceIngestResourceContext
-            ):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-            if denial is None and resource_context.scope_project_id != authority.scope_project_id:
-                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
-            if denial is None and (
-                authority.matched_grant_id is None or authority.matched_grant_status != "active"
-            ):
-                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            if denial is None:
-                matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
-                matched_grant_id = authority.matched_grant_id
-                matched_project_id = authority.scope_project_id
+            denial, matched_kind, matched_grant_id, matched_project_id = (
+                evaluate_guide_ingest_authority(
+                    action, authority, resource_context, self._lifecycle_denial(context)
+                )
+            )
+        elif action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
+            denial, matched_kind, matched_grant_id, matched_project_id = (
+                evaluate_submitter_authority(
+                    action, context, authority, resource_context, self._lifecycle_denial(context)
+                )
+            )
         else:
             denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
         return await self._complete_decision(

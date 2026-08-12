@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
+from uuid import UUID
+
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
@@ -35,6 +37,7 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
         self,
         *,
         request: SubmissionBundlePreparationRequest,
+        project_id: UUID | None = None,
     ) -> None: ...
 
     def transaction(self) -> AbstractAsyncContextManager[object]: ...
@@ -42,7 +45,7 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
     async def prepare_final(
         self,
         *,
-        request: SubmissionBundlePreparationRequest,
+        facts: SubmissionBundleDurableIntentAuthorityFacts,
     ) -> object: ...
 
     def close(self) -> None: ...
@@ -50,6 +53,14 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
 
 class DenySubmissionBundlePreparedAuthorization:
     """Keep contributor durable preparation unavailable until XINT-05A."""
+
+    async def prepare_final(
+        self,
+        *,
+        facts: SubmissionBundleDurableIntentAuthorityFacts,
+    ) -> object:
+        del facts
+        raise ArtifactAuthorityDeniedError("submission bundle durable preparation is unavailable")
 
     async def consume(
         self,

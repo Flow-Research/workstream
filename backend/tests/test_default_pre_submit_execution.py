@@ -91,21 +91,15 @@ from tests.pre_submit_test_helpers import (
     evidence_workflow,
     submission_preparation_request,
 )
+from tests.submission_preparation_auth_helpers import (
+    install_submitter_grant,
+    prepared_submitter_authority,
+    table_counts,
+)
 
 
 async def _bytes(value: bytes):
     yield value
-
-
-class _AllowSubmissionPreparedAuthorization:
-    """Test-only final authority that records transaction-bound consumption."""
-
-    def __init__(self) -> None:
-        self.facts = None
-
-    async def consume(self, *, prepared_authorization, facts) -> None:
-        assert type(prepared_authorization) is PreparedAuthorizationHandle
-        self.facts = facts
 
 
 class _AllowOperatorAuthority:
@@ -456,7 +450,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("review_policies", "review_policy_mutation_custody"), ("revision_policies", "revision_policy_mutation_custody"),  # noqa: E501
     )
     blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
-    original_prepared_closed = bool()
+    original_prepared_closed = False
     tables = (
         "artifact_contents",
         "artifact_replicas",
@@ -642,10 +636,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            before = {
-                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
-                for table in tables
-            }
+            await install_submitter_grant(connection, params)
+            before = await table_counts(connection, tables)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as session:
             preparation_authority = cast(Any, SimpleNamespace(revalidate=AsyncMock()))
@@ -662,7 +654,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 actor_profile_id=actor_id,
                 identity_link_id=identity_link_id,
             )
-
             async def fresh_checked_bundle():
                 prepared = await preparation.prepare(
                     _bytes(_archive()),
@@ -717,25 +708,27 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 execute_committed_put=AsyncMock(),
                 resume_committed_put=AsyncMock(),
             )
-            final_authority = _AllowSubmissionPreparedAuthorization()
-            durable_service = SubmissionBundleDurablePutService(
-                session=session,
-                admission=ArtifactAdmissionService(
-                    session,
-                    admission_settings,
-                    namespace,
-                ),
-                storage=provider,
-                authorization=final_authority,
-            )
             async with session.begin():
+                final_authority = await prepared_submitter_authority(
+                    session, preparation_request, actor_id, identity_link_id, lineage.project_id,
+                )
+                durable_service = SubmissionBundleDurablePutService(
+                    session=session,
+                    admission=ArtifactAdmissionService(
+                        session,
+                        admission_settings,
+                        namespace,
+                    ),
+                    storage=provider,
+                    authorization=final_authority,
+                )
                 (
                     retained,
                     selected_evidence_id,
                     first_admission,
                 ) = await durable_service.admit_in_transaction(
                     SubmissionBundleDurablePutRequest(
-                        prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                        prepared_authorization=None,
                         prepared_artifact=request.prepared_artifact,
                         pass_capability=first.pass_capability,
                     )
@@ -762,7 +755,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     replay_admission,
                 ) = await durable_service.admit_in_transaction(
                     SubmissionBundleDurablePutRequest(
-                        prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                        prepared_authorization=None,
                         prepared_artifact=replay_prepared,
                         pass_capability=fresh.pass_capability,
                         replay_durable_intent_id=replay_intent_id,
@@ -794,7 +787,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 async with session.begin():
                     await durable_service.admit_in_transaction(
                         SubmissionBundleDurablePutRequest(
-                            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                            prepared_authorization=None,
                             prepared_artifact=drift_prepared,
                             pass_capability=drift.pass_capability,
                         )
@@ -820,7 +813,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 async with session.begin():
                     await denied_service.admit_in_transaction(
                         SubmissionBundleDurablePutRequest(
-                            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+                            prepared_authorization=None,
                             prepared_artifact=denied_prepared,
                             pass_capability=denied.pass_capability,
                         )

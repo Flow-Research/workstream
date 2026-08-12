@@ -19,7 +19,7 @@ from app.modules.authorization.domain.project_create import ProjectCreateResourc
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
-
+from app.modules.authorization.submission_preparation import SubmissionBundlePreparationPreflightResourceContext, SubmissionBundlePreparationResourceContext
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SETUP_RUN_READ: "setup_run",
@@ -1518,6 +1518,8 @@ AuthorizationResourceContext = (
     | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
     | PreSubmitCheckerInputResourceContext
+    | SubmissionBundlePreparationPreflightResourceContext
+    | SubmissionBundlePreparationResourceContext
 )
 
 
@@ -1609,6 +1611,8 @@ class AuthorizationDecision(BaseModel):
         "guide_source_binding",
         "guide_source_read",
         "pre_submit_checker_input",
+        "submission_bundle_preparation_preflight",
+        "submission_bundle_preparation",
     ]
     resource_id: (
         UUID
@@ -1668,17 +1672,13 @@ class AuthorizationDecision(BaseModel):
 
 
 class AuthorizationDenied(Exception):
-    """Fail-closed control flow carrying only one bounded decision."""
-
     def __init__(self, decision: AuthorizationDecision) -> None:
         if decision.allowed or decision.denial_code is None:
             raise TypeError("authorization denial requires a denied decision")
         self.decision = decision
         super().__init__("Authorization denied")
-
     @property
     def public_code(self) -> str:
-        """Map internal catalogue outcomes to the stable public denial."""
         denial_code = self.decision.denial_code
         if denial_code is None:
             raise RuntimeError("authorization denial lost its denial code")
@@ -1688,7 +1688,5 @@ class AuthorizationDenied(Exception):
         }:
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED.value
         return denial_code.value
-
-
 class AuthorizationEvidenceUnavailable(RuntimeError):
-    """Authorization evidence could not be persisted safely."""
+    pass
