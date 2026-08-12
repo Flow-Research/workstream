@@ -28,6 +28,10 @@ class DenySubmissionCreationAuthorization:
         del facts
         raise SubmissionCreationUnavailable("submission creation is unavailable")
 
+    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
+        del facts
+        raise SubmissionCreationUnavailable("submission creation is unavailable")
+
 
 class _ArtifactAdmissionAdapter:
     def __init__(self, admissions: SubmissionAdmissionConsumptionPort) -> None:
@@ -75,7 +79,3 @@ class TransactionalSubmissionCreationCommand:
                 authorization=self._authorization,
                 admissions=_ArtifactAdmissionAdapter(self._admissions),
             ).create(request)
-
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
-        del facts
-        raise SubmissionCreationUnavailable("submission creation is unavailable")

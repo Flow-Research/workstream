@@ -119,7 +119,6 @@ class TaskSubmissionCreationService:
         submission_id = uuid4()
         submission = build_submission(
             submission_id=str(submission_id), task=task,
-            task_assignment_id=str(request.assignment_id),
             contributor_id=str(request.contributor_id), version=version,
             summary=request.summary, worker_attestation=request.contributor_attestation,
             supersedes_submission_id=(str(context.predecessor.submission_id)
@@ -135,6 +134,7 @@ class TaskSubmissionCreationService:
             )
         )
         submission.submission_bundle_admission_id = str(request.admission_id)
+        submission.task_assignment_id = str(request.assignment_id)
         submission.artifact_binding_id = str(consumed.binding_id)
         submission.artifact_content_id = str(consumed.content_id)
         await self._session.flush()

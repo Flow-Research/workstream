@@ -113,7 +113,7 @@ def test_current_head_installs_submission_lineage_contract(
         )
         command.upgrade(config, HEAD_REVISION)
 
-    async def contract() -> tuple[bool, str, list[str], str]:
+    async def contract() -> tuple[bool, str, list[str], str, set[str], str]:
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             exists = await connection.fetchval(
@@ -145,11 +145,25 @@ def test_current_head_installs_submission_lineage_contract(
                 "where c.conname='ck_submissions_artifact_lineage_shape' "
                 "and t.relname='submissions'"
             )
-            return bool(exists), definition, [row["column_name"] for row in columns], lineage_shape
+            objects = await connection.fetch(
+                "select conname as name from pg_constraint c join pg_class t on t.oid=c.conrelid "
+                "where t.relname='submissions' and conname=any($1::text[]) union all "
+                "select indexname as name from pg_indexes where tablename='submissions' "
+                "and indexname=any($1::text[])",
+                ["fk_submissions_task_assignment_id_task_assignments",
+                 "ix_submissions_submission_bundle_admission_id",
+                 "uq_submissions_artifact_binding_id", "ix_submissions_artifact_content_id"],
+            )
+            package_nullable = await connection.fetchval(
+                "select is_nullable from information_schema.columns where table_name='submissions' "
+                "and column_name='package_hash'"
+            )
+            return (bool(exists), definition, [row["column_name"] for row in columns],
+                    lineage_shape, {row["name"] for row in objects}, package_nullable)
         finally:
             await connection.close()
 
-    exists, definition, columns, lineage_shape = asyncio.run(contract())
+    exists, definition, columns, lineage_shape, objects, package_nullable = asyncio.run(contract())
     assert exists is True
     assert "consumed_by_submission_version > 0" in definition
     assert columns == [
@@ -160,6 +174,13 @@ def test_current_head_installs_submission_lineage_contract(
     ]
     assert "task_assignment_id IS NULL" in lineage_shape
     assert "artifact_content_id IS NOT NULL" in lineage_shape
+    assert objects == {
+        "fk_submissions_task_assignment_id_task_assignments",
+        "ix_submissions_submission_bundle_admission_id",
+        "uq_submissions_artifact_binding_id",
+        "ix_submissions_artifact_content_id",
+    }
+    assert package_nullable == "YES"
 
 
 def test_manifest_covers_every_required_object_class() -> None:

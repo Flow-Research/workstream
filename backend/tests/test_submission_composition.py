@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.modules.tasks.api import (
+    SubmissionPredecessorFacts,
     SubmissionArtifactAdmissionResult,
     SubmissionCreationRequest,
     SubmissionCreationUnavailable,
@@ -137,3 +138,45 @@ async def test_final_authority_failure_remains_inside_caller_transaction():
     with pytest.raises(SubmissionCreationUnavailable):
         await service.create(request)
     assert len(persisted) == 1
+
+
+@pytest.mark.asyncio
+async def test_revision_increments_and_binds_the_exact_predecessor():
+    predecessor = SubmissionPredecessorFacts(submission_id=uuid4(), version=1)
+    initial = _request()
+    request = SubmissionCreationRequest(
+        admission_id=initial.admission_id, task_id=initial.task_id,
+        assignment_id=initial.assignment_id, contributor_id=initial.contributor_id,
+        predecessor_submission_id=predecessor.submission_id,
+        summary=initial.summary, contributor_attestation=initial.contributor_attestation,
+    )
+    context = _context(request)
+    context = TaskSubmissionContextFacts(
+        task_id=context.task_id, assignment_id=context.assignment_id,
+        contributor_id=context.contributor_id, status="needs_revision", kind="revision",
+        predecessor=predecessor, locked_project_context=context.locked_project_context,
+    )
+    seen = {}
+
+    class Authority:
+        async def authorize(self, facts): pass
+        async def consume(self, facts): seen.update(final=facts)
+
+    class Admissions:
+        async def consume(self, value):
+            seen["art"] = value
+            return SubmissionArtifactAdmissionResult(binding_id=uuid4(), content_id=uuid4())
+
+    service = TaskSubmissionCreationService(_Session(), authorization=Authority(), admissions=Admissions())
+
+    class Repository:
+        async def lock_submission_context(self, value): return context
+        async def get_task(self, task_id): return _task()
+        async def add_submission(self, submission): seen.update(submission=submission)
+
+    service._repository = Repository()
+    result = await service.create(request)
+    assert result.submission_version == 2
+    assert seen["submission"].supersedes_submission_id == str(predecessor.submission_id)
+    assert seen["art"].submission_version == 2
+    assert seen["final"].predecessor_submission_id == predecessor.submission_id
