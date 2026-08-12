@@ -7,8 +7,9 @@ WS-ARCH-001 — Modular Monolith Boundaries
 ## Goal
 
 Implement the TASK-owned immutable Submission command and hidden application
-composition that atomically consumes fresh human AUTH, fixed ART-binding AUTH,
-ART admission/binding, and TASK persistence through public ports.
+composition that atomically consumes deny-only human AUTH, deny-only fixed
+ART-binding AUTH, the already-ready ART admission/binding, and TASK persistence
+through public ports.
 
 ## Why this chunk exists
 
@@ -41,7 +42,9 @@ backend/app/modules/tasks/api/**
 backend/app/modules/tasks/models.py
 backend/app/modules/tasks/repository.py
 backend/app/modules/tasks/service.py
-backend/app/adapters/**/submission*.py
+backend/app/modules/tasks/submission_composition.py
+backend/app/adapters/tasks/submission_composition.py
+backend/app/adapters/tasks/__init__.py
 backend/app/main.py
 backend/alembic/versions/<next-current-main-revision>.py
 backend/tests/test_tasks.py
@@ -71,11 +74,15 @@ contribution dispatch; compatibility facade.
       transaction as every mutation and evidence row. Production wiring remains
       deny-only; this chunk proves denial/concealment and zero mutation, not a
       successful AUTH capability or complete business effect.
-- [ ] `PreparedBundlePreSubmitEvidenceService.persist(...)` joins that root
-      transaction through its public port and never opens or commits an
-      independent transaction; an integration test proves a final-stage failure
-      rolls back the Submission, binding, admission transition, evidence rows,
-      and authorization evidence together.
+- [ ] The command accepts only typed TASK-owned authority ports. It never
+      receives an AUTH prepared handle, raw authorization context, AUTH
+      repository/session, or private ART service. The deny-only implementations
+      conceal the unavailable capability before any protected mutation.
+- [ ] Pre-submit evidence and the ready admission are immutable prerequisites
+      produced by the earlier preparation path; 02F neither re-persists nor
+      mutates checker evidence. An integration test proves a final-stage failure
+      rolls back the Submission, binding, admission transition, and any
+      transaction-local authorization evidence together.
 - [ ] Composition opens one unit of work and wires ports only; TASK command owns
       sequencing and each owner enforces its invariants.
 - [ ] Denial, cancellation and persistence failure roll back all effects;
@@ -85,6 +92,23 @@ contribution dispatch; compatibility facade.
       and authorization resource manifest in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02F-transaction-manifest.md`.
 - [ ] The new command remains hidden/unreachable pending 02G-02I.
+
+## Required lock and operation order
+
+1. Open one root transaction in the application composition adapter.
+2. Consume/conceal the human `submission.create` authority through its typed
+   deny-only TASK-facing port before protected state is revealed or mutated.
+3. Lock TASK, active assignment, and latest predecessor through TASK ownership.
+4. Allocate the immutable Submission id and next version from the locked facts.
+5. Call the ART admission-consumption public port with that exact id, version,
+   and TASK context; ART locks its lineage and consumes fixed binding authority.
+6. Persist and flush the TASK-owned Submission with the exact predecessor and
+   ART content/binding references required by the command contract.
+7. Consume/record any final TASK-owned authority evidence inside the same root
+   transaction, then let the composition adapter commit once.
+
+No step may commit independently. Denial or failure at any step rolls back the
+whole root transaction.
 
 ## Verification commands
 
@@ -112,3 +136,7 @@ lock order, deny-only zero effect, and absence of orchestration-domain drift.
 
 Stop if transaction atomicity requires public sessions/repositories, if ART
 must create Submission, or if the live route must change early.
+
+## Merge state
+
+- Outcome on merge: `complete`

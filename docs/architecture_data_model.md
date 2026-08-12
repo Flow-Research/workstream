@@ -1336,7 +1336,7 @@ Fields:
 - `submission_bundle_manifest_id` (target server-generated manifest identity)
 - `pre_submit_evidence_set_id` (target checker evidence identity)
 - `package_uri` (legacy caller transport removed by WS-ARCH-001-02I, which implements the superseded WS-ART-001-05B cutover)
-- `package_hash` (legacy caller input removed by WS-ARCH-001-02I; never canonical)
+- `package_hash` (nullable legacy caller input removed by WS-ARCH-001-02I; never canonical)
 - `artifact_hash` (legacy transitional column replaced by exact binding/content identity and removed separately after all readers cut over)
 - `artifact_hash_manifest` (legacy caller manifest removed by WS-ARCH-001-02I)
 - `contributor_attestation`

@@ -477,6 +477,14 @@ class Submission(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    task_assignment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("task_assignments.id"), index=True
+    )
+    submission_bundle_admission_id: Mapped[str | None] = mapped_column(
+        String(36), unique=True, index=True
+    )
+    artifact_binding_id: Mapped[str | None] = mapped_column(String(36), unique=True)
+    artifact_content_id: Mapped[str | None] = mapped_column(String(36), index=True)
     task_id: Mapped[str] = mapped_column(
         ForeignKey("workstream_tasks.id"), nullable=False, index=True
     )
@@ -490,7 +498,7 @@ class Submission(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="submitted", index=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     package_uri: Mapped[str | None] = mapped_column(String(1000))
-    package_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    package_hash: Mapped[str | None] = mapped_column(String(128))
     artifact_hash_manifest: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
     worker_attestation: Mapped[str] = mapped_column(Text, nullable=False)
     locked_guide_version: Mapped[str] = mapped_column(String(50), nullable=False)

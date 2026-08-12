@@ -20,7 +20,7 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0002_admission_version"
+HEAD_REVISION = "0003_submission_lineage"
 BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
@@ -102,7 +102,7 @@ def test_fresh_database_matches_committed_manifest(
     assert actual == expected
 
 
-def test_current_head_installs_consumed_submission_version_contract(
+def test_current_head_installs_submission_lineage_contract(
     isolated_database_env: str, migration_lock
 ) -> None:
     config = _alembic_config()
@@ -112,7 +112,7 @@ def test_current_head_installs_consumed_submission_version_contract(
         )
         command.upgrade(config, HEAD_REVISION)
 
-    async def contract() -> tuple[bool, str]:
+    async def contract() -> tuple[bool, str, list[str]]:
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             exists = await connection.fetchval(
@@ -127,13 +127,30 @@ def test_current_head_installs_consumed_submission_version_contract(
                 "where c.conname='ck_submission_bundle_admissions_terminal_shape' "
                 "and n.nspname='public' and t.relname='submission_bundle_admissions'"
             )
-            return bool(exists), definition
+            columns = await connection.fetch(
+                "select column_name from information_schema.columns "
+                "where table_schema='public' and table_name='submissions' and "
+                "column_name=any($1::text[]) order by column_name",
+                [
+                    "artifact_binding_id",
+                    "artifact_content_id",
+                    "submission_bundle_admission_id",
+                    "task_assignment_id",
+                ],
+            )
+            return bool(exists), definition, [row["column_name"] for row in columns]
         finally:
             await connection.close()
 
-    exists, definition = asyncio.run(contract())
+    exists, definition, columns = asyncio.run(contract())
     assert exists is True
     assert "consumed_by_submission_version > 0" in definition
+    assert columns == [
+        "artifact_binding_id",
+        "artifact_content_id",
+        "submission_bundle_admission_id",
+        "task_assignment_id",
+    ]
 
 
 def test_manifest_covers_every_required_object_class() -> None:
