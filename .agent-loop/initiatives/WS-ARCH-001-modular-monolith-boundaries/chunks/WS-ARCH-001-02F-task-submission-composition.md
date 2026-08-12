@@ -52,6 +52,7 @@ backend/tests/test_submission_composition.py
 backend/scripts/run_test_lanes.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 backend/tests/authorization/guide_compilation/test_migration_contract.py
 backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/architecture/test_module_boundaries.py
