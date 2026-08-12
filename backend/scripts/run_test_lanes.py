@@ -142,6 +142,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_behavior_ownership.py",
     "tests/test_artifact_admission.py",
     "tests/test_submission_bundle_admission.py",
+    "tests/test_pre_submit_evidence_relock.py",
     "tests/test_artifact_operator_api.py",
     "tests/test_artifact_recovery.py",
     "tests/test_db_session.py",

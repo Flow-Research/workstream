@@ -63,6 +63,7 @@ backend/tests/architecture/test_module_boundaries.py
 backend/scripts/module_boundaries.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
+backend/scripts/run_test_lanes.py
 backend/tests/test_artifact_architecture.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
