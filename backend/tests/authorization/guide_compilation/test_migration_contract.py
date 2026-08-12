@@ -56,11 +56,11 @@ async def _insert_permission_without_action(database_url: str, permission: str) 
         await connection.close()
 
 
-def test_v01_baseline_preserves_exact_compilation_registries(
+def test_current_schema_preserves_exact_compilation_registries(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_registry_state(isolated_database_env)) == (
-        "0001_v01_baseline",
+        "0002_admission_version",
         1,
         1,
         1,
