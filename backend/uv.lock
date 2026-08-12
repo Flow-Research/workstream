@@ -1519,7 +1519,7 @@ requires-dist = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.13,<3.0" },
     { name = "pypdf", url = "https://files.pythonhosted.org/packages/af/72/ce3067ac31e214a66388159f8462ddb8c13dd00170f24d555a1f1ae8ee91/pypdf-6.15.0-py3-none-any.whl" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.0,<2.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4,<2.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<0.16" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3.0" },

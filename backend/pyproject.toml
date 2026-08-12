@@ -39,7 +39,7 @@ dev = [
   "docstr-coverage>=2.3,<3.0",
   "jsonschema==4.26.0",
   "pytest>=9.0.3,<10.0",
-  "pytest-asyncio>=1.0,<2.0",
+  "pytest-asyncio>=1.4,<2.0",
   "pytest-cov==7.1.0",
   "ruff>=0.8,<0.16",
 ]

@@ -28,7 +28,7 @@ dependencies and retained development tooling to patched versions.
 - `cryptography` resolves to at least 50.0.0.
 - `pypdf` is exactly 6.15.0 in the direct hash pin, approval manifest, and lock.
 - Backend pytest resolves to at least 9.0.3 after compatibility validation.
-- `pytest-asyncio` resolves to a pytest-9-compatible 1.x version.
+- `pytest-asyncio` resolves to the tested pytest-9-compatible 1.4.x line.
 - Retained mutation tooling pins pytest at least 9.0.3 and uv at least 0.11.15 with hashes.
 - Guide dependency integrity and focused parser, auth, and mutation-policy tests pass.
 - No Workstream product behavior changes.
@@ -41,9 +41,12 @@ test delta, and senior engineering.
 ## Verification
 
 ```bash
+set -euo pipefail
 cd backend
 uv lock --check
 uv run python scripts/check_guide_extractor_dependencies.py
+uv pip install --dry-run --require-hashes \
+  -r ../scripts/mutation-requirements.txt
 uv run pytest -q tests/test_guide_extractor_dependencies.py tests/test_guide_pdf.py tests/test_mutation_policy.py
 WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres \
   uv run python scripts/run_isolated_tests.py \
