@@ -1123,8 +1123,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     assert blocked.failure_audit["event_type"] == "pre_submission_check_failed"
     assert blocked.failure_audit["failed_count"] >= 1
     assert "task.toml" not in repr(blocked.failure_audit)
-    assert evidence_count == 5
-    assert result_count == 5 * len(request.effective_plan.entries)
+        assert (evidence_count, result_count) == (5, 5 * len(request.effective_plan.entries))
     assert after == {
         **before,
         "artifact_contents": before["artifact_contents"] + 1,
