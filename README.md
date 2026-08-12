@@ -102,31 +102,22 @@ Flow Identity is the current v0.1 external authentication provider. It is an
 adapter boundary, not the definition or ownership boundary of Workstream.
 Workstream is not an execution workspace and is not blockchain-first.
 
-## Core Thesis
+## Core Invariants
 
-Different projects speak different domain languages, but governed work and
-contribution systems share the same lifecycle:
+Different projects speak different domain languages, but Workstream preserves
+the same governing invariants across them:
 
-- every project has a guide
-- every project has an approved submission artifact policy
-- every task belongs to a project
-- every project has an active published contribution policy version with
-  explicit `accepted_submission` and `completed_review` rules, including
-  explicit unpaid rules where intended
-- every task has acceptance criteria
-- every submission has required artifacts, evidence references, hashes, and contributor attestation
-- every invalid submission packet is blocked before submission creation
-- every submission passes automated checks before human review
-- every valid human decision appends an immutable Review; submitted findings
-  and later resolutions are immutable
-- every revision responds to unresolved blocking feedback without rewriting it
-- every valid human review creates a reviewer contribution
-- every accepted Review creates one immutable FinalAcceptance
-- every submitter accepted_submission contribution consumes FinalAcceptance
-- every payable contribution updates compensation fulfillment; all contributions
-  may feed a separately implemented reputation projection
+- project guides and policies are versioned before they govern work
+- tasks, assignments, submissions, checks, and Reviews retain their exact
+  project and actor lineage
+- invalid submission packets stop before trusted Submission creation
+- findings, responses, resolutions, Reviews, and contribution facts append to
+  history rather than rewriting it
+- `FinalAcceptance` is the sole source of an accepted submitter contribution
+- conditional compensation follows contribution truth and never controls it
 
-Workstream turns that operating knowledge into reusable infrastructure.
+These invariants turn project-specific operating knowledge into reusable
+infrastructure without narrowing the complete v0.1 lifecycle defined above.
 
 ## Current v0.1 State
 
@@ -136,7 +127,7 @@ capabilities, not by calendar weeks or promised dates.
 Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
 submission packets, immutable artifact storage, automated checker execution,
-and the pre-review gate. Project-guide ingestion now has typed source handling,
+and the pre-review gate. Project-guide ingestion has typed source handling,
 bounded extraction, security controls, persisted sufficiency evidence, and
 authorized fixed-service guide-source binding and reads.
 
@@ -480,63 +471,26 @@ publication failures automatically.
 
 ## v0.1 Success Standard
 
-Workstream v0.1 must run a real internal task cycle with real people:
-
-```text
-Create project guide
-Create task
-Assign task
-Submit packet
-Run checks
-Review packet
-Record review decision: accept, needs_revision, or reject
-Create reviewer contribution for every valid human review
-For accept, create FinalAcceptance
-Use FinalAcceptance as the sole source of the submitter contribution
-Record compensation status only for payable contribution awards
-Project reputation only after its separate implementation
-Review lessons learned
-```
-
-The system is successful only if it prevents weak work from reaching review,
-preserves evidence, and gives operators a clear path from task intake through
-review, contribution, conditional compensation, and fulfillment.
+Workstream v0.1 succeeds only when the complete lifecycle defined at the top of
+this README runs as a real internal task cycle with real people. The cycle must
+prevent invalid work from reaching review, preserve exact evidence and
+authority, support revision without rewriting history, produce trusted
+contribution facts, and carry payable contributions through conditional award
+and fulfillment. Runtime reputation projection is not part of this release
+bar.
 
 ## Operating Standard
 
-Workstream is built as durable operational infrastructure:
+Workstream is built as durable operational infrastructure. Project rules live
+in versioned guides and policies rather than chat memory. Each active attempt
+keeps its locked governing context; `needs_revision` preparation rebases a
+complete valid context for the next attempt rather than silently mixing old and
+new rules.
 
-Governance:
-
-- project rules live in guides and policies, not chat memory
-- guide and policy versions are frozen for each active attempt so rules do not
-  drift silently; only human `needs_revision` preparation atomically rebases
-  changed applicable versions for the next attempt
-- out-of-band guidance is not enforceable until it becomes a guide, policy, template, or checker contract update
-
-Lifecycle and revision:
-
-- status is a ledger, not a loose label
-- revisions append one response and later resolution per required prior finding
-- revision context is prepared from the complete active Project Guide and
-  policy context before resubmission; exact component matches are kept, every
-  changed valid component is rebased together, and unsafe mixed context blocks
-
-Artifacts, evidence, and auditing:
-
-- reviews cite evidence and required changes
-- submitted artifacts are immutable and hash-bound to checker runs
-- every checker result is stored and auditable
-
-Contribution and compensation:
-
-- every valid human review creates a reviewer contribution from locked evidence
-- for an accept decision, FinalAcceptance alone sources the submitter contribution
-- only payable contributions create immutable awards and fulfillment tracking;
-  explicit unpaid rules create none
-- compensation fulfillment is recorded separately from task acceptance
-
-Checkers, lessons, and gates:
-
-- lessons learned become guide updates or new checkers
-- quality gates remain separate: project activation, task screening, and submission quality
+Lifecycle state is a ledger, not a loose label. Submitted artifacts remain
+immutable and hash-bound to their checks; findings, responses, resolutions,
+Reviews, and contribution facts remain attributable and auditable. Lessons
+become governed guide, policy, template, or checker changes before they affect
+future work. Project activation, task screening, submission quality, review,
+contribution recognition, and conditional fulfillment remain distinct gates
+even though they form one end-to-end v0.1 lifecycle.
