@@ -61,6 +61,8 @@ backend/app/api/router.py
 backend/app/api/routes/artifact_submissions.py
 backend/tests/architecture/test_module_boundaries.py
 backend/scripts/module_boundaries.py
+backend/scripts/behavior_ownership.py
+backend/tests/test_behavior_ownership.py
 backend/tests/test_artifact_architecture.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
