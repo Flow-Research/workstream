@@ -90,7 +90,7 @@ from app.modules.authorization.runtime import (
     ServiceActorProvisionResourceContext,
     authorization_resource_digest,
 )
-from app.modules.authorization.submission_preparation_kernel import (
+from app.modules.authorization.artifact_project_authority import (
     evaluate_guide_ingest_authority,
     evaluate_submitter_authority,
     lock_guide_ingest_authority,

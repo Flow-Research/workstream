@@ -104,6 +104,12 @@ async def test_submission_preparation_binds_exact_facts_and_rejects_replay() -> 
             )
 
         async def find_active_project_role(self, **values):
+            assert values == {
+                "project_id": project_id,
+                "actor_profile_id": context.actor_profile_id,
+                "role": "submitter",
+                "for_update": True,
+            }
             return SimpleNamespace(id=uuid4(), status="active")
 
     facts = Facts()
@@ -127,6 +133,17 @@ async def test_submission_preparation_binds_exact_facts_and_rejects_replay() -> 
         idempotency_key=caller.idempotency_key, request_value=final
     )
     resource = _resource(final)
+    mismatch_handle = await prepared.prepare(
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, final_caller, scope
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            mismatch_handle,
+            ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+            final_caller,
+            resource.model_copy(update={"archive_byte_count": 43}),
+        )
+    assert evidence.events == []
     handle = await prepared.prepare(
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, final_caller, scope
     )

@@ -1,4 +1,4 @@
-"""Narrow kernel rules for contributor submission preparation."""
+"""Narrow kernel rules for human project-scoped ART actions."""
 
 from __future__ import annotations
 

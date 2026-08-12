@@ -2,7 +2,7 @@
   "entries": [
     {
       "capability": "unassigned_legacy_auth",
-      "content_sha256": "8d08c66977e68fa592fb4d7bc6bc1bf3f03c93478c96207c2d50f377dad6f6c0",
+      "content_sha256": "e708ad45f832e909e52d63daed72ed8a75ca9b9ebc336af3ca9049254a3aec8f",
       "end_line": 1587,
       "hard_limit": 1200,
       "kind": "production_file",
