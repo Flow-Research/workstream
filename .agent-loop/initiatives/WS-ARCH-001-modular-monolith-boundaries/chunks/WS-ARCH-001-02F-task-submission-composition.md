@@ -49,6 +49,7 @@ backend/alembic/versions/<next-current-main-revision>.py
 backend/alembic/env.py
 backend/tests/test_tasks.py
 backend/tests/test_submission_composition.py
+backend/tests/test_artifact_bindings_db.py
 backend/scripts/run_test_lanes.py
 backend/scripts/behavior_ownership.py
 backend/tests/test_alembic.py
@@ -59,7 +60,11 @@ backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02F-task-submission-composition.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
+.agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02F-transaction-manifest.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02F-external-review-response.md
 docs/architecture_data_model.md
 ```
 

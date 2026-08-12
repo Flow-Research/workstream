@@ -142,20 +142,24 @@ def test_current_head_installs_submission_lineage_contract(
             lineage_shape = await connection.fetchval(
                 "select pg_get_constraintdef(c.oid) from pg_constraint c "
                 "join pg_class t on t.oid=c.conrelid "
+                "join pg_namespace n on n.oid=t.relnamespace "
                 "where c.conname='ck_submissions_artifact_lineage_shape' "
-                "and t.relname='submissions'"
+                "and t.relname='submissions' and n.nspname='public'"
             )
             objects = await connection.fetch(
                 "select conname as name from pg_constraint c join pg_class t on t.oid=c.conrelid "
-                "where t.relname='submissions' and conname=any($1::text[]) union all "
+                "join pg_namespace n on n.oid=t.relnamespace "
+                "where t.relname='submissions' and n.nspname='public' "
+                "and conname=any($1::text[]) union all "
                 "select indexname as name from pg_indexes where tablename='submissions' "
-                "and indexname=any($1::text[])",
+                "and schemaname='public' and indexname=any($1::text[])",
                 ["fk_submissions_task_assignment_id_task_assignments",
                  "ix_submissions_submission_bundle_admission_id",
                  "uq_submissions_artifact_binding_id", "ix_submissions_artifact_content_id"],
             )
             package_nullable = await connection.fetchval(
-                "select is_nullable from information_schema.columns where table_name='submissions' "
+                "select is_nullable from information_schema.columns where "
+                "table_schema='public' and table_name='submissions' "
                 "and column_name='package_hash'"
             )
             return (bool(exists), definition, [row["column_name"] for row in columns],
