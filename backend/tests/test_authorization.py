@@ -2125,8 +2125,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
         ActionId.PROJECT_CREATE,
-        ActionId.PROJECT_GUIDE_CREATE,
-        ActionId.PROJECT_GUIDE_UPDATE,
+        ActionId.PROJECT_GUIDE_CREATE, ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
         ActionId.PROJECT_GUIDE_COMPILATION_REQUEST, ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_REVIEW_POLICY_UPDATE,
@@ -2153,8 +2152,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
     }
     assert {
         definition.action_id.value: (

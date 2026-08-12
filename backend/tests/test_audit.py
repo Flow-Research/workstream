@@ -129,8 +129,7 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         action_id="artifact.binding.read",
         denial_code="permission_not_granted",
     )
-    assert denied.action_id is ActionId.ARTIFACT_BINDING_READ
-    assert denied.permission_id is PermissionId.ARTIFACT_BINDING_READ
+    assert (denied.action_id, denied.permission_id) == (ActionId.ARTIFACT_BINDING_READ, PermissionId.ARTIFACT_BINDING_READ)
     with pytest.raises(ValidationError, match="action permission"):
         _authority_input(
             AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
@@ -214,8 +213,7 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
-        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
     }
     artifact_allowed = _authority_input(
         AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
