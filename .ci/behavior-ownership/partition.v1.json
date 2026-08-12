@@ -29,6 +29,10 @@
       "target": "backend/app/adapters/project_agents/openai_agent_sdk.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/tasks/submission_composition.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/api_controls.py"
     },
@@ -678,6 +682,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/submission_command.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/submission_context.py"
     },
     {
@@ -711,6 +719,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/submission_composition.py"
     },
     {
       "group": "auth",
@@ -817,7 +829,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "2052bde67b61768756b7a2e342abdb96e311d10bc06709d1f61611f298ea2a7a",
+  "authority_digest": "4a06d3ea196d5aa9972b2c07019401f5fd5a8f44049745024359660e11a92b08",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

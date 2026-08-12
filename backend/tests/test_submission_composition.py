@@ -22,6 +22,9 @@ class _Session:
     def in_nested_transaction(self):
         return False
 
+    async def flush(self):
+        return None
+
 
 def _request():
     return SubmissionCreationRequest(
@@ -48,6 +51,7 @@ def _context(request):
 
 def _task():
     values = {
+        "id": str(uuid4()),
         "locked_guide_version": "1", "locked_post_submit_checker_policy_id": str(uuid4()),
         "locked_post_submit_checker_policy_version": "1",
         "locked_post_submit_checker_policy_hash": "sha256:" + "4" * 64,
@@ -72,7 +76,7 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
     events = []
 
     class Authority:
-        async def authorize(self, facts): events.append(("authorize", facts.submission_id))
+        async def authorize(self, facts): events.append(("authorize", facts.task_id))
         async def consume(self, facts): events.append(("final", facts.submission_version))
 
     class Admissions:
@@ -91,7 +95,7 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
 
     service._repository = Repository()
     result = await service.create(request)
-    assert [event[0] for event in events] == ["authorize", "task", "art", "persist", "final"]
+    assert [event[0] for event in events] == ["authorize", "task", "persist", "art", "final"]
     assert result.submission_version == 1
 
 

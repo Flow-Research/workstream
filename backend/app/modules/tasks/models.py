@@ -187,6 +187,13 @@ class WorkstreamTask(Base):
             """,
             name="post_submit_policy_lock_complete",
         ),
+        CheckConstraint(
+            "(task_assignment_id is null and submission_bundle_admission_id is null "
+            "and artifact_binding_id is null and artifact_content_id is null) or "
+            "(task_assignment_id is not null and submission_bundle_admission_id is not null "
+            "and artifact_binding_id is not null and artifact_content_id is not null)",
+            name="artifact_lineage_shape",
+        ),
         Index(
             "ix_workstream_tasks_locked_source_snapshot",
             "locked_guide_source_snapshot_id",

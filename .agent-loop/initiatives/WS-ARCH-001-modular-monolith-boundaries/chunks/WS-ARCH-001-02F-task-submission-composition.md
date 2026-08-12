@@ -47,10 +47,14 @@ backend/app/adapters/tasks/submission_composition.py
 backend/app/adapters/tasks/__init__.py
 backend/app/main.py
 backend/alembic/versions/<next-current-main-revision>.py
+backend/alembic/env.py
 backend/tests/test_tasks.py
-backend/tests/test_submission_concurrency.py
-backend/tests/test_submission_history.py
+backend/tests/test_submission_composition.py
+backend/scripts/run_test_lanes.py
+backend/scripts/behavior_ownership.py
 backend/tests/test_alembic.py
+backend/tests/authorization/guide_compilation/test_migration_contract.py
+backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
@@ -100,11 +104,13 @@ contribution dispatch; compatibility facade.
    deny-only TASK-facing port before protected state is revealed or mutated.
 3. Lock TASK, active assignment, and latest predecessor through TASK ownership.
 4. Allocate the immutable Submission id and next version from the locked facts.
-5. Call the ART admission-consumption public port with that exact id, version,
+5. Insert and flush the provisional TASK-owned Submission identity/version so
+   ART's admission foreign key can be validated inside the same transaction.
+6. Call the ART admission-consumption public port with that exact id, version,
    and TASK context; ART locks its lineage and consumes fixed binding authority.
-6. Persist and flush the TASK-owned Submission with the exact predecessor and
-   ART content/binding references required by the command contract.
-7. Consume/record any final TASK-owned authority evidence inside the same root
+7. Attach the exact ART admission/content/binding references to the Submission
+   and flush the complete immutable row.
+8. Consume/record any final TASK-owned authority evidence inside the same root
    transaction, then let the composition adapter commit once.
 
 No step may commit independently. Denial or failure at any step rolls back the
@@ -113,8 +119,8 @@ whole root transaction.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters app/main.py tests/test_submission_concurrency.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_tasks.py tests/test_submission_concurrency.py tests/test_submission_history.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/tasks app/adapters/tasks tests/test_submission_composition.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_composition.py tests/test_tasks.py tests/test_alembic.py --cov=app.modules.tasks --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py

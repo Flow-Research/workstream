@@ -2,6 +2,12 @@
   "schema_version": 1,
   "edges": [
     {
+      "source_file": "backend/app/adapters/tasks/submission_composition.py",
+      "target_module": "tasks",
+      "imported_private_path": "app.modules.tasks.submission_composition",
+      "repair_owner": "WS-ARCH-001-03"
+    },
+    {
       "source_file": "backend/app/adapters/artifacts/__init__.py",
       "target_module": "actors",
       "imported_private_path": "app.modules.actors.service_identities",

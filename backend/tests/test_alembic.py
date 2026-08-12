@@ -80,6 +80,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0002_admission_version",
         BASELINE_REVISION,
     ]
     assert revisions[-1].down_revision is None
@@ -112,7 +113,7 @@ def test_current_head_installs_submission_lineage_contract(
         )
         command.upgrade(config, HEAD_REVISION)
 
-    async def contract() -> tuple[bool, str, list[str]]:
+    async def contract() -> tuple[bool, str, list[str], str]:
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             exists = await connection.fetchval(
@@ -138,11 +139,17 @@ def test_current_head_installs_submission_lineage_contract(
                     "task_assignment_id",
                 ],
             )
-            return bool(exists), definition, [row["column_name"] for row in columns]
+            lineage_shape = await connection.fetchval(
+                "select pg_get_constraintdef(c.oid) from pg_constraint c "
+                "join pg_class t on t.oid=c.conrelid "
+                "where c.conname='ck_submissions_artifact_lineage_shape' "
+                "and t.relname='submissions'"
+            )
+            return bool(exists), definition, [row["column_name"] for row in columns], lineage_shape
         finally:
             await connection.close()
 
-    exists, definition, columns = asyncio.run(contract())
+    exists, definition, columns, lineage_shape = asyncio.run(contract())
     assert exists is True
     assert "consumed_by_submission_version > 0" in definition
     assert columns == [
@@ -151,6 +158,8 @@ def test_current_head_installs_submission_lineage_contract(
         "submission_bundle_admission_id",
         "task_assignment_id",
     ]
+    assert "task_assignment_id IS NULL" in lineage_shape
+    assert "artifact_content_id IS NOT NULL" in lineage_shape
 
 
 def test_manifest_covers_every_required_object_class() -> None:

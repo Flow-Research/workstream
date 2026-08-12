@@ -13,12 +13,13 @@ and production authorization remains deny-only.
    authority port before TASK state is revealed.
 3. TASK locks the task, active assignment, and latest predecessor.
 4. TASK allocates the Submission UUID and version.
-5. ART consumes the exact admission and fixed binding authority through its
+5. TASK inserts and flushes the provisional Submission identity/version.
+6. ART consumes the exact admission and fixed binding authority through its
    public port, locking ART lineage and binding scope.
-6. TASK inserts and flushes the immutable Submission with admission, binding,
+7. TASK completes and flushes the immutable Submission with admission, binding,
    content, assignment, predecessor, and locked policy references.
-7. TASK consumes final human authority using the allocated identity/version.
-8. The adapter commits once; every exception or cancellation rolls back all
+8. TASK consumes final human authority using the allocated identity/version.
+9. The adapter commits once; every exception or cancellation rolls back all
    participants.
 
 ## Public facts and ports

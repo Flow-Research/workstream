@@ -70,6 +70,7 @@ from app.modules.tasks.models import (
     WorkstreamTask,
 )
 from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.submission_composition import build_submission
 from app.modules.tasks.schemas import (
     AssignmentResponse,
     AuditEventResponse,
@@ -728,43 +729,14 @@ class TaskService:
 
         latest_submission = await self._repo.get_latest_submission_for_task(task.id)
         next_version = 1 if latest_submission is None else latest_submission.version + 1
-        submission = Submission(
-            id=str(uuid4()),
-            task_id=task.id,
-            contributor_id=actor.actor_id,
-            version=next_version,
-            status="submitted",
-            summary=payload.summary,
-            package_uri=payload.package_uri,
-            package_hash=payload.package_hash,
+        submission = build_submission(
+            submission_id=str(uuid4()), task=task, contributor_id=actor.actor_id,
+            version=next_version, summary=payload.summary,
+            package_uri=payload.package_uri, package_hash=payload.package_hash,
             artifact_hash_manifest=[
                 entry.model_dump(mode="json") for entry in payload.artifact_hash_manifest
             ],
             worker_attestation=payload.worker_attestation,
-            locked_guide_version=task.locked_guide_version,
-            locked_post_submit_checker_policy_id=task.locked_post_submit_checker_policy_id,
-            locked_post_submit_checker_policy_version=(
-                task.locked_post_submit_checker_policy_version
-            ),
-            locked_post_submit_checker_policy_hash=task.locked_post_submit_checker_policy_hash,
-            locked_post_submit_checker_policy_body=task.locked_post_submit_checker_policy_body,
-            locked_review_policy_id=task.locked_review_policy_id,
-            locked_review_policy_generation=task.locked_review_policy_generation,
-            locked_review_policy_hash=task.locked_review_policy_hash,
-            locked_revision_policy_id=task.locked_revision_policy_id,
-            locked_revision_policy_generation=task.locked_revision_policy_generation,
-            locked_revision_policy_hash=task.locked_revision_policy_hash,
-            locked_payment_policy_version=task.locked_payment_policy_version,
-            locked_guide_source_snapshot_id=task.locked_guide_source_snapshot_id,
-            locked_guide_source_snapshot_hash=task.locked_guide_source_snapshot_hash,
-            locked_effective_project_submission_artifact_policy_id=(
-                task.locked_effective_project_submission_artifact_policy_id
-            ),
-            locked_effective_project_submission_artifact_policy_hash=(
-                task.locked_effective_project_submission_artifact_policy_hash
-            ),
-            locked_pre_submit_checker_policy_id=task.locked_pre_submit_checker_policy_id,
-            locked_pre_submit_checker_bundle_hash=task.locked_pre_submit_checker_bundle_hash,
             supersedes_submission_id=None if latest_submission is None else latest_submission.id,
             evidence_items=[
                 EvidenceItem(

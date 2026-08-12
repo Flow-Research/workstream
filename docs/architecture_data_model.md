@@ -1331,8 +1331,8 @@ Fields:
 - `version`
 - `status`
 - `summary`
-- `submission_bundle_admission_id` (target canonical intake identity after ART-05)
-- `artifact_binding_id` (target canonical byte binding after ART-05)
+- `submission_bundle_admission_id` (hidden canonical intake identity from WS-ARCH-001-02F; public cutover remains 02I)
+- `artifact_binding_id` (hidden canonical byte binding from WS-ARCH-001-02F; public cutover remains 02I)
 - `submission_bundle_manifest_id` (target server-generated manifest identity)
 - `pre_submit_evidence_set_id` (target checker evidence identity)
 - `package_uri` (legacy caller transport removed by WS-ARCH-001-02I, which implements the superseded WS-ART-001-05B cutover)

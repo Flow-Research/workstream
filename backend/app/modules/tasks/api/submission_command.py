@@ -31,22 +31,32 @@ class SubmissionCreationRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionCreationAuthorityFacts:
-    """Exact TASK-owned facts consumed around protected mutation."""
+class SubmissionCreationPreparationFacts:
+    """TASK selectors checked before protected state is revealed."""
 
     task_id: UUID
     assignment_id: UUID
     contributor_id: UUID
     admission_id: UUID
     predecessor_submission_id: UUID | None
-    submission_id: UUID | None = None
-    submission_version: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionCreationAuthorityFacts(SubmissionCreationPreparationFacts):
+    """Exact final TASK identity/version required for authority consumption."""
+
+    submission_id: UUID
+    submission_version: int
+
+    def __post_init__(self) -> None:
+        if self.submission_version < 1:
+            raise ValueError("submission version is invalid")
 
 
 class SubmissionCreationAuthorizationPort(Protocol):
     """Authorize and finally consume human Submission authority in one transaction."""
 
-    async def authorize(self, facts: SubmissionCreationAuthorityFacts) -> None:
+    async def authorize(self, facts: SubmissionCreationPreparationFacts) -> None:
         """Conceal denial before TASK state is locked or revealed."""
 
     async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
