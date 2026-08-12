@@ -70,12 +70,15 @@ from app.modules.authorization.runtime import (
     ServiceAuthorizationContext,
 )
 from app.modules.authorization.submission_preparation import (
-    empty_submission_preparation_binding,
     parse_submission_preparation_or_invalid,
     submission_preparation_binding_fields,
     submission_preparation_binding_matches,
     SubmissionBundlePreparationPreflightResourceContext,
     SubmissionBundlePreparationResourceContext,
+)
+from app.modules.authorization.pre_submit_materialization import (
+    initialize_artifact_bindings,
+    parse_materialization_binding,
 )
 
 
@@ -573,37 +576,20 @@ class PreparedAuthorizationService:
         policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
         submission_policy_context = submission_policy_resource_digest = None
-        exact_artifact_context = exact_artifact_resource_digest = None
         (
+            exact_artifact_context,
+            exact_artifact_resource_digest,
             submission_preparation_context,
             submission_preparation_resource_digest,
             submission_preparation_final_context,
             submission_preparation_final_digest,
-        ) = empty_submission_preparation_binding()
+        ) = initialize_artifact_bindings()
         compilation_binding = parse_prepared_compilation(action_id, caller_input.request_value)
         if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
-            try:
-                value = dict(caller_input.request_value)
-                for field in (
-                    "resource_id",
-                    "task_id",
-                    "assignment_id",
-                    "project_id",
-                    "guide_id",
-                    "source_snapshot_id",
-                    "submission_artifact_policy_id",
-                    "checker_policy_id",
-                    "prepared_generation_id",
-                ):
-                    value[field] = UUID(str(value[field]))
-                resource = PreSubmitCheckerInputPreparationContext.model_validate(value)
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            exact_artifact_context = resource.model_dump(mode="json")
-            exact_artifact_resource_digest = canonical_json_hash(
-                {"pre_submit_checker_input_preparation": exact_artifact_context}
+            exact_artifact_context, exact_artifact_resource_digest = (
+                parse_materialization_binding(
+                    dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
+                )
             )
         if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
             (

@@ -94,6 +94,7 @@ from tests.pre_submit_test_helpers import (
 from tests.submission_preparation_auth_helpers import (
     install_submitter_grant,
     prepared_submitter_authority,
+    table_counts,
 )
 
 
@@ -636,10 +637,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 params,
             )
             await install_submitter_grant(connection, params)
-            before = {
-                table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
-                for table in tables
-            }
+            before = await table_counts(connection, tables)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as session:
             preparation_authority = cast(Any, SimpleNamespace(revalidate=AsyncMock()))
@@ -711,9 +709,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 execute_committed_put=AsyncMock(),
                 resume_committed_put=AsyncMock(),
             )
-            final_authority = await prepared_submitter_authority(
-                session, preparation_request, actor_id, identity_link_id, lineage.project_id
-            )
+            final_authority = await prepared_submitter_authority(session, preparation_request, actor_id, identity_link_id, lineage.project_id)
             durable_service = SubmissionBundleDurablePutService(
                 session=session,
                 admission=ArtifactAdmissionService(

@@ -47,6 +47,7 @@ backend/app/modules/authorization/runtime.py
 backend/app/modules/authorization/repository.py
 backend/app/modules/authorization/submission_preparation.py
 backend/app/modules/authorization/artifact_project_authority.py
+backend/app/modules/authorization/pre_submit_materialization.py
 backend/app/adapters/auth/**
 backend/app/adapters/artifacts/__init__.py
 backend/app/modules/artifacts/submission_authorization.py

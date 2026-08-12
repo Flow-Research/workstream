@@ -54,6 +54,13 @@ async def install_submitter_grant(connection, params) -> None:
     )
 
 
+async def table_counts(connection, tables) -> dict[str, int]:
+    return {
+        table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
+        for table in tables
+    }
+
+
 async def prepared_submitter_authority(session, request, actor_id, identity_link_id, project_id):
     authority = PreparedSubmissionBundlePreparationAuthorization(
         session,

@@ -110,10 +110,6 @@ def parse_submission_preparation(
     return request_context, request_digest, final_context, final_digest
 
 
-def empty_submission_preparation_binding() -> tuple[None, None, None, None]:
-    return None, None, None, None
-
-
 def parse_submission_preparation_or_invalid(raw: dict, invalid_error):
     try:
         return parse_submission_preparation(raw)
