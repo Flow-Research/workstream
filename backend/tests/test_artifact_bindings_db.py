@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -63,6 +64,31 @@ async def _isolated_binding_schema(database_url: str):
                     "scope_version_predecessor check "
                     "((scope_version=1 and supersedes_binding_id is null) or "
                     "(scope_version>1 and supersedes_binding_id is not null))"
+                )
+            )
+            await connection.execute(
+                text(
+                    f'create unique index uq_admission_consumer on "{schema}".'
+                    "submission_bundle_admissions (consumed_by_submission_id) "
+                    "where consumed_by_submission_id is not null"
+                )
+            )
+            await connection.execute(
+                text(
+                    f'alter table "{schema}".submission_bundle_admissions add constraint '
+                    "terminal_shape check ("
+                    "(status='ready' and consumed_at is null and "
+                    "consumed_by_submission_id is null and "
+                    "consumed_by_submission_version is null and stale_at is null and "
+                    "stale_reason is null) or "
+                    "(status='consumed' and consumed_at is not null and "
+                    "consumed_by_submission_id is not null and "
+                    "consumed_by_submission_version > 0 and stale_at is null and "
+                    "stale_reason is null) or "
+                    "(status='stale' and consumed_at is null and "
+                    "consumed_by_submission_id is null and "
+                    "consumed_by_submission_version is null and stale_at is not null and "
+                    "octet_length(stale_reason) between 1 and 500))"
                 )
             )
         factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -143,7 +169,7 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
             assert binding_count == 1
 
         first_competing = _request(submission_id=uuid4())
-        competing = _request(submission_id=first_competing.submission_id)
+        competing = replace(first_competing, admission_id=uuid4())
         async with factory.begin() as seed:
             await _seed(seed, schema, first_competing)
             await _seed(seed, schema, competing)

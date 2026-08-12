@@ -9,7 +9,7 @@
 | `WS-ARCH-001-02B` | PROJECTS locked guide and submission-policy public facts/ports | L1 | Merged PR #315 |
 | `WS-ARCH-001-02C` | CHECKERS effective pre-submit plan and bounded execution-result public facts/ports | L1 | Merged PR #320; no contributor preparation action or public route activated |
 | `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Complete; production remains deny-only |
-| `WS-ARCH-001-02E` | ART ready-admission consumption and binding public capability | L1 | Complete; production remains deny-only and route-unreachable |
+| `WS-ARCH-001-02E` | ART ready-admission consumption and binding hidden module-level capability | L1 | Complete; production remains deny-only and route-unreachable |
 | `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Next durable boundary |
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Proposed after 02F |
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Proposed after 02G |

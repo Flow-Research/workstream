@@ -119,6 +119,10 @@ python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
+The hosted `shared_foundations_a` and `shared_foundations_b` lanes additionally
+run the authoritative ART route-isolation and module-boundary tests registered
+in `backend/scripts/run_test_lanes.py`.
+
 ## Required reviewers
 
 Architecture, security/auth, product/ops, QA, senior engineering, CI integrity,

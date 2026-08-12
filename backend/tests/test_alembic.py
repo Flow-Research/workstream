@@ -121,8 +121,11 @@ def test_current_head_installs_consumed_submission_version_contract(
                 "and column_name='consumed_by_submission_version' and data_type='integer')"
             )
             definition = await connection.fetchval(
-                "select pg_get_constraintdef(oid) from pg_constraint "
-                "where conname='ck_submission_bundle_admissions_terminal_shape'"
+                "select pg_get_constraintdef(c.oid) from pg_constraint c "
+                "join pg_class t on t.oid=c.conrelid "
+                "join pg_namespace n on n.oid=t.relnamespace "
+                "where c.conname='ck_submission_bundle_admissions_terminal_shape' "
+                "and n.nspname='public' and t.relname='submission_bundle_admissions'"
             )
             return bool(exists), definition
         finally:
