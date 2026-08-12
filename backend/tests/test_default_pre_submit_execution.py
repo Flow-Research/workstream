@@ -183,7 +183,7 @@ def _plan(catalogue):
         guide_id=uuid4(),
         guide_version=1,
         source_snapshot_id=uuid4(),
-        source_snapshot_hash="sha256:" + "1" * 64,
+        source_snapshot_hash=canonical_json_hash({}),
         effective_policy_id=uuid4(),
         effective_policy_hash=policy_hash,
         pre_submit_policy_id=uuid4(),
