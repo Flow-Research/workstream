@@ -20,7 +20,7 @@ async def install_submitter_grant(connection, params) -> None:
         text(
             "insert into actor_profiles "
             "(id,actor_kind,status,provisioning_method,created_by) values "
-            "(:authorizer,'human','active','administrative','test')"
+            "(:authorizer,'human','active','automatic_first_access','test')"
         ),
         {"authorizer": authorizer_id},
     )
