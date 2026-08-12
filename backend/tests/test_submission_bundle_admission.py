@@ -13,7 +13,9 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
+import app.adapters.artifacts as artifact_adapters
 import app.modules.artifacts.submission_admission as submission_admission_module
+from app.core.config import Settings
 from app.modules.artifacts.pre_submit_evidence import (
     PreSubmitEvidenceConflict,
     PreSubmitEvidenceService,
@@ -88,6 +90,37 @@ def _preparation_request(
 
 def _sha(character: str) -> str:
     return "sha256:" + character * 64
+
+
+@pytest.mark.asyncio
+async def test_artifact_adapter_preserves_public_actor_facts() -> None:
+    actor = _actor()
+
+    assert await artifact_adapters.get_submission_bundle_preparation_actor(actor) is actor
+
+
+@pytest.mark.asyncio
+async def test_artifact_adapter_default_preparation_authority_denies() -> None:
+    authority = artifact_adapters.get_submission_bundle_preparation_authorization()
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.preflight(request=_preparation_request(byte_source=object()))
+
+
+@pytest.mark.asyncio
+async def test_artifact_adapter_stale_scratch_cleanup_closes_manager(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = SimpleNamespace(cleanup_stale=AsyncMock(return_value=3), close=Mock())
+    monkeypatch.setattr(
+        artifact_adapters,
+        "create_artifact_scratch_manager",
+        lambda _settings: manager,
+    )
+
+    assert await artifact_adapters.cleanup_stale_artifact_scratch(Settings()) == 3
+    manager.cleanup_stale.assert_awaited_once_with()
+    manager.close.assert_called_once_with()
 
 
 def test_submission_bundle_preparation_route_is_hidden() -> None:
