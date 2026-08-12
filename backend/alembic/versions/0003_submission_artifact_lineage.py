@@ -33,7 +33,7 @@ def upgrade() -> None:
         "uq_submissions_artifact_binding_id", "submissions", ["artifact_binding_id"]
     )
     op.create_check_constraint(
-        "ck_submissions_artifact_lineage_shape",
+        op.f("ck_submissions_artifact_lineage_shape"),
         "submissions",
         "(task_assignment_id is null and submission_bundle_admission_id is null "
         "and artifact_binding_id is null and artifact_content_id is null) or "
