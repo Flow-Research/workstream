@@ -68,9 +68,14 @@ from app.modules.authorization.runtime import (
     ProjectReviewPolicyMutationResourceContext,
     ProjectRevisionPolicyMutationResourceContext,
     ServiceAuthorizationContext,
-    SubmissionBundlePreparationResourceContext,
+)
+from app.modules.authorization.submission_preparation import (
+    empty_submission_preparation_binding,
+    parse_submission_preparation_or_invalid,
+    submission_preparation_binding_fields,
+    submission_preparation_binding_matches,
     SubmissionBundlePreparationPreflightResourceContext,
-    SubmissionBundlePreparationRequestContext,
+    SubmissionBundlePreparationResourceContext,
 )
 
 
@@ -312,21 +317,12 @@ def _submission_preparation_binding_matches(
     resource: SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext,
 ) -> bool:
-    if isinstance(resource, SubmissionBundlePreparationResourceContext):
-        context = resource.model_dump(mode="json")
-        return binding.submission_preparation_final_context == context and (
-            binding.submission_preparation_final_digest
-            == authorization_resource_digest(resource)
-        )
-    request_context = SubmissionBundlePreparationRequestContext.model_validate(
-        {
-            field: getattr(resource, field)
-            for field in SubmissionBundlePreparationRequestContext.model_fields
-        }
-    ).model_dump(mode="json")
-    return binding.submission_preparation_context == request_context and (
-        binding.submission_preparation_resource_digest
-        == canonical_json_hash({"submission_bundle_preparation": request_context})
+    return submission_preparation_binding_matches(
+        request_context=binding.submission_preparation_context,
+        request_digest=binding.submission_preparation_resource_digest,
+        final_context=binding.submission_preparation_final_context,
+        final_digest=binding.submission_preparation_final_digest,
+        resource=resource,
     )
 
 
@@ -405,8 +401,7 @@ class PreparedAuthorizationService:
                 action_id, resource, authority.scope_project_id
             )
             if setup_match is False or (
-                setup_match is None
-                and action_id is not ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE
+                setup_match is None and action_id is not ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE
             ):
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.RESOURCE_GUARD_DENIED
@@ -472,9 +467,7 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
             final_resource_context, SubmissionBundlePreparationResourceContext
-        ) and not _submission_preparation_binding_matches(
-            issuance.binding, final_resource_context
-        ):
+        ) and not _submission_preparation_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
             final_resource_context,
@@ -581,8 +574,12 @@ class PreparedAuthorizationService:
         sufficiency: dict[str, object] = {}
         submission_policy_context = submission_policy_resource_digest = None
         exact_artifact_context = exact_artifact_resource_digest = None
-        submission_preparation_context = submission_preparation_resource_digest = None
-        submission_preparation_final_context = submission_preparation_final_digest = None
+        (
+            submission_preparation_context,
+            submission_preparation_resource_digest,
+            submission_preparation_final_context,
+            submission_preparation_final_digest,
+        ) = empty_submission_preparation_binding()
         compilation_binding = parse_prepared_compilation(action_id, caller_input.request_value)
         if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
             try:
@@ -609,55 +606,14 @@ class PreparedAuthorizationService:
                 {"pre_submit_checker_input_preparation": exact_artifact_context}
             )
         if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
-            try:
-                value = dict(caller_input.request_value)
-                for field in (
-                    "scope_project_id", "actor_profile_id", "identity_link_id",
-                    "task_id", "assignment_id",
-                ):
-                    value[field] = UUID(str(value[field]))
-                for field in ("predecessor_submission_id",):
-                    if value.get(field) is not None:
-                        value[field] = UUID(str(value[field]))
-                request_resource = SubmissionBundlePreparationRequestContext.model_validate(
-                    {
-                        field: value[field]
-                        for field in SubmissionBundlePreparationRequestContext.model_fields
-                    }
-                )
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            submission_preparation_context = request_resource.model_dump(mode="json")
-            submission_preparation_resource_digest = canonical_json_hash(
-                {"submission_bundle_preparation": submission_preparation_context}
+            (
+                submission_preparation_context,
+                submission_preparation_resource_digest,
+                submission_preparation_final_context,
+                submission_preparation_final_digest,
+            ) = parse_submission_preparation_or_invalid(
+                dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
             )
-            if "prepared_generation_id" in value:
-                try:
-                    for field in (
-                        "pre_submit_evidence_set_id", "prepared_generation_id", "guide_id",
-                        "source_snapshot_id", "effective_policy_id", "pre_submit_policy_id",
-                        "semantic_manifest_id",
-                    ):
-                        value[field] = UUID(str(value[field]))
-                    if value.get("replay_durable_intent_id") is not None:
-                        value["replay_durable_intent_id"] = UUID(
-                            str(value["replay_durable_intent_id"])
-                        )
-                    final_resource = SubmissionBundlePreparationResourceContext(
-                        resource_type="submission_bundle_preparation",
-                        resource_id=value["prepared_generation_id"],
-                        **value,
-                    )
-                except (KeyError, TypeError, ValueError) as exc:
-                    raise PreparedAuthorizationHandleInvalid(
-                        "invalid prepared authorization handle"
-                    ) from exc
-                submission_preparation_final_context = final_resource.model_dump(mode="json")
-                submission_preparation_final_digest = authorization_resource_digest(
-                    final_resource
-                )
         if action_id is ActionId.PROJECT_CREATE:
             try:
                 operation_id = UUID(str(caller_input.request_value["operation_id"]))
@@ -896,10 +852,14 @@ class PreparedAuthorizationService:
             submission_policy_resource_digest=submission_policy_resource_digest,
             exact_artifact_context=exact_artifact_context,
             exact_artifact_resource_digest=exact_artifact_resource_digest,
-            submission_preparation_context=submission_preparation_context,
-            submission_preparation_resource_digest=submission_preparation_resource_digest,
-            submission_preparation_final_context=submission_preparation_final_context,
-            submission_preparation_final_digest=submission_preparation_final_digest,
+            **submission_preparation_binding_fields(
+                (
+                    submission_preparation_context,
+                    submission_preparation_resource_digest,
+                    submission_preparation_final_context,
+                    submission_preparation_final_digest,
+                )
+            ),
             **compilation_binding,
         )
 

@@ -45,6 +45,8 @@ backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/modules/authorization/repository.py
+backend/app/modules/authorization/submission_preparation.py
+backend/app/modules/authorization/submission_preparation_kernel.py
 backend/app/adapters/auth/**
 backend/app/adapters/artifacts/__init__.py
 backend/app/modules/artifacts/submission_authorization.py
@@ -54,6 +56,9 @@ backend/app/modules/artifacts/service.py
 backend/tests/test_authorization.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
+backend/tests/submission_preparation_auth_helpers.py
+backend/tests/test_submission_preparation_adapter.py
+backend/tests/test_submission_preparation_authorization.py
 backend/tests/architecture/test_authorization_boundary.py
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
@@ -64,6 +69,7 @@ backend/tests/architecture/test_authorization_boundary.py
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02G-preparation-activation.md
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 docs/spec_authorization_service.md
 docs/architecture_data_model.md
 docs/roadmap_status.md
@@ -112,6 +118,9 @@ binding path.
       authorities remain unchanged; no fixed binding authority or TASK
       Submission consumption becomes available.
 - [ ] AUTH and general boundary ledgers do not grow.
+- [ ] New preparation behavior is factored into bounded production and test
+      modules; the frozen AUTH structural-debt ledger is regenerated only for
+      verified shrinkage, never to accept new or enlarged debt.
 
 ## Verification commands
 

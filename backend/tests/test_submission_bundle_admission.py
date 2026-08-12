@@ -32,7 +32,6 @@ from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
     ArtifactAuthorityDeniedError,
     SubmissionBundleArtifactAdmissionRequest,
-    SubmissionBundleDurableIntentAuthorityFacts,
 )
 from app.interfaces.artifacts import (
     ArtifactConfigurationError,
@@ -123,75 +122,6 @@ async def test_explicit_deny_preparation_authority_denies() -> None:
     with pytest.raises(ArtifactAuthorityDeniedError):
         await authority.prepare_final(request=request)
     authority.close()
-
-
-def test_artifact_adapter_composes_active_preparation_authority() -> None:
-    from app.modules.artifacts.authorization import (
-        PreparedSubmissionBundlePreparationAuthorization,
-    )
-
-    session = object()
-    context = object()
-    authority = artifact_adapters.get_submission_bundle_preparation_authorization(
-        session, context
-    )
-    assert type(authority) is PreparedSubmissionBundlePreparationAuthorization
-    assert authority._session is session
-    assert authority._context is context
-
-
-@pytest.mark.asyncio
-async def test_final_preparation_rejects_cross_request_facts() -> None:
-    from app.modules.artifacts.authorization import (
-        PreparedSubmissionBundlePreparationAuthorization,
-    )
-    from app.modules.authorization.runtime import PreparedAuthorizationInput
-
-    authority = object.__new__(PreparedSubmissionBundlePreparationAuthorization)
-    project_id, actor_id, link_id, task_id, assignment_id = (
-        uuid4() for _ in range(5)
-    )
-    authority._input = PreparedAuthorizationInput(
-        idempotency_key=uuid4(),
-        request_value={
-            "scope_project_id": str(project_id),
-            "actor_profile_id": str(actor_id),
-            "identity_link_id": str(link_id),
-            "task_id": str(task_id),
-            "assignment_id": str(assignment_id),
-            "predecessor_submission_id": None,
-        },
-    )
-    facts = SubmissionBundleDurableIntentAuthorityFacts(
-        actor_profile_id=actor_id,
-        identity_link_id=link_id,
-        project_id=project_id,
-        task_id=task_id,
-        assignment_id=uuid4(),
-        predecessor_submission_id=None,
-        predecessor_submission_version=None,
-        pre_submit_evidence_set_id=uuid4(),
-        prepared_generation_id=uuid4(),
-        guide_id=uuid4(),
-        guide_version="v1",
-        source_snapshot_id=uuid4(),
-        source_snapshot_sha256=_sha("1"),
-        effective_policy_id=uuid4(),
-        effective_policy_sha256=_sha("2"),
-        pre_submit_policy_id=uuid4(),
-        pre_submit_policy_sha256=_sha("3"),
-        effective_plan_sha256=_sha("4"),
-        semantic_manifest_id=uuid4(),
-        semantic_manifest_sha256=_sha("5"),
-        archive_sha256=_sha("6"),
-        archive_byte_count=42,
-        media_type="application/zip",
-        storage_scheme="s3",
-        operation_identity=_sha("7"),
-        replay_durable_intent_id=None,
-    )
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.prepare_final(facts=facts)
 
 
 @pytest.mark.asyncio

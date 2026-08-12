@@ -55,13 +55,6 @@ from app.modules.artifacts.schemas import ArtifactOperatorAuthorizationEvidence
 from app.modules.artifacts.submission_authorization import (
     DenySubmissionBundlePreparedAuthorization,
 )
-from app.modules.artifacts.authorization import PreparedSubmissionBundlePreparationAuthorization
-from app.modules.authorization.runtime import (
-    ActorKind,
-    ActorStatus,
-    HumanAuthorizationContext,
-    IdentityLinkStatus,
-)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
     SubmissionArchiveLimits,
@@ -98,21 +91,14 @@ from tests.pre_submit_test_helpers import (
     evidence_workflow,
     submission_preparation_request,
 )
+from tests.submission_preparation_auth_helpers import (
+    install_submitter_grant,
+    prepared_submitter_authority,
+)
 
 
 async def _bytes(value: bytes):
     yield value
-
-
-class _AllowSubmissionPreparedAuthorization:
-    """Test-only final authority that records transaction-bound consumption."""
-
-    def __init__(self) -> None:
-        self.facts = None
-
-    async def consume(self, *, prepared_authorization, facts) -> None:
-        assert type(prepared_authorization) is PreparedAuthorizationHandle
-        self.facts = facts
 
 
 class _AllowOperatorAuthority:
@@ -649,44 +635,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            admin_grant_id, qualification_id, project_grant_id = uuid4(), uuid4(), uuid4()
-            await connection.execute(
-                text(
-                    "insert into admin_role_grants "
-                    "(id,target_actor_profile_id,role,scope_type,scope_project_id,status,"
-                    "version,granted_by_system_principal,grant_reason) values "
-                    "(:admin_grant,:actor,'project_manager','project',:project,'active',1,"
-                    "'test','submission preparation test')"
-                ),
-                {**params, "admin_grant": admin_grant_id},
-            )
-            await connection.execute(
-                text(
-                    "insert into project_role_qualification_snapshots "
-                    "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
-                    "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
-                    "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
-                    "(:qualification,:project,:actor,'submitter','{}'::json,'{}'::json,"
-                    "'[]'::json,'[]'::json,:actor,:admin_grant)"
-                ),
-                {**params, "qualification": qualification_id, "admin_grant": admin_grant_id},
-            )
-            await connection.execute(
-                text(
-                    "insert into project_role_grants "
-                    "(id,project_id,actor_profile_id,role,status,version,grant_method,"
-                    "qualification_snapshot_id,granted_by_actor_profile_id,"
-                    "granted_by_admin_role_grant_id,grant_reason) values "
-                    "(:project_grant,:project,:actor,'submitter','active',1,'manual',"
-                    ":qualification,:actor,:admin_grant,'submission preparation test')"
-                ),
-                {
-                    **params,
-                    "project_grant": project_grant_id,
-                    "qualification": qualification_id,
-                    "admin_grant": admin_grant_id,
-                },
-            )
+            await install_submitter_grant(connection, params)
             before = {
                 table: int(await connection.scalar(text(f"select count(*) from {table}")) or 0)
                 for table in tables
@@ -762,21 +711,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 execute_committed_put=AsyncMock(),
                 resume_committed_put=AsyncMock(),
             )
-            final_authority = PreparedSubmissionBundlePreparationAuthorization(
-                session,
-                HumanAuthorizationContext(
-                    actor_profile_id=actor_id,
-                    actor_kind=ActorKind.HUMAN,
-                    actor_status=ActorStatus.ACTIVE,
-                    identity_link_id=identity_link_id,
-                    identity_link_status=IdentityLinkStatus.ACTIVE,
-                    request_id=preparation_request.request_id,
-                    correlation_id=preparation_request.correlation_id,
-                ),
-            )
-            await final_authority.revalidate(
-                request=preparation_request,
-                project_id=lineage.project_id,
+            final_authority = await prepared_submitter_authority(
+                session, preparation_request, actor_id, identity_link_id, lineage.project_id
             )
             durable_service = SubmissionBundleDurablePutService(
                 session=session,
