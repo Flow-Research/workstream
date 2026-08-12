@@ -1,6 +1,8 @@
 """Focused ART adapter proofs for AUTH submission preparation."""
 
 from uuid import uuid4
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -70,3 +72,22 @@ async def test_final_preparation_rejects_cross_request_facts() -> None:
     )
     with pytest.raises(ArtifactAuthorityDeniedError):
         await authority.prepare_final(facts=facts)
+
+
+@pytest.mark.asyncio
+async def test_preflight_rejects_nonhuman_context_before_database_access() -> None:
+    authority = object.__new__(PreparedSubmissionBundlePreparationAuthorization)
+    authority._context = object()
+    authority._session = SimpleNamespace(begin=AsyncMock())
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.preflight(request=SimpleNamespace(actor=object()))
+
+
+@pytest.mark.asyncio
+async def test_final_preparation_requires_preflight_input() -> None:
+    authority = object.__new__(PreparedSubmissionBundlePreparationAuthorization)
+    authority._input = None
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.prepare_final(facts=object())
