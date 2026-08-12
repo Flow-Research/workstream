@@ -209,6 +209,27 @@ async def test_proven_task_lineage_change_marks_ready_admission_stale() -> None:
 
 
 @pytest.mark.asyncio
+async def test_broken_art_lineage_denies_without_staling_admission() -> None:
+    request = _request()
+    admission, evidence, content = _lineage(request)
+    content.sha256 = _sha("9")
+    session = _session(admission, evidence, content)
+
+    authority = _Allow()
+    with pytest.raises(
+        SubmissionAdmissionConsumptionError,
+        match="submission_bundle_admission_unavailable",
+    ):
+        await SubmissionAdmissionConsumptionService(session, authority).consume(request)
+
+    assert admission.status == "ready"
+    assert admission.stale_at is None
+    assert admission.stale_reason is None
+    authority.consume.assert_not_awaited()
+    session.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_matching_consumed_admission_replays_exact_binding() -> None:
     request = _request()
     admission, _, _ = _lineage(request)
@@ -217,11 +238,13 @@ async def test_matching_consumed_admission_replays_exact_binding() -> None:
     binding = SimpleNamespace(id=str(uuid4()), content_id=admission.artifact_content_id)
     session = _session(admission, binding)
 
-    result = await SubmissionAdmissionConsumptionService(session, _Allow()).consume(request)
+    authority = _Allow()
+    result = await SubmissionAdmissionConsumptionService(session, authority).consume(request)
 
     assert result.status == "consumed"
     assert result.replayed is True
     assert result.binding_id.hex == binding.id.replace("-", "")
+    assert authority.consume.await_args.args[0].submission_id == request.submission_id
     session.add.assert_not_called()
     session.flush.assert_not_awaited()
 

@@ -55,11 +55,17 @@ backend/tests/test_alembic.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
+backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02E-art-admission-binding-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md
 docs/spec_artifact_storage_service.md
 docs/architecture_data_model.md
 ```
+
+The two CI scripts are limited to registering this chunk's exact new public
+targets and focused test module; their validation semantics and thresholds may
+not change.
 
 ## Not allowed
 

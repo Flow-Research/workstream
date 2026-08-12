@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ from app.modules.artifacts.api import (
     SubmissionAdmissionConsumptionError,
     SubmissionAdmissionConsumptionRequest,
     SubmissionAdmissionConsumptionResult,
+    SubmissionAdmissionConsumptionStatus,
 )
 from app.modules.artifacts.models import (
     ArtifactBinding,
@@ -124,7 +125,11 @@ class SubmissionAdmissionConsumptionService:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_unavailable"
             )
-        if not self._lineage_matches(admission, evidence, content, request):
+        if not self._art_lineage_is_intact(admission, evidence, content):
+            raise SubmissionAdmissionConsumptionError(
+                "submission_bundle_admission_unavailable"
+            )
+        if not self._task_lineage_matches(admission, evidence, request):
             now = await self._session.scalar(select(func.now()))
             admission.status = "stale"
             admission.stale_at = now
@@ -148,20 +153,7 @@ class SubmissionAdmissionConsumptionService:
                 "submission_bundle_admission_context_changed"
             )
 
-        await self._authorization.consume(
-            SubmissionBindingAuthorityFacts(
-                admission_id=request.admission_id,
-                project_id=UUID(admission.project_id),
-                task_id=UUID(admission.task_id),
-                assignment_id=UUID(admission.assignment_id),
-                submission_id=request.submission_id,
-                submission_version=request.submission_version,
-                content_id=UUID(admission.artifact_content_id),
-                sha256=admission.archive_sha256,
-                byte_count=admission.archive_byte_count,
-                logical_role=_LOGICAL_ROLE,
-            )
-        )
+        await self._authorization.consume(self._authority_facts(admission, request))
 
         binding = ArtifactBinding(
             id=str(uuid4()),
@@ -205,21 +197,39 @@ class SubmissionAdmissionConsumptionService:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_context_changed"
             )
+        await self._authorization.consume(self._authority_facts(admission, request))
         return self._result(admission, request, binding=binding, replayed=True)
 
     @staticmethod
-    def _lineage_matches(
+    def _art_lineage_is_intact(
         admission: SubmissionBundleAdmission,
         evidence: PreSubmitEvidenceSet,
         content: ArtifactContent,
+    ) -> bool:
+        return bool(
+            admission.status == "ready"
+            and evidence.id == admission.pre_submit_evidence_set_id
+            and evidence.project_id == admission.project_id
+            and evidence.task_id == admission.task_id
+            and evidence.assignment_id == admission.assignment_id
+            and evidence.terminal_status == "passed"
+            and evidence.eligible is True
+            and content.id == admission.artifact_content_id
+            and content.sha256 == admission.archive_sha256
+            and content.byte_count == admission.archive_byte_count
+        )
+
+    @staticmethod
+    def _task_lineage_matches(
+        admission: SubmissionBundleAdmission,
+        evidence: PreSubmitEvidenceSet,
         request: SubmissionAdmissionConsumptionRequest,
     ) -> bool:
         context = request.task_context
         references = context.locked_project_context
         predecessor = context.predecessor
         return bool(
-            admission.status == "ready"
-            and admission.actor_profile_id == str(context.contributor_id)
+            admission.actor_profile_id == str(context.contributor_id)
             and admission.project_id == str(references.project_id)
             and admission.task_id == str(context.task_id)
             and admission.assignment_id == str(context.assignment_id)
@@ -227,10 +237,6 @@ class SubmissionAdmissionConsumptionService:
             == (str(predecessor.submission_id) if predecessor is not None else None)
             and admission.predecessor_submission_version
             == (predecessor.version if predecessor is not None else None)
-            and evidence.id == admission.pre_submit_evidence_set_id
-            and evidence.project_id == admission.project_id
-            and evidence.task_id == admission.task_id
-            and evidence.assignment_id == admission.assignment_id
             and evidence.guide_version == references.guide_version
             and evidence.source_snapshot_id == str(references.source_snapshot_id)
             and evidence.source_snapshot_sha256 == references.source_snapshot_hash
@@ -239,11 +245,24 @@ class SubmissionAdmissionConsumptionService:
             and evidence.pre_submit_policy_id == str(references.pre_submit_policy_id)
             and evidence.locked_checker_policy_sha256
             == references.pre_submit_policy_bundle_hash
-            and evidence.terminal_status == "passed"
-            and evidence.eligible is True
-            and content.id == admission.artifact_content_id
-            and content.sha256 == admission.archive_sha256
-            and content.byte_count == admission.archive_byte_count
+        )
+
+    @staticmethod
+    def _authority_facts(
+        admission: SubmissionBundleAdmission,
+        request: SubmissionAdmissionConsumptionRequest,
+    ) -> SubmissionBindingAuthorityFacts:
+        return SubmissionBindingAuthorityFacts(
+            admission_id=request.admission_id,
+            project_id=UUID(admission.project_id),
+            task_id=UUID(admission.task_id),
+            assignment_id=UUID(admission.assignment_id),
+            submission_id=request.submission_id,
+            submission_version=request.submission_version,
+            content_id=UUID(admission.artifact_content_id),
+            sha256=admission.archive_sha256,
+            byte_count=admission.archive_byte_count,
+            logical_role=_LOGICAL_ROLE,
         )
 
     @staticmethod
@@ -260,6 +279,6 @@ class SubmissionAdmissionConsumptionService:
             content_id=UUID(admission.artifact_content_id),
             submission_id=request.submission_id,
             submission_version=request.submission_version,
-            status=admission.status,  # type: ignore[arg-type]
+            status=cast("SubmissionAdmissionConsumptionStatus", admission.status),
             replayed=replayed,
         )
