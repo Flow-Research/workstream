@@ -47,18 +47,28 @@ backend/app/modules/artifacts/submission_admission.py
 backend/app/modules/artifacts/submission_bindings.py
 backend/app/modules/artifacts/guide_bindings.py
 backend/app/interfaces/artifact_operations.py
-backend/alembic/versions/<next-current-main-revision>.py
+backend/alembic/versions/0002_submission_admission_consumed_version.py
+backend/alembic/env.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_artifact_bindings.py
+backend/tests/test_artifact_bindings_db.py
+backend/tests/test_artifact_architecture.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 backend/tests/architecture/test_module_boundaries.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .ci/behavior-ownership/**
+backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02E-art-admission-binding-api.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md
 docs/spec_artifact_storage_service.md
 docs/architecture_data_model.md
 ```
+
+The two CI scripts are limited to registering this chunk's exact new public
+targets and focused test module; their validation semantics and thresholds may
+not change.
 
 ## Not allowed
 
@@ -67,37 +77,51 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
 
 ## Acceptance criteria
 
-- [ ] Public inputs/outputs are immutable identifiers, digests, sizes, status,
+- [x] Public inputs/outputs are immutable identifiers, digests, sizes, status,
       and stable errors only.
-- [ ] The ART port consumes the typed 02A TASK lineage capability and locks the
+- [x] The ART port consumes the typed 02A TASK lineage capability and locks the
       exact task, assignment, predecessor-Submission, project, guide, snapshot,
       and policy facts without querying TASK persistence.
-- [ ] ART locks and validates ready admission/content/manifest/evidence lineage
+- [x] ART locks and validates ready admission/content/manifest/evidence lineage
       and accepts a server-owned Submission identity supplied by TASKS.
-- [ ] `ready -> consumed|stale` is terminal, unique, concurrency-safe, and
+- [x] `ready -> consumed|stale` is terminal, unique, concurrency-safe, and
       rollback-safe; authority loss alone never marks stale.
-- [ ] Binding identity is exact and provider-neutral; no provider I/O occurs.
-- [ ] Reuse the existing generic `ArtifactBinding` model and the established
+- [x] Binding identity is exact and provider-neutral; no provider I/O occurs.
+- [x] Reuse the existing generic `ArtifactBinding` model and the established
       guide-binding replay/authority-consumption convention unless a separately
       reviewed schema finding proves it insufficient; do not create a parallel
       binding aggregate.
-- [ ] Submission-binding types in `app.interfaces.artifact_operations` migrate
+- [x] Submission-binding types in `app.interfaces.artifact_operations` migrate
       to `artifacts.api`; no parallel legacy/public ART contract remains.
-- [ ] Capability remains unreachable from the public route pending 02F-02I.
-- [ ] Record the exact admission/binding port, state, error, and resource
+- [x] Capability remains unreachable from the public route pending 02F-02I.
+- [x] Record the exact admission/binding port, state, error, and resource
       manifest, including the complete TASK lineage resource facts, in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md`.
+
+## Merge state
+
+- Outcome on merge: `complete`
+
+## Outcome
+
+02E lands the hidden ART consumption capability and exact transaction proof.
+It does not activate contributor submission behavior; 02F must compose this
+port with TASK-owned Submission creation before later AUTH activation.
 
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/artifacts tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/artifacts tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_bundle_admission.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/test_alembic.py --cov=app.modules.artifacts --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check
 ```
+
+The hosted `shared_foundations_a` and `shared_foundations_b` lanes additionally
+run the authoritative ART route-isolation and module-boundary tests registered
+in `backend/scripts/run_test_lanes.py`.
 
 ## Required reviewers
 

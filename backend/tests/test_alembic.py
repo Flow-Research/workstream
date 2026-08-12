@@ -20,7 +20,8 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0001_v01_baseline"
+HEAD_REVISION = "0002_admission_version"
+BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -77,8 +78,11 @@ def test_v01_graph_has_one_root_and_head() -> None:
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
-    assert [revision.revision for revision in revisions] == [HEAD_REVISION]
-    assert revisions[0].down_revision is None
+    assert [revision.revision for revision in revisions] == [
+        HEAD_REVISION,
+        BASELINE_REVISION,
+    ]
+    assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
 
@@ -90,12 +94,46 @@ def test_fresh_database_matches_committed_manifest(
         asyncio.run(
             _execute(isolated_database_env, "drop schema public cascade; create schema public")
         )
-        command.upgrade(config, HEAD_REVISION)
+        command.upgrade(config, BASELINE_REVISION)
     expected = _manifest_path().read_bytes()
     actual = canonical_bytes(asyncio.run(build_manifest(isolated_database_env)))
 
     assert hashlib.sha256(actual).hexdigest() == hashlib.sha256(expected).hexdigest()
     assert actual == expected
+
+
+def test_current_head_installs_consumed_submission_version_contract(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, HEAD_REVISION)
+
+    async def contract() -> tuple[bool, str]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            exists = await connection.fetchval(
+                "select exists(select 1 from information_schema.columns "
+                "where table_schema='public' and table_name='submission_bundle_admissions' "
+                "and column_name='consumed_by_submission_version' and data_type='integer')"
+            )
+            definition = await connection.fetchval(
+                "select pg_get_constraintdef(c.oid) from pg_constraint c "
+                "join pg_class t on t.oid=c.conrelid "
+                "join pg_namespace n on n.oid=t.relnamespace "
+                "where c.conname='ck_submission_bundle_admissions_terminal_shape' "
+                "and n.nspname='public' and t.relname='submission_bundle_admissions'"
+            )
+            return bool(exists), definition
+        finally:
+            await connection.close()
+
+    exists, definition = asyncio.run(contract())
+    assert exists is True
+    assert "consumed_by_submission_version > 0" in definition
 
 
 def test_manifest_covers_every_required_object_class() -> None:

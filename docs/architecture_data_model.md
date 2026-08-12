@@ -828,7 +828,13 @@ ART-04C2 adds one `SubmissionBundleAdmission` only when the verifier's complete
 read produces a matching successful receipt. The row joins the exact durable
 intent and evidence to provider-neutral content, the verified replica, the
 verification receipt, and exactly one direct-put or observed-confirmed receipt.
-It starts in `ready`; later 05A alone may execute `ready -> consumed|stale`.
+It starts in `ready`. The hidden ART admission-consumption capability may apply
+`ready -> consumed|stale` only inside a caller-owned root transaction after
+exact TASK and ART lineage validation. A consumed admission records the exact
+Submission identifier and lifecycle version while its generic artifact binding
+uses its independent binding-chain version. The capability remains deny-only
+and route-unreachable until the later TASK composition and AUTH activation
+chunks.
 The hidden preparation route keeps scratch and prepared handles process-local,
 returns before durable verification finishes, and remains excluded from OpenAPI
 and unavailable until AUTH activates `artifact.submission_bundle.prepare`.

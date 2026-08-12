@@ -8,6 +8,13 @@ from app.modules.artifacts.api.submission_preparation import (
     SubmissionBundlePreparationStatus,
     SubmissionBundlePreparationUnavailable,
 )
+from app.modules.artifacts.api.submission_admission import (
+    SubmissionAdmissionConsumptionError,
+    SubmissionAdmissionConsumptionPort,
+    SubmissionAdmissionConsumptionRequest,
+    SubmissionAdmissionConsumptionResult,
+    SubmissionAdmissionConsumptionStatus,
+)
 
 __all__ = (
     "SubmissionBundlePreparationCommand",
@@ -16,4 +23,9 @@ __all__ = (
     "SubmissionBundlePreparationResult",
     "SubmissionBundlePreparationStatus",
     "SubmissionBundlePreparationUnavailable",
+    "SubmissionAdmissionConsumptionError",
+    "SubmissionAdmissionConsumptionPort",
+    "SubmissionAdmissionConsumptionRequest",
+    "SubmissionAdmissionConsumptionResult",
+    "SubmissionAdmissionConsumptionStatus",
 )
