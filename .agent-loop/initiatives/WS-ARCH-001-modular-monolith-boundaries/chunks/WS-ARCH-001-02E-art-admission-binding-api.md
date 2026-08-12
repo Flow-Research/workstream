@@ -96,7 +96,11 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
       manifest, including the complete TASK lineage resource facts, in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md`.
 
-## Outcome on merge
+## Merge state
+
+- Outcome on merge: `complete`
+
+## Outcome
 
 02E lands the hidden ART consumption capability and exact transaction proof.
 It does not activate contributor submission behavior; 02F must compose this
