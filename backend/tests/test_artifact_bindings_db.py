@@ -1,0 +1,143 @@
+"""PostgreSQL transaction proof for ART admission consumption."""
+
+from __future__ import annotations
+
+import asyncio
+from contextlib import asynccontextmanager
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.modules.artifacts.models import (
+    ArtifactBinding,
+    ArtifactContent,
+    PreSubmitEvidenceSet,
+    SubmissionBundleAdmission,
+)
+from app.modules.artifacts.submission_bindings import (
+    SubmissionAdmissionConsumptionService,
+)
+from test_artifact_bindings import _Allow, _lineage, _request
+
+
+_TABLES = (
+    ArtifactContent.__table__,
+    PreSubmitEvidenceSet.__table__,
+    SubmissionBundleAdmission.__table__,
+    ArtifactBinding.__table__,
+)
+
+
+def _column_sql(column, dialect) -> str:
+    name = dialect.identifier_preparer.quote(column.name)
+    type_sql = column.type.compile(dialect=dialect)
+    primary = " primary key" if column.primary_key else ""
+    return f"{name} {type_sql}{primary}"
+
+
+@asynccontextmanager
+async def _isolated_binding_schema(database_url: str):
+    engine = create_async_engine(database_url)
+    schema = f"binding_{uuid4().hex}"
+    dialect = engine.dialect
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text(f'create schema "{schema}"'))
+            for table in _TABLES:
+                columns = ", ".join(_column_sql(column, dialect) for column in table.columns)
+                await connection.execute(
+                    text(f'create table "{schema}"."{table.name}" ({columns})')
+                )
+            await connection.execute(
+                text(
+                    f'create unique index uq_binding_scope on "{schema}".artifact_bindings '
+                    "(project_id, resource_type, resource_id, logical_role, scope_version)"
+                )
+            )
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        yield schema, factory
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text(f'drop schema if exists "{schema}" cascade'))
+        await engine.dispose()
+
+
+async def _set_schema(session, schema: str) -> None:
+    await session.execute(text(f'set local search_path to "{schema}"'))
+
+
+async def _seed(session, schema: str, request) -> None:
+    admission, evidence, content = _lineage(request)
+    await _set_schema(session, schema)
+    await session.execute(
+        ArtifactContent.__table__.insert().values(
+            id=content.id,
+            sha256=content.sha256,
+            byte_count=content.byte_count,
+        )
+    )
+    await session.execute(
+        PreSubmitEvidenceSet.__table__.insert().values(**vars(evidence))
+    )
+    await session.execute(
+        SubmissionBundleAdmission.__table__.insert().values(
+            **vars(admission),
+            durable_intent_id=str(uuid4()),
+            put_attempt_id=str(uuid4()),
+            verified_replica_id=str(uuid4()),
+            verification_receipt_id=str(uuid4()),
+            put_operation_receipt_id=str(uuid4()),
+            put_observation_receipt_id=None,
+            ready_at=text("now()"),
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
+    isolated_database_env: str,
+) -> None:
+    request = _request()
+    async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
+        async with factory.begin() as seed:
+            await _seed(seed, schema, request)
+
+        async def consume_once():
+            async with factory() as session:
+                async with session.begin():
+                    await _set_schema(session, schema)
+                    return await SubmissionAdmissionConsumptionService(
+                        session, _Allow()
+                    ).consume(request)
+
+        first, second = await asyncio.gather(consume_once(), consume_once())
+        assert sorted(result.replayed for result in (first, second)) == [False, True]
+
+        rollback_request = _request()
+        async with factory.begin() as seed:
+            await _seed(seed, schema, rollback_request)
+        async with factory() as session:
+            transaction = await session.begin()
+            await _set_schema(session, schema)
+            await SubmissionAdmissionConsumptionService(session, _Allow()).consume(
+                rollback_request
+            )
+            await transaction.rollback()
+        async with factory() as session:
+            await _set_schema(session, schema)
+            status = await session.scalar(
+                text(
+                    "select status from submission_bundle_admissions where id=:id"
+                ),
+                {"id": str(rollback_request.admission_id)},
+            )
+            bindings = await session.scalar(
+                text(
+                    "select count(*) from artifact_bindings where resource_id=:id"
+                ),
+                {"id": str(rollback_request.submission_id)},
+            )
+            assert status == "ready"
+            assert bindings == 0

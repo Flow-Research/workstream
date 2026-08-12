@@ -50,6 +50,7 @@ backend/app/interfaces/artifact_operations.py
 backend/alembic/versions/<next-current-main-revision>.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_artifact_bindings.py
+backend/tests/test_artifact_bindings_db.py
 backend/tests/test_artifact_architecture.py
 backend/tests/test_alembic.py
 backend/tests/architecture/test_module_boundaries.py
