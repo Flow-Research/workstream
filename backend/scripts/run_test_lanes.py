@@ -142,6 +142,8 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_behavior_ownership.py",
     "tests/test_artifact_admission.py",
     "tests/test_submission_bundle_admission.py",
+    "tests/test_submission_preparation_adapter.py",
+    "tests/test_submission_preparation_authorization.py",
     "tests/test_submission_composition.py",
     "tests/test_artifact_bindings.py",
     "tests/test_artifact_bindings_db.py",

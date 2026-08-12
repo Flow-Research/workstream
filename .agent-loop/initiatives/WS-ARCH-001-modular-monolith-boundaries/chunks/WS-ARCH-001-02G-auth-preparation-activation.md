@@ -62,6 +62,7 @@ backend/tests/test_submission_preparation_adapter.py
 backend/tests/test_submission_preparation_authorization.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
