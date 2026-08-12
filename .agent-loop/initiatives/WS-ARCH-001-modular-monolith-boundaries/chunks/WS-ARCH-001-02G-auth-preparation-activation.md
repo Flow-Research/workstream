@@ -61,6 +61,7 @@ backend/tests/submission_preparation_auth_helpers.py
 backend/tests/test_submission_preparation_adapter.py
 backend/tests/test_submission_preparation_authorization.py
 backend/tests/architecture/test_authorization_boundary.py
+backend/scripts/behavior_ownership.py
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
@@ -71,6 +72,7 @@ backend/tests/architecture/test_authorization_boundary.py
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02G-preparation-activation.md
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
+.ci/behavior-ownership/partition.v1.json
 docs/spec_authorization_service.md
 docs/architecture_data_model.md
 docs/roadmap_status.md
