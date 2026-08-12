@@ -186,7 +186,8 @@ async def test_composed_final_denial_rolls_back_task_and_art_rows(
             contributor_attestation="attestation",
         )
         async with factory() as session:
-            await _set_schema(session, schema)
+            await session.execute(text(f'set search_path to "{schema}"'))
+            await session.commit()
             command = TransactionalSubmissionCreationCommand(
                 session, authorization=_FinalDeny(),
                 admissions=SubmissionAdmissionConsumptionService(session, _Allow()),
