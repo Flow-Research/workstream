@@ -26,6 +26,10 @@ edges are removed and final authority remains transaction-bound.
 
 L1
 
+## Merge state
+
+- Outcome on merge: `complete`
+
 ## SLA
 
 P1
