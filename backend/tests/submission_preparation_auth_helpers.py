@@ -1,5 +1,6 @@
 """Focused PostgreSQL setup helpers for submission-preparation AUTH proof."""
 
+import json
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -15,6 +16,7 @@ from app.modules.authorization.runtime import (
 
 async def install_submitter_grant(connection, params) -> None:
     authorizer_id = str(uuid4())
+    authorizer_link_id = str(uuid4())
     admin_grant_id, qualification_id, project_grant_id = uuid4(), uuid4(), uuid4()
     await connection.execute(
         text(
@@ -23,6 +25,15 @@ async def install_submitter_grant(connection, params) -> None:
             "(:authorizer,'human','active','automatic_first_access','test')"
         ),
         {"authorizer": authorizer_id},
+    )
+    await connection.execute(
+        text(
+            "insert into actor_identity_links "
+            "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+            "last_verified_at) values "
+            "(:link,:authorizer,'flow-test',:authorizer,'human','active','test',now())"
+        ),
+        {"link": authorizer_link_id, "authorizer": authorizer_id},
     )
     await connection.execute(
         text(
@@ -47,11 +58,8 @@ async def install_submitter_grant(connection, params) -> None:
             "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
             "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
             "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
-            "(:qualification,:project,:actor,'submitter',"
-            "'{\"availability\":\"available\",\"reference_ids\":[\"skill:test\"],"
-            "\"unavailable_reason\":null}'::json,"
-            "'{\"availability\":\"unavailable\",\"reference_ids\":[],"
-            "\"unavailable_reason\":\"no_record\"}'::json,"
+            "(:qualification,:project,:actor,'submitter',cast(:skills as json),"
+            "cast(:reputation as json),"
             "'[]'::json,'[]'::json,:authorizer,:admin_grant)"
         ),
         {
@@ -59,6 +67,20 @@ async def install_submitter_grant(connection, params) -> None:
             "authorizer": authorizer_id,
             "qualification": qualification_id,
             "admin_grant": admin_grant_id,
+            "skills": json.dumps(
+                {
+                    "availability": "available",
+                    "reference_ids": ["skill:test"],
+                    "unavailable_reason": None,
+                }
+            ),
+            "reputation": json.dumps(
+                {
+                    "availability": "unavailable",
+                    "reference_ids": [],
+                    "unavailable_reason": "no_record",
+                }
+            ),
         },
     )
     await connection.execute(

@@ -709,18 +709,20 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 execute_committed_put=AsyncMock(),
                 resume_committed_put=AsyncMock(),
             )
-            final_authority = await prepared_submitter_authority(session, preparation_request, actor_id, identity_link_id, lineage.project_id)
-            durable_service = SubmissionBundleDurablePutService(
-                session=session,
-                admission=ArtifactAdmissionService(
-                    session,
-                    admission_settings,
-                    namespace,
-                ),
-                storage=provider,
-                authorization=final_authority,
-            )
             async with session.begin():
+                final_authority = await prepared_submitter_authority(
+                    session, preparation_request, actor_id, identity_link_id, lineage.project_id,
+                )
+                durable_service = SubmissionBundleDurablePutService(
+                    session=session,
+                    admission=ArtifactAdmissionService(
+                        session,
+                        admission_settings,
+                        namespace,
+                    ),
+                    storage=provider,
+                    authorization=final_authority,
+                )
                 (
                     retained,
                     selected_evidence_id,

@@ -54,6 +54,14 @@ class SubmissionBundlePreparationAuthorization(SubmissionBundlePreparedAuthoriza
 class DenySubmissionBundlePreparedAuthorization:
     """Keep contributor durable preparation unavailable until XINT-05A."""
 
+    async def prepare_final(
+        self,
+        *,
+        facts: SubmissionBundleDurableIntentAuthorityFacts,
+    ) -> object:
+        del facts
+        raise ArtifactAuthorityDeniedError("submission bundle durable preparation is unavailable")
+
     async def consume(
         self,
         *,

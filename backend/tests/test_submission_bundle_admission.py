@@ -125,6 +125,14 @@ async def test_explicit_deny_preparation_authority_denies() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicit_deny_durable_authority_denies_final_preparation() -> None:
+    authority = DenySubmissionBundlePreparedAuthorization()
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.prepare_final(facts=object())  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
 async def test_artifact_adapter_stale_scratch_cleanup_closes_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
