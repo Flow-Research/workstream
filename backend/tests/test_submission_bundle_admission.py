@@ -191,6 +191,58 @@ def test_artifact_adapter_builds_configured_local_bootstrap(tmp_path) -> None:
         bootstrap.close()
 
 
+def test_artifact_adapter_composes_submission_command_from_owner_ports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = uuid4()
+    correlation_id = uuid4()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/hidden",
+            "headers": [],
+            "state": {
+                "request_id": str(request_id),
+                "correlation_id": str(correlation_id),
+            },
+        }
+    )
+    request.scope["app"] = SimpleNamespace(
+        state=SimpleNamespace(
+            settings=Settings(),
+            pre_submission_checker_catalogue=object(),
+        )
+    )
+    session = object()
+    internal_authority = object()
+    authority = artifact_adapters.get_submission_bundle_preparation_authorization()
+    task_contexts = object()
+    project_contexts = object()
+    monkeypatch.setattr(
+        artifact_adapters, "task_submission_context_port", Mock(return_value=task_contexts)
+    )
+    monkeypatch.setattr(
+        artifact_adapters,
+        "project_locked_policy_context_port",
+        Mock(return_value=project_contexts),
+    )
+
+    command = artifact_adapters.get_submission_bundle_preparation_command(
+        request,
+        session,  # type: ignore[arg-type]
+        internal_authority,  # type: ignore[arg-type]
+        authority,
+    )
+
+    assert command._session is session
+    assert command._authority is authority
+    assert command._task_contexts is task_contexts
+    assert command._project_contexts is project_contexts
+    artifact_adapters.task_submission_context_port.assert_called_once_with(session)
+    artifact_adapters.project_locked_policy_context_port.assert_called_once_with(session)
+
+
 def test_submission_bundle_preparation_route_is_hidden() -> None:
     app = create_app()
     route = next(
