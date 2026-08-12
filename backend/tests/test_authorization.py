@@ -2234,15 +2234,13 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         sum(
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
-        )
-        == 55
+        ) == 55
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
-        )
-        == 47
+        ) == 47
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
