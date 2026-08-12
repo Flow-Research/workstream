@@ -61,6 +61,7 @@ from app.modules.artifacts.submission_admission import (
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.main import create_app
 from app.api.routes.artifact_submissions import prepare_submission_bundle, router as submission_router
 from app.modules.artifacts.submission_admission import validate_submission_packet_headers
@@ -159,6 +160,27 @@ def test_artifact_adapter_requires_configured_scratch_root() -> None:
 
     with pytest.raises(ArtifactConfigurationError):
         artifact_adapters.create_artifact_scratch_manager(settings)
+
+
+def test_artifact_adapter_builds_configured_local_bootstrap(tmp_path) -> None:
+    root = tmp_path / "objects"
+    root.mkdir(mode=0o700)
+    settings = Settings(
+        **artifact_admission_limit_settings(),
+        environment="test",
+        artifact_store_backend="local",
+        artifact_local_root=root,
+        artifact_scratch_root=tmp_path / "scratch",
+        artifact_scratch_minimum_free_bytes=0,
+    )
+
+    bootstrap = artifact_adapters.create_artifact_store_bootstrap(settings)
+
+    try:
+        assert bootstrap.identity.provider_key == "local"
+        assert bootstrap.namespace_identity.provider_profile == "local-v2"
+    finally:
+        bootstrap.close()
 
 
 def test_submission_bundle_preparation_route_is_hidden() -> None:
