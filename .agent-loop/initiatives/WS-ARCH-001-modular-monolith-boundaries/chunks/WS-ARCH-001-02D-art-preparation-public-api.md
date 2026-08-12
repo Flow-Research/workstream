@@ -60,6 +60,9 @@ backend/scripts/module_boundaries.py
 backend/tests/test_artifact_architecture.py
 backend/tests/test_submission_bundle_admission.py
 backend/tests/test_default_pre_submit_execution.py
+backend/tests/test_effective_pre_submit_execution.py
+backend/tests/test_authorization.py
+backend/tests/test_pre_submit_evidence_relock.py
 backend/tests/pre_submit_test_helpers.py
 .ci/module-boundaries/private-edge-debt.v1.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
@@ -67,8 +70,17 @@ backend/tests/pre_submit_test_helpers.py
 .ci/behavior-ownership/**
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02D-art-preparation-public-api.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02D-resource-manifest.md
 docs/spec_artifact_storage_service.md
+.agent-loop/policies/architecture-boundaries.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/INTENT.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/PLAN.md
+docs/architecture_lockdown.md
+docs/operations_backend_testing.md
+backend/app/adapters/README.md
 ```
 
 ## Public and private contract split
@@ -95,33 +107,33 @@ cross-module imports; serialized prepared handles; compatibility facades.
 
 ## Acceptance criteria
 
-- [ ] The route and composition code depend on `artifacts.api`; ART depends on
+- [x] The route and composition code depend on `artifacts.api`; ART depends on
       owner public APIs only. The composition root may instantiate concrete
       implementations but may not hide a service locator or second factory
       behind the public API.
-- [ ] The public port shape places preflight before byte acceptance and final
+- [x] The public port shape places preflight before byte acceptance and final
       prepared-authority consumption in the durable-intent transaction before
       capacity, put attempt, or provider I/O, but production remains deny-only
       and no successful prepared handle is issued or consumed in this chunk.
-- [ ] Planned-action denial, concealment, exact replay, stale lineage, and
+- [x] Planned-action denial, concealment, exact replay, stale lineage, and
       cross-resource attempts preserve zero partial effect and zero provider I/O.
-- [ ] `artifact.submission_bundle.prepare` remains planned/unavailable and the
+- [x] `artifact.submission_bundle.prepare` remains planned/unavailable and the
       route remains hidden.
-- [ ] Every touched private edge is removed.
-- [ ] Route-facing submission-preparation types in
+- [x] Every touched private edge is removed.
+- [x] Route-facing submission-preparation types in
       `app.interfaces.artifact_operations` migrate to `artifacts.api`.
       Process-local sealed types become ART-private; no parallel legacy/public
       ART contract remains.
-- [ ] After byte materialization and before evidence persistence, ART re-locks
+- [x] After byte materialization and before evidence persistence, ART re-locks
       TASK assignment/predecessor facts and PROJECT locked-policy facts through
       their public ports and compares them with the original CHECKER plan
       lineage. Stale lineage fails before durable evidence or provider I/O.
-- [ ] CHECKER execution is injected at the composition root and returns only
+- [x] CHECKER execution is injected at the composition root and returns only
       public CHECKER result facts. ART constructs and retains its own custody
       facts; neither module imports the other's private implementation.
-- [ ] `artifacts.api` imports no private module and exposes no ORM, session,
+- [x] `artifacts.api` imports no private module and exposes no ORM, session,
       repository, provider, scratch path, byte buffer, or serialized handle.
-- [ ] Record the exact preparation resource/port manifest in
+- [x] Record the exact preparation resource/port manifest in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02D-resource-manifest.md`.
 
 ## Verification commands

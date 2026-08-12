@@ -108,6 +108,28 @@ def test_owner_adapter_may_bind_only_its_own_private_implementation(
     }
 
 
+def test_non_root_adapter_keeps_same_owner_private_debt_visible(
+    tmp_path: Path,
+) -> None:
+    """Only the exact owner composition root receives the wiring exemption."""
+    _registry(tmp_path / "registry.json")
+    _write(
+        tmp_path / "backend/app/adapters/tasks/worker.py",
+        "from app.modules.tasks.repository import TaskRepository\n",
+    )
+    private, _, _ = boundary.scan(
+        tmp_path, boundary.load_registry(tmp_path / "registry.json")
+    )
+    assert private == {
+        boundary.PrivateEdge(
+            "backend/app/adapters/tasks/worker.py",
+            "tasks",
+            "app.modules.tasks.repository",
+            "WS-ARCH-001-03",
+        )
+    }
+
+
 def test_import_from_modules_package_resolves_registered_alias(tmp_path: Path) -> None:
     """Package-level module aliases cannot disappear from dependency scanning."""
     _registry(tmp_path / "registry.json")
@@ -441,7 +463,13 @@ def test_initial_ledgers_capture_high_risk_application_edges() -> None:
         "app.modules.checkers.pre_submit_execution",
     ) not in actual
     assert not any(
+        source == "backend/app/adapters/artifacts/__init__.py"
+        and target.startswith("app.modules.artifacts.")
+        for source, target in actual
+    )
+    assert any(
         source.startswith("backend/app/adapters/artifacts/")
+        and source != "backend/app/adapters/artifacts/__init__.py"
         and target.startswith("app.modules.artifacts.")
         for source, target in actual
     )

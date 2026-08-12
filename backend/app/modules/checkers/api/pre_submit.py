@@ -9,6 +9,32 @@ from uuid import UUID
 
 EFFECTIVE_PRE_SUBMISSION_PLAN_SCHEMA_VERSION = "effective_pre_submission_plan.v1"
 EFFECTIVE_PRE_SUBMISSION_PLAN_HASH_DOMAIN = "workstream.effective_pre_submission_plan.v1"
+ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
+_RESULT_MESSAGE_CODES = frozenset(
+    {
+        "advisory_disabled",
+        "attestation_missing",
+        "dependency_not_run",
+        "file_size_limit_exceeded",
+        "forbidden_artifact_present",
+        "package_size_limit_exceeded",
+        "packaging_requirement_failed",
+        "passed",
+        "policy_attestation_missing",
+        "quality_signal_warning",
+        "required_evidence_missing",
+        "required_file_missing",
+        "sensitive_path_forbidden",
+        "storage_scheme_not_allowed",
+        "submission_packet_invalid",
+    }
+)
+PRE_SUBMISSION_RESULT_METADATA_KEYS = frozenset(
+    {"entry_count", "finding_count", "matched_category_count"}
+)
+_EXECUTION_STATUSES = frozenset(
+    {"passed", "warning", "advisory_disabled", "dependency_not_run", "failed"}
+)
 
 
 class EffectivePreSubmissionPlanError(ValueError):
@@ -204,6 +230,60 @@ class PreSubmissionExecutionFacts:
     plan_sha256: str
     eligible: bool
     entries: tuple[PreSubmissionExecutionEntryFacts, ...]
+
+
+def validate_pre_submission_execution_facts(
+    plan: EffectivePreSubmissionExecutionPlan,
+    execution: PreSubmissionExecutionFacts,
+) -> None:
+    """Validate one bounded CHECKER result against its exact immutable plan."""
+    if (
+        type(execution.eligible) is not bool
+        or execution.plan_sha256 != plan.plan_sha256
+        or len(execution.entries) != len(plan.entries)
+    ):
+        raise PreSubmissionInfrastructureUnavailableError(
+            "pre_submission_result_context_invalid"
+        )
+    disqualified = False
+    for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
+        expected_severity = (
+            "warning" if plan_entry.classification == "advisory" else "blocking"
+        )
+        status = result.checker_execution_status
+        if (
+            result.dispatch_authority != "workstream.pre_submission_checker_catalogue"
+            or result.definition_id != plan_entry.definition_id
+            or result.definition_version != plan_entry.definition_version
+            or result.public_name != plan_entry.public_name
+            or result.policy_source != plan_entry.policy_trace_source
+            or result.effective_plan_sha256 != plan.plan_sha256
+            or result.rule_instance_id != plan_entry.rule_instance_id
+            or result.locked_policy_sha256 != plan.lineage.effective_policy_hash
+            or result.phase != plan_entry.phase
+            or result.order != plan_entry.order
+            or result.classification != plan_entry.classification
+            or result.severity != expected_severity
+            or status not in _EXECUTION_STATUSES
+            or result.message_code not in _RESULT_MESSAGE_CODES
+            or result.failure_code
+            != (plan_entry.failure_code if status == "failed" else None)
+            or len(result.metadata) != len({key for key, _ in result.metadata})
+            or any(
+                key not in PRE_SUBMISSION_RESULT_METADATA_KEYS
+                or type(value) is not int
+                or value < 0
+                for key, value in result.metadata
+            )
+        ):
+            raise PreSubmissionInfrastructureUnavailableError(
+                "pre_submission_result_context_invalid"
+            )
+        disqualified = disqualified or status in {"failed", "dependency_not_run"}
+    if execution.eligible == disqualified:
+        raise PreSubmissionInfrastructureUnavailableError(
+            "pre_submission_result_context_invalid"
+        )
 
 
 def effective_plan_body(

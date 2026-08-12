@@ -22,7 +22,10 @@ canonical module map
    opaque capability Protocols, and ports—not implementation.
 4. The caller supplies server-owned canonical facts; it never receives the
    target's ORM model or repository.
-5. Concrete implementations meet only in the application composition root.
+5. Concrete implementations meet only in the application composition root or
+   the exact same-owner `backend/app/adapters/<owner>/__init__.py` composition
+   root. That adapter root constructs typed public ports; the exception never
+   extends to nested adapter files or cross-owner private imports.
 6. The application composition root opens the SQLAlchemy transaction/unit of
    work and constructs transaction-bound public-port implementations. The
    owning application command coordinates those injected ports without

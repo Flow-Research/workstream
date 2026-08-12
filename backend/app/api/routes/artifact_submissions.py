@@ -33,18 +33,6 @@ class SubmissionBundlePreparationResponse(BaseModel):
     replayed: bool
 
 
-def _require_ascii_submission_packet_headers(summary: str, attestation: str) -> None:
-    """Reject lossy HTTP-header decoding before immutable evidence hashing."""
-    try:
-        summary.encode("ascii")
-        attestation.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail="submission_bundle_packet_header_encoding_invalid",
-        ) from exc
-
-
 @router.post(
     "/tasks/{task_id}/submission-bundle-preparations",
     response_model=SubmissionBundlePreparationResponse,
@@ -74,7 +62,6 @@ async def prepare_submission_bundle(
         raise HTTPException(status_code=404, detail="Task not found")
     assert assignment_id is not None and idempotency_key is not None
     assert summary is not None and contributor_attestation is not None
-    _require_ascii_submission_packet_headers(summary, contributor_attestation)
     try:
         identifiers = (
             UUID(task_id),

@@ -123,11 +123,14 @@ def _source_module(source: str) -> str | None:
 
 
 def _source_owner_adapter(source: str) -> str | None:
-    """Return the module owned by one explicit adapter package."""
+    """Return the module owned by one exact adapter composition root."""
     prefix = "backend/app/adapters/"
     if not source.startswith(prefix):
         return None
-    return source.removeprefix(prefix).split("/", 1)[0]
+    parts = source.removeprefix(prefix).split("/")
+    if len(parts) != 2 or parts[1] != "__init__.py":
+        return None
+    return parts[0]
 
 
 def _is_public_target(target: str, module: str) -> bool:

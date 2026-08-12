@@ -270,3 +270,8 @@ edges, public API leaks, unknown modules, cyclic public dependencies,
 dynamic-import hiding, and agreement with the WS-AUTH-003 ledger. The edge
 inventory is temporary recovery evidence; do not add an edge to make a feature
 pass. Remove the dependency through the owning module's typed public API.
+The sole non-ledgered owner-private composition exception is the exact
+`backend/app/adapters/<owner>/__init__.py` file importing that same owner's
+private implementation to construct typed public ports. Nested adapter files
+and cross-owner private imports remain scanned and must be repaired or remain
+exact protected-base debt.

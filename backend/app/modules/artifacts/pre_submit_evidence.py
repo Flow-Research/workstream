@@ -14,9 +14,12 @@ from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.models import PreSubmitEvidenceResult, PreSubmitEvidenceSet
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.checkers.api import (
+    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
     EffectivePreSubmissionExecutionPlan,
     PreSubmissionExecutionEntryFacts,
     PreSubmissionExecutionFacts,
+    PreSubmissionInfrastructureUnavailableError,
+    validate_pre_submission_execution_facts,
 )
 from app.modules.projects.api import (
     ProjectLockedPolicyContextPort,
@@ -24,15 +27,29 @@ from app.modules.projects.api import (
     ProjectLockedPolicyContextUnavailable,
 )
 from app.modules.tasks.api import (
+    TaskSubmissionContextFacts,
     TaskSubmissionContextPort,
     TaskSubmissionContextRequest,
     TaskSubmissionContextUnavailable,
 )
 
-ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
-_CHECKER_EXECUTION_STATUSES = frozenset(
-    {"passed", "warning", "advisory_disabled", "dependency_not_run", "failed"}
-)
+def validate_predecessor_lineage(
+    task_context: TaskSubmissionContextFacts,
+    *,
+    predecessor_submission_id: UUID | None,
+    predecessor_submission_version: int | None,
+) -> None:
+    """Require the post-byte predecessor to equal the initially checked version."""
+    predecessor = task_context.predecessor
+    if (
+        (predecessor is None) != (predecessor_submission_id is None)
+        or predecessor is not None
+        and (
+            predecessor.submission_id != predecessor_submission_id
+            or predecessor.version != predecessor_submission_version
+        )
+    ):
+        raise PreSubmitEvidenceConflict("pre_submit_locked_context_changed")
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +201,7 @@ class PreSubmitEvidencePersistenceRequest:
     task_id: UUID
     assignment_id: UUID
     predecessor_submission_id: UUID | None
+    expected_predecessor_submission_version: int | None
     prepared_generation_id: UUID
     archive_sha256: str
     archive_byte_count: int
@@ -288,35 +306,16 @@ def _validate_execution(
         or len(execution.entries) != len(plan.entries)
     ):
         raise PreSubmitEvidenceConflict("pre_submission_result_context_invalid")
-    disqualified = False
-    for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
-        expected_severity = (
-            "warning" if plan_entry.classification == "advisory" else "blocking"
+    try:
+        validate_pre_submission_execution_facts(
+            plan,
+            PreSubmissionExecutionFacts(
+                plan_sha256=execution.plan_sha256,
+                eligible=execution.eligible,
+                entries=execution.entries,
+            ),
         )
-        status = result.checker_execution_status
-        if (
-            result.dispatch_authority != "workstream.pre_submission_checker_catalogue"
-            or result.definition_id != plan_entry.definition_id
-            or result.definition_version != plan_entry.definition_version
-            or result.public_name != plan_entry.public_name
-            or result.policy_source != plan_entry.policy_trace_source
-            or result.effective_plan_sha256 != plan.plan_sha256
-            or result.rule_instance_id != plan_entry.rule_instance_id
-            or result.locked_policy_sha256 != plan.lineage.effective_policy_hash
-            or result.phase != plan_entry.phase
-            or result.order != plan_entry.order
-            or result.classification != plan_entry.classification
-            or result.severity != expected_severity
-            or status not in _CHECKER_EXECUTION_STATUSES
-            or not result.message_code
-            or result.failure_code
-            != (plan_entry.failure_code if status == "failed" else None)
-            or len(result.metadata) != len({key for key, _ in result.metadata})
-            or any(type(value) is not int or value < 0 for _, value in result.metadata)
-        ):
-            raise PreSubmitEvidenceConflict("pre_submission_result_context_invalid")
-        disqualified = disqualified or status in {"failed", "dependency_not_run"}
-    if execution.eligible == disqualified:
+    except PreSubmissionInfrastructureUnavailableError:
         raise PreSubmitEvidenceConflict("pre_submission_result_context_invalid")
 
 
@@ -711,6 +710,13 @@ class PreSubmitEvidenceService:
             )
         except (TaskSubmissionContextUnavailable, ProjectLockedPolicyContextUnavailable) as exc:
             raise PreSubmitEvidenceConflict("pre_submit_locked_context_changed") from exc
+        validate_predecessor_lineage(
+            task_context,
+            predecessor_submission_id=request.predecessor_submission_id,
+            predecessor_submission_version=(
+                request.expected_predecessor_submission_version
+            ),
+        )
         lineage = request.plan.lineage
         guide_version = project_context.guide_version.removeprefix("v")
         try:
@@ -719,10 +725,6 @@ class PreSubmitEvidenceService:
             raise PreSubmitEvidenceConflict("pre_submit_locked_context_changed") from exc
         if (
             task_context.contributor_id != request.actor_profile_id
-            or task_context.predecessor is None
-            and request.predecessor_submission_id is not None
-            or task_context.predecessor is not None
-            and task_context.predecessor.submission_id != request.predecessor_submission_id
             or project_context.project_id != lineage.project_id
             or project_context.guide_id != lineage.guide_id
             or numeric_guide_version != lineage.guide_version

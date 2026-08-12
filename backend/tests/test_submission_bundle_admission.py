@@ -40,6 +40,9 @@ from app.modules.artifacts.submission_admission import (
     SubmissionBundleDurablePutResult,
     SubmissionBundleDurablePutService,
 )
+from app.modules.artifacts.submission_materialization import (
+    PreparedBundlePreSubmitEvidenceService,
+)
 from app.modules.artifacts.submission_admission import (
     SubmissionBundleAdmissionPublicationError,
     SubmissionBundleAdmissionPublisher,
@@ -53,11 +56,8 @@ from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
 from app.main import create_app
-from app.api.routes.artifact_submissions import (
-    _require_ascii_submission_packet_headers,
-    prepare_submission_bundle,
-    router as submission_router,
-)
+from app.api.routes.artifact_submissions import prepare_submission_bundle, router as submission_router
+from app.modules.artifacts.submission_admission import validate_submission_packet_headers
 
 
 def _actor() -> ActorIdentityFacts:
@@ -68,7 +68,9 @@ def _actor() -> ActorIdentityFacts:
     )
 
 
-def _preparation_request(*, byte_source, media_type: str = "application/zip"):
+def _preparation_request(
+    *, byte_source, media_type: str = "application/zip", summary: str = "summary"
+):
     return SubmissionBundlePreparationRequest(
         actor=_actor(),
         request_id=uuid4(),
@@ -77,7 +79,7 @@ def _preparation_request(*, byte_source, media_type: str = "application/zip"):
         assignment_id=uuid4(),
         predecessor_submission_id=None,
         idempotency_key=uuid4(),
-        summary="summary",
+        summary=summary,
         contributor_attestation="attestation",
         media_type=media_type,
         byte_source=byte_source,
@@ -104,11 +106,14 @@ def test_submission_bundle_preparation_route_is_hidden() -> None:
 
 
 def test_submission_packet_headers_reject_non_ascii() -> None:
-    _require_ascii_submission_packet_headers("plain summary", "plain attestation")
-    with pytest.raises(HTTPException) as failure:
-        _require_ascii_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
-    assert failure.value.status_code == 422
-    assert failure.value.detail == "submission_bundle_packet_header_encoding_invalid"
+    validate_submission_packet_headers("plain summary", "plain attestation")
+    with pytest.raises(
+        SubmissionBundlePreparationRejected,
+        match="submission_bundle_packet_header_encoding_invalid",
+    ):
+        validate_submission_packet_headers(
+            "caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok"
+        )
 
 
 @pytest.mark.asyncio
@@ -182,7 +187,12 @@ async def test_hidden_preparation_denies_before_reading_uploaded_bytes() -> None
         runtime_factory=runtime_factory,
     )
     with pytest.raises(SubmissionBundlePreparationUnavailable):
-        await command.prepare(_preparation_request(byte_source=bytes_source()))
+        await command.prepare(
+            _preparation_request(
+                byte_source=bytes_source(),
+                summary="caf\N{LATIN SMALL LETTER E WITH ACUTE}",
+            )
+        )
     assert reads == 0
 
 
@@ -209,6 +219,43 @@ async def test_hidden_preparation_closes_authority_after_invalid_media_type() ->
             )
         )
     authority.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_post_byte_authority_denial_precedes_evidence_relock() -> None:
+    denial = ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
+    authority = SimpleNamespace(revalidate=AsyncMock(side_effect=denial))
+    task_contexts = SimpleNamespace(lock_submission_context=AsyncMock())
+    project_contexts = SimpleNamespace(lock_locked_policy_context=AsyncMock())
+    session = SimpleNamespace(
+        in_transaction=lambda: False,
+        begin=_transaction,
+        execute=AsyncMock(),
+    )
+    workflow = PreparedBundlePreSubmitEvidenceService(
+        session=session,
+        materialization=SimpleNamespace(),
+        preparation_authorization=authority,
+        task_contexts=task_contexts,
+        project_contexts=project_contexts,
+    )
+    materialization_request = SimpleNamespace(
+        prepared_artifact=SimpleNamespace(
+            commitment=SimpleNamespace(sha256=_sha("1"), byte_count=1),
+            generation_id=uuid4(),
+        ),
+    )
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await workflow.persist(
+            materialization_request,
+            execution=object(),
+            preparation_request=object(),
+        )
+
+    authority.revalidate.assert_awaited_once()
+    task_contexts.lock_submission_context.assert_not_awaited()
+    project_contexts.lock_locked_policy_context.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -298,7 +345,9 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
         project_contexts=SimpleNamespace(),
         runtime_factory=runtime_factory,
     )
-    command._lock_context = AsyncMock(return_value=(object(), locked))
+    command._lock_context = AsyncMock(
+        return_value=(SimpleNamespace(predecessor=None), locked)
+    )
     command._compile_plan = Mock(return_value=object())
     command._load_predecessor = AsyncMock(return_value=None)
     command._existing_durable_result = AsyncMock(return_value=expected)
@@ -340,7 +389,6 @@ def test_durable_put_result_projects_without_losing_replay_state() -> None:
         status="prepared",
         replayed=True,
     )
-
     assert PreparedSubmissionBundlePreparationCommand._result(durable) == (
         SubmissionBundlePreparationResult(
             put_attempt_id=durable.put_attempt_id,
@@ -350,6 +398,13 @@ def test_durable_put_result_projects_without_losing_replay_state() -> None:
         )
     )
 
+
+def test_post_byte_locked_context_conflict_maps_to_public_race_code() -> None:
+    conflict = PreSubmitEvidenceConflict("pre_submit_locked_context_changed")
+    assert (
+        PreparedSubmissionBundlePreparationCommand._evidence_conflict_code(conflict)
+        == "submission_bundle_preparation_context_changed"
+    )
 
 def _capability(prepared, evidence_set_id):
     service = PreSubmitEvidenceService(

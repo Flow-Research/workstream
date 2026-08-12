@@ -15,6 +15,42 @@
     },
     {
       "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.authorization",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.guide_setup",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.models",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.preparation",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.schemas",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.service",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
       "target_module": "projects",
       "imported_private_path": "app.modules.projects.guide_setup_continuation",
       "repair_owner": "WS-ARCH-001-03"
@@ -24,6 +60,30 @@
       "target_module": "projects",
       "imported_private_path": "app.modules.projects.models",
       "repair_owner": "WS-ARCH-001-03"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/local.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.preparation",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/local.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.sources",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/s3_compatible.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.preparation",
+      "repair_owner": "WS-ARCH-001-04"
+    },
+    {
+      "source_file": "backend/app/adapters/artifacts/s3_compatible.py",
+      "target_module": "artifacts",
+      "imported_private_path": "app.modules.artifacts.sources",
+      "repair_owner": "WS-ARCH-001-04"
     },
     {
       "source_file": "backend/app/api/deps/api_controls.py",

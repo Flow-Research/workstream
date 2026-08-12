@@ -18,8 +18,13 @@
 - WS-ARCH-001-02C merged through PR #320. It exposes CHECKER-owned
   effective-plan and bounded execution-result contracts without activating the
   contributor preparation route.
-- Next durable boundary: WS-ARCH-001-02D only, the ART hidden-preparation public
-  API and private-edge migration. Open pull requests show transient ownership.
+- WS-ARCH-001-02D is complete in this change. It moves the hidden preparation
+  route to delivery composition, exposes the bounded ART request/result/command
+  API, consumes TASK/PROJECT/CHECKER public capabilities, keeps AUTH handles
+  opaque, and preserves deny-only availability.
+- Next durable boundary: WS-ARCH-001-02E only, the ART
+  ready-admission consumption and binding public capability. Open pull requests
+  show transient ownership.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the

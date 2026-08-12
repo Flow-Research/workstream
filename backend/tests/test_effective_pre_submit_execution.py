@@ -21,6 +21,12 @@ from app.modules.artifacts.pre_submit_evidence import (
     PersistedPreSubmitEvidence,
     pre_submit_failure_audit_payload,
     semantic_manifest_identity,
+    validate_predecessor_lineage,
+)
+from app.modules.tasks.api import (
+    SubmissionPredecessorFacts,
+    TaskLockedProjectContextReferences,
+    TaskSubmissionContextFacts,
 )
 from app.modules.checkers.api import (
     PreSubmissionExecutionEntryFacts,
@@ -85,6 +91,38 @@ def test_evidence_operation_identity_binds_every_custody_fact() -> None:
         effective_plan_sha256=_sha("7")
     )
     assert identity != context.operation_identity(effective_plan_sha256=_sha("8"))
+
+
+def test_post_byte_relock_rejects_advanced_predecessor_version() -> None:
+    predecessor_id = uuid4()
+    task_context = TaskSubmissionContextFacts(
+        task_id=uuid4(),
+        assignment_id=uuid4(),
+        contributor_id=uuid4(),
+        status="needs_revision",
+        kind="revision",
+        predecessor=SubmissionPredecessorFacts(
+            submission_id=predecessor_id,
+            version=2,
+        ),
+        locked_project_context=TaskLockedProjectContextReferences(
+            project_id=uuid4(),
+            guide_version="1",
+            source_snapshot_id=uuid4(),
+            source_snapshot_hash=_sha("1"),
+            effective_policy_id=uuid4(),
+            effective_policy_hash=_sha("2"),
+            pre_submit_policy_id=uuid4(),
+            pre_submit_policy_bundle_hash=_sha("3"),
+        ),
+    )
+
+    with pytest.raises(PreSubmitEvidenceConflict, match="pre_submit_locked_context_changed"):
+        validate_predecessor_lineage(
+            task_context,
+            predecessor_submission_id=predecessor_id,
+            predecessor_submission_version=1,
+        )
 
 
 def test_semantic_manifest_identity_is_server_deterministic() -> None:

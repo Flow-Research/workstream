@@ -277,6 +277,7 @@ async def _request(
         assignment_id=uuid4(),
         submission_artifact_policy_id=plan.lineage.effective_policy_id,
         checker_policy_id=plan.lineage.pre_submit_policy_id,
+        predecessor_submission_version=None,
         prepared_artifact=prepared,
         effective_plan=plan,
         inspection=inspection,
@@ -465,6 +466,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         "submissions",
         "checker_runs",
         "review_queue_entries",
+        "pre_submit_evidence_sets",
+        "pre_submit_evidence_results",
     )
     try:
         async with engine.begin() as connection:

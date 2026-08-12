@@ -12,7 +12,9 @@ module and every cross-module call must use a typed public API.
 - The nine business modules and three supporting modules have one canonical
   ownership map.
 - Cross-module runtime imports use only the target module's `api` package.
-- Concrete implementations meet only in the application composition root.
+- Concrete implementations meet only in the application composition root or
+  the exact same-owner `backend/app/adapters/<owner>/__init__.py` composition
+  root; nested adapters and cross-owner private imports remain prohibited.
 - Existing private-import debt is frozen as exact source-to-target edges.
 - Every feature chunk repairs the capabilities and debt edges it touches.
 - No debt count grows, and final closure requires an empty private-import

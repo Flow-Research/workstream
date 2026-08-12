@@ -13,11 +13,15 @@ from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.modules.checkers.api import (
+    ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,
     EffectivePreSubmissionExecutionPlan,
     EffectivePreSubmissionPlanEntry,
     PreSubmissionExecutionEntryFacts,
     PreSubmissionExecutionFacts,
+    PreSubmissionInfrastructureUnavailableError,
+    PRE_SUBMISSION_RESULT_METADATA_KEYS,
     SubmissionPacketView,
+    validate_pre_submission_execution_facts,
 )
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.artifacts.submission_archive import (
@@ -55,29 +59,6 @@ _EXECUTED_PHASES = frozenset(
 _FORBIDDEN_EXACT_NAMES = frozenset({".env", "id_rsa", "id_ed25519"})
 _FORBIDDEN_DIRECTORY_NAMES = frozenset({".git"})
 _FORBIDDEN_SUFFIXES = (".pem", ".key")
-_RESULT_MESSAGE_CODES = frozenset(
-    {
-        "advisory_disabled",
-        "attestation_missing",
-        "dependency_not_run",
-        "file_size_limit_exceeded",
-        "forbidden_artifact_present",
-        "package_size_limit_exceeded",
-        "packaging_requirement_failed",
-        "passed",
-        "policy_attestation_missing",
-        "quality_signal_warning",
-        "required_evidence_missing",
-        "required_file_missing",
-        "sensitive_path_forbidden",
-        "storage_scheme_not_allowed",
-        "submission_packet_invalid",
-    }
-)
-_RESULT_METADATA_KEYS = frozenset({"entry_count", "finding_count", "matched_category_count"})
-ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
-
-
 class DefaultPreSubmissionExecutionError(RuntimeError):
     """Fail hidden execution without creating a durable checker effect."""
 
@@ -178,7 +159,7 @@ class PreSubmissionExecutionResult:
                     metadata=tuple(
                         (key, value)
                         for key, value in entry.metadata
-                        if key in _RESULT_METADATA_KEYS
+                        if key in PRE_SUBMISSION_RESULT_METADATA_KEYS
                         and type(value) is int
                         and value >= 0
                     ),
@@ -604,46 +585,16 @@ def validate_pre_submission_execution_result(
         or len(execution.entries) != len(plan.entries)
     ):
         raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
-    disqualified = False
     for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
-        expected_severity = "warning" if plan_entry.classification == "advisory" else "blocking"
         if (
             type(result.status) is not PreSubmissionResultStatus
             or result.schema_version != plan_entry.result_schema
-            or result.definition.dispatch_authority != "workstream.pre_submission_checker_catalogue"
-            or result.definition.definition_id != plan_entry.definition_id
-            or result.definition.definition_version != plan_entry.definition_version
-            or result.definition.public_name != plan_entry.public_name
-            or result.definition.source != plan_entry.policy_trace_source
-            or result.policy_trace.effective_plan_sha256 != plan.plan_sha256
-            or result.policy_trace.rule_instance_id != plan_entry.rule_instance_id
-            or result.policy_trace.locked_policy_sha256 != plan.lineage.effective_policy_hash
-            or result.phase != plan_entry.phase
-            or result.order != plan_entry.order
-            or result.classification != plan_entry.classification
-            or result.severity != expected_severity
-            or result.message_code not in _RESULT_MESSAGE_CODES
-            or (
-                result.failure_code
-                != (
-                    plan_entry.failure_code
-                    if result.status is PreSubmissionResultStatus.FAILED
-                    else None
-                )
-            )
-            or len(result.metadata) != len({key for key, _ in result.metadata})
-            or any(
-                key not in _RESULT_METADATA_KEYS or type(value) is not int or value < 0
-                for key, value in result.metadata
-            )
         ):
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
-        disqualified = disqualified or result.status in {
-            PreSubmissionResultStatus.FAILED,
-            PreSubmissionResultStatus.DEPENDENCY_NOT_RUN,
-        }
-    if execution.eligible == disqualified:
-        raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
+    try:
+        validate_pre_submission_execution_facts(plan, execution.bounded_facts())
+    except PreSubmissionInfrastructureUnavailableError as exc:
+        raise PreSubmissionInfrastructureUnavailable(str(exc)) from exc
 
 
 def _is_high_confidence_sensitive(normalized_path: str) -> bool:

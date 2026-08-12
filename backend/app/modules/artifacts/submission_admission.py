@@ -29,7 +29,10 @@ from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
     SubmissionBundleDurableIntent,
 )
-from app.modules.artifacts.pre_submit_evidence import PreSubmitPassCapability
+from app.modules.artifacts.pre_submit_evidence import (
+    PreSubmitEvidenceConflict,
+    PreSubmitPassCapability,
+)
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
@@ -77,6 +80,17 @@ from app.modules.tasks.api import (
     TaskSubmissionContextRequest,
     TaskSubmissionContextUnavailable,
 )
+
+
+def validate_submission_packet_headers(summary: str, attestation: str) -> None:
+    """Reject lossy header decoding only after contributor preflight succeeds."""
+    try:
+        summary.encode("ascii")
+        attestation.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise SubmissionBundlePreparationRejected(
+            "submission_bundle_packet_header_encoding_invalid"
+        ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -451,6 +465,10 @@ class PreparedSubmissionBundlePreparationCommand:
         prepared = None
         try:
             await self._authority.preflight(request=request)
+            validate_submission_packet_headers(
+                request.summary,
+                request.contributor_attestation,
+            )
             if request.media_type.partition(";")[0].strip().lower() != "application/zip":
                 raise SubmissionBundlePreparationRejected("submission_bundle_media_type_invalid")
             async with self._runtime_factory() as runtime:
@@ -491,6 +509,11 @@ class PreparedSubmissionBundlePreparationCommand:
                         assignment_id=request.assignment_id,
                         submission_artifact_policy_id=project_context.effective_policy_id,
                         checker_policy_id=project_context.pre_submit_policy_id,
+                        predecessor_submission_version=(
+                            task_context.predecessor.version
+                            if task_context.predecessor is not None
+                            else None
+                        ),
                         prepared_artifact=prepared,
                         effective_plan=plan,
                         inspection=inspection,
@@ -536,6 +559,10 @@ class PreparedSubmissionBundlePreparationCommand:
                     durable,
                 )
                 return self._result(result)
+        except PreSubmitEvidenceConflict as exc:
+            raise SubmissionBundlePreparationRejected(
+                self._evidence_conflict_code(exc)
+            ) from exc
         except ArtifactAuthorityDeniedError as exc:
             raise SubmissionBundlePreparationUnavailable(
                 "submission bundle preparation is unavailable"
@@ -614,6 +641,13 @@ class PreparedSubmissionBundlePreparationCommand:
             )
             value = await self._session.scalar(statement)
             return UUID(value) if value is not None else None
+
+    @staticmethod
+    def _evidence_conflict_code(exc: PreSubmitEvidenceConflict) -> str:
+        """Map ART-private evidence failures to the bounded public vocabulary."""
+        if str(exc) == "pre_submit_locked_context_changed":
+            return "submission_bundle_preparation_context_changed"
+        return "pre_submission_checked_custody_unavailable"
 
     async def _lock_context(
         self,

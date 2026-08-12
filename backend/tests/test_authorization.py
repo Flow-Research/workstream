@@ -6303,21 +6303,10 @@ async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
         )
         with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
             await authority.consume(
-                service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
-                action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 prepared_authorization=handle,
                 facts=replace(facts, **{field_name: changed}),
             )
-    with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
-        await authority.consume(
-            service_identity=ServiceIdentity.ARTIFACT_GUIDE_READER,
-            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-            prepared_authorization=handle,
-            facts=facts,
-        )
     await authority.consume(
-        service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
-        action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         prepared_authorization=handle,
         facts=facts,
     )
@@ -6332,8 +6321,6 @@ async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
     )
     with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
         await authority.consume(
-            service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
-            action_id=ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
             prepared_authorization=handle,
             facts=facts,
         )

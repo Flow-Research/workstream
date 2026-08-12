@@ -270,12 +270,21 @@ def get_submission_bundle_preparation_command(
     @asynccontextmanager
     async def runtime():
         bootstrap = create_artifact_store_bootstrap(settings)
-        manager = create_artifact_scratch_manager(settings)
-        materialization_authority = PreparedPreSubmitMaterializationAuthorization(
-            session,
-            request_id=request_id,
-            correlation_id=correlation_id,
-        )
+        try:
+            manager = create_artifact_scratch_manager(settings)
+        except BaseException:
+            bootstrap.close()
+            raise
+        try:
+            materialization_authority = PreparedPreSubmitMaterializationAuthorization(
+                session,
+                request_id=request_id,
+                correlation_id=correlation_id,
+            )
+        except BaseException:
+            manager.close()
+            bootstrap.close()
+            raise
         try:
             namespace = artifact_storage_namespace_spec(settings, bootstrap)
             store = bootstrap.initialize_after_namespace_claim(
