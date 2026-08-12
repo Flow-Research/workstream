@@ -514,7 +514,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             await connection.execute(
                 text(
                     "insert into projects (id,name,slug,status) values "
-                    "(:project,'Evidence project',:project,'draft')"
+                    "(:project,'Evidence project',:project,'active')"
                 ),
                 params,
             )
@@ -522,7 +522,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 text(
                     "insert into project_guides "
                     "(id,project_id,version,status,content_markdown,created_by) values "
-                    "(:guide,:project,'1','draft','# Guide','test')"
+                    "(:guide,:project,'1','active','# Guide','test')"
                 ),
                 params,
             )
