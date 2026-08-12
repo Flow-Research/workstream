@@ -571,6 +571,8 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         validate_pre_submission_execution_result(plan, replace(forged, eligible=1))  # type: ignore[arg-type]
 
     for metadata in (
+        (("finding_count",),),
+        ((["finding_count"], 1),),
         (("unknown_count", 1),),
         (("finding_count", 1), ("finding_count", 2)),
         (("finding_count", "1"),),

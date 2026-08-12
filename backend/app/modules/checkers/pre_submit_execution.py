@@ -586,16 +586,26 @@ def validate_pre_submission_execution_result(
     ):
         raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
     for plan_entry, result in zip(plan.entries, execution.entries, strict=True):
-        metadata_keys = tuple(key for key, _ in result.metadata)
+        metadata = result.metadata
+        if type(metadata) is not tuple or any(
+            type(item) is not tuple
+            or len(item) != 2
+            or type(item[0]) is not str
+            or type(item[1]) is not int
+            for item in metadata
+        ):
+            raise PreSubmissionInfrastructureUnavailable(
+                "pre_submission_result_context_invalid"
+            )
+        metadata_keys = tuple(item[0] for item in metadata)
         if (
             type(result.status) is not PreSubmissionResultStatus
             or result.schema_version != plan_entry.result_schema
             or len(metadata_keys) != len(set(metadata_keys))
             or any(
                 key not in PRE_SUBMISSION_RESULT_METADATA_KEYS
-                or type(value) is not int
                 or value < 0
-                for key, value in result.metadata
+                for key, value in metadata
             )
         ):
             raise PreSubmissionInfrastructureUnavailable("pre_submission_result_context_invalid")
