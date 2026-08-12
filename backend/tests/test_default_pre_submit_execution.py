@@ -444,6 +444,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     custody_triggers = (
         ("projects", "project_creation_custody"),
         ("project_guides", "guide_mutation_product_custody"),
+        ("project_guides", "guide_lineage_lifecycle_guard"),
         ("guide_source_snapshots", "source_snapshot_product_custody"),
         ("submission_artifact_policies", "submission_policy_creation_custody"),
         (
