@@ -569,3 +569,20 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
         match="pre_submission_result_context_invalid",
     ):
         validate_pre_submission_execution_result(plan, replace(forged, eligible=1))  # type: ignore[arg-type]
+
+    for metadata in (
+        (("unknown_count", 1),),
+        (("finding_count", 1), ("finding_count", 2)),
+        (("finding_count", "1"),),
+        (("finding_count", -1),),
+    ):
+        malformed_entry = replace(forged.entries[0], metadata=metadata)  # type: ignore[arg-type]
+        malformed = replace(
+            forged,
+            entries=(malformed_entry, *forged.entries[1:]),
+        )
+        with pytest.raises(
+            PreSubmissionInfrastructureUnavailable,
+            match="pre_submission_result_context_invalid",
+        ):
+            validate_pre_submission_execution_result(plan, malformed)
