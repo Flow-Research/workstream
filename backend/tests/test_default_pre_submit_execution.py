@@ -654,7 +654,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 actor_profile_id=actor_id,
                 identity_link_id=identity_link_id,
             )
-
             async def fresh_checked_bundle():
                 prepared = await preparation.prepare(
                     _bytes(_archive()),
