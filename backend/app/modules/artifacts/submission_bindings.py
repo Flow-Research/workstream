@@ -172,8 +172,16 @@ class SubmissionAdmissionConsumptionService:
             .with_for_update()
         )
         if existing is not None:
-            raise SubmissionAdmissionConsumptionError(
-                "submission_bundle_admission_context_changed"
+            now = await self._session.scalar(select(func.now()))
+            admission.status = "stale"
+            admission.stale_at = now
+            admission.stale_reason = "submission_binding_scope_already_consumed"
+            await self._session.flush()
+            return self._result(
+                admission,
+                request,
+                binding=None,
+                replayed=False,
             )
 
         await self._authorization.consume(

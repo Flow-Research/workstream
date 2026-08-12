@@ -75,26 +75,32 @@ provider I/O; deletion/expiry/retention; compatibility path; new private edge.
 
 ## Acceptance criteria
 
-- [ ] Public inputs/outputs are immutable identifiers, digests, sizes, status,
+- [x] Public inputs/outputs are immutable identifiers, digests, sizes, status,
       and stable errors only.
-- [ ] The ART port consumes the typed 02A TASK lineage capability and locks the
+- [x] The ART port consumes the typed 02A TASK lineage capability and locks the
       exact task, assignment, predecessor-Submission, project, guide, snapshot,
       and policy facts without querying TASK persistence.
-- [ ] ART locks and validates ready admission/content/manifest/evidence lineage
+- [x] ART locks and validates ready admission/content/manifest/evidence lineage
       and accepts a server-owned Submission identity supplied by TASKS.
-- [ ] `ready -> consumed|stale` is terminal, unique, concurrency-safe, and
+- [x] `ready -> consumed|stale` is terminal, unique, concurrency-safe, and
       rollback-safe; authority loss alone never marks stale.
-- [ ] Binding identity is exact and provider-neutral; no provider I/O occurs.
-- [ ] Reuse the existing generic `ArtifactBinding` model and the established
+- [x] Binding identity is exact and provider-neutral; no provider I/O occurs.
+- [x] Reuse the existing generic `ArtifactBinding` model and the established
       guide-binding replay/authority-consumption convention unless a separately
       reviewed schema finding proves it insufficient; do not create a parallel
       binding aggregate.
-- [ ] Submission-binding types in `app.interfaces.artifact_operations` migrate
+- [x] Submission-binding types in `app.interfaces.artifact_operations` migrate
       to `artifacts.api`; no parallel legacy/public ART contract remains.
-- [ ] Capability remains unreachable from the public route pending 02F-02I.
-- [ ] Record the exact admission/binding port, state, error, and resource
+- [x] Capability remains unreachable from the public route pending 02F-02I.
+- [x] Record the exact admission/binding port, state, error, and resource
       manifest, including the complete TASK lineage resource facts, in
       `.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02E-admission-binding-manifest.md`.
+
+## Outcome on merge
+
+02E lands the hidden ART consumption capability and exact transaction proof.
+It does not activate contributor submission behavior; 02F must compose this
+port with TASK-owned Submission creation before later AUTH activation.
 
 ## Verification commands
 

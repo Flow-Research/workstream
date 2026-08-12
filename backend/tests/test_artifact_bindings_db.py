@@ -158,7 +158,9 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
                         ).consume(value)
                     except SubmissionAdmissionConsumptionError as exc:
                         return exc.code
-                    return "consumed"
+                    return (await session.get(
+                        SubmissionBundleAdmission, str(value.admission_id)
+                    )).status
 
         outcomes = await asyncio.gather(
             consume_competing(first_competing),
@@ -166,7 +168,7 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
         )
         assert sorted(outcomes) == [
             "consumed",
-            "submission_bundle_admission_context_changed",
+            "stale",
         ]
         async with factory() as session:
             await _set_schema(session, schema)
@@ -174,7 +176,20 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
                 text("select count(*) from artifact_bindings where resource_id=:id"),
                 {"id": str(first_competing.submission_id)},
             )
+            statuses = list(
+                await session.scalars(
+                    text(
+                        "select status from submission_bundle_admissions "
+                        "where id in (:first,:second) order by status"
+                    ),
+                    {
+                        "first": str(first_competing.admission_id),
+                        "second": str(competing.admission_id),
+                    },
+                )
+            )
             assert binding_count == 1
+            assert statuses == ["consumed", "stale"]
 
         rollback_request = _request()
         async with factory.begin() as seed:

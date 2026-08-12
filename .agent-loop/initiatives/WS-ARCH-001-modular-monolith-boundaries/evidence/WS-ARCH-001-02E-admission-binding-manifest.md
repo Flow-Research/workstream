@@ -49,6 +49,8 @@ capability in 02E.
   consumes fresh final authority, and returns the existing binding.
 - A different Submission receives
   `submission_bundle_admission_already_consumed`.
+- A competing admission for an already-bound Submission scope becomes `stale`
+  with `submission_binding_scope_already_consumed`.
 - Proven TASK context replacement permits only
   `ready -> stale` with `locked_submission_context_changed`.
 - Authorization denial, broken/missing ART lineage, cancellation, or transaction
