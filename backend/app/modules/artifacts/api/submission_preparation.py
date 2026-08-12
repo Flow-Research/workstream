@@ -25,7 +25,12 @@ class SubmissionBundlePreparationStatus(StrEnum):
     PREPARED = "prepared"
     PUT_IN_FLIGHT = "put_in_flight"
     OBJECT_CONFIRMED = "object_confirmed"
+    STORED_PENDING_VERIFICATION = "stored_pending_verification"
+    OBSERVED_CONFIRMED = "observed_confirmed"
+    ACKNOWLEDGEMENT_UNKNOWN = "acknowledgement_unknown"
+    PROVIDER_UNAVAILABLE = "provider_unavailable"
     ABSENT_REPLAY_REQUIRED = "absent_replay_required"
+    STALE = "stale"
     READY = "ready"
 
 

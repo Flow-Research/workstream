@@ -380,20 +380,37 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch)
     authority.close.assert_called_once_with()
 
 
-def test_durable_put_result_projects_without_losing_replay_state() -> None:
+@pytest.mark.parametrize(
+    "durable_status",
+    (
+        "prepared",
+        "put_in_flight",
+        "object_confirmed",
+        "stored_pending_verification",
+        "observed_confirmed",
+        "acknowledgement_unknown",
+        "provider_unavailable",
+        "absent_replay_required",
+        "stale",
+        "ready",
+    ),
+)
+def test_durable_put_result_projects_every_closed_preparation_status(
+    durable_status: str,
+) -> None:
     durable = SubmissionBundleDurablePutResult(
         put_attempt_id=uuid4(),
         pre_submit_evidence_set_id=uuid4(),
         operation_identity=_sha("9"),
         admission_id=None,
-        status="prepared",
+        status=durable_status,
         replayed=True,
     )
     assert PreparedSubmissionBundlePreparationCommand._result(durable) == (
         SubmissionBundlePreparationResult(
             put_attempt_id=durable.put_attempt_id,
             admission_id=None,
-            submission_bundle_preparation_status="prepared",
+            submission_bundle_preparation_status=durable_status,
             replayed=True,
         )
     )
