@@ -10,18 +10,17 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.drop_constraint(
-        "ck_submission_bundle_admissions_terminal_shape",
-        "submission_bundle_admissions",
-        type_="check",
+    op.execute(
+        "alter table submission_bundle_admissions drop constraint "
+        "ck_submission_bundle_admissions_terminal_shape"
     )
     op.add_column(
         "submission_bundle_admissions",
         sa.Column("consumed_by_submission_version", sa.Integer(), nullable=True),
     )
-    op.create_check_constraint(
-        "ck_submission_bundle_admissions_terminal_shape",
-        "submission_bundle_admissions",
+    op.execute(
+        "alter table submission_bundle_admissions add constraint "
+        "ck_submission_bundle_admissions_terminal_shape check ("
         "(status='ready' and consumed_at is null and consumed_by_submission_id is null "
         "and consumed_by_submission_version is null and stale_at is null and stale_reason is null) "
         "or (status='consumed' and consumed_at is not null and "
@@ -29,7 +28,7 @@ def upgrade() -> None:
         "and stale_at is null and stale_reason is null) or "
         "(status='stale' and consumed_at is null and consumed_by_submission_id is null "
         "and consumed_by_submission_version is null and stale_at is not null "
-        "and octet_length(stale_reason) between 1 and 500)",
+        "and octet_length(stale_reason) between 1 and 500))"
     )
 
 
