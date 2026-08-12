@@ -107,9 +107,17 @@ async def test_artifact_adapter_preserves_public_actor_facts() -> None:
 @pytest.mark.asyncio
 async def test_artifact_adapter_default_preparation_authority_denies() -> None:
     authority = artifact_adapters.get_submission_bundle_preparation_authorization()
+    request = _preparation_request(byte_source=object())
 
     with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.preflight(request=_preparation_request(byte_source=object()))
+        await authority.preflight(request=request)
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.revalidate(request=request)
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        authority.transaction()
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.prepare_final(request=request)
+    authority.close()
 
 
 @pytest.mark.asyncio
