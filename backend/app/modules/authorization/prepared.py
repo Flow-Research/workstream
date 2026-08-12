@@ -79,6 +79,8 @@ from app.modules.authorization.submission_preparation import (
 from app.modules.authorization.pre_submit_materialization import (
     initialize_artifact_bindings,
     parse_materialization_binding,
+    parse_project_create_binding,
+    parse_submission_binding,
 )
 
 
@@ -592,29 +594,19 @@ class PreparedAuthorizationService:
                 )
             )
         if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
-            (
-                submission_preparation_context,
-                submission_preparation_resource_digest,
-                submission_preparation_final_context,
-                submission_preparation_final_digest,
-            ) = parse_submission_preparation_or_invalid(
+            submission_binding = parse_submission_binding(
+                dict(caller_input.request_value),
+                PreparedAuthorizationHandleInvalid,
+                parse_submission_preparation_or_invalid,
+            )
+            submission_preparation_context = submission_binding[0]
+            submission_preparation_resource_digest = submission_binding[1]
+            submission_preparation_final_context = submission_binding[2]
+            submission_preparation_final_digest = submission_binding[3]
+        if action_id is ActionId.PROJECT_CREATE:
+            operation_id, project_id, operation_generation = parse_project_create_binding(
                 dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
             )
-        if action_id is ActionId.PROJECT_CREATE:
-            try:
-                operation_id = UUID(str(caller_input.request_value["operation_id"]))
-                project_id = UUID(str(caller_input.request_value["project_id"]))
-                operation_generation = caller_input.request_value["operation_generation"]
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            if (
-                type(operation_generation) is not int
-                or operation_generation < 1
-                or operation_id == project_id
-            ):
-                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if action_id in {
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,

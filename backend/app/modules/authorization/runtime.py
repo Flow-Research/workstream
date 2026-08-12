@@ -19,10 +19,7 @@ from app.modules.authorization.domain.project_create import ProjectCreateResourc
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
-from app.modules.authorization.submission_preparation import (
-    SubmissionBundlePreparationPreflightResourceContext,
-    SubmissionBundlePreparationResourceContext,
-)
+from app.modules.authorization.submission_preparation import SubmissionBundlePreparationPreflightResourceContext, SubmissionBundlePreparationResourceContext
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SETUP_RUN_READ: "setup_run",

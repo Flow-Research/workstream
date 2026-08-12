@@ -24,3 +24,19 @@ def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
 
 def initialize_artifact_bindings() -> tuple[None, None, None, None, None, None]:
     return None, None, None, None, None, None
+
+
+def parse_submission_binding(raw: dict, invalid_error, parser) -> tuple:
+    return parser(raw, invalid_error)
+
+
+def parse_project_create_binding(raw: dict, invalid_error):
+    try:
+        operation_id = UUID(str(raw["operation_id"]))
+        project_id = UUID(str(raw["project_id"]))
+        generation = raw["operation_generation"]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise invalid_error("invalid prepared authorization handle") from exc
+    if type(generation) is not int or generation < 1 or operation_id == project_id:
+        raise invalid_error("invalid prepared authorization handle")
+    return operation_id, project_id, generation
