@@ -1129,9 +1129,10 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         **before,
         "artifact_contents": before["artifact_contents"] + 1,
         "artifact_replicas": before["artifact_replicas"] + 1,
-        "artifact_put_attempts": before["artifact_put_attempts"] + 1,
-        "submission_bundle_admissions": before["submission_bundle_admissions"] + 1,
-    }
+            "artifact_put_attempts": before["artifact_put_attempts"] + 1,
+            "submission_bundle_admissions": before["submission_bundle_admissions"] + 1,
+            "pre_submit_evidence_sets": evidence_count, "pre_submit_evidence_results": result_count,  # noqa: E501
+        }
 
 
 @pytest.mark.asyncio
