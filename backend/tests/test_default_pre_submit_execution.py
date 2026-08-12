@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from io import BytesIO
 from dataclasses import replace
+import json
 from pathlib import Path
 import threading
 from types import SimpleNamespace
@@ -452,11 +453,10 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             "effective_submission_policy_custody",
         ),
         ("pre_submit_checker_policies", "pre_submit_policy_custody"),
-        ("review_policies", "review_policy_mutation_custody"),
-        ("revision_policies", "revision_policy_mutation_custody"),
+        ("review_policies", "review_policy_mutation_custody"), ("revision_policies", "revision_policy_mutation_custody"),  # noqa: E501
     )
     blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
-    original_prepared_closed = False
+    original_prepared_closed = bool()
     tables = (
         "artifact_contents",
         "artifact_replicas",
@@ -480,6 +480,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 "submission_policy": str(uuid4()),
                 "effective_policy": str(lineage.effective_policy_id),
                 "effective_hash": lineage.effective_policy_hash,
+                "effective_body": json.dumps(_effective_policy()), "checker_body": json.dumps(compile_effective_project_submission_artifact_policy(_effective_policy(), lineage.effective_policy_hash).compiled_bundle),  # noqa: E501
                 "checker_policy": str(lineage.pre_submit_policy_id),
                 "checker_hash": lineage.pre_submit_policy_bundle_hash,
                 "post_policy": str(uuid4()),
@@ -553,7 +554,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     "submission_artifact_policy_hash,lifecycle_status,merge_algorithm_version,"
                     "effective_policy,effective_policy_hash,created_by) values "
                     "(:effective_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
-                    ":submission_policy,:effective_hash,'approved','1','{}'::json,"
+                    ":submission_policy,:effective_hash,'approved','1',cast(:effective_body as json),"
                     ":effective_hash,'test')"
                 ),
                 params,
@@ -566,7 +567,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     "lifecycle_status,compiler_version,compiled_bundle,compiled_bundle_hash,"
                     "checker_names,checker_configs,created_by) values "
                     "(:checker_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
-                    ":effective_policy,:effective_hash,'compiled','1','{}'::json,"
+                    ":effective_policy,:effective_hash,'compiled','1',cast(:checker_body as json),"
                     ":checker_hash,'[]'::json,'{}'::json,'test')"
                 ),
                 params,
