@@ -450,7 +450,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("review_policies", "review_policy_mutation_custody"), ("revision_policies", "revision_policy_mutation_custody"),  # noqa: E501
     )
     blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
-    original_prepared_closed = bool()
+    original_prepared_closed = False
     tables = (
         "artifact_contents",
         "artifact_replicas",

@@ -230,7 +230,7 @@
     },
     {
       "capability": "unassigned_legacy_auth",
-      "content_sha256": "4237346339315c106ebb2878ac3a1f4fdc074068c9099bd3e9288fdc749ea0d4",
+      "content_sha256": "8e9bc12e0e6621cbfdc35139a09fa8f66cd71a3da0a8fe20064df6dd0499c701",
       "end_line": 1714,
       "hard_limit": 1200,
       "kind": "test_file",
@@ -746,7 +746,7 @@
     },
     {
       "capability": "unassigned_legacy_auth",
-      "content_sha256": "c157da98985d4532f24cc2d2cf1e4e8aa46b0af39ca1f3beaca91fc81e9aaa8d",
+      "content_sha256": "a95eabc57cd871f8d1881f015916ca32383f25ad30691c384d09e31ec1c936b9",
       "end_line": 1128,
       "hard_limit": 120,
       "kind": "test_function",
