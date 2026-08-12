@@ -454,9 +454,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         ("review_policies", "review_policy_mutation_custody"),
         ("revision_policies", "revision_policy_mutation_custody"),
     )
-    blocked_prepared = replay_prepared = None
-    drift_prepared = None
-    denied_prepared = None
+    blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
     original_prepared_closed = False
     tables = (
         "artifact_contents",
@@ -600,25 +598,13 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             )
             await connection.execute(
                 text(
-                    "insert into revision_policies "
+                    "with inserted_revision as (insert into revision_policies "
                     "(id,project_id,guide_version,policy_generation,policy_hash,"
                     "semantics_status,max_revision_rounds,revision_deadline_hours,"
                     "allowed_resubmission_states) values "
                     "(:revision_policy,:project,'1',1,:revision_policy_hash,"
-                    "'legacy_incomplete',1,24,'[]'::json)"
-                ),
-                params,
-            )
-            await connection.execute(
-                text(
-                    "update project_guides set status='active',"
-                    "selected_review_policy_id=:review_policy,"
-                    "selected_review_policy_generation=1,"
-                    "selected_review_policy_hash=:review_policy_hash,"
-                    "selected_revision_policy_id=:revision_policy,"
-                    "selected_revision_policy_generation=1,"
-                    "selected_revision_policy_hash=:revision_policy_hash "
-                    "where id=:guide"
+                    "'legacy_incomplete',1,24,'[]'::json) returning id) "
+                    "update project_guides set status='active',selected_review_policy_id=:review_policy,selected_review_policy_generation=1,selected_review_policy_hash=:review_policy_hash,selected_revision_policy_id=:revision_policy,selected_revision_policy_generation=1,selected_revision_policy_hash=:revision_policy_hash where id=:guide"
                 ),
                 params,
             )
@@ -1276,10 +1262,7 @@ async def test_disabled_advisory_is_explicit_and_not_skipped_success(tmp_path: P
         if entry.definition_id == "artifact.quality.placeholder_signal"
     )
 
-    assert (
-        advisory.checker_execution_status
-        == PreSubmissionResultStatus.ADVISORY_DISABLED.value
-    )
+    assert advisory.checker_execution_status == PreSubmissionResultStatus.ADVISORY_DISABLED.value
     assert result.eligible is True
     await request.prepared_artifact.close()
     manager.close()
@@ -1477,9 +1460,7 @@ async def test_effective_execution_enforces_project_only_forbidden_rule(tmp_path
 
     assert result.eligible is False
     project_result = next(
-        entry
-        for entry in result.entries
-        if entry.definition_id == "policy.artifact.forbid"
+        entry for entry in result.entries if entry.definition_id == "policy.artifact.forbid"
     )
     assert project_result.checker_execution_status == PreSubmissionResultStatus.FAILED.value
     await request.prepared_artifact.close()
@@ -1499,9 +1480,7 @@ async def test_effective_execution_enforces_server_owned_storage_scheme(tmp_path
     result = await service.materialize_prepared_bundle(request)
 
     policy_result = next(
-        entry
-        for entry in result.entries
-        if entry.definition_id == "policy.storage_scheme.enforce"
+        entry for entry in result.entries if entry.definition_id == "policy.storage_scheme.enforce"
     )
     assert policy_result.checker_execution_status == PreSubmissionResultStatus.FAILED.value
     assert policy_result.message_code == "storage_scheme_not_allowed"
