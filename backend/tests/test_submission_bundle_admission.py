@@ -33,6 +33,10 @@ from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     SubmissionBundleArtifactAdmissionRequest,
 )
+from app.interfaces.artifacts import (
+    ArtifactConfigurationError,
+    ArtifactProviderLiveProofRequiredError,
+)
 from app.modules.artifacts.submission_authorization import (
     DenySubmissionBundlePreparedAuthorization,
     DenySubmissionBundlePreparationAuthorization,
@@ -138,6 +142,23 @@ def test_artifact_adapter_maps_preparation_limits_from_settings() -> None:
         archive.maximum_compression_ratio
         == settings.artifact_submission_zip_maximum_compression_ratio
     )
+
+
+def test_artifact_adapter_rejects_unproven_aws_runtime() -> None:
+    settings = SimpleNamespace(
+        artifact_store_backend="s3_compatible", artifact_s3_provider_profile="aws_s3"
+    )
+
+    with pytest.raises(ArtifactProviderLiveProofRequiredError):
+        artifact_adapters.require_artifact_runtime_eligible(settings)  # type: ignore[arg-type]
+
+
+def test_artifact_adapter_requires_configured_scratch_root() -> None:
+    settings = Settings()
+    settings.artifact_scratch_root = None
+
+    with pytest.raises(ArtifactConfigurationError):
+        artifact_adapters.create_artifact_scratch_manager(settings)
 
 
 def test_submission_bundle_preparation_route_is_hidden() -> None:
