@@ -36,7 +36,6 @@ __all__ = (
     "GuideSufficiencyMaterialUnavailable",
     "GuideSufficiencySourceItem",
     "GuideSufficiencyExtractionProvenance",
-    "SubmissionBindingRequest",
 )
 
 
@@ -217,18 +216,6 @@ class GuideSourceMaterializationResult:
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionBindingRequest:
-    """Verified contributor content and its exact Submission owner."""
-
-    prepared_authorization: PreparedAuthorizationHandle
-    project_id: UUID
-    task_id: UUID
-    submission_id: UUID
-    logical_role: str
-    verified_content_ids: tuple[UUID, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class CheckerOutputBindingRequest:
     """Verified checker output and its exact CheckerRun owner."""
 
@@ -309,9 +296,6 @@ class ArtifactBindingPort(Protocol):
         self, request: GuideSourceBindingRequest
     ) -> GuideSourceBindingResult:
         """Bind verified guide content under the guide binding action."""
-
-    async def bind_submission(self, request: SubmissionBindingRequest) -> object:
-        """Bind verified submission content under the submission binding action."""
 
     async def bind_checker_output(self, request: CheckerOutputBindingRequest) -> object:
         """Bind verified checker output under the checker binding action."""

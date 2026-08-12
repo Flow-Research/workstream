@@ -16,6 +16,7 @@ ARTIFACT_OPERATIONS = APP_ROOT / "interfaces" / "artifact_operations.py"
 SUBMISSION_PREPARATION_API = (
     APP_ROOT / "modules" / "artifacts" / "api" / "submission_preparation.py"
 )
+SUBMISSION_ADMISSION_API = APP_ROOT / "modules" / "artifacts" / "api" / "submission_admission.py"
 COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
 S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
 CLOSED_PORTS = {
@@ -32,7 +33,6 @@ CANONICAL_REQUESTS = {
     "GuideArtifactIngestRequest",
     "GuideSourceBindingRequest",
     "GuideSourceMaterializationRequest",
-    "SubmissionBindingRequest",
     "CheckerOutputBindingRequest",
     "BindingMaterializationRequest",
     "CheckerOutputArtifactRequest",
@@ -516,7 +516,6 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
         "GuideArtifactIngestPort": {"ingest"},
         "ArtifactBindingPort": {
             "bind_guide_source",
-            "bind_submission",
             "bind_checker_output",
         },
         "ArtifactMaterializationPort": {
@@ -528,7 +527,6 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
     expected_request_by_method = {
         "ingest": "GuideArtifactIngestRequest",
         "bind_guide_source": "GuideSourceBindingRequest",
-        "bind_submission": "SubmissionBindingRequest",
         "bind_checker_output": "CheckerOutputBindingRequest",
         "materialize_guide_source": "GuideSourceMaterializationRequest",
         "materialize_bindings": "BindingMaterializationRequest",
