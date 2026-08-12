@@ -142,19 +142,39 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
             assert status == "consumed"
             assert binding_count == 1
 
-        competing = _request(submission_id=request.submission_id)
+        first_competing = _request(submission_id=uuid4())
+        competing = _request(submission_id=first_competing.submission_id)
         async with factory.begin() as seed:
+            await _seed(seed, schema, first_competing)
             await _seed(seed, schema, competing)
+
+        async def consume_competing(value):
+            async with factory() as session:
+                async with session.begin():
+                    await _set_schema(session, schema)
+                    try:
+                        await SubmissionAdmissionConsumptionService(
+                            session, _Allow()
+                        ).consume(value)
+                    except SubmissionAdmissionConsumptionError as exc:
+                        return exc.code
+                    return "consumed"
+
+        outcomes = await asyncio.gather(
+            consume_competing(first_competing),
+            consume_competing(competing),
+        )
+        assert sorted(outcomes) == [
+            "consumed",
+            "submission_bundle_admission_context_changed",
+        ]
         async with factory() as session:
-            async with session.begin():
-                await _set_schema(session, schema)
-                with pytest.raises(
-                    SubmissionAdmissionConsumptionError,
-                    match="submission_bundle_admission_context_changed",
-                ):
-                    await SubmissionAdmissionConsumptionService(
-                        session, _Allow()
-                    ).consume(competing)
+            await _set_schema(session, schema)
+            binding_count = await session.scalar(
+                text("select count(*) from artifact_bindings where resource_id=:id"),
+                {"id": str(first_competing.submission_id)},
+            )
+            assert binding_count == 1
 
         rollback_request = _request()
         async with factory.begin() as seed:

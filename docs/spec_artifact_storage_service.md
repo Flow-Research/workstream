@@ -1298,6 +1298,7 @@ pre_submit_evidence_set_id      = UUID
 ready_at                       = timestamp
 consumed_at                    = timestamp | null
 consumed_by_submission_id      = UUID | null
+consumed_by_submission_version = positive integer | null
 stale_at                       = timestamp | null
 stale_reason                   = bounded token | null
 ```
