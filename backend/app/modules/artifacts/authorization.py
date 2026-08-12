@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import asdict
-from typing import Annotated, Protocol
+from typing import Annotated, NoReturn, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -32,7 +32,7 @@ from app.modules.artifacts.submission_materialization import (
     PreSubmitMaterializationAuthorityFacts,
     PreSubmitMaterializationPreparationFacts,
 )
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
@@ -55,12 +55,195 @@ from app.modules.authorization.runtime import (
     GuideSourceReadResourceContext,
     PreSubmitCheckerInputResourceContext,
     PreSubmitCheckerInputPreparationContext,
+    SubmissionBundlePreparationResourceContext,
+    SubmissionBundlePreparationPreflightResourceContext,
     HumanAuthorizationContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
     ServiceAuthorizationContext,
     AuthorizationContext,
 )
+
+
+class PreparedSubmissionBundlePreparationAuthorization:
+    """Translate ART facts into AUTH's existing request-local PREP protocol."""
+
+    def __init__(self, session: AsyncSession, context: AuthorizationContext) -> None:
+        self._session = session
+        self._context = context
+        self._repository = AdminAuthorizationRepository(session)
+        self._authorization = AuthorizationService(
+            session, context, admin_repository=self._repository
+        )
+        self._prepared = PreparedAuthorizationService(
+            session, context, self._authorization, self._repository
+        )
+        self._input: PreparedAuthorizationInput | None = None
+
+    @staticmethod
+    def _deny(exc: BaseException | None = None) -> NoReturn:
+        denial = ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
+        if exc is None:
+            raise denial
+        raise denial from exc
+
+    @staticmethod
+    def _request_input(request, project_id: UUID) -> PreparedAuthorizationInput:
+        return PreparedAuthorizationInput(
+            idempotency_key=request.idempotency_key,
+            request_value={
+                "scope_project_id": str(project_id),
+                "actor_profile_id": str(request.actor.actor_profile_id),
+                "identity_link_id": str(request.actor.identity_link_id),
+                "task_id": str(request.task_id),
+                "assignment_id": str(request.assignment_id),
+                "predecessor_submission_id": (
+                    str(request.predecessor_submission_id)
+                    if request.predecessor_submission_id is not None
+                    else None
+                ),
+            },
+        )
+
+    def _final_input(self, facts) -> PreparedAuthorizationInput:
+        request_value = self._final_values(facts, json=True)
+        return PreparedAuthorizationInput(
+            idempotency_key=self._input.idempotency_key,
+            request_value=request_value,
+        )
+
+    @staticmethod
+    def _final_values(facts, *, json: bool) -> dict:
+        values = asdict(facts)
+        project_id = values.pop("project_id")
+        values["scope_project_id"] = project_id
+        if json:
+            return {
+                key: str(value) if isinstance(value, UUID) else value
+                for key, value in values.items()
+            }
+        return values
+
+    async def preflight(self, *, request) -> None:
+        action = ACTION_BY_ID[ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE]
+        invalid = (
+            not isinstance(self._context, HumanAuthorizationContext)
+            or action.availability is not ActionAvailability.ACTIVE
+            or self._context.actor_status.value != "active"
+            or self._context.identity_link_status.value != "active"
+            or request.actor.actor_profile_id != self._context.actor_profile_id
+            or request.actor.identity_link_id != self._context.identity_link_id
+        )
+        if invalid:
+            self._deny()
+        async with self._session.begin():
+            locked = await self._repository.lock_request_actor(
+                self._context.identity_link_id, self._context.actor_profile_id
+            )
+            if locked is None:
+                self._deny()
+            link, profile = locked
+            if (
+                link.id != str(self._context.identity_link_id)
+                or link.actor_profile_id != str(self._context.actor_profile_id)
+                or link.status != "active"
+                or profile.id != str(self._context.actor_profile_id)
+                or profile.actor_kind != "human"
+                or profile.status != "active"
+            ):
+                self._deny()
+
+    async def revalidate(self, *, request, project_id: UUID | None = None) -> None:
+        if project_id is None:
+            if self._input is None:
+                self._deny()
+            project_id = UUID(str(self._input.request_value["scope_project_id"]))
+        self._input = self._request_input(request, project_id)
+        resource = SubmissionBundlePreparationPreflightResourceContext(
+            resource_type="submission_bundle_preparation_preflight",
+            resource_id=request.assignment_id,
+            scope_project_id=project_id,
+            actor_profile_id=request.actor.actor_profile_id,
+            identity_link_id=request.actor.identity_link_id,
+            task_id=request.task_id,
+            assignment_id=request.assignment_id,
+            predecessor_submission_id=request.predecessor_submission_id,
+        )
+        try:
+            await self._prepared.preflight(
+                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+                self._input,
+                PreparedAuthorityScope(
+                    kind=PreparedAuthorityScopeKind.PROJECT,
+                    project_id=project_id,
+                ),
+                resource,
+            )
+        except (PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported) as exc:
+            self._deny(exc)
+
+    @asynccontextmanager
+    async def transaction(self):
+        async with self._session.begin():
+            yield
+
+    async def prepare_final(self, *, facts):
+        if self._input is None:
+            self._deny()
+        final_input = self._final_input(facts)
+        expected = self._input.request_value
+        actual = final_input.request_value
+        for field in (
+            "scope_project_id",
+            "actor_profile_id",
+            "identity_link_id",
+            "task_id",
+            "assignment_id",
+            "predecessor_submission_id",
+        ):
+            if actual[field] != expected[field]:
+                self._deny()
+        if final_input.idempotency_key != self._input.idempotency_key:
+            self._deny()
+        try:
+            handle = await self._prepared.prepare(
+                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+                final_input,
+                PreparedAuthorityScope(
+                    kind=PreparedAuthorityScopeKind.PROJECT,
+                    project_id=facts.project_id,
+                ),
+            )
+        except (PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported) as exc:
+            self._deny(exc)
+        self._input = final_input
+        return handle
+
+    async def consume(self, *, prepared_authorization: object, facts) -> None:
+        if self._input is None or type(prepared_authorization) is not PreparedAuthorizationHandle:
+            self._deny()
+        try:
+            resource = SubmissionBundlePreparationResourceContext(
+                resource_type="submission_bundle_preparation",
+                resource_id=facts.prepared_generation_id,
+                **self._final_values(facts, json=False),
+            )
+            await self._prepared.consume(
+                prepared_authorization,
+                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+                self._input,
+                resource,
+            )
+        except (
+            AuthorizationDenied,
+            PreparedAuthorizationHandleInvalid,
+            PreparedAuthorizationUnsupported,
+            ValidationError,
+        ) as exc:
+            self._deny(exc)
+
+    def close(self) -> None:
+        self._prepared.close()
 
 
 async def get_artifact_authorization_context(

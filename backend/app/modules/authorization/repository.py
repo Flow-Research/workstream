@@ -136,16 +136,22 @@ class AdminAuthorizationRepository:
         await self._session.execute(text("select pg_advisory_xact_lock(:key)"), {"key": key})
 
     async def find_active_project_role(
-        self, *, project_id: UUID, actor_profile_id: UUID, role: str
+        self,
+        *,
+        project_id: UUID,
+        actor_profile_id: UUID,
+        role: str,
+        for_update: bool = False,
     ) -> ProjectRoleGrant | None:
-        return await self._session.scalar(
-            select(ProjectRoleGrant).where(
+        query = select(ProjectRoleGrant).where(
                 ProjectRoleGrant.project_id == str(project_id),
                 ProjectRoleGrant.actor_profile_id == str(actor_profile_id),
                 ProjectRoleGrant.role == role,
                 ProjectRoleGrant.status == "active",
             )
-        )
+        if for_update:
+            query = query.with_for_update(of=ProjectRoleGrant)
+        return await self._session.scalar(query)
 
     async def find_active_project_role_any(
         self, *, project_id: UUID, actor_profile_id: UUID, for_update: bool = False

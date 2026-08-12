@@ -1474,6 +1474,67 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
     semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+class SubmissionBundlePreparationRequestContext(BaseModel):
+    """Server-owned contributor selectors known before reading request bytes."""
+
+    model_config = _STRICT_FROZEN
+
+    scope_project_id: UUID
+    actor_profile_id: UUID
+    identity_link_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    predecessor_submission_id: UUID | None
+
+
+class SubmissionBundlePreparationPreflightResourceContext(
+    SubmissionBundlePreparationRequestContext
+):
+    """Exact project-scoped selectors revalidated before request bytes are read."""
+
+    resource_type: Literal["submission_bundle_preparation_preflight"]
+    resource_id: UUID
+
+
+class SubmissionBundlePreparationResourceContext(SubmissionBundlePreparationRequestContext):
+    """Exact contributor, locked policy, evidence, and durable-intent facts."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["submission_bundle_preparation"]
+    resource_id: UUID
+    predecessor_submission_version: int | None = Field(default=None, ge=1)
+    pre_submit_evidence_set_id: UUID
+    prepared_generation_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_policy_id: UUID
+    effective_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    pre_submit_policy_id: UUID
+    pre_submit_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_plan_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    semantic_manifest_id: UUID
+    semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    archive_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    archive_byte_count: int = Field(ge=0)
+    media_type: Literal["application/zip"]
+    storage_scheme: Literal["local", "s3"]
+    operation_identity: str = Field(min_length=1)
+    replay_durable_intent_id: UUID | None
+
+    @model_validator(mode="after")
+    def require_exact_identity_and_predecessor(self):
+        if self.resource_id != self.prepared_generation_id:
+            raise ValueError("submission preparation resource must match generation")
+        if (self.predecessor_submission_id is None) != (
+            self.predecessor_submission_version is None
+        ):
+            raise ValueError("submission predecessor identity is incomplete")
+        return self
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ProjectReadResourceContext
@@ -1518,6 +1579,8 @@ AuthorizationResourceContext = (
     | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
     | PreSubmitCheckerInputResourceContext
+    | SubmissionBundlePreparationPreflightResourceContext
+    | SubmissionBundlePreparationResourceContext
 )
 
 
@@ -1609,6 +1672,8 @@ class AuthorizationDecision(BaseModel):
         "guide_source_binding",
         "guide_source_read",
         "pre_submit_checker_input",
+        "submission_bundle_preparation_preflight",
+        "submission_bundle_preparation",
     ]
     resource_id: (
         UUID

@@ -198,6 +198,8 @@ from app.modules.authorization.runtime import (
     GuideSourceReadResourceContext,
     PreSubmitCheckerInputPreparationContext,
     PreSubmitCheckerInputResourceContext,
+    SubmissionBundlePreparationPreflightResourceContext,
+    SubmissionBundlePreparationResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -1746,7 +1748,7 @@ ART_CUSTODY_EXPECTATIONS = {
     "artifact.submission_bundle.prepare": (
         "submission.create",
         "WS-XINT-002-05A",
-        "planned",
+        "active",
     ),
     "artifact.pre_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
@@ -2150,7 +2152,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE, ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE, ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+            ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -2236,14 +2239,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 54
+            == 55
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 48
+            == 47
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -3721,6 +3724,136 @@ class _PreparedTestSession:
 
     def in_nested_transaction(self) -> bool:
         return self.nested
+
+
+@pytest.mark.asyncio
+async def test_submission_preparation_prep_binds_full_facts_and_rejects_replay() -> None:
+    context = _runtime_context()
+    session = _PreparedTestSession()
+    project_id, task_id, assignment_id = uuid4(), uuid4(), uuid4()
+
+    class Facts:
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
+            )
+
+        async def find_active_project_role(self, **values):
+            assert values == {
+                "project_id": project_id,
+                "actor_profile_id": context.actor_profile_id,
+                "role": "submitter",
+                "for_update": True,
+            }
+            return SimpleNamespace(id=uuid4(), status="active")
+
+    facts = Facts()
+    authorization, evidence = _runtime_service(
+        context, session=session, admin_repository=facts
+    )
+    prepared = PreparedAuthorizationService(session, context, authorization, facts)
+    request_values = {
+        "scope_project_id": str(project_id),
+        "actor_profile_id": str(context.actor_profile_id),
+        "identity_link_id": str(context.identity_link_id),
+        "task_id": str(task_id),
+        "assignment_id": str(assignment_id),
+        "predecessor_submission_id": None,
+    }
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=request_values)
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
+    )
+    await prepared.preflight(
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        caller,
+        scope,
+        SubmissionBundlePreparationPreflightResourceContext(
+            resource_type="submission_bundle_preparation_preflight",
+            resource_id=assignment_id,
+            scope_project_id=project_id,
+            actor_profile_id=context.actor_profile_id,
+            identity_link_id=context.identity_link_id,
+            task_id=task_id,
+            assignment_id=assignment_id,
+            predecessor_submission_id=None,
+        ),
+    )
+    final_values = {
+        **request_values,
+        "predecessor_submission_version": None,
+        "pre_submit_evidence_set_id": str(uuid4()),
+        "prepared_generation_id": str(uuid4()),
+        "guide_id": str(uuid4()),
+        "guide_version": "v1",
+        "source_snapshot_id": str(uuid4()),
+        "source_snapshot_sha256": "sha256:" + "1" * 64,
+        "effective_policy_id": str(uuid4()),
+        "effective_policy_sha256": "sha256:" + "2" * 64,
+        "pre_submit_policy_id": str(uuid4()),
+        "pre_submit_policy_sha256": "sha256:" + "3" * 64,
+        "effective_plan_sha256": "sha256:" + "4" * 64,
+        "semantic_manifest_id": str(uuid4()),
+        "semantic_manifest_sha256": "sha256:" + "5" * 64,
+        "archive_sha256": "sha256:" + "6" * 64,
+        "archive_byte_count": 42,
+        "media_type": "application/zip",
+        "storage_scheme": "s3",
+        "operation_identity": "sha256:" + "7" * 64,
+        "replay_durable_intent_id": None,
+    }
+    final_caller = PreparedAuthorizationInput(
+        idempotency_key=caller.idempotency_key, request_value=final_values
+    )
+    typed_final_values = dict(final_values)
+    for field in (
+        "scope_project_id", "actor_profile_id", "identity_link_id", "task_id",
+        "assignment_id", "pre_submit_evidence_set_id", "prepared_generation_id",
+        "guide_id", "source_snapshot_id", "effective_policy_id",
+        "pre_submit_policy_id", "semantic_manifest_id",
+    ):
+        typed_final_values[field] = UUID(typed_final_values[field])
+    resource = SubmissionBundlePreparationResourceContext(
+        resource_type="submission_bundle_preparation",
+        resource_id=UUID(final_values["prepared_generation_id"]),
+        **typed_final_values,
+    )
+    mismatch_handle = await prepared.prepare(
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, final_caller, scope
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            mismatch_handle,
+            ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+            final_caller,
+            resource.model_copy(update={"archive_byte_count": 43}),
+        )
+
+
+    handle = await prepared.prepare(
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, final_caller, scope
+    )
+    decision = await prepared.consume(
+        handle,
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        final_caller,
+        resource,
+    )
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.PROJECT_ROLE_GRANT
+    assert len(evidence.events) == 1
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+            final_caller,
+            resource,
+        )
 
 
 @pytest.mark.asyncio

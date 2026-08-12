@@ -41,10 +41,13 @@ from app.modules.artifacts.schemas import (
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
     PreparedArtifactInternalAuthority,
+    get_artifact_authorization_context,
     get_guide_artifact_prepared_authorization,
 )
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.api import ActorIdentityFacts
+
+
 async def get_submission_bundle_preparation_actor(
     actor: Annotated[
         ActorIdentityFacts,
@@ -222,13 +225,19 @@ def get_guide_artifact_ingest_command(
     return PreparedGuideArtifactIngestCommand(service, authority)
 
 
-def get_submission_bundle_preparation_authorization():
-    """Keep contributor preparation fail closed until XINT-05A activation."""
-    from app.modules.artifacts.submission_authorization import (
-        DenySubmissionBundlePreparationAuthorization,
+def get_submission_bundle_preparation_authorization(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    context: Annotated[
+        object,
+        Depends(get_artifact_authorization_context),
+    ],
+):
+    """Compose the active contributor PREP adapter from canonical AUTH context."""
+    from app.modules.artifacts.authorization import (
+        PreparedSubmissionBundlePreparationAuthorization,
     )
 
-    return DenySubmissionBundlePreparationAuthorization()
+    return PreparedSubmissionBundlePreparationAuthorization(session, context)
 
 
 def get_submission_bundle_preparation_command(

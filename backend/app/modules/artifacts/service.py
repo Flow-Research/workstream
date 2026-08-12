@@ -1885,7 +1885,7 @@ class ArtifactAdmissionService:
             if type(request) is SubmissionBundleArtifactAdmissionRequest:
                 if (
                     submission_prepared_authorization is None
-                    or type(prepared_authorization) is not PreparedAuthorizationHandle
+                    or prepared_authorization is not None
                 ):
                     raise ArtifactAuthorityDeniedError(
                         "submission bundle durable preparation is unavailable"
@@ -1912,6 +1912,9 @@ class ArtifactAdmissionService:
                     raise ArtifactAdmissionRelationshipError(
                         "submission bundle pass capability evidence changed"
                     )
+                prepared_authorization = await submission_prepared_authorization.prepare_final(
+                    facts=authority_facts
+                )
                 await submission_prepared_authorization.consume(
                     prepared_authorization=prepared_authorization,
                     facts=authority_facts,
