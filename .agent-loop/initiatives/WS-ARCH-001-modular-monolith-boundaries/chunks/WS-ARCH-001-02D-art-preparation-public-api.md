@@ -44,12 +44,16 @@ PROJECT, and CHECKER public fact manifests.
 ```text
 backend/app/modules/artifacts/api/**
 backend/app/modules/artifacts/authorization.py
+backend/app/modules/artifacts/preparation.py
 backend/app/modules/artifacts/router.py
 backend/app/modules/artifacts/pre_submit_evidence.py
 backend/app/modules/artifacts/submission_admission.py
 backend/app/modules/artifacts/submission_authorization.py
 backend/app/modules/artifacts/submission_materialization.py
 backend/app/modules/artifacts/schemas.py
+backend/app/modules/checkers/api/__init__.py
+backend/app/modules/checkers/api/pre_submit.py
+backend/app/modules/checkers/pre_submit_execution.py
 backend/app/adapters/artifacts/__init__.py
 backend/app/adapters/checkers/__init__.py
 backend/app/adapters/projects/__init__.py
