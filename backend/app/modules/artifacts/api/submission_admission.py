@@ -62,4 +62,3 @@ class SubmissionAdmissionConsumptionPort(Protocol):
         request: SubmissionAdmissionConsumptionRequest,
     ) -> SubmissionAdmissionConsumptionResult:
         """Apply one terminal admission transition without provider I/O."""
-

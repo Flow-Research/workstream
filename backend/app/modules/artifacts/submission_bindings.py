@@ -30,11 +30,27 @@ class SubmissionBindingAuthorityFacts:
     """Exact ART-owned facts consumed before binding and terminal mutation."""
 
     admission_id: UUID
+    evidence_set_id: UUID
+    actor_profile_id: UUID
+    identity_link_id: UUID
     project_id: UUID
     task_id: UUID
     assignment_id: UUID
+    predecessor_submission_id: UUID | None
+    predecessor_submission_version: int | None
     submission_id: UUID
     submission_version: int
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_sha256: str
+    effective_policy_id: UUID
+    effective_policy_sha256: str
+    pre_submit_policy_id: UUID
+    pre_submit_policy_sha256: str
+    locked_policy_context_hash: str
+    semantic_manifest_id: UUID
+    semantic_manifest_sha256: str
     content_id: UUID
     sha256: str
     byte_count: int
@@ -108,9 +124,13 @@ class SubmissionAdmissionConsumptionService:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_stale"
             )
-        if admission.status == "consumed":
-            return await self._consumed_replay(admission, request)
-
+        if (
+            admission.status == "consumed"
+            and admission.consumed_by_submission_id != str(request.submission_id)
+        ):
+            raise SubmissionAdmissionConsumptionError(
+                "submission_bundle_admission_already_consumed"
+            )
         evidence = await self._session.scalar(
             select(PreSubmitEvidenceSet)
             .where(PreSubmitEvidenceSet.id == admission.pre_submit_evidence_set_id)
@@ -129,6 +149,8 @@ class SubmissionAdmissionConsumptionService:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_unavailable"
             )
+        if admission.status == "consumed":
+            return await self._consumed_replay(admission, evidence, request)
         if not self._task_lineage_matches(admission, evidence, request):
             now = await self._session.scalar(select(func.now()))
             admission.status = "stale"
@@ -144,7 +166,7 @@ class SubmissionAdmissionConsumptionService:
                 ArtifactBinding.resource_type == "submission",
                 ArtifactBinding.resource_id == str(request.submission_id),
                 ArtifactBinding.logical_role == _LOGICAL_ROLE,
-                ArtifactBinding.scope_version == 1,
+                ArtifactBinding.scope_version == request.submission_version,
             )
             .with_for_update()
         )
@@ -153,7 +175,9 @@ class SubmissionAdmissionConsumptionService:
                 "submission_bundle_admission_context_changed"
             )
 
-        await self._authorization.consume(self._authority_facts(admission, request))
+        await self._authorization.consume(
+            self._authority_facts(admission, evidence, request)
+        )
 
         binding = ArtifactBinding(
             id=str(uuid4()),
@@ -162,7 +186,7 @@ class SubmissionAdmissionConsumptionService:
             resource_type="submission",
             resource_id=str(request.submission_id),
             logical_role=_LOGICAL_ROLE,
-            scope_version=1,
+            scope_version=request.submission_version,
             actor_id=admission.actor_profile_id,
             attribution_type="contributor",
             supersedes_binding_id=None,
@@ -178,26 +202,29 @@ class SubmissionAdmissionConsumptionService:
     async def _consumed_replay(
         self,
         admission: SubmissionBundleAdmission,
+        evidence: PreSubmitEvidenceSet,
         request: SubmissionAdmissionConsumptionRequest,
     ) -> SubmissionAdmissionConsumptionResult:
-        if admission.consumed_by_submission_id != str(request.submission_id):
-            raise SubmissionAdmissionConsumptionError(
-                "submission_bundle_admission_already_consumed"
-            )
         binding = await self._session.scalar(
             select(ArtifactBinding).where(
                 ArtifactBinding.project_id == admission.project_id,
                 ArtifactBinding.resource_type == "submission",
                 ArtifactBinding.resource_id == str(request.submission_id),
                 ArtifactBinding.logical_role == _LOGICAL_ROLE,
-                ArtifactBinding.scope_version == 1,
+                ArtifactBinding.scope_version == request.submission_version,
             )
         )
         if binding is None or binding.content_id != admission.artifact_content_id:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_context_changed"
             )
-        await self._authorization.consume(self._authority_facts(admission, request))
+        if not self._task_lineage_matches(admission, evidence, request):
+            raise SubmissionAdmissionConsumptionError(
+                "submission_bundle_admission_context_changed"
+            )
+        await self._authorization.consume(
+            self._authority_facts(admission, evidence, request)
+        )
         return self._result(admission, request, binding=binding, replayed=True)
 
     @staticmethod
@@ -207,11 +234,23 @@ class SubmissionAdmissionConsumptionService:
         content: ArtifactContent,
     ) -> bool:
         return bool(
-            admission.status == "ready"
-            and evidence.id == admission.pre_submit_evidence_set_id
+            evidence.id == admission.pre_submit_evidence_set_id
+            and evidence.actor_profile_id == admission.actor_profile_id
+            and evidence.identity_link_id == admission.identity_link_id
             and evidence.project_id == admission.project_id
             and evidence.task_id == admission.task_id
             and evidence.assignment_id == admission.assignment_id
+            and evidence.predecessor_submission_id
+            == admission.predecessor_submission_id
+            and evidence.predecessor_submission_version
+            == admission.predecessor_submission_version
+            and evidence.locked_policy_context_hash
+            == admission.locked_policy_context_hash
+            and evidence.semantic_manifest_id == admission.semantic_manifest_id
+            and evidence.semantic_manifest_sha256
+            == admission.semantic_manifest_sha256
+            and evidence.archive_sha256 == admission.archive_sha256
+            and evidence.archive_byte_count == admission.archive_byte_count
             and evidence.terminal_status == "passed"
             and evidence.eligible is True
             and content.id == admission.artifact_content_id
@@ -250,15 +289,36 @@ class SubmissionAdmissionConsumptionService:
     @staticmethod
     def _authority_facts(
         admission: SubmissionBundleAdmission,
+        evidence: PreSubmitEvidenceSet,
         request: SubmissionAdmissionConsumptionRequest,
     ) -> SubmissionBindingAuthorityFacts:
         return SubmissionBindingAuthorityFacts(
             admission_id=request.admission_id,
+            evidence_set_id=UUID(evidence.id),
+            actor_profile_id=UUID(admission.actor_profile_id),
+            identity_link_id=UUID(admission.identity_link_id),
             project_id=UUID(admission.project_id),
             task_id=UUID(admission.task_id),
             assignment_id=UUID(admission.assignment_id),
+            predecessor_submission_id=(
+                UUID(admission.predecessor_submission_id)
+                if admission.predecessor_submission_id is not None
+                else None
+            ),
+            predecessor_submission_version=admission.predecessor_submission_version,
             submission_id=request.submission_id,
             submission_version=request.submission_version,
+            guide_id=UUID(evidence.guide_id),
+            guide_version=evidence.guide_version,
+            source_snapshot_id=UUID(evidence.source_snapshot_id),
+            source_snapshot_sha256=evidence.source_snapshot_sha256,
+            effective_policy_id=UUID(evidence.effective_policy_id),
+            effective_policy_sha256=evidence.locked_artifact_policy_sha256,
+            pre_submit_policy_id=UUID(evidence.pre_submit_policy_id),
+            pre_submit_policy_sha256=evidence.locked_checker_policy_sha256,
+            locked_policy_context_hash=evidence.locked_policy_context_hash,
+            semantic_manifest_id=UUID(evidence.semantic_manifest_id),
+            semantic_manifest_sha256=evidence.semantic_manifest_sha256,
             content_id=UUID(admission.artifact_content_id),
             sha256=admission.archive_sha256,
             byte_count=admission.archive_byte_count,

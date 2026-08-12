@@ -31,8 +31,9 @@ persistence.
 1. Concealment authorization runs before admission lookup.
 2. ART locks and validates the exact admission, evidence, content, and TASK
    capability facts.
-3. Exact binding authority consumes admission, project, task, assignment,
-   Submission, content, digest, byte-count, and logical-role facts.
+3. Exact binding authority consumes the complete actor/identity-link, admission,
+   evidence, TASK, predecessor, guide/snapshot/policy, manifest, Submission,
+   content, digest, byte-count, and logical-role facts.
 4. ART creates one generic `ArtifactBinding` and marks the admission consumed
    in the caller-owned root transaction.
 
@@ -43,13 +44,14 @@ capability in 02E.
 ## State and replay
 
 - `ready -> consumed` creates one binding with resource type `submission`,
-  logical role `submission_bundle_original`, and binding scope version `1`.
-- Exact replay for the same Submission returns the existing binding.
+  logical role `submission_bundle_original`, and the exact Submission version.
+- Exact replay for the same Submission and version revalidates full lineage,
+  consumes fresh final authority, and returns the existing binding.
 - A different Submission receives
   `submission_bundle_admission_already_consumed`.
-- Proven TASK/evidence/content lineage replacement permits only
+- Proven TASK context replacement permits only
   `ready -> stale` with `locked_submission_context_changed`.
-- Authorization denial, missing ART lineage, cancellation, or transaction
+- Authorization denial, broken/missing ART lineage, cancellation, or transaction
   rollback leaves the admission unchanged.
 - `consumed` and `stale` are terminal.
 
@@ -62,4 +64,3 @@ release occurs in this capability.
 - `submission_bundle_admission_already_consumed`
 - `submission_bundle_admission_context_changed`
 - `submission_bundle_admission_stale`
-

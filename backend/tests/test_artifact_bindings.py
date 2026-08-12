@@ -68,7 +68,11 @@ def _lineage(request: SubmissionAdmissionConsumptionRequest):
         predecessor_submission_id=None,
         predecessor_submission_version=None,
         pre_submit_evidence_set_id=evidence_id,
+        identity_link_id=str(uuid4()),
         artifact_content_id=content_id,
+        locked_policy_context_hash=_sha("5"),
+        semantic_manifest_id=str(uuid4()),
+        semantic_manifest_sha256=_sha("6"),
         archive_sha256=_sha("4"),
         archive_byte_count=9,
         consumed_at=None,
@@ -78,9 +82,13 @@ def _lineage(request: SubmissionAdmissionConsumptionRequest):
     )
     evidence = SimpleNamespace(
         id=evidence_id,
+        actor_profile_id=admission.actor_profile_id,
+        identity_link_id=admission.identity_link_id,
         project_id=admission.project_id,
         task_id=admission.task_id,
         assignment_id=admission.assignment_id,
+        predecessor_submission_id=admission.predecessor_submission_id,
+        predecessor_submission_version=admission.predecessor_submission_version,
         guide_version=refs.guide_version,
         source_snapshot_id=str(refs.source_snapshot_id),
         source_snapshot_sha256=refs.source_snapshot_hash,
@@ -88,6 +96,12 @@ def _lineage(request: SubmissionAdmissionConsumptionRequest):
         locked_artifact_policy_sha256=refs.effective_policy_hash,
         pre_submit_policy_id=str(refs.pre_submit_policy_id),
         locked_checker_policy_sha256=refs.pre_submit_policy_bundle_hash,
+        locked_policy_context_hash=admission.locked_policy_context_hash,
+        semantic_manifest_id=admission.semantic_manifest_id,
+        semantic_manifest_sha256=admission.semantic_manifest_sha256,
+        archive_sha256=admission.archive_sha256,
+        archive_byte_count=admission.archive_byte_count,
+        guide_id=str(uuid4()),
         terminal_status="passed",
         eligible=True,
     )
@@ -156,16 +170,37 @@ async def test_ready_admission_creates_exact_binding_and_consumes_once() -> None
     assert binding.resource_type == "submission"
     assert binding.resource_id == str(request.submission_id)
     assert binding.logical_role == "submission_bundle_original"
-    assert binding.scope_version == 1
+    assert binding.scope_version == request.submission_version
     assert binding.content_id == admission.artifact_content_id
     assert admission.consumed_by_submission_id == str(request.submission_id)
     assert admission.consumed_at == now
     facts = authority.consume.await_args.args[0]
     assert facts.admission_id == request.admission_id
+    assert facts.evidence_set_id.hex == evidence.id.replace("-", "")
+    assert facts.actor_profile_id == request.task_context.contributor_id
+    assert facts.identity_link_id.hex == admission.identity_link_id.replace("-", "")
+    assert facts.project_id == request.task_context.locked_project_context.project_id
+    assert facts.task_id == request.task_context.task_id
+    assert facts.assignment_id == request.task_context.assignment_id
+    assert facts.predecessor_submission_id is None
+    assert facts.predecessor_submission_version is None
     assert facts.submission_id == request.submission_id
+    assert facts.submission_version == request.submission_version
+    assert facts.guide_id.hex == evidence.guide_id.replace("-", "")
+    assert facts.guide_version == evidence.guide_version
+    assert facts.source_snapshot_id.hex == evidence.source_snapshot_id.replace("-", "")
+    assert facts.source_snapshot_sha256 == evidence.source_snapshot_sha256
+    assert facts.effective_policy_id.hex == evidence.effective_policy_id.replace("-", "")
+    assert facts.effective_policy_sha256 == evidence.locked_artifact_policy_sha256
+    assert facts.pre_submit_policy_id.hex == evidence.pre_submit_policy_id.replace("-", "")
+    assert facts.pre_submit_policy_sha256 == evidence.locked_checker_policy_sha256
+    assert facts.locked_policy_context_hash == evidence.locked_policy_context_hash
+    assert facts.semantic_manifest_id.hex == evidence.semantic_manifest_id.replace("-", "")
+    assert facts.semantic_manifest_sha256 == evidence.semantic_manifest_sha256
     assert facts.content_id == result.content_id
     assert facts.sha256 == admission.archive_sha256
     assert facts.byte_count == admission.archive_byte_count
+    assert facts.logical_role == "submission_bundle_original"
     session.flush.assert_awaited_once_with()
 
 
@@ -232,11 +267,11 @@ async def test_broken_art_lineage_denies_without_staling_admission() -> None:
 @pytest.mark.asyncio
 async def test_matching_consumed_admission_replays_exact_binding() -> None:
     request = _request()
-    admission, _, _ = _lineage(request)
+    admission, evidence, content = _lineage(request)
     admission.status = "consumed"
     admission.consumed_by_submission_id = str(request.submission_id)
     binding = SimpleNamespace(id=str(uuid4()), content_id=admission.artifact_content_id)
-    session = _session(admission, binding)
+    session = _session(admission, evidence, content, binding)
 
     authority = _Allow()
     result = await SubmissionAdmissionConsumptionService(session, authority).consume(request)
@@ -265,6 +300,27 @@ async def test_consumed_admission_rejects_different_submission() -> None:
 
     session.add.assert_not_called()
     session.flush.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_consumed_admission_rejects_wrong_submission_version() -> None:
+    original = _request()
+    replay = SubmissionAdmissionConsumptionRequest(
+        admission_id=original.admission_id,
+        submission_id=original.submission_id,
+        submission_version=2,
+        task_context=original.task_context,
+    )
+    admission, evidence, content = _lineage(original)
+    admission.status = "consumed"
+    admission.consumed_by_submission_id = str(original.submission_id)
+    session = _session(admission, evidence, content, None)
+
+    with pytest.raises(
+        SubmissionAdmissionConsumptionError,
+        match="submission_bundle_admission_context_changed",
+    ):
+        await SubmissionAdmissionConsumptionService(session, _Allow()).consume(replay)
 
 
 @pytest.mark.asyncio
