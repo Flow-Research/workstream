@@ -805,6 +805,7 @@ def _artifact_service_resource_context(
     | GuideSourceReadResourceContext
     | PreSubmitCheckerInputResourceContext
     | PreSubmitCheckerInputPreparationContext
+    | SubmissionBindingResourceContext
 ):
     """Compose the canonical AUTH resource context for fixed ART service facts."""
     values = asdict(facts)
