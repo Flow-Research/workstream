@@ -31,9 +31,11 @@ from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
+    AuthorizationDenialCode,
     HumanAuthorizationContext,
     IdentityLinkStatus,
     ServiceAuthorizationContext,
+    PreparedAuthorizationUnsupported,
 )
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts import authorization as artifact_authorization
@@ -331,10 +333,8 @@ async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
             assert bindings == 0
 
 
-@pytest.mark.asyncio
-async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
-    isolated_database_env: str, monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
+    """Install deterministic TASK/AUTH collaborators for the hidden command."""
     art_request = _request()
     context = art_request.task_context
     request_id, correlation_id, human_link_id, service_actor_id, service_link_id = (
@@ -394,30 +394,45 @@ async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
     monkeypatch.setattr(AdminAuthorizationRepository, "lock_request_actor", lock_actor)
     monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", find_role)
     monkeypatch.setattr(artifact_authorization, "fixed_service_action_context", fixed_context)
+    request = SubmissionCreationRequest(
+        admission_id=art_request.admission_id, task_id=context.task_id,
+        assignment_id=context.assignment_id, contributor_id=context.contributor_id,
+        predecessor_submission_id=None, summary="summary",
+        contributor_attestation="attestation",
+    )
+    return art_request, human, request, request_id, correlation_id
+
+
+async def _create_hidden(factory, schema, human, request, request_id, correlation_id):
+    """Run one hidden command and return its stable result or boundary error."""
+    async with factory() as session:
+        await session.execute(text(f'set search_path to "{schema}"'))
+        await session.commit()
+        command = compose_hidden_submission_creation_command(
+            session, human, request_id=request_id, correlation_id=correlation_id
+        )
+        try:
+            return await command.create(request)
+        except (SubmissionAdmissionConsumptionError, SubmissionCreationUnavailable) as exc:
+            return exc
+
+
+@pytest.mark.asyncio
+async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
+    isolated_database_env: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent hidden commands commit exactly one complete authorized effect."""
+    art_request, human, request, request_id, correlation_id = _wire_hidden_authority(
+        monkeypatch
+    )
 
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         async with factory.begin() as seed:
             await _seed(seed, schema, art_request)
-        request = SubmissionCreationRequest(
-            admission_id=art_request.admission_id, task_id=context.task_id,
-            assignment_id=context.assignment_id, contributor_id=context.contributor_id,
-            predecessor_submission_id=None, summary="summary",
-            contributor_attestation="attestation",
-        )
-
-        async def create_once(value: SubmissionCreationRequest = request):
-            async with factory() as session:
-                await session.execute(text(f'set search_path to "{schema}"'))
-                await session.commit()
-                command = compose_hidden_submission_creation_command(
-                    session, human, request_id=request_id, correlation_id=correlation_id
-                )
-                try:
-                    return await command.create(value)
-                except Exception as exc:
-                    return exc
-
-        outcomes = await asyncio.gather(create_once(), create_once())
+        outcomes = await asyncio.gather(*(
+            _create_hidden(factory, schema, human, request, request_id, correlation_id)
+            for _ in range(2)
+        ))
         assert sum(not isinstance(value, Exception) for value in outcomes) == 1
         failures = [value for value in outcomes if isinstance(value, Exception)]
         assert len(failures) == 1
@@ -431,34 +446,39 @@ async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
                 text("select count(*) from audit_events where event_domain='authority' and event_type='sensitive_authorization_allowed'")
             ) == 2
 
+
+@pytest.mark.asyncio
+async def test_revoked_binding_service_rolls_back_the_hidden_command(
+    isolated_database_env: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A revoked fixed-service link leaves every protected effect absent."""
+    art_request, human, request, request_id, correlation_id = _wire_hidden_authority(
+        monkeypatch
+    )
+    async def revoked_context(*_args, **_kwargs):
+        raise PreparedAuthorizationUnsupported(
+            AuthorizationDenialCode.IDENTITY_LINK_REVOKED
+        )
+    monkeypatch.setattr(
+        artifact_authorization, "fixed_service_action_context", revoked_context
+    )
+    async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         denied_art_request = replace(
-            art_request,
-            admission_id=uuid4(),
-            submission_id=uuid4(),
+            art_request, admission_id=uuid4(), submission_id=uuid4()
         )
         async with factory.begin() as seed:
             await _seed(seed, schema, denied_art_request)
-        revoked_service = replace(
-            service,
-            identity_link_status=IdentityLinkStatus.REVOKED,
+        denied = await _create_hidden(
+            factory, schema, human,
+            replace(request, admission_id=denied_art_request.admission_id),
+            request_id, correlation_id,
         )
-
-        async def revoked_context(*_args, **_kwargs):
-            return revoked_service
-
-        monkeypatch.setattr(
-            artifact_authorization,
-            "fixed_service_action_context",
-            revoked_context,
-        )
-        denied_request = replace(request, admission_id=denied_art_request.admission_id)
-        denied = await create_once(denied_request)
         assert isinstance(denied, SubmissionAdmissionConsumptionError)
         assert denied.code == "submission_bundle_admission_unavailable"
         async with factory() as session:
             await _set_schema(session, schema)
-            assert await session.scalar(text("select count(*) from submissions")) == 1
-            assert await session.scalar(text("select count(*) from artifact_bindings")) == 1
+            assert await session.scalar(text("select count(*) from submissions")) == 0
+            assert await session.scalar(text("select count(*) from artifact_bindings")) == 0
             assert await session.scalar(
                 text(
                     "select count(*) from submission_bundle_admissions "
@@ -468,4 +488,4 @@ async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
             ) == 1
             assert await session.scalar(
                 text("select count(*) from audit_events")
-            ) == 2
+            ) == 0

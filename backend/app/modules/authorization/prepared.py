@@ -10,17 +10,11 @@ from typing import NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import ValidationError
 
 from app.core.hashing import canonical_json_hash
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.audit.schemas import ActorReferenceKind
-from app.modules.tasks.api import (
-    SubmissionCreationAuthorityFacts,
-    SubmissionCreationPreparationFacts,
-    SubmissionCreationUnavailable,
-)
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     SERVICE_ACTIONS_BY_IDENTITY,
@@ -59,7 +53,6 @@ from app.modules.authorization.runtime import (
     AuthorizationContext,
     AuthorizationDenialCode,
     AuthorizationDecision,
-    AuthorizationDenied,
     AuthorizationResourceContext,
     authorization_resource_digest,
     IdentityLinkStatus,
@@ -81,7 +74,6 @@ from app.modules.authorization.runtime import (
     ProjectReviewPolicyMutationResourceContext,
     ProjectRevisionPolicyMutationResourceContext,
     ServiceAuthorizationContext,
-    HumanAuthorizationContext,
 )
 from app.modules.authorization.submission_preparation import (
     parse_submission_preparation_or_invalid,
@@ -90,6 +82,7 @@ from app.modules.authorization.submission_preparation import (
     SubmissionBundlePreparationPreflightResourceContext,
     SubmissionBundlePreparationResourceContext,
 )
+from app.modules.authorization.submission_consumption import parse_consumption_binding
 from app.modules.authorization.pre_submit_materialization import (
     initialize_artifact_bindings,
     parse_materialization_binding,
@@ -334,8 +327,8 @@ def _exact_artifact_binding_matches(
             == canonical_json_hash({"pre_submit_checker_input_preparation": context})
         )
     context = resource.model_dump(mode="json")
-    return binding.exact_artifact_context == context and binding.exact_artifact_resource_digest == (
-        authorization_resource_digest(resource)
+    return binding.exact_artifact_context == context and (
+        binding.exact_artifact_resource_digest == authorization_resource_digest(resource)
     )
 
 
@@ -490,8 +483,11 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
             final_resource_context,
-            (PreSubmitCheckerInputResourceContext, SubmissionBindingResourceContext,
-             SubmissionCreationResourceContext),
+            (
+                PreSubmitCheckerInputResourceContext,
+                SubmissionBindingResourceContext,
+                SubmissionCreationResourceContext,
+            ),
         ) and not _exact_artifact_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
@@ -602,38 +598,18 @@ class PreparedAuthorizationService:
         policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
         submission_policy_context = submission_policy_resource_digest = None
-        (
-            exact_artifact_context,
-            exact_artifact_resource_digest,
-            submission_preparation_context,
-            submission_preparation_resource_digest,
-            submission_preparation_final_context,
-            submission_preparation_final_digest,
-        ) = initialize_artifact_bindings()
+        exact_artifact_context, exact_artifact_resource_digest, submission_preparation_context, submission_preparation_resource_digest, submission_preparation_final_context, submission_preparation_final_digest = initialize_artifact_bindings()
         compilation_binding = parse_prepared_compilation(action_id, caller_input.request_value)
         if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
-            exact_artifact_context, exact_artifact_resource_digest = (
-                parse_materialization_binding(
-                    dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
-                )
+            exact_artifact_context, exact_artifact_resource_digest = parse_materialization_binding(
+                dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
             )
-        if action_id in {
-            ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
-            ActionId.SUBMISSION_CREATE,
-        }:
-            resource_type = (
-                SubmissionBindingResourceContext
-                if action_id is ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE
-                else SubmissionCreationResourceContext
-            )
-            try:
-                resource = resource_type.model_validate(caller_input.request_value)
-            except (TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            exact_artifact_context = resource.model_dump(mode="json")
-            exact_artifact_resource_digest = authorization_resource_digest(resource)
+        consumption_resource = parse_consumption_binding(
+            action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid
+        )
+        if consumption_resource is not None:
+            exact_artifact_context = consumption_resource.model_dump(mode="json")
+            exact_artifact_resource_digest = authorization_resource_digest(consumption_resource)
         if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
             submission_binding = parse_submission_binding(
                 dict(caller_input.request_value),
@@ -901,29 +877,8 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.ACTOR_SELF,
                 actor_profile_id=resource.resource_id,
             )
-        if action_id in _ADMIN_MUTATIONS and AuthorizationService._admin_resource_matches(
-            action_id, resource
-        ):
-            project_id = AuthorizationService._resource_project_id(resource)
-            target_actor_profile_id = None
-            role = None
-            grant_id = None
-            if action_id is ActionId.PROJECT_ROLE_GRANT_ISSUE:
-                target_actor_profile_id = resource.target_actor_profile_id
-                role = resource.role
-            elif action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE:
-                grant_id = resource.resource_id
-            return PreparedAuthorityScope(
-                kind=(
-                    PreparedAuthorityScopeKind.PROJECT
-                    if project_id is not None
-                    else PreparedAuthorityScopeKind.SYSTEM
-                ),
-                project_id=project_id,
-                target_actor_profile_id=target_actor_profile_id,
-                role=role,
-                grant_id=grant_id,
-            )
+        if admin_scope := _admin_prepared_scope(action_id, resource):
+            return admin_scope
         expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
             action_id
         ) or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
@@ -982,9 +937,7 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,
             )
-        if action_id is ActionId.SUBMISSION_CREATE and isinstance(
-            resource, SubmissionCreationResourceContext
-        ):
+        if isinstance(resource, SubmissionCreationResourceContext):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,
@@ -992,80 +945,27 @@ class PreparedAuthorizationService:
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
 
 
-class PreparedSubmissionCreationAuthorization:
-    """Consume fresh human authority using locked TASK-owned final facts."""
-
-    def __init__(self, session: AsyncSession, context: AuthorizationContext) -> None:
-        self._session = session
-        self._context = context
-
-    async def authorize(self, facts: SubmissionCreationPreparationFacts) -> None:
-        context = self._context
-        if (
-            not isinstance(context, HumanAuthorizationContext)
-            or context.actor_kind is not ActorKind.HUMAN
-            or context.actor_profile_id != facts.contributor_id
-        ):
-            raise SubmissionCreationUnavailable("submission creation is unavailable")
-
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
-        context = self._context
-        task = facts.task_context
-        project = task.locked_project_context
-        predecessor = task.predecessor
-        resource = SubmissionCreationResourceContext(
-            resource_type="submission_creation",
-            resource_id=facts.submission_id,
-            scope_project_id=project.project_id,
-            actor_profile_id=facts.contributor_id,
-            identity_link_id=context.identity_link_id,
-            task_id=facts.task_id,
-            assignment_id=facts.assignment_id,
-            admission_id=facts.admission_id,
-            predecessor_submission_id=facts.predecessor_submission_id,
-            predecessor_submission_version=(predecessor.version if predecessor else None),
-            submission_id=facts.submission_id,
-            submission_version=facts.submission_version,
-            task_status=task.status,
-            submission_kind=task.kind,
-            guide_version=project.guide_version,
-            source_snapshot_id=project.source_snapshot_id,
-            source_snapshot_sha256=project.source_snapshot_hash,
-            effective_policy_id=project.effective_policy_id,
-            effective_policy_sha256=project.effective_policy_hash,
-            pre_submit_policy_id=project.pre_submit_policy_id,
-            pre_submit_policy_sha256=project.pre_submit_policy_bundle_hash,
-        )
-        repository = AdminAuthorizationRepository(self._session)
-        authorization = AuthorizationService(self._session, context, admin_repository=repository)
-        prepared = PreparedAuthorizationService(
-            self._session, context, authorization, repository
-        )
-        prepared_input = PreparedAuthorizationInput(
-            idempotency_key=facts.admission_id,
-            request_value=resource.model_dump(mode="json"),
-        )
-        try:
-            handle = await prepared.prepare(
-                ActionId.SUBMISSION_CREATE,
-                prepared_input,
-                PreparedAuthorityScope(
-                    kind=PreparedAuthorityScopeKind.PROJECT,
-                    project_id=project.project_id,
-                ),
-            )
-            await prepared.consume(
-                handle, ActionId.SUBMISSION_CREATE, prepared_input, resource
-            )
-        except (
-            AuthorizationDenied,
-            PreparedAuthorizationHandleInvalid,
-            PreparedAuthorizationUnsupported,
-            ValidationError,
-        ) as exc:
-            raise SubmissionCreationUnavailable("submission creation is unavailable") from exc
-        finally:
-            prepared.close()
+def _admin_prepared_scope(action_id, resource):
+    """Return the exact administrative prepared scope when applicable."""
+    if action_id not in _ADMIN_MUTATIONS or not AuthorizationService._admin_resource_matches(
+        action_id, resource
+    ):
+        return None
+    project_id = AuthorizationService._resource_project_id(resource)
+    target_actor_profile_id = role = grant_id = None
+    if action_id is ActionId.PROJECT_ROLE_GRANT_ISSUE:
+        target_actor_profile_id, role = resource.target_actor_profile_id, resource.role
+    elif action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE:
+        grant_id = resource.resource_id
+    return PreparedAuthorityScope(
+        kind=(
+            PreparedAuthorityScopeKind.PROJECT if project_id else PreparedAuthorityScopeKind.SYSTEM
+        ),
+        project_id=project_id,
+        target_actor_profile_id=target_actor_profile_id,
+        role=role,
+        grant_id=grant_id,
+    )
 
 
 async def fixed_service_authorization_context(
@@ -1079,8 +979,6 @@ async def fixed_service_authorization_context(
     profile = await actors.get_service_actor(service_identity.value)
     if profile is None or profile.service_identity != service_identity.value:
         raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTOR_NOT_FOUND)
-
-
     link = await actors.get_identity_link_for_actor(profile.id)
     if (
         link is None
@@ -1122,9 +1020,7 @@ async def fixed_service_action_context(
         or action.availability is not ActionAvailability.ACTIVE
         or action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(service_identity, ())
     ):
-        raise PreparedAuthorizationUnsupported(
-            AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-        )
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
     return context
 
 
@@ -1194,3 +1090,8 @@ async def fixed_service_prepared_authorization(
         )
     finally:
         prepared.close()
+
+
+from app.modules.authorization.submission_creation_authorization import (  # noqa: E402, F401
+    PreparedSubmissionCreationAuthorization,
+)

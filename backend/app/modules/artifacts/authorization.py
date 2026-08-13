@@ -590,15 +590,15 @@ class _PreparedArtifactServiceAuthorization:
         """Prepare one process-local capability bound to every canonical fact."""
         if self._prepared is not None:
             raise ArtifactAuthorityDeniedError("artifact service authority is invalid")
-        resource = _artifact_service_resource_context(facts)
         try:
+            resource = _artifact_service_resource_context(facts)
             context = await fixed_service_authorization_context(
                 self._session,
                 self._service_identity,
                 self._request_id,
                 self._correlation_id,
             )
-        except PreparedAuthorizationUnsupported as exc:
+        except (PreparedAuthorizationUnsupported, ValidationError) as exc:
             raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
         repository = AdminAuthorizationRepository(self._session)
 

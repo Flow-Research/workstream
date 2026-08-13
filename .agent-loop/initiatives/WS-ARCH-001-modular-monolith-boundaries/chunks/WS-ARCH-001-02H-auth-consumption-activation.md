@@ -42,6 +42,8 @@ admission/binding, and 02F transaction manifests against current `main`.
 ```text
 backend/app/modules/authorization/api/**
 backend/app/modules/authorization/**/submission*.py
+backend/app/modules/authorization/submission_consumption.py
+backend/app/modules/authorization/submission_creation_authorization.py
 backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/artifact_project_authority.py
 backend/app/modules/authorization/kernel.py
@@ -61,7 +63,9 @@ backend/tests/test_submission_composition.py
 backend/tests/test_submission_preparation_authorization.py
 backend/tests/test_artifact_bindings.py
 backend/tests/test_artifact_bindings_db.py
+backend/tests/authorization/test_fixed_service_action_context.py
 backend/tests/architecture/test_authorization_boundary.py
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
@@ -70,6 +74,7 @@ backend/tests/architecture/test_authorization_boundary.py
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-02H-auth-consumption-activation.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/evidence/WS-ARCH-001-02H-consumption-activation.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-02H-external-review-response.md
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 docs/roadmap_status.md
@@ -99,8 +104,12 @@ TASK persistence; human substitution for fixed service authority.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/artifacts/authorization.py app/modules/tasks/api/submission_command.py app/modules/tasks/submission_composition.py app/adapters/auth app/adapters/tasks app/adapters/artifacts app/api/deps/authorization.py app/main.py tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/architecture/test_authorization_boundary.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/artifacts/authorization.py app/modules/tasks/api/submission_command.py app/modules/tasks/submission_composition.py app/adapters/auth app/adapters/tasks app/adapters/artifacts app/api/deps/authorization.py app/main.py tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_authorization.py tests/test_submission_composition.py tests/test_submission_preparation_authorization.py tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py --cov=app.modules.authorization --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_artifact_bindings.py tests/test_artifact_bindings_db.py tests/test_submission_composition.py --cov=app.modules.artifacts --cov-fail-under=90)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_submission_composition.py --cov=app.modules.tasks --cov-fail-under=90)
+gh pr checks <PR-number> --watch
+(cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json)
 python3 scripts/check_stale_authorization_docs.py
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_markdown_links.py

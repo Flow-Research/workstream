@@ -1745,18 +1745,15 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
     "artifact.submission_bundle.prepare": (
         "submission.create",
-        "WS-XINT-002-05A", "active",
+        "WS-XINT-002-05A",
+        "active",
     ),
     "artifact.pre_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
         "WS-XINT-002-06A",
         "active",
     ),
-    "artifact.submission.binding.create": (
-        "artifact.binding.create",
-        "WS-AUTH-001-ART-05",
-        "active",
-    ),
+    "artifact.submission.binding.create": ("artifact.binding.create", "WS-AUTH-001-ART-05", "active"),
     "artifact.post_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
         "WS-AUTH-001-ART-06A",
@@ -1923,8 +1920,7 @@ def _admin_resource_context(
 
 
 def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() -> None:
-    historical_permissions = frozenset(
-        """actor.profile.read_self actor.profile.update_self actor.profile.read_any
+    historical_permissions = frozenset("""actor.profile.read_self actor.profile.update_self actor.profile.read_any
         actor.profile.suspend actor.profile.reactivate actor.profile.deactivate
         actor.identity_link.read actor.identity_link.revoke actor.identity_link.reactivate
         actor.service.provision admin_role.read admin_role.grant admin_role.revoke
@@ -1938,8 +1934,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         compensation.adapter_binding.manage compensation.award.read
         compensation.delivery.reconcile operations.status.read operations.timer.run
         operations.reconcile.run operations.outbox.retry operations.projection.rebuild
-        audit.read audit.export""".split()
-    )
+        audit.read audit.export""".split())
     new_permissions = frozenset(
         """project.setup_diagnostic.read project.effective_policy.read
         operations.task.start_override operations.submission_gate.repair
@@ -2152,8 +2147,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
-        ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
     }
     assert {
         definition.action_id.value: (
@@ -6350,55 +6344,6 @@ async def test_fixed_service_context_rejects_mismatched_loaded_identity(
             uuid4(),
             uuid4(),
         )
-
-
-@pytest.mark.parametrize(
-    ("context_status", "link_status", "action_id", "should_allow"),
-    [
-        (ActorStatus.ACTIVE, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, True),
-        (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, False),
-        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, False),
-        (ActorStatus.ACTIVE, IdentityLinkStatus.ACTIVE, ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE, False),
-    ],
-)
-@pytest.mark.asyncio
-async def test_fixed_service_action_context_enforces_lifecycle_and_matrix(
-    context_status: ActorStatus,
-    link_status: IdentityLinkStatus,
-    action_id: ActionId,
-    should_allow: bool,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    context = _runtime_context(
-        actor_kind=ActorKind.SERVICE,
-        service_identity=ServiceIdentity.ARTIFACT_BINDING,
-    ).model_copy(
-        update={
-            "actor_status": context_status,
-            "identity_link_status": link_status,
-        }
-    )
-
-    async def fixed_context(*_args):
-        return context
-
-    monkeypatch.setattr(
-        authorization_prepared,
-        "fixed_service_authorization_context",
-        fixed_context,
-    )
-    operation = authorization_prepared.fixed_service_action_context(
-        _PreparedTestSession(),  # type: ignore[arg-type]
-        service_identity=ServiceIdentity.ARTIFACT_BINDING,
-        action_id=action_id,
-        request_id=uuid4(),
-        correlation_id=uuid4(),
-    )
-    if should_allow:
-        assert await operation is context
-    else:
-        with pytest.raises(PreparedAuthorizationUnsupported):
-            await operation
 
 
 @pytest.mark.parametrize(

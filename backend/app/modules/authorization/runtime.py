@@ -20,6 +20,7 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 from app.modules.authorization.submission_preparation import SubmissionBundlePreparationPreflightResourceContext, SubmissionBundlePreparationResourceContext
+from app.modules.authorization.submission_consumption import SubmissionBindingResourceContext, SubmissionCreationResourceContext
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SETUP_RUN_READ: "setup_run",
@@ -110,8 +111,7 @@ class PreparedAuthorityScope(BaseModel):
     target_actor_profile_id: UUID | None = None
     role: ProjectRole | None = None
     grant_id: UUID | None = None
-    artifact_resource_type: (
-        Literal[
+    artifact_resource_type: Literal[
             "artifact_put_attempt",
             "artifact_verification_job",
             "artifact_pending_work",
@@ -119,9 +119,7 @@ class PreparedAuthorityScope(BaseModel):
             "guide_source_read",
             "pre_submit_checker_input",
             "submission_binding",
-        ]
-        | None
-    ) = None
+        ] | None = None
     artifact_resource_id: UUID | Literal["workstream:artifact_pending_work"] | None = None
 
     @model_validator(mode="after")
@@ -179,8 +177,7 @@ class PreparedAuthorityScope(BaseModel):
                             "guide_source_binding",
                             "guide_source_read",
                             "pre_submit_checker_input",
-                            "submission_binding",
-                        }
+                            "submission_binding"}
                         and isinstance(self.artifact_resource_id, UUID)
                     )
                 )
@@ -1438,87 +1435,6 @@ class GuideSourceReadResourceContext(BaseModel):
         return self
 
 
-class SubmissionCreationResourceContext(BaseModel):
-    """Exact TASK-owned facts authorized for one immutable Submission."""
-
-    model_config = _STRICT_FROZEN
-    resource_type: Literal["submission_creation"]
-    resource_id: UUID
-    scope_project_id: UUID
-    actor_profile_id: UUID
-    identity_link_id: UUID
-    task_id: UUID
-    assignment_id: UUID
-    admission_id: UUID
-    predecessor_submission_id: UUID | None
-    predecessor_submission_version: int | None = Field(default=None, ge=1)
-    submission_id: UUID
-    submission_version: int = Field(ge=1)
-    task_status: str = Field(min_length=1)
-    submission_kind: Literal["initial", "revision"]
-    guide_version: str = Field(min_length=1)
-    source_snapshot_id: UUID
-    source_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    effective_policy_id: UUID
-    effective_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    pre_submit_policy_id: UUID
-    pre_submit_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-
-    @model_validator(mode="after")
-    def bind_submission_and_predecessor(self):
-        if self.resource_id != self.submission_id:
-            raise ValueError("submission resource must match submission")
-        if (self.predecessor_submission_id is None) != (
-            self.predecessor_submission_version is None
-        ):
-            raise ValueError("submission predecessor identity is incomplete")
-        return self
-
-
-class SubmissionBindingResourceContext(BaseModel):
-    """Exact ART lineage authorized for one fixed-service Submission binding."""
-
-    model_config = _STRICT_FROZEN
-    resource_type: Literal["submission_binding"]
-    resource_id: UUID
-    admission_id: UUID
-    evidence_set_id: UUID
-    actor_profile_id: UUID
-    identity_link_id: UUID
-    project_id: UUID
-    task_id: UUID
-    assignment_id: UUID
-    predecessor_submission_id: UUID | None
-    predecessor_submission_version: int | None = Field(default=None, ge=1)
-    submission_id: UUID
-    submission_version: int = Field(ge=1)
-    guide_id: UUID
-    guide_version: str = Field(min_length=1)
-    source_snapshot_id: UUID
-    source_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    effective_policy_id: UUID
-    effective_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    pre_submit_policy_id: UUID
-    pre_submit_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    locked_policy_context_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    semantic_manifest_id: UUID
-    semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    content_id: UUID
-    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    byte_count: int = Field(ge=0)
-    logical_role: Literal["submission_bundle_original"]
-
-    @model_validator(mode="after")
-    def bind_admission(self):
-        if self.resource_id != self.admission_id:
-            raise ValueError("submission binding resource must match admission")
-        if (self.predecessor_submission_id is None) != (
-            self.predecessor_submission_version is None
-        ):
-            raise ValueError("submission binding predecessor is incomplete")
-        return self
-
-
 class PreSubmitCheckerInputPreparationContext(BaseModel):
     """Pre-inspection facts used to lock materializer authority."""
 
@@ -1600,8 +1516,7 @@ AuthorizationResourceContext = (
     | ArtifactPendingWorkResourceContext
     | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
-    | SubmissionCreationResourceContext
-    | SubmissionBindingResourceContext
+    | SubmissionCreationResourceContext | SubmissionBindingResourceContext
     | PreSubmitCheckerInputResourceContext
     | SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext
@@ -1643,7 +1558,6 @@ class AuthorizationDenialCode(StrEnum):
 
 class MatchedAuthorityKind(StrEnum):
     """Privacy-bounded authority source classifications."""
-
     ACTOR_SELF = "actor_self"
     ADMIN_ROLE_GRANT = "admin_role_grant"
     PROJECT_ROLE_GRANT = "project_role_grant"
@@ -1652,9 +1566,7 @@ class MatchedAuthorityKind(StrEnum):
 
 class AuthorizationDecision(BaseModel):
     """Frozen decision safe for feature code, evidence, and error mapping."""
-
     model_config = _STRICT_FROZEN
-
     decision_id: UUID
     action_id: ActionId | None
     permission_id: PermissionId | None
@@ -1698,8 +1610,7 @@ class AuthorizationDecision(BaseModel):
         "pre_submit_checker_input",
         "submission_bundle_preparation_preflight",
         "submission_bundle_preparation",
-        "submission_creation",
-        "submission_binding",
+        "submission_creation", "submission_binding",
     ]
     resource_id: (
         UUID
@@ -1764,6 +1675,7 @@ class AuthorizationDenied(Exception):
             raise TypeError("authorization denial requires a denied decision")
         self.decision = decision
         super().__init__("Authorization denied")
+
     @property
     def public_code(self) -> str:
         denial_code = self.decision.denial_code
