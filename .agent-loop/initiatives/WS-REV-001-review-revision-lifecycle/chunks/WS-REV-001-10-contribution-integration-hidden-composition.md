@@ -193,3 +193,7 @@ contribution creation matrix, replay, rollback, and route absence.
 ## Stop condition
 
 Merge, record automated memory, and stop. Do not start 11A.
+
+## Merge state
+
+- Outcome on merge: `planned`

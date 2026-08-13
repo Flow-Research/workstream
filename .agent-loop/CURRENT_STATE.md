@@ -83,3 +83,4 @@ after canonical WS-ARCH-001-04E.
 WS-CON-001-05A is planned before live task readiness. WS-CON-001-06 is a planned retirement.
 ReviewLease inherits the task-locked version without a CON lookup.
 WS-CON-001-05B is planned after the 05A zero-consumer proof.
+WS-REV-001-10 is planned after its named REV and CON prerequisites.

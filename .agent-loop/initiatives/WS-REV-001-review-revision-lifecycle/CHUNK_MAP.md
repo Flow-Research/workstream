@@ -31,7 +31,7 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 | `WS-REV-001-09A4` | Human prepared N+1 and checker-source XOR | 09A3 + TASK/ART submission cutover | Skeleton |
 | `WS-REV-001-09A5` | Replacement-assignment preparation successor | 09A4 + AUTH replacement contract | Skeleton |
 | `WS-REV-001-09B` | Finding replay/resolution/preferred return | 09A5 | Skeleton |
-| `WS-REV-001-10` | Canonical Review/FinalAcceptance/TASK/CON transaction | 09B + CON-03C persistence + CON-07 participant + shared audit/outbox | Skeleton; first Review commit; every decision creates reviewer record, accept additionally creates submitter record |
+| `WS-REV-001-10` | Canonical Review/FinalAcceptance/TASK/CON transaction | 09B + CON-03C persistence + CON-07 participant + shared audit/outbox | Planned; first Review commit; every decision creates reviewer record, accept additionally creates submitter record |
 | `WS-REV-001-11A` | Queue inspection and privileged queue/lease commands | 10 | Skeleton |
 | `WS-REV-001-11B` | Revision repair and obligation close | 11A | Skeleton |
 | `WS-REV-001-11C` | Reconciliation persistence and service jobs | 11B | Skeleton |

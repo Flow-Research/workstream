@@ -70,3 +70,4 @@ The next dependency-ordered boundary is `WS-REV-001-03B`, normalized packet
 manifest persistence, after the required ART-owned packet-membership contract
 is published. Its skeleton must be expanded and reviewed against current
 `main` before implementation. Open pull requests determine transient work.
+WS-REV-001-10 is planned only after its named REV and CON prerequisites.
