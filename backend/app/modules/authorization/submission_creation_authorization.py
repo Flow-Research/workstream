@@ -64,7 +64,7 @@ class PreparedSubmissionCreationAuthorization:
         try:
             resource = _creation_resource(context, facts)
             prepared_input = PreparedAuthorizationInput(
-                idempotency_key=facts.admission_id,
+                idempotency_key=facts.submission_id,
                 request_value=resource.model_dump(mode="json"),
             )
             handle = await prepared.prepare(
@@ -98,7 +98,7 @@ class PreparedSubmissionCreationAuthorization:
         try:
             resource = _creation_resource(self._context, facts)
             prepared_input = PreparedAuthorizationInput(
-                idempotency_key=facts.admission_id,
+                idempotency_key=facts.submission_id,
                 request_value=resource.model_dump(mode="json"),
             )
             if (
