@@ -12,7 +12,7 @@
 | `WS-ARCH-001-02E` | ART ready-admission consumption and binding hidden module-level capability | L1 | Complete; production remains deny-only and route-unreachable |
 | `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Complete; production remains deny-only and route-unreachable |
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Complete on merge |
-| `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Next after 02G merges |
+| `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete on merge; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
 | `WS-ARCH-001-03` | PROJECT/TASK guide, locked-context, task and assignment capability repairs | L1 | Non-executable placeholder; requires a split contract |
 | `WS-ARCH-001-04` | ART/CHECKER materialization, run and result capability repairs | L1 | Non-executable placeholder; requires a split contract |

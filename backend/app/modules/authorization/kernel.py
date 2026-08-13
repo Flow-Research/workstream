@@ -54,6 +54,7 @@ from app.modules.authorization.runtime import (
     ArtifactVerificationJobResourceContext,
     GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
+    SubmissionBindingResourceContext,
     PreSubmitCheckerInputResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
@@ -206,6 +207,7 @@ _ARTIFACT_INTERNAL_RESOURCES = {
         "pre_submit_checker_input",
         PreSubmitCheckerInputResourceContext,
     ),
+    ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: ("submission_binding", SubmissionBindingResourceContext),
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
         "artifact_put_attempt",
         ArtifactPutAttemptResourceContext,
@@ -559,10 +561,8 @@ class AuthorizationService:
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
-            context, grant = await lock_guide_ingest_authority(
-                self._admin, context, scope, action.permission_id, self._locked_human_context
-            )
-        elif action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
+            context, grant = await lock_guide_ingest_authority(self._admin, context, scope, action.permission_id, self._locked_human_context)
+        elif action_id in {ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE}:
             context, grant = await lock_submitter_authority(
                 self._admin, context, scope, self._locked_human_context
             )
@@ -1078,15 +1078,11 @@ class AuthorizationService:
                 matched_grant_id = authority.matched_grant_id
         elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
             denial, matched_kind, matched_grant_id, matched_project_id = (
-                evaluate_guide_ingest_authority(
-                    action, authority, resource_context, self._lifecycle_denial(context)
-                )
+                evaluate_guide_ingest_authority(action, authority, resource_context, self._lifecycle_denial(context))
             )
-        elif action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
+        elif action_id in {ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE}:
             denial, matched_kind, matched_grant_id, matched_project_id = (
-                evaluate_submitter_authority(
-                    action, context, authority, resource_context, self._lifecycle_denial(context)
-                )
+                evaluate_submitter_authority(action, context, authority, resource_context, self._lifecycle_denial(context))
             )
         else:
             denial = AuthorizationDenialCode.ACTION_UNAVAILABLE

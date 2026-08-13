@@ -46,7 +46,7 @@ mappings, and availability must remain identical.
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-05A` | Active: `artifact.submission_bundle.prepare`; registry custody remains historical while replacement implementation chunk WS-ARCH-001-02G supplies the executable PREP boundary |
 | `WS-XINT-002-06A` | Active: `artifact.pre_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-05` | Planned: `artifact.submission.binding.create`; registry custody is retained while replacement implementation chunk WS-ARCH-001-02H performs activation |
+| `WS-AUTH-001-ART-05` | Active on WS-ARCH-001-02H merge: `artifact.submission.binding.create`; only the fixed artifact-binding service may consume it |
 | `WS-XINT-002-06B` | Planned: `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | Planned: `artifact.review_packet.materialize` only |
 | Future REV-owned activation, not approved for v0.1 | Planned/unavailable: `artifact.review_evidence.binding.create` |
@@ -60,15 +60,16 @@ reconciles the live catalogue by removing the six unused multi-step upload rows
 and registering three end-to-end bundle/review rows. The resulting 22 rows have
 exact action cardinalities `3/8/2/1/1/1/1/3/1/1` in the table order above. The
 `OPERATOR` suffix denotes only future activation custody; it grants no Operator
-entitlement. Fifteen actions remain planned after the three ART foundation
+entitlement. Fourteen actions remain planned after the three ART foundation
 service actions, `artifact.guide_source.ingest`, the two fixed-service guide
-binding/read actions, and `artifact.submission_bundle.prepare` activate. The independently
+binding/read actions, `artifact.submission_bundle.prepare`, and fixed-service
+`artifact.submission.binding.create` activate. The independently
 gated `artifact.verification_job.retry`
 remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`. The current catalogue
-has 73 PermissionIds, 102 ActionIds, 55 active actions, and 47 planned actions,
+has 73 PermissionIds, 102 ActionIds, 57 active actions, and 45 planned actions,
 with fourteen fixed-service identities and twenty-two matrix memberships.
 
 ## REV custody transfer

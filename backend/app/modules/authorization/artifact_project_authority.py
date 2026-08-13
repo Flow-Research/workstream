@@ -10,6 +10,7 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationUnsupported,
     PreparedAuthorityScopeKind,
     SubmissionBundlePreparationResourceContext,
+    SubmissionCreationResourceContext,
 )
 
 
@@ -85,7 +86,10 @@ def evaluate_submitter_authority(action, context, authority, resource, lifecycle
     denial = lifecycle_denial
     if denial is None and action.availability is not ActionAvailability.ACTIVE:
         denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-    elif denial is None and not isinstance(resource, SubmissionBundlePreparationResourceContext):
+    elif denial is None and not isinstance(
+        resource,
+        (SubmissionBundlePreparationResourceContext, SubmissionCreationResourceContext),
+    ):
         denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
     elif denial is None and resource.scope_project_id != authority.scope_project_id:
         denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED

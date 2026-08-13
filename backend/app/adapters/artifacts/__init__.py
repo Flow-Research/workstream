@@ -240,6 +240,26 @@ def get_submission_bundle_preparation_authorization(
     return PreparedSubmissionBundlePreparationAuthorization(session, context)
 
 
+def submission_admission_consumption_port(
+    session: AsyncSession,
+    *,
+    request_id: UUID,
+    correlation_id: UUID,
+):
+    """Compose the active fixed-service ART participant for the hidden transaction."""
+    from app.modules.artifacts.authorization import PreparedSubmissionBindingAuthorization
+    from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
+
+    return SubmissionAdmissionConsumptionService(
+        session,
+        PreparedSubmissionBindingAuthorization(
+            session,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        ),
+    )
+
+
 def get_submission_bundle_preparation_command(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],

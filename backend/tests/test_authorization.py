@@ -31,10 +31,10 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     create_async_engine,
 )
 from starlette.requests import Request
-
 from app.api.deps.authorization import (
     authorization_http_error,
     get_authorization_actor,
+    get_authorization_actor_identity,
     get_authorization_service,
     get_prepared_authorization_service,
 )
@@ -1745,18 +1745,15 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
     "artifact.submission_bundle.prepare": (
         "submission.create",
-        "WS-XINT-002-05A", "active",
+        "WS-XINT-002-05A",
+        "active",
     ),
     "artifact.pre_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
         "WS-XINT-002-06A",
         "active",
     ),
-    "artifact.submission.binding.create": (
-        "artifact.binding.create",
-        "WS-AUTH-001-ART-05",
-        "planned",
-    ),
+    "artifact.submission.binding.create": ("artifact.binding.create", "WS-AUTH-001-ART-05", "active"),
     "artifact.post_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
         "WS-AUTH-001-ART-06A",
@@ -1923,8 +1920,7 @@ def _admin_resource_context(
 
 
 def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() -> None:
-    historical_permissions = frozenset(
-        """actor.profile.read_self actor.profile.update_self actor.profile.read_any
+    historical_permissions = frozenset("""actor.profile.read_self actor.profile.update_self actor.profile.read_any
         actor.profile.suspend actor.profile.reactivate actor.profile.deactivate
         actor.identity_link.read actor.identity_link.revoke actor.identity_link.reactivate
         actor.service.provision admin_role.read admin_role.grant admin_role.revoke
@@ -1938,8 +1934,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         compensation.adapter_binding.manage compensation.award.read
         compensation.delivery.reconcile operations.status.read operations.timer.run
         operations.reconcile.run operations.outbox.retry operations.projection.rebuild
-        audit.read audit.export""".split()
-    )
+        audit.read audit.export""".split())
     new_permissions = frozenset(
         """project.setup_diagnostic.read project.effective_policy.read
         operations.task.start_override operations.submission_gate.repair
@@ -2152,7 +2147,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
     }
     assert {
         definition.action_id.value: (
@@ -2233,13 +2228,13 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         sum(
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
-        ) == 55
+        ) == 57
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
-        ) == 47
+        ) == 45
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -2797,6 +2792,7 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
@@ -2904,7 +2900,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "73 PermissionIds, 102 ActionIds, 54 active actions, and\n48 planned actions" in operations
+            "73 PermissionIds, 102 ActionIds, 57 active actions, and\n45 planned actions" in operations
     )
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -9721,25 +9717,19 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     token = SimpleNamespace(subject_kind="service")
-    admitted = SimpleNamespace(profile=object(), identity_link=object())
+    admitted = SimpleNamespace(profile=SimpleNamespace(
+        id=str(uuid4()), actor_kind="service", service_identity="workstream.artifact.binding",
+    ), identity_link=SimpleNamespace(id=str(uuid4())))
     calls: list[object] = []
-
     async def resolve_service(_self, current):
         calls.append(current)
         return admitted
-
     async def forbidden_human_lookup(*_args, **_kwargs):
         raise AssertionError("service admission entered the human path")
-
     monkeypatch.setattr(ActorService, "resolve_service_for_authorization", resolve_service)
-    monkeypatch.setattr(
-        ActorService,
-        "find_actor_for_authorization",
-        forbidden_human_lookup,
-    )
+    monkeypatch.setattr(ActorService, "find_actor_for_authorization", forbidden_human_lookup)
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
     result = SimpleNamespace(token=token)
-
     resolved = await get_authorization_actor(
         request,
         result,  # type: ignore[arg-type]
@@ -9747,9 +9737,11 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
         object(),  # type: ignore[arg-type]
     )
 
-    assert resolved is admitted
+    identity = await get_authorization_actor_identity(resolved)
+    assert identity.service_identity == "workstream.artifact.binding"
+    human = SimpleNamespace(profile=SimpleNamespace(id=str(uuid4()), actor_kind="human", service_identity=None), identity_link=SimpleNamespace(id=str(uuid4())))
+    assert (await get_authorization_actor_identity(human)).actor_kind.value == "human"
     assert calls == [token]
-
 
 @pytest.mark.parametrize(
     ("profile_status", "link_status"),
@@ -9785,7 +9777,6 @@ async def test_inactive_service_dependency_stages_no_observation(
 
     await anext(dependency)
     await dependency.aclose()
-
 
 async def test_service_denial_rolls_back_observations_before_clean_restage(
     monkeypatch: pytest.MonkeyPatch,
@@ -9845,7 +9836,6 @@ async def test_service_denial_rolls_back_observations_before_clean_restage(
     assert session.rollback_count == 1
     assert session.commit_count == 1
 
-
 async def test_service_dependency_cancellation_rolls_back_staged_observation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -9887,9 +9877,10 @@ async def test_service_dependency_cancellation_rolls_back_staged_observation(
     assert observations == ["staged"]
     assert session.rollback_count == 1
 
-
+@pytest.mark.parametrize("failure_type", [AuthorizationEvidenceUnavailable, SQLAlchemyError])
 async def test_service_observation_persistence_failure_is_retryable_and_private(
     monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[Exception],
 ) -> None:
     private_subject = "private-service-subject"
 
@@ -9911,7 +9902,7 @@ async def test_service_observation_persistence_failure_is_retryable_and_private(
     )
 
     async def fail_observation(_self, _resolved):
-        raise SQLAlchemyError(private_subject)
+        raise failure_type(private_subject)
 
     monkeypatch.setattr(ActorService, "touch_after_authorization", fail_observation)
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
@@ -9924,7 +9915,6 @@ async def test_service_observation_persistence_failure_is_retryable_and_private(
     assert exc_info.value.error_code == "service_unavailable"
     assert private_subject not in str(exc_info.value)
     assert session.rollback_count == 1
-
 
 def test_authorization_runtime_contracts_are_strict_and_two_argument() -> None:
     context = _runtime_context()

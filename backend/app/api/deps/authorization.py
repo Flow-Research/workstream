@@ -53,6 +53,31 @@ from app.schemas.auth import AuthVerificationResult
 logger = logging.getLogger(__name__)
 
 
+def compose_hidden_submission_creation_command(
+    session: AsyncSession,
+    context: AuthorizationContext,
+    *,
+    request_id: UUID,
+    correlation_id: UUID,
+):
+    """Wire the active hidden TASK/ART transaction without exposing a route."""
+    from app.adapters.artifacts import submission_admission_consumption_port
+    from app.adapters.tasks import TransactionalSubmissionCreationCommand
+    from app.modules.authorization.prepared import (
+        PreparedSubmissionCreationAuthorization,
+    )
+
+    return TransactionalSubmissionCreationCommand(
+        session,
+        authorization=PreparedSubmissionCreationAuthorization(session, context),
+        admissions=submission_admission_consumption_port(
+            session,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        ),
+    )
+
+
 def _authorization_context(
     resolved: ResolvedActor,
     request_id: UUID,

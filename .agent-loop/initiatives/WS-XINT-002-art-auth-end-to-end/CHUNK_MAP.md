@@ -9,7 +9,7 @@
 | `04B` | Activate fixed-service guide binding and read. | L1 | Merged/active in PR #245 (`6babf81b`) |
 | `06A` | Activate only pre-submit checker-input materialization. | L1 | Merged through PR #293; precedes ART-04C1 and 05A |
 | `05A` | Historical initial contributor preparation activation proposal. | L1 | Superseded/non-executable; replacement activation is WS-ARCH-001-02G after 02A-02F |
-| `05B` | Historical Submission binding/consumption proposal. | L1 | Superseded/non-executable; replacement activation/cutover is WS-ARCH-001-02H/02I |
+| `05B` | Historical Submission binding/consumption proposal. | L1 | Superseded/non-executable; replacement activation is complete through WS-ARCH-001-02H and public cutover remains 02I |
 | `05C` | Historical checker-remediation submission context proposal. | L1 | Superseded/non-executable; future exact WS-ARCH-001-04 replacement requires 02H and must merge before 02I |
 | `05D` | Historical human-review revision context proposal. | L1 | Superseded/non-executable; future exact WS-ARCH-001-05 replacement requires 02H and must merge before 02I |
 | `06B` | Activate post-submit materialization and checker output write/binding. | L1 | Non-executable pending POL/ART evidence plus WS-ARCH-001 checker capability contract |

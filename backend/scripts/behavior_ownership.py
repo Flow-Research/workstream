@@ -99,6 +99,12 @@ ARCH_02G_AUTH_PREPARATION_TARGETS = frozenset(
         "backend/app/modules/authorization/submission_preparation.py",
     }
 )
+ARCH_02H_AUTH_CONSUMPTION_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/submission_consumption.py",
+        "backend/app/modules/authorization/submission_creation_authorization.py",
+    }
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -287,6 +293,7 @@ def _validate_additive_partition_transition(
         | AUTH_12I_TARGETS
         | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | ARCH_02G_AUTH_PREPARATION_TARGETS
+        | ARCH_02H_AUTH_CONSUMPTION_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

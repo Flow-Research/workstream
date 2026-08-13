@@ -494,14 +494,16 @@ v0.1 baseline.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 73 PermissionIds, 102 ActionIds, 54 active actions, and
-48 planned actions. AUTH-12I adds and activates only the unified compilation
+Catalogue totals are 73 PermissionIds, 102 ActionIds, 57 active actions, and
+45 planned actions. AUTH-12I adds and activates only the unified compilation
 request/execute pair. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
 route mapping is in `docs/spec_authorization_service.md`. WS-XINT-002-04A
 activates Project Manager guide-source ingest, and WS-XINT-002-04B activates
-only the fixed-service guide binding and read actions. The other 16 ART actions
-remain planned, including every Operator artifact action.
+only the fixed-service guide binding and read actions. WS-ARCH-001-02G activates
+contributor bundle preparation; 02H activates hidden human Submission creation
+and fixed-service submission binding. The other 14 ART actions remain planned,
+including every Operator artifact action.
 The v0.1 schema keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
 
@@ -533,9 +535,10 @@ The historical permission set remains exactly 49 values. The post-`0020` set
 contains exactly 24 values, including `review.queue.override`, the two
 compilation permissions, `project.setup_diagnostic.read`, and
 `project.effective_policy.read`; do not derive
-historical status from identifier prefixes. All submission/review rows remain
-planned. Initial and revision submission share `submission.create`, and no
-revision-specific permission or preparation action exists.
+historical status from identifier prefixes. WS-ARCH-001-02H activates the
+hidden base `submission.create` boundary; review rows remain planned. Initial
+and revision submission share `submission.create`, and no revision-specific
+permission or preparation action exists.
 
 Review reads consume the request-scoped public
 `AuthorizationService.require(action_id, typed_resource_context)` boundary.
@@ -569,9 +572,12 @@ PREP currently supports actor-self profile update, the eight active
 AdminRoleGrant-backed administrative mutations, the three active fixed-service
 ART foundation actions, Project Manager `artifact.guide_source.ingest`, and the
 fixed-service `artifact.guide_source.binding.create` and
-`artifact.guide_source.read` actions. Submission, checker, review, and generic
-artifact-read actions remain planned; no other production feature command is
-cut over. Callers begin and own one root transaction, call `prepare`,
+`artifact.guide_source.read`, contributor `artifact.submission_bundle.prepare`,
+hidden human `submission.create`, and fixed-service
+`artifact.submission.binding.create` actions. Checker, review, generic
+artifact-read, and the public Submission cutover remain planned; no other
+production feature command is cut over. Callers begin and own one root
+transaction, call `prepare`,
 lock their participant rows, compose final typed facts, call `consume` with the
 independently expected ActionId and the same strict request/idempotency input,
 flush participant work, and commit once. AUTH never commits in dependency

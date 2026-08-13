@@ -558,7 +558,7 @@ ACTION_DEFINITIONS = (
         PermissionId.OPERATIONS_CHECKER_RETRY,
         ActionOwner.AUTH_14,
     ),
-    _planned(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
+    _active(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
     _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(
         ActionId.REVIEW_QUEUE_INSPECT,
@@ -714,7 +714,7 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.XINT_002_04B,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.AUTH_ART_05,
@@ -876,6 +876,8 @@ def _index_actions(
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        ActionId.SUBMISSION_CREATE,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -986,7 +988,23 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
 )
 
 
-def _index_service_actions(rows: dict[ServiceIdentity, frozenset[ActionId]]) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
+_ACTIVE_SERVICE_ACTIONS = {
+    ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+    ActionId.ARTIFACT_PENDING_WORK_SCAN,
+    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+    ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+    ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+    ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+    ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+}
+
+
+def _index_service_actions(
+    rows: dict[ServiceIdentity, frozenset[ActionId]],
+) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
     expected_metadata = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
             PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -1081,7 +1099,10 @@ def _index_service_actions(rows: dict[ServiceIdentity, frozenset[ActionId]]) -> 
         raise RuntimeError("service action matrix identity mismatch")
     if any(not actions for actions in rows.values()):
         raise RuntimeError("service action matrix row mismatch")
-    if frozenset((i, a) for i, actions in rows.items() for a in actions) != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS:
+    if (
+        frozenset((i, a) for i, actions in rows.items() for a in actions)
+        != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS
+    ):
         raise RuntimeError("service action matrix row mismatch")
     if not FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
         action for actions in rows.values() for action in actions
@@ -1091,18 +1112,7 @@ def _index_service_actions(rows: dict[ServiceIdentity, frozenset[ActionId]]) -> 
         definition = ACTION_BY_ID[action]
         expected_availability = (
             ActionAvailability.ACTIVE
-            if action
-            in {
-                ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-                ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-                ActionId.ARTIFACT_PENDING_WORK_SCAN,
-                ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-                ActionId.ARTIFACT_GUIDE_SOURCE_READ,
-                ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
-                ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
-                ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
-            }
+            if action in _ACTIVE_SERVICE_ACTIONS
             else ActionAvailability.PLANNED
         )
         if (

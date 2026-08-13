@@ -20,6 +20,7 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 from app.modules.authorization.submission_preparation import SubmissionBundlePreparationPreflightResourceContext, SubmissionBundlePreparationResourceContext
+from app.modules.authorization.submission_consumption import SubmissionBindingResourceContext, SubmissionCreationResourceContext
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SETUP_RUN_READ: "setup_run",
@@ -110,17 +111,15 @@ class PreparedAuthorityScope(BaseModel):
     target_actor_profile_id: UUID | None = None
     role: ProjectRole | None = None
     grant_id: UUID | None = None
-    artifact_resource_type: (
-        Literal[
+    artifact_resource_type: Literal[
             "artifact_put_attempt",
             "artifact_verification_job",
             "artifact_pending_work",
             "guide_source_binding",
             "guide_source_read",
             "pre_submit_checker_input",
-        ]
-        | None
-    ) = None
+            "submission_binding",
+        ] | None = None
     artifact_resource_id: UUID | Literal["workstream:artifact_pending_work"] | None = None
 
     @model_validator(mode="after")
@@ -178,7 +177,7 @@ class PreparedAuthorityScope(BaseModel):
                             "guide_source_binding",
                             "guide_source_read",
                             "pre_submit_checker_input",
-                        }
+                            "submission_binding"}
                         and isinstance(self.artifact_resource_id, UUID)
                     )
                 )
@@ -1517,6 +1516,7 @@ AuthorizationResourceContext = (
     | ArtifactPendingWorkResourceContext
     | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
+    | SubmissionCreationResourceContext | SubmissionBindingResourceContext
     | PreSubmitCheckerInputResourceContext
     | SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext
@@ -1558,7 +1558,6 @@ class AuthorizationDenialCode(StrEnum):
 
 class MatchedAuthorityKind(StrEnum):
     """Privacy-bounded authority source classifications."""
-
     ACTOR_SELF = "actor_self"
     ADMIN_ROLE_GRANT = "admin_role_grant"
     PROJECT_ROLE_GRANT = "project_role_grant"
@@ -1567,9 +1566,7 @@ class MatchedAuthorityKind(StrEnum):
 
 class AuthorizationDecision(BaseModel):
     """Frozen decision safe for feature code, evidence, and error mapping."""
-
     model_config = _STRICT_FROZEN
-
     decision_id: UUID
     action_id: ActionId | None
     permission_id: PermissionId | None
@@ -1613,6 +1610,7 @@ class AuthorizationDecision(BaseModel):
         "pre_submit_checker_input",
         "submission_bundle_preparation_preflight",
         "submission_bundle_preparation",
+        "submission_creation", "submission_binding",
     ]
     resource_id: (
         UUID
@@ -1677,6 +1675,7 @@ class AuthorizationDenied(Exception):
             raise TypeError("authorization denial requires a denied decision")
         self.decision = decision
         super().__init__("Authorization denied")
+
     @property
     def public_code(self) -> str:
         denial_code = self.decision.denial_code

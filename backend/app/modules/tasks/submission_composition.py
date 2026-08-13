@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.api import (
     SubmissionArtifactAdmissionPort,
     SubmissionArtifactAdmissionRequest,
+    SubmissionArtifactAdmissionResult,
     SubmissionCreationAuthorizationPort,
     SubmissionCreationAuthorityFacts,
     SubmissionCreationPreparationFacts,
@@ -124,20 +125,6 @@ class TaskSubmissionCreationService:
             supersedes_submission_id=(str(context.predecessor.submission_id)
                                       if context.predecessor else None),
         )
-        await self._repository.add_submission(submission)
-        consumed = await self._admissions.consume(
-            SubmissionArtifactAdmissionRequest(
-                admission_id=request.admission_id,
-                submission_id=submission_id,
-                submission_version=version,
-                task_context=context,
-            )
-        )
-        submission.submission_bundle_admission_id = str(request.admission_id)
-        submission.task_assignment_id = str(request.assignment_id)
-        submission.artifact_binding_id = str(consumed.binding_id)
-        submission.artifact_content_id = str(consumed.content_id)
-        await self._session.flush()
         final = SubmissionCreationAuthorityFacts(
             task_id=preliminary.task_id,
             assignment_id=preliminary.assignment_id,
@@ -146,8 +133,33 @@ class TaskSubmissionCreationService:
             predecessor_submission_id=preliminary.predecessor_submission_id,
             submission_id=submission_id,
             submission_version=version,
+            task_context=context,
         )
-        await self._authorization.consume(final)
+        prepared_authorization = await self._authorization.prepare(final)
+        try:
+            await self._repository.add_submission(submission)
+            consumed = await self._admissions.consume(
+                SubmissionArtifactAdmissionRequest(
+                    admission_id=request.admission_id,
+                    submission_id=submission_id,
+                    submission_version=version,
+                    task_context=context,
+                )
+            )
+            if (
+                type(consumed) is not SubmissionArtifactAdmissionResult
+                or not isinstance(consumed.binding_id, UUID)
+                or not isinstance(consumed.content_id, UUID)
+            ):
+                raise RuntimeError("artifact admission did not produce exact binding facts")
+            submission.submission_bundle_admission_id = str(request.admission_id)
+            submission.task_assignment_id = str(request.assignment_id)
+            submission.artifact_binding_id = str(consumed.binding_id)
+            submission.artifact_content_id = str(consumed.content_id)
+            await self._session.flush()
+            await self._authorization.consume(prepared_authorization, final)
+        finally:
+            self._authorization.close(prepared_authorization)
         return SubmissionCreationResult(
             submission_id=submission_id,
             submission_version=version,

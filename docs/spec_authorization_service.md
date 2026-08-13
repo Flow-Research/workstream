@@ -257,7 +257,10 @@ REV rows. Subsequent approved activations advanced the pre-12I catalogue to 52
 active and 48 planned rows. AUTH-12I adds and activates the two compilation
 request/execute rows, producing 102 rows. WS-ARCH-001-02G subsequently
 activates the existing contributor-preparation row, producing 55 active and 47
-planned rows without adding an action or permission.
+planned rows without adding an action or permission. WS-ARCH-001-02H activates
+the existing human `submission.create` and fixed-service
+`artifact.submission.binding.create` rows, producing 57 active and 45 planned
+rows without adding an action or permission.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
@@ -483,7 +486,7 @@ A mapping is not a permission alias.
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-05A` | Active `artifact.submission_bundle.prepare`; registry custody retained while replacement implementation chunk WS-ARCH-001-02G supplies the executable PREP boundary |
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
-| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; registry custody retained while replacement implementation chunk WS-ARCH-001-02H performs activation |
+| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; activated by replacement implementation chunk WS-ARCH-001-02H for only the fixed artifact-binding service |
 | `WS-XINT-002-06B` | `artifact.post_submit.checker_input.materialize`, `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 | `WS-XINT-002-07A` | `artifact.review_packet.materialize` only |
 | Future REV-owned activation, not approved for v0.1 | `artifact.review_evidence.binding.create` remains planned/unavailable |
@@ -502,8 +505,9 @@ The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. WS-XINT-002-03 activates the three internal
 service actions, WS-XINT-002-04A activates guide-source ingest, and
 WS-XINT-002-04B activates the two fixed-service guide binding/read actions, and
-WS-ARCH-001-02G activates contributor bundle preparation; the other 15 ART
-actions remain planned and unavailable.
+WS-ARCH-001-02G activates contributor bundle preparation. WS-ARCH-001-02H
+activates submission binding for the fixed artifact-binding service; the other
+14 ART actions remain planned and unavailable.
 The v0.1 baseline admits the exact privacy-bounded ART resource-context digest
 in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
@@ -723,7 +727,9 @@ active AdminRoleGrant-backed administrative mutations, the three active fixed
 ART foundation service actions, Project Manager
 `artifact.guide_source.ingest`, and the fixed-service
 `artifact.guide_source.binding.create` and `artifact.guide_source.read`
-actions. Submission, checker, review, and generic artifact-read actions remain
+actions, contributor `artifact.submission_bundle.prepare`, hidden human
+`submission.create`, and fixed-service `artifact.submission.binding.create`.
+Checker, review, generic artifact-read, and the public Submission cutover remain
 planned and issue no handle.
 Actor-self preparation locks the exact caller
 profile and then its exact identity link. Administrative preparation locks

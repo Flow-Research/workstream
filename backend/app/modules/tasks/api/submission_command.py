@@ -47,10 +47,23 @@ class SubmissionCreationAuthorityFacts(SubmissionCreationPreparationFacts):
 
     submission_id: UUID
     submission_version: int
+    task_context: TaskSubmissionContextFacts
 
     def __post_init__(self) -> None:
         if self.submission_version < 1:
             raise ValueError("submission version is invalid")
+        if (
+            self.task_context.task_id != self.task_id
+            or self.task_context.assignment_id != self.assignment_id
+            or self.task_context.contributor_id != self.contributor_id
+            or (
+                self.task_context.predecessor.submission_id
+                if self.task_context.predecessor is not None
+                else None
+            )
+            != self.predecessor_submission_id
+        ):
+            raise ValueError("submission authority context is inconsistent")
 
 
 class SubmissionCreationAuthorizationPort(Protocol):
@@ -59,8 +72,16 @@ class SubmissionCreationAuthorizationPort(Protocol):
     async def authorize(self, facts: SubmissionCreationPreparationFacts) -> None:
         """Conceal denial before TASK state is locked or revealed."""
 
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
+    async def prepare(self, facts: SubmissionCreationAuthorityFacts) -> object:
+        """Prepare fresh exact authority before ART admission state is inspected."""
+
+    async def consume(
+        self, prepared_authorization: object, facts: SubmissionCreationAuthorityFacts
+    ) -> None:
         """Consume final exact authority after protected facts are known."""
+
+    def close(self, prepared_authorization: object) -> None:
+        """Discard process-local authority after every success or failure path."""
 
 
 @dataclass(frozen=True, slots=True)

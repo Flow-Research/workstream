@@ -14,6 +14,19 @@ from app.modules.tasks.api import (
     TaskSubmissionContextFacts,
 )
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
+from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.adapters.tasks import TransactionalSubmissionCreationCommand
+from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
+from app.modules.artifacts.authorization import PreparedSubmissionBindingAuthorization
+from app.modules.authorization.prepared import (
+    PreparedSubmissionCreationAuthorization,
+)
+from app.modules.authorization.runtime import (
+    ActorKind,
+    ActorStatus,
+    HumanAuthorizationContext,
+    IdentityLinkStatus,
+)
 
 
 class _Session:
@@ -71,6 +84,38 @@ def _task():
     return SimpleNamespace(**values)
 
 
+@pytest.mark.parametrize(
+    ("actor_status", "link_status"),
+    [
+        (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE),
+        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED),
+    ],
+)
+@pytest.mark.asyncio
+async def test_human_lifecycle_denial_precedes_task_state(
+    actor_status, link_status,
+):
+    request = _request()
+    context = HumanAuthorizationContext(
+        actor_profile_id=request.contributor_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=actor_status,
+        identity_link_id=uuid4(),
+        identity_link_status=link_status,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    authority = PreparedSubmissionCreationAuthorization(object(), context)
+    service = TaskSubmissionCreationService(
+        _Session(), authorization=authority, admissions=None
+    )
+    service._repository = SimpleNamespace(
+        lock_submission_context=lambda value: pytest.fail("TASK state was revealed")
+    )
+    with pytest.raises(SubmissionCreationUnavailable):
+        await service.create(request)
+
+
 @pytest.mark.asyncio
 async def test_command_orders_authority_task_art_persistence_and_final_consumption():
     request = _request()
@@ -78,7 +123,13 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
 
     class Authority:
         async def authorize(self, facts): events.append(("authorize", facts.task_id))
-        async def consume(self, facts): events.append(("final", facts.submission_version))
+        async def prepare(self, facts):
+            events.append(("prepare", facts.submission_version))
+            return "prepared"
+        async def consume(self, handle, facts):
+            assert handle == "prepared"
+            events.append(("final", facts.submission_version))
+        def close(self, handle): assert handle == "prepared"
 
     class Admissions:
         async def consume(self, value):
@@ -96,7 +147,9 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
 
     service._repository = Repository()
     result = await service.create(request)
-    assert [event[0] for event in events] == ["authorize", "task", "persist", "art", "final"]
+    assert [event[0] for event in events] == [
+        "authorize", "task", "prepare", "persist", "art", "final"
+    ]
     assert result.submission_version == 1
 
 
@@ -104,7 +157,9 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
 async def test_denial_precedes_task_lock_and_all_mutation():
     class Authority:
         async def authorize(self, facts): raise SubmissionCreationUnavailable
-        async def consume(self, facts): raise AssertionError("unreachable")
+        async def prepare(self, facts): raise AssertionError("unreachable")
+        async def consume(self, handle, facts): raise AssertionError("unreachable")
+        def close(self, handle): raise AssertionError("unreachable")
 
     service = TaskSubmissionCreationService(_Session(), authorization=Authority(), admissions=None)
     service._repository = SimpleNamespace(
@@ -114,17 +169,23 @@ async def test_denial_precedes_task_lock_and_all_mutation():
         await service.create(_request())
 
 
+@pytest.mark.parametrize("revocation", ["identity_link_revoked", "submitter_grant_missing"])
 @pytest.mark.asyncio
-async def test_final_authority_failure_remains_inside_caller_transaction():
+async def test_fresh_authority_denial_precedes_art_and_mutation(revocation):
     request = _request()
+    events = []
 
     class Authority:
         async def authorize(self, facts): pass
-        async def consume(self, facts): raise SubmissionCreationUnavailable
+        async def prepare(self, facts):
+            events.append(revocation)
+            raise SubmissionCreationUnavailable("submission creation is unavailable")
+        async def consume(self, handle, facts): raise AssertionError("unreachable")
+        def close(self, handle): raise AssertionError("unreachable")
 
     class Admissions:
         async def consume(self, value):
-            return SubmissionArtifactAdmissionResult(binding_id=uuid4(), content_id=uuid4())
+            raise AssertionError("ART admission state was inspected")
 
     service = TaskSubmissionCreationService(_Session(), authorization=Authority(), admissions=Admissions())
     persisted = []
@@ -137,7 +198,56 @@ async def test_final_authority_failure_remains_inside_caller_transaction():
     service._repository = Repository()
     with pytest.raises(SubmissionCreationUnavailable):
         await service.create(request)
+    assert events == [revocation]
+    assert persisted == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_admission_result_denies_before_lineage_and_final_authority():
+    request = _request()
+    events = []
+
+    class Authority:
+        async def authorize(self, facts): events.append("authorize")
+        async def prepare(self, facts):
+            events.append("prepare")
+            return "prepared"
+        async def consume(self, handle, facts): events.append("final")
+        def close(self, handle): assert handle == "prepared"
+
+    class Admissions:
+        async def consume(self, value):
+            events.append("art")
+            return SimpleNamespace(binding_id=None, content_id=uuid4())
+
+    service = TaskSubmissionCreationService(
+        _Session(), authorization=Authority(), admissions=Admissions()
+    )
+    persisted = []
+
+    class Repository:
+        async def lock_submission_context(self, value): return _context(request)
+        async def get_task(self, task_id): return _task()
+        async def add_submission(self, submission): persisted.append(submission)
+
+    service._repository = Repository()
+    with pytest.raises(RuntimeError, match="exact binding facts"):
+        await service.create(request)
+    assert events == ["authorize", "prepare", "art"]
     assert len(persisted) == 1
+    assert persisted[0].artifact_binding_id is None
+
+
+def test_hidden_composition_uses_both_active_authority_adapters() -> None:
+    session = SimpleNamespace()
+    context = SimpleNamespace()
+    command = compose_hidden_submission_creation_command(
+        session, context, request_id=uuid4(), correlation_id=uuid4()
+    )
+    assert type(command) is TransactionalSubmissionCreationCommand
+    assert type(command._authorization) is PreparedSubmissionCreationAuthorization
+    assert type(command._admissions) is SubmissionAdmissionConsumptionService
+    assert type(command._admissions._authorization) is PreparedSubmissionBindingAuthorization
 
 
 @pytest.mark.asyncio
@@ -160,7 +270,13 @@ async def test_revision_increments_and_binds_the_exact_predecessor():
 
     class Authority:
         async def authorize(self, facts): pass
-        async def consume(self, facts): seen.update(final=facts)
+        async def prepare(self, facts):
+            seen["prepared"] = facts
+            return "prepared"
+        async def consume(self, handle, facts):
+            assert handle == "prepared"
+            seen.update(final=facts)
+        def close(self, handle): assert handle == "prepared"
 
     class Admissions:
         async def consume(self, value):
