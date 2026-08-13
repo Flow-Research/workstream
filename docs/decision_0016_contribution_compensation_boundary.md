@@ -52,13 +52,14 @@ Each rule is `unpaid` or `compensated`; compensated rules reference immutable
 money and/or project-points `ContributionAwardDefinition` rows.
 
 Guide activation validates and binds one policy version. Task readiness locks
-it before claimability; TaskAssignment and ReviewLease inherit that exact task
-lock without claim-time selection. Later publication alone affects only newly
-prepared tasks and never mutates existing work. After a human `needs_revision`,
-task-owned revision preparation may create a new task context from a newly
-active guide generation. The completed Review and reviewer award retain the
-prior lease version; the next assignment and ReviewLease inherit the newly
-prepared task's lock. Prior contributions and awards are never rewritten.
+it before claimability; TaskAssignment copies that lock, each Submission stamps
+its attempt version, and ReviewLease copies the Submission stamp without
+claim-time selection. Later publication alone never mutates active
+work. After a human `needs_revision`, task-owned revision preparation may
+atomically rebase the continuing Task and TaskAssignment to the complete current
+context for the next submission attempt. The completed Review and reviewer
+award retain the prior lease version; the next Submission and ReviewLease use
+the rebased version. Prior contributions and awards are never rewritten.
 
 The retired guide-bound economic-policy aggregate and all semantic and physical
 consumers are removed through CON-05A/05B. No alias, fallback, dual read/write,

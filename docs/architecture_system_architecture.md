@@ -231,7 +231,8 @@ Owns:
 - immutable reviewer `completed_review` sourced from Review/ReviewLease
 - immutable submitter `accepted_submission` sourced only from FinalAcceptance
 - project ContributionPolicy and immutable published versions
-- task-locked policy-version lineage inherited by TaskAssignment and ReviewLease
+- task-locked policy-version lineage copied to TaskAssignment, stamped on each
+  immutable Submission, and copied from that Submission to ReviewLease
 - immutable CompensationAwards for payable contribution rules only
 - immutable fulfillment receipts and rebuildable status projections
 - contribution and compensation outbox events

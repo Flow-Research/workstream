@@ -233,10 +233,11 @@ Record only project-owner-supplied business terms and their durable source:
 
 This section is informational. It is not an active contribution award rule. Workstream
 publishes `ContributionPolicyVersion` independently. Guide activation binds one
-version; task readiness locks it, and `TaskAssignment` plus `ReviewLease`
-inherit it. After a human `needs_revision`, complete-context preparation may
-create a newly prepared task context from a newly active guide-bound version;
-existing assignments and leases remain immutable.
+version; task readiness locks it, `TaskAssignment` copies it, Submission stamps
+the attempt value, and `ReviewLease` copies that stamp. After a human
+`needs_revision`, complete-context preparation may
+atomically rebase the continuing Task and TaskAssignment for the next attempt;
+prior Submissions, ReviewLeases, contributions, and awards remain immutable.
 
 ## Lessons Learned
 

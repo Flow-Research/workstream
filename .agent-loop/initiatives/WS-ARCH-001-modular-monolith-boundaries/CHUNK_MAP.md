@@ -26,7 +26,7 @@
 | `WS-ARCH-001-04D` | XINT-06B exact fixed-service post-submit activation | L1 | Planned skeleton after 04B/04C evidence |
 | `WS-ARCH-001-04E` | TASK automatic dispatch/current routing integration and canonical `allow_review` manifest | L1 | Planned skeleton after 04D |
 | `WS-ARCH-001-04F` | Contributor-readable checker remediation for final non-reviewable checker outcomes | L1 | Planned skeleton after 04E; required before public 02I, not before REV begins from `allow_review` |
-| `WS-ARCH-001-05` | REV/CON admission, inherited reviewer-policy lineage, packet, claim, decision and revision coordination parent | L1 | Independent schema/packet foundations may proceed; live admission/claim waits for canonical `allow_review` and exact AUTH gates; review claim copies the task-locked version and performs no CON lookup; must split before implementation |
+| `WS-ARCH-001-05` | REV/CON admission, inherited reviewer-policy lineage, packet, claim, decision and revision coordination parent | L1 | Independent schema/packet foundations may proceed; live admission/claim waits for canonical `allow_review` and exact AUTH gates; review claim copies the admitted Submission's immutable attempt version and only verifies upstream Task/Assignment equality, with no CON lookup; must split before implementation |
 | `WS-ARCH-001-06` | Mandatory atomic Review/FinalAcceptance/TASK/CON contribution-and-award coordination | L1 | Non-executable placeholder; CON-03C/07 must precede first Review commit; requires a split contract |
 | `WS-ARCH-001-07` | Supporting-module repairs and empty-ledger closure | L1 | Non-executable placeholder; requires a split contract |
 

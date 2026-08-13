@@ -3,8 +3,9 @@
 ## Goal
 
 Remove the retired guide-bound economic contract from every semantic consumer,
-classify existing rows, and expose the CON-owned validation port used once when
-a Project Guide is activated. The port returns the one active, published,
+classify existing rows, and expose the CON-owned validation port used when a
+Project Guide is activated and at the controlled human-revision rebase
+boundary. The port returns the one active, published,
 complete, binding-valid same-project ContributionPolicyVersion that PROJECTS
 binds to the guide. This chunk supplies the required immutable FK/persistence
 contract for the guide -> task -> assignment lineage, but owns no PROJECTS or
@@ -47,7 +48,7 @@ provider/artifact calls; unrelated checker behavior
 - [ ] CON exposes one caller-session, flush-only validation port that locks and
   returns the one active, published, complete, binding-valid same-project
   ContributionPolicyVersion for guide activation. It contains no PROJECTS,
-  TASK, role, claim, assignment, or revision composition.
+  TASK, role, claim, assignment, or REV orchestration.
 - [ ] The persistence contract supports non-null
   `ProjectGuide.contribution_policy_version_id`, non-null
   `WorkstreamTask.locked_contribution_policy_version_id` before
@@ -62,15 +63,21 @@ provider/artifact calls; unrelated checker behavior
 - [ ] Missing/invalid policy fails guide activation with no guide/task/
   assignment/audit/outbox partial state. Later publication never updates an
   active guide, existing task, assignment, Submission, ReviewLease,
-  ContributionRecord, or CompensationAward. A newly prepared task may inherit
-  a newer version only through a newly activated guide generation. All tasks
-  prepared from one active guide generation lock that guide's same version.
+  ContributionRecord, or CompensationAward. Only human `needs_revision`
+  preparation may deliberately adopt a newer complete guide-bound version by
+  rebasing the continuing Task/TaskAssignment for the next attempt. All tasks
+  prepared from one active guide generation initially lock that guide's same
+  version.
 - [ ] Publish versus guide activation and binding-state versus guide activation
   pass both lock orders without deadlock or mixed versions.
 - [ ] `WS-ARCH-001-03B` alone owns TASK readiness and claim composition. It
   inherits the guide-bound version onto the task before claimability, then
   copies the task lock onto the assignment without invoking CON at claim time.
   `WS-ARCH-001-03C` alone owns the later AUTH activation proof.
+- [ ] TASK-owned human revision preparation may call the same CON validation
+  port after locking the complete current project context. CON returns exact
+  validated policy facts; TASK alone writes the continuing Task/TaskAssignment
+  rebase and immutable prior/next preparation lineage.
 - [ ] Existing rows follow the approved deterministic classification and cannot
   enter new Review decisions without a valid freeze. Migration fails on
   ambiguity and downgrade refuses post-cutover data loss.

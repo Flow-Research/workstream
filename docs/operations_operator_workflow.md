@@ -72,7 +72,8 @@ Reads authorized immutable and operational evidence without mutation.
 5. Add required output format.
 6. Confirm the active guide binds a published ContributionPolicyVersion with
    explicit submitter and reviewer compensated/unpaid rules; task readiness
-   locks it before `READY`, and Assignment/ReviewLease inherit it later.
+   locks it before `READY`, Assignment copies it, Submission stamps the attempt
+   value, and ReviewLease later copies that immutable stamp.
 7. Set skill tags.
 8. Run task schema check.
 9. Move to READY.

@@ -121,8 +121,9 @@ revision coverage.
   owner gap.
 - Automatic queue admission requires the exact final TASK/CHECKER/ART handoff
   to merge before 05A; it is not currently evidenced merged.
-- Claim packet creation: queue/lease persistence, inherited task-locked policy
-  lineage, and exact ART packet membership/materialization contracts.
+- Claim packet creation: queue/lease persistence, immutable Submission-stamped
+  attempt-policy lineage, and exact ART packet membership/materialization
+  contracts.
 - Decision commit: Review/FinalAcceptance persistence, TASK participant, CON
   contribution participant, audit, and outbox.
 - Product reads/routes: matching AUTH activation plus lifecycle release gate.

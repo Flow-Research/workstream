@@ -97,8 +97,8 @@ never uses direct Review/ReviewLease contribution-source fields.
   commits independently and no post-commit repair path exists.
 - [ ] Needs revision composes the task-owned complete-context preparation after
   the reviewer operation in the same caller transaction. The reviewer
-  contribution keeps its lease freeze; preparation may update only the next-
-  attempt assignment selector. Review, reviewer award, task/assignment effects,
+  contribution keeps its lease freeze; preparation may update the continuing
+  Task/TaskAssignment context only for the next attempt. Review, reviewer award, task/assignment effects,
   preparation or blocked result, audit/outbox, and visibility roll back
   together. CON-07 does not own the rebase.
 - [ ] No FinalAcceptance create action/API exists. Static/runtime proof finds no

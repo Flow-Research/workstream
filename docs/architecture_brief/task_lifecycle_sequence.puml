@@ -97,7 +97,7 @@ Authorization --> API : opaque single-use prepared handle
 API -> DB : lock idempotency, lifecycle fence, queue;\nlock task, assignment, Submission, CheckerRun;\nrecompose canonical final facts
 API -> Authorization : consume prepared handle and evaluate final facts
 Authorization --> API : allowed; authorization evidence staged
-API -> DB : freeze reviewer policy; create ReviewLease\n+ ReviewPacketManifest; commit once
+API -> DB : copy Submission attempt policy version; create ReviewLease\n+ ReviewPacketManifest; commit once
 API --> UI : exact leased Review Context
 
 Reviewer -> UI : submit accept / needs_revision / reject

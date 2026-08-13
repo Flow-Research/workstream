@@ -80,8 +80,8 @@ These values are server-owned. The task locks the guide-bound
 ContributionPolicyVersion before it becomes claimable; TaskAssignment copies
 that exact lock and task creators do not provide award fields directly.
 Publication cannot change existing work. A successful human `needs_revision`
-preparation may create a newly prepared task context from a newly active guide
-generation for the next attempt.
+preparation may atomically rebase the continuing Task and TaskAssignment to the
+complete current guide context for the next submission attempt.
 
 - submitter contribution policy version id:
 - contribution type: `accepted_submission`

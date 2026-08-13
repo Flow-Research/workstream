@@ -207,6 +207,7 @@ Fields:
 - `id`
 - `project_id`
 - `version`
+- `contribution_policy_version_id`
 - `status`
 - `activation_sequence` (nullable only while draft; immutable after allocation)
 - `content_markdown`
@@ -258,8 +259,11 @@ Material changes require a new guide version or policy version. They include
 guide source material, submission artifact policy, pre-submit checker
 generation rules, post-submit checker policy, review policy, revision policy,
 and their guide-bound contracts. Contribution policy publication is independent
-of guide versioning and affects only new TaskAssignments and ReviewLeases; their
-frozen versions never drift.
+of guide versioning. A published version affects work only when a later guide
+activation binds it or controlled human-revision preparation atomically rebases
+the continuing Task and TaskAssignment for the next attempt. Ordinary task and
+review claims only copy the already-locked attempt lineage; prior Submissions,
+ReviewLeases, Reviews, ContributionRecords, and CompensationAwards never drift.
 
 ## GuideSourceSnapshot
 
@@ -740,7 +744,8 @@ covered Project Manager permission or an explicitly authorized Operator/Audit
 projection and exposes the full
 locked source snapshot, effective policy, pre-submit checker, post-submit
 checker, review, and revision provenance. Contribution-policy provenance comes
-from the guide-bound task lock inherited by `TaskAssignment` and `ReviewLease`.
+from the guide-bound task lock copied to `TaskAssignment`, stamped on each
+immutable Submission, and copied from that Submission to `ReviewLease`.
 None of these reads
 recompute from the current active guide.
 
@@ -1088,9 +1093,11 @@ Fields:
 - `retired_by`
 - `retired_at`
 
-At most one policy is active for new work in one project. New TaskAssignments
-and ReviewLeases require its published version; missing configuration is not an
-implicit unpaid rule.
+At most one policy is active for guide activation in one project. Guide
+activation and task readiness require its published version; missing
+configuration is not an implicit unpaid rule. Later TaskAssignment and
+ReviewLease creation copy the attempt's locked version even if it has since
+been retired.
 
 ## ContributionPolicyVersion
 
@@ -1104,8 +1111,9 @@ Fields:
 - publication and retirement actor/timestamp fields
 
 Published and retired versions are immutable. Guide activation binds one
-version; WorkstreamTask locks it before claimability, and TaskAssignment plus
-ReviewLease inherit it.
+version; WorkstreamTask locks it before claimability, TaskAssignment copies it,
+Submission stamps the attempt value, and ReviewLease copies that immutable
+stamp.
 
 ## ContributionRule
 
@@ -1240,6 +1248,7 @@ Fields:
 - `locked_revision_policy_id`
 - `locked_revision_policy_generation`
 - `locked_revision_policy_hash`
+- `locked_contribution_policy_version_id`
 - `source_type`
 - `source_ref`
 - `source_payload_hash`
@@ -1292,6 +1301,12 @@ id/generation/hash identities, acceptance criteria, derived display summaries,
 and skill tags. Contributors submit against the task id; they do not restate
 policy identities.
 
+`locked_contribution_policy_version_id` equals the active guide's bound version
+when the task first enters `ready`. Ordinary claim never changes it. Human
+`needs_revision` complete-context preparation is the only boundary that may
+atomically rebase this field on the continuing Task for the next attempt, with
+prior/next lineage recorded before contributor access.
+
 Durable post-submit checker execution uses
 `locked_post_submit_checker_policy_id`,
 `locked_post_submit_checker_policy_version`, and
@@ -1320,6 +1335,12 @@ foreign key `fk_task_assignments_contributor_id_actor_profiles`, index
 `public.require_human_actor_profile_reference()` to reject service profiles.
 It deliberately permits suspended and deactivated human profiles because this
 column preserves historical attribution rather than current authority.
+
+At initial claim, `submitter_contribution_policy_version_id` must equal the
+Task's locked version. It remains fixed throughout that submission attempt.
+Only human `needs_revision` complete-context preparation may atomically rebase
+the continuing assignment field for the next attempt; ordinary publication,
+task claim, submission, and review claim cannot change it.
 
 ## Submission
 
@@ -1366,6 +1387,8 @@ Fields:
 - `supersedes_submission_id`
 - `remediation_source_checker_run_id` (checker-remediation submissions only)
 - `revision_context_preparation_id` (human-Review revision submissions only)
+- `contribution_policy_version_id` (immutable exact attempt policy copied from
+  the TaskAssignment during Submission creation)
 
 The submission contributor uses foreign key
 `fk_submissions_contributor_id_actor_profiles`, index
@@ -1396,8 +1419,10 @@ post-submit checker policy ids/versions/hashes, exact review policy identities,
 exact revision policy identities, provider references, package hashes, or
 artifact manifests. Submitter award eligibility is governed by the
 TaskAssignment-selected `ContributionPolicyVersion` for the exact attempt and
-is not contributor-supplied. Human revision preparation records prior/next
-policy lineage before it may update that selector; publication alone cannot.
+is not contributor-supplied. Submission creation stamps that identifier
+immutably before any later rebase can change the continuing assignment. Human
+revision preparation records prior/next policy lineage before it may update
+that selector; publication alone cannot.
 
 Version 1 has neither revision-source field. Every later version has exactly one:
 a checker-remediation version stores the server-derived
@@ -1662,11 +1687,13 @@ attempt has no close fields. Terminal close provenance is exact:
 `admin_override`. Identity, queue/Submission lineage, reviewer, frozen policy,
 generation, and lease times never change; terminal attempts are wholly
 immutable. The reviewer policy FK is non-null and same-project through CON's
-canonical `ContributionPolicyVersion(id, project_id)` identity, and a new lease
-may freeze only a currently published version. CON owns claim-time selection;
-REV's database guard prevents a mutable draft or already-retired identity from
-being recorded as the new attempt's freeze. Reviewer and preferred-reviewer FKs
-accept only canonical human ActorProfiles.
+canonical `ContributionPolicyVersion(id, project_id)` identity. Claim copies
+the exact version stamped on the admitted Submission/task attempt; it performs
+no current-policy lookup. A version that was published when the attempt was
+prepared remains valid for that attempt after later retirement or publication.
+REV's database guard rejects a draft, crossed-project, or lineage-mismatched
+identity. Reviewer and preferred-reviewer FKs accept only canonical human
+ActorProfiles.
 
 `ReviewPacketManifest` is an immutable REV semantic projection over the exact
 lease, Submission, admitting CheckerRun/results, stamped context, response
@@ -1799,8 +1826,10 @@ Submission's complete stamped context with every applicable currently active
 Project Guide and policy selector: guide identity/version/activation sequence,
 source snapshot, submission-artifact policy, effective project policy,
 pre-submit and post-submit checker policies, ReviewPolicy, RevisionPolicy,
-task-template/task-execution context, and the submitter
-ContributionPolicyVersion selected by CON. An exact component match is kept;
+task-template/task-execution context, and the ContributionPolicyVersion in the
+attempt's locked context. At this human revision boundary, TASK validates the
+complete currently active project context through owner ports, including CON's
+policy-validation port. An exact component match is kept;
 every changed valid component is rebased together for the next attempt. Missing,
 incomplete, inconsistent, crossed-project, revoked, or otherwise unsafe context
 blocks the whole preparation for manager repair. Task Context returns only the
@@ -1809,11 +1838,11 @@ the reviewer reads the context stamped on the leased Submission.
 
 Publication never silently rebases award eligibility during active or completed
 work. After a human `needs_revision`, revision preparation records prior and
-next `ContributionPolicyVersion` references and, when context changes, creates
-a newly prepared task context from a newly active guide generation. Existing
-TaskAssignments are not rewritten. The completed reviewer contribution retains
-its ReviewLease version; each new assignment and ReviewLease inherit its task
-lock.
+next `ContributionPolicyVersion` references and atomically updates the
+continuing Task and TaskAssignment only for the next submission attempt when
+the complete current context changed. Prior Submissions, ReviewLeases, Reviews,
+ContributionRecords, and CompensationAwards retain their old version. The next
+Submission stamps the rebased version, and its ReviewLease copies that version.
 
 The contributor and reviewer history show prior/next guide, policy—including
 ContributionPolicyVersion—identity, activation sequence where applicable,

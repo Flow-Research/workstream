@@ -29,8 +29,9 @@ partial review afterward.
 
 CON validates the one same-project ContributionPolicyVersion at guide
 activation. TASK locks that guide-bound version before claimability and copies
-it to TaskAssignment; REV copies the same lineage to ReviewLease. Neither task
-claim nor review claim performs policy selection. The lease stores a non-null
+it to TaskAssignment; Submission stamps the attempt value, and REV copies that
+immutable Submission value to ReviewLease. Neither task claim nor review claim
+performs policy selection. The lease stores a non-null
 CON policy-version FK, but that dependency transfers no lease authority to CON.
 
 ## D6 — Artifact boundary
@@ -84,11 +85,12 @@ the complete applicable current Project Guide/source activation,
 submission-artifact policy, pre-submit and post-submit checker policies, review
 policy, revision policy, task-template/task-execution context, and
 ContributionPolicyVersion. It atomically keeps unchanged components or rebases
-all changed components through a newly prepared task context; no existing task,
-assignment, Submission, or lease is rewritten.
+all changed components on the continuing Task and TaskAssignment for the next
+submission attempt; no prior Submission, ReviewLease, Review, contribution, or
+award is rewritten.
 The completed reviewer contribution retains its lease-frozen policy; the
-revised submitter attempt inherits its newly task-locked policy; and the next
-ReviewLease inherits that same task lock. Prior
+revised submitter attempt uses the rebased TaskAssignment policy; and the next
+ReviewLease copies the version stamped on that Submission. Prior
 Submissions, Reviews, ContributionRecords, and CompensationAwards remain
 immutable. Incomplete or inconsistent current context blocks rather than
 publishing a mixed version set. The Review, reviewer contribution/award, task

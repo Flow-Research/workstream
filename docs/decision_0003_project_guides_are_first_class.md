@@ -86,10 +86,11 @@ enforceable rules until they are moved into those contracts.
 
 Publication of a `ContributionPolicyVersion` is independent of guide
 activation and never silently changes existing work. Guide activation binds
-one version; task readiness locks it before claimability, and TaskAssignment
-plus ReviewLease inherit it without claim-time selection. Human revision
-preparation may create a newly prepared task context from a newly active guide
-generation; existing rows are never rewritten.
+one version; task readiness locks it before claimability, TaskAssignment copies
+it, Submission stamps the attempt value, and ReviewLease copies that immutable
+stamp without claim-time selection. Human revision
+preparation may atomically rebase the continuing Task and TaskAssignment for
+the next submission attempt; prior attempt rows are never rewritten.
 
 ## Consequences
 

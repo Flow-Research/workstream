@@ -88,6 +88,8 @@ Required before entering:
 - review policy present
 - revision policy present
 - guide version locked for this task
+- `locked_contribution_policy_version_id` bound to the activated guide's
+  same-project published, complete, binding-valid ContributionPolicyVersion
 - source reference recorded when imported
 - acceptance criteria frozen; a controlled new guide/task context follows its
   owning policy/rebase path and never rewrites existing locked context
@@ -169,9 +171,10 @@ the active applicable guide/source, submission/checker, review, revision,
 task-execution, and submitter ContributionPolicy context. Exact component
 matches keep; every changed valid component rebases together. Missing,
 inconsistent, revoked, or unsafe context blocks the whole preparation for
-Project Manager repair. Changed context creates a newly prepared task lock;
-the next assignment inherits it, while the prior TaskAssignment, completed
-Review, and lease do not change. Checker-caused remediation
+Project Manager repair. Changed context atomically rebases the continuing Task
+and TaskAssignment for the next submission attempt. The prior Submission,
+completed Review, ReviewLease, contribution, and award do not change.
+Checker-caused remediation
 remains a distinct CheckerRun-rooted path, keeps the Task's locked context, and
 creates no Review, ReviewFinding, preparation, reviewer contribution, or
 synthetic human actor. Its corrected Submission persists the unique immutable

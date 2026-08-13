@@ -20,12 +20,14 @@ digest and byte count; final completed current CheckerRun; no unresolved
 blocking failure under the locked post-submit policy; and
 `routing_recommendation = allow_review`. It also carries the exact
 `WorkstreamTask.locked_contribution_policy_version_id`, the exactly equal
-`TaskAssignment.submitter_contribution_policy_version_id`, and locked
-review/revision policy lineage needed by later REV and CON consumers. The
-version was the same-project, published, complete, binding-valid immutable
+`TaskAssignment.submitter_contribution_policy_version_id`, immutable
+`Submission.contribution_policy_version_id`, and locked review/revision policy
+lineage needed by later REV and CON consumers. The Submission version was
+stamped before any later revision rebase. The initial version was the
+same-project, published, complete, binding-valid immutable
 version selected at guide activation and locked before task claimability; the
-manifest never reselects it and later policy publication cannot alter the task,
-assignment, Submission, or downstream lease.
+manifest never reselects it and later policy publication cannot alter this
+Submission attempt or its downstream lease.
 
 Replay, revocation, stale guide/policy generation, stale assignment, replaced
 binding, non-current run, cross-project/resource, wrong service, wrong session,

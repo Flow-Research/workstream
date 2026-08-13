@@ -37,8 +37,9 @@ operational claims with a capability-ordered plan, now refreshed through
   submitter ContributionPolicyVersion; completed history remains immutable.
 - Guide activation binds one policy version; task readiness locks it before the
   task becomes claimable.
-- TaskAssignment and REV-owned ReviewLease inherit that same task-governing
-  version; neither claim path selects policy.
+- TaskAssignment copies that task-governing version, Submission stamps the
+  exact attempt value, and REV-owned ReviewLease copies that immutable stamp;
+  neither claim path selects policy.
 - ContributionRecord and CompensationAward rows are immutable and replay-safe.
 - REV owns Review, FinalAcceptance, task/assignment effects, audit/outbox
   staging, and the single transaction commit.

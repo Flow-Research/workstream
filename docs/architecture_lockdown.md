@@ -211,10 +211,12 @@ reviewing auditable:
 Compensation remains an independently owned CON policy, but its selected version
 is part of the complete governing work context. Guide activation binds one
 `ContributionPolicyVersion`; task readiness locks it before claimability, and
-TaskAssignment plus ReviewLease inherit it without claim-time selection.
+TaskAssignment copies it, Submission stamps the attempt value, and ReviewLease
+copies that stamp without claim-time selection.
 Publication never silently changes existing work. A human `needs_revision`
-may prepare a new task context from a newly active guide generation while the
-completed lease and prior history remain immutable. Either rule may be
+may atomically rebase the continuing Task and TaskAssignment for the next
+submission attempt while the completed lease and prior history remain
+immutable. Either rule may be
 explicitly unpaid and therefore create no award.
 
 ### Human Accountability

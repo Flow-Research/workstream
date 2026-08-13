@@ -13,14 +13,14 @@ signed-loop records do not make behavior live.
 | `02A` | Shared transactional outbox persistence/append | Merged PR #155; migration 0029 |
 | `03A` | Adapter-binding persistence | Merged PR #267; migration 0053 |
 | `03B` | Contribution-policy persistence | Merged PR #274; migration 0055 |
-| `PLAN5` | Complete-context human needs-revision rebase reconciliation | Merged PR #270 |
+| `PLAN5` | Historical complete-context human needs-revision rebase reconciliation | Merged PR #270; continuing-TaskAssignment rebase retained, independent reviewer-selection wording superseded by current PLAN2 |
 
 ## Current reconciliation
 
 | Chunk | Goal | Risk | Status |
 |---|---|---:|---|
 | `PLAN4` | Reconcile current main, ART/AUTH/REV changes, open PRs, and end-to-end order | L1 | Merged PR #261 |
-| `PLAN5` | Reconcile complete-context human needs-revision rebase across guide, policy, REV, and CON contracts | L1 | Merged PR #270; no runtime |
+| `PLAN5` | Reconcile complete-context human needs-revision rebase across guide, policy, REV, and CON contracts | L1 | Merged PR #270; historical baseline, current PLAN2 controls reviewer inheritance |
 
 ## Core runtime chunks
 
@@ -62,7 +62,7 @@ PLAN4
 
 REV-04B + 03B -> 03C -> 03D
 04B + guide activation facts -> 05A -> WS-ARCH-001-03B task readiness -> 03C activation
-task-locked policy lineage -> assignment -> Submission/allow_review -> ReviewLease
+task-locked policy lineage -> assignment -> Submission-stamped attempt lineage -> allow_review -> ReviewLease
 REV revision lineage + 03C/03D + 05A -> 07 -> REV-10 first Review commit
 
 AUTH dispatcher registration -> 02B

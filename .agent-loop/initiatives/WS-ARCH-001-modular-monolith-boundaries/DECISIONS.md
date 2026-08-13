@@ -98,8 +98,9 @@ PROJECT/POL readiness and TASK assignment authority complete first. ART and
 CHECKERS then materialize, execute, persist, and expose the exact current
 post-submit result. Only after that merged manifest may REV activate admission
 for the Submission. Independent REV schema/packet foundations may proceed
-earlier. CON participates before assignment, before review claim, and in every
-final decision; it is not downstream-only. The admission-only public API clean
+earlier. CON validates policy at guide activation and at a controlled human
+revision rebase, then participates in every final decision. Ordinary task and
+review claims only copy locked lineage; CON is not downstream-only. The admission-only public API clean
 cut remains later still, after initial, checker-remediation, and
 reviewer-requested revision contexts all use the same path.
 

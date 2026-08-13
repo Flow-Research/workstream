@@ -32,8 +32,8 @@
 The reviewer consumes the context stamped on the revised Submission and does
 not perform a separate rebase. The completed reviewer contribution retains the
 originating ReviewLease version. This preparation records the complete selected
-next-attempt context and may create a newly prepared task lock; the next
-assignment and ReviewLease inherit that exact version.
+next-attempt context and may atomically rebase the continuing Task and
+TaskAssignment; the next Submission and ReviewLease use that exact version.
 
 ## Immutable Finding Responses
 

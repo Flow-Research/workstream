@@ -409,15 +409,16 @@ audit retain actor kind so UUID shape never implies human authority.
 
 Legacy compensation-context state is removed by WS-CON and no moving selector
 may silently change an active attempt. Guide activation binds one
-`ContributionPolicyVersion`; task readiness locks it, and TaskAssignment plus
-ReviewLease inherit it. Neither claim path selects policy. Accept and reject
-use that exact version.
+`ContributionPolicyVersion`; task readiness locks it, TaskAssignment copies it,
+Submission stamps the attempt value, and ReviewLease copies that immutable
+stamp. Neither claim path selects policy. Accept and reject use that exact
+version.
 
 After a human `needs_revision`, complete-context preparation keeps unchanged
-context or creates a new task context locked to the newly active guide-bound
-version. Existing tasks, assignments, Submissions, Reviews and leases are not
-rewritten. The later assignment and lease inherit the new task lock. Prior
-history is never rewritten.
+context or atomically rebases the continuing Task and TaskAssignment to the
+newly active complete guide-bound context for the next submission attempt.
+Existing Submissions, ReviewLeases, Reviews, contributions, and awards are not
+rewritten. Prior history is never rewritten.
 
 ### D18 - Authority-Loss Replacement Preserves Source And Changes Target
 

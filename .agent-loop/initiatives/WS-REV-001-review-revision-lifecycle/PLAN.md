@@ -71,7 +71,7 @@ path belongs to the matching XINT activation after the REV behavior merges.
 ### Wave 3 — Claim, lease, and packet
 
 8. `06A` implements atomic claim, one-active-lease capacity, REV's lease policy-
-   version inheritance from the admitted task lock, and packet-
+   version copy from the admitted Submission's immutable attempt stamp, and packet-
    manifest freeze with ART-owned membership.
 9. `06B` implements owned release and preferred decline.
 10. `06C` implements database-time preference/lease expiry, lazy recovery, and
@@ -187,7 +187,9 @@ REV alone decides admission meaning and persists:
 
 Claim
 AUTH prepares/consumes authority
-REV verifies the canonical admission's task-locked ContributionPolicyVersion ID
+REV copies the canonical admission's immutable
+Submission.contribution_policy_version_id and verifies upstream Task/Assignment
+lineage only for equality
 REV alone persists and manages:
   ReviewLease + policy-version FK + queue/lease transitions + packet freeze
 ART and CON perform no claim or lease write
@@ -229,7 +231,7 @@ stale `Proposed` or `Active` label.
 | Reviewer-packet membership identifier/port contract, with no REV runtime dependency | ART-owned contract-only precursor to ART-07A | Missing exact published contract; report to ART owner | 03B |
 | Shared lifecycle-audit participant | CON-02C | Merged PR #277 | 04B |
 | Final Submission/CheckerRun/verified-binding admission manifest | ART checker chain through ART-06B and XINT-06B | Not evidenced complete | 05A |
-| Task-locked ContributionPolicyVersion lineage carried by canonical admission and copied to the lease FK | TASK/ARCH manifest; CON-06 lookup superseded | Future live admission gate; no claim-time lookup | 06A |
+| Submission-stamped ContributionPolicyVersion carried by canonical admission and copied to the lease FK; Task/Assignment lineage is verified only for upstream equality | TASK/ARCH manifest; CON-06 lookup superseded | Future live admission gate; no claim-time lookup | 06A |
 | Exact reviewer packet materialization | ART-07A, activated by XINT-002-07A | Future after merged REV lease/manifest | 07A |
 | Atomic contribution/award decision participant | CON-07 | Future after REV-04B/09B and CON prerequisites | 10 |
 | Shared dispatcher/handler registry | CON-02B | Not evidenced merged | 12P1 |
@@ -255,10 +257,10 @@ waits for CON-07's mandatory flush-only participant.
 On human `needs_revision`, REV composes the task-owned complete-context
 preparation after the reviewer CON operation in the same transaction. The
 completed reviewer record keeps its lease-frozen policy. Preparation may keep
-the applicable lineage or create a newly prepared task context locked to a
-newly active guide-bound version; existing tasks and assignments are not
-rewritten. The next assignment and ReviewLease inherit that task lock. REV owns
-orchestration and lineage, not CON policy selection.
+the applicable lineage or atomically rebase the continuing Task and
+TaskAssignment to the complete current context for the next submission attempt.
+Prior Submissions, ReviewLeases, Reviews, contributions, and awards are not
+rewritten. REV owns orchestration and lineage, not CON policy selection.
 
 ## Alternatives rejected
 

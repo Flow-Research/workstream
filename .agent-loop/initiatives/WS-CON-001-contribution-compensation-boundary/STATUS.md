@@ -6,7 +6,9 @@
   identifiers below describe the original merge sequence, not the current root.
 - CON-01, CON-02A, and CON-03A are merged; 03A merged in PR #267.
 - PLAN5 is merged in PR #270 and preserves the human-confirmed complete-context
-  `needs_revision` rebase rule.
+  `needs_revision` rebase rule on the continuing TaskAssignment. Its old
+  independent reviewer-selection wording is historical and superseded by the
+  current canonical inheritance rule recorded by WS-ARCH-001 PLAN2.
 - Runtime on main contains shared outbox persistence, the schema-only
   compensation binding foundation, contribution-policy persistence, and the
   02C shared lifecycle-audit participant merged through PR #277. Contribution-record,
@@ -54,7 +56,8 @@ schema work. Current dependency analysis yields:
    assignment persistence contract must merge before live task readiness.
 8. Contribution/award persistence follows stable REV Review, ReviewLease and
    FinalAcceptance FK targets, but precedes live review decisions.
-9. Review claim inherits the task-locked version; CON-06 is a planned
+9. Review claim copies the admitted Submission's immutable attempt version;
+   Task/Assignment lineage is only an equality check, and CON-06 is a planned
    retirement of the former lookup and must not implement runtime behavior.
 10. The atomic REV/CON participant must merge before the first canonical Review
     decision; it creates a reviewer ContributionRecord for every final decision
@@ -78,13 +81,15 @@ schema work. Current dependency analysis yields:
 
 CON is not downstream of REV acceptance. It validates the one policy version
 at guide activation and participates in every final review-decision commit.
-TASK and REV inherit that immutable lineage without claim-time CON lookups.
+TASK carries that lineage into each immutable Submission, and REV copies the
+Submission stamp without a claim-time CON lookup.
 Only fulfillment, reconciliation and product reads remain downstream of the
 canonical decision transaction.
 
 WS-CON-001-05A is planned as the guide-activation validation and persistence
-prerequisite for task readiness. WS-CON-001-06 is a planned retirement; ReviewLease
-copies and verifies the task-locked version.
+prerequisite for task readiness. WS-CON-001-06 is a planned retirement;
+ReviewLease copies the admitted Submission's immutable attempt version and
+verifies upstream Task/Assignment equality only.
 WS-CON-001-05B is planned after the 05A zero-consumer proof.
 
 ## Immediate next action

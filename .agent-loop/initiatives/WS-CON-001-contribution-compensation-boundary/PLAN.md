@@ -57,7 +57,8 @@ CON-03B, while later REV-04B waits for CON-02C.
 ### Phase C — REV integration foundations
 
 9. The former `06` claim-time reviewer lookup is superseded. REV owns the
-   ReviewLease row and copies the task-locked version carried by admission.
+   ReviewLease row and copies the immutable Submission-attempt version carried
+   by admission.
 10. REV proceeds through its queue/lease/packet/Review persistence sequence.
 11. After REV-04B supplies stable Review, ReviewLease, and FinalAcceptance FK
     targets, `03C` persists immutable ContributionRecord and CompensationAward.

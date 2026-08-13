@@ -160,11 +160,15 @@ guide activation
 -> task claim copies the task lock to
    TaskAssignment.submitter_contribution_policy_version_id
 -> TASK creates the assignment
+-> each Submission stamps that attempt's exact
+   Submission.contribution_policy_version_id
 ```
 
-The guide, task and assignment lineage is immutable for that task/attempt;
-later policy publication affects only newly prepared tasks and cannot change
-existing tasks or assignments. A task cannot enter preparation with a stale guide, policy
+The guide, task and assignment lineage is immutable for each completed attempt;
+later policy publication alone cannot change active work. Only human
+`needs_revision` preparation may atomically rebase the continuing Task and
+TaskAssignment for the next submission attempt, while recording immutable
+prior/next lineage. A task cannot enter preparation with a stale guide, policy
 generation, assignment, contributor, predecessor, or missing/invalid frozen
 submitter ContributionPolicyVersion.
 
@@ -185,6 +189,8 @@ The acceptance manifest must bind:
   proven published, complete and binding-valid at guide activation;
 - approved unified guide/setup generation and complete policy hashes;
 - Submission id/version and admission id;
+- exact immutable `Submission.contribution_policy_version_id`, equal to the
+  assignment value when that Submission was created;
 - ART binding, content, replica, digest and byte count;
 - checker plan, run, result and supersession/currentness identities;
 - `routing_recommendation = allow_review`.
@@ -207,7 +213,7 @@ The live sequence is:
 ```text
 canonical allow_review admission and packet
 -> review claim
--> REV verifies the task's locked ContributionPolicyVersion lineage
+-> REV verifies the Submission-stamped ContributionPolicyVersion lineage
 -> REV copies that exact version as
    ReviewLease.reviewer_contribution_policy_version_id
 -> Review decision in one caller-owned transaction

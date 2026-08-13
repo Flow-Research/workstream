@@ -151,11 +151,11 @@ reputation scoring
   reviewer record to the actual Review author. The v1 Review/findings remain
   unchanged, and only accepted v2 creates FinalAcceptance and its submitter
   record.
-- Human revision preparation keeps unchanged context or creates a newly
-  prepared task context locked to a changed valid guide-bound version. Existing
-  TaskAssignments are not rewritten. The completed Review uses its lease
-  version; each later assignment and lease inherit the new task lock; reviewer
-  award eligibility remains decision-neutral for the same inherited rule.
+- Human revision preparation keeps unchanged context or atomically rebases the
+  continuing Task and TaskAssignment to a changed valid complete context for
+  the next submission attempt. The completed Review uses its lease version;
+  each later Submission and lease use the rebased attempt version; reviewer
+  award eligibility remains decision-neutral for the same rule.
 - Chain reads expose bounded relationship metadata only. Historical artifact
   bytes remain inaccessible without the active exact packet manifest.
 - Internal API contracts use `/api/v1` and stable errors, but production OpenAPI

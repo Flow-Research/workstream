@@ -7,7 +7,10 @@ name one dependency-ordered path from current `main` through canonical
 ## Allowed files
 
 - `.agent-loop/CURRENT_STATE.md`
-- `docs/{roadmap_status,spec_contribution_compensation,spec_review_lifecycle}.md`
+- current canonical `docs/**` architecture, decision, specification,
+  operations, glossary, diagram, template, roadmap, and product-flow wording
+  required to reconcile the same policy/revision lifecycle; imported
+  `docs/reference_specs/**` remain historical and are not changed
 - WS-ARCH-001 planning, status, risk, decision, chunk and review files
 - directly stale WS-POL-003, WS-ART-001, WS-AUTH-001, WS-CON-001 and WS-REV-001
   planning, status, decision, handoff, conformance, runtime-verification, chunk,
@@ -26,15 +29,22 @@ name one dependency-ordered path from current `main` through canonical
 2. Guide activation binds one validated ContributionPolicyVersion, TASK locks
    it before claimability, TaskAssignment inherits it without claim-time
    selection, and the canonical `allow_review` manifest carries that lineage.
-3. Live ReviewLease claim verifies and inherits that task-locked version
+3. Submission stamps the exact assignment version for its attempt. Live
+   ReviewLease claim verifies and copies that immutable Submission value
    without claim-time selection; every final Review decision requires
    CON ContributionRecord/CompensationAward persistence and its atomic
    participant.
-4. Every future child has one owner, one PR outcome and explicit dependencies;
+4. Human `needs_revision` is the sole controlled rebase boundary: it may
+   atomically update the continuing Task and TaskAssignment to the complete
+   current context for the next submission attempt, while prior Submission,
+   ReviewLease, Review, contribution, and award history stays immutable.
+5. No new Task or replacement TaskAssignment is created merely because the
+   complete context changed during revision.
+6. Every future child has one owner, one PR outcome and explicit dependencies;
    each is marked non-executable until a current-main contract supplies exact,
    non-overlapping file boundaries and runnable commands.
-5. Technical-debt repair remains incremental and mandatory for touched edges.
-6. Current-state and capability-ledger wording match merged 02H behavior.
+7. Technical-debt repair remains incremental and mandatory for touched edges.
+8. Current-state and capability-ledger wording match merged 02H behavior.
 
 ## Verification and reviewers
 

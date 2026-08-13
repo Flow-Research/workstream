@@ -45,11 +45,12 @@ the task's locked context. The contributor does not
 provide those ids, versions, hashes, or internal policy bodies in the
 submission packet.
 
-Compensation is not submission input. The server uses the TaskAssignment
-submitter ContributionPolicyVersion selected for this prepared attempt and the
-ReviewLease reviewer freeze during contribution creation. Only a prior human
-`needs_revision` preparation may have rebased the assignment selector; project
-publication or submission input cannot change it.
+Compensation is not submission input. The server stamps the continuing
+TaskAssignment's ContributionPolicyVersion on this exact Submission attempt;
+ReviewLease later copies that stamped version. Only a prior human
+`needs_revision` preparation may have atomically rebased the continuing Task
+and TaskAssignment for this next attempt; publication or submission input alone
+cannot change it.
 
 Workstream runs the single effective pre-submission plan against the uploaded
 outer ZIP in bounded scratch before creating the submission. Failed preparation

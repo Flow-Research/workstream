@@ -39,7 +39,8 @@ currently active applicable project context:
 - generated pre-submit and approved post-submit checker policies;
 - ReviewPolicy and RevisionPolicy;
 - task-template and task-execution policy context; and
-- the submitter ContributionPolicyVersion selected by CON.
+- the ContributionPolicyVersion in the prior attempt's locked context and the
+  current guide-bound version validated through CON.
 
 For every component:
 
@@ -91,12 +92,12 @@ only in-progress synchronization boundary for the complete next-attempt
 context.
 
 The ReviewLease that produced `needs_revision` and its reviewer
-`completed_review` ContributionRecord remain governed by that lease's
-task-inherited ContributionPolicyVersion. Revision preparation records
-prior/next lineage and, when context changes, creates a newly prepared task
-context from the newly active guide-bound version; it does not rewrite the
-continuing TaskAssignment. The next assignment and ReviewLease inherit the new
-task lock. Prior Submissions, Reviews, ContributionRecords, and
+`completed_review` ContributionRecord remain governed by that lease's frozen
+ContributionPolicyVersion. Revision preparation records prior/next lineage and,
+when the complete current context changes, atomically rebases the continuing
+Task and TaskAssignment for the next submission attempt. The next Submission
+and ReviewLease use the rebased version. Prior Submissions, ReviewLeases,
+Reviews, ContributionRecords, and
 CompensationAwards are never rewritten.
 
 The human `needs_revision` Review, reviewer contribution and applicable award,

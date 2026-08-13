@@ -79,9 +79,10 @@ dependency shape is aligned with CON ownership:
   ContributionPolicyVersion table as a non-null FK target;
 - REV-04B needs CON-02C shared lifecycle-audit participant and then enables
   CON-03C to reference Review/ReviewLease/FinalAcceptance;
-- REV-06A inherits the task-locked policy version carried by canonical
-  admission; the former CON-06 lookup is planned for retirement without transferring lease
-  ownership;
+- REV-06A copies the immutable Submission-attempt policy version carried by
+  canonical admission and checks Task/Assignment only for upstream equality;
+  the former CON-06 lookup is planned for retirement without transferring
+  lease ownership;
 - REV-10 consumes CON-07's flush-only contribution/award participant and owns
   the single commit;
 - REV-12P1 needs the shared dispatcher only much later.

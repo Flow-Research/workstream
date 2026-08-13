@@ -11,7 +11,9 @@ claimable. The later claim command performs no CON lookup: it copies that exact
 locked identifier to
 `TaskAssignment.submitter_contribution_policy_version_id` inside the TASK-owned
 assignment transaction. TASK does not select, evaluate, or own
-ContributionPolicy rules.
+ContributionPolicy rules. `SubmissionCreationCommand` stamps the assignment's
+current attempt version as immutable
+`Submission.contribution_policy_version_id`.
 
 Allowed: `backend/app/modules/tasks/api/**`, the smallest TASKS-owned
 claim/assignment/service extraction, focused TASK tests, composition adapters,
@@ -29,13 +31,16 @@ enumerates exact files, commands, migration head and reviewers.
 
 Acceptance: task readiness fails before claimability when the active guide has
 no same-project published, complete, binding-valid immutable
-ContributionPolicyVersion; a newer publication affects only a later task
-readiness lock and cannot mutate an existing task. Concurrent claims have one
+ContributionPolicyVersion; a newer publication alone cannot mutate an existing
+task or assignment. The later human-revision contract is the only controlled
+same-Task/TaskAssignment rebase boundary. Concurrent claims have one
 winner; inactive/replaced assignment,
 wrong contributor, stale project generation and invalid predecessor deny;
 the assignment version must equal the task lock and any missing, cross-project,
 stale, or changed lineage denies before assignment creation; claim performs no
-policy selection and later publication cannot mutate either freeze;
+policy selection and later publication cannot mutate either current-attempt
+lock; Submission creation stamps the exact attempt version before any later
+human-revision rebase;
 facts contain no ORM/session object; touched debt shrinks. Verify focused unit
 and PostgreSQL race tests, boundary validators, Ruff and hosted coverage.
 Required reviews: architecture, security, product/ops, QA, senior and test

@@ -28,8 +28,9 @@ module and every cross-module call must use a typed public API.
   REV a private-import exception.
 - CON is a mandatory earlier participant: it validates the one
   ContributionPolicyVersion bound at guide activation. TASK locks that version
-  before claimability; assignment and ReviewLease inherit it without
-  claim-time selection. CON later stages ContributionRecord/CompensationAward
+  before claimability; assignment copies it, Submission stamps the attempt
+  value, and ReviewLease copies that immutable stamp without claim-time
+  selection. CON later stages ContributionRecord/CompensationAward
   consequences atomically with every final review decision. Only accept adds
   FinalAcceptance and the submitter record.
 

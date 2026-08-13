@@ -49,7 +49,8 @@ optional/no-op CON participant, ART call, contribution/award/reputation policy
   retains it and carries typed human `RevisionOriginFacts`; reject blocks it and
   rejects task. No moving current assignment is inferred.
 - CON reviewer operation input contains exact future Review, ReviewLease,
-  reviewer, reviewer policy freeze, and stabilized lineage. CON submitter input
+  reviewer, lease-frozen policy version copied from the Submission stamp, and
+  stabilized lineage. CON submitter input
   contains exact future FinalAcceptance, TaskAssignment, submitter, assignment
   policy freeze, and the same lineage. Neither is nullable/omnibus.
 - Pure choreography proves reviewer operation precedes every branch and

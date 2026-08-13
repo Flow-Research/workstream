@@ -19,14 +19,14 @@ PLAN4 is the current-main end-to-end refresh after merged AUTH 02D.
 | `WS-REV-001-04B` | FinalAcceptance and shared audit/outbox linkage persistence | 04A + CON-02A outbox persistence + CON-02C audit participant | Skeleton; enables CON-03C schema work |
 | `WS-REV-001-05A` | Atomic final `allow_review` admission | 04B + canonical WS-ARCH-001-04E admission-backed manifest carrying exact TASK/CHECKER/ART/AUTH facts and frozen submitter ContributionPolicyVersion lineage | Skeleton |
 | `WS-REV-001-05B` | Concealed active-lease/one-offer/none query | 05A | Skeleton |
-| `WS-REV-001-06A` | Atomic claim and REV-owned lease/packet freezes, including exact inherited `ReviewLease.reviewer_contribution_policy_version_id` | 05B + 03B + task-locked policy lineage in canonical admission + exact ART packet proof | Skeleton; claim performs no current-policy lookup |
+| `WS-REV-001-06A` | Atomic claim and REV-owned lease/packet freezes, including exact inherited `ReviewLease.reviewer_contribution_policy_version_id` | 05B + 03B + Submission-stamped attempt policy lineage in canonical admission + exact ART packet proof | Skeleton; claim performs no current-policy lookup |
 | `WS-REV-001-06B` | Owned release and preferred decline | 06A | Skeleton |
 | `WS-REV-001-06C` | Preference/lease expiry and lazy recovery | 06B + fixed service admission | Skeleton |
 | `WS-REV-001-07A` | Lease-bounded packet/context/chain reads | 06C + ART 07A | Skeleton |
 | `WS-REV-001-07B` | Immutable reviewer notes/findings | 07A | Skeleton; no evidence upload |
 | `WS-REV-001-08` | Pure decision validator/effect plan | 07B | Skeleton; no canonical write |
 | `WS-REV-001-09A1` | Review-rooted revision episode/preparation persistence | 08 + human round/deadline decision | Skeleton |
-| `WS-REV-001-09A2` | TASK complete-context revision participant and resolver | 09A1 + CON current-version selection contract | Skeleton |
+| `WS-REV-001-09A2` | TASK complete-context revision participant and resolver | 09A1 + TASK-owned locked/prepared-context contract; TASK internally validates policy through the CON-05A port | Skeleton; REV has no direct CON selection dependency |
 | `WS-REV-001-09A3` | Contributor finding-response records | 09A2 | Skeleton; no evidence upload |
 | `WS-REV-001-09A4` | Human prepared N+1 and checker-source XOR | 09A3 + TASK/ART submission cutover | Skeleton |
 | `WS-REV-001-09A5` | Replacement-assignment preparation successor | 09A4 + AUTH replacement contract | Skeleton |
@@ -55,7 +55,7 @@ CON-03B publishes FK target + REV-03A1 -> REV-03A2 owns lease persistence
 ART contract-only membership port + 03A2 -> 03B -> 04A
 CON-02A + CON-02C + 04A -> 04B -> CON-03C
 TASK/CHECKER/ART admission manifest carrying frozen submitter policy version -> 05A -> 05B
-task-locked policy lineage + ART packet proof -> 06A -> 06B -> 06C
+Submission-stamped attempt policy lineage + ART packet proof -> 06A -> 06B -> 06C
 REV lease/manifest -> ART-07A -> REV-07A -> 07B -> 08
 human decision -> 09A1 -> 09A2 -> 09A3 -> 09A4 -> 09A5 -> 09B
 REV Review/ReviewLease/FinalAcceptance schema -> CON-03C -> CON-07 decision participant -> 10

@@ -175,8 +175,8 @@ changes no actor grant or unrelated task and creates no FinalAcceptance or
 submitter contribution. `closed/review_rejected` is not a canonical state.
 
 Every valid recorded `needs_revision` or `reject` decision still creates the
-reviewer's `completed_review` contribution and evaluates the ReviewLease-frozen
-reviewer contribution policy. Neither decision creates a submitter contribution
+reviewer's `completed_review` contribution and evaluates that rule from the
+ReviewLease-frozen ContributionPolicyVersion. Neither decision creates a submitter contribution
 or submitter award.
 
 ## Offline Reviewer Quality

@@ -115,9 +115,10 @@ retired_by
 retired_at
 ```
 
-At most one policy may be active for new work in a project. An active policy
-MUST point to one published version. Missing policy configuration MUST fail
-assignment or lease creation; it MUST NOT be interpreted as unpaid work.
+At most one policy may be active for guide activation in a project. An active
+policy MUST point to one published version. Missing or invalid policy
+configuration MUST block guide activation and task readiness; it MUST NOT be
+interpreted as unpaid work or deferred until assignment/review claim.
 
 ### ContributionPolicyVersion
 
@@ -138,8 +139,12 @@ retired_at
 ```
 
 Draft content may be edited through the authorized policy service. Published
-and retired content is immutable. Publishing a later version affects only new
-TaskAssignments and ReviewLeases.
+and retired content is immutable. Publishing a later version affects a work
+attempt only when a future guide activation or human `needs_revision`
+preparation deliberately adopts the complete changed context. Existing
+Submissions, admissions, ReviewLeases, Reviews, ContributionRecords, and awards
+never change; only the continuing Task and TaskAssignment may rebase at that
+controlled boundary for the next attempt.
 
 ### ContributionRule
 
@@ -460,21 +465,29 @@ Task claim performs no policy lookup and copies the task lock to:
 TaskAssignment.submitter_contribution_policy_version_id
 ```
 
+Submission creation copies that exact attempt value to:
+
+```text
+Submission.contribution_policy_version_id
+```
+
 The CON participant flushes only and never commits. PROJECTS owns activation;
 TASK owns readiness, claim composition, and status effects.
 
 After a human `needs_revision`, task-owned preparation locks the complete
-current next-attempt context. If policy changed, only a newly activated guide
-and newly prepared task may lock the new version; no existing TaskAssignment is
-rewritten. Missing, incomplete, crossed-project, ambiguous, or
-binding-ineligible lineage blocks the whole preparation. Publication alone
-never performs an update.
+current next-attempt context. If policy changed, it validates the newly active
+guide-bound version through CON and atomically rebases the continuing Task and
+TaskAssignment for the next submission attempt, recording exact prior/next
+lineage. Missing, incomplete, crossed-project, ambiguous, or binding-ineligible
+context blocks the whole preparation. Publication alone never performs an
+update.
 
 ### Reviewer inheritance
 
 During authorized review claim, REV locks its queue, canonical admission,
-Task, TaskAssignment, and ReviewLease facts. It verifies the admitted task lock
-and copies that exact identifier to:
+Task, TaskAssignment, Submission, and ReviewLease facts. It verifies the
+Submission's immutable attempt lineage and copies
+`Submission.contribution_policy_version_id` to:
 
 ```text
 ReviewLease.reviewer_contribution_policy_version_id
@@ -483,7 +496,8 @@ ReviewLease.reviewer_contribution_policy_version_id
 Review claim performs no CON lookup or current-policy selection.
 
 REV owns ReviewLease schema, claim composition, and status effects. CON owns
-only the freeze capability.
+policy validation at guide activation and the controlled human-revision rebase,
+not ordinary review-claim selection.
 
 ### Freeze invariants
 
@@ -491,12 +505,13 @@ only the freeze capability.
 - Later publication MUST NOT alter an existing assignment, lease,
   ContributionRecord, or CompensationAward.
 - Suspension races MUST be resolved with explicit locks and both-order tests.
-- Missing, draft, ambiguous, crossed-project, or incomplete policy state fails
-  before the assignment or lease commits.
-- Human revision preparation MUST rebase changed award eligibility only through
-  a newly prepared task context bound to a newly active guide generation. The
-  completed Review and reviewer contribution keep the prior ReviewLease freeze;
-  each new assignment and ReviewLease inherit the new task lock.
+- Missing, draft, ambiguous, crossed-project, or incomplete policy state blocks
+  guide activation/task readiness or the controlled human-revision rebase.
+- Human revision preparation MUST rebase changed award eligibility with every
+  changed applicable context component on the continuing Task/TaskAssignment
+  for the next attempt. The completed Review and reviewer contribution keep the
+  prior ReviewLease version; the next Submission and ReviewLease use the
+  rebased version.
 - Accept and reject never rebase. They evaluate the exact assignment and lease
   versions frozen for the current attempt.
 
@@ -568,10 +583,10 @@ task-owned complete-context preparation keeps/rebases/blocks the next attempt
 
 The Review, reviewer contribution/award, task and assignment effects, initial
 preparation or blocked outcome, audit/outbox rows, and contributor-visible state
-commit once or roll back together. The preparation may create a newly prepared
-task context and successor assignment for future work; it never updates the
-prior TaskAssignment or changes the completed Review, its lease-inherited
-policy, any prior Submission, ContributionRecord, or CompensationAward.
+commit once or roll back together. The preparation may update the continuing
+Task and TaskAssignment only for the next submission attempt; it never changes
+the completed Review, its lease-frozen policy, any prior Submission,
+ReviewLease, ContributionRecord, or CompensationAward.
 
 Reject:
 
