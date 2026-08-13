@@ -1,8 +1,10 @@
 # Chunk Contract: WS-ARCH-001-04A CHECKER Post-Submit API
 
 Status: non-executable planning skeleton after POL-07 and 03C. Risk: L1.
-Outcome: CHECKERS publishes
-immutable post-submit plan, run, final-result, currentness and routing facts.
+Outcome: CHECKERS owns the single post-submit API and phase-command contract
+for consuming and publishing immutable execution facts. Chunk 04C owns durable
+final-result/currentness persistence; 04E owns the durable `allow_review`
+routing manifest.
 
 Allowed: `backend/app/modules/checkers/api/**`, focused CHECKER-owned
 implementation/tests, boundary ledgers and initiative evidence/status. Not

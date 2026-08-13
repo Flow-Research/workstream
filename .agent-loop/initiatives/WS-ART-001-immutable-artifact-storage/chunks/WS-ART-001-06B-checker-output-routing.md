@@ -85,7 +85,11 @@ lease, assignment, or decision.
 - the stale-contract phase advances to `checker_cutover` only after both checker
   paths consume bindings and the phase scan passes.
 
-## Exact CI Coverage Gates
+## Superseded historical verification evidence
+
+The commands below describe the retired proposal and are not active gates.
+Current coverage authority remains the repository-wide 78 percent floor plus
+the applicable protected-subsystem gates defined by current CI.
 
 ```bash
 coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90

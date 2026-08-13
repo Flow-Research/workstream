@@ -1,7 +1,11 @@
 # WS-ARCH-001 PLAN2 External Review Response
 
-Comments addressed: no actionable CodeRabbit comments were present at the
-first review read; review was still processing.
+Comments addressed: all eight actionable CodeRabbit findings were validated
+and corrected: CHECKER ownership separation, ART terminology, denial-audit
+facts, reviewer-session evidence, planning/implementation ownership wording,
+retired coverage commands, the sole post-submit sequence, and roadmap
+checker/REV milestone separation. The additional route-removal wording finding
+was also corrected.
 
 Comments deferred: none.
 

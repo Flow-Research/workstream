@@ -180,5 +180,6 @@ complete unified guide compilation and approval
 -> later review/revision and public 02I clean cut
 ```
 
-No open pull request currently owns this sequence. Existing owner skeletons
+PR #329 is the open planning reconciliation for this boundary. No open
+implementation pull request owns the executable sequence; the owner skeletons
 remain non-executable until refreshed against current `main`.

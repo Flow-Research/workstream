@@ -37,9 +37,10 @@ aliases.
 - Three retired runtime methods/prompts and the second post-submit model call
   are deleted; the canonical ART-04B1 pre-submit catalogue, canonical
   CHECKER/POL post-submit catalogue, and one checker service port remain.
-- OpenAPI/import/reachability tests prove the later WS-ARCH-001 public cutover has removed the standalone
-  `/submission-precheck` route and remove the ordinary
-  caller-triggered `POST /submissions/{id}/checker-runs` execution path. A
+- The later WS-ARCH-001 public cutover removes the standalone
+  `/submission-precheck` route and the ordinary caller-triggered
+  `POST /submissions/{id}/checker-runs` execution path. OpenAPI, import, and
+  reachability tests prove that both paths are absent. A
   bounded repair command may remain only by Submission/run identity and must
   use the same deterministic attempt contract.
 - Static/import tests find no per-checker product entry, caller-selected

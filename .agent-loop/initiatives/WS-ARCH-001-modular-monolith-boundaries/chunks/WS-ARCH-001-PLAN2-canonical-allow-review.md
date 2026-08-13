@@ -33,7 +33,10 @@ name one dependency-ordered path from current `main` through canonical
 Run Markdown-link and stale-wording checks plus `git diff --check`. Required
 reviews: architecture, security, product/operations, senior engineering, docs
 and reuse. Human focus: dependency truth and whether canonical `allow_review`
-is the correct pre-REV milestone.
+is the correct pre-REV milestone. Before readiness is reported, inspect the
+collaboration session registry and record in the internal-review evidence that
+all required reviewer sessions have returned final results and none remain
+open.
 
 ## Merge state
 

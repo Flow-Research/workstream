@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ARCH-001-04B ART Post-Submit Materialization
 
 Status: non-executable planning skeleton after 04A and merged 02H. Risk: L1.
-Outcome: ART can hiddenly
+Outcome: ART can internally
 materialize the exact verified bytes bound to one immutable Submission for the
 fixed post-submit checker service.
 

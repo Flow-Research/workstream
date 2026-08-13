@@ -129,11 +129,12 @@ review. Their presence does not change the implemented-on-`main` list above.
 ## Remaining v0.1 Capability Milestones
 
 1. Complete the remaining artifact custody chain: contributor intake cleanup,
-   archive safety, semantic change gating, post-submit checker/review
-   materialization, recovery, provider proof, and the later public cutover.
+   archive safety, semantic change gating, post-submit checker materialization,
+   recovery, provider proof, and the later public cutover.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
-2. Complete review and revision persistence, queueing, access, decisions,
+2. After canonical `allow_review`, complete review admission and the review and
+   revision persistence, queueing, access, decisions,
    findings, replay, and operational recovery.
 3. Create immutable contributor and reviewer contribution records from the
    accepted review lifecycle.

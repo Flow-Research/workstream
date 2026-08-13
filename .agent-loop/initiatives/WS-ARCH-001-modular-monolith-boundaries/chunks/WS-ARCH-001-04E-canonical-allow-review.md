@@ -26,8 +26,11 @@ Replay, revocation, stale guide/policy generation, stale assignment, replaced
 binding, non-current run, cross-project/resource, wrong service, wrong session,
 wrong transaction, and concurrent duplicate execution all deny. Every denial
 proves zero provider reads, checker mutations, TASK routing transitions, REV
-admissions, allowed audit facts, and duplicate Submission, binding, dispatch,
-run, or routing rows. No REV admission occurs in this chunk. Verify real
+admissions, and duplicate Submission, binding, dispatch, run, or routing rows.
+The only permitted denial evidence contains the canonical denial reason plus
+request and correlation identifiers; it commits atomically with its denial
+outbox operation and contains no product mutation or allowed-decision fact. No
+REV admission occurs in this chunk. Verify real
 API/database/Celery/MinIO integration, recovery
 and concurrency tests, all boundary validators, Ruff and hosted coverage.
 Required reviews: architecture, authorization security, product/ops, QA,
