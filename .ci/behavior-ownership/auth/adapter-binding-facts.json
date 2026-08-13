@@ -1,0 +1,28 @@
+{
+  "behavior_id": "auth.adapter_binding.facts",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.adapter_bindings.AdapterBindingCreateFacts.__post_init__",
+    "app.modules.authorization.api.adapter_bindings.AdapterBindingReadFacts.__post_init__",
+    "app.modules.authorization.api.adapter_bindings.AdapterBindingResumeFacts.__post_init__",
+    "app.modules.authorization.api.adapter_bindings.AdapterBindingSuspendFacts.__post_init__",
+    "app.modules.authorization.api.adapter_bindings._require_token",
+    "app.modules.authorization.api.adapter_bindings._require_uuid",
+    "app.modules.authorization.api.adapter_bindings.adapter_binding_resource_digest"
+  ],
+  "group": "auth",
+  "outcomes": [
+    "return",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "WS-ARCH-001-CP01A required reviewers"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/adapter_bindings.py",
+  "tests": [
+    "backend/tests/authorization/test_adapter_binding_registration.py::test_cp01a_public_facts_are_immutable_and_validate_lifecycle_state",
+    "backend/tests/authorization/test_adapter_binding_registration.py::test_cp01a_digest_is_deterministic_and_action_domain_separated"
+  ]
+}
