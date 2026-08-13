@@ -5,6 +5,10 @@ ContributionPolicy behavior, CP06 validation, and CP07 ProjectGuide binding;
 inactive. Risk: L1. CP08, WS-ARCH-001-03A/03B/03C, and CP09 are downstream and
 are not prerequisites.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 ## Goal
 
 Activate only `project.guide.activate` over one complete approved

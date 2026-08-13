@@ -87,6 +87,8 @@ inherits that immutable Submission version without a CON lookup.
 CP09 is the proposed clean legacy economic-path removal after WS-ARCH-001-03C activates
 the CP08/ARCH-03B replacement behavior.
 WS-REV-001-10 is planned after its named REV and CON prerequisites.
+WS-AUTH-001-12H is planned after POL-07, corrected AUTH-12B2, CP05, CP06, and
+CP07; CP08, WS-ARCH-001-03A/03B/03C, and CP09 remain downstream.
 Merged WS-CON-001-PLAN5 remains historical evidence for same-TaskAssignment
 human revision rebase; current PLAN2 supersedes its independent reviewer-policy
 selection wording.
