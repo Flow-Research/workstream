@@ -338,6 +338,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/adapter_bindings.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/api/decisions.py"
     },
     {
@@ -845,7 +849,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "8ee0aa0c7ab30e28e3f7a665b66bcfd981d220197f783e5fb72a000bd2948cb4",
+  "authority_digest": "2bee80de4e315abab9e5821d572e37e22e986cb26ee33e78644ea5b97dad04fe",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
