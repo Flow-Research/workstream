@@ -9730,7 +9730,6 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
     monkeypatch.setattr(ActorService, "find_actor_for_authorization", forbidden_human_lookup)
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
     result = SimpleNamespace(token=token)
-
     resolved = await get_authorization_actor(
         request,
         result,  # type: ignore[arg-type]
@@ -9837,7 +9836,6 @@ async def test_service_denial_rolls_back_observations_before_clean_restage(
     assert session.rollback_count == 1
     assert session.commit_count == 1
 
-
 async def test_service_dependency_cancellation_rolls_back_staged_observation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -9879,8 +9877,10 @@ async def test_service_dependency_cancellation_rolls_back_staged_observation(
     assert observations == ["staged"]
     assert session.rollback_count == 1
 
+@pytest.mark.parametrize("failure_type", [AuthorizationEvidenceUnavailable, SQLAlchemyError])
 async def test_service_observation_persistence_failure_is_retryable_and_private(
     monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[Exception],
 ) -> None:
     private_subject = "private-service-subject"
 
@@ -9902,7 +9902,7 @@ async def test_service_observation_persistence_failure_is_retryable_and_private(
     )
 
     async def fail_observation(_self, _resolved):
-        raise AuthorizationEvidenceUnavailable(private_subject)
+        raise failure_type(private_subject)
 
     monkeypatch.setattr(ActorService, "touch_after_authorization", fail_observation)
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
@@ -9915,7 +9915,6 @@ async def test_service_observation_persistence_failure_is_retryable_and_private(
     assert exc_info.value.error_code == "service_unavailable"
     assert private_subject not in str(exc_info.value)
     assert session.rollback_count == 1
-
 
 def test_authorization_runtime_contracts_are_strict_and_two_argument() -> None:
     context = _runtime_context()
