@@ -9717,12 +9717,9 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     token = SimpleNamespace(subject_kind="service")
-    admitted = SimpleNamespace(
-        profile=SimpleNamespace(
-            id=str(uuid4()), actor_kind="service",
-            service_identity="workstream.artifact.binding",
-        ), identity_link=SimpleNamespace(id=str(uuid4())),
-    )
+    admitted = SimpleNamespace(profile=SimpleNamespace(
+        id=str(uuid4()), actor_kind="service", service_identity="workstream.artifact.binding",
+    ), identity_link=SimpleNamespace(id=str(uuid4())))
     calls: list[object] = []
     async def resolve_service(_self, current):
         calls.append(current)
@@ -9743,6 +9740,8 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
 
     identity = await get_authorization_actor_identity(resolved)
     assert identity.service_identity == "workstream.artifact.binding"
+    human = SimpleNamespace(profile=SimpleNamespace(id=str(uuid4()), actor_kind="human", service_identity=None), identity_link=SimpleNamespace(id=str(uuid4())))
+    assert (await get_authorization_actor_identity(human)).actor_kind.value == "human"
     assert calls == [token]
 
 
