@@ -63,9 +63,11 @@ backend/tests/test_submission_composition.py
 backend/tests/test_submission_preparation_authorization.py
 backend/tests/test_artifact_bindings.py
 backend/tests/test_artifact_bindings_db.py
+backend/tests/test_audit.py
 backend/tests/authorization/test_fixed_service_action_context.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/scripts/behavior_ownership.py
+backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/partition.v1.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 .agent-loop/CURRENT_STATE.md
