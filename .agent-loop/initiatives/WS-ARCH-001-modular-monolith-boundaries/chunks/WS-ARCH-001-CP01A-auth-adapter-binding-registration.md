@@ -90,7 +90,6 @@ python3 scripts/workstream_agent_gate.py --help
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_markdown_links.py
-python3 scripts/check_stale_authorization_docs.py
 git diff --check
 ```
 
