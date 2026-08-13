@@ -109,3 +109,7 @@ non-executable until PLAN3 merges and its current-main contract is expanded.
 - WS-ARCH-001-CP07 is proposed and non-executable.
 - WS-ARCH-001-CP08 is proposed and non-executable.
 - WS-ARCH-001-CP09 is proposed and non-executable after WS-ARCH-001-03C.
+
+Retained WS-CON-001-06 and WS-CON-001-08A chunk files are historical,
+non-executable evidence. CP06/CP07/CP08 replace CON-06's old dependency; future
+delivery needs a fresh contract against CP02/CP04 rather than old CON-04A/04B.

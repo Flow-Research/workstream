@@ -32,12 +32,12 @@ signed-loop records do not make behavior live.
 | `04B` | Historical hidden contribution-policy contract | 03B + binding activation + exact AUTH registration/PREP contract | Superseded by ARCH CP04-CP05 |
 | `WS-CON-001-05A` | Historical broad semantic cutover/validation/schema contract | unavailable behavior and cross-owner schema assumptions | Superseded by CP06 validation, CP07 PROJECT binding, CP08 TASK lineage, and CP09 removal |
 | `WS-CON-001-05B` | Historical legacy economic schema removal | former 05A | Superseded by clean v0.1 CP09 without compatibility/backfill |
-| `WS-CON-001-06` | Retire former reviewer claim-time policy lookup | Replaced by guide -> task -> assignment -> Submission -> ReviewLease inheritance | Planned retirement; no implementation |
+| `WS-CON-001-06` | Historical retirement contract for former reviewer claim-time policy lookup | Replaced by CP06 validation + CP07/CP08 persistence -> Submission -> ReviewLease inheritance | Superseded/non-executable retained evidence; do not follow its old 05A reference |
 | `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B and mandatory before live REV decisions |
 | `03D` | Delivery/receipt/status persistence | 03C | Proposed |
 | `07` | Atomic flush-only review contribution/award participant | 03C/03D + CP06/CP08 + stable REV revision lineage | Proposed; mandatory before REV-10/first Review commit |
 | `02B` | Generic outbox dispatcher/recovery | AUTH dispatcher identity/action/matrix/context/PREP registration | Blocked on AUTH; required later, not before 03A/03B |
-| `08A` | Outbound compensation delivery | 03D + 07 + 02B + CP02/CP04 + independent delivery authority | Proposed |
+| `08A` | Historical outbound compensation delivery contract | old CON-04A/04B prerequisites are superseded | Non-executable retained evidence; requires a fresh current-main replacement after 03D + 07 + 02B + CP02/CP04 + independent delivery authority |
 | `08R` | Bound callback rate control | 08A | Proposed |
 | `08B` | Inbound fulfillment callback | 08R + independent callback authority/fence | Proposed |
 | `10A` | Contribution/award product reads | 08B + exact AUTH read contracts | Proposed |

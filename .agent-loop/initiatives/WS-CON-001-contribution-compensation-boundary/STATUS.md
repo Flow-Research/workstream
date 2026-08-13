@@ -84,6 +84,11 @@ historical-row backfill or compatibility behavior.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required
   unless current-main discovery proves real deployed data exists.
+- The retained CON-06 contract is superseded/non-executable historical evidence;
+  CP06/CP07/CP08 are its only current replacement path.
+- The retained CON-08A contract is non-executable because it names superseded
+  CON-04A/04B prerequisites. Delivery requires a fresh current-main contract
+  against CP02/CP04 and its other exact gates.
 - CON-03C: REV Review and FinalAcceptance tables are not implemented.
 - CON-07: the corresponding REV decision caller contract is future. CON-06 is
   a planned retirement with no runtime dependency.
