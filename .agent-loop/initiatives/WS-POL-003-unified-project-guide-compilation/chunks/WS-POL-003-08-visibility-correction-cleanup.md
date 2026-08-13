@@ -1,6 +1,8 @@
 # Chunk Contract: WS-POL-003-08 - Visibility, Correction, and Cleanup
 
-Status: Proposed after 07, AUTH-12H, and ART-05B. Risk: L1.
+Status: Non-executable planning skeleton after 07, AUTH-12H, and the canonical
+WS-ARCH-001-04E manifest. Risk: L1. This cleanup is not a prerequisite for
+WS-ARCH-001-03A.
 
 ## Goal
 
@@ -31,7 +33,7 @@ aliases.
 - Three retired runtime methods/prompts and the second post-submit model call
   are deleted; the canonical ART-04B1 pre-submit catalogue, canonical
   CHECKER/POL post-submit catalogue, and one checker service port remain.
-- OpenAPI/import/reachability tests prove ART-05B has removed the standalone
+- OpenAPI/import/reachability tests prove the later WS-ARCH-001 public cutover has removed the standalone
   `/submission-precheck` route and remove the ordinary
   caller-triggered `POST /submissions/{id}/checker-runs` execution path. A
   bounded repair command may remain only by Submission/run identity and must

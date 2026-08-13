@@ -117,14 +117,22 @@ but are not all complete as one production path:
   replay on the canonical authorization boundary;
 - atomic review-to-contribution and conditional compensation integration.
 
+The immediate upstream integration milestone is narrower and precedes live REV
+work: one admission-backed immutable Submission must produce one durable final
+current post-submit checker result with `routing_recommendation = allow_review`
+through PROJECTS, TASKS, ART, CHECKERS, and AUTH public APIs. The existing
+legacy pre-review result does not satisfy that milestone.
+
 Open pull requests are the authoritative view of the exact code currently under
 review. Their presence does not change the implemented-on-`main` list above.
 
 ## Remaining v0.1 Capability Milestones
 
 1. Complete the remaining artifact custody chain: contributor intake cleanup,
-   archive safety, semantic change gating, durable admission, submission
-   binding, checker/review materialization, recovery, and provider proof.
+   archive safety, semantic change gating, post-submit checker/review
+   materialization, recovery, provider proof, and the later public cutover.
+   Hidden durable admission, Submission creation, and final binding are already
+   merged through WS-ARCH-001-02H.
 2. Complete review and revision persistence, queueing, access, decisions,
    findings, replay, and operational recovery.
 3. Create immutable contributor and reviewer contribution records from the

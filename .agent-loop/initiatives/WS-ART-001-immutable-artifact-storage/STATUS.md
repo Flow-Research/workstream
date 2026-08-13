@@ -136,11 +136,11 @@ activated only the mandatory fixed pre-submit materializer. ART-04C1 merged
 through PR #296 as `6e1d5c9f` and installed the evidence-bound durable put
 intent. ART-04C2 merged through PR #300 as `b2e2c615` and added verified
 ready-admission publication plus the still-hidden, fail-closed continuous
-preparation composition. Contributor AUTH action activation, admission
-consumption, TASK-owned Submission creation, and final binding remain
-unavailable. The old 05-wave XINT-05A-05D and ART-05A/05B contracts are
-non-executable; initial preparation/consumption foundations are replaced by
-WS-ARCH-001-02A-02H. Final 02I cutover is deferred until the later
+preparation composition. Replacement WS-ARCH-001-02A-02H subsequently merged
+the public owner contracts, contributor AUTH activation, admission
+consumption, TASK-owned Submission creation, and final binding while keeping
+the public route unchanged. The old 05-wave XINT-05A-05D and ART-05A/05B
+contracts are non-executable. Final 02I cutover is deferred until the later
 remediation/review-revision, checker-output, and REV-admission replacement
 contracts merge.
 

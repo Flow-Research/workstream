@@ -83,3 +83,21 @@ admission-backed contract and post-submit checker/REV handoffs are live. 02I is
 therefore deferred across the required WS-ARCH-001-03/04/05 splits; it cannot
 strand `needs_revision` contributors or create Submissions that cannot reach
 visible checker and reviewer admission facts.
+
+## D12: Canonical allow-review is the upstream completion milestone
+
+The next cross-module milestone is not REV lifecycle implementation and is not
+the public 02I cutover. It is one hidden but production-authorized,
+admission-backed Submission reaching a durable current post-submit checker
+result of `allow_review` through owner public APIs. Existing legacy pre-review
+behavior is regression evidence only and cannot satisfy this milestone.
+
+## D13: Separate readiness, review admission, and public release
+
+PROJECT/POL readiness and TASK assignment authority complete first. ART and
+CHECKERS then materialize, execute, persist, and expose the exact current
+post-submit result. Only after that merged manifest may REV atomically admit
+the Submission. Full reviewer packet, decision, revision, and CON work remain
+owner initiatives downstream. The admission-only public API clean cut remains
+later still, after initial, checker-remediation, and reviewer-requested
+revision contexts all use the same path.

@@ -35,6 +35,11 @@
 - Complete on merge: WS-ARCH-001-02H activates exact human Submission
   consumption and fixed ART binding authority against the hidden atomic
   transaction. The public route remains unchanged.
+- PLAN2 is complete on merge as the current-main planning reconciliation. The next product
+  milestone is one admission-backed immutable Submission reaching a durable
+  current `allow_review` result through PROJECTS/TASKS/ART/CHECKERS/AUTH public
+  APIs. REV admission follows that manifest; the public 02I cutover remains
+  later.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the

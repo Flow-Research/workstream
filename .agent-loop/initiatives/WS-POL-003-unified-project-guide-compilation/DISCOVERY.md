@@ -35,9 +35,10 @@ on 2026-08-08.
   current non-default project-selectable post-submit checker.
 - The obsolete `POST /tasks/{task_id}/submission-precheck` route and direct
   `POST /submissions/{submission_id}/checker-runs` trigger remain reachable.
-  ART PLAN5 superseded 04A4 and moved the standalone precheck clean cut to
-  ART-05B. Later AUTH-14/cleanup must constrain ordinary post execution to the
-  single typed command and preserve only bounded same-attempt repair.
+  Historical ART PLAN5/ART-05B text is non-executable. The later
+  WS-ARCH-001 public cutover must remove the standalone precheck route,
+  constrain ordinary post execution to the single typed command, and preserve
+  only bounded same-attempt repair.
 - `backend/app/modules/projects/service.py` deliberately prevents mutation of
   agent-derived policy bodies; that immutability must be preserved.
 

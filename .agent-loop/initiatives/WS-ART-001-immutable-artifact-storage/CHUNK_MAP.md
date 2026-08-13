@@ -37,9 +37,9 @@ they cross multiple L1 boundaries.
 | `WS-ART-001-04C2` | Reuse verification/recovery to publish one capacity-charged ready admission and compose the hidden continuous endpoint. | L1 | Merged PR #300 as `b2e2c615` |
 | `WS-ART-001-05A` | Historical ART admission/binding plus Submission coordination proposal. | L1 | Superseded/non-executable; replaced by WS-ARCH-001-02E/02F |
 | `WS-ART-001-05B` | Historical live Submission API/dispatch cutover proposal. | L1 | Superseded/non-executable; replaced by WS-ARCH-001-02I after 02A-02H |
-| `WS-ART-001-06A` | Persist post-submit checker input snapshot and materialization bound to the unified compilation and compiled checker plan. | L1 | Proposed after WS-ARCH-001-02H and POL-06B/07; required before deferred 02I |
-| `WS-ART-001-06B` | Store/bind checker outputs and preserve POL-owned single-port routing. | L1 | Proposed after 06A |
-| `WS-ART-001-07A` | Add lease-scoped exact-binding reviewer packet materialization without review lifecycle ownership. | L1 | Proposed after 06B plus hidden REV manifest |
+| `WS-ART-001-06A` | Historical post-submit checker input/materialization proposal. | L1 | Superseded/non-executable; WS-ARCH-001-04A-04D owns the split replacement |
+| `WS-ART-001-06B` | Historical checker-output binding/routing proposal. | L1 | Superseded/non-executable; WS-ARCH-001-04C-04E owns the split replacement |
+| `WS-ART-001-07A` | Add lease-scoped exact-binding reviewer packet materialization without review lifecycle ownership. | L1 | Proposed after canonical WS-ARCH-001-04E plus an exact hidden REV manifest |
 | `WS-ART-001-07B` | Bind accepted Submission/ART identity into the CON handoff without provider I/O. | L1 | Proposed after REV acceptance and CON hidden contract |
 | `WS-ART-001-08A` | Prove Local/MinIO product lifecycle through real APIs and durable background services. | L1 | Proposed after 07B |
 | `WS-ART-001-08B` | Prove AWS production readiness and bounded activation independently of product behavior. | L1 | Proposed after 08A or concurrently once product contracts are stable |
@@ -56,9 +56,10 @@ AUTH-04B implementation [merged PR #245]
 -> WS-ARCH-001-01 boundary foundation
 -> WS-ARCH-001-02A-02F hidden public-capability/transaction foundations
 -> WS-ARCH-001-02G/02H exact AUTH activation
--> POL-06B -> POL-07 -> ART-06A -> ART-06B
--> XINT-06B post-submit/output activation
--> WS-ARCH-001-03/04/05 split remediation, review-revision, checker, and REV-admission prerequisites
+-> POL-06B -> POL-07
+-> WS-ARCH-001-03/04 current task/readiness and canonical post-submit
+   materialization/checker/output activation
+-> WS-ARCH-001-05 REV-admission prerequisites
 -> WS-ARCH-001-02I live admission-only clean cut
 -> ART/REV-07A hidden packet contract
 -> XINT-07A packet activation only
@@ -66,6 +67,9 @@ AUTH-04B implementation [merged PR #245]
 -> ART-08A + ART-08B
 -> XINT-08 + ART-08C
 ```
+
+The former ART-06A/06B -> XINT-06B row is historical and non-executable.
+WS-ARCH-001 PLAN2 is the only current owner of that split capability path.
 
 XINT-05C checker remediation and XINT-05D human-review revision reuse the same
 one-ZIP preparation/Submission primitives only after their CHECKER/REV-owned

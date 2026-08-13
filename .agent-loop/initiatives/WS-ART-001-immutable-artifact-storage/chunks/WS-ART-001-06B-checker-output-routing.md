@@ -1,6 +1,9 @@
 # Chunk Contract: WS-ART-001-06B Checker Output And Post-Submit Routing
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06A and POL-07
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable
+
+WS-ARCH-001-04C-04E owns the current split replacement. This file is design
+evidence only.
 
 Artifact contract phase: `checker_cutover`
 

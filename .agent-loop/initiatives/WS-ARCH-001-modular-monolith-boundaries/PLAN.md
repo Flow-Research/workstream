@@ -114,6 +114,77 @@ initial submission, checker remediation, and reviewer-requested revision. A
 review note remains REV-owned and relates to the exact predecessor Submission;
 the contributor response is a new complete ZIP and immutable Submission.
 
+## PLAN2: canonical Submission-to-allow-review sequence
+
+PLAN2 corrects the post-02H delivery path around one measurable product
+milestone. It does not start REV or CON implementation and does not release a
+public route.
+
+### Gate 0: complete Project Guide readiness in the owner initiative
+
+The existing WS-POL-003 order remains authoritative:
+
+```text
+POL-03B
+-> POL-04A -> AUTH-12B2 -> POL-04B
+-> POL-05A -> AUTH-12F4 -> POL-05B
+-> POL-06A -> AUTH-12G -> POL-06B
+-> POL-07 -> AUTH-12H
+```
+
+Each POL/AUTH chunk repairs only the public boundary and structural debt it
+touches. Completion means one current approved unified generation supplies the
+exact active guide plus complete pre-submit and post-submit policy identities
+and hashes. POL-08 physical cleanup follows the canonical `allow_review`
+milestone so it does not create a circular dependency on the Submission path;
+no live call may use the transitional inference paths in the interim.
+
+### Gate 1: current task and assignment authority
+
+Parent 03 is split into 03A-03C. PROJECTS exposes current approved compilation
+facts; TASKS exposes claim/assignment and immutable locked-context facts; AUTH
+activates only the exact task/assignment actions after both hidden owner paths
+exist. A task cannot enter preparation with a stale guide, policy generation,
+assignment, contributor, or predecessor.
+
+### Gate 2: canonical post-submit checker completion
+
+Parent 04 is split into 04A-04E. CHECKERS first publishes immutable
+post-submit plan/run/result contracts. ART materializes the exact verified
+Submission binding. CHECKERS installs hidden owner-local persistence while its
+production authority remains fail-closed. AUTH then activates only those exact
+fixed-service boundaries. TASKS finally dispatches the now-authorized
+execution and projects the current routing fact without owning checker logic.
+
+The acceptance manifest must bind:
+
+- project, task, assignment, contributor and predecessor;
+- approved unified guide/setup generation and complete policy hashes;
+- Submission id/version and admission id;
+- ART binding, content, replica, digest and byte count;
+- checker plan, run, result and supersession/currentness identities;
+- `routing_recommendation = allow_review`.
+
+Replay, revocation, stale generation, stale assignment, replaced binding,
+non-current run, cross-project/resource, wrong service/session/transaction and
+concurrent duplicate execution all fail closed. Denial produces no provider
+read, checker mutation, TASK transition, REV admission or allowed audit fact.
+
+### Gate 3: REV admission follows the merged manifest
+
+Parent 05 is no longer a prerequisite for *producing* canonical
+`allow_review`. It begins only afterward. Its first future split installs the
+exact REV admission consumer; packet, lease, claim, decision and revision
+remain REV-owned successors. CON remains downstream of REV final acceptance.
+
+### Public cutover remains later
+
+02I remains deferred. It may remove the legacy public Submission path only
+after initial, checker-remediation and reviewer-requested revision contexts all
+use the admission-backed contract and their checker/REV handoffs are proven.
+Canonical hidden `allow_review` is therefore an upstream milestone, not an
+implicit public release.
+
 ## Verification
 
 - AST import-edge inventory and protected-base comparison.

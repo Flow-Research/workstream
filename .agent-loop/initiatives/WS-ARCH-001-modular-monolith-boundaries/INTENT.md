@@ -19,6 +19,13 @@ module and every cross-module call must use a typed public API.
 - Every feature chunk repairs the capabilities and debt edges it touches.
 - No debt count grows, and final closure requires an empty private-import
   ledger.
+- Product delivery has one explicit upstream milestone before live REV work:
+  an admission-backed immutable Submission, bound to the exact verified ZIP
+  and current approved guide/policy generation, produces one durable current
+  post-submit checker result whose routing recommendation is `allow_review`.
+- That milestone uses only owner public APIs across PROJECTS, TASKS, ART,
+  CHECKERS, and AUTH. It does not rely on the legacy Submission route or grant
+  REV a private-import exception.
 
 ## Non-goals
 
@@ -35,3 +42,5 @@ module and every cross-module call must use a typed public API.
 - A coordinating agent may implement code across modules, but code is placed
   only in the module that owns the behavior.
 - Boundary debt is removed incrementally alongside delivery chunks.
+- REV activation begins only after the canonical `allow_review` manifest is
+  merged. CON live integration begins only from REV-owned final acceptance.

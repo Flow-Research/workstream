@@ -1,6 +1,9 @@
 # Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05B and POL-06B/07
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable
+
+WS-ARCH-001-04A-04D owns the current split replacement after POL-06B/07;
+historical ART-05B is non-executable. This file is design evidence only.
 
 Artifact contract phase: `submission_cutover`
 

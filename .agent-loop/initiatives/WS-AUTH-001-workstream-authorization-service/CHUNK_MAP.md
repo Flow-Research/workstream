@@ -76,7 +76,7 @@ may proceed concurrently; open pull requests show transient ownership.
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
 | `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
-| `WS-AUTH-001-14` | Submission, Checker, And Audit Visibility Cutover | L1 | Proposed |
+| `WS-AUTH-001-14` | Historical Submission, Checker, And Audit Visibility Cutover | L1 | Superseded/non-executable; split across WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |
 | `WS-AUTH-001-16` | Conformance, Observability, And Live API Proof | L1 | Proposed |
 
@@ -95,7 +95,7 @@ feature manifest exists and then uses the ordinary bounded contribution loop.
 | `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | Merged through PR #293; ART-04C1 is its next ART consumer |
 | `WS-XINT-002-05A` | Historical Submission Bundle Preparation Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02G requires 02A-02F |
 | `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H is complete on merge |
-| `WS-XINT-002-06B` | Post-Submit Materialization And Checker Output Activation | L1 | Feature-gated on POL-06B/07 unified plan plus ART-06A/06B evidence |
+| `WS-XINT-002-06B` | Historical Post-Submit Materialization And Checker Output Activation | L1 | Superseded/non-executable; WS-ARCH-001 PLAN2/04A-04E owns the current split |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-07` | REV 07 Context Chain And Finding Evidence Activation | L1 | Feature/ART-gated |
@@ -160,9 +160,12 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-12B2 -> WS-POL-003-04B -> 05A
 -> WS-AUTH-001-12F4 -> WS-POL-003-05B -> 06A
 -> WS-AUTH-001-12G -> WS-POL-003-06B -> 07
--> WS-AUTH-001-12H -> WS-POL-003-08
--> WS-AUTH-001-13
--> ART/XINT submission and checker gates -> WS-AUTH-001-14
+-> WS-AUTH-001-12H
+-> WS-ARCH-001-03A/03B -> WS-ARCH-001-03C (AUTH-13 task readiness)
+-> WS-ARCH-001-04A-04E canonical post-submit `allow_review`
+-> WS-POL-003-08 cleanup (not a prerequisite for WS-ARCH-001-03A)
+-> WS-ARCH-001-04F checker remediation and later REV/public-cutover gates
+-> historical WS-AUTH-001-14 remains superseded/non-executable
 -> WS-AUTH-001-15
 -> all registration/activation chunks whose feature surfaces have merged
 -> WS-AUTH-001-16

@@ -749,9 +749,8 @@ AUTH-04B implementation/activation [merged PR #245]
 -> replacement activation/API/dispatch cutover + complete legacy precheck removal
 -> POL-06B deterministic unified post-submit projection
 -> POL-07 sole checker service port
--> ART-06A post-submit checker snapshot/materialization
--> ART-06B checker output binding and routing
--> XINT-06B post-submit/output activation
+-> WS-ARCH-001 PLAN2/04A-04E canonical post-submit materialization,
+   checker-output activation, and `allow_review` manifest
 -> ART-07A lease-scoped reviewer packet materialization
 -> XINT-07A reviewer packet activation only
 -> ART-07B accepted-contribution artifact identity handoff
@@ -759,6 +758,9 @@ AUTH-04B implementation/activation [merged PR #245]
 -> ART-08B AWS production-readiness/activation proof
 -> XINT-08 + ART-08C final v0.1 conformance
 ```
+
+Historical ART-06A/06B and XINT-06B sequencing is non-executable; PLAN2 owns
+the current split and prevents a parallel post-submit path.
 
 04A1-04C2, including split 04B1-04B3, remain hidden internal pieces of one
 continuous contributor request.

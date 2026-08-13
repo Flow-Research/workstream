@@ -157,3 +157,28 @@ pre-start-assurance planning, and QUAL test-structure planning. They must not
 be removed or overwritten. Dead temporary registrations and clean merged
 worktrees may be pruned only after confirming no process owns them, their HEAD
 is contained in `origin/main`, and they contain no uncommitted or unique work.
+
+## Current-main reconciliation after 02H
+
+PR #328 merged the hidden AUTH/TASK/ART consumption transaction. Human
+Submission creation and fixed-service binding are now authorized, replay-safe,
+and atomic, but the public route remains legacy. The existing checker subsystem
+can persist `allow_review`; that result is attached to the legacy pre-review
+workflow and does not prove the new admission-backed path is review-ready.
+
+The current plans incorrectly compress three different outcomes into parents
+03/04/05: project/task readiness, canonical post-submit checker completion, and
+later reviewer/revision behavior. The corrected dependency is:
+
+```text
+complete unified guide compilation and approval
+-> current task/assignment authority
+-> merged 02H hidden Submission transaction
+-> exact post-submit materialization and checker output
+-> durable current allow_review manifest
+-> REV admission
+-> later review/revision and public 02I clean cut
+```
+
+No open pull request currently owns this sequence. Existing owner skeletons
+remain non-executable until refreshed against current `main`.
