@@ -66,7 +66,7 @@ task-locked policy lineage -> assignment -> Submission-stamped attempt lineage -
 REV revision lineage + 03C/03D + CP06/CP08 -> 07 -> REV-10 first Review commit
 
 AUTH dispatcher registration -> 02B
-03D + 07 + 02B + CP02/CP04 -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
+03D + 07 + 02B + CP02/CP04 -> fresh delivery replacement -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
 ```
 
 ART-03C is merged baseline evidence. Remaining ART submission/reviewer custody
