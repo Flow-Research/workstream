@@ -85,6 +85,7 @@ canonical decision transaction.
 WS-CON-001-05A is planned as the guide-activation validation and persistence
 prerequisite for task readiness. WS-CON-001-06 is a planned retirement; ReviewLease
 copies and verifies the task-locked version.
+WS-CON-001-05B is planned after the 05A zero-consumer proof.
 
 ## Immediate next action
 

@@ -68,3 +68,7 @@ clean run, and every focused model report at least 90 percent.
 
 Required tracks: senior, QA, security, product, architecture, docs, reuse, test-
 delta, and CI integrity. CON-06 is a planned retirement; do not create a successor lookup.
+
+## Merge state
+
+- Outcome on merge: `planned`

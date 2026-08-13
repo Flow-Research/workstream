@@ -82,3 +82,4 @@ retirement. WS-AUTH-001-14 is a planned retirement. WS-POL-003-08 is planned
 after canonical WS-ARCH-001-04E.
 WS-CON-001-05A is planned before live task readiness. WS-CON-001-06 is a planned retirement.
 ReviewLease inherits the task-locked version without a CON lookup.
+WS-CON-001-05B is planned after the 05A zero-consumer proof.

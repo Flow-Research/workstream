@@ -31,7 +31,7 @@ signed-loop records do not make behavior live.
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `WS-CON-001-05A` | Legacy semantic cutover + guide-activation ContributionPolicyVersion validation port + guide/task/assignment persistence contract | 04B + guide-activation contract + row-classification decision | Planned; no TASK composition; mandatory before WS-ARCH-001-03B task readiness |
-| `05B` | Legacy economic schema removal | 05A zero-consumer proof | Proposed |
+| `WS-CON-001-05B` | Legacy economic schema removal | 05A zero-consumer proof | Planned |
 | `WS-CON-001-06` | Retire former reviewer claim-time policy lookup | Replaced by guide -> task -> assignment -> Submission -> ReviewLease inheritance | Planned retirement; no implementation |
 | `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B and mandatory before live REV decisions |
 | `03D` | Delivery/receipt/status persistence | 03C | Proposed |
