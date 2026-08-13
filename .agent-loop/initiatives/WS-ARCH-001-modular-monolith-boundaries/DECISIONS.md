@@ -105,11 +105,9 @@ reviewer-requested revision contexts all use the same path.
 
 ## D14: ContributionPolicy is the sole award-governing policy
 
-There is no separate CompensationPolicy or payment policy in the canonical
-model. CON owns `ContributionPolicy` and immutable
-`ContributionPolicyVersion`; `CompensationAward` is an evaluation result, not
-a policy. PLAN2 uses only the exact frozen submitter and reviewer
-ContributionPolicyVersion references. Existing runtime and historical
-`payment_policy`/`locked_payment_policy_version` vocabulary is legacy debt and
-must be removed by owning clean-cut chunks before public release; it is not
-authority and receives no compatibility alias or fallback.
+CON owns `ContributionPolicy` and immutable `ContributionPolicyVersion`.
+`CompensationAward` is an evaluation result, not a policy. PLAN2 uses only the
+exact frozen submitter and reviewer ContributionPolicyVersion references. All
+retired economic-policy vocabulary and fields are removal debt for the owning
+clean-cut chunks before public release; they are not authority and receive no
+compatibility alias or fallback.
