@@ -8,9 +8,7 @@ Non-executable split record.
 
 - `WS-REV-001-06A`: atomic claim and ReviewLease, claim-time materialization
   through 03B's canonical ReviewPacketManifest/item persistence contract, and
-  copy of the admitted Submission's immutable attempt policy version with
-  upstream Task/Assignment equality checks. `WS-CON-001-06` is retirement-only;
-  claim performs no CON lookup or selection. It owns no packet-manifest
+  mandatory `WS-CON-001-06` reviewer policy freeze. It owns no packet-manifest
   model, schema, migration, repository, or duplicate persistence abstraction.
 - `WS-REV-001-06B`: reviewer-owned release/decline and preference transitions.
 - `WS-REV-001-06C`: separate fixed-service preference and lease expiry plus
