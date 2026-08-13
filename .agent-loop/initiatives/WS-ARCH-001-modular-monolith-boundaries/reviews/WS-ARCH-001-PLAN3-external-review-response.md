@@ -20,6 +20,10 @@
   capability ledger.
 - Distinguished the covered Project Manager HTTP entry from the fixed project
   setup service's internal command resolution in CP07.
+- Corrected the two still-proposed AUTH-12/12H contracts so guide activation
+  depends on POL-07, corrected 12B2, CP05, CP06, and CP07 only. Their retired
+  economic fields confer no authority; CP08, ARCH-03A/03B/03C, and CP09 remain
+  downstream, removing the last documented cycle.
 
 ## Comments deferred
 

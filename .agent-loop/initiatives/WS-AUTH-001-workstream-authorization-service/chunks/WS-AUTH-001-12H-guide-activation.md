@@ -1,7 +1,9 @@
 # Chunk Contract: WS-AUTH-001-12H - Unified Guide Activation Cutover
 
-Status: Proposed after POL-07, corrected 12B2, and the owning CON clean cut;
-inactive. Risk: L1.
+Status: Proposed after POL-07, corrected 12B2, CP05 active
+ContributionPolicy behavior, CP06 validation, and CP07 ProjectGuide binding;
+inactive. Risk: L1. CP08, WS-ARCH-001-03A/03B/03C, and CP09 are downstream and
+are not prerequisites.
 
 ## Goal
 
@@ -31,7 +33,11 @@ chain compatibility, or issuer-role fallback.
 - Final PREP binds the complete chain plus actor/link/grant, action, operation,
   request/idempotency, session, and transaction. POL/project code owns product
   locks and the one activation commit.
-- Retired guide-bound economic policy is absent after the owning CON clean cut.
+- The exact CP07 `ProjectGuide.contribution_policy_version_id` binding is
+  present, current for the activation lineage, and validated through CP06
+  against CP05 active behavior. Retired guide-bound economic fields grant no
+  authority and are ignored by this activation path; CP09 removes them only
+  after WS-ARCH-001-03C activates the replacement task/assignment path.
 - The merged POL-07 single checker port proves both compiled pre-submit and
   post-submit components are executable through the sole approved commands;
   activation cannot precede that proof.
