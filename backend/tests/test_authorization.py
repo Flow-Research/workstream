@@ -2083,24 +2083,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             "project.effective_policy.manage",
             "WS-AUTH-001-12G",
         ),
-        "project.setup_run.update": ("project.guide.manage", "WS-AUTH-001-12B2"),
-        "project.guide.activate": ("project.guide.manage", "WS-AUTH-001-12H"),
-        "compensation.adapter_binding.read": (
-            "compensation.adapter_binding.manage",
-            "WS-ARCH-001-CP01A",
-        ),
-        "compensation.adapter_binding.create": (
-            "compensation.adapter_binding.manage",
-            "WS-ARCH-001-CP01A",
-        ),
-        "compensation.adapter_binding.suspend": (
-            "compensation.adapter_binding.manage",
-            "WS-ARCH-001-CP01A",
-        ),
-        "compensation.adapter_binding.resume": (
-            "compensation.adapter_binding.manage",
-            "WS-ARCH-001-CP01A",
-        ),
+        "project.setup_run.update": ("project.guide.manage", "WS-AUTH-001-12B2"), "project.guide.activate": ("project.guide.manage", "WS-AUTH-001-12H"),  # noqa: E501
+        **dict.fromkeys((f"compensation.adapter_binding.{op}" for op in ("read", "create", "suspend", "resume")), ("compensation.adapter_binding.manage", "WS-ARCH-001-CP01A")),  # noqa: E501
     }
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
@@ -2240,18 +2224,17 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionOwner.XINT_003_08B: 1,
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
-    assert (
-        sum(
-            definition.availability is ActionAvailability.ACTIVE
+    availability_counts = {
+        availability: sum(
+            definition.availability is availability
             for definition in ACTION_DEFINITIONS
-        ) == 57
-    )
-    assert (
-        sum(
-            definition.availability is ActionAvailability.PLANNED
-            for definition in ACTION_DEFINITIONS
-        ) == 49
-    )
+        )
+        for availability in ActionAvailability
+    }
+    assert availability_counts == {
+        ActionAvailability.ACTIVE: 57,
+        ActionAvailability.PLANNED: 49,
+    }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
         resolve_executable_action(ActionId.REVIEW_QUEUE_READ)

@@ -45,6 +45,7 @@ docs/spec_authorization_service.md (catalogue parity only)
 docs/spec_contribution_compensation.md (CP01A registration parity only)
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md (CP01A state only)
 docs/roadmap_status.md (CP01A capability state only)
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/{CHUNK_MAP.md,STATUS.md}
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP01A-auth-adapter-binding-registration.md

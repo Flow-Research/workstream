@@ -752,7 +752,7 @@ or rebuild identity therefore still requires its own human-approved feature
 manifest followed by AUTH-owned identity/matrix registration, provisioning,
 AUTH-09E admission, evaluator integration, and exact action activation.
 
-### Proposed surface mappings
+### Surface mappings
 
 The table contains both registered-unavailable and future proposed mappings.
 CP01A registers the four adapter-binding read/create/suspend/resume ActionIds
@@ -764,7 +764,7 @@ canonical `contribution.policy.*` namespace while mapping to the existing
 `compensation.policy.manage` PermissionId. AUTH must approve exact identifiers,
 principals, contexts, mappings, custodians, and activation in its own chunks.
 
-| Proposed ActionId | PermissionId | Principal / target | Protocol | Feature owner |
+| ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
 | `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | Finance / binding | Q | WS-ARCH-001-CP01A (registered, unavailable) |
