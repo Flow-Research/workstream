@@ -84,7 +84,7 @@ CP06 validation plus CP07/CP08 owner persistence are proposed before live task
 readiness. WS-CON-001-06 is a planned retirement.
 Submission stamps the assignment's exact attempt version, and ReviewLease
 inherits that immutable Submission version without a CON lookup.
-CP09 is the proposed clean legacy economic-path removal after ARCH-03C activates
+CP09 is the proposed clean legacy economic-path removal after WS-ARCH-001-03C activates
 the CP08/ARCH-03B replacement behavior.
 WS-REV-001-10 is planned after its named REV and CON prerequisites.
 Merged WS-CON-001-PLAN5 remains historical evidence for same-TaskAssignment
@@ -98,3 +98,14 @@ AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
 activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
 clean v0.1 legacy economic-path removal in that order. Every child remains
 non-executable until PLAN3 merges and its current-main contract is expanded.
+
+- WS-ARCH-001-PLAN3 is proposed planning only.
+- WS-ARCH-001-CP01 is proposed and non-executable.
+- WS-ARCH-001-CP02 is proposed and non-executable.
+- WS-ARCH-001-CP03 is proposed and non-executable.
+- WS-ARCH-001-CP04 is proposed and non-executable.
+- WS-ARCH-001-CP05 is proposed and non-executable.
+- WS-ARCH-001-CP06 is proposed and non-executable.
+- WS-ARCH-001-CP07 is proposed and non-executable.
+- WS-ARCH-001-CP08 is proposed and non-executable.
+- WS-ARCH-001-CP09 is proposed and non-executable after WS-ARCH-001-03C.

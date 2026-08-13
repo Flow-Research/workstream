@@ -10,7 +10,11 @@ TASK, and REV authority are excluded.
 
 Before implementation, replace this skeleton with a current-main contract that
 names exact AUTH public types, catalogue rows, tests, allowed files, and
-reviewers. No CON implementation or activation belongs here.
+reviewers. The pre-start review must either split binding registration from
+policy registration or prove the combined unavailable-only change is bounded:
+one shared catalogue/context seam, no evaluator/activation/service identity,
+reviewable diff size, and independent parity tests for each action family. No
+CON implementation or activation belongs here.
 
 ## Merge state
 

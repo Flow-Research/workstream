@@ -32,8 +32,9 @@ not current start requirements.
   pre-submit policy; it performs no inference.
 - AUTH-12G follows hidden POL-06A and activates deterministic stored
   post-submit projection authority.
-- AUTH-12H follows the complete POL-06B/07 and required CON clean cut, and
-  activates only a complete approved unified guide lineage.
+- AUTH-12H follows complete POL-06B/07 plus CP05 active ContributionPolicy
+  behavior, CP06 validation, and CP07 ProjectGuide binding. It does not depend
+  on CP08, WS-ARCH-001-03A/03B/03C, or CP09 final legacy removal.
 - AUTH-13 through AUTH-16 remain future task, submission/checker, cleanup, and
   conformance boundaries. Each must be split against then-current product
   behavior before implementation.

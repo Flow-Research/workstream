@@ -53,7 +53,7 @@ schema work. Current dependency analysis yields:
 6. CP01-CP05 register, implement, and activate binding/policy behavior in exact
    pairs.
 7. CP06 validation, CP07 guide binding, and CP08 task-attempt persistence
-   precede ARCH-03A/03B replacement behavior and ARCH-03C activation; CP09 then
+   precede ARCH-03A/03B replacement behavior and WS-ARCH-001-03C activation; CP09 then
    removes the retired path.
 8. Contribution/award persistence follows stable REV Review, ReviewLease and
    FinalAcceptance FK targets, but precedes live review decisions.
@@ -101,7 +101,7 @@ CP06 validation plus CP07/CP08 owner persistence replace former CON-05A as the
 prerequisite for task readiness. WS-CON-001-06 is a planned retirement;
 ReviewLease copies the admitted Submission's immutable attempt version and
 verifies upstream Task/Assignment equality only.
-CP09 replaces historical CON-05B and follows ARCH-03C activation of the
+CP09 replaces historical CON-05B and follows WS-ARCH-001-03C activation of the
 CP08/ARCH-03B replacement path.
 
 ## Immediate next action

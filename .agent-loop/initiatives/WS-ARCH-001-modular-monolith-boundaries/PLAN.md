@@ -129,7 +129,7 @@ POL-03B
 -> POL-04A -> AUTH-12B2 -> POL-04B
 -> POL-05A -> AUTH-12F4 -> POL-05B
 -> POL-06A -> AUTH-12G -> POL-06B
--> POL-07 -> AUTH-12H
+-> POL-07 + CP05 + CP06 + CP07 -> AUTH-12H
 ```
 
 Each POL/AUTH chunk repairs only the public boundary and structural debt it
@@ -138,6 +138,11 @@ exact active guide plus complete pre-submit and post-submit policy identities
 and hashes. POL-08 physical cleanup follows the canonical `allow_review`
 milestone so it does not create a circular dependency on the Submission path;
 no live call may use the transitional inference paths in the interim.
+
+AUTH-12H requires only active policy behavior, validation, and ProjectGuide
+binding needed for guide activation. CP08, WS-ARCH-001-03A/03B/03C, and CP09
+are downstream; making final legacy removal a 12H prerequisite would create a
+cycle through task activation.
 
 ### Gate 1: current task, assignment and submitter-policy authority
 

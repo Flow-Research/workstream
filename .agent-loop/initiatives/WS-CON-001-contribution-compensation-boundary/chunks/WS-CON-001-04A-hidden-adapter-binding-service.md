@@ -1,8 +1,5 @@
 # Chunk Contract: WS-CON-001-04A - Hidden Adapter-Binding Service
 
-> Historical, superseded, and non-executable. PLAN3 replaces this broad
-> contract with WS-ARCH-001-CP01 through CP03. Do not implement this file.
-
 ## Goal and risk
 
 Implement authorization-ready binding create/read/suspend/resume domain behavior

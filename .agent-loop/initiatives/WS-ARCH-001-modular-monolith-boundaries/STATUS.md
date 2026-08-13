@@ -53,6 +53,23 @@
   behavior must precede owner-separated guide/task lineage. CP01-CP09 are
   proposed non-executable skeletons until PLAN3 is reviewed and merged.
 
+## Proposed PLAN3 children
+
+- WS-ARCH-001-PLAN3 is proposed planning only; runtime behavior is unchanged.
+- WS-ARCH-001-CP01 is proposed: combined unavailable AUTH registration; it
+  must split before implementation unless current-main scope proof shows one
+  bounded shared catalogue/context change.
+- WS-ARCH-001-CP02 is proposed: hidden adapter-binding behavior.
+- WS-ARCH-001-CP03 is proposed: exact adapter-binding activation.
+- WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
+- WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
+- WS-ARCH-001-CP06 is proposed: CON policy-validation port.
+- WS-ARCH-001-CP07 is proposed: PROJECT guide binding.
+- WS-ARCH-001-CP08 is proposed: TASK/Assignment/Submission lineage persistence
+  and public facts only.
+- WS-ARCH-001-CP09 is proposed: clean legacy economic-path removal after
+  WS-ARCH-001-03C activates the replacement.
+
 ## Planned PLAN2 children
 
 - WS-ARCH-001-03A is planned.

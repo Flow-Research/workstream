@@ -1,8 +1,5 @@
 # Chunk Contract: WS-CON-001-05A - Legacy Economic Terms Cutover And Task Freeze
 
-> Historical, superseded, and non-executable. PLAN3 replaces this cross-owner
-> contract with WS-ARCH-001-CP06 through CP09. Do not implement this file.
-
 ## Goal
 
 Remove the retired guide-bound economic contract from every semantic consumer,
