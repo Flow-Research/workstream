@@ -102,9 +102,8 @@ grant_revoked | admin_override` and must match their terminal status.
   substitute source.
 - Inserted attempts begin active, use database `claimed_at`, have
   `expires_at > claimed_at`, and use a unique positive generation per queue.
-  The database rejects a draft or already-retired version at insertion. Future
-  claim composition must inherit and verify canonical admission's task-locked
-  identity; the former CON-06 claim-time lookup is a planned retirement.
+  The database rejects a draft or already-retired version at insertion;
+  CON-06 still owns claim-time lookup and selection of that published identity.
 - Reviewer and preferred-reviewer references must resolve to canonical human
   ActorProfiles; service actors are rejected by database guards.
 - Lease identity, reviewer, frozen policy, lineage, generation, claimed time,
