@@ -30,12 +30,12 @@ signed-loop records do not make behavior live.
 | `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Merged PR #277; independent of dispatcher; required before REV-04B |
 | `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
 | `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
-| `05A` | Legacy semantic cutover + initial TaskAssignment policy freeze and guarded human-revision rebase support | 04B + task/assignment/revision authority contract + row-classification decision | Proposed |
+| `05A` | Legacy semantic cutover + initial TaskAssignment submitter ContributionPolicyVersion freeze and guarded human-revision rebase support | 04B + task/assignment/revision authority contract + row-classification decision | Proposed; mandatory before WS-ARCH-001-03B/03C live assignment |
 | `05B` | Legacy economic schema removal | 05A zero-consumer proof | Proposed |
-| `06` | Reviewer policy lookup/freeze participant | 05B + REV lease contract/caller facts | Proposed; CON never owns lease |
-| `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B |
+| `06` | Reviewer ContributionPolicyVersion lookup/freeze participant | 05B + REV lease contract/caller facts | Proposed; mandatory before live REV claim; CON never owns lease |
+| `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B and mandatory before live REV decisions |
 | `03D` | Delivery/receipt/status persistence | 03C | Proposed |
-| `07` | Atomic flush-only review contribution/award participant | 03C/03D + 05A + 06 + stable REV revision lineage | Proposed; consumed by REV-10 |
+| `07` | Atomic flush-only review contribution/award participant | 03C/03D + 05A + 06 + stable REV revision lineage | Proposed; mandatory before REV-10/first Review commit |
 | `02B` | Generic outbox dispatcher/recovery | AUTH dispatcher identity/action/matrix/context/PREP registration | Blocked on AUTH; required later, not before 03A/03B |
 | `08A` | Outbound compensation delivery | 03D + 07 + 02B + 04A/04B + independent delivery authority | Proposed |
 | `08R` | Bound callback rate control | 08A | Proposed |
@@ -61,8 +61,9 @@ PLAN4
   -> 02C ----------------------------------> REV-04B
 
 REV-04B + 03B -> 03C -> 03D
-05B + REV lease/caller facts -> 06
-REV revision lineage + 03C/03D + 05A + 06 -> 07 -> REV-10
+04B + task/assignment facts -> 05A -> WS-ARCH-001-03B/03C live assignment
+05B + REV lease/caller facts -> 06 -> live REV claim
+REV revision lineage + 03C/03D + 05A + 06 -> 07 -> REV-10 first Review commit
 
 AUTH dispatcher registration -> 02B
 03D + 07 + 02B + 04A/04B -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11

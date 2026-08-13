@@ -32,12 +32,15 @@ task assignment changes; provider/artifact/adapter calls
 ## Acceptance criteria
 
 - [ ] Port accepts caller AsyncSession and canonical locked project/claim facts,
-  locks one active ContributionPolicy and published version plus referenced
-  definitions/bindings, returns the exact version ID, and never commits.
-- [ ] Missing/inactive/invalid policy or binding returns stable failure with no
-  CON/audit/outbox partial state.
+  locks one active same-project ContributionPolicy and its published, complete,
+  binding-valid version plus referenced immutable rule/definition/binding
+  dependencies, returns the exact version ID, and never commits.
+- [ ] Missing, inactive, unpublished, incomplete, binding-invalid,
+  cross-project or stale policy/version returns stable failure before
+  ReviewLease creation with no CON/audit/outbox partial state.
 - [ ] REV-owned ReviewLease has immutable non-null
   `reviewer_contribution_policy_version_id` and REV owns its write/wiring.
+  Later policy publication or binding changes never mutate the lease freeze.
 - [ ] review.claim uses exact active same-project reviewer ProjectRoleGrant;
   unrelated project/admin grants do not substitute. No-self-review and REV
   lifecycle guards remain REV-owned; no adjudication behavior or dependency is
@@ -64,8 +67,9 @@ then run:
 
 Pass requires a non-empty selected test set, caller-session flush-only freeze,
 both publish/claim and binding/claim race orders, missing-policy rollback,
+unpublished/incomplete/binding-invalid/cross-project/stale denials,
 same-project reviewer authorization with unrelated-grant and self-review
-denials, repository coverage at least 78 percent in the same clean run, and
+denials, immutable lease proof, repository coverage at least 78 percent in the same clean run, and
 focused contribution coverage at least 90 percent.
 
 ## Review and stop

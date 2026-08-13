@@ -50,9 +50,16 @@ schema work. Current dependency analysis yields:
 5. CON-02C lifecycle-audit participant before REV-04B.
 6. Hidden policy/binding behavior and legacy clean cut as AUTH contracts become
    available.
-7. Contribution/award persistence after REV provides stable FK targets.
-8. Atomic REV/CON participant after both sides' lineage exists.
-9. Dispatcher and fulfillment later, after exact AUTH service registration.
+7. CON-05A submitter policy selection/freeze must merge before live task claim
+   and assignment activation.
+8. Contribution/award persistence follows stable REV Review, ReviewLease and
+   FinalAcceptance FK targets, but precedes live review decisions.
+9. CON-06 reviewer policy selection/freeze must merge before live REV claim.
+10. The atomic REV/CON participant must merge before the first canonical Review
+    decision; it creates a reviewer ContributionRecord for every final decision
+    and, on accept only, a submitter ContributionRecord from FinalAcceptance.
+    Frozen rules may create zero, one or two CompensationAwards per record.
+11. Dispatcher and fulfillment follow exact AUTH service registration.
 
 ## Current blockers
 
@@ -66,6 +73,11 @@ schema work. Current dependency analysis yields:
 - CON-06/07: corresponding REV lease/decision caller contracts are future.
 - CON-03A creation behavior: AUTH has not approved a compensation-adapter
   service identity/capability; existing ART/REV identities cannot substitute.
+
+CON is not downstream of REV acceptance. It participates at assignment freeze,
+reviewer-lease freeze, and every final review-decision commit. Only fulfillment,
+reconciliation and product reads remain downstream of the canonical decision
+transaction.
 
 ## Immediate next action
 

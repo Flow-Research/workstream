@@ -28,3 +28,14 @@ Commands rerun:
 
 Remaining risks: CodeRabbit and hosted CI must complete against the new exact
 head before merge readiness is reported.
+
+## Human L1 plan review amendment
+
+The human review correctly rejected downstream-only CON wording. The plan now
+uses `ContributionPolicy`/`ContributionPolicyVersion` as the sole governing
+policy model, freezes the submitter version atomically on TaskAssignment,
+carries it through canonical `allow_review`, freezes the reviewer version
+independently on ReviewLease, and requires ContributionRecord,
+CompensationAward, and the CON flush-only participant before the first live
+Review decision. Independent REV schema and packet foundations remain free to
+proceed behind their own gates.

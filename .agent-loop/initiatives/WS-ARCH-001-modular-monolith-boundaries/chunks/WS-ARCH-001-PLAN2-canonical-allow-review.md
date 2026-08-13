@@ -9,7 +9,7 @@ name one dependency-ordered path from current `main` through canonical
 - `.agent-loop/CURRENT_STATE.md`
 - `docs/roadmap_status.md`
 - WS-ARCH-001 planning, status, risk, decision, chunk and review files
-- directly stale WS-POL-003, WS-ART-001, WS-AUTH-001 and WS-REV-001 status or
+- directly stale WS-POL-003, WS-ART-001, WS-AUTH-001, WS-CON-001 and WS-REV-001 status or
   chunk-map wording required for parity
 
 ## Not allowed
@@ -22,11 +22,18 @@ name one dependency-ordered path from current `main` through canonical
 
 1. The plan separates guide/task readiness, canonical checker completion, REV
    admission and later public cutover.
-2. Every future child has one owner, one PR outcome and explicit dependencies;
+2. TaskAssignment creation atomically freezes the exact submitter
+   ContributionPolicyVersion through CON, and the canonical `allow_review`
+   manifest carries that exact lineage.
+3. Live ReviewLease claim independently freezes the reviewer
+   ContributionPolicyVersion through CON; every final Review decision requires
+   CON ContributionRecord/CompensationAward persistence and its atomic
+   participant.
+4. Every future child has one owner, one PR outcome and explicit dependencies;
    each is marked non-executable until a current-main contract supplies exact,
    non-overlapping file boundaries and runnable commands.
-3. Technical-debt repair remains incremental and mandatory for touched edges.
-4. Current-state and capability-ledger wording match merged 02H behavior.
+5. Technical-debt repair remains incremental and mandatory for touched edges.
+6. Current-state and capability-ledger wording match merged 02H behavior.
 
 ## Verification and reviewers
 

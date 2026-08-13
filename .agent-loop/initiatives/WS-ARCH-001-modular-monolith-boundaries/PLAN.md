@@ -139,13 +139,27 @@ and hashes. POL-08 physical cleanup follows the canonical `allow_review`
 milestone so it does not create a circular dependency on the Submission path;
 no live call may use the transitional inference paths in the interim.
 
-### Gate 1: current task and assignment authority
+### Gate 1: current task, assignment and submitter-policy authority
 
 Parent 03 is split into 03A-03C. PROJECTS exposes current approved compilation
 facts; TASKS exposes claim/assignment and immutable locked-context facts; AUTH
 activates only the exact task/assignment actions after both hidden owner paths
-exist. A task cannot enter preparation with a stale guide, policy generation,
-assignment, contributor, or predecessor.
+exist. CON must first expose the active same-project `ContributionPolicy`
+selection/freeze participant. The atomic claim path is:
+
+```text
+task claim
+-> CON validates one active, published, complete and binding-valid
+   ContributionPolicyVersion for the submitter
+-> TASK freezes that exact version as
+   TaskAssignment.submitter_contribution_policy_version_id
+-> TASK creates the assignment
+```
+
+The frozen version is immutable for that attempt; later policy publication
+cannot change it. A task cannot enter preparation with a stale guide, policy
+generation, assignment, contributor, predecessor, or missing/invalid frozen
+submitter ContributionPolicyVersion.
 
 ### Gate 2: canonical post-submit checker completion
 
@@ -159,6 +173,8 @@ execution and projects the current routing fact without owning checker logic.
 The acceptance manifest must bind:
 
 - project, task, assignment, contributor and predecessor;
+- exact `TaskAssignment.submitter_contribution_policy_version_id`, same-project
+  and proven published, complete and binding-valid when selected;
 - approved unified guide/setup generation and complete policy hashes;
 - Submission id/version and admission id;
 - ART binding, content, replica, digest and byte count;
@@ -170,12 +186,45 @@ non-current run, cross-project/resource, wrong service/session/transaction and
 concurrent duplicate execution all fail closed. Denial produces no provider
 read, checker mutation, TASK transition, REV admission or allowed audit fact.
 
-### Gate 3: REV admission follows the merged manifest
+### Gate 3: REV foundations may proceed; live REV follows the merged manifest
 
 Parent 05 is no longer a prerequisite for *producing* canonical
-`allow_review`. It begins only afterward. Its first future split installs the
-exact REV admission consumer; packet, lease, claim, decision and revision
-remain REV-owned successors. CON remains downstream of REV final acceptance.
+`allow_review`. Independent REV schema and packet-contract foundations may
+proceed before it when their own named dependencies are satisfied. Canonical
+`allow_review` gates live admission, claiming and review processing—not
+owner-local schema preparation.
+
+The live sequence is:
+
+```text
+canonical allow_review admission and packet
+-> review claim
+-> CON validates one active same-project ContributionPolicy and its published,
+   complete, binding-valid immutable reviewer ContributionPolicyVersion plus
+   locked rule/definition/binding dependencies
+-> REV freezes it as
+   ReviewLease.reviewer_contribution_policy_version_id
+-> Review decision in one caller-owned transaction
+   -> every accept / needs_revision / reject creates the reviewer
+      ContributionRecord and evaluates the frozen reviewer rule
+   -> create zero, one or two CompensationAwards as the frozen rule requires
+   -> accept additionally creates FinalAcceptance, the submitter
+      ContributionRecord, and zero, one or two submitter CompensationAwards
+      from TaskAssignment.submitter_contribution_policy_version_id
+   -> needs_revision/reject create no FinalAcceptance and no submitter record
+```
+
+Missing, unpublished, incomplete, binding-invalid, cross-project or stale
+reviewer policy facts deny before lease creation. Later policy publication or
+binding changes cannot alter the lease's immutable freeze.
+
+REV owns Review, ReviewLease, FinalAcceptance, judgment and the single commit.
+CON owns ContributionPolicy/ContributionPolicyVersion selection,
+ContributionRecord, CompensationAward and its flush-only transaction
+participant. The first canonical Review decision cannot commit without the
+mandatory CON participant. ContributionRecord/CompensationAward persistence
+must therefore follow stable REV Review/ReviewLease/FinalAcceptance schema and
+precede live REV decision implementation.
 
 ### Public cutover remains later
 

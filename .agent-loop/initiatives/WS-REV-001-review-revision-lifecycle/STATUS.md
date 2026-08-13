@@ -52,6 +52,15 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 - Missing external behavior is reported to its owner and never implemented in
   REV.
 
+Canonical `allow_review` gates live admission, claim and review processing; it
+does not block independent REV schema or packet-contract foundations whose own
+dependencies are satisfied. Live claim additionally requires the CON-06
+participant and freezes `ReviewLease.reviewer_contribution_policy_version_id`.
+Live decisions require CON ContributionRecord/CompensationAward persistence and
+the CON-07 atomic participant: every final decision creates the reviewer
+record; accept also creates FinalAcceptance and the submitter record. No
+canonical Review decision may commit without CON.
+
 ## Next step
 
 The next dependency-ordered boundary is `WS-REV-001-03B`, normalized packet

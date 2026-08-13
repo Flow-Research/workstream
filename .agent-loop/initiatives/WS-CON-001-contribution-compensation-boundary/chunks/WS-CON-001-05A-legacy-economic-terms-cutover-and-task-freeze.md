@@ -5,8 +5,9 @@
 Remove the retired guide-bound economic contract from every semantic consumer,
 classify existing rows, and freeze the active published
 ContributionPolicyVersion on each successful new TaskAssignment. Supply the
-same guarded current-version selection contract for later task-owned human
-revision preparation; publication itself never mutates an assignment. Physical
+same guarded current-version selection contract for a distinct next attempt
+during task-owned human revision preparation; publication itself never mutates
+an existing attempt's freeze. Physical
 dead-schema removal belongs to 05B.
 
 ## Risk
@@ -44,8 +45,9 @@ provider/artifact calls; unrelated checker behavior
 
 - [ ] Every new TaskAssignment has non-null
   `submitter_contribution_policy_version_id`, initially frozen at claim and
-  mutable only by the explicit audited task-owned human revision preparation
-  path. Direct or publication-driven updates are rejected.
+  immutable for that attempt. Human revision preparation creates/binds a
+  distinct next-attempt freeze with explicit prior/next lineage; direct,
+  in-place or publication-driven updates to the prior attempt are rejected.
 - [ ] Exact merged Submission.task_assignment_id lineage is preserved; no
   parallel submission identity is added.
 - [ ] No runtime/API/setup/task/checker/review consumer treats retired guide-
@@ -69,9 +71,10 @@ provider/artifact calls; unrelated checker behavior
 - [ ] Missing/invalid policy fails with no assignment/task/audit/outbox partial
   state. Later publication never updates an assignment. A later human
   needs-revision preparation locks and validates the complete current context,
-  keeps an unchanged version or updates a changed valid version for the next
-  attempt, and records prior/next lineage atomically through the task-owned
-  lifecycle.
+  reuses an unchanged valid version or binds a changed valid version only to
+  the distinct next attempt, and records prior/next lineage atomically through
+  the task-owned lifecycle. Stale, replayed or concurrent preparation cannot
+  mutate the prior attempt or create two next-attempt freezes.
 - [ ] Publish versus claim and binding-state versus claim pass both lock orders
   without deadlock or mixed versions.
 - [ ] Existing rows follow the approved deterministic classification and cannot
@@ -102,6 +105,7 @@ fi
 Pass requires a non-empty selected test set, upgrade and guarded downgrade,
 exact assignment freeze and Submission lineage, full rollback on missing or
 ambiguous policy, both publication/claim and binding/claim race orders,
+no in-place revision mutation plus stale/replay/concurrent next-attempt proof,
 real-kernel denial before activation, no runtime legacy-policy consumer,
 repository coverage at least 78 percent in the same clean run, and every
 focused report at least 90 percent.

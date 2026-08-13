@@ -26,6 +26,11 @@ module and every cross-module call must use a typed public API.
 - That milestone uses only owner public APIs across PROJECTS, TASKS, ART,
   CHECKERS, and AUTH. It does not rely on the legacy Submission route or grant
   REV a private-import exception.
+- CON is a mandatory earlier participant: it freezes the submitter
+  ContributionPolicyVersion during assignment, freezes the reviewer version
+  during lease claim, and stages ContributionRecord/CompensationAward
+  consequences atomically with every final review decision. Only accept adds
+  FinalAcceptance and the submitter record.
 
 ## Non-goals
 
@@ -42,5 +47,7 @@ module and every cross-module call must use a typed public API.
 - A coordinating agent may implement code across modules, but code is placed
   only in the module that owns the behavior.
 - Boundary debt is removed incrementally alongside delivery chunks.
-- REV activation begins only after the canonical `allow_review` manifest is
-  merged. CON live integration begins only from REV-owned final acceptance.
+- Canonical `allow_review` gates live REV admission/claim/processing, not
+  independent REV schema or packet foundations.
+- CON live integration begins at TaskAssignment policy freeze, continues at
+  ReviewLease policy freeze, and is mandatory in every final Review commit.

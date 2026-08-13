@@ -18,9 +18,12 @@ pre-review/evaluation state; immutable Submission id/version; assignment,
 contributor and predecessor; admission id; ART binding, content, replica,
 digest and byte count; final completed current CheckerRun; no unresolved
 blocking failure under the locked post-submit policy; and
-`routing_recommendation = allow_review`. It also carries the locked
-review/revision and payment/contribution policy identities and hashes needed by
-the later REV and CON consumers.
+`routing_recommendation = allow_review`. It also carries the exact
+`TaskAssignment.submitter_contribution_policy_version_id` and locked
+review/revision policy lineage needed by later REV and CON consumers. The
+submitter version is the same-project, published, complete, binding-valid
+immutable version selected at assignment; the manifest never reselects it and
+later policy publication cannot alter the attempt.
 
 Replay, revocation, stale guide/policy generation, stale assignment, replaced
 binding, non-current run, cross-project/resource, wrong service, wrong session,

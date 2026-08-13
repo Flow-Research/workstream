@@ -96,8 +96,20 @@ behavior is regression evidence only and cannot satisfy this milestone.
 
 PROJECT/POL readiness and TASK assignment authority complete first. ART and
 CHECKERS then materialize, execute, persist, and expose the exact current
-post-submit result. Only after that merged manifest may REV atomically admit
-the Submission. Full reviewer packet, decision, revision, and CON work remain
-owner initiatives downstream. The admission-only public API clean cut remains
-later still, after initial, checker-remediation, and reviewer-requested
-revision contexts all use the same path.
+post-submit result. Only after that merged manifest may REV activate admission
+for the Submission. Independent REV schema/packet foundations may proceed
+earlier. CON participates before assignment, before review claim, and in every
+final decision; it is not downstream-only. The admission-only public API clean
+cut remains later still, after initial, checker-remediation, and
+reviewer-requested revision contexts all use the same path.
+
+## D14: ContributionPolicy is the sole award-governing policy
+
+There is no separate CompensationPolicy or payment policy in the canonical
+model. CON owns `ContributionPolicy` and immutable
+`ContributionPolicyVersion`; `CompensationAward` is an evaluation result, not
+a policy. PLAN2 uses only the exact frozen submitter and reviewer
+ContributionPolicyVersion references. Existing runtime and historical
+`payment_policy`/`locked_payment_policy_version` vocabulary is legacy debt and
+must be removed by owning clean-cut chunks before public release; it is not
+authority and receives no compatibility alias or fallback.

@@ -4,6 +4,11 @@ Status: non-executable planning skeleton after 03A. Risk: L1. Outcome: TASKS exp
 assignment, contributor, predecessor and immutable locked-context commands and
 facts without importing PROJECTS or AUTH internals.
 
+The TASK command composes the CON-owned submitter policy selection/freeze port
+inside the assignment transaction and persists the returned exact version as
+`TaskAssignment.submitter_contribution_policy_version_id`. TASK does not select,
+evaluate, copy, or own ContributionPolicy rules.
+
 Allowed: `backend/app/modules/tasks/api/**`, the smallest TASKS-owned
 claim/assignment/service extraction, focused TASK tests, composition adapters,
 boundary ledgers and initiative evidence/status. Not allowed: project-policy
@@ -20,6 +25,9 @@ enumerates exact files, commands, migration head and reviewers.
 
 Acceptance: concurrent claims have one winner; inactive/replaced assignment,
 wrong contributor, stale project generation and invalid predecessor deny;
+missing, unpublished, incomplete, binding-invalid, cross-project, stale, or
+changed submitter ContributionPolicyVersion denies before assignment creation;
+later publication cannot mutate the attempt's frozen version;
 facts contain no ORM/session object; touched debt shrinks. Verify focused unit
 and PostgreSQL race tests, boundary validators, Ruff and hosted coverage.
 Required reviews: architecture, security, product/ops, QA, senior and test

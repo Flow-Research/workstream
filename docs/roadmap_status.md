@@ -133,21 +133,28 @@ review. Their presence does not change the implemented-on-`main` list above.
    recovery, provider proof, and the later public cutover.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
-2. After canonical `allow_review`, complete review admission and the review and
-   revision persistence, queueing, access, decisions,
-   findings, replay, and operational recovery.
-3. Create immutable contributor and reviewer contribution records from the
-   accepted review lifecycle.
-4. Complete contribution-policy evaluation, conditional compensation awards,
-   fulfillment, idempotency, reconciliation, and audit behavior without making
-   settlement a prerequisite.
-5. Preserve authoritative contribution evidence for future reputation
+2. Complete ContributionPolicy service behavior and freeze the exact published,
+   complete, binding-valid submitter ContributionPolicyVersion on each
+   TaskAssignment before live assignment creation.
+3. Continue independent REV schema and packet-contract foundations. After
+   canonical `allow_review`, activate admission and claim only with an
+   independently frozen reviewer ContributionPolicyVersion on ReviewLease.
+4. Persist ContributionRecord and CompensationAward before live Review
+   decisions. Every final decision atomically creates the reviewer record and
+   evaluates its frozen rule; accept additionally creates FinalAcceptance and
+   the submitter record and evaluates the assignment-frozen rule.
+   `needs_revision` and `reject` create neither FinalAcceptance nor a submitter
+   record.
+5. Complete review/revision findings, replay, recovery, contribution-award
+   fulfillment, idempotency, reconciliation, product reads, and audit behavior
+   without making settlement a prerequisite.
+6. Preserve authoritative contribution evidence for future reputation
    projections; reputation projection remains deferred from the v0.1 runtime.
-6. Prove the complete v0.1 lifecycle through real API, database, durable-job,
+7. Prove the complete v0.1 lifecycle through real API, database, durable-job,
    storage, security, and operational recovery tests.
-7. Add the React/Vite/TypeScript product surfaces only against stable and tested
+8. Add the React/Vite/TypeScript product surfaces only against stable and tested
    backend contracts.
-8. Run a real internal pilot and close findings without weakening lifecycle,
+9. Run a real internal pilot and close findings without weakening lifecycle,
    authorization, storage, or evidence guarantees.
 
 These are dependency-ordered capability milestones, not a schedule. Distinct
