@@ -112,3 +112,24 @@ exact frozen submitter and reviewer ContributionPolicyVersion references. All
 retired economic-policy vocabulary and fields are removal debt for the owning
 clean-cut chunks before public release; they are not authority and receive no
 compatibility alias or fallback.
+
+## D15: ContributionPolicy cutover is registration-behavior-activation
+
+Adapter-binding and ContributionPolicy capabilities follow separate AUTH
+registration -> hidden CON behavior -> exact AUTH activation sequences. Future
+fulfillment callback authority is not a prerequisite and cannot be inherited.
+
+## D16: Aggregate owners persist policy lineage
+
+CON validates and returns immutable policy-version facts. PROJECTS alone binds
+the version to ProjectGuide. TASKS alone locks it on Task, copies it to
+TaskAssignment, and stamps it on Submission. ReviewLease later copies only the
+Submission stamp. No product service imports another module's model or
+repository to perform those writes.
+
+## D17: v0.1 removal is clean, not compatible
+
+The consolidated baseline is the current schema authority. The retired
+guide-bound economic path is removed only after canonical lineage is live, with
+no alias, fallback, dual read/write, guessed conversion, or historical backfill
+unless future discovery proves an actual deployed-data obligation.

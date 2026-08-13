@@ -129,7 +129,7 @@ POL-03B
 -> POL-04A -> AUTH-12B2 -> POL-04B
 -> POL-05A -> AUTH-12F4 -> POL-05B
 -> POL-06A -> AUTH-12G -> POL-06B
--> POL-07 -> AUTH-12H
+-> POL-07 + corrected AUTH-12B2 + CP05 + CP06 + CP07 -> AUTH-12H
 ```
 
 Each POL/AUTH chunk repairs only the public boundary and structural debt it
@@ -138,6 +138,11 @@ exact active guide plus complete pre-submit and post-submit policy identities
 and hashes. POL-08 physical cleanup follows the canonical `allow_review`
 milestone so it does not create a circular dependency on the Submission path;
 no live call may use the transitional inference paths in the interim.
+
+AUTH-12H requires only corrected AUTH-12B2 plus active policy behavior,
+validation, and ProjectGuide binding needed for guide activation. CP08,
+WS-ARCH-001-03A/03B/03C, and CP09 are downstream; making final legacy removal
+a 12H prerequisite would create a cycle through task activation.
 
 ### Gate 1: current task, assignment and submitter-policy authority
 
@@ -275,3 +280,36 @@ implicit public release.
 - Put orchestration in ART or AUTH: transfers lifecycle ownership.
 - Create a generic shared domain/service locator: hides coupling.
 - Preserve the debt ledger permanently: normalizes the architecture failure.
+
+## PLAN3 ContributionPolicy implementation correction
+
+PLAN2's lifecycle rule remains canonical, but its earlier instruction to begin
+CON-05A is not executable on current main. ContributionPolicy persistence exists
+without hidden policy behavior or exact AUTH action registration/activation;
+the retired guide-bound economic path remains live across PROJECTS, TASKS, Submission,
+and CHECKERS. The repository now uses one consolidated v0.1 baseline, so no
+deployed-history conversion or compatibility path is assumed.
+
+The corrected linear sequence is:
+
+```text
+CP01 AUTH unavailable registration
+-> CP02 CON hidden adapter-binding behavior
+-> CP03 AUTH adapter-binding activation
+-> CP04 CON hidden ContributionPolicy behavior
+-> CP05 AUTH ContributionPolicy activation
+-> CP06 CON validation port
+-> CP07 PROJECT guide binding
+-> CP08 TASK/Assignment/Submission schema and public lineage facts
+-> ARCH-03A PROJECT current-generation facts
+-> ARCH-03B TASK readiness, claim, assignment and Submission behavior
+-> ARCH-03C AUTH task/assignment activation
+-> CP09 clean legacy economic-path removal
+```
+
+Each arrow consumes merged public behavior. No chunk imports another product
+module's models or repository. Callback/fulfillment authority is excluded from
+adapter-binding registration. CON validates policy facts; PROJECTS owns guide
+writes; CP08 supplies TASK-owned persistence/public facts; ARCH-03B alone owns
+Task readiness, claim, assignment, and Submission command writes; REV later
+copies only the immutable Submission policy stamp.

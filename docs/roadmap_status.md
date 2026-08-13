@@ -133,11 +133,16 @@ review. Their presence does not change the implemented-on-`main` list above.
    recovery, provider proof, and the later public cutover.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
-2. Complete ContributionPolicy service behavior, bind one exact published,
+2. Register exact ContributionPolicy authority while unavailable; implement
+   and separately activate adapter-binding and ContributionPolicy behavior;
+   expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and
    lock it on each task before that task becomes claimable. TaskAssignment
    inherits the task lock without a claim-time lookup, and each immutable
    Submission stamps the exact version governing that attempt.
+   Complete `WS-ARCH-001-03A` through `WS-ARCH-001-03C` to activate the sole
+   replacement task/assignment path, then run `WS-ARCH-001-CP09` to remove the
+   retired guide-bound economic path only after that replacement is live.
 3. Continue independent REV schema and packet-contract foundations. After
    canonical `allow_review`, activate admission and claim only when ReviewLease
    copies the exact ContributionPolicyVersion stamped on the admitted

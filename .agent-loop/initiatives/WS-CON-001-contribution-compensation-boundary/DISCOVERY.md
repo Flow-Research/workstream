@@ -122,8 +122,10 @@ REV-04B and 02B deferred until AUTH supplies its exact service authority.
 - Later migration-bearing merges may change the migration head; every
   implementation chunk must refresh current main. REV PLAN4 is merged, but
   each REV child still refreshes its exact runtime contract.
-- The deterministic classification of legacy economic rows remains a human
-  data-migration decision before CON-05A/05B.
+- The consolidated v0.1 baseline contains no evidenced deployed-history
+  obligation. CP09 uses clean removal; any future claim that production data
+  requires classification must be proven from current deployment evidence and
+  separately reviewed.
 - Exact CON ActionIds, service identities, dual-principal behavior, and
   activation owners require separate AUTH review; CON cannot invent them.
 - Provider fulfillment and callback authentication remain design inputs, not

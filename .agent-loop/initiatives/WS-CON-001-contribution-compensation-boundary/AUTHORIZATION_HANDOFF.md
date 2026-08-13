@@ -39,10 +39,11 @@ protocol and one caller-owned commit.
 | `03A` binding persistence | none; schema stores only canonical actor identity and non-secret route facts | CON may proceed |
 | `03B` policy persistence | none; no command or protected route | CON may proceed |
 | `02C` lifecycle audit participant | none; caller supplies already-authorized typed facts | CON may proceed |
-| `04A` binding commands | `compensation.adapter_binding.{read,create,suspend,resume,retire}` mapped to `compensation.adapter_binding.manage` with exact Finance authority | register before hidden service; activate after it |
-| `04B` policy commands | `contribution.policy.{read,create_draft,update_draft,publish,retire}` mapped to `compensation.policy.manage` with exact Finance authority | register before hidden service; activate after it |
-| `05A` guide-activation validation/persistence | existing guide activation authority; later TASK readiness/claim authority remains TASK/AUTH-owned | CON supplies no TASK composition; exact guide/task/assignment lineage must be proven before claim activation |
-| `06` former review-claim lookup | none | planned retirement; REV inherits admitted task-locked policy and AUTH adds no CON lookup path |
+| `CP01` binding and policy registration | exact binding/policy actions, typed contexts, custody and permission mapping; callback/fulfillment excluded | register unavailable before hidden services |
+| `CP03` binding activation | exact CP02-proven binding actions only | activate after hidden proof |
+| `CP05` policy activation | exact CP04-proven policy actions only | activate after hidden proof |
+| `CP06-CP08` validation and owner persistence | existing guide activation authority; later TASK readiness/claim authority remains TASK/AUTH-owned | CON validates only; PROJECT/TASK own writes |
+| `06` former review-claim lookup | none | planned retirement; REV copies the admitted Submission's immutable attempt version, verifies Task/Assignment only for equality, and performs no CON/current-policy lookup |
 | `07` review decision participant | existing planned `review.decision` contract | REV owns composition/commit; AUTH later activates |
 | `02B` dispatcher | `outbox.dispatch`, closed dispatcher identity, singleton matrix row, provisioning, admission, typed context, evaluator, and availability | blocked; schedule after AUTH delivery |
 | `08B` fulfillment callback | independently approved reporter identity/action/matrix contract | not inherited from dispatcher |
@@ -75,8 +76,10 @@ matrix rows, or evaluators.
 
 ## Immediate AUTH ask
 
-No AUTH change blocks planning or CON `03A`, `03B`, or `02C`. Before CON `04A`
-or `04B`, AUTH must publish the exact registration contracts above. Before CON
+No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01 is
+the first proposed implementation gate and registers binding/policy authority
+while unavailable. CP03 and CP05 activate only their respective CP02/CP04
+hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and
 transaction-participant foundations now needed by REV.

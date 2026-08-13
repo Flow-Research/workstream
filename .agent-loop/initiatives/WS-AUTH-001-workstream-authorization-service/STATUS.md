@@ -32,14 +32,20 @@ not current start requirements.
   pre-submit policy; it performs no inference.
 - AUTH-12G follows hidden POL-06A and activates deterministic stored
   post-submit projection authority.
-- AUTH-12H follows the complete POL-06B/07 and required CON clean cut, and
-  activates only a complete approved unified guide lineage.
+- WS-AUTH-001-12H is planned after complete POL-06B/07, corrected AUTH-12B2, CP05 active
+  ContributionPolicy behavior, CP06 validation, and CP07 ProjectGuide binding.
+  It does not depend on CP08, WS-ARCH-001-03A/03B/03C, or CP09 final legacy
+  removal.
 - AUTH-13 through AUTH-16 remain future task, submission/checker, cleanup, and
   conformance boundaries. Each must be split against then-current product
   behavior before implementation.
 - ART, REV, and CON feature actions remain unavailable until their exact hidden
   owner behavior and typed manifests are merged. Their activation order lives
   in the matching XINT and feature-owner records.
+- PLAN3 proposes the missing contribution-policy sequence: CP01 registers exact
+  adapter-binding and policy actions while unavailable; CP03 and CP05 activate
+  only their respective merged hidden behavior. Fulfillment callback authority
+  remains separate and cannot be bundled into adapter-binding registration.
 
 Open pull requests are the transient-work view. This status page does not name
 an active branch or authorize implementation. GitHub permissions, a bounded

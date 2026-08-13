@@ -10,7 +10,7 @@
 | Human revision mixes new guide/policies with stale contribution terms or rewrites completed awards | Incoherent contributor obligations and corrupted economic history | One task-owned complete-context preparation keeps/rebases/blocks atomically; only the next-attempt TaskAssignment selector changes; completed lease/contribution/award history remains immutable. |
 | Planning evidence is treated as runtime | Wrong migration or dependency assumptions | Treat ART #249 as merged ART runtime and REV #258 as merged planning evidence only; refresh main before every implementation. |
 | Migration collision with ART/REV | Broken linear history | Allocate only from the then-current Alembic head; no number is reserved in planning. |
-| Legacy economic rows are guessed | Corrupted award policy lineage | Require explicit deterministic classification or fail closed before 05A/05B. |
+| Compatibility or backfill is invented for the consolidated v0.1 baseline | Unnecessary dual paths and corrupted policy lineage | CP09 performs clean removal; require separately reviewed deployment evidence before any data-classification path. |
 | Dispatcher authority leaks to handlers | Cross-feature service privilege | Dispatcher owns mechanics only; every protected handler has independent identity/action/context. |
 | Optional evidence becomes core availability dependency | ART outage blocks contribution truth | Keep 09A/09B deferred and PostgreSQL reads authoritative. |
 | Provider receipt leaks secrets | Security/privacy incident | Persist only bounded non-sensitive receipt facts; explicitly deny provider bodies, secrets, tokens, signatures, URLs, PII, balances, ledgers, settlement data, and digests derived from any forbidden input. |

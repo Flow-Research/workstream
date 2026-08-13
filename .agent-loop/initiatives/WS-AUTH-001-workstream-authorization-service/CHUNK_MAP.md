@@ -17,8 +17,16 @@ may proceed concurrently; open pull requests show transient ownership.
 
 ## Chunks
 
+`WS-ARCH-001/CHUNK_MAP.md` owns the ordered cross-module sequence
+`WS-ARCH-001-CP01 -> CP02 -> CP03 -> CP04 -> CP05`; the AUTH entries below
+project only AUTH-owned registration and activation responsibilities from that
+sequence.
+
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
+| `WS-ARCH-001-CP01` | Adapter-binding and ContributionPolicy unavailable registration | L1 | Proposed by PLAN3; excludes callback/fulfillment and all activation |
+| `WS-ARCH-001-CP03` | Exact adapter-binding activation | L1 | Proposed after merged CP02 hidden proof |
+| `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |
 | `WS-AUTH-001-01` | Adopt Authorization Baseline And Repository Contracts | L1 | Merged through PR #93 as `772af1d` |
 | `WS-AUTH-001-02` | Verified Issuer Token And JWKS Boundary | L1 | Merged through PR #107 as `060b780` |
@@ -74,7 +82,7 @@ may proceed concurrently; open pull requests show transient ownership.
 | `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Merged through PR #312 as `98eae13e`; POL-03B is the next consumer |
 | `WS-AUTH-001-12F4` | Unified Pre-Submit Approval Activation | L1 | Proposed after hidden POL-05A; before POL-05B |
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
-| `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |
+| `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07, corrected AUTH-12B2, CP05 active behavior, CP06 validation, and CP07 ProjectGuide binding; CP08, ARCH-03A/03B/03C, and CP09 are downstream |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Historical Submission, Checker, And Audit Visibility Cutover | L1 | Planned retirement as superseded/non-executable; split across WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |

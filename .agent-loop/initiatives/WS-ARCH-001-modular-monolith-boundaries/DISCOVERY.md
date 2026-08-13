@@ -183,3 +183,22 @@ complete unified guide compilation and approval
 PR #329 is the open planning reconciliation for this boundary. No open
 implementation pull request owns the executable sequence; the owner skeletons
 remain non-executable until refreshed against current `main`.
+
+## PLAN3 current-main discovery
+
+- ContributionPolicy and immutable version/rule/definition persistence already
+  exist under the CON-owned contributions module.
+- AUTH contains broad compensation permission identifiers but no exact
+  `contribution.policy.*` ActionIds, ActionOwner custody, typed contexts, or
+  planned definitions suitable for the hidden service.
+- The historical CON-04A contract incorrectly makes future fulfillment callback
+  registration a prerequisite of adapter-binding behavior.
+- ProjectGuide lacks `contribution_policy_version_id`; WorkstreamTask,
+  TaskAssignment, and Submission lack their canonical ContributionPolicyVersion
+  lineage fields.
+- Retired guide-bound economic fields and consumers remain live across PROJECTS,
+  TASKS, Submission, and CHECKERS.
+- The active schema is the consolidated `0001_v01_baseline`; there is no
+  repository evidence requiring a compatibility alias, deployed-history
+  backfill, or guessed legacy-row conversion.
+- No open pull request currently owns this sequence.
