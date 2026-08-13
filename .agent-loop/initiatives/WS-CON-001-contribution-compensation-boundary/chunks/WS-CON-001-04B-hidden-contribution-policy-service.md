@@ -1,5 +1,8 @@
 # Chunk Contract: WS-CON-001-04B - Hidden Contribution-Policy Service
 
+> Historical, superseded, and non-executable. PLAN3 replaces this contract with
+> WS-ARCH-001-CP04 and CP05. Do not implement this file.
+
 ## Goal and risk
 
 Implement hidden read/draft/update/publish/retire ContributionPolicy behavior

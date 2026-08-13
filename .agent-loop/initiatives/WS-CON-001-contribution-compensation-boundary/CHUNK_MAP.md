@@ -28,16 +28,16 @@ signed-loop records do not make behavior live.
 |---|---|---|---|
 | `03B` | Contribution-policy persistence | 03A | Merged PR #274; REV-03A2 FK is unblocked |
 | `02C` | Shared lifecycle-audit participant | PLAN4; current AuditEvent contract | Merged PR #277; independent of dispatcher; required before REV-04B |
-| `04A` | Hidden adapter-binding service | 03A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
-| `04B` | Hidden contribution-policy service | 03B + 04A + exact AUTH registration/PREP contract | Blocked on AUTH registration |
-| `WS-CON-001-05A` | Legacy semantic cutover + guide-activation ContributionPolicyVersion validation port + guide/task/assignment persistence contract | 04B + guide-activation contract + row-classification decision | Planned; no TASK composition; mandatory before WS-ARCH-001-03B task readiness |
-| `WS-CON-001-05B` | Legacy economic schema removal | 05A zero-consumer proof | Planned |
+| `04A` | Historical broad hidden adapter-binding contract | 03A + exact AUTH registration/PREP contract | Superseded by owner-separated ARCH CP01-CP03; callback authority is not a binding prerequisite |
+| `04B` | Historical hidden contribution-policy contract | 03B + binding activation + exact AUTH registration/PREP contract | Superseded by ARCH CP04-CP05 |
+| `WS-CON-001-05A` | Historical broad semantic cutover/validation/schema contract | unavailable behavior and cross-owner schema assumptions | Superseded by CP06 validation, CP07 PROJECT binding, CP08 TASK lineage, and CP09 removal |
+| `WS-CON-001-05B` | Historical legacy economic schema removal | former 05A | Superseded by clean v0.1 CP09 without compatibility/backfill |
 | `WS-CON-001-06` | Retire former reviewer claim-time policy lookup | Replaced by guide -> task -> assignment -> Submission -> ReviewLease inheritance | Planned retirement; no implementation |
 | `03C` | ContributionRecord/CompensationAward persistence | 03B + merged REV Review/ReviewLease/FinalAcceptance targets | Proposed after REV-04B and mandatory before live REV decisions |
 | `03D` | Delivery/receipt/status persistence | 03C | Proposed |
-| `07` | Atomic flush-only review contribution/award participant | 03C/03D + 05A + stable REV revision lineage | Proposed; mandatory before REV-10/first Review commit |
+| `07` | Atomic flush-only review contribution/award participant | 03C/03D + CP06/CP08 + stable REV revision lineage | Proposed; mandatory before REV-10/first Review commit |
 | `02B` | Generic outbox dispatcher/recovery | AUTH dispatcher identity/action/matrix/context/PREP registration | Blocked on AUTH; required later, not before 03A/03B |
-| `08A` | Outbound compensation delivery | 03D + 07 + 02B + 04A/04B + independent delivery authority | Proposed |
+| `08A` | Outbound compensation delivery | 03D + 07 + 02B + CP02/CP04 + independent delivery authority | Proposed |
 | `08R` | Bound callback rate control | 08A | Proposed |
 | `08B` | Inbound fulfillment callback | 08R + independent callback authority/fence | Proposed |
 | `10A` | Contribution/award product reads | 08B + exact AUTH read contracts | Proposed |
@@ -57,16 +57,16 @@ Deferred optional work:
 ```text
 PLAN4
   -> 03A -> 03B ---------------------------> REV-03A2
-                  -> 04A -> 04B -> 05A -> 05B
   -> 02C ----------------------------------> REV-04B
 
 REV-04B + 03B -> 03C -> 03D
-04B + guide activation facts -> 05A -> WS-ARCH-001-03B task readiness -> 03C activation
+CP01 -> CP02 -> CP03 -> CP04 -> CP05 -> CP06 -> CP07 -> CP08
+CP08 -> WS-ARCH-001-03A/03B replacement behavior -> 03C activation -> CP09
 task-locked policy lineage -> assignment -> Submission-stamped attempt lineage -> allow_review -> ReviewLease
-REV revision lineage + 03C/03D + 05A -> 07 -> REV-10 first Review commit
+REV revision lineage + 03C/03D + CP06/CP08 -> 07 -> REV-10 first Review commit
 
 AUTH dispatcher registration -> 02B
-03D + 07 + 02B + 04A/04B -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
+03D + 07 + 02B + CP02/CP04 -> 08A -> 08R -> 08B -> 10A -> 10B -> 10C -> 11
 ```
 
 ART-03C is merged baseline evidence. Remaining ART submission/reviewer custody

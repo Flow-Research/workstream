@@ -19,6 +19,9 @@ may proceed concurrently; open pull requests show transient ownership.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
+| `WS-ARCH-001-CP01` | Adapter-binding and ContributionPolicy unavailable registration | L1 | Proposed by PLAN3; excludes callback/fulfillment and all activation |
+| `WS-ARCH-001-CP03` | Exact adapter-binding activation | L1 | Proposed after merged CP02 hidden proof |
+| `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |
 | `WS-AUTH-001-01` | Adopt Authorization Baseline And Repository Contracts | L1 | Merged through PR #93 as `772af1d` |
 | `WS-AUTH-001-02` | Verified Issuer Token And JWKS Boundary | L1 | Merged through PR #107 as `060b780` |

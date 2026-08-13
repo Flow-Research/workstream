@@ -15,10 +15,20 @@
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete on merge; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
 | `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
+| `WS-ARCH-001-PLAN3` | ContributionPolicy registration, behavior, activation, guide/task lineage and clean legacy-removal sequencing | L1 | Proposed planning correction; no runtime |
+| `WS-ARCH-001-CP01` | AUTH adapter-binding and ContributionPolicy unavailable registration | L1 | Proposed skeleton after PLAN3 |
+| `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Proposed skeleton after CP01 |
+| `WS-ARCH-001-CP03` | AUTH exact adapter-binding activation | L1 | Proposed skeleton after CP02 evidence |
+| `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after CP03 |
+| `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |
+| `WS-ARCH-001-CP06` | CON guide-activation/revision policy-validation port | L1 | Proposed skeleton after CP05 |
+| `WS-ARCH-001-CP07` | PROJECT guide-bound ContributionPolicyVersion persistence | L1 | Proposed skeleton after CP06 |
+| `WS-ARCH-001-CP08` | TASK/Assignment/Submission policy-lineage schema and public facts | L1 | Proposed foundation after CP07; no commands |
+| `WS-ARCH-001-CP09` | Clean retired guide-bound economic path removal | L1 | Proposed after ARCH-03C activates the replacement; split if discovery requires |
 | `WS-ARCH-001-03` | PROJECT/TASK readiness coordination parent | L1 | Split; non-executable parent |
-| `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned skeleton after AUTH-12H; POL-08 cleanup remains later |
-| `WS-ARCH-001-03B` | TASK readiness, claim, assignment and locked-context public commands/facts | L1 | Planned skeleton after 03A and CON-05A guide-activation policy validation/persistence contract; TASK locks the guide-bound version before claimability and claim only inherits it |
-| `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned skeleton after 03A/03B hidden manifests and CON-05A; no live claim before exact guide -> task -> assignment lineage proof |
+| `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned after AUTH-12H and CP07; may reuse CP07 public guide fact but cannot duplicate its write |
+| `WS-ARCH-001-03B` | TASK readiness, claim, assignment and locked-context public commands/facts | L1 | Sole behavior owner after 03A and CP08; consumes CP08 fields/facts to write Task -> Assignment -> Submission lineage |
+| `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned after 03A/03B and CP08; activates replacement before CP09 removes the retired path |
 | `WS-ARCH-001-04` | Canonical post-submit checker coordination parent | L1 | Split; non-executable parent |
 | `WS-ARCH-001-04A` | CHECKER post-submit plan/run/final-result public contract | L1 | Planned skeleton after POL-07 and 03C |
 | `WS-ARCH-001-04B` | ART exact verified Submission materialization | L1 | Planned skeleton after 04A and merged 02H |

@@ -275,3 +275,36 @@ implicit public release.
 - Put orchestration in ART or AUTH: transfers lifecycle ownership.
 - Create a generic shared domain/service locator: hides coupling.
 - Preserve the debt ledger permanently: normalizes the architecture failure.
+
+## PLAN3 ContributionPolicy implementation correction
+
+PLAN2's lifecycle rule remains canonical, but its earlier instruction to begin
+CON-05A is not executable on current main. ContributionPolicy persistence exists
+without hidden policy behavior or exact AUTH action registration/activation;
+the retired guide-bound economic path remains live across PROJECTS, TASKS, Submission,
+and CHECKERS. The repository now uses one consolidated v0.1 baseline, so no
+deployed-history conversion or compatibility path is assumed.
+
+The corrected linear sequence is:
+
+```text
+CP01 AUTH unavailable registration
+-> CP02 CON hidden adapter-binding behavior
+-> CP03 AUTH adapter-binding activation
+-> CP04 CON hidden ContributionPolicy behavior
+-> CP05 AUTH ContributionPolicy activation
+-> CP06 CON validation port
+-> CP07 PROJECT guide binding
+-> CP08 TASK/Assignment/Submission schema and public lineage facts
+-> ARCH-03A PROJECT current-generation facts
+-> ARCH-03B TASK readiness, claim, assignment and Submission behavior
+-> ARCH-03C AUTH task/assignment activation
+-> CP09 clean legacy economic-path removal
+```
+
+Each arrow consumes merged public behavior. No chunk imports another product
+module's models or repository. Callback/fulfillment authority is excluded from
+adapter-binding registration. CON validates policy facts; PROJECTS owns guide
+writes; CP08 supplies TASK-owned persistence/public facts; ARCH-03B alone owns
+Task readiness, claim, assignment, and Submission command writes; REV later
+copies only the immutable Submission policy stamp.

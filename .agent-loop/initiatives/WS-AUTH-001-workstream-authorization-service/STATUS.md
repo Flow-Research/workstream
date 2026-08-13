@@ -40,6 +40,10 @@ not current start requirements.
 - ART, REV, and CON feature actions remain unavailable until their exact hidden
   owner behavior and typed manifests are merged. Their activation order lives
   in the matching XINT and feature-owner records.
+- PLAN3 proposes the missing contribution-policy sequence: CP01 registers exact
+  adapter-binding and policy actions while unavailable; CP03 and CP05 activate
+  only their respective merged hidden behavior. Fulfillment callback authority
+  remains separate and cannot be bundled into adapter-binding registration.
 
 Open pull requests are the transient-work view. This status page does not name
 an active branch or authorize implementation. GitHub permissions, a bounded

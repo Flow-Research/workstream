@@ -50,10 +50,11 @@ schema work. Current dependency analysis yields:
 3. PLAN5 complete-context human revision-rebase reconciliation.
 4. CON-03B contribution-policy persistence, unblocking REV-03A2.
 5. CON-02C lifecycle-audit participant before REV-04B.
-6. Hidden policy/binding behavior and legacy clean cut as AUTH contracts become
-   available.
-7. CON-05A guide-activation policy validation and the immutable guide/task/
-   assignment persistence contract must merge before live task readiness.
+6. CP01-CP05 register, implement, and activate binding/policy behavior in exact
+   pairs.
+7. CP06 validation, CP07 guide binding, and CP08 task-attempt persistence
+   precede ARCH-03A/03B replacement behavior and ARCH-03C activation; CP09 then
+   removes the retired path.
 8. Contribution/award persistence follows stable REV Review, ReviewLease and
    FinalAcceptance FK targets, but precedes live review decisions.
 9. Review claim copies the admitted Submission's immutable attempt version;
@@ -65,14 +66,24 @@ schema work. Current dependency analysis yields:
     Frozen rules may create zero, one or two CompensationAwards per record.
 11. Dispatcher and fulfillment follow exact AUTH service registration.
 
+## PLAN3 correction
+
+The former 04A/04B/05A/05B path is not executable as written. PLAN3 separates
+AUTH registration, hidden CON behavior, AUTH activation, CON validation,
+PROJECT guide binding, TASK attempt lineage, and clean legacy removal as
+CP01-CP09. The consolidated v0.1 baseline removes any presumption of deployed
+historical-row backfill or compatibility behavior.
+
 ## Current blockers
 
 - CON-02B: missing `outbox.dispatch`, `workstream.outbox.dispatcher`, exact
   matrix/context/PREP support, and AUTH activation plan.
-- CON-04A/04B and later protected surfaces: exact AUTH manifests are not yet
-  registered.
-- CON-05A/05B: deterministic legacy-row classification remains a human data
-  decision.
+- CP01: exact AUTH adapter-binding and ContributionPolicy manifests are not yet
+  registered; callback/fulfillment authority must remain separate.
+- CP02-CP05: hidden behavior and exact activation have not merged.
+- CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
+  the preceding public behavior. No historical-row classification is required
+  unless current-main discovery proves real deployed data exists.
 - CON-03C: REV Review and FinalAcceptance tables are not implemented.
 - CON-07: the corresponding REV decision caller contract is future. CON-06 is
   a planned retirement with no runtime dependency.
@@ -86,15 +97,17 @@ Submission stamp without a claim-time CON lookup.
 Only fulfillment, reconciliation and product reads remain downstream of the
 canonical decision transaction.
 
-WS-CON-001-05A is planned as the guide-activation validation and persistence
+CP06 validation plus CP07/CP08 owner persistence replace former CON-05A as the
 prerequisite for task readiness. WS-CON-001-06 is a planned retirement;
 ReviewLease copies the admitted Submission's immutable attempt version and
 verifies upstream Task/Assignment equality only.
-WS-CON-001-05B is planned after the 05A zero-consumer proof.
+CP09 replaces historical CON-05B and follows ARCH-03C activation of the
+CP08/ARCH-03B replacement path.
 
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. Binding creation remains deferred
-to CON-04A after AUTH approves the exact adapter identity and capability
-contract. Open pull requests determine transient CON work.
+participant after REV's earlier gates merge. The first proposed policy-cutover
+implementation is CP01 AUTH unavailable registration; no product behavior may
+start until PLAN3 merges and CP01 receives a current-main executable contract.
+Open pull requests determine transient CON work.

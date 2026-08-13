@@ -54,3 +54,15 @@ module and every cross-module call must use a typed public API.
 - CON validates one policy version at guide activation and is mandatory again
   in every final Review commit. TASK and REV inherit the immutable version;
   neither claim performs CON policy selection.
+
+## PLAN3 intent
+
+Turn PLAN2's correct ContributionPolicy lifecycle into an executable,
+non-circular sequence. Success means AUTH registers before behavior, each CON
+behavior activates only after hidden proof, CON exposes validation without
+writing foreign aggregates, PROJECTS binds the guide, TASKS carries immutable
+attempt lineage, and the retired guide-bound economic path is removed without
+compatibility or invented historical migration work.
+
+PLAN3 changes planning only. It does not register an action, activate a route,
+write policy behavior, mutate schema, or start a runtime child.

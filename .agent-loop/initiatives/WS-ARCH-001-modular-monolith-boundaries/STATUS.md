@@ -48,6 +48,10 @@
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the
   capability being touched.
+- PLAN3 corrects PLAN2's first implementation dependency. CON-05A is not a
+  valid direct start: missing AUTH registration/activation and hidden CON
+  behavior must precede owner-separated guide/task lineage. CP01-CP09 are
+  proposed non-executable skeletons until PLAN3 is reviewed and merged.
 
 ## Planned PLAN2 children
 

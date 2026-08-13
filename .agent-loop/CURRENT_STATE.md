@@ -80,11 +80,21 @@ WS-ARCH-001-04E is planned. WS-ARCH-001-04F is planned.
 WS-ART-001-06A is a planned retirement. WS-ART-001-06B is a planned
 retirement. WS-AUTH-001-14 is a planned retirement. WS-POL-003-08 is planned
 after canonical WS-ARCH-001-04E.
-WS-CON-001-05A is planned before live task readiness. WS-CON-001-06 is a planned retirement.
+CP06 validation plus CP07/CP08 owner persistence are proposed before live task
+readiness. WS-CON-001-06 is a planned retirement.
 Submission stamps the assignment's exact attempt version, and ReviewLease
 inherits that immutable Submission version without a CON lookup.
-WS-CON-001-05B is planned after the 05A zero-consumer proof.
+CP09 is the proposed clean legacy economic-path removal after ARCH-03C activates
+the CP08/ARCH-03B replacement behavior.
 WS-REV-001-10 is planned after its named REV and CON prerequisites.
 Merged WS-CON-001-PLAN5 remains historical evidence for same-TaskAssignment
 human revision rebase; current PLAN2 supersedes its independent reviewer-policy
 selection wording.
+
+## Proposed PLAN3 correction
+
+Do not start historical CON-05A directly. The proposed CP01-CP09 sequence owns
+AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
+activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
+clean v0.1 legacy economic-path removal in that order. Every child remains
+non-executable until PLAN3 merges and its current-main contract is expanded.
