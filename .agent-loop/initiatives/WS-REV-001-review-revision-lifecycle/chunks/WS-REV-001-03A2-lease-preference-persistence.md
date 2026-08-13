@@ -102,10 +102,8 @@ grant_revoked | admin_override` and must match their terminal status.
   substitute source.
 - Inserted attempts begin active, use database `claimed_at`, have
   `expires_at > claimed_at`, and use a unique positive generation per queue.
-  The database rejects a draft, crossed-project, or lineage-mismatched version
-  at insertion. Later live claim copies the immutable version stamped on the
-  admitted Submission; a version retired after that attempt was prepared
-  remains valid. CON-06 is a retirement-only cleanup and owns no lookup.
+  The database rejects a draft or already-retired version at insertion;
+  CON-06 still owns claim-time lookup and selection of that published identity.
 - Reviewer and preferred-reviewer references must resolve to canonical human
   ActorProfiles; service actors are rejected by database guards.
 - Lease identity, reviewer, frozen policy, lineage, generation, claimed time,

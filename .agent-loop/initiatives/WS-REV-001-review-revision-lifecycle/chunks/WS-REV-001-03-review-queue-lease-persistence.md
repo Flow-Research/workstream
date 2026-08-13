@@ -9,9 +9,8 @@ parent.
 
 - `WS-REV-001-03A` is a non-executable split record. `03A1` owns queue and
   admission-idempotency persistence; `03A2` owns lease and preference
-  persistence. Neither base child selects policy. Later live claim copies the
-  immutable ContributionPolicyVersion stamped on the admitted Submission; CON
-  owns no claim-time selector.
+  persistence. CON policy freeze is a later claim-time typed handoff and is not
+  a prerequisite for either base child.
 - `WS-REV-001-03B` is the sole owner of the normalized immutable
   ReviewPacketManifest/item models, schema, migration, repository contract, and
   persistence tests. It starts only after ART merges an exact packet-membership
