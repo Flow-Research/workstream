@@ -10,8 +10,8 @@ review claim.
 
 ## Replacement contract
 
-- `WS-ARCH-001-CP06` owns the CON validation port; CP07 and CP08 own PROJECT/TASK
-  persistence foundations.
+- `WS-CON-001-05A` owns the one upstream guide-activation validation port and
+  persistence contract.
 - `WS-ARCH-001-03B` owns task readiness and assignment inheritance.
 - Submission creation stamps the assignment's attempt version and canonical
   `allow_review` preserves that immutable Submission lineage.

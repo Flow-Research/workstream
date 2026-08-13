@@ -8,8 +8,8 @@ outcome. L1 economic/external-service/auth risk.
 
 ## Prerequisites
 
-- CON-03D delivery-receipt status persistence, ARCH-CP02 binding behavior,
-  ARCH-CP04 policy behavior, CON-07, and shared outbox dispatcher are merged;
+- CON-03D delivery-receipt status persistence, CON-04A binding behavior,
+  CON-04B policy behavior, CON-07, and shared outbox dispatcher are merged;
 - exact outbound-delivery ServiceIdentity and ActionId/static row approved and
   registered as planned by AUTH, or an explicitly approved closed
   dual-principal design;
