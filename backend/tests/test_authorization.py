@@ -9740,8 +9740,9 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
 
     identity = await get_authorization_actor_identity(resolved)
     assert identity.service_identity == "workstream.artifact.binding"
+    human = SimpleNamespace(profile=SimpleNamespace(id=str(uuid4()), actor_kind="human", service_identity=None), identity_link=SimpleNamespace(id=str(uuid4())))
+    assert (await get_authorization_actor_identity(human)).actor_kind.value == "human"
     assert calls == [token]
-
 
 @pytest.mark.parametrize(
     ("profile_status", "link_status"),
@@ -9777,7 +9778,6 @@ async def test_inactive_service_dependency_stages_no_observation(
 
     await anext(dependency)
     await dependency.aclose()
-
 
 async def test_service_denial_rolls_back_observations_before_clean_restage(
     monkeypatch: pytest.MonkeyPatch,
@@ -9878,7 +9878,6 @@ async def test_service_dependency_cancellation_rolls_back_staged_observation(
 
     assert observations == ["staged"]
     assert session.rollback_count == 1
-
 
 async def test_service_observation_persistence_failure_is_retryable_and_private(
     monkeypatch: pytest.MonkeyPatch,
