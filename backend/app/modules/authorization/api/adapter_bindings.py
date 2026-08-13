@@ -15,11 +15,13 @@ _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}\Z")
 
 
 def _require_token(name: str, value: str) -> None:
+    """Reject values outside the bounded canonical-token grammar."""
     if not isinstance(value, str) or not _TOKEN.fullmatch(value):
         raise ValueError(f"{name} must be a bounded canonical token")
 
 
 def _require_uuid(name: str, value: UUID) -> None:
+    """Reject identifiers that are not already parsed UUID values."""
     if not isinstance(value, UUID):
         raise ValueError(f"{name} must be a UUID")
 
@@ -32,6 +34,7 @@ class AdapterBindingReadFacts:
     adapter_binding_id: UUID
 
     def __post_init__(self) -> None:
+        """Validate the exact project and binding identifiers."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
 
@@ -47,6 +50,7 @@ class AdapterBindingCreateFacts:
     route_key: str
 
     def __post_init__(self) -> None:
+        """Validate the binding creation identity and routing facts."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_actor_id", self.adapter_actor_id)
         _require_token("instrument", self.instrument)
@@ -63,6 +67,7 @@ class AdapterBindingSuspendFacts:
     expected_status: str = "active"
 
     def __post_init__(self) -> None:
+        """Require an exact active binding as the suspension target."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
         if self.expected_status != "active":
@@ -78,6 +83,7 @@ class AdapterBindingResumeFacts:
     expected_status: str = "suspended"
 
     def __post_init__(self) -> None:
+        """Require an exact suspended binding as the resumption target."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
         if self.expected_status != "suspended":
