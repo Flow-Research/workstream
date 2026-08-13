@@ -40,6 +40,7 @@ backend/app/modules/authorization/api/adapter_bindings.py
 .ci/behavior-ownership/partition.v1.json (additive AUTH target parity only)
 .ci/behavior-ownership/auth/adapter-binding-facts.json
 backend/scripts/behavior_ownership.py (exact CP01A public-API target only)
+backend/scripts/run_test_lanes.py (CP01A test custody only)
 backend/tests/test_behavior_ownership.py (exact additive-transition parity only)
 backend/tests/authorization/test_adapter_binding_registration.py
 backend/tests/test_authorization.py (closed catalogue/action-owner parity only)
