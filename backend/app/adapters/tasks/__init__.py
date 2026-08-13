@@ -39,9 +39,18 @@ class DenySubmissionCreationAuthorization:
         del facts
         raise SubmissionCreationUnavailable("submission creation is unavailable")
 
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
+    async def prepare(self, facts: SubmissionCreationAuthorityFacts) -> object:
         del facts
         raise SubmissionCreationUnavailable("submission creation is unavailable")
+
+    async def consume(
+        self, prepared_authorization: object, facts: SubmissionCreationAuthorityFacts
+    ) -> None:
+        del prepared_authorization, facts
+        raise SubmissionCreationUnavailable("submission creation is unavailable")
+
+    def close(self, prepared_authorization: object) -> None:
+        del prepared_authorization
 
 
 class _ArtifactAdmissionAdapter:

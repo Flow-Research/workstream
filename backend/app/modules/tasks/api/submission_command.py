@@ -72,8 +72,16 @@ class SubmissionCreationAuthorizationPort(Protocol):
     async def authorize(self, facts: SubmissionCreationPreparationFacts) -> None:
         """Conceal denial before TASK state is locked or revealed."""
 
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
+    async def prepare(self, facts: SubmissionCreationAuthorityFacts) -> object:
+        """Prepare fresh exact authority before ART admission state is inspected."""
+
+    async def consume(
+        self, prepared_authorization: object, facts: SubmissionCreationAuthorityFacts
+    ) -> None:
         """Consume final exact authority after protected facts are known."""
+
+    def close(self, prepared_authorization: object) -> None:
+        """Discard process-local authority after every success or failure path."""
 
 
 @dataclass(frozen=True, slots=True)

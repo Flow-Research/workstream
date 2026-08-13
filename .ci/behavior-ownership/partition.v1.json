@@ -466,6 +466,14 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/submission_consumption.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/submission_creation_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/submission_preparation.py"
     },
     {
@@ -837,7 +845,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "d01214349f276a98624b34236b0b163c82cb68bc8426c0137e4aa71c6471c024",
+  "authority_digest": "8ee0aa0c7ab30e28e3f7a665b66bcfd981d220197f783e5fb72a000bd2948cb4",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

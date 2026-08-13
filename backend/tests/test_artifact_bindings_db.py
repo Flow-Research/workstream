@@ -150,9 +150,16 @@ class _FinalDeny:
     async def authorize(self, facts) -> None:
         del facts
 
-    async def consume(self, facts) -> None:
+    async def prepare(self, facts) -> object:
         del facts
         raise SubmissionCreationUnavailable("submission creation is unavailable")
+
+    async def consume(self, prepared_authorization, facts) -> None:
+        del prepared_authorization, facts
+        raise AssertionError("unreachable")
+
+    def close(self, prepared_authorization) -> None:
+        del prepared_authorization
 
 
 @pytest.mark.asyncio

@@ -13,9 +13,11 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorKind,
+    ActorStatus,
     AuthorizationContext,
     AuthorizationDenied,
     HumanAuthorizationContext,
+    IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
     PreparedAuthorizationUnsupported,
@@ -41,11 +43,13 @@ class PreparedSubmissionCreationAuthorization:
             not isinstance(context, HumanAuthorizationContext)
             or context.actor_kind is not ActorKind.HUMAN
             or context.actor_profile_id != facts.contributor_id
+            or context.actor_status is not ActorStatus.ACTIVE
+            or context.identity_link_status is not IdentityLinkStatus.ACTIVE
         ):
             raise SubmissionCreationUnavailable("submission creation is unavailable")
 
-    async def consume(self, facts: SubmissionCreationAuthorityFacts) -> None:
-        """Consume one project-scoped capability for exact locked TASK facts."""
+    async def prepare(self, facts: SubmissionCreationAuthorityFacts) -> object:
+        """Prepare fresh project-scoped authority before ART state is inspected."""
         from app.modules.authorization.prepared import PreparedAuthorizationService
 
         context = self._context
@@ -56,6 +60,7 @@ class PreparedSubmissionCreationAuthorization:
             AuthorizationService(self._session, context, admin_repository=repository),
             repository,
         )
+        retained = False
         try:
             resource = _creation_resource(context, facts)
             prepared_input = PreparedAuthorizationInput(
@@ -70,8 +75,42 @@ class PreparedSubmissionCreationAuthorization:
                     project_id=resource.scope_project_id,
                 ),
             )
+            retained = True
+            return _PreparedSubmissionCreation(prepared, handle, prepared_input, resource)
+        except (
+            AuthorizationDenied,
+            PreparedAuthorizationHandleInvalid,
+            PreparedAuthorizationUnsupported,
+            ValidationError,
+        ) as exc:
+            raise SubmissionCreationUnavailable("submission creation is unavailable") from exc
+        finally:
+            if not retained:
+                prepared.close()
+
+    async def consume(
+        self, prepared_authorization: object, facts: SubmissionCreationAuthorityFacts
+    ) -> None:
+        """Consume the exact capability prepared before admission inspection."""
+        if not isinstance(prepared_authorization, _PreparedSubmissionCreation):
+            raise SubmissionCreationUnavailable("submission creation is unavailable")
+        prepared = prepared_authorization.service
+        try:
+            resource = _creation_resource(self._context, facts)
+            prepared_input = PreparedAuthorizationInput(
+                idempotency_key=facts.admission_id,
+                request_value=resource.model_dump(mode="json"),
+            )
+            if (
+                prepared_input != prepared_authorization.prepared_input
+                or resource != prepared_authorization.resource
+            ):
+                raise SubmissionCreationUnavailable("submission creation is unavailable")
             await prepared.consume(
-                handle, ActionId.SUBMISSION_CREATE, prepared_input, resource
+                prepared_authorization.handle,
+                ActionId.SUBMISSION_CREATE,
+                prepared_input,
+                resource,
             )
         except (
             AuthorizationDenied,
@@ -82,6 +121,23 @@ class PreparedSubmissionCreationAuthorization:
             raise SubmissionCreationUnavailable("submission creation is unavailable") from exc
         finally:
             prepared.close()
+
+    def close(self, prepared_authorization: object) -> None:
+        """Discard an AUTH-owned process-local carrier on every exit path."""
+        if isinstance(prepared_authorization, _PreparedSubmissionCreation):
+            prepared_authorization.service.close()
+
+
+class _PreparedSubmissionCreation:
+    """AUTH-private carrier for one process-local prepared capability."""
+
+    __slots__ = ("handle", "prepared_input", "resource", "service")
+
+    def __init__(self, service, handle, prepared_input, resource) -> None:
+        self.service = service
+        self.handle = handle
+        self.prepared_input = prepared_input
+        self.resource = resource
 
 
 def _creation_resource(
