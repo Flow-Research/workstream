@@ -26,7 +26,7 @@
 | `WS-ARCH-001-CP08` | TASK/Assignment/Submission policy-lineage schema and public facts | L1 | Proposed foundation after CP07; no commands |
 | `WS-ARCH-001-CP09` | Clean retired guide-bound economic path removal | L1 | Proposed after ARCH-03C activates the replacement; split if discovery requires |
 | `WS-ARCH-001-03` | PROJECT/TASK readiness coordination parent | L1 | Split; non-executable parent |
-| `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned after AUTH-12H and CP07; may reuse CP07 public guide fact but cannot duplicate its write |
+| `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned after AUTH-12H, CP07, and CP08; may reuse CP07 public guide fact but cannot duplicate its write |
 | `WS-ARCH-001-03B` | TASK readiness, claim, assignment and locked-context public commands/facts | L1 | Sole behavior owner after 03A and CP08; consumes CP08 fields/facts to write Task -> Assignment -> Submission lineage |
 | `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned after 03A/03B and CP08; activates replacement before CP09 removes the retired path |
 | `WS-ARCH-001-04` | Canonical post-submit checker coordination parent | L1 | Split; non-executable parent |

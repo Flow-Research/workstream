@@ -17,6 +17,11 @@ may proceed concurrently; open pull requests show transient ownership.
 
 ## Chunks
 
+`WS-ARCH-001/CHUNK_MAP.md` owns the ordered cross-module sequence
+`WS-ARCH-001-CP01 -> CP02 -> CP03 -> CP04 -> CP05`; the AUTH entries below
+project only AUTH-owned registration and activation responsibilities from that
+sequence.
+
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-ARCH-001-CP01` | Adapter-binding and ContributionPolicy unavailable registration | L1 | Proposed by PLAN3; excludes callback/fulfillment and all activation |

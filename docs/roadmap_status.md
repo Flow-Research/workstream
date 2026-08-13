@@ -140,6 +140,9 @@ review. Their presence does not change the implemented-on-`main` list above.
    lock it on each task before that task becomes claimable. TaskAssignment
    inherits the task lock without a claim-time lookup, and each immutable
    Submission stamps the exact version governing that attempt.
+   Complete `WS-ARCH-001-03A` through `WS-ARCH-001-03C` to activate the sole
+   replacement task/assignment path, then run `WS-ARCH-001-CP09` to remove the
+   retired guide-bound economic path only after that replacement is live.
 3. Continue independent REV schema and packet-contract foundations. After
    canonical `allow_review`, activate admission and claim only when ReviewLease
    copies the exact ContributionPolicyVersion stamped on the admitted

@@ -39,10 +39,13 @@ CON 02C lifecycle audit participant
 -> CON 03C ContributionRecord/CompensationAward persistence
 -> CON 03D delivery/receipt/status and ordinal persistence
 
-REV lease schema/caller facts + ARCH-CP04/CP05 policy service and activation
+REV lease schema/caller facts + WS-ARCH-001-CP01 through CP05 registration,
+behavior, and activation
+-> WS-ARCH-001-CP06 validation -> CP07 guide binding -> CP08 attempt persistence
+-> WS-ARCH-001-03A/03B replacement behavior -> WS-ARCH-001-03C activation
 -> task-locked policy lineage carried through admission; no CON claim-time lookup
 
-stable REV revision lineage + CON 03C/03D + ARCH-CP06/CP08
+stable REV revision lineage + CON 03C/03D + WS-ARCH-001-CP06/CP08
 -> CON 07 mandatory review-decision participant
 -> REV 10 hidden contribution composition
 

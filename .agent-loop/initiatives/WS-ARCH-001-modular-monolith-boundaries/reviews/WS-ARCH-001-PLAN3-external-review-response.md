@@ -12,10 +12,22 @@
 - CP01 remains a planning skeleton only. Its pre-start contract must split the
   two registration families or prove one bounded unavailable-only shared
   catalogue/context change with independent parity tests.
+- Aligned the canonical CP07 -> CP08 -> WS-ARCH-001-03A dependency in the
+  initiative map and made AUTH's projection defer to that owner sequence.
+- Named all four immutable policy-lineage fields in the CON conformance proof
+  and restored the complete CP01-CP08 -> ARCH-03A/03B/03C release chain.
+- Recorded the replacement activation and CP09 clean-removal gate in the
+  capability ledger.
+- Distinguished the covered Project Manager HTTP entry from the fixed project
+  setup service's internal command resolution in CP07.
 
 ## Comments deferred
 
-None.
+- CodeRabbit comments against historical CON 04A/04B/05A/05B/08A bodies were
+  not applied. Those merged chunk contracts are immutable historical evidence;
+  active CHUNK_MAP/STATUS/runtime records already mark them non-executable and
+  point to the current CP replacements. Editing their landed contract bodies
+  would violate the repository's atomic chunk-state history gate.
 
 ## Human decisions needed
 
