@@ -1,5 +1,6 @@
 """Exact AUTH resource contracts for hidden Submission consumption."""
 
+import json
 from typing import Literal
 from uuid import UUID
 
@@ -105,7 +106,9 @@ def parse_consumption_binding(action_id: ActionId, value, invalid):
     if resource_type is None:
         return None
     try:
-        resource = resource_type.model_validate(value)
+        resource = resource_type.model_validate_json(
+            json.dumps(value, separators=(",", ":"), sort_keys=True)
+        )
     except (TypeError, ValueError) as exc:
         raise invalid("invalid prepared authorization handle") from exc
     return resource

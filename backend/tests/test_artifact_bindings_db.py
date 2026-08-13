@@ -28,6 +28,7 @@ from app.modules.tasks.models import AuditEvent
 from app.modules.tasks.repository import TaskRepository
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization import prepared as prepared_authorization
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
@@ -38,7 +39,6 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationUnsupported,
 )
 from app.modules.actors.service_identities import ServiceIdentity
-from app.modules.artifacts import authorization as artifact_authorization
 from test_artifact_bindings import _Allow, _lineage, _request
 
 
@@ -388,9 +388,15 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
     async def lock_context(_self, _request): return context
     async def get_task(_self, _task_id, **_kwargs): return task
     async def lock_actor(_self, link_id, actor_id):
+        is_service = actor_id == service_actor_id
         return (
             type("Link", (), {"id": str(link_id), "actor_profile_id": str(actor_id), "status": "active"})(),
-            type("Profile", (), {"id": str(actor_id), "actor_kind": ("service" if actor_id == service_actor_id else "human"), "status": "active"})(),
+            type("Profile", (), {
+                "id": str(actor_id),
+                "actor_kind": "service" if is_service else "human",
+                "service_identity": service.service_identity.value if is_service else None,
+                "status": "active",
+            })(),
         )
     async def find_role(_self, **_kwargs):
         return type("Grant", (), {"id": uuid4(), "status": "active", "scope_project_id": None})()
@@ -401,7 +407,7 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(AdminAuthorizationRepository, "lock_request_actor", lock_actor)
     monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", find_role)
     monkeypatch.setattr(
-        artifact_authorization, "fixed_service_authorization_context", fixed_context
+        prepared_authorization, "fixed_service_authorization_context", fixed_context
     )
     request = SubmissionCreationRequest(
         admission_id=art_request.admission_id, task_id=context.task_id,
@@ -452,7 +458,10 @@ async def test_live_hidden_authority_commits_one_complete_concurrent_effect(
             assert await session.scalar(text("select count(*) from submissions")) == 1
             assert await session.scalar(text("select count(*) from artifact_bindings")) == 1
             assert await session.scalar(
-                text("select count(*) from audit_events where event_domain='authority' and event_type='sensitive_authorization_allowed'")
+                text(
+                    "select count(*) from audit_events where event_domain='authority' "
+                    "and event_type='SensitiveAuthorizationAllowed'"
+                )
             ) == 2
 
 
@@ -469,7 +478,7 @@ async def test_revoked_binding_service_rolls_back_the_hidden_command(
             AuthorizationDenialCode.IDENTITY_LINK_REVOKED
         )
     monkeypatch.setattr(
-        artifact_authorization, "fixed_service_authorization_context", revoked_context
+        prepared_authorization, "fixed_service_authorization_context", revoked_context
     )
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         denied_art_request = replace(
