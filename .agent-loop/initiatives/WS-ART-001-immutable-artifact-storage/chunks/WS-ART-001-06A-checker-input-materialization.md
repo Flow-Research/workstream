@@ -5,6 +5,10 @@ Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable
 WS-ARCH-001-04A-04D owns the current split replacement after POL-06B/07;
 historical ART-05B is non-executable. This file is design evidence only.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 Artifact contract phase: `submission_cutover`
 
 ## Goal

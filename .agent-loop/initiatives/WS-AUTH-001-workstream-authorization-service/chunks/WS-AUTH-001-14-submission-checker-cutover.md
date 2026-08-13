@@ -8,6 +8,10 @@ WS-ARCH-001-04D post-submit activation, 04E canonical routing, 04F checker
 remediation, and later REV admission/public 02I cutover. Historical
 `WS-ART-001-05B` and `WS-XINT-002-06B` must not be used as start gates.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service

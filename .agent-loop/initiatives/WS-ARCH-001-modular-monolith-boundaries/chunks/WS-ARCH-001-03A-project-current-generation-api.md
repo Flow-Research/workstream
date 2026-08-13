@@ -23,3 +23,7 @@ stale, mixed-generation, incomplete, unapproved or superseded chains deny;
 all touched private edges shrink. Verify focused PROJECT tests, PostgreSQL
 locking/race tests, boundary validators, Ruff and hosted coverage. Required
 reviews: architecture, security, product/ops, QA, senior, reuse and test delta.
+
+## Merge state
+
+- Outcome on merge: `planned`

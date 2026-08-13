@@ -22,7 +22,7 @@ transient work, and no chunk starts automatically.
 | `WS-POL-003-06B` | Live deterministic post-submit projection/approval cutover with zero additional inference. | 06A + AUTH-12G |
 | `WS-POL-003-07` | One typed checker-service port with one complete pre and one complete post command. | 06B + merged ART-04B1-04B3 execution/evidence contract |
 | `WS-AUTH-001-12H` | Activate guide publication only over the complete approved current-generation unified chain and CON clean cut. | 07 + corrected 12B2 + owning CON clean cut |
-| `WS-POL-003-08` | Visibility, generation-safe correction, physical legacy inference/parallel-route cleanup, and activation compatibility proof. | 07 + AUTH-12H + canonical WS-ARCH-001-04E manifest; not a prerequisite for 03A |
+| `WS-POL-003-08` | Visibility, generation-safe correction, physical legacy inference/parallel-route cleanup, and activation compatibility proof. | Planned after 07 + AUTH-12H + canonical WS-ARCH-001-04E manifest; not a prerequisite for 03A |
 
 ## Merged ART admission foundation
 

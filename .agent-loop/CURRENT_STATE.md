@@ -28,7 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`, including hidden preparation and atomic consumption/binding activation | PLAN2 defines the order: complete unified guide readiness, task authority, and canonical post-submit checking until the admission-backed Submission has a durable current `allow_review`; REV admission follows and `02I` remains later |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`, including hidden preparation and atomic consumption/binding activation | Planned WS-ARCH-001-PLAN2 skeletons WS-ARCH-001-03A/03B/03C and WS-ARCH-001-04A/04B/04C/04D/04E/04F define the order through durable current `allow_review`; REV admission follows and `02I` remains later |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; policy persistence and shared lifecycle audit are merged | Complete hidden services, contribution records, conditional awards, fulfillment, and reconciliation after named AUTH and REV gates |
@@ -69,3 +69,14 @@ authority; these records do not grant or withhold it.
 Distinct initiatives may proceed concurrently. A merge in another initiative
 requires integration review only where it changes the current branch's base,
 contracts, paths, or evidence—not ceremonial repetition of unaffected work.
+
+## Planned WS-ARCH-001 PLAN2 children
+
+WS-ARCH-001-PLAN2 is planned. WS-ARCH-001-03A is planned.
+WS-ARCH-001-03B is planned. WS-ARCH-001-03C is planned.
+WS-ARCH-001-04A is planned. WS-ARCH-001-04B is planned.
+WS-ARCH-001-04C is planned. WS-ARCH-001-04D is planned.
+WS-ARCH-001-04E is planned. WS-ARCH-001-04F is planned.
+WS-ART-001-06A is a planned retirement. WS-ART-001-06B is a planned
+retirement. WS-AUTH-001-14 is a planned retirement. WS-POL-003-08 is planned
+after canonical WS-ARCH-001-04E.

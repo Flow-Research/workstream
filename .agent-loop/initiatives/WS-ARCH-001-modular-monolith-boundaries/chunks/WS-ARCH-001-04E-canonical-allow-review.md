@@ -42,3 +42,7 @@ RevisionContextPreparation records.
 
 Before implementation, replace this skeleton with a current-main contract that
 enumerates exact files, commands, migration head and reviewers.
+
+## Merge state
+
+- Outcome on merge: `planned`

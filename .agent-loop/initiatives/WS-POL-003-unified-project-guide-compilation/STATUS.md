@@ -49,3 +49,6 @@ reviewer tracks. They cannot authorize implementation in their current form.
 compilation custody and the first public AUTH-capability consumer proof.
 AUTH-12I merged through PR #312 at `98eae13e`; POL-03B is now the next eligible
 POL implementation boundary.
+
+WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
+is not a prerequisite for WS-ARCH-001-03A.

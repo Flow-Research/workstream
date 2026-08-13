@@ -144,6 +144,10 @@ contracts are non-executable. Final 02I cutover is deferred until the later
 remediation/review-revision, checker-output, and REV-admission replacement
 contracts merge.
 
+WS-ART-001-06A and WS-ART-001-06B are planned retirements as
+superseded/non-executable historical designs; WS-ARCH-001-04 owns their split
+replacement.
+
 ## Gate
 
 Planning evidence and all required internal reviewer tracks must pass before a

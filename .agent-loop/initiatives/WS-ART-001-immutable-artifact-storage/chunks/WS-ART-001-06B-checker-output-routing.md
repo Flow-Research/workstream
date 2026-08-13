@@ -5,6 +5,10 @@ Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable
 WS-ARCH-001-04C-04E owns the current split replacement. This file is design
 evidence only.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 Artifact contract phase: `checker_cutover`
 
 ## Goal

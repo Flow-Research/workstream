@@ -24,3 +24,7 @@ facts contain no ORM/session object; touched debt shrinks. Verify focused unit
 and PostgreSQL race tests, boundary validators, Ruff and hosted coverage.
 Required reviews: architecture, security, product/ops, QA, senior and test
 delta.
+
+## Merge state
+
+- Outcome on merge: `planned`

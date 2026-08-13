@@ -4,6 +4,10 @@ Status: Non-executable planning skeleton after 07, AUTH-12H, and the canonical
 WS-ARCH-001-04E manifest. Risk: L1. This cleanup is not a prerequisite for
 WS-ARCH-001-03A.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 ## Goal
 
 Expose a bounded Project Manager review package, implement generation-safe

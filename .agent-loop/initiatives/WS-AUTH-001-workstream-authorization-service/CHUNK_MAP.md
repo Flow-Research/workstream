@@ -76,7 +76,7 @@ may proceed concurrently; open pull requests show transient ownership.
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
 | `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
-| `WS-AUTH-001-14` | Historical Submission, Checker, And Audit Visibility Cutover | L1 | Superseded/non-executable; split across WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover |
+| `WS-AUTH-001-14` | Historical Submission, Checker, And Audit Visibility Cutover | L1 | Planned retirement as superseded/non-executable; split across WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |
 | `WS-AUTH-001-16` | Conformance, Observability, And Live API Proof | L1 | Proposed |
 

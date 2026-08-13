@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-PLAN2 Canonical Allow-Review Reconciliation
 
-Status: complete on merge; planning-only. Risk: L1. Outcome on merge: repository plans
+Status: planned; planning-only. Risk: L1. Outcome on merge: repository plans
 name one dependency-ordered path from current `main` through canonical
 `allow_review`; no runtime behavior changes.
 
@@ -34,3 +34,7 @@ Run Markdown-link and stale-wording checks plus `git diff --check`. Required
 reviews: architecture, security, product/operations, senior engineering, docs
 and reuse. Human focus: dependency truth and whether canonical `allow_review`
 is the correct pre-REV milestone.
+
+## Merge state
+
+- Outcome on merge: `planned`
