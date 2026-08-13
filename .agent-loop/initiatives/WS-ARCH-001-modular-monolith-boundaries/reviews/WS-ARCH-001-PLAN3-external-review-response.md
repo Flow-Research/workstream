@@ -20,10 +20,10 @@
   capability ledger.
 - Distinguished the covered Project Manager HTTP entry from the fixed project
   setup service's internal command resolution in CP07.
-- Corrected the two still-proposed AUTH-12/12H contracts so guide activation
-  depends on POL-07, corrected 12B2, CP05, CP06, and CP07 only. Their retired
-  economic fields confer no authority; CP08, ARCH-03A/03B/03C, and CP09 remain
-  downstream, removing the last documented cycle.
+- Corrected the still-proposed AUTH-12H contract so guide activation depends on
+  POL-07, corrected 12B2, CP05, CP06, and CP07 only. Its retired economic
+  fields confer no authority; CP08, ARCH-03A/03B/03C, and CP09 remain
+  downstream, removing the last active documented cycle.
 
 ## Comments deferred
 
@@ -32,6 +32,12 @@
   active CHUNK_MAP/STATUS/runtime records already mark them non-executable and
   point to the current CP replacements. Editing their landed contract bodies
   would violate the repository's atomic chunk-state history gate.
+- The suggested edit to `WS-AUTH-001-12-project-mutation-cutover.md` was
+  reverted after exact-head Agent Gates correctly identified it as the rejected,
+  non-executable planning parent with immutable landed outcome. D38, the active
+  AUTH map/status, PLAN3, and the corrected 12H contract supersede its original
+  future sequence; the parent is historical evidence, not implementation
+  authority.
 
 ## Human decisions needed
 

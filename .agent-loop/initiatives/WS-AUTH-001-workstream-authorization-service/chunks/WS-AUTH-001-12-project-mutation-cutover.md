@@ -96,11 +96,9 @@ Superseded for all remaining work by D38 and `CHUNK_MAP.md`.
    changing checker execution, visibility, or `WS-POL-002-03` behavior.
 9. 12B2 activates setup-run ledger authority and cuts both Celery entry points
    only after 12E/12F4/12G have activated the exact product actions they call.
-10. 12H cuts over guide activation after POL-07, corrected 12B2, CP05 active
-    ContributionPolicy behavior, CP06 validation, and CP07 ProjectGuide
-    binding are merged. CP08, WS-ARCH-001-03A/03B/03C, and CP09 are downstream;
-    the retired economic fields grant no activation authority while CP09 waits
-    for the replacement task/assignment path to become active.
+10. 12H cuts over guide activation after every prerequisite family is local
+    and the owning CON clean cut has removed the retired economic-policy
+    dependency.
 
 Agent-backed commands may perform an authorization preflight before external
 work, but no prepared handle may cross a rollback, commit, agent call, Celery

@@ -82,7 +82,7 @@ sequence.
 | `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Merged through PR #312 as `98eae13e`; POL-03B is the next consumer |
 | `WS-AUTH-001-12F4` | Unified Pre-Submit Approval Activation | L1 | Proposed after hidden POL-05A; before POL-05B |
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
-| `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07 and complete approved unified lineage |
+| `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07, corrected AUTH-12B2, CP05 active behavior, CP06 validation, and CP07 ProjectGuide binding; CP08, ARCH-03A/03B/03C, and CP09 are downstream |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Historical Submission, Checker, And Audit Visibility Cutover | L1 | Planned retirement as superseded/non-executable; split across WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |
