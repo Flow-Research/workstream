@@ -31,8 +31,8 @@ git diff --check
 | CON-03B | `app/modules/contributions/*` | `app/modules/contributions app/modules/projects/models.py app/db/models.py tests/test_contributions.py tests/test_projects.py alembic/versions/<exact-file>.py` |
 | CON-03C | `app/modules/contributions/*`; `app/modules/compensation/*` | `app/modules/contributions app/modules/compensation app/db/models.py tests/test_contributions.py tests/test_compensation.py alembic/versions/<exact-file>.py` |
 | CON-03D | `app/modules/compensation/*` | `app/modules/compensation app/db/models.py tests/test_compensation.py alembic/versions/<exact-file>.py` |
-| Historical CON-04A/04B/05A/05B | Superseded/non-executable | Use PLAN3 CP01-CP09 and each future current-main contract; do not execute retained historical rows |
-| ARCH-CP01 through CP09 | Defined only by separately approved current-main contracts | Do not execute from this table alone |
+| Historical CON-04A/04B/05A/05B | Superseded/non-executable | Use PLAN3 CP01A/CP01B through CP09 and each future current-main contract; do not execute retained historical rows |
+| ARCH-CP01A/CP01B through CP09 | Defined only by separately approved current-main contracts | Do not execute from this table alone |
 | CON-07 | `app/modules/contributions/*`; `app/modules/compensation/*` | `app/modules/contributions app/modules/compensation tests/test_contributions.py tests/test_compensation.py tests/test_authorization.py tests/test_outbox.py` |
 | Historical CON-08A | Superseded/non-executable | Fresh delivery replacement must define current targets after CP02/CP04 and all other gates; do not execute this retained row |
 | CON-08R | `app/modules/api_controls/*`; `app/api/deps/api_controls.py`; `app/core/config.py` | `app/modules/api_controls app/api/deps/api_controls.py app/core/config.py tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py alembic/versions/<exact-file>.py` |

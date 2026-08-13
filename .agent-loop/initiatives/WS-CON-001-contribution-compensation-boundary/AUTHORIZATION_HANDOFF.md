@@ -39,7 +39,8 @@ protocol and one caller-owned commit.
 | `03A` binding persistence | none; schema stores only canonical actor identity and non-secret route facts | CON may proceed |
 | `03B` policy persistence | none; no command or protected route | CON may proceed |
 | `02C` lifecycle audit participant | none; caller supplies already-authorized typed facts | CON may proceed |
-| `CP01` binding and policy registration | exact binding/policy actions, typed contexts, custody and permission mapping; callback/fulfillment excluded | register unavailable before hidden services |
+| `CP01A` binding registration | exact binding actions, typed contexts, custody and permission mapping; retirement/callback/fulfillment excluded | register unavailable first |
+| `CP01B` policy registration | exact `contribution.policy.*` actions, typed contexts, custody and permission mapping | register unavailable after CP01A and before hidden services |
 | `CP03` binding activation | exact CP02-proven binding actions only | activate after hidden proof |
 | `CP05` policy activation | exact CP04-proven policy actions only | activate after hidden proof |
 | `CP06-CP08` validation and owner persistence | existing guide activation authority; later TASK readiness/claim authority remains TASK/AUTH-owned | CON validates only; PROJECT/TASK own writes |
@@ -76,9 +77,9 @@ matrix rows, or evaluators.
 
 ## Immediate AUTH ask
 
-No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01 is
-the first proposed implementation gate and registers binding/policy authority
-while unavailable. CP03 and CP05 activate only their respective CP02/CP04
+No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01A
+and CP01B are the first proposed implementation gates and separately register
+binding and policy authority while unavailable. CP03 and CP05 activate only their respective CP02/CP04
 hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and

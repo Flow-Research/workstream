@@ -39,7 +39,7 @@ CON 02C lifecycle audit participant
 -> CON 03C ContributionRecord/CompensationAward persistence
 -> CON 03D delivery/receipt/status and ordinal persistence
 
-REV lease schema/caller facts + WS-ARCH-001-CP01 through CP05 registration,
+REV lease schema/caller facts + WS-ARCH-001-CP01A/CP01B through CP05 registration,
 behavior, and activation
 -> WS-ARCH-001-CP06 validation -> CP07 guide binding -> CP08 attempt persistence
 -> WS-ARCH-001-03A/03B replacement behavior -> WS-ARCH-001-03C activation

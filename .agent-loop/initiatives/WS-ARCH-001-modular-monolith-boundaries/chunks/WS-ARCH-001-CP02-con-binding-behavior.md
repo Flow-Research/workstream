@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-CP02 — Hidden Adapter-Binding Behavior
 
-Status: proposed non-executable skeleton after CP01. Risk: L1.
+Status: proposed non-executable skeleton after CP01A and CP01B. Risk: L1.
 
 CON implements only hidden adapter-binding create/read/suspend/resume behavior
 through its public capability boundary and the registered opaque PREP protocol.
