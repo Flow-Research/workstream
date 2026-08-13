@@ -31,10 +31,10 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     create_async_engine,
 )
 from starlette.requests import Request
-
 from app.api.deps.authorization import (
     authorization_http_error,
     get_authorization_actor,
+    get_authorization_actor_identity,
     get_authorization_service,
     get_prepared_authorization_service,
 )
@@ -9717,22 +9717,20 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     token = SimpleNamespace(subject_kind="service")
-    admitted = SimpleNamespace(profile=object(), identity_link=object())
+    admitted = SimpleNamespace(
+        profile=SimpleNamespace(
+            id=str(uuid4()), actor_kind="service",
+            service_identity="workstream.artifact.binding",
+        ), identity_link=SimpleNamespace(id=str(uuid4())),
+    )
     calls: list[object] = []
-
     async def resolve_service(_self, current):
         calls.append(current)
         return admitted
-
     async def forbidden_human_lookup(*_args, **_kwargs):
         raise AssertionError("service admission entered the human path")
-
     monkeypatch.setattr(ActorService, "resolve_service_for_authorization", resolve_service)
-    monkeypatch.setattr(
-        ActorService,
-        "find_actor_for_authorization",
-        forbidden_human_lookup,
-    )
+    monkeypatch.setattr(ActorService, "find_actor_for_authorization", forbidden_human_lookup)
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
     result = SimpleNamespace(token=token)
 
@@ -9743,7 +9741,8 @@ async def test_authorization_dependency_admits_service_without_human_rate_contro
         object(),  # type: ignore[arg-type]
     )
 
-    assert resolved is admitted
+    identity = await get_authorization_actor_identity(resolved)
+    assert identity.service_identity == "workstream.artifact.binding"
     assert calls == [token]
 
 
