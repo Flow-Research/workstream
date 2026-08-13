@@ -17,8 +17,8 @@
 | `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
 | `WS-ARCH-001-03` | PROJECT/TASK readiness coordination parent | L1 | Split; non-executable parent |
 | `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned skeleton after AUTH-12H; POL-08 cleanup remains later |
-| `WS-ARCH-001-03B` | TASK claim, assignment and locked-context public commands/facts | L1 | Planned skeleton after 03A and CON-05A submitter ContributionPolicyVersion freeze participant; any earlier TASK contract work remains non-live |
-| `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned skeleton after 03A/03B hidden manifests and CON-05A; no live assignment before atomic freeze proof |
+| `WS-ARCH-001-03B` | TASK readiness, claim, assignment and locked-context public commands/facts | L1 | Planned skeleton after 03A and CON-05A guide-activation policy validation/persistence contract; TASK locks the guide-bound version before claimability and claim only inherits it |
+| `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned skeleton after 03A/03B hidden manifests and CON-05A; no live claim before exact guide -> task -> assignment lineage proof |
 | `WS-ARCH-001-04` | Canonical post-submit checker coordination parent | L1 | Split; non-executable parent |
 | `WS-ARCH-001-04A` | CHECKER post-submit plan/run/final-result public contract | L1 | Planned skeleton after POL-07 and 03C |
 | `WS-ARCH-001-04B` | ART exact verified Submission materialization | L1 | Planned skeleton after 04A and merged 02H |
@@ -26,7 +26,7 @@
 | `WS-ARCH-001-04D` | XINT-06B exact fixed-service post-submit activation | L1 | Planned skeleton after 04B/04C evidence |
 | `WS-ARCH-001-04E` | TASK automatic dispatch/current routing integration and canonical `allow_review` manifest | L1 | Planned skeleton after 04D |
 | `WS-ARCH-001-04F` | Contributor-readable checker remediation for final non-reviewable checker outcomes | L1 | Planned skeleton after 04E; required before public 02I, not before REV begins from `allow_review` |
-| `WS-ARCH-001-05` | REV/CON admission, reviewer-policy freeze, packet, claim, decision and revision coordination parent | L1 | Independent schema/packet foundations may proceed; live admission/claim waits for canonical `allow_review`, CON-06 and exact AUTH gates; must split before implementation |
+| `WS-ARCH-001-05` | REV/CON admission, inherited reviewer-policy lineage, packet, claim, decision and revision coordination parent | L1 | Independent schema/packet foundations may proceed; live admission/claim waits for canonical `allow_review` and exact AUTH gates; review claim copies the task-locked version and performs no CON lookup; must split before implementation |
 | `WS-ARCH-001-06` | Mandatory atomic Review/FinalAcceptance/TASK/CON contribution-and-award coordination | L1 | Non-executable placeholder; CON-03C/07 must precede first Review commit; requires a split contract |
 | `WS-ARCH-001-07` | Supporting-module repairs and empty-ledger closure | L1 | Non-executable placeholder; requires a split contract |
 

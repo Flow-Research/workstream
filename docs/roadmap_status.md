@@ -133,12 +133,14 @@ review. Their presence does not change the implemented-on-`main` list above.
    recovery, provider proof, and the later public cutover.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
-2. Complete ContributionPolicy service behavior and freeze the exact published,
-   complete, binding-valid submitter ContributionPolicyVersion on each
-   TaskAssignment before live assignment creation.
+2. Complete ContributionPolicy service behavior, bind one exact published,
+   complete, binding-valid ContributionPolicyVersion at guide activation, and
+   lock it on each task before that task becomes claimable. TaskAssignment
+   inherits the task lock without a claim-time lookup.
 3. Continue independent REV schema and packet-contract foundations. After
    canonical `allow_review`, activate admission and claim only with an
-   independently frozen reviewer ContributionPolicyVersion on ReviewLease.
+   task-inherited reviewer ContributionPolicyVersion on ReviewLease without a
+   claim-time lookup.
 4. Persist ContributionRecord and CompensationAward before live Review
    decisions. Every final decision atomically creates the reviewer record and
    evaluates its frozen rule; accept additionally creates FinalAcceptance and

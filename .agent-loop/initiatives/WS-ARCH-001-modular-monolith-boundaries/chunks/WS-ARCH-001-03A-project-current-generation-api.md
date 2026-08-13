@@ -1,8 +1,9 @@
 # Chunk Contract: WS-ARCH-001-03A PROJECT Current Generation API
 
 Status: non-executable planning skeleton after AUTH-12H; POL-08 cleanup remains
-later. Risk: L1. Outcome: PROJECTS exposes immutable current approved unified guide,
-setup, pre-submit and post-submit identities/hashes through its public API.
+later. Risk: L1. Outcome: PROJECTS exposes immutable current approved unified
+guide, its exact guide-bound ContributionPolicyVersion, setup, pre-submit and
+post-submit identities/hashes through its public API.
 
 Allowed: `backend/app/modules/projects/api/**`, the smallest PROJECTS-owned
 repository/service extraction, focused PROJECT tests, boundary ledgers, and
@@ -19,7 +20,10 @@ Before implementation, replace this skeleton with a current-main contract that
 enumerates exact files, commands, migration head and reviewers.
 
 Acceptance: one transaction-bound port returns only canonical immutable facts;
-stale, mixed-generation, incomplete, unapproved or superseded chains deny;
+guide activation has validated and bound one same-project published, complete,
+binding-valid immutable ContributionPolicyVersion as
+`ProjectGuide.contribution_policy_version_id`; stale, mixed-generation,
+incomplete, unapproved or superseded chains deny;
 all touched private edges shrink. Verify focused PROJECT tests, PostgreSQL
 locking/race tests, boundary validators, Ruff and hosted coverage. Required
 reviews: architecture, security, product/ops, QA, senior, reuse and test delta.

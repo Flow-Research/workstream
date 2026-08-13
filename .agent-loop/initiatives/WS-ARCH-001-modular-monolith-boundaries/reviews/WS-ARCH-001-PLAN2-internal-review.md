@@ -17,6 +17,13 @@ Submission foundations to one canonical durable `allow_review` milestone.
   contributor checker remediation into 04F before public cutover.
 - Marked 03A-04F as non-executable planning skeletons that require exact
   current-main contracts before implementation.
+- Removed claim-time ContributionPolicyVersion selection. CON validates one
+  version at guide activation; PROJECTS binds it, TASK locks it before
+  claimability, and assignment/Submission/allow_review/ReviewLease inherit it.
+- Retired the CON-06 lookup path and removed it from REV claim and CON-07
+  dependencies.
+- Corrected REV active instructions: PLAN4/03A1/03A2 are merged and 03B is the
+  next planning boundary after the ART contract-only packet-membership port.
 
 ## Reviewer result
 
@@ -37,4 +44,4 @@ left open.
 - `python3 scripts/check_stale_workstream_wording.py`
 - `python3 scripts/check_stale_authorization_docs.py`
 - `python3 scripts/check_stale_artifact_contracts.py`
-- `python3 -m pytest -q scripts/test_lightweight_agent_gates.py`
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_lightweight_agent_gates.py`

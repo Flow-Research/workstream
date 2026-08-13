@@ -214,9 +214,10 @@ post-submit checker policy reference.
 
 A task cannot move to `READY` until the task contract is complete, the guide
 version is locked, submission artifact requirements are clear,
-checker/review/revision policy versions are locked, and a release decision is
-recorded. A TaskAssignment or ReviewLease cannot be created until it can freeze
-the active published ContributionPolicyVersion.
+checker/review/revision policy versions and the guide-bound
+ContributionPolicyVersion are locked, and a release decision is recorded. A
+task cannot become `READY` without that policy lock. TaskAssignment and
+ReviewLease later inherit it without current-policy lookup.
 
 After screening and release, contributors use
 `GET /api/v1/tasks/{task_id}/work-context` for the locked guide and lifecycle

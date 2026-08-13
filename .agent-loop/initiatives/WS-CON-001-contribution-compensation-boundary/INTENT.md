@@ -35,8 +35,10 @@ operational claims with a capability-ordered plan, now refreshed through
   `needs_revision` is the only in-progress boundary that atomically rebases
   every changed applicable next-attempt context component, including the
   submitter ContributionPolicyVersion; completed history remains immutable.
-- TaskAssignment freezes the submitter policy version before work.
-- REV-owned ReviewLease freezes the reviewer policy version before review.
+- Guide activation binds one policy version; task readiness locks it before the
+  task becomes claimable.
+- TaskAssignment and REV-owned ReviewLease inherit that same task-governing
+  version; neither claim path selects policy.
 - ContributionRecord and CompensationAward rows are immutable and replay-safe.
 - REV owns Review, FinalAcceptance, task/assignment effects, audit/outbox
   staging, and the single transaction commit.

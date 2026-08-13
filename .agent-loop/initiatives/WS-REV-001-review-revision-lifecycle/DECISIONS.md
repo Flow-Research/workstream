@@ -408,16 +408,16 @@ audit retain actor kind so UUID shape never implies human authority.
 ### D17 - Contribution Policy Freeze Rebases Only At Human Revision Boundary
 
 Legacy compensation-context state is removed by WS-CON and no moving selector
-may silently change an active attempt. Task claim initially freezes the
-submitter `ContributionPolicyVersion`; each ReviewLease independently freezes
-the reviewer version. Accept and reject use those exact versions.
+may silently change an active attempt. Guide activation binds one
+`ContributionPolicyVersion`; task readiness locks it, and TaskAssignment plus
+ReviewLease inherit it. Neither claim path selects policy. Accept and reject
+use that exact version.
 
-After a human `needs_revision`, complete-context preparation keeps an unchanged
-submitter version or atomically rebases a changed valid version on the
-continuing TaskAssignment for the next attempt, with prior/next lineage in the
-preparation. The completed Review and reviewer contribution retain the old
-lease freeze. A later lease independently freezes the reviewer version then
-current. Prior history is never rewritten.
+After a human `needs_revision`, complete-context preparation keeps unchanged
+context or creates a new task context locked to the newly active guide-bound
+version. Existing tasks, assignments, Submissions, Reviews and leases are not
+rewritten. The later assignment and lease inherit the new task lock. Prior
+history is never rewritten.
 
 ### D18 - Authority-Loss Replacement Preserves Source And Changes Target
 
@@ -653,6 +653,7 @@ ContributionRecord and award persistence; REV owns orchestration and one commit.
 ### D34 - PLAN4 Is The Live Sequence
 
 PLAN4, the live CHUNK_MAP, and the active review specification control future
-work. PLAN2/PLAN3 and retired 02-family files remain historical evidence. Only
-03A1 is proposed as the first runtime child after PLAN4 approval; later child
-contracts must be refreshed from then-current main.
+work. PLAN2/PLAN3 and retired 02-family files remain historical evidence.
+PLAN4, 03A1, and 03A2 are merged. The next planning boundary is 03B after the
+ART contract-only packet-membership port; its executable contract must be
+refreshed from current main and approved before implementation.

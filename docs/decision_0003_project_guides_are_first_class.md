@@ -85,11 +85,11 @@ implementation. Rules that affect submission intake must be encoded in
 enforceable rules until they are moved into those contracts.
 
 Publication of a `ContributionPolicyVersion` is independent of guide
-activation and never silently changes active work. Task claim initially freezes
-the submitter version on `TaskAssignment`; human revision preparation may
-atomically rebase it with the rest of the next-attempt context. Each
-`ReviewLease` independently freezes the reviewer version then current and is
-never rewritten.
+activation and never silently changes existing work. Guide activation binds
+one version; task readiness locks it before claimability, and TaskAssignment
+plus ReviewLease inherit it without claim-time selection. Human revision
+preparation may create a newly prepared task context from a newly active guide
+generation; existing rows are never rewritten.
 
 ## Consequences
 

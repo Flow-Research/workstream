@@ -739,9 +739,9 @@ projections from the locked rows. `locked-context` requires the registered
 covered Project Manager permission or an explicitly authorized Operator/Audit
 projection and exposes the full
 locked source snapshot, effective policy, pre-submit checker, post-submit
-checker, review, and revision provenance. Compensation provenance comes from
-the independently frozen `TaskAssignment` or `ReviewLease` version and is not
-guide context. None of these reads
+checker, review, and revision provenance. Contribution-policy provenance comes
+from the guide-bound task lock inherited by `TaskAssignment` and `ReviewLease`.
+None of these reads
 recompute from the current active guide.
 
 Approval creates a project-scoped `PreSubmitCheckerPolicy` row with lifecycle
@@ -1103,8 +1103,9 @@ Fields:
 - `status`: `draft | published | retired`
 - publication and retirement actor/timestamp fields
 
-Published and retired versions are immutable. TaskAssignment freezes the
-submitter version; ReviewLease independently freezes the reviewer version.
+Published and retired versions are immutable. Guide activation binds one
+version; WorkstreamTask locks it before claimability, and TaskAssignment plus
+ReviewLease inherit it.
 
 ## ContributionRule
 
@@ -1631,8 +1632,8 @@ offer, or none; it never exposes the full backlog.
 
 `ReviewLease` is the permanent identity of one claim attempt. It stores the
 canonical human reviewer ActorProfile ID, queue/Submission lineage, database
-lease times, disposition, and the independently frozen reviewer
-ContributionPolicyVersion. PostgreSQL enforces one active lease per reviewer and
+lease times, disposition, and the ContributionPolicyVersion inherited from the
+task lock during claim. PostgreSQL enforces one active lease per reviewer and
 queue entry. The queue's deferred `active_lease_id` relationship must agree
 with the single active lease at transaction commit, allowing later claim and
 close commands to stage both sides atomically without exposing behavior in the
@@ -1806,13 +1807,13 @@ blocks the whole preparation for manager repair. Task Context returns only the
 validated complete chain head. No context rebase occurs during active review;
 the reviewer reads the context stamped on the leased Submission.
 
-Publication never silently rebases award eligibility during an active attempt.
-After a human `needs_revision`, revision preparation records prior and next
-submitter `ContributionPolicyVersion` references and atomically updates the
-continuing TaskAssignment when the complete current next-attempt context
-changes. The completed reviewer contribution retains its ReviewLease-frozen
-version; each new ReviewLease independently freezes the then-current reviewer
-version.
+Publication never silently rebases award eligibility during active or completed
+work. After a human `needs_revision`, revision preparation records prior and
+next `ContributionPolicyVersion` references and, when context changes, creates
+a newly prepared task context from a newly active guide generation. Existing
+TaskAssignments are not rewritten. The completed reviewer contribution retains
+its ReviewLease version; each new assignment and ReviewLease inherit its task
+lock.
 
 The contributor and reviewer history show prior/next guide, policy—including
 ContributionPolicyVersion—identity, activation sequence where applicable,

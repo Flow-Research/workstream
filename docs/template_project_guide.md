@@ -232,11 +232,11 @@ Record only project-owner-supplied business terms and their durable source:
 - intended instrument/unit:
 
 This section is informational. It is not an active contribution award rule. Workstream
-publishes `ContributionPolicyVersion` independently, and `TaskAssignment` and
-`ReviewLease` freeze their applicable versions for the current attempt. After a
-human `needs_revision`, complete-context preparation records and applies any
-changed submitter ContributionPolicyVersion for the next attempt; each next
-ReviewLease independently freezes the reviewer version then current.
+publishes `ContributionPolicyVersion` independently. Guide activation binds one
+version; task readiness locks it, and `TaskAssignment` plus `ReviewLease`
+inherit it. After a human `needs_revision`, complete-context preparation may
+create a newly prepared task context from a newly active guide-bound version;
+existing assignments and leases remain immutable.
 
 ## Lessons Learned
 

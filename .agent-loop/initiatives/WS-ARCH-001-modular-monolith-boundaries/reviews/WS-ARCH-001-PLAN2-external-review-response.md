@@ -31,11 +31,15 @@ head before merge readiness is reported.
 
 ## Human L1 plan review amendment
 
-The human review correctly rejected downstream-only CON wording. The plan now
-uses `ContributionPolicy`/`ContributionPolicyVersion` as the sole governing
-policy model, freezes the submitter version atomically on TaskAssignment,
-carries it through canonical `allow_review`, freezes the reviewer version
-independently on ReviewLease, and requires ContributionRecord,
-CompensationAward, and the CON flush-only participant before the first live
-Review decision. Independent REV schema and packet foundations remain free to
-proceed behind their own gates.
+The first human review correctly rejected downstream-only CON wording. A
+second human review found that claim-time submitter/reviewer selection still
+created overlapping ownership and a circular CON/TASK dependency. The final
+model selects once: guide activation validates and binds one
+`ContributionPolicyVersion`; task readiness locks it before claimability;
+TaskAssignment, Submission, canonical `allow_review`, and ReviewLease inherit
+that same immutable lineage without calling CON during either claim. CON-05A
+owns only its validation port, legacy cleanup and persistence contract;
+WS-ARCH-001-03B alone owns TASK composition; 03C alone owns AUTH activation.
+REV 03A1/03A2 are recorded merged and 03B is the next planning boundary.
+ContributionRecord, CompensationAward, and the CON flush-only participant
+remain mandatory before the first live Review decision.

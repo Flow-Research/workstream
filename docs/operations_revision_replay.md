@@ -38,10 +38,10 @@ change summary. Task Context returns the validated head, not moving selectors.
 No rebase occurs during review; the reviewer reads the context stamped on the
 leased Submission.
 
-The completed reviewer contribution uses the originating ReviewLease freeze.
-The continuing TaskAssignment is updated only by successful human revision
-preparation for the next submitter attempt, and each later ReviewLease
-independently freezes the reviewer version then current. The decision,
+The completed reviewer contribution uses the originating ReviewLease version.
+Successful human revision preparation may create a newly prepared task context
+for the next attempt; it never rewrites an existing TaskAssignment. Each later
+assignment and ReviewLease inherit that task's lock. The decision,
 reviewer contribution/award, task/assignment effects, preparation or blocked
 outcome, audit/outbox, and visible state commit once or roll back together.
 

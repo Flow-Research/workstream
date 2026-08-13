@@ -7,10 +7,11 @@ name one dependency-ordered path from current `main` through canonical
 ## Allowed files
 
 - `.agent-loop/CURRENT_STATE.md`
-- `docs/roadmap_status.md`
+- `docs/{roadmap_status,spec_contribution_compensation,spec_review_lifecycle}.md`
 - WS-ARCH-001 planning, status, risk, decision, chunk and review files
-- directly stale WS-POL-003, WS-ART-001, WS-AUTH-001, WS-CON-001 and WS-REV-001 status or
-  chunk-map wording required for parity
+- directly stale WS-POL-003, WS-ART-001, WS-AUTH-001, WS-CON-001 and WS-REV-001
+  planning, status, decision, handoff, conformance, runtime-verification, chunk,
+  or chunk-map wording required for parity
 
 ## Not allowed
 
@@ -22,11 +23,11 @@ name one dependency-ordered path from current `main` through canonical
 
 1. The plan separates guide/task readiness, canonical checker completion, REV
    admission and later public cutover.
-2. TaskAssignment creation atomically freezes the exact submitter
-   ContributionPolicyVersion through CON, and the canonical `allow_review`
-   manifest carries that exact lineage.
-3. Live ReviewLease claim independently freezes the reviewer
-   ContributionPolicyVersion through CON; every final Review decision requires
+2. Guide activation binds one validated ContributionPolicyVersion, TASK locks
+   it before claimability, TaskAssignment inherits it without claim-time
+   selection, and the canonical `allow_review` manifest carries that lineage.
+3. Live ReviewLease claim verifies and inherits that task-locked version
+   without claim-time selection; every final Review decision requires
    CON ContributionRecord/CompensationAward persistence and its atomic
    participant.
 4. Every future child has one owner, one PR outcome and explicit dependencies;

@@ -41,8 +41,9 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 - ART gates only manifest/admission/packet consumers that need its final typed
   facts; REV does not wait for ART-07A runtime to define packet semantics.
 - REV owns 03A2 completely; CON-03B must merely exist first as its mandatory
-  policy-version FK target. CON-06 later supplies claim-time policy lookup;
-  CON-07 later supplies canonical decision contribution composition.
+  policy-version FK target. Review claim later inherits the task-locked policy
+  version without a CON lookup; CON-07 supplies canonical decision
+  contribution composition.
 - ART must publish a contract-only packet-membership port before REV-03B. ART-
   07A then consumes the merged REV lease/manifest; this removes the former
   circular gate.
@@ -54,8 +55,10 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 
 Canonical `allow_review` gates live admission, claim and review processing; it
 does not block independent REV schema or packet-contract foundations whose own
-dependencies are satisfied. Live claim additionally requires the CON-06
-participant and freezes `ReviewLease.reviewer_contribution_policy_version_id`.
+dependencies are satisfied. Live claim verifies the admitted task policy
+lineage and copies it to
+`ReviewLease.reviewer_contribution_policy_version_id`; it performs no current
+policy selection.
 Live decisions require CON ContributionRecord/CompensationAward persistence and
 the CON-07 atomic participant: every final decision creates the reviewer
 record; accept also creates FinalAcceptance and the submitter record. No

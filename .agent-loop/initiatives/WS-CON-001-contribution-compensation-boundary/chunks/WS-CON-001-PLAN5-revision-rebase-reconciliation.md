@@ -42,9 +42,9 @@ immutable.
 - The next-attempt context keeps unchanged components and atomically replaces
   every changed component with the complete current valid version, forward or
   backward where reactivation is allowed.
-- The TaskAssignment stores the authoritative rebased submitter
-  ContributionPolicyVersion for the next attempt; the next ReviewLease
-  independently freezes the then-current reviewer ContributionPolicyVersion.
+- A newly prepared task context locks the authoritative guide-bound
+  ContributionPolicyVersion for the next attempt; its TaskAssignment and
+  ReviewLease inherit that same version without claim-time selection.
 - Missing, incomplete, inconsistent, crossed-project, revoked, or unsafe
   current context blocks preparation; no mixed context may be published.
 - Checker-caused remediation remains distinct and does not perform this human
@@ -142,8 +142,8 @@ the user-owned local PDF deletion
 - [x] The human `needs_revision` Review, reviewer contribution/award, task and
   assignment effects, initial preparation or blocked outcome, audit/outbox
   effects, and contributor-visible state commit once or roll back together.
-- [x] The next submitter attempt uses the rebased ContributionPolicyVersion and
-  the next ReviewLease independently freezes the then-current reviewer version.
+- [x] The next submitter attempt and ReviewLease inherit the
+  ContributionPolicyVersion locked to the newly prepared task context.
 - [x] Prior Submissions, Reviews, ContributionRecords, and Awards are never
   rebased or rewritten.
 - [x] Checker-caused remediation remains a distinct no-human-rebase path.

@@ -3,12 +3,12 @@
 ## Goal
 
 Remove the retired guide-bound economic contract from every semantic consumer,
-classify existing rows, and freeze the active published
-ContributionPolicyVersion on each successful new TaskAssignment. Supply the
-same guarded current-version selection contract for a distinct next attempt
-during task-owned human revision preparation; publication itself never mutates
-an existing attempt's freeze. Physical
-dead-schema removal belongs to 05B.
+classify existing rows, and expose the CON-owned validation port used once when
+a Project Guide is activated. The port returns the one active, published,
+complete, binding-valid same-project ContributionPolicyVersion that PROJECTS
+binds to the guide. This chunk supplies the required immutable FK/persistence
+contract for the guide -> task -> assignment lineage, but owns no PROJECTS or
+TASK command composition. Physical dead-schema removal belongs to 05B.
 
 ## Risk
 
@@ -18,8 +18,8 @@ L1 economic/task lifecycle/authorization; SLA P1.
 
 ```text
 backend/app/modules/contributions/{ports,service}.py
-backend/app/modules/projects/{schemas,repository,service}.py only legacy consumer removal
-backend/app/modules/tasks/{models,schemas,repository,service}.py only cutover/freeze
+backend/app/modules/projects/{models,schemas}.py only the guide-bound ContributionPolicyVersion FK contract and legacy consumer removal
+backend/app/modules/tasks/{models,schemas}.py only the task/assignment ContributionPolicyVersion FK contract and legacy consumer removal
 backend/app/modules/checkers/{schemas,repository,service,runner}.py only legacy consumer removal
 backend/alembic/versions/<next>_task_assignment_contribution_policy_freeze.py
 backend/app/db/models.py
@@ -34,6 +34,7 @@ docs/operations_payment_reputation.md only implemented operations
 ## Not allowed
 
 ```text
+PROJECT guide-activation or TASK readiness/claim/assignment command composition
 task-claim permission/grant/kernel implementation
 ReviewLease or Review behavior; contribution/award creation
 public policy routes; dead physical schema removal
@@ -43,40 +44,33 @@ provider/artifact calls; unrelated checker behavior
 
 ## Acceptance criteria
 
-- [ ] Every new TaskAssignment has non-null
-  `submitter_contribution_policy_version_id`, initially frozen at claim and
-  immutable for that attempt. Human revision preparation creates/binds a
-  distinct next-attempt freeze with explicit prior/next lineage; direct,
-  in-place or publication-driven updates to the prior attempt are rejected.
+- [ ] CON exposes one caller-session, flush-only validation port that locks and
+  returns the one active, published, complete, binding-valid same-project
+  ContributionPolicyVersion for guide activation. It contains no PROJECTS,
+  TASK, role, claim, assignment, or revision composition.
+- [ ] The persistence contract supports non-null
+  `ProjectGuide.contribution_policy_version_id`, non-null
+  `WorkstreamTask.locked_contribution_policy_version_id` before
+  claimability, and non-null
+  `TaskAssignment.submitter_contribution_policy_version_id`; exact FK and
+  same-project constraints reject mixed lineage.
 - [ ] Exact merged Submission.task_assignment_id lineage is preserved; no
   parallel submission identity is added.
 - [ ] No runtime/API/setup/task/checker/review consumer treats retired guide-
   bound terms as current economic authority. A zero-consumer scanner proves
   remaining physical schema is unreachable until 05B.
-- [ ] Stable PermissionId `task.claim` exists but no task-claim ActionId is
-  registered. AUTH-10 exact same-project submitter ProjectRoleGrant and
-  AUTH-PREP contracts are merged; no unrelated project/admin grant substitutes
-  and CON contains no role logic.
-- [ ] AUTH prepares exact submitter authority first. Task-owned composition
-  locks canonical task/assignment facts, invokes the CON participant to lock
-  active ContributionPolicy, published version, exact rule/definition/binding
-  dependencies and return one same-project version, then recomposes final
-  facts. AUTH consumes the handle and evaluates once before TaskAssignment is
-  created with that immutable version. CON flushes only and never commits.
-- [ ] CON-05A and task-owned claim composition merge while the task-claim
-  ActionId remains absent. `WS-AUTH-001-13` enumerates/registers the exact
-  action, integrates its evaluator, and activates only after the merged feature
-  manifest proves the freeze, canonical guards, rollback, and real-kernel
-  unavailable behavior before activation.
-- [ ] Missing/invalid policy fails with no assignment/task/audit/outbox partial
-  state. Later publication never updates an assignment. A later human
-  needs-revision preparation locks and validates the complete current context,
-  reuses an unchanged valid version or binds a changed valid version only to
-  the distinct next attempt, and records prior/next lineage atomically through
-  the task-owned lifecycle. Stale, replayed or concurrent preparation cannot
-  mutate the prior attempt or create two next-attempt freezes.
-- [ ] Publish versus claim and binding-state versus claim pass both lock orders
-  without deadlock or mixed versions.
+- [ ] Missing/invalid policy fails guide activation with no guide/task/
+  assignment/audit/outbox partial state. Later publication never updates an
+  active guide, existing task, assignment, Submission, ReviewLease,
+  ContributionRecord, or CompensationAward. A newly prepared task may inherit
+  a newer version only through a newly activated guide generation. All tasks
+  prepared from one active guide generation lock that guide's same version.
+- [ ] Publish versus guide activation and binding-state versus guide activation
+  pass both lock orders without deadlock or mixed versions.
+- [ ] `WS-ARCH-001-03B` alone owns TASK readiness and claim composition. It
+  inherits the guide-bound version onto the task before claimability, then
+  copies the task lock onto the assignment without invoking CON at claim time.
+  `WS-ARCH-001-03C` alone owns the later AUTH activation proof.
 - [ ] Existing rows follow the approved deterministic classification and cannot
   enter new Review decisions without a valid freeze. Migration fails on
   ambiguity and downgrade refuses post-cutover data loss.
@@ -103,19 +97,18 @@ fi
 ```
 
 Pass requires a non-empty selected test set, upgrade and guarded downgrade,
-exact assignment freeze and Submission lineage, full rollback on missing or
-ambiguous policy, both publication/claim and binding/claim race orders,
-no in-place revision mutation plus stale/replay/concurrent next-attempt proof,
-real-kernel denial before activation, no runtime legacy-policy consumer,
+exact guide/task/assignment/Submission lineage, full rollback on missing or
+ambiguous policy, both publication/activation and binding/activation race
+orders, no claim-time policy lookup, no runtime legacy-policy consumer,
 repository coverage at least 78 percent in the same clean run, and every
 focused report at least 90 percent.
 
 ## Review and stop
 
 Required tracks: senior, QA, security, product, architecture, docs, reuse, test-
-delta, and CI integrity. Stop if exact task/Submission lineage, AUTH-PREP,
-task-owned composition seam, or migration classification is not merged. Do not
-wait for or perform `task.claim` activation inside this chunk.
+delta, and CI integrity. Stop if the guide/task/assignment persistence contract
+or migration classification cannot be exact. Do not implement PROJECTS/TASK
+composition or `task.claim` activation inside this chunk.
 
 ## Merge state
 

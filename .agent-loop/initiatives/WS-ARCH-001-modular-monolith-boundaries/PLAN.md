@@ -142,22 +142,29 @@ no live call may use the transitional inference paths in the interim.
 ### Gate 1: current task, assignment and submitter-policy authority
 
 Parent 03 is split into 03A-03C. PROJECTS exposes current approved compilation
-facts; TASKS exposes claim/assignment and immutable locked-context facts; AUTH
-activates only the exact task/assignment actions after both hidden owner paths
-exist. CON must first expose the active same-project `ContributionPolicy`
-selection/freeze participant. The atomic claim path is:
+facts, including the one ContributionPolicyVersion bound at guide activation;
+TASKS locks that version before a task becomes claimable and exposes
+claim/assignment and immutable locked-context facts; AUTH activates only the
+exact task/assignment actions after both hidden owner paths exist. The linear
+path is:
 
 ```text
-task claim
+guide activation
 -> CON validates one active, published, complete and binding-valid
-   ContributionPolicyVersion for the submitter
--> TASK freezes that exact version as
+   same-project ContributionPolicyVersion
+-> PROJECTS binds that exact version as
+   ProjectGuide.contribution_policy_version_id
+-> TASK readiness inherits it as
+   WorkstreamTask.locked_contribution_policy_version_id
+-> task becomes claimable
+-> task claim copies the task lock to
    TaskAssignment.submitter_contribution_policy_version_id
 -> TASK creates the assignment
 ```
 
-The frozen version is immutable for that attempt; later policy publication
-cannot change it. A task cannot enter preparation with a stale guide, policy
+The guide, task and assignment lineage is immutable for that task/attempt;
+later policy publication affects only newly prepared tasks and cannot change
+existing tasks or assignments. A task cannot enter preparation with a stale guide, policy
 generation, assignment, contributor, predecessor, or missing/invalid frozen
 submitter ContributionPolicyVersion.
 
@@ -174,7 +181,8 @@ The acceptance manifest must bind:
 
 - project, task, assignment, contributor and predecessor;
 - exact `TaskAssignment.submitter_contribution_policy_version_id`, same-project
-  and proven published, complete and binding-valid when selected;
+  and exactly equal to `WorkstreamTask.locked_contribution_policy_version_id`,
+  proven published, complete and binding-valid at guide activation;
 - approved unified guide/setup generation and complete policy hashes;
 - Submission id/version and admission id;
 - ART binding, content, replica, digest and byte count;
@@ -199,10 +207,8 @@ The live sequence is:
 ```text
 canonical allow_review admission and packet
 -> review claim
--> CON validates one active same-project ContributionPolicy and its published,
-   complete, binding-valid immutable reviewer ContributionPolicyVersion plus
-   locked rule/definition/binding dependencies
--> REV freezes it as
+-> REV verifies the task's locked ContributionPolicyVersion lineage
+-> REV copies that exact version as
    ReviewLease.reviewer_contribution_policy_version_id
 -> Review decision in one caller-owned transaction
    -> every accept / needs_revision / reject creates the reviewer
@@ -214,12 +220,19 @@ canonical allow_review admission and packet
    -> needs_revision/reject create no FinalAcceptance and no submitter record
 ```
 
-Missing, unpublished, incomplete, binding-invalid, cross-project or stale
-reviewer policy facts deny before lease creation. Later policy publication or
-binding changes cannot alter the lease's immutable freeze.
+The inherited ContributionPolicyVersion contains distinct
+`completed_review` and `accepted_submission` rules. Reviewer and submitter
+evaluation therefore use the same governing version without implying the same
+award result.
+
+Missing, cross-project, stale or mismatched task policy lineage denies before
+lease creation. Review claim performs no current-policy selection. Later policy
+publication or binding changes cannot alter the task, assignment, Submission or
+lease lineage.
 
 REV owns Review, ReviewLease, FinalAcceptance, judgment and the single commit.
-CON owns ContributionPolicy/ContributionPolicyVersion selection,
+CON owns ContributionPolicy/ContributionPolicyVersion validation at guide
+activation,
 ContributionRecord, CompensationAward and its flush-only transaction
 participant. The first canonical Review decision cannot commit without the
 mandatory CON participant. ContributionRecord/CompensationAward persistence

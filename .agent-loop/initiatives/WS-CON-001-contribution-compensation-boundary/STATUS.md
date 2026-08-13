@@ -50,11 +50,12 @@ schema work. Current dependency analysis yields:
 5. CON-02C lifecycle-audit participant before REV-04B.
 6. Hidden policy/binding behavior and legacy clean cut as AUTH contracts become
    available.
-7. CON-05A submitter policy selection/freeze must merge before live task claim
-   and assignment activation.
+7. CON-05A guide-activation policy validation and the immutable guide/task/
+   assignment persistence contract must merge before live task readiness.
 8. Contribution/award persistence follows stable REV Review, ReviewLease and
    FinalAcceptance FK targets, but precedes live review decisions.
-9. CON-06 reviewer policy selection/freeze must merge before live REV claim.
+9. Review claim inherits the task-locked version; CON-06 is a planned
+   retirement of the former lookup and must not implement runtime behavior.
 10. The atomic REV/CON participant must merge before the first canonical Review
     decision; it creates a reviewer ContributionRecord for every final decision
     and, on accept only, a submitter ContributionRecord from FinalAcceptance.
@@ -70,18 +71,20 @@ schema work. Current dependency analysis yields:
 - CON-05A/05B: deterministic legacy-row classification remains a human data
   decision.
 - CON-03C: REV Review and FinalAcceptance tables are not implemented.
-- CON-06/07: corresponding REV lease/decision caller contracts are future.
+- CON-07: the corresponding REV decision caller contract is future. CON-06 is
+  a planned retirement with no runtime dependency.
 - CON-03A creation behavior: AUTH has not approved a compensation-adapter
   service identity/capability; existing ART/REV identities cannot substitute.
 
-CON is not downstream of REV acceptance. It participates at assignment freeze,
-reviewer-lease freeze, and every final review-decision commit. Only fulfillment,
-reconciliation and product reads remain downstream of the canonical decision
-transaction.
+CON is not downstream of REV acceptance. It validates the one policy version
+at guide activation and participates in every final review-decision commit.
+TASK and REV inherit that immutable lineage without claim-time CON lookups.
+Only fulfillment, reconciliation and product reads remain downstream of the
+canonical decision transaction.
 
-WS-CON-001-05A is planned as the submitter policy freeze prerequisite for live
-assignment. WS-CON-001-06 is planned as the reviewer policy freeze prerequisite
-for live ReviewLease claim.
+WS-CON-001-05A is planned as the guide-activation validation and persistence
+prerequisite for task readiness. WS-CON-001-06 is a planned retirement; ReviewLease
+copies and verifies the task-locked version.
 
 ## Immediate next action
 

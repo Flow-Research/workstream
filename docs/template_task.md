@@ -74,14 +74,14 @@ directly.
 - project pre-submit checker policy id:
 - project pre-submit checker bundle hash:
 
-## Assignment Compensation Snapshot
+## Governing Contribution Policy Snapshot
 
-These values are server-owned and appear only after TaskAssignment creation.
-The TaskAssignment initially freezes the active published
-ContributionPolicyVersion; task creators do not provide award fields directly.
-Publication cannot change an active attempt. A successful human
-`needs_revision` preparation may atomically record and apply a changed current
-version for the next attempt.
+These values are server-owned. The task locks the guide-bound
+ContributionPolicyVersion before it becomes claimable; TaskAssignment copies
+that exact lock and task creators do not provide award fields directly.
+Publication cannot change existing work. A successful human `needs_revision`
+preparation may create a newly prepared task context from a newly active guide
+generation for the next attempt.
 
 - submitter contribution policy version id:
 - contribution type: `accepted_submission`

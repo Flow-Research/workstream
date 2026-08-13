@@ -50,9 +50,9 @@ Acceptance:
   compensated/unpaid rule for each of `accepted_submission` and
   `completed_review`.
 - Guide-policy activation and contribution-policy publication are independently
-  governed. Project activation requires both to be complete; later
-  `TaskAssignment` and `ReviewLease` creation freeze the applicable published
-  version rather than treating award eligibility as guide or checker context.
+  governed. Project activation requires both to be complete and binds the
+  exact published version. Task readiness locks it; later `TaskAssignment` and
+  `ReviewLease` creation inherit that task lock without policy selection.
 - Normal setup starts from guide/source capture. Project Managers do not
   manually trigger sufficiency or derivation in the happy path.
 - Submission artifact policy is Workstream-derived and approved by an

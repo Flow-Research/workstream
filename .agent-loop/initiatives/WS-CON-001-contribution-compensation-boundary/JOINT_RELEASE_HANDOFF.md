@@ -40,9 +40,9 @@ CON 02C lifecycle audit participant
 -> CON 03D delivery/receipt/status and ordinal persistence
 
 REV lease schema/caller facts + CON 04B policy service
--> CON 06 claim-time policy lookup/freeze participant
+-> task-locked policy lineage carried through admission; no CON claim-time lookup
 
-stable REV revision lineage + CON 03C/03D + CON 05A + CON 06
+stable REV revision lineage + CON 03C/03D + CON 05A
 -> CON 07 mandatory review-decision participant
 -> REV 10 hidden contribution composition
 

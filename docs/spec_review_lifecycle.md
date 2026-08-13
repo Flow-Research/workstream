@@ -125,7 +125,8 @@ freshly verify the Flow token
 -> recompose canonical final facts
 -> AUTH validates all prepared-handle bindings, consumes the handle once,
    evaluates exact current authority once, and stages bounded evidence
--> freeze the reviewer ContributionPolicyVersion and append ReviewLease plus
+-> verify canonical admission's task-locked ContributionPolicyVersion, copy it
+   to ReviewLease.reviewer_contribution_policy_version_id, and append ReviewLease plus
    ReviewPacketManifest
 -> stage audit/outbox rows and commit once
 ```
@@ -235,13 +236,13 @@ rows reject update, delete, and truncate at the database boundary. The removed
 limit or deadline blocks preparation and never auto-rejects or auto-closes a
 Task.
 
-The submitter `ContributionPolicyVersion` freezes on the exact TaskAssignment.
-The reviewer version freezes independently on each ReviewLease. Project Guide
-or policy publication changes neither freeze during an active attempt. After a
-human `needs_revision`, complete-context preparation may atomically update the
-continuing TaskAssignment to the current valid submitter version for the next
-attempt. A later lease freezes the then-current reviewer terms without
-rewriting an earlier lease.
+Project Guide activation binds one `ContributionPolicyVersion`; task readiness
+locks it before claimability. TaskAssignment and ReviewLease inherit that exact
+task-governing version without claim-time selection. Project Guide or policy
+publication changes no existing task, assignment, Submission, or lease. After
+a human `needs_revision`, complete-context preparation may create a newly
+prepared task context from a newly activated guide generation; its assignment
+and lease inherit that new task lock without rewriting earlier lineage.
 
 ## Checker Admission
 
@@ -508,8 +509,8 @@ next-attempt guide/source, submission/checker, review, revision,
 task-template/task-execution, and submitter ContributionPolicy context; context
 digest; outcome; direction; change summary; source and target TaskAssignment;
 preparation sequence; preparing actor/process; and audit link. It records prior
-and next submitter ContributionPolicyVersion and atomically updates the
-continuing assignment when that selector changed.
+and next ContributionPolicyVersion lineage and, when changed, binds a newly
+prepared task context; it never updates the prior TaskAssignment selector.
 
 Each episode forms one non-branching preparation chain: one root per Review,
 one child per preparation, same task/Review/source lineage across an edge, and
@@ -529,9 +530,9 @@ the active lease. History shows the prior and new guide versions, direction,
 and change summary.
 
 The needs-revision Review and its reviewer contribution/award use the completed
-ReviewLease's frozen policy. The next Submission uses the complete prepared
-context, and the next ReviewLease independently freezes the reviewer policy
-then current. Accept and reject perform no rebase. The Review, reviewer
+ReviewLease's frozen policy. The next Submission uses the complete newly
+prepared task context, and its next ReviewLease inherits that task's locked
+policy version. Accept and reject perform no rebase. The Review, reviewer
 contribution/award, task and assignment effects, initial preparation or blocked
 outcome, audit/outbox effects, and contributor-visible state commit once or
 roll back together.

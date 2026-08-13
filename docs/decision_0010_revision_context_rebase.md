@@ -91,12 +91,12 @@ only in-progress synchronization boundary for the complete next-attempt
 context.
 
 The ReviewLease that produced `needs_revision` and its reviewer
-`completed_review` ContributionRecord remain governed by that lease's frozen
-reviewer ContributionPolicyVersion. Revision preparation updates the continuing
-TaskAssignment's submitter ContributionPolicyVersion to the selected current
-version for the next attempt and records the prior/next lineage. The next
-ReviewLease independently freezes the reviewer ContributionPolicyVersion then
-current. Prior Submissions, Reviews, ContributionRecords, and
+`completed_review` ContributionRecord remain governed by that lease's
+task-inherited ContributionPolicyVersion. Revision preparation records
+prior/next lineage and, when context changes, creates a newly prepared task
+context from the newly active guide-bound version; it does not rewrite the
+continuing TaskAssignment. The next assignment and ReviewLease inherit the new
+task lock. Prior Submissions, Reviews, ContributionRecords, and
 CompensationAwards are never rewritten.
 
 The human `needs_revision` Review, reviewer contribution and applicable award,
