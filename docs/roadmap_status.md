@@ -133,9 +133,10 @@ review. Their presence does not change the implemented-on-`main` list above.
    recovery, provider proof, and the later public cutover.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
-2. Register exact adapter-binding authority through CP01A and exact
-   ContributionPolicy authority through CP01B while both remain unavailable; implement
-   and separately activate adapter-binding and ContributionPolicy behavior;
+2. CP01A has registered exact adapter-binding authority while keeping all four
+   actions unavailable. Register exact ContributionPolicy authority through
+   CP01B while unavailable; then implement and separately activate
+   adapter-binding and ContributionPolicy behavior;
    expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and
    lock it on each task before that task becomes claimable. TaskAssignment

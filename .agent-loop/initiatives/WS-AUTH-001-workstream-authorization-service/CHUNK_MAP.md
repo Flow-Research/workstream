@@ -25,7 +25,7 @@ sequence.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-ARCH-001-CP01` | Combined registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |
-| `WS-ARCH-001-CP01A` | Adapter-binding unavailable registration | L1 | Proposed; excludes retirement, callback/fulfillment, identity, evaluator, and activation |
+| `WS-ARCH-001-CP01A` | Adapter-binding unavailable registration | L1 | Complete on merge; excludes retirement, callback/fulfillment, identity, evaluator, and activation |
 | `WS-ARCH-001-CP01B` | ContributionPolicy unavailable registration | L1 | Proposed after CP01A; excludes binding behavior, evaluator, and activation |
 | `WS-ARCH-001-CP03` | Exact adapter-binding activation | L1 | Proposed after merged CP02 hidden proof |
 | `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |

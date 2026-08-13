@@ -38,6 +38,13 @@ backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/action_ids.py
 backend/app/modules/authorization/api/adapter_bindings.py
 backend/tests/authorization/test_adapter_binding_registration.py
+backend/tests/test_authorization.py (closed catalogue/action-owner parity only)
+docs/operations_authorization_service.md (catalogue parity only)
+docs/spec_authorization_service.md (catalogue parity only)
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md (catalogue parity only)
+docs/spec_contribution_compensation.md (CP01A registration parity only)
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md (CP01A state only)
+docs/roadmap_status.md (CP01A capability state only)
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/{CHUNK_MAP.md,STATUS.md}
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP01A-auth-adapter-binding-registration.md
@@ -119,4 +126,4 @@ identity, migration, or product import; update and re-review the contract first.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`

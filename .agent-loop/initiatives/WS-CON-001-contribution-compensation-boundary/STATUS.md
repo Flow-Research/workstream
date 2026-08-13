@@ -78,8 +78,10 @@ historical-row backfill or compatibility behavior.
 
 - CON-02B: missing `outbox.dispatch`, `workstream.outbox.dispatcher`, exact
   matrix/context/PREP support, and AUTH activation plan.
-- CP01A/CP01B: exact AUTH adapter-binding and ContributionPolicy manifests are not yet
-  registered; callback/fulfillment authority must remain separate.
+- CP01A is complete on merge with four exact adapter-binding actions registered
+  but unavailable. CP01B ContributionPolicy registration remains missing;
+  callback/fulfillment authority stays separate and CP02 cannot start before
+  CP01B merges.
 - CP02-CP05: hidden behavior and exact activation have not merged.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required
