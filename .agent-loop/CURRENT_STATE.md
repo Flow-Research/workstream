@@ -80,3 +80,5 @@ WS-ARCH-001-04E is planned. WS-ARCH-001-04F is planned.
 WS-ART-001-06A is a planned retirement. WS-ART-001-06B is a planned
 retirement. WS-AUTH-001-14 is a planned retirement. WS-POL-003-08 is planned
 after canonical WS-ARCH-001-04E.
+WS-CON-001-05A is planned before live assignment. WS-CON-001-06 is planned
+before live ReviewLease claim.

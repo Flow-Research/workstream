@@ -116,3 +116,7 @@ Required tracks: senior, QA, security, product, architecture, docs, reuse, test-
 delta, and CI integrity. Stop if exact task/Submission lineage, AUTH-PREP,
 task-owned composition seam, or migration classification is not merged. Do not
 wait for or perform `task.claim` activation inside this chunk.
+
+## Merge state
+
+- Outcome on merge: `planned`

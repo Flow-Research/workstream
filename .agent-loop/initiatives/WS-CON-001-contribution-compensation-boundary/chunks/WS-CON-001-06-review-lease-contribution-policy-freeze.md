@@ -77,3 +77,7 @@ focused contribution coverage at least 90 percent.
 Required tracks: senior, QA, security, product, architecture, docs, reuse, and
 test-delta. Stop if REV lease schema/caller facts or review.claim authority are
 not merged. CON owns no review composition.
+
+## Merge state
+
+- Outcome on merge: `planned`

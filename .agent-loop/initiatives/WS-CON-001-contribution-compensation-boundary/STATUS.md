@@ -79,6 +79,10 @@ reviewer-lease freeze, and every final review-decision commit. Only fulfillment,
 reconciliation and product reads remain downstream of the canonical decision
 transaction.
 
+WS-CON-001-05A is planned as the submitter policy freeze prerequisite for live
+assignment. WS-CON-001-06 is planned as the reviewer policy freeze prerequisite
+for live ReviewLease claim.
+
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
