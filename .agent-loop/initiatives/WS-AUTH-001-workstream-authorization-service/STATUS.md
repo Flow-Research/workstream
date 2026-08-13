@@ -42,8 +42,9 @@ not current start requirements.
 - ART, REV, and CON feature actions remain unavailable until their exact hidden
   owner behavior and typed manifests are merged. Their activation order lives
   in the matching XINT and feature-owner records.
-- PLAN3 proposes the missing contribution-policy sequence: CP01 registers exact
-  adapter-binding and policy actions while unavailable; CP03 and CP05 activate
+- PLAN3 proposes the missing contribution-policy sequence: CP01A registers exact
+  adapter-binding actions while unavailable and CP01B separately registers
+  policy actions while unavailable; CP03 and CP05 activate
   only their respective merged hidden behavior. Fulfillment callback authority
   remains separate and cannot be bundled into adapter-binding registration.
 

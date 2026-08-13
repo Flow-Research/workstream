@@ -78,7 +78,7 @@ historical-row backfill or compatibility behavior.
 
 - CON-02B: missing `outbox.dispatch`, `workstream.outbox.dispatcher`, exact
   matrix/context/PREP support, and AUTH activation plan.
-- CP01: exact AUTH adapter-binding and ContributionPolicy manifests are not yet
+- CP01A/CP01B: exact AUTH adapter-binding and ContributionPolicy manifests are not yet
   registered; callback/fulfillment authority must remain separate.
 - CP02-CP05: hidden behavior and exact activation have not merged.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
@@ -113,6 +113,6 @@ CP08/ARCH-03B replacement path.
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
 participant after REV's earlier gates merge. The first proposed policy-cutover
-implementation is CP01 AUTH unavailable registration; no product behavior may
-start until PLAN3 merges and CP01 receives a current-main executable contract.
+implementation begins with CP01A then CP01B unavailable AUTH registration; no
+product behavior may start until both current-main contracts merge.
 Open pull requests determine transient CON work.

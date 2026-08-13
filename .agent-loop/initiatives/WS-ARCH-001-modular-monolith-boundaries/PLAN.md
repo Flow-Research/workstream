@@ -293,7 +293,8 @@ deployed-history conversion or compatibility path is assumed.
 The corrected linear sequence is:
 
 ```text
-CP01 AUTH unavailable registration
+CP01A AUTH adapter-binding unavailable registration
+-> CP01B AUTH ContributionPolicy unavailable registration
 -> CP02 CON hidden adapter-binding behavior
 -> CP03 AUTH adapter-binding activation
 -> CP04 CON hidden ContributionPolicy behavior

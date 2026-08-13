@@ -24,7 +24,7 @@
 | Live assignment or review claim loses the one task-governing ContributionPolicyVersion | Critical | Enforce immutable guide -> task -> assignment -> Submission/allow_review -> ReviewLease lineage; missing, cross-project, stale or mismatched facts deny before claim effects, and neither claim performs CON policy lookup |
 | Review decision commits without mandatory contribution consequences | Critical | Stable REV schema precedes CON-03C/07; every decision atomically creates reviewer ContributionRecord/awards and accept additionally creates FinalAcceptance plus submitter record/awards |
 | Composition root absorbs domain decisions | High | Composition opens the unit of work and wires transaction-bound ports only; TASK command owns Submission sequencing and each target port enforces its own invariants |
-| Policy behavior starts before exact AUTH registration | Critical | CP01 registers typed unavailable authority before CP02/CP04 behavior; CP03/CP05 activate only after hidden proof |
-| Binding management inherits fulfillment callback authority | Critical | CP01-CP03 exclude delivery/callback identities and permissions entirely |
+| Policy behavior starts before exact AUTH registration | Critical | CP01A and CP01B register their separate typed unavailable authority before CP02/CP04 behavior; CP03/CP05 activate only after hidden proof |
+| Binding management inherits retirement, fulfillment, callback, or delivery authority | Critical | CP01A through CP03 exclude retirement actions plus fulfillment, callback, and delivery action IDs, permissions, identities, routes, evaluators, and service-matrix rows entirely |
 | CON writes PROJECT or TASK aggregates | Critical | CP06 returns immutable validation facts only; CP07 and CP08 own their respective writes |
 | Consolidated v0.1 schema gains fake compatibility debt | High | CP09 performs a clean current-baseline cut and forbids aliases, dual paths, and invented backfills |
