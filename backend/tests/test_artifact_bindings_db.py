@@ -29,6 +29,7 @@ from app.modules.tasks.repository import TaskRepository
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization import prepared as prepared_authorization
+from app.modules.artifacts import authorization as artifact_authorization
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
@@ -409,6 +410,9 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         prepared_authorization, "fixed_service_authorization_context", fixed_context
     )
+    monkeypatch.setattr(
+        artifact_authorization, "fixed_service_authorization_context", fixed_context
+    )
     request = SubmissionCreationRequest(
         admission_id=art_request.admission_id, task_id=context.task_id,
         assignment_id=context.assignment_id, contributor_id=context.contributor_id,
@@ -479,6 +483,9 @@ async def test_revoked_binding_service_rolls_back_the_hidden_command(
         )
     monkeypatch.setattr(
         prepared_authorization, "fixed_service_authorization_context", revoked_context
+    )
+    monkeypatch.setattr(
+        artifact_authorization, "fixed_service_authorization_context", revoked_context
     )
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         denied_art_request = replace(
