@@ -400,7 +400,9 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(TaskRepository, "get_task", get_task)
     monkeypatch.setattr(AdminAuthorizationRepository, "lock_request_actor", lock_actor)
     monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", find_role)
-    monkeypatch.setattr(artifact_authorization, "fixed_service_action_context", fixed_context)
+    monkeypatch.setattr(
+        artifact_authorization, "fixed_service_authorization_context", fixed_context
+    )
     request = SubmissionCreationRequest(
         admission_id=art_request.admission_id, task_id=context.task_id,
         assignment_id=context.assignment_id, contributor_id=context.contributor_id,
@@ -467,7 +469,7 @@ async def test_revoked_binding_service_rolls_back_the_hidden_command(
             AuthorizationDenialCode.IDENTITY_LINK_REVOKED
         )
     monkeypatch.setattr(
-        artifact_authorization, "fixed_service_action_context", revoked_context
+        artifact_authorization, "fixed_service_authorization_context", revoked_context
     )
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         denied_art_request = replace(
