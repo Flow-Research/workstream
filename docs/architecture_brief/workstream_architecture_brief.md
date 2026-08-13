@@ -141,8 +141,12 @@ The sequence below shows the narrow v0.1 loop the system must prove before expan
 
 ### Lifecycle Invariants
 
-- New TaskAssignments and ReviewLeases cannot be created without an active
-  published contribution policy version to freeze.
+- A task cannot enter `READY` until it has locked the complete, binding-valid
+  ContributionPolicyVersion bound during guide activation. TaskAssignment
+  copies that task lock, Submission stamps the exact attempt version, and
+  ReviewLease copies the Submission stamp without claim-time selection. A
+  version retired after it was validly locked remains authoritative for that
+  immutable attempt.
 - A contributor submission creates a new immutable submission version; locked artifacts are not edited in place.
 - Review decisions are exactly `accept`, `needs_revision`, or `reject`.
 - `needs_revision` preserves immutable findings, responses, preparations, and

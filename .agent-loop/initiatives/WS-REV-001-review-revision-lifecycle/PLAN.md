@@ -71,7 +71,7 @@ path belongs to the matching XINT activation after the REV behavior merges.
 ### Wave 3 — Claim, lease, and packet
 
 8. `06A` implements atomic claim, one-active-lease capacity, REV's lease policy-
-   version freeze using the lookup result supplied by CON-06, and packet-
+   version copy from the admitted Submission's immutable attempt stamp, and packet-
    manifest freeze with ART-owned membership.
 9. `06B` implements owned release and preferred decline.
 10. `06C` implements database-time preference/lease expiry, lazy recovery, and
@@ -173,7 +173,7 @@ Unavailable actions fail closed. REV never changes catalogue availability.
 | TASK/CHECKER | Project/Task/TaskAssignment/Submission and CheckerRun state, final current `allow_review`, typed task/submission transitions | Existing immutable Submission, final current CheckerRun facts, stamped policy/context lineage, typed caller-transaction participants | Admission/decision/revision commands containing exact locked REV facts | Review queue, reviewer routing/lease, Review judgment, findings, or contribution records |
 | ART/XINT | Artifact bytes, verified binding/hash/membership identifiers, provider access, scratch/materialization, packet-byte authorization and delivery | Exact verified Submission binding facts, a contract-only membership port, and later lease-scoped packet materialization | Active REV lease and normalized immutable ReviewPacketManifest identifying what may be materialized | Admission meaning, queue/lease lifecycle, reviewer notes/findings, decisions, revisions, or contributions |
 | REV | Queue/admission idempotency, routing/preference, ReviewLease, normalized packet-manifest semantics, immutable Review/findings/resolutions, human revision history, FinalAcceptance, orchestration and the single commit | N/A | N/A | AUTH grants/activation, artifact custody/provider I/O, upstream Submission/checker creation, ContributionRecord/award/fulfillment persistence |
-| CON | ContributionPolicy/versions, ContributionRecord, award and fulfillment state, policy-freeze lookup, flush-only decision participant, shared dispatcher/release hooks | Existing canonical policy-version FK target, claim-time policy lookup result, and decision-time contribution/award staging | REV-owned lease reference facts; immutable Review source for reviewer work; accept-only FinalAcceptance source for submitter work; caller session/locked facts | ReviewLease persistence/transitions, reviewer selection, review decision, FinalAcceptance creation, task transition, authorization, or transaction commit |
+| CON | ContributionPolicy/versions, ContributionRecord, award and fulfillment state, guide-activation policy validation, flush-only decision participant, shared dispatcher/release hooks | Existing canonical policy-version FK target and decision-time contribution/award staging | REV-owned lease reference facts; immutable Review source for reviewer work; accept-only FinalAcceptance source for submitter work; caller session/locked facts | ReviewLease persistence/transitions, reviewer selection, claim-time policy selection, review decision, FinalAcceptance creation, task transition, authorization, or transaction commit |
 | Future adjudication | Future policy and adjudication behavior under separate intent | Nothing in v0.1 | Traversable immutable Submission/Review/finding/response/resolution/FinalAcceptance lineage | Any v0.1 REV behavior |
 
 ### Exact ownership flows
@@ -187,10 +187,12 @@ REV alone decides admission meaning and persists:
 
 Claim
 AUTH prepares/consumes authority
-CON looks up and returns the canonical reviewer ContributionPolicyVersion ID
+REV copies the canonical admission's immutable
+Submission.contribution_policy_version_id and verifies upstream Task/Assignment
+lineage only for equality
 REV alone persists and manages:
   ReviewLease + policy-version FK + queue/lease transitions + packet freeze
-ART performs no claim write and CON performs no lease write
+ART and CON perform no claim or lease write
 
 Packet read
 REV supplies active lease + normalized ReviewPacketManifest
@@ -225,11 +227,11 @@ stale `Proposed` or `Active` label.
 | Required owner output | Producer | Current-main state at PLAN4 | REV consumer |
 |---|---|---|---|
 | Closed typed REV authorization/PREP schemas, actions unavailable | XINT-003-02D | Merged in PR #257 | Hidden REV services; later positive activation remains XINT-owned |
-| Canonical reviewer ContributionPolicyVersion persistence target | CON-03B | Not evidenced merged; owner plan is stale and must be refreshed by CON | 03A2 |
+| Canonical ContributionPolicyVersion persistence target | CON-03B | Merged PR #274; consumed by merged REV-03A2 PR #280 | 03A2 |
 | Reviewer-packet membership identifier/port contract, with no REV runtime dependency | ART-owned contract-only precursor to ART-07A | Missing exact published contract; report to ART owner | 03B |
-| Shared lifecycle-audit participant | CON-02C | Not evidenced merged; generic audit persistence alone is insufficient | 04B |
+| Shared lifecycle-audit participant | CON-02C | Merged PR #277 | 04B |
 | Final Submission/CheckerRun/verified-binding admission manifest | ART checker chain through ART-06B and XINT-06B | Not evidenced complete | 05A |
-| Claim-time reviewer-policy lookup result used by REV to freeze its lease FK | CON-06 | Future after REV lease schema and CON prerequisites | 06A |
+| Submission-stamped ContributionPolicyVersion carried by canonical admission and copied to the lease FK; Task/Assignment lineage is verified only for upstream equality | TASK/ARCH manifest; CON-06 lookup superseded | Future live admission gate; no claim-time lookup | 06A |
 | Exact reviewer packet materialization | ART-07A, activated by XINT-002-07A | Future after merged REV lease/manifest | 07A |
 | Atomic contribution/award decision participant | CON-07 | Future after REV-04B/09B and CON prerequisites | 10 |
 | Shared dispatcher/handler registry | CON-02B | Not evidenced merged | 12P1 |
@@ -255,9 +257,10 @@ waits for CON-07's mandatory flush-only participant.
 On human `needs_revision`, REV composes the task-owned complete-context
 preparation after the reviewer CON operation in the same transaction. The
 completed reviewer record keeps its lease-frozen policy. Preparation may keep
-or rebase the continuing TaskAssignment's submitter policy for the next
-attempt, and the next ReviewLease independently freezes the reviewer version
-then current. REV owns orchestration and lineage, not CON policy selection.
+the applicable lineage or atomically rebase the continuing Task and
+TaskAssignment to the complete current context for the next submission attempt.
+Prior Submissions, ReviewLeases, Reviews, contributions, and awards are not
+rewritten. REV owns orchestration and lineage, not CON policy selection.
 
 ## Alternatives rejected
 
@@ -280,6 +283,7 @@ above 78 percent. Full local suite runs are not required.
 
 ## Stop rule
 
-This planning refresh starts no runtime child. After review and human approval,
-start only `WS-REV-001-03A1`. Stop after its PR; do not begin 03A2
-automatically.
+This planning refresh starts no runtime child. PLAN4, 03A1, and 03A2 are
+merged. The next REV planning boundary is 03B after ART publishes its exact
+contract-only packet-membership port. Replace the 03B skeleton with a
+current-main executable contract and obtain human approval before implementation.

@@ -95,7 +95,7 @@ actions remain reference-only external handoffs.
 | `project.review_policy.update` | 02A immutable identity/lineage plus refreshed REV-03P/AUTH-12D2; activated only by `WS-XINT-003-02B` |
 | `project.revision_policy.update` | 02A immutable identity/lineage plus refreshed REV-03P/AUTH-12D2; activated only by `WS-XINT-003-02B` |
 | `review.queue.read` | merged REV-05A admission and REV-05B concealed current-work view |
-| `review.claim` | merged REV-03B persistence, REV-06A claim behavior, CON-06 freeze, and exact ART packet proof |
+| `review.claim` | merged REV-03B persistence, REV-06A copy of the admitted Submission's immutable attempt-policy stamp with upstream equality proof, retirement of CON-06 lookup behavior, and exact ART packet proof |
 | `review.release` | merged REV-06B owned release behavior |
 | `review.decline_preference` | merged REV-06B preference behavior |
 | `review.preference_expiry.run` | merged REV-06C preference timer command |

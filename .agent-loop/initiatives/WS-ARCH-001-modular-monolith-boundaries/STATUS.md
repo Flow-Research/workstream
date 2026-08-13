@@ -35,7 +35,28 @@
 - Complete on merge: WS-ARCH-001-02H activates exact human Submission
   consumption and fixed ART binding authority against the hidden atomic
   transaction. The public route remains unchanged.
+- WS-ARCH-001-PLAN2 is planned and lands as the current-main planning
+  reconciliation. Planned non-executable skeletons WS-ARCH-001-03A,
+  WS-ARCH-001-03B, WS-ARCH-001-03C, WS-ARCH-001-04A, WS-ARCH-001-04B,
+  WS-ARCH-001-04C, WS-ARCH-001-04D, WS-ARCH-001-04E, and WS-ARCH-001-04F
+  record its dependency order. The next product
+  milestone is one admission-backed immutable Submission reaching a durable
+  current `allow_review` result through PROJECTS/TASKS/ART/CHECKERS/AUTH public
+  APIs. REV admission follows that manifest; the public 02I cutover remains
+  later.
 - Repository housekeeping after PR #315 found no competing clean-up
   initiative: WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 owns
   AUTH-specific debt, and test-structure repairs remain incremental with the
   capability being touched.
+
+## Planned PLAN2 children
+
+- WS-ARCH-001-03A is planned.
+- WS-ARCH-001-03B is planned.
+- WS-ARCH-001-03C is planned.
+- WS-ARCH-001-04A is planned.
+- WS-ARCH-001-04B is planned.
+- WS-ARCH-001-04C is planned.
+- WS-ARCH-001-04D is planned.
+- WS-ARCH-001-04E is planned.
+- WS-ARCH-001-04F is planned.

@@ -121,9 +121,9 @@ revision coverage.
   owner gap.
 - Automatic queue admission requires the exact final TASK/CHECKER/ART handoff
   to merge before 05A; it is not currently evidenced merged.
-- Claim packet creation: queue/lease persistence, CON-06's claim-time policy
-  lookup result used by REV for its lease freeze, and exact ART packet
-  membership/materialization contracts.
+- Claim packet creation: queue/lease persistence, immutable Submission-stamped
+  attempt-policy lineage, and exact ART packet membership/materialization
+  contracts.
 - Decision commit: Review/FinalAcceptance persistence, TASK participant, CON
   contribution participant, audit, and outbox.
 - Product reads/routes: matching AUTH activation plus lifecycle release gate.
@@ -143,8 +143,7 @@ revision coverage.
 - Final typed ART/CHECKER-to-REV admission manifest.
 - ART contract-only reviewer packet membership input and later ART-07A
   materialization input/output types.
-- Final CON claim-time reviewer-policy lookup and two-operation decision
-  participant.
+- Final CON two-operation decision participant; no claim-time policy lookup.
 - Exact TASK decision and human-revision participant interfaces.
 
 These unknowns do not block 03A1. They do block their named later consumers.

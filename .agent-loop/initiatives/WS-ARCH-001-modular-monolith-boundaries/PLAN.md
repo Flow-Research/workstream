@@ -114,6 +114,145 @@ initial submission, checker remediation, and reviewer-requested revision. A
 review note remains REV-owned and relates to the exact predecessor Submission;
 the contributor response is a new complete ZIP and immutable Submission.
 
+## PLAN2: canonical Submission-to-allow-review sequence
+
+PLAN2 corrects the post-02H delivery path around one measurable product
+milestone. It does not start REV or CON implementation and does not release a
+public route.
+
+### Gate 0: complete Project Guide readiness in the owner initiative
+
+The existing WS-POL-003 order remains authoritative:
+
+```text
+POL-03B
+-> POL-04A -> AUTH-12B2 -> POL-04B
+-> POL-05A -> AUTH-12F4 -> POL-05B
+-> POL-06A -> AUTH-12G -> POL-06B
+-> POL-07 -> AUTH-12H
+```
+
+Each POL/AUTH chunk repairs only the public boundary and structural debt it
+touches. Completion means one current approved unified generation supplies the
+exact active guide plus complete pre-submit and post-submit policy identities
+and hashes. POL-08 physical cleanup follows the canonical `allow_review`
+milestone so it does not create a circular dependency on the Submission path;
+no live call may use the transitional inference paths in the interim.
+
+### Gate 1: current task, assignment and submitter-policy authority
+
+Parent 03 is split into 03A-03C. PROJECTS exposes current approved compilation
+facts, including the one ContributionPolicyVersion bound at guide activation;
+TASKS locks that version before a task becomes claimable and exposes
+claim/assignment and immutable locked-context facts; AUTH activates only the
+exact task/assignment actions after both hidden owner paths exist. The linear
+path is:
+
+```text
+guide activation
+-> CON validates one active, published, complete and binding-valid
+   same-project ContributionPolicyVersion
+-> PROJECTS binds that exact version as
+   ProjectGuide.contribution_policy_version_id
+-> TASK readiness inherits it as
+   WorkstreamTask.locked_contribution_policy_version_id
+-> task becomes claimable
+-> task claim copies the task lock to
+   TaskAssignment.submitter_contribution_policy_version_id
+-> TASK creates the assignment
+-> each Submission stamps that attempt's exact
+   Submission.contribution_policy_version_id
+```
+
+The guide, task and assignment lineage is immutable for each completed attempt;
+later policy publication alone cannot change active work. Only human
+`needs_revision` preparation may atomically rebase the continuing Task and
+TaskAssignment for the next submission attempt, while recording immutable
+prior/next lineage. A task cannot enter preparation with a stale guide, policy
+generation, assignment, contributor, predecessor, or missing/invalid frozen
+submitter ContributionPolicyVersion.
+
+### Gate 2: canonical post-submit checker completion
+
+Parent 04 is split into 04A-04E. CHECKERS first publishes immutable
+post-submit plan/run/result contracts. ART materializes the exact verified
+Submission binding. CHECKERS installs hidden owner-local persistence while its
+production authority remains fail-closed. AUTH then activates only those exact
+fixed-service boundaries. TASKS finally dispatches the now-authorized
+execution and projects the current routing fact without owning checker logic.
+
+The acceptance manifest must bind:
+
+- project, task, assignment, contributor and predecessor;
+- exact `TaskAssignment.submitter_contribution_policy_version_id`, same-project
+  and exactly equal to `WorkstreamTask.locked_contribution_policy_version_id`,
+  proven published, complete and binding-valid at guide activation;
+- approved unified guide/setup generation and complete policy hashes;
+- Submission id/version and admission id;
+- exact immutable `Submission.contribution_policy_version_id`, equal to the
+  assignment value when that Submission was created;
+- ART binding, content, replica, digest and byte count;
+- checker plan, run, result and supersession/currentness identities;
+- `routing_recommendation = allow_review`.
+
+Replay, revocation, stale generation, stale assignment, replaced binding,
+non-current run, cross-project/resource, wrong service/session/transaction and
+concurrent duplicate execution all fail closed. Denial produces no provider
+read, checker mutation, TASK transition, REV admission or allowed audit fact.
+
+### Gate 3: REV foundations may proceed; live REV follows the merged manifest
+
+Parent 05 is no longer a prerequisite for *producing* canonical
+`allow_review`. Independent REV schema and packet-contract foundations may
+proceed before it when their own named dependencies are satisfied. Canonical
+`allow_review` gates live admission, claiming and review processing—not
+owner-local schema preparation.
+
+The live sequence is:
+
+```text
+canonical allow_review admission and packet
+-> review claim
+-> REV verifies the Submission-stamped ContributionPolicyVersion lineage
+-> REV copies that exact version as
+   ReviewLease.reviewer_contribution_policy_version_id
+-> Review decision in one caller-owned transaction
+   -> every accept / needs_revision / reject creates the reviewer
+      ContributionRecord and evaluates the frozen reviewer rule
+   -> create zero, one or two CompensationAwards as the frozen rule requires
+   -> accept additionally creates FinalAcceptance, the submitter
+      ContributionRecord, and zero, one or two submitter CompensationAwards
+      from TaskAssignment.submitter_contribution_policy_version_id
+   -> needs_revision/reject create no FinalAcceptance and no submitter record
+```
+
+The inherited ContributionPolicyVersion contains distinct
+`completed_review` and `accepted_submission` rules. Reviewer and submitter
+evaluation therefore use the same governing version without implying the same
+award result.
+
+Missing, cross-project, stale or mismatched task policy lineage denies before
+lease creation. Review claim performs no current-policy selection. Later policy
+publication or binding changes cannot alter the task, assignment, Submission or
+lease lineage.
+
+REV owns Review, ReviewLease, FinalAcceptance, judgment and the single commit.
+CON owns ContributionPolicy/ContributionPolicyVersion validation at guide
+activation,
+ContributionRecord, CompensationAward and its flush-only transaction
+participant. The first canonical Review decision cannot commit without the
+mandatory CON participant. ContributionRecord/CompensationAward persistence
+must therefore follow stable REV Review/ReviewLease/FinalAcceptance schema and
+precede live REV decision implementation.
+
+### Public cutover remains later
+
+02I remains deferred. It may remove the legacy public Submission path only
+after initial, checker-remediation and reviewer-requested revision contexts all
+use the admission-backed contract and their checker/REV handoffs are proven.
+Canonical hidden `allow_review` is therefore an upstream milestone, not an
+implicit public release.
+
 ## Verification
 
 - AST import-edge inventory and protected-base comparison.

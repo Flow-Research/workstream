@@ -22,18 +22,15 @@ transient work, and no chunk starts automatically.
 | `WS-POL-003-06B` | Live deterministic post-submit projection/approval cutover with zero additional inference. | 06A + AUTH-12G |
 | `WS-POL-003-07` | One typed checker-service port with one complete pre and one complete post command. | 06B + merged ART-04B1-04B3 execution/evidence contract |
 | `WS-AUTH-001-12H` | Activate guide publication only over the complete approved current-generation unified chain and CON clean cut. | 07 + corrected 12B2 + owning CON clean cut |
-| `WS-POL-003-08` | Visibility, generation-safe correction, physical legacy inference/parallel-route cleanup, and activation compatibility proof. | 07 + AUTH-12H + ART-05B |
+| `WS-POL-003-08` | Visibility, generation-safe correction, physical legacy inference/parallel-route cleanup, and activation compatibility proof. | Planned after 07 + AUTH-12H + canonical WS-ARCH-001-04E manifest; not a prerequisite for 03A |
 
-## Parallel ART admission path
+## Merged ART admission foundation
 
-The ART admission sequence remains independent and may proceed concurrently:
-
-```text
-merged ART-04B3
--> merged XINT-06A
--> merged ART-04C1 -> ART-04C2
--> XINT-05A -> ART-05A -> XINT-05B -> ART-05B
-```
+ART-04B3, XINT-06A, ART-04C1/04C2 and replacement WS-ARCH-001-02A-02H are
+merged. The hidden admission-backed Submission transaction is authorized;
+historical XINT-05A/05B and ART-05A/05B are non-executable. The remaining path
+to canonical `allow_review` is coordinated by WS-ARCH-001 PLAN2 and does not
+run in parallel with a second Submission path.
 
 Once a unified guide generation is active, ART admission must bind only that
 generation's approved compilation-derived policy hashes; stale pre-unified or
@@ -41,7 +38,7 @@ mixed-generation chains deny through the existing locked-lineage checks.
 
 ## Post-submit execution gate
 
-ART-06A/06B may build hidden materialization/output behavior after ART-05B,
-but XINT-06B must not activate it until POL-06B and POL-07 have merged. AUTH-14
-then owns only bounded live authorization/visibility over the sole
-admission-backed Submission and checker paths.
+ART post-submit materialization/output behavior may begin only through the
+split WS-ARCH-001-04 contracts after POL-06B/07 and task readiness merge.
+WS-ARCH-001-04D is the later replacement activation gate. Historical
+XINT-06B and AUTH-14 contracts are superseded/non-executable.

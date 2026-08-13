@@ -1,6 +1,13 @@
 # Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05B and POL-06B/07
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded/non-executable
+
+WS-ARCH-001-04A-04D owns the current split replacement after POL-06B/07;
+historical ART-05B is non-executable. This file is design evidence only.
+
+## Merge state
+
+- Outcome on merge: `planned`
 
 Artifact contract phase: `submission_cutover`
 
@@ -78,7 +85,11 @@ bounded isolated checker workspaces.
   repository command below; `scripts/test_agent_gates.py` fails on workflow
   command, source-set, threshold, or cumulative-retention drift.
 
-## Exact CI Coverage Gates
+## Superseded historical verification evidence
+
+The commands below describe the retired proposal and are not active gates.
+Current coverage authority remains the repository-wide 78 percent floor plus
+the applicable protected-subsystem gates defined by current CI.
 
 ```bash
 coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90

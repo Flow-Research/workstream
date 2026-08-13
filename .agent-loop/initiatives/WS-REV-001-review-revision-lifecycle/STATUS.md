@@ -41,8 +41,10 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 - ART gates only manifest/admission/packet consumers that need its final typed
   facts; REV does not wait for ART-07A runtime to define packet semantics.
 - REV owns 03A2 completely; CON-03B must merely exist first as its mandatory
-  policy-version FK target. CON-06 later supplies claim-time policy lookup;
-  CON-07 later supplies canonical decision contribution composition.
+  policy-version FK target. Review claim later copies the admitted Submission's
+  immutable attempt policy version, checking Task/Assignment only for upstream
+  equality and performing no CON lookup; CON-07 supplies canonical decision
+  contribution composition.
 - ART must publish a contract-only packet-membership port before REV-03B. ART-
   07A then consumes the merged REV lease/manifest; this removes the former
   circular gate.
@@ -52,9 +54,21 @@ REV does not own Project/Task/Submission/Checker/AUTH/ART/CON internals.
 - Missing external behavior is reported to its owner and never implemented in
   REV.
 
+Canonical `allow_review` gates live admission, claim and review processing; it
+does not block independent REV schema or packet-contract foundations whose own
+dependencies are satisfied. Live claim copies the admitted
+`Submission.contribution_policy_version_id` to
+`ReviewLease.reviewer_contribution_policy_version_id`; it performs no current
+policy selection and uses Task/Assignment lineage only as an equality check.
+Live decisions require CON ContributionRecord/CompensationAward persistence and
+the CON-07 atomic participant: every final decision creates the reviewer
+record; accept also creates FinalAcceptance and the submitter record. No
+canonical Review decision may commit without CON.
+
 ## Next step
 
 The next dependency-ordered boundary is `WS-REV-001-03B`, normalized packet
 manifest persistence, after the required ART-owned packet-membership contract
 is published. Its skeleton must be expanded and reviewed against current
 `main` before implementation. Open pull requests determine transient work.
+WS-REV-001-10 is planned only after its named REV and CON prerequisites.

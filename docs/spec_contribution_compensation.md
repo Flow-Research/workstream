@@ -115,9 +115,10 @@ retired_by
 retired_at
 ```
 
-At most one policy may be active for new work in a project. An active policy
-MUST point to one published version. Missing policy configuration MUST fail
-assignment or lease creation; it MUST NOT be interpreted as unpaid work.
+At most one policy may be active for guide activation in a project. An active
+policy MUST point to one published version. Missing or invalid policy
+configuration MUST block guide activation and task readiness; it MUST NOT be
+interpreted as unpaid work or deferred until assignment/review claim.
 
 ### ContributionPolicyVersion
 
@@ -138,8 +139,12 @@ retired_at
 ```
 
 Draft content may be edited through the authorized policy service. Published
-and retired content is immutable. Publishing a later version affects only new
-TaskAssignments and ReviewLeases.
+and retired content is immutable. Publishing a later version affects a work
+attempt only when a future guide activation or human `needs_revision`
+preparation deliberately adopts the complete changed context. Existing
+Submissions, admissions, ReviewLeases, Reviews, ContributionRecords, and awards
+never change; only the continuing Task and TaskAssignment may rebase at that
+controlled boundary for the next attempt.
 
 ### ContributionRule
 
@@ -436,43 +441,63 @@ by reading `Review.decision`.
 
 ## Policy Freezing
 
-### Submitter freeze
+### Governing policy lock
 
-During authorized task claim, the task-owned transaction locks canonical task
-and assignment-eligibility facts before calling a narrow CON
-participant. That participant locks the active ContributionPolicy, its current
-published version, both rules, referenced definitions, and bindings. It returns
-one exact version ID to be stored as:
+During authorized Project Guide activation, PROJECTS calls the narrow CON
+validation participant. That participant locks the active ContributionPolicy,
+its current published version, both rules, referenced definitions, and
+bindings. It returns one exact version ID that PROJECTS binds as:
+
+```text
+ProjectGuide.contribution_policy_version_id
+```
+
+TASK readiness inherits that identifier before the task becomes claimable and
+stores it as:
+
+```text
+WorkstreamTask.locked_contribution_policy_version_id
+```
+
+Task claim performs no policy lookup and copies the task lock to:
 
 ```text
 TaskAssignment.submitter_contribution_policy_version_id
 ```
 
-The participant flushes only and never commits. The task subsystem owns claim
-composition and status effects.
+Submission creation copies that exact attempt value to:
 
-After a human `needs_revision`, the task-owned revision-preparation participant
-locks the complete current next-attempt context and calls CON to select and
-validate the current published submitter ContributionPolicyVersion. An
-unchanged version is kept; a changed valid version atomically replaces the
-TaskAssignment selector for the next attempt and records prior/next lineage in
-the immutable preparation. A missing, incomplete, crossed-project, ambiguous,
-or binding-ineligible version blocks the whole preparation. Publication alone
-never performs this update.
+```text
+Submission.contribution_policy_version_id
+```
 
-### Reviewer freeze
+The CON participant flushes only and never commits. PROJECTS owns activation;
+TASK owns readiness, claim composition, and status effects.
 
-During authorized review claim, REV locks its queue and ReviewLease facts
-before calling the corresponding CON participant. The participant performs the
-same policy completeness and binding validation and returns one version ID to
-be stored as:
+After a human `needs_revision`, task-owned preparation locks the complete
+current next-attempt context. If policy changed, it validates the newly active
+guide-bound version through CON and atomically rebases the continuing Task and
+TaskAssignment for the next submission attempt, recording exact prior/next
+lineage. Missing, incomplete, crossed-project, ambiguous, or binding-ineligible
+context blocks the whole preparation. Publication alone never performs an
+update.
+
+### Reviewer inheritance
+
+During authorized review claim, REV locks its queue, canonical admission,
+Task, TaskAssignment, Submission, and ReviewLease facts. It verifies the
+Submission's immutable attempt lineage and copies
+`Submission.contribution_policy_version_id` to:
 
 ```text
 ReviewLease.reviewer_contribution_policy_version_id
 ```
 
+Review claim performs no CON lookup or current-policy selection.
+
 REV owns ReviewLease schema, claim composition, and status effects. CON owns
-only the freeze capability.
+policy validation at guide activation and the controlled human-revision rebase,
+not ordinary review-claim selection.
 
 ### Freeze invariants
 
@@ -480,12 +505,13 @@ only the freeze capability.
 - Later publication MUST NOT alter an existing assignment, lease,
   ContributionRecord, or CompensationAward.
 - Suspension races MUST be resolved with explicit locks and both-order tests.
-- Missing, draft, ambiguous, crossed-project, or incomplete policy state fails
-  before the assignment or lease commits.
-- Human revision preparation MUST rebase changed submitter award eligibility
-  together with every changed applicable next-attempt context component. The
-  completed Review and reviewer contribution keep the prior ReviewLease freeze;
-  each new ReviewLease independently freezes the reviewer version then current.
+- Missing, draft, ambiguous, crossed-project, or incomplete policy state blocks
+  guide activation/task readiness or the controlled human-revision rebase.
+- Human revision preparation MUST rebase changed award eligibility with every
+  changed applicable context component on the continuing Task/TaskAssignment
+  for the next attempt. The completed Review and reviewer contribution keep the
+  prior ReviewLease version; the next Submission and ReviewLease use the
+  rebased version.
 - Accept and reject never rebase. They evaluate the exact assignment and lease
   versions frozen for the current attempt.
 
@@ -558,9 +584,9 @@ task-owned complete-context preparation keeps/rebases/blocks the next attempt
 The Review, reviewer contribution/award, task and assignment effects, initial
 preparation or blocked outcome, audit/outbox rows, and contributor-visible state
 commit once or roll back together. The preparation may update the continuing
-TaskAssignment's submitter policy selector for future work; it never changes
-the completed Review, its reviewer policy, or any prior Submission,
-ContributionRecord, or CompensationAward.
+Task and TaskAssignment only for the next submission attempt; it never changes
+the completed Review, its lease-frozen policy, any prior Submission,
+ReviewLease, ContributionRecord, or CompensationAward.
 
 Reject:
 
@@ -768,9 +794,10 @@ explicitly closed dual-principal evaluator. Discovery candidate strings are
 not canonical catalogue identifiers and MUST NOT be registered by CON.
 
 `task.claim` currently has a stable PermissionId but no ActionId. CON-05A and
-task-owned freeze composition must merge before AUTH registers or activates
-that future action. `review.claim` and `review.decision` remain planned until
-CON-06/07 and complete REV composition merge. AUTH must transfer the complete
+task-owned readiness/inheritance composition must merge before AUTH registers
+or activates that future action. `review.claim` and `review.decision` remain
+planned until the inherited task-policy lineage, CON-07, and complete REV
+composition merge. AUTH must transfer the complete
 REV action set under its canonical custody contract; CON MUST NOT define a
 partial local transfer.
 
@@ -943,8 +970,8 @@ CON-03A -> CON-03B -> REV lease/policy-freeze persistence
 CON-02C -> REV Review/FinalAcceptance transaction foundation
 REV-04B runtime Review/ReviewLease/FinalAcceptance -> CON-03C -> CON-03D
 CON-03A -> CON-04A
-CON-03B + CON-04A -> CON-04B -> CON-05A -> CON-05B -> CON-06
-stable REV revision lineage + CON-03C/03D + CON-05A + CON-06 -> CON-07 -> REV-10
+CON-03B + CON-04A -> CON-04B -> CON-05A -> CON-05B
+stable REV revision lineage + CON-03C/03D + CON-05A -> CON-07 -> REV-10
 AUTH dispatcher contract -> CON-02B
 CON-02B + CON-03D + CON-04A/B + CON-07 -> CON-08A -> CON-08R -> CON-08B
 CON-08B -> CON-10A -> CON-10B
@@ -960,8 +987,8 @@ not a prerequisite for CON-02C, CON-03A, or CON-03B.
 Cross-initiative interleaving is mandatory:
 
 ```text
-REV-02 exact Submission/TaskAssignment attribution
-  -> CON-05A/B task freeze and legacy cutover
+CON-05A guide-activation validation/persistence contract
+  -> PROJECT guide binding -> TASK readiness lock -> assignment inheritance
 
 CON-03B ContributionPolicyVersion persistence
   -> REV-03 ReviewLease foreign key
@@ -971,8 +998,8 @@ CON-02A outbox persistence + CON-02C audit
 REV-04B runtime Review/ReviewLease/FinalAcceptance + CON-03B
   -> CON-03C exact contribution source schema
 
-REV lease schema/caller facts + CON-06 reviewer freeze
-  -> REV-06A claim composition
+canonical admission carrying task-locked policy lineage
+  -> REV-06A claim composition and ReviewLease inheritance
 
 REV-09B stable lineage + CON-03C + CON-07
   -> REV-10 first canonical Review-committing transaction

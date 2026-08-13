@@ -157,8 +157,8 @@ CON ContributionPolicyVersion persistence
 CON shared outbox + lifecycle-audit participants
   -> REV-04 immutable Review and FinalAcceptance persistence
 
-CON ReviewLease freeze capability + AUTH prepared mutation protocol
-  -> REV-06 claim integration
+TASK/Submission locked ContributionPolicyVersion lineage + AUTH prepared mutation protocol
+  -> REV-06 claim integration; no CON policy selection
 
 REV-04 stable FinalAcceptance schema
   -> CON exact FinalAcceptance-sourced contribution schema

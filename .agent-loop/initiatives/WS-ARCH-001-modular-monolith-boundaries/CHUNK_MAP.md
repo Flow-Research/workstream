@@ -14,10 +14,20 @@
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Complete on merge |
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete on merge; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
-| `WS-ARCH-001-03` | PROJECT/TASK guide, locked-context, task and assignment capability repairs | L1 | Non-executable placeholder; requires a split contract |
-| `WS-ARCH-001-04` | ART/CHECKER materialization, run and result capability repairs | L1 | Non-executable placeholder; requires a split contract |
-| `WS-ARCH-001-05` | ART/TASK/REV reviewer packet and revision capability repairs | L1 | Non-executable placeholder; requires a split contract |
-| `WS-ARCH-001-06` | REV/CON/COMP accepted-work and award handoff capability repairs | L1 | Non-executable placeholder; requires a split contract |
+| `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
+| `WS-ARCH-001-03` | PROJECT/TASK readiness coordination parent | L1 | Split; non-executable parent |
+| `WS-ARCH-001-03A` | PROJECT current approved unified-generation public facts | L1 | Planned skeleton after AUTH-12H; POL-08 cleanup remains later |
+| `WS-ARCH-001-03B` | TASK readiness, claim, assignment and locked-context public commands/facts | L1 | Planned skeleton after 03A and CON-05A guide-activation policy validation/persistence contract; TASK locks the guide-bound version before claimability and claim only inherits it |
+| `WS-ARCH-001-03C` | AUTH-13 task/assignment activation and integrated readiness proof | L1 | Planned skeleton after 03A/03B hidden manifests and CON-05A; no live claim before exact guide -> task -> assignment lineage proof |
+| `WS-ARCH-001-04` | Canonical post-submit checker coordination parent | L1 | Split; non-executable parent |
+| `WS-ARCH-001-04A` | CHECKER post-submit plan/run/final-result public contract | L1 | Planned skeleton after POL-07 and 03C |
+| `WS-ARCH-001-04B` | ART exact verified Submission materialization | L1 | Planned skeleton after 04A and merged 02H |
+| `WS-ARCH-001-04C` | CHECKER hidden durable current output and supersession behavior | L1 | Planned skeleton after 04A/04B; production remains deny-only |
+| `WS-ARCH-001-04D` | XINT-06B exact fixed-service post-submit activation | L1 | Planned skeleton after 04B/04C evidence |
+| `WS-ARCH-001-04E` | TASK automatic dispatch/current routing integration and canonical `allow_review` manifest | L1 | Planned skeleton after 04D |
+| `WS-ARCH-001-04F` | Contributor-readable checker remediation for final non-reviewable checker outcomes | L1 | Planned skeleton after 04E; required before public 02I, not before REV begins from `allow_review` |
+| `WS-ARCH-001-05` | REV/CON admission, inherited reviewer-policy lineage, packet, claim, decision and revision coordination parent | L1 | Independent schema/packet foundations may proceed; live admission/claim waits for canonical `allow_review` and exact AUTH gates; review claim copies the admitted Submission's immutable attempt version and only verifies upstream Task/Assignment equality, with no CON lookup; must split before implementation |
+| `WS-ARCH-001-06` | Mandatory atomic Review/FinalAcceptance/TASK/CON contribution-and-award coordination | L1 | Non-executable placeholder; CON-03C/07 must precede first Review commit; requires a split contract |
 | `WS-ARCH-001-07` | Supporting-module repairs and empty-ledger closure | L1 | Non-executable placeholder; requires a split contract |
 
 Parent chunks 02-06 are coordination contracts, not permission to combine an
@@ -25,3 +35,9 @@ entire product milestone into one PR. Each is split further when its exact
 feature contract crosses more than one reviewable mutation boundary. The
 02A-02I sequence is the executable split of parent 02, subject to plan review
 and human approval.
+
+Chunks 03A-04F are non-executable planning skeletons. Before implementation,
+each must be replaced with a current-main contract that names exact allowed and
+not-allowed files, migration head, runnable commands, reviewers, and the public
+types it extends. Their sequencing is approved here; their current text does
+not authorize code changes.

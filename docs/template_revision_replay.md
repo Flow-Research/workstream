@@ -31,10 +31,9 @@
 
 The reviewer consumes the context stamped on the revised Submission and does
 not perform a separate rebase. The completed reviewer contribution retains the
-originating ReviewLease freeze. This preparation records and atomically applies
-the complete selected next-attempt context, including a changed submitter
-ContributionPolicyVersion; the next ReviewLease independently freezes the
-reviewer version then current.
+originating ReviewLease version. This preparation records the complete selected
+next-attempt context and may atomically rebase the continuing Task and
+TaskAssignment; the next Submission and ReviewLease use that exact version.
 
 ## Immutable Finding Responses
 

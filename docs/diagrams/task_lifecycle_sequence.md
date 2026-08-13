@@ -135,8 +135,10 @@ sequenceDiagram
 
 ## Lifecycle Invariants
 
-- New TaskAssignments and ReviewLeases require an active published
-  `ContributionPolicyVersion` to freeze.
+- A claimable task already has `locked_contribution_policy_version_id`; new
+  TaskAssignments copy it, Submissions stamp the exact attempt value, and
+  ReviewLeases copy that stamp through canonical admission without
+  active-policy lookup.
 - A contributor submission creates a new immutable submission version; locked artifacts are not edited in place.
 - Review decisions are exactly `accept`, `needs_revision`, or `reject`.
 - `needs_revision` commits the immutable Review and task effect first. Before

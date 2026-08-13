@@ -2,9 +2,15 @@
 
 ## Status
 
-Proposed and inactive. It may start only after `WS-AUTH-001-13`,
-`WS-ART-001-05B`, `WS-POL-003-07`, and `WS-XINT-002-06B` have merged. Exact
-ActionIds and the then-current migration must be frozen at start.
+Superseded and non-executable. Its concerns are split across the merged
+WS-ARCH-001-02G/02H activation, future WS-ARCH-001-03C task readiness,
+WS-ARCH-001-04D post-submit activation, 04E canonical routing, 04F checker
+remediation, and later REV admission/public 02I cutover. Historical
+`WS-ART-001-05B` and `WS-XINT-002-06B` must not be used as start gates.
+
+## Merge state
+
+- Outcome on merge: `planned`
 
 ## Parent initiative
 

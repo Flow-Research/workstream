@@ -47,17 +47,18 @@ CON-03B, while later REV-04B waits for CON-02C.
    exact binding actions/contexts and keeps them unavailable until hidden proof.
 6. `04B` adds hidden contribution-policy behavior under the same
    registration-before-behavior-before-activation sequence.
-7. `05A` removes semantic use of retired guide-bound economic terms, initially
-   freezes the submitter ContributionPolicyVersion on TaskAssignment, and
-   supplies the guarded update boundary later consumed by human revision
-   preparation for complete next-attempt rebase.
+7. `05A` removes semantic use of retired guide-bound economic terms, supplies
+   the guide-activation ContributionPolicyVersion validation port, and defines
+   the immutable guide/task/assignment persistence contract. PROJECTS and TASK
+   owner chunks perform composition; neither claim path calls CON.
 8. `05B` removes the now-unreachable legacy economic schema after an approved
    deterministic row classification and zero-consumer proof.
 
 ### Phase C — REV integration foundations
 
-9. `06` supplies only claim-time reviewer policy lookup/freeze facts. REV owns
-   the ReviewLease row and lifecycle.
+9. The former `06` claim-time reviewer lookup is superseded. REV owns the
+   ReviewLease row and copies the immutable Submission-attempt version carried
+   by admission.
 10. REV proceeds through its queue/lease/packet/Review persistence sequence.
 11. After REV-04B supplies stable Review, ReviewLease, and FinalAcceptance FK
     targets, `03C` persists immutable ContributionRecord and CompensationAward.

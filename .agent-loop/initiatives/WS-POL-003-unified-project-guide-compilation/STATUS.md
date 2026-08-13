@@ -35,7 +35,7 @@ determine transient implementation ownership.
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
 | Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |
-| ART-05B + POL-07 + ART-06A/06B evidence | XINT-06B and AUTH-14 | Not yet implemented |
+| Canonical WS-ARCH-001-04E manifest + POL-07 | POL-08 cleanup and later AUTH/REV admission | Not yet implemented; historical ART-05A/05B are non-executable |
 
 ## Chunk state
 
@@ -49,3 +49,6 @@ reviewer tracks. They cannot authorize implementation in their current form.
 compilation custody and the first public AUTH-capability consumer proof.
 AUTH-12I merged through PR #312 at `98eae13e`; POL-03B is now the next eligible
 POL implementation boundary.
+
+WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
+is not a prerequisite for WS-ARCH-001-03A.

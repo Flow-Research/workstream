@@ -303,7 +303,7 @@ and successful current CheckerRun to server-selected human-review routing.
 
 The planned permanent identity of one reviewer claim attempt. It binds the
 canonical human reviewer, queue entry, exact Submission packet, lease timing,
-and independently frozen reviewer ContributionPolicyVersion.
+and ContributionPolicyVersion inherited from the task lock.
 
 ## Review
 

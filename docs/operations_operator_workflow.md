@@ -70,9 +70,10 @@ Reads authorized immutable and operational evidence without mutation.
 3. Create task title and description.
 4. Add acceptance criteria.
 5. Add required output format.
-6. Confirm an active published ContributionPolicyVersion exists with explicit
-   submitter and reviewer compensated/unpaid rules; the Assignment and
-   ReviewLease freeze it later.
+6. Confirm the active guide binds a published ContributionPolicyVersion with
+   explicit submitter and reviewer compensated/unpaid rules; task readiness
+   locks it before `READY`, Assignment copies it, Submission stamps the attempt
+   value, and ReviewLease later copies that immutable stamp.
 7. Set skill tags.
 8. Run task schema check.
 9. Move to READY.

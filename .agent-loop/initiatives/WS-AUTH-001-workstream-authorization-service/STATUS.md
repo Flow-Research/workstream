@@ -1,5 +1,9 @@
 # Status: WS-AUTH-001 Workstream Authorization Service
 
+WS-AUTH-001-14 is a planned retirement as a superseded/non-executable broad
+cutover; WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover own its split
+replacement.
+
 ## Durable state on `main`
 
 AUTH provides the central deny-by-default authorization boundary for Workstream.

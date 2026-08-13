@@ -746,19 +746,24 @@ AUTH-04B implementation/activation [merged PR #245]
 -> WS-ARCH-001-02 split ownership-correct 05-wave replacement contracts
 -> replacement AUTH preparation capability + ART admission/binding ports
 -> replacement TASK-owned Submission command + composition-owned transaction
--> replacement activation/API/dispatch cutover + complete legacy precheck removal
+-> replacement hidden activation and dispatch foundations; public cutover remains deferred
 -> POL-06B deterministic unified post-submit projection
 -> POL-07 sole checker service port
--> ART-06A post-submit checker snapshot/materialization
--> ART-06B checker output binding and routing
--> XINT-06B post-submit/output activation
+-> WS-ARCH-001 PLAN2/04A-04E canonical post-submit materialization,
+   checker-output activation, and `allow_review` manifest
 -> ART-07A lease-scoped reviewer packet materialization
 -> XINT-07A reviewer packet activation only
+-> REV admission and reviewer-requested revision proof
+-> WS-ARCH-001-04F checker remediation
+-> WS-ARCH-001-02I admission-only public cutover and legacy precheck removal
 -> ART-07B accepted-contribution artifact identity handoff
 -> ART-08A Local/MinIO real API lifecycle proof
 -> ART-08B AWS production-readiness/activation proof
 -> XINT-08 + ART-08C final v0.1 conformance
 ```
+
+Historical ART-06A/06B and XINT-06B sequencing is non-executable; PLAN2 owns
+the current split and prevents a parallel post-submit path.
 
 04A1-04C2, including split 04B1-04B3, remain hidden internal pieces of one
 continuous contributor request.
@@ -770,18 +775,12 @@ PLAN5 supersedes the former early 04A4 removal. The legacy standalone precheck
 route and its internal `TaskService.create_submission` safety guard remain
 temporary legacy behavior only until the verified-admission Submission path is
 ready. They receive no new features or compatibility adapters. The future
-WS-ARCH-001-02 split cutover contracts must assign TASK-owned API/lifecycle,
-ART-owned admission/binding, AUTH public capability, and composition wiring;
-that cutover deletes the route, public schemas/service entry point, internal
-guard, and caller-owned package/hash/manifest contract in the same transaction
-and API migration that makes admission consumption authoritative. There is no
-interval in which unchecked legacy Submission creation is reachable.
-
-XINT-06 must split because live preparation requires the fixed pre-submit
-materializer before a replacement 05-wave contract can safely activate the
-human preparation action.
-The later 06B activation owns only post-submit materialization plus checker
-output write/binding. This removes the previous dependency cycle.
+Historical replacement-05-wave and XINT-06B prose is non-executable. The sole
+current route is WS-ARCH-001 PLAN2: 04A-04E produces canonical
+`allow_review`, REV admission and both revision contexts are proven, 04F
+provides checker remediation, and only then 02I deletes the legacy route,
+schemas, service entry point, internal guard, and caller-owned
+package/hash/manifest contract while making admission consumption public.
 
 Reviewer packet materialization is an ART byte-custody capability consumed by
 REV under an exact active lease. ART creates no review aggregate or decision.

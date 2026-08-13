@@ -51,15 +51,15 @@ published `ContributionPolicyVersion` values contain exactly one explicit
 Each rule is `unpaid` or `compensated`; compensated rules reference immutable
 money and/or project-points `ContributionAwardDefinition` rows.
 
-TaskAssignment freezes the submitter policy version during authorized task
-claim. ReviewLease independently freezes the reviewer policy version during
-authorized review claim. Later publication alone changes only new work and
-never mutates an active attempt. After a human `needs_revision`, the task-owned
-revision preparation atomically rebases a changed submitter policy together
-with every changed applicable next-attempt context component. The completed
-Review and reviewer award retain the prior lease freeze; the next ReviewLease
-freezes the reviewer version then current. Prior contributions and awards are
-never rewritten.
+Guide activation validates and binds one policy version. Task readiness locks
+it before claimability; TaskAssignment copies that lock, each Submission stamps
+its attempt version, and ReviewLease copies the Submission stamp without
+claim-time selection. Later publication alone never mutates active
+work. After a human `needs_revision`, task-owned revision preparation may
+atomically rebase the continuing Task and TaskAssignment to the complete current
+context for the next submission attempt. The completed Review and reviewer
+award retain the prior lease version; the next Submission and ReviewLease use
+the rebased version. Prior contributions and awards are never rewritten.
 
 The retired guide-bound economic-policy aggregate and all semantic and physical
 consumers are removed through CON-05A/05B. No alias, fallback, dual read/write,

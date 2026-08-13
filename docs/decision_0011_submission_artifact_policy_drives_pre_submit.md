@@ -29,8 +29,9 @@ Every active project guide version must have a complete guide-policy bundle:
 - `RevisionPolicy`
 
 Publication of a `ContributionPolicyVersion` is independent of this guide-policy
-activation bundle. `TaskAssignment` and `ReviewLease` records freeze their applicable
-published `ContributionPolicyVersion` values at their own lifecycle boundaries.
+activation bundle. Guide activation binds one published version; task readiness
+locks it, TaskAssignment copies it, and ReviewLease copies the version stamped
+on its Submission attempt.
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.

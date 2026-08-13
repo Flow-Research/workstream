@@ -19,6 +19,20 @@ module and every cross-module call must use a typed public API.
 - Every feature chunk repairs the capabilities and debt edges it touches.
 - No debt count grows, and final closure requires an empty private-import
   ledger.
+- Product delivery has one explicit upstream milestone before live REV work:
+  an admission-backed immutable Submission, bound to the exact verified ZIP
+  and current approved guide/policy generation, produces one durable current
+  post-submit checker result whose routing recommendation is `allow_review`.
+- That milestone uses only owner public APIs across PROJECTS, TASKS, ART,
+  CHECKERS, and AUTH. It does not rely on the legacy Submission route or grant
+  REV a private-import exception.
+- CON is a mandatory earlier participant: it validates the one
+  ContributionPolicyVersion bound at guide activation. TASK locks that version
+  before claimability; assignment copies it, Submission stamps the attempt
+  value, and ReviewLease copies that immutable stamp without claim-time
+  selection. CON later stages ContributionRecord/CompensationAward
+  consequences atomically with every final review decision. Only accept adds
+  FinalAcceptance and the submitter record.
 
 ## Non-goals
 
@@ -35,3 +49,8 @@ module and every cross-module call must use a typed public API.
 - A coordinating agent may implement code across modules, but code is placed
   only in the module that owns the behavior.
 - Boundary debt is removed incrementally alongside delivery chunks.
+- Canonical `allow_review` gates live REV admission/claim/processing, not
+  independent REV schema or packet foundations.
+- CON validates one policy version at guide activation and is mandatory again
+  in every final Review commit. TASK and REV inherit the immutable version;
+  neither claim performs CON policy selection.

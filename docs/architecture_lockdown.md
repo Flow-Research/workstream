@@ -209,13 +209,15 @@ reviewing auditable:
 - source type and source reference when imported
 
 Compensation remains an independently owned CON policy, but its selected version
-is part of the complete governing work context. Task claim initially freezes
-the submitter `ContributionPolicyVersion`; ReviewLease independently freezes the
-reviewer version. Publication never silently changes an active attempt. A human
-`needs_revision` atomically rebases every changed applicable next-attempt
-context component, including the submitter version, while the completed lease
-and prior history remain immutable. Either rule may be explicitly unpaid and
-therefore create no award.
+is part of the complete governing work context. Guide activation binds one
+`ContributionPolicyVersion`; task readiness locks it before claimability, and
+TaskAssignment copies it, Submission stamps the attempt value, and ReviewLease
+copies that stamp without claim-time selection.
+Publication never silently changes existing work. A human `needs_revision`
+may atomically rebase the continuing Task and TaskAssignment for the next
+submission attempt while the completed lease and prior history remain
+immutable. Either rule may be
+explicitly unpaid and therefore create no award.
 
 ### Human Accountability
 

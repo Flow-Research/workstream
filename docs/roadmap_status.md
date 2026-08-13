@@ -117,28 +117,47 @@ but are not all complete as one production path:
   replay on the canonical authorization boundary;
 - atomic review-to-contribution and conditional compensation integration.
 
+The immediate upstream integration milestone is narrower and precedes live REV
+work: one admission-backed immutable Submission must produce one durable final
+current post-submit checker result with `routing_recommendation = allow_review`
+through PROJECTS, TASKS, ART, CHECKERS, and AUTH public APIs. The existing
+legacy pre-review result does not satisfy that milestone.
+
 Open pull requests are the authoritative view of the exact code currently under
 review. Their presence does not change the implemented-on-`main` list above.
 
 ## Remaining v0.1 Capability Milestones
 
 1. Complete the remaining artifact custody chain: contributor intake cleanup,
-   archive safety, semantic change gating, durable admission, submission
-   binding, checker/review materialization, recovery, and provider proof.
-2. Complete review and revision persistence, queueing, access, decisions,
-   findings, replay, and operational recovery.
-3. Create immutable contributor and reviewer contribution records from the
-   accepted review lifecycle.
-4. Complete contribution-policy evaluation, conditional compensation awards,
-   fulfillment, idempotency, reconciliation, and audit behavior without making
-   settlement a prerequisite.
-5. Preserve authoritative contribution evidence for future reputation
+   archive safety, semantic change gating, post-submit checker materialization,
+   recovery, provider proof, and the later public cutover.
+   Hidden durable admission, Submission creation, and final binding are already
+   merged through WS-ARCH-001-02H.
+2. Complete ContributionPolicy service behavior, bind one exact published,
+   complete, binding-valid ContributionPolicyVersion at guide activation, and
+   lock it on each task before that task becomes claimable. TaskAssignment
+   inherits the task lock without a claim-time lookup, and each immutable
+   Submission stamps the exact version governing that attempt.
+3. Continue independent REV schema and packet-contract foundations. After
+   canonical `allow_review`, activate admission and claim only when ReviewLease
+   copies the exact ContributionPolicyVersion stamped on the admitted
+   Submission, without a claim-time lookup.
+4. Persist ContributionRecord and CompensationAward before live Review
+   decisions. Every final decision atomically creates the reviewer record and
+   evaluates its frozen rule; accept additionally creates FinalAcceptance and
+   the submitter record and evaluates the assignment-frozen rule.
+   `needs_revision` and `reject` create neither FinalAcceptance nor a submitter
+   record.
+5. Complete review/revision findings, replay, recovery, contribution-award
+   fulfillment, idempotency, reconciliation, product reads, and audit behavior
+   without making settlement a prerequisite.
+6. Preserve authoritative contribution evidence for future reputation
    projections; reputation projection remains deferred from the v0.1 runtime.
-6. Prove the complete v0.1 lifecycle through real API, database, durable-job,
+7. Prove the complete v0.1 lifecycle through real API, database, durable-job,
    storage, security, and operational recovery tests.
-7. Add the React/Vite/TypeScript product surfaces only against stable and tested
+8. Add the React/Vite/TypeScript product surfaces only against stable and tested
    backend contracts.
-8. Run a real internal pilot and close findings without weakening lifecycle,
+9. Run a real internal pilot and close findings without weakening lifecycle,
    authorization, storage, or evidence guarantees.
 
 These are dependency-ordered capability milestones, not a schedule. Distinct

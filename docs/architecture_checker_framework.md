@@ -121,8 +121,9 @@ The checker framework is conservative. It blocks objective structural failures a
 ### check_policy_context_present
 
 Ensures the task has locked guide, checker, review, and revision policy context.
-Compensation is frozen independently on TaskAssignment and ReviewLease and is
-not checker-policy context.
+Award eligibility is locked on TaskAssignment for the attempt, stamped on the
+immutable Submission, and copied from that Submission to ReviewLease. It is not
+checker-policy context.
 
 ### check_submission_packet
 

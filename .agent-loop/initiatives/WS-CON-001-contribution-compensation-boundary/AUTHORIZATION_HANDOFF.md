@@ -41,8 +41,8 @@ protocol and one caller-owned commit.
 | `02C` lifecycle audit participant | none; caller supplies already-authorized typed facts | CON may proceed |
 | `04A` binding commands | `compensation.adapter_binding.{read,create,suspend,resume,retire}` mapped to `compensation.adapter_binding.manage` with exact Finance authority | register before hidden service; activate after it |
 | `04B` policy commands | `contribution.policy.{read,create_draft,update_draft,publish,retire}` mapped to `compensation.policy.manage` with exact Finance authority | register before hidden service; activate after it |
-| `05A` task claim/freeze | exact task-owned claim action, submitter authority, and prepared mutation | final identifier must follow the task-owned contract |
-| `06` review claim freeze | existing planned `review.claim` contract | REV composes CON policy result; AUTH later activates |
+| `05A` guide-activation validation/persistence | existing guide activation authority; later TASK readiness/claim authority remains TASK/AUTH-owned | CON supplies no TASK composition; exact guide/task/assignment lineage must be proven before claim activation |
+| `06` former review-claim lookup | none | planned retirement; REV inherits admitted task-locked policy and AUTH adds no CON lookup path |
 | `07` review decision participant | existing planned `review.decision` contract | REV owns composition/commit; AUTH later activates |
 | `02B` dispatcher | `outbox.dispatch`, closed dispatcher identity, singleton matrix row, provisioning, admission, typed context, evaluator, and availability | blocked; schedule after AUTH delivery |
 | `08B` fulfillment callback | independently approved reporter identity/action/matrix contract | not inherited from dispatcher |
