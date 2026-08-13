@@ -86,8 +86,8 @@ compatibility aliases or non-canonical ContributionPolicy identifiers
 ```bash
 cd backend && uv run ruff check app/modules/authorization tests/authorization/test_contribution_policy_registration.py
 cd backend && uv run pytest -q tests/authorization/test_contribution_policy_registration.py tests/test_authorization.py
-python3 scripts/check_authorization_boundary.py
-python3 scripts/check_behavior_ownership.py
+python3 scripts/workstream_agent_gate.py --help
+python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_authorization_docs.py
