@@ -54,7 +54,8 @@
   non-executable split parent; CP01A is complete on merge with its four actions
   registered/unavailable, CP01B is complete on merge with five policy actions
   registered/unavailable, and CP02-CP09 remain non-executable skeletons.
-- PLAN4 is planned on merge and changes no runtime. It makes the existing incremental strangler
+- [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned on merge
+  and changes no runtime. It makes the existing incremental strangler
   operational: unrelated frozen debt cannot block delivery, new debt is
   prohibited, directly touched debt must shrink, and unsafe adjacent debt is
   recorded for a later owner-sized closure without widening the feature PR.
