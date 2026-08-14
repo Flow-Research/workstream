@@ -48,7 +48,7 @@ def test_current_schema_preserves_guide_compilation_schema(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0003_submission_lineage",
+        "0004_compensation_adapter_binding_lifecycle",
         True,
         4,
         1,
