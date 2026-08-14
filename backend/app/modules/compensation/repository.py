@@ -112,6 +112,10 @@ class AdapterBindingRepository:
         self, event: CompensationAdapterBindingLifecycleEvent
     ) -> None:
         """Flush an event with the pending binding transition."""
+        # Persist the pending status/version transition first so the event
+        # trigger observes its exact target state.  Both writes remain inside
+        # the caller-owned transaction and its deferred custody constraint.
+        await self._session.flush()
         self._session.add(event)
         await self._session.flush()
         await self._session.refresh(event)

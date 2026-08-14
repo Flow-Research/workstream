@@ -310,7 +310,7 @@ class AdapterBindingService:
                 AdapterBindingReadRequest(
                     actor_profile_id=actor_id,
                     project_id=project_id,
-                    adapter_binding_id=event.adapter_binding_id,
+                    adapter_binding_id=UUID(str(event.adapter_binding_id)),
                 )
             )
         except (AdapterBindingUnavailable, AdapterBindingConflict) as exc:
