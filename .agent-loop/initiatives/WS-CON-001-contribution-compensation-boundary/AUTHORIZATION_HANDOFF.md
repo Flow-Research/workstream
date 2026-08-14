@@ -78,8 +78,9 @@ matrix rows, or evaluators.
 ## Immediate AUTH ask
 
 No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01A
-and CP01B are the first proposed implementation gates and separately register
-binding and policy authority while unavailable. CP03 and CP05 activate only their respective CP02/CP04
+and CP01B separately register binding and policy authority while unavailable.
+CP01C corrects binding identity and lifecycle-generation facts before CP02.
+CP03 and CP05 activate only their respective CP02/CP04
 hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and

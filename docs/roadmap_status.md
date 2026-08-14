@@ -134,7 +134,8 @@ review. Their presence does not change the implemented-on-`main` list above.
    Hidden durable admission, Submission creation, and final binding are already
    merged through WS-ARCH-001-02H.
 2. CP01A and CP01B have registered exact adapter-binding and ContributionPolicy
-   authority while keeping all nine actions unavailable. Next implement and
+   authority while keeping all nine actions unavailable. CP01C corrects the
+   unavailable binding facts before CP02. Next implement and
    separately activate
    adapter-binding and ContributionPolicy behavior;
    expose CON validation; then bind one exact published,

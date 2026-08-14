@@ -19,7 +19,8 @@
 | `WS-ARCH-001-CP01` | Combined AUTH registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |
 | `WS-ARCH-001-CP01A` | AUTH adapter-binding unavailable registration | L1 | Complete on merge; four actions remain planned/unavailable |
 | `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete on merge; five actions remain planned/unavailable |
-| `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Next proposed skeleton after CP01B |
+| `WS-ARCH-001-CP01C` | AUTH adapter-binding fact correction | L1 | Complete on merge; corrects unavailable facts before CON behavior |
+| `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Next proposed skeleton after CP01C |
 | `WS-ARCH-001-CP03` | AUTH exact adapter-binding activation | L1 | Proposed skeleton after CP02 evidence |
 | `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after CP03 |
 | `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |

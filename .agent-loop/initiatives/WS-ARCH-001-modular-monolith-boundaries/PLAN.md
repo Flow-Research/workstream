@@ -295,6 +295,7 @@ The corrected linear sequence is:
 ```text
 CP01A AUTH adapter-binding unavailable registration
 -> CP01B AUTH ContributionPolicy unavailable registration
+-> CP01C AUTH adapter-binding fact correction
 -> CP02 CON hidden adapter-binding behavior
 -> CP03 AUTH adapter-binding activation
 -> CP04 CON hidden ContributionPolicy behavior
