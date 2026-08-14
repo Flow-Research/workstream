@@ -67,7 +67,7 @@ backend/tests/architecture/test_module_boundaries.py
 backend/tests/test_compensation.py (removal/replacement of superseded 03A proof only)
 backend/tests/conftest.py (schema fingerprint and reset inventory parity only)
 backend/tests/test_database_reset.py (new-table reset/guard proof only)
-backend/tests/test_schema.py (0003-to-0004 empty/non-empty upgrade proof only)
+backend/tests/test_alembic.py (HEAD_REVISION and 0003-to-0004 empty/non-empty upgrade proof only)
 .ci/behavior-ownership/compensation/adapter-binding-behavior.json (new exact ownership entry only)
 .ci/behavior-ownership/partition.v1.json (exact generated partition parity only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
@@ -177,6 +177,37 @@ insufficient. Existing ART, REV, checker, dispatcher, or other internal service
 identities must fail. CP03 must not activate create until AUTH/ACTORS has an explicitly
 approved compensation-adapter identity rule and real adapter composition.
 
+PROJECTS and ACTORS eligibility ports must acquire owner-controlled database
+row locks or equivalent transaction-scoped eligibility fences in the fixed
+order PROJECTS then ACTORS. Those fences remain held until the caller-owned
+root transaction commits or rolls back. Lockless revalidation is forbidden:
+eligibility cannot change between the accepted owner fact, AUTH consumption,
+and binding insertion.
+
+## Mutation idempotency and recovery
+
+Before binding-ID generation, owner eligibility reads, product row locks, AUTH
+preparation, or AUTH consumption, every mutation acquires a
+transaction-scoped database fence keyed by the globally unique `operation_id`
+and checks the lifecycle-event repository by that identity.
+
+- No event: continue the canonical mutation while retaining the operation fence
+  until transaction end.
+- Existing event with a different action/event type, actor, project, request
+  digest, or immutable binding facts: return the same concealed conflict.
+- Exact existing event: join its exact binding and authorize request-scoped read
+  of that exact `(project_id, adapter_binding_id)` before returning the stable
+  original `AdapterBindingMutationResult`. Reconstruct that result only from
+  the immutable lifecycle event and immutable binding identity fields, never
+  from mutable current lifecycle state. A revoked, inactive, unauthorized,
+  cross-project, or mismatched caller receives the same concealed conflict.
+
+Recovery performs no mutation PREP preparation/consumption, creates no new AUTH
+allowed-mutation evidence, and changes no binding or lifecycle event. This is
+the sole recovery path after an unknown commit; callers need only retain the
+stable `operation_id`. Concurrent duplicates wait on the same operation fence,
+then observe either the committed event or no event after rollback.
+
 ## Canonical behavior
 
 ### Read
@@ -196,24 +227,20 @@ approved compensation-adapter identity rule and real adapter composition.
 
 1. Require one caller-owned root transaction; nested or missing transactions
    fail before reads or writes.
-2. Generate the binding ID server-side, preserve the caller's stable operation
-   identity, and compute the canonical request digest inside CON.
-3. Obtain exact PROJECTS and ACTORS eligibility facts through transaction-bound
-   public-port reads in the fixed order PROJECTS then ACTORS.
-4. Lock/serialize the project plus `instrument_type` creation boundary. The
-   owner ports must either hold their canonical owner-row locks through the
-   caller-owned root transaction or revalidate both owner facts, in the same
-   fixed order, immediately before AUTH consumption and insertion.
-5. Build AUTH facts with exact `project_id`, generated
+2. Compute the canonical request digest, acquire/check the operation fence, and
+   complete concealed authorized recovery when the operation already exists.
+3. Only for a new operation, generate the binding ID server-side.
+4. Obtain and retain exact PROJECTS then ACTORS transaction-bound eligibility
+   locks/fences through transaction end.
+5. Lock/serialize the project plus `instrument_type` creation boundary.
+6. Build AUTH facts with exact `project_id`, generated
    `adapter_binding_id`, unchanged `instrument_type`, eligible
    `adapter_actor_id`, and the unchanged canonical non-secret `route_key`.
-6. Prepare and consume authority before inserting product state.
-7. Insert one active/version-1 binding and one immutable created event.
-8. Flush only. The lifecycle-event table enforces global uniqueness of
-   `operation_id`. The repository checks that identity before mutation; any
-   duplicate, including an exact retry, returns the same bounded
-   already-processed conflict without disclosing the prior binding or event.
-   It never replays a success response or creates a second effect.
+7. Prepare and consume authority before inserting product state.
+8. Insert one active/version-1 binding and one immutable created event.
+9. Flush only. The lifecycle-event table independently enforces globally unique
+   `operation_id`; the operation fence and database constraint together prove
+   one mutation effect.
 
 ### Suspend
 
@@ -266,8 +293,9 @@ occurred_at (database time)
 `operation_id` is globally unique across adapter-binding lifecycle events.
 There is exactly one event for each binding lifecycle version. Updates and
 deletes fail at the database boundary. A resumed event must reference the exact
-immediately preceding suspended event for the same binding and
-`from_lifecycle_version`; that immutable suspended event remains the source of
+immediately preceding suspended event for the same binding, and
+`prior_suspended_event.to_lifecycle_version` must equal
+`resumed_event.from_lifecycle_version`. That immutable suspended event remains the source of
 the cleared suspension actor/time. Events are product lifecycle truth, not
 authorization decisions. CP03 separately proves AUTH allowed-decision evidence
 is staged atomically by the real PREP consumer in the same transaction. Planned
@@ -286,6 +314,8 @@ It must:
 - prove both upgrade cases: an empty table upgrades atomically, while a
   non-empty table leaves the complete `0003_submission_lineage` schema and data
   unchanged and requires database recreation;
+- update `backend/tests/test_alembic.py::HEAD_REVISION` to
+  `0004_compensation_adapter_binding_lifecycle` and prove the single-head graph;
 - replace the active/version-1-only lifecycle shape with exact active and
   suspended shapes;
 - replace `compensation_binding_updates_deferred` with a fail-closed trigger;
@@ -311,8 +341,13 @@ It must:
 - Denial occurs before binding mutation and lifecycle-event insertion.
 - Stale and concurrent suspend/resume attempts produce one transition.
 - Concurrent create for one project/instrument produces one active binding.
-- Concurrent project ineligibility or adapter-actor revocation observed before
-  AUTH consumption denies and creates neither a binding nor lifecycle event.
+- Concurrent project ineligibility or adapter-actor revocation blocks on the
+  retained owner fence; once it commits first, create denies before AUTH
+  consumption, and when create holds the fence first, revocation cannot commit
+  between eligibility proof and binding insertion.
+- Duplicate operations are rejected or recovered before binding-ID generation
+  and mutation AUTH preparation/consumption; they create no new allowed mutation
+  evidence, binding, or lifecycle event.
 - Active replacement blocks resume of an older suspended binding.
 - PostgreSQL independently rejects forbidden row/event mutations.
 - Rollback removes binding changes, lifecycle events, and staged participant
@@ -325,7 +360,7 @@ It must:
 cd backend
 uv run ruff check app/modules/compensation app/modules/actors/api app/modules/projects/api tests/compensation
 uv run pytest -q tests/compensation tests/test_compensation.py
-uv run pytest -q tests/test_schema.py tests/test_schema_baseline.py tests/test_schema_baseline_manifest.py
+uv run pytest -q tests/test_alembic.py
 uv run pytest -q tests/test_database_reset.py
 uv run python -m scripts.module_boundaries validate --protected-base "$(git merge-base HEAD origin/main)"
 uv run python -m scripts.authorization_boundary validate --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md

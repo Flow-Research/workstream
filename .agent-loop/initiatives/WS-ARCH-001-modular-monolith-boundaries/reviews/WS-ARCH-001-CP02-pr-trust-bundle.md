@@ -23,6 +23,8 @@ explicit human approval.
   authorization, and an opaque mutation-authorization port.
 - Defined migration `0004`, lifecycle-event history, concurrency/idempotency,
   database guards, fail-closed proof, tests, reviewers, and stop conditions.
+- Defined transaction-retained owner eligibility fences and authorized
+  unknown-commit recovery before any duplicate mutation authorization.
 - Reconciled ARCH, CON, roadmap, and current-state records.
 - Recorded the architectural decision and newly identified risks.
 

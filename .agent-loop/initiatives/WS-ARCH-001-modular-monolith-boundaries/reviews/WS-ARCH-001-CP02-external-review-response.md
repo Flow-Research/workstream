@@ -11,8 +11,8 @@ than applied blindly. Each was valid within the bounded interpretation below.
 2. Exact allowed files: fixed. Globs and brace expansions were replaced with
    concrete production, test, generated-parity, initiative, and review paths.
 3. Eligibility race: fixed. PROJECTS then ACTORS eligibility uses
-   transaction-bound reads with locks held or fixed-order revalidation directly
-   before AUTH consumption and insertion. Ineligibility/revocation race tests
+   transaction-scoped locks or equivalent fences held through transaction end.
+   Ineligibility/revocation race tests
    must prove no binding or event is created.
 4. Migration references: fixed in the active CON handoff. `0052` is explicitly
    historical; the active graph ends at `0003_submission_lineage`. Historical
@@ -25,6 +25,25 @@ than applied blindly. Each was valid within the bounded interpretation below.
 7. Test wording: fixed. The future proof names unit tests, PostgreSQL
    schema/lifecycle tests, concurrency tests, reset tests, boundary tests, and
    hosted full-coverage proof explicitly.
+
+## Independent exact-head review after rebase
+
+Four additional contract defects and one recovery gap were validated and fixed:
+
+1. Owner eligibility now requires PROJECTS then ACTORS transaction-scoped locks
+   or equivalent fences held through transaction end. Lockless revalidation is
+   forbidden.
+2. Every mutation fences and checks `operation_id` before binding-ID generation,
+   product locks, or AUTH preparation/consumption. Duplicates create no new
+   allowed mutation evidence or product effect.
+3. Resume history now requires the immediately preceding same-binding suspended
+   event and exact `prior.to_lifecycle_version == resumed.from_lifecycle_version`.
+4. Migration proof now uses the real `backend/tests/test_alembic.py`, including
+   `HEAD_REVISION = "0004_compensation_adapter_binding_lifecycle"`.
+5. Unknown-commit recovery uses the stable operation identity, exact original
+   facts, and request-scoped authorization of the recovered binding. It returns
+   the stable result without mutation PREP reuse; mismatches or revoked/read-
+   denied callers receive the same concealed conflict.
 
 ## Verification after correction
 
