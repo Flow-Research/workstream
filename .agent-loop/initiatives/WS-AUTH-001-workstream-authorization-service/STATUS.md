@@ -45,7 +45,8 @@ not current start requirements.
 - PLAN3 defines the missing contribution-policy sequence: WS-ARCH-001-CP01A is
   complete on merge with exact adapter-binding actions still unavailable; CP01B is
   complete on merge and separately registers
-  policy actions while unavailable; CP03 and CP05 activate
+  policy actions while unavailable; CP01C is complete on merge with corrected
+  unavailable binding identity and lifecycle-generation facts; CP03 and CP05 activate
   only their respective merged hidden behavior. Fulfillment callback authority
   remains separate and cannot be bundled into adapter-binding registration.
 

@@ -60,7 +60,7 @@ PLAN4
   -> 02C ----------------------------------> REV-04B
 
 REV-04B + 03B -> 03C -> 03D
-CP01A -> CP01B -> CP02 -> CP03 -> CP04 -> CP05 -> CP06 -> CP07 -> CP08
+CP01A -> CP01B -> CP01C -> CP02 -> CP03 -> CP04 -> CP05 -> CP06 -> CP07 -> CP08
 CP08 -> WS-ARCH-001-03A/03B replacement behavior -> WS-ARCH-001-03C activation -> CP09
 task-locked policy lineage -> assignment -> Submission-stamped attempt lineage -> allow_review -> ReviewLease
 REV revision lineage + 03C/03D + CP06/CP08 -> 07 -> REV-10 first Review commit

@@ -73,7 +73,10 @@ has 73 PermissionIds, 111 ActionIds, 57 active actions, and 54 planned actions,
 with fourteen fixed-service identities and twenty-two matrix memberships.
 CP01A contributes four planned/unavailable adapter-binding actions and CP01B
 contributes five planned/unavailable ContributionPolicy actions; neither
-changes fixed-service identity or matrix membership.
+changes fixed-service identity or matrix membership. CP01C corrects only the
+unavailable adapter-binding resource facts before CP02. It does not change
+catalogue custody, action identifiers, fixed-service identity, availability,
+or matrix membership.
 
 ## REV custody transfer
 

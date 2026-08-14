@@ -64,7 +64,10 @@
   mappings, typed facts, and digests are registered while unavailable.
 - WS-ARCH-001-CP01B is complete on merge: exact unavailable
   ContributionPolicy registration.
-- WS-ARCH-001-CP02 is the next proposed boundary: hidden adapter-binding behavior.
+- WS-ARCH-001-CP01C is complete on merge: unavailable adapter-binding facts
+  match exact binding identity and lifecycle generation without a unit alias.
+- WS-ARCH-001-CP02 is the next proposed boundary after CP01C: hidden
+  adapter-binding behavior.
 - WS-ARCH-001-CP03 is proposed: exact adapter-binding activation.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.

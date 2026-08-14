@@ -757,7 +757,12 @@ The table contains both registered-unavailable and future proposed mappings.
 CP01A registers the four adapter-binding read/create/suspend/resume ActionIds,
 and CP01B registers the five ContributionPolicy ActionIds. All nine remain
 unavailable and have no evaluator, identity, service-matrix row, route, or
-activation. All other rows remain proposals, including dependency-aware
+activation. CP01C corrects the unavailable binding facts before behavior:
+create binds project, server-selected binding identity, `instrument_type`, adapter
+actor, and non-secret route key; suspend/resume additionally bind the exact
+positive lifecycle version. A binding is project/instrument scoped, so its
+authorization facts do not contain a compensation unit. All other rows remain
+proposals, including dependency-aware
 adapter-binding retirement. Existing PermissionIds remain stable. Policy ActionIds use the
 canonical `contribution.policy.*` namespace while mapping to the existing
 `compensation.policy.manage` PermissionId. AUTH must approve exact identifiers,

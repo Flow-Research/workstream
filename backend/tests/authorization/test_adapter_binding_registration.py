@@ -1,4 +1,4 @@
-"""CP01A proof for planned adapter-binding AUTH registration."""
+"""CP01A registration and CP01C fact-correction proof."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def test_cp01a_registers_only_exact_planned_binding_actions() -> None:
     assert all(_ACTIONS.isdisjoint(actions) for actions in SERVICE_ACTIONS_BY_IDENTITY.values())
 
 
-def test_cp01a_public_facts_are_immutable_and_validate_lifecycle_state() -> None:
+def test_cp01c_public_facts_are_immutable_and_validate_lifecycle_state() -> None:
     project_id = uuid4()
     binding_id = uuid4()
     read = AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=binding_id)
@@ -56,34 +56,71 @@ def test_cp01a_public_facts_are_immutable_and_validate_lifecycle_state() -> None
         AdapterBindingSuspendFacts(
             project_id=project_id,
             adapter_binding_id=binding_id,
+            expected_lifecycle_version=1,
             expected_status="suspended",
         )
     with pytest.raises(ValueError, match="resumption requires suspended"):
         AdapterBindingResumeFacts(
             project_id=project_id,
             adapter_binding_id=binding_id,
+            expected_lifecycle_version=2,
             expected_status="active",
         )
+    for version in (True, 0, -1, 1.5, "1"):
+        with pytest.raises(ValueError, match="expected_lifecycle_version"):
+            AdapterBindingSuspendFacts(
+                project_id=project_id,
+                adapter_binding_id=binding_id,
+                expected_lifecycle_version=version,  # type: ignore[arg-type]
+            )
+        with pytest.raises(ValueError, match="expected_lifecycle_version"):
+            AdapterBindingResumeFacts(
+                project_id=project_id,
+                adapter_binding_id=binding_id,
+                expected_lifecycle_version=version,  # type: ignore[arg-type]
+            )
     for route_key in ("1adapter", "adapter..secret", "a" * 121, "secret route"):
         with pytest.raises(ValueError, match="route_key must be canonical"):
             AdapterBindingCreateFacts(
                 project_id=project_id,
-                instrument="money",
-                unit="USD",
+                adapter_binding_id=binding_id,
+                instrument_type="money",
                 adapter_actor_id=uuid4(),
                 route_key=route_key,
             )
+    with pytest.raises(ValueError, match="adapter_binding_id must be a UUID"):
+        AdapterBindingCreateFacts(
+            project_id=project_id,
+            adapter_binding_id=str(binding_id),  # type: ignore[arg-type]
+            instrument_type="money",
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
+    with pytest.raises(ValueError, match="instrument_type must be a bounded canonical token"):
+        AdapterBindingCreateFacts(
+            project_id=project_id,
+            adapter_binding_id=binding_id,
+            instrument_type=" ",
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
 
-    assert AdapterBindingCreateFacts(
+    actor_id = uuid4()
+    create = AdapterBindingCreateFacts(
         project_id=project_id,
-        instrument="money",
-        unit="USD",
-        adapter_actor_id=uuid4(),
+        adapter_binding_id=binding_id,
+        instrument_type="money",
+        adapter_actor_id=actor_id,
         route_key="a" * 120,
-    ).route_key == "a" * 120
+    )
+    assert create.adapter_binding_id == binding_id
+    assert create.adapter_actor_id == actor_id
+    assert create.instrument_type == "money"
+    assert create.route_key == "a" * 120
+    assert not hasattr(create, "unit")
 
 
-def test_cp01a_digest_is_deterministic_and_action_domain_separated() -> None:
+def test_cp01c_digest_is_deterministic_and_action_domain_separated() -> None:
     project_id = uuid4()
     binding_id = uuid4()
     read = AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=binding_id)
@@ -95,13 +132,88 @@ def test_cp01a_digest_is_deterministic_and_action_domain_separated() -> None:
     suspend = AdapterBindingSuspendFacts(
         project_id=project_id,
         adapter_binding_id=binding_id,
+        expected_lifecycle_version=1,
     )
     suspend_digest = adapter_binding_resource_digest(
         action_id("compensation.adapter_binding.suspend"), suspend
     )
     assert suspend_digest != first
+    assert suspend_digest != adapter_binding_resource_digest(
+        action_id("compensation.adapter_binding.suspend"),
+        AdapterBindingSuspendFacts(
+            project_id=project_id,
+            adapter_binding_id=binding_id,
+            expected_lifecycle_version=2,
+        ),
+    )
+    resume_action = action_id("compensation.adapter_binding.resume")
+    assert adapter_binding_resource_digest(
+        resume_action,
+        AdapterBindingResumeFacts(
+            project_id=project_id,
+            adapter_binding_id=binding_id,
+            expected_lifecycle_version=1,
+        ),
+    ) != adapter_binding_resource_digest(
+        resume_action,
+        AdapterBindingResumeFacts(
+            project_id=project_id,
+            adapter_binding_id=binding_id,
+            expected_lifecycle_version=2,
+        ),
+    )
     with pytest.raises(ValueError, match="does not match"):
         adapter_binding_resource_digest(read_action, suspend)
+
+    create_action = action_id("compensation.adapter_binding.create")
+    actor_id = uuid4()
+    create = AdapterBindingCreateFacts(
+        project_id=project_id,
+        adapter_binding_id=binding_id,
+        instrument_type="money",
+        adapter_actor_id=actor_id,
+        route_key="adapter.primary",
+    )
+    other_binding = AdapterBindingCreateFacts(
+        project_id=project_id,
+        adapter_binding_id=uuid4(),
+        instrument_type="money",
+        adapter_actor_id=actor_id,
+        route_key="adapter.primary",
+    )
+    assert adapter_binding_resource_digest(
+        create_action, create
+    ) != adapter_binding_resource_digest(create_action, other_binding)
+    other_instrument_type = AdapterBindingCreateFacts(
+        project_id=project_id,
+        adapter_binding_id=binding_id,
+        instrument_type="project_points",
+        adapter_actor_id=actor_id,
+        route_key="adapter.primary",
+    )
+    assert adapter_binding_resource_digest(
+        create_action, create
+    ) != adapter_binding_resource_digest(create_action, other_instrument_type)
+
+
+def test_cp01c_rejects_retired_create_fact_shape() -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'unit'"):
+        AdapterBindingCreateFacts(
+            project_id=uuid4(),
+            adapter_binding_id=uuid4(),
+            instrument_type="money",
+            unit="USD",  # type: ignore[call-arg]
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
+    with pytest.raises(TypeError, match="unexpected keyword argument 'instrument'"):
+        AdapterBindingCreateFacts(
+            project_id=uuid4(),
+            adapter_binding_id=uuid4(),
+            instrument="money",  # type: ignore[call-arg]
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
 
 
 def test_cp01a_public_api_exports_exact_registration_surface() -> None:

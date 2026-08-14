@@ -27,6 +27,12 @@ def _require_uuid(name: str, value: UUID) -> None:
         raise ValueError(f"{name} must be a UUID")
 
 
+def _require_positive_int(name: str, value: int) -> None:
+    """Reject booleans and non-positive lifecycle generations."""
+    if type(value) is not int or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+
+
 def _require_route_key(value: str) -> None:
     """Enforce the canonical compensation adapter route-key grammar."""
     if not isinstance(value, str) or not _ROUTE_KEY.fullmatch(value) or ".." in value:
@@ -51,17 +57,17 @@ class AdapterBindingCreateFacts:
     """Server-owned facts for one planned binding creation."""
 
     project_id: UUID
-    instrument: str
-    unit: str
+    adapter_binding_id: UUID
+    instrument_type: str
     adapter_actor_id: UUID
     route_key: str
 
     def __post_init__(self) -> None:
         """Validate the binding creation identity and routing facts."""
         _require_uuid("project_id", self.project_id)
+        _require_uuid("adapter_binding_id", self.adapter_binding_id)
         _require_uuid("adapter_actor_id", self.adapter_actor_id)
-        _require_token("instrument", self.instrument)
-        _require_token("unit", self.unit)
+        _require_token("instrument_type", self.instrument_type)
         _require_route_key(self.route_key)
 
 
@@ -71,12 +77,14 @@ class AdapterBindingSuspendFacts:
 
     project_id: UUID
     adapter_binding_id: UUID
+    expected_lifecycle_version: int
     expected_status: str = "active"
 
     def __post_init__(self) -> None:
         """Require an exact active binding as the suspension target."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
+        _require_positive_int("expected_lifecycle_version", self.expected_lifecycle_version)
         if self.expected_status != "active":
             raise ValueError("suspension requires active binding status")
 
@@ -87,12 +95,14 @@ class AdapterBindingResumeFacts:
 
     project_id: UUID
     adapter_binding_id: UUID
+    expected_lifecycle_version: int
     expected_status: str = "suspended"
 
     def __post_init__(self) -> None:
         """Require an exact suspended binding as the resumption target."""
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
+        _require_positive_int("expected_lifecycle_version", self.expected_lifecycle_version)
         if self.expected_status != "suspended":
             raise ValueError("resumption requires suspended binding status")
 
