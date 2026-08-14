@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+import asyncpg
 import pytest
 
 from app.core.config import get_settings
@@ -12,6 +13,35 @@ from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from project_create_fixtures import insert_historical_project
 
 BindingSeed = Callable[[], Awaitable[tuple[UUID, UUID, UUID]]]
+
+
+async def seed_nonempty_0003_adapter_binding(database_url: str) -> None:
+    """Seed one FK-valid legacy binding without disabling system triggers."""
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+    try:
+        await connection.execute(
+            "insert into actor_profiles "
+            "(id,actor_kind,status,provisioning_method,created_by) values "
+            "('00000000-0000-0000-0000-000000000003','service','active',"
+            "'manual_service_provisioning','00000000-0000-0000-0000-000000000003'); "
+            "alter table projects disable trigger project_creation_custody; "
+            "insert into projects (id,name,slug,status) values "
+            "('00000000-0000-0000-0000-000000000002','Migration preflight',"
+            "'migration-preflight','draft'); "
+            "alter table projects enable trigger project_creation_custody; "
+            "alter table project_compensation_adapter_bindings disable trigger "
+            "project_compensation_binding_update_guard; "
+            "insert into project_compensation_adapter_bindings "
+            "(id,project_id,instrument_type,adapter_actor_id,route_key,created_by) values "
+            "('00000000-0000-0000-0000-000000000001',"
+            "'00000000-0000-0000-0000-000000000002','money',"
+            "'00000000-0000-0000-0000-000000000003','adapter.primary',"
+            "'00000000-0000-0000-0000-000000000003'); "
+            "alter table project_compensation_adapter_bindings enable trigger "
+            "project_compensation_binding_update_guard"
+        )
+    finally:
+        await connection.close()
 
 
 @pytest.fixture

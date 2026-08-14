@@ -81,6 +81,9 @@ human identity substitution; and deny-default production composition.
   the schema test now proves the exact replacement constraints.
 - Migration `0004` widens Alembic's revision column before stamping its
   longer canonical revision identifier; the schema test proves the new bound.
+- The database-reset fingerprint is reconciled to the exact hosted `0004`
+  schema, and migration preflight evidence retains internal foreign-key
+  enforcement instead of attempting to disable PostgreSQL system triggers.
 - PostgreSQL behavior, migration, reset, semantic lanes, and repository-wide
   coverage are proven by mandatory hosted GitHub checks, not a local full run.
 

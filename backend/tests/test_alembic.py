@@ -12,6 +12,7 @@ from alembic.script import ScriptDirectory
 import asyncpg
 import pytest
 
+from adapter_binding_fixtures import seed_nonempty_0003_adapter_binding
 from scripts.schema_baseline_manifest import (
     APPLICATION_ACL_PRINCIPALS,
     build_manifest,
@@ -50,6 +51,7 @@ async def _database_snapshot(database_url: str) -> dict[str, object]:
             "actor_profile_migration_state",
             "authority_control",
             "iso_4217_currency_codes",
+            "actor_profiles", "projects", "project_compensation_adapter_bindings",
         ):
             if await connection.fetchval("select to_regclass($1) is not null", f"public.{table}"):
                 rows = await connection.fetch(
@@ -57,6 +59,7 @@ async def _database_snapshot(database_url: str) -> dict[str, object]:
                 )
                 reference_rows[table] = [row["value"] for row in rows]
         return {
+            "schema": canonical_bytes(await build_manifest(database_url)),
             "versions": [row["version_num"] for row in versions],
             "objects": [tuple(row.values()) for row in objects],
             "reference_rows": reference_rows,
@@ -99,7 +102,6 @@ def test_fresh_database_matches_committed_manifest(
         command.upgrade(config, BASELINE_REVISION)
     expected = _manifest_path().read_bytes()
     actual = canonical_bytes(asyncio.run(build_manifest(isolated_database_env)))
-
     assert hashlib.sha256(actual).hexdigest() == hashlib.sha256(expected).hexdigest()
     assert actual == expected
 
@@ -269,25 +271,12 @@ def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
             _execute(isolated_database_env, "drop schema public cascade; create schema public")
         )
         command.upgrade(config, "0003_submission_lineage")
-        asyncio.run(
-            _execute(
-                isolated_database_env,
-                "alter table project_compensation_adapter_bindings disable trigger all; "
-                "insert into project_compensation_adapter_bindings "
-                "(id,project_id,instrument_type,adapter_actor_id,route_key,created_by) values "
-                "('00000000-0000-0000-0000-000000000001',"
-                "'00000000-0000-0000-0000-000000000002','money',"
-                "'00000000-0000-0000-0000-000000000003','adapter.primary',"
-                "'00000000-0000-0000-0000-000000000004'); "
-                "alter table project_compensation_adapter_bindings enable trigger all",
-            )
-        )
+        asyncio.run(seed_nonempty_0003_adapter_binding(isolated_database_env))
+        before = asyncio.run(_database_snapshot(isolated_database_env))
         with pytest.raises(RuntimeError, match="requires a fresh database"):
             command.upgrade(config, HEAD_REVISION)
 
-    snapshot = asyncio.run(_database_snapshot(isolated_database_env))
-    assert snapshot["versions"] == ["0003_submission_lineage"]
-    assert ("r", "compensation_adapter_binding_lifecycle_events") not in snapshot["objects"]
+    assert asyncio.run(_database_snapshot(isolated_database_env)) == before
 
 
 def test_manifest_covers_every_required_object_class() -> None:
