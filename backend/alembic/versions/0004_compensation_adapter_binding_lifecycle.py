@@ -19,6 +19,14 @@ def upgrade() -> None:
             "compensation adapter-binding lifecycle"
         )
 
+    op.alter_column(
+        "alembic_version",
+        "version_num",
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=64),
+        existing_nullable=False,
+    )
+
     op.execute(
         "drop trigger project_compensation_binding_update_guard "
         "on project_compensation_adapter_bindings"

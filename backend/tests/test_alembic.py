@@ -198,12 +198,17 @@ def test_current_head_installs_compensation_binding_lifecycle(
         )
         command.upgrade(config, HEAD_REVISION)
 
-    async def contract() -> tuple[bool, set[str], set[str], set[str]]:
+    async def contract() -> tuple[bool, int, set[str], set[str], set[str]]:
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             table_exists = await connection.fetchval(
                 "select to_regclass('public.compensation_adapter_binding_lifecycle_events') "
                 "is not null"
+            )
+            revision_length = await connection.fetchval(
+                "select character_maximum_length from information_schema.columns "
+                "where table_schema='public' and table_name='alembic_version' "
+                "and column_name='version_num'"
             )
             triggers = await connection.fetch(
                 "select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid "
@@ -226,6 +231,7 @@ def test_current_head_installs_compensation_binding_lifecycle(
             )
             return (
                 bool(table_exists),
+                revision_length,
                 {row["tgname"] for row in triggers},
                 {row["proname"] for row in functions},
                 {row["conname"] for row in binding_checks},
@@ -233,8 +239,9 @@ def test_current_head_installs_compensation_binding_lifecycle(
         finally:
             await connection.close()
 
-    exists, triggers, functions, binding_checks = asyncio.run(contract())
+    exists, revision_length, triggers, functions, binding_checks = asyncio.run(contract())
     assert exists is True
+    assert revision_length == 64
     assert triggers >= {
         "project_compensation_binding_update_guard",
         "compensation_binding_event_insert_guard",
