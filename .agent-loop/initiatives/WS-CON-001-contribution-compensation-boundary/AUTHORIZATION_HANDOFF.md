@@ -2,10 +2,11 @@
 
 ## Current baseline
 
-Current `main` is `b47a7e64f7d75cda8a0681d1aff3bf0c4a5be4aa` with the AUTH
-actor, grant, fixed-service, prepared-mutation, project-guide, policy-mutation,
-and REV-readiness foundations plus merged REV PLAN4 and ART foundations. The
-database is at migration `0052_legacy_intake_removal`. These foundations do
+Current `main` contains the AUTH actor, grant, fixed-service,
+prepared-mutation, project-guide, policy-mutation, and REV-readiness
+foundations plus merged REV PLAN4 and ART foundations. The old
+`0052_legacy_intake_removal` identifier is historical merge evidence; the
+active consolidated graph ends at `0003_submission_lineage`. These foundations do
 not create CON runtime, activate CON behavior, or give an outbox dispatcher
 feature authority.
 

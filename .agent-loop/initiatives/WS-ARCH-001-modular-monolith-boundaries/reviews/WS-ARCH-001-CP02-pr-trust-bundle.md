@@ -77,8 +77,8 @@ atomic chunk-state synchronization, and `git diff --check` all pass.
 ## Test delta
 
 No tests changed because this PR changes planning only. The future contract
-requires focused unit, PostgreSQL schema/lifecycle, concurrency, reset, boundary,
-and hosted full-coverage proof.
+requires focused unit tests, PostgreSQL schema/lifecycle tests, concurrency
+tests, reset tests, boundary tests, and hosted full-coverage proof.
 
 ## CI integrity
 
@@ -87,17 +87,17 @@ weakened. Hosted CI remains required before this PR is ready to merge.
 
 ## Reviewer results
 
-- Architecture: PASS.
-- Security/authorization: PASS.
-- Product/operations: PASS WITH LOW RISKS; the history-link concern was fixed.
-- Documentation: PASS after two findings were fixed.
-- Senior engineering: PASS after three findings were fixed.
+- Architecture status: pass.
+- Security/authorization status: pass.
+- Product/operations status: pass. Low-risk history-link concern was fixed.
+- Documentation status: pass. Two findings were fixed.
+- Senior engineering status: pass. Three findings were fixed.
 
 ## External review
 
-CodeRabbit and hosted CI are pending after publication. Valid findings will be
-fixed; comments that conflict with the approved ownership model will be
-answered with evidence rather than applied blindly.
+CodeRabbit produced seven valid bounded findings on the first published head.
+All were fixed and recorded in the external-review response. Hosted CI and
+CodeRabbit must rerun against the corrected exact head before merge readiness.
 
 ## Remaining risks
 

@@ -8,18 +8,18 @@ schema, route, action availability, or product behavior changes in this PR.
 
 ## Reviewer results
 
-- Architecture: PASS. Public CON ports, owner capability boundaries,
+- Architecture status: pass. Public CON ports, owner capability boundaries,
   deny-default composition, and CP03-only AUTH activation are explicit.
-- Security/authorization: PASS. Exact tenant-safe loading, opaque
+- Security/authorization status: pass. Exact tenant-safe loading, opaque
   prepare/consume/close semantics, service-identity eligibility, transaction
   binding, replay denial, and audit/evidence separation are specified.
-- Product/operations: PASS WITH LOW RISKS. Replacement and resume semantics,
+- Product/operations status: pass. Low-risk note: replacement and resume semantics,
   bounded reads, and lifecycle ownership are correct. Its history-link concern
   was resolved by requiring resumed events to reference the exact preceding
   suspended event.
-- Documentation: PASS after removing stale actor vocabulary and aligning the
+- Documentation status: pass. Findings were resolved by removing stale actor vocabulary and aligning the
   roadmap with the proposed executable-contract state.
-- Senior engineering: PASS after adding schema-reset files to allowed scope,
+- Senior engineering status: pass. Findings were resolved by adding schema-reset files to allowed scope,
   making duplicate operation handling deterministic, and excluding retirement
   fields from the CP02 read view.
 
@@ -55,5 +55,5 @@ git diff --check
 
 ## Final disposition
 
-PASS for the planning correction. The future CP02 implementation requires a
+Final status: pass for the planning correction. The future CP02 implementation requires a
 fresh review of its actual code, migration, tests, and hosted CI evidence.

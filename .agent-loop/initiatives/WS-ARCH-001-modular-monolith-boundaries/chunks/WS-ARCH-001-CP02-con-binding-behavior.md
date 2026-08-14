@@ -67,18 +67,33 @@ backend/tests/architecture/test_module_boundaries.py
 backend/tests/test_compensation.py (removal/replacement of superseded 03A proof only)
 backend/tests/conftest.py (schema fingerprint and reset inventory parity only)
 backend/tests/test_database_reset.py (new-table reset/guard proof only)
-.ci/behavior-ownership/** (exact generated/owned-test parity only)
+backend/tests/test_schema.py (0003-to-0004 empty/non-empty upgrade proof only)
+.ci/behavior-ownership/compensation/adapter-binding-behavior.json (new exact ownership entry only)
+.ci/behavior-ownership/partition.v1.json (exact generated partition parity only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
-backend/alembic/baseline/** (generated schema-manifest parity only; do not rewrite 0001)
+backend/alembic/baseline/v01_approved_manifest_delta.json (generated parity only)
+backend/alembic/baseline/v01_baseline_manifest.json (generated parity only)
+backend/alembic/baseline/v01_pre_reset_source_manifest.json (generated parity only)
+backend/alembic/baseline/v01_schema.sql (generated parity only; do not rewrite 0001)
 docs/spec_contribution_compensation.md
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 docs/roadmap_status.md
 .agent-loop/CURRENT_STATE.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/{CHUNK_MAP,STATUS,RISKS,DECISIONS}.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/RISKS.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/DECISIONS.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP02-con-binding-behavior.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-*.md
-.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/{CHUNK_MAP,STATUS,AUTHORIZATION_HANDOFF,CONFORMANCE_MATRIX,RUNTIME_VERIFICATION}.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-plan-review-evidence.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-implementation-review-evidence.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-external-review-response.md
+.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-pr-trust-bundle.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CHUNK_MAP.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/AUTHORIZATION_HANDOFF.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CONFORMANCE_MATRIX.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/RUNTIME_VERIFICATION.md
 ```
 
 The implementation plan review must remove any unused allowance before code is
@@ -118,8 +133,12 @@ independent commit inside any service, repository, authorization participant, or
 - `AdapterBindingActorEligibilityPort`;
 - bounded unavailable/conflict errors.
 
-Requests carry exact UUID identities plus a server-owned operation identity and
-canonical request digest. Create carries `instrument_type` unchanged and never
+Mutation requests carry exact UUID identities plus one stable `operation_id`
+supplied by the trusted server-side command caller and preserved unchanged on
+every retry. External clients never choose it directly; a future route may
+derive it once from its validated idempotency contract before calling CON. CON
+computes the canonical `request_digest` from the immutable request fields and
+rejects any supplied digest field. Create carries `instrument_type` unchanged and never
 contains `unit`. `route_key` uses the existing CON contract exactly: 1-120
 characters, begins with an ASCII letter, contains only ASCII letters, digits,
 `.`, `_`, `:`, or `-`, and never contains `..`. It is a non-secret configured
@@ -177,10 +196,14 @@ approved compensation-adapter identity rule and real adapter composition.
 
 1. Require one caller-owned root transaction; nested or missing transactions
    fail before reads or writes.
-2. Generate the binding ID server-side and preserve the caller's operation
-   identity/request digest.
-3. Obtain exact PROJECTS and ACTORS eligibility facts through public ports.
-4. Lock/serialize the project plus `instrument_type` creation boundary.
+2. Generate the binding ID server-side, preserve the caller's stable operation
+   identity, and compute the canonical request digest inside CON.
+3. Obtain exact PROJECTS and ACTORS eligibility facts through transaction-bound
+   public-port reads in the fixed order PROJECTS then ACTORS.
+4. Lock/serialize the project plus `instrument_type` creation boundary. The
+   owner ports must either hold their canonical owner-row locks through the
+   caller-owned root transaction or revalidate both owner facts, in the same
+   fixed order, immediately before AUTH consumption and insertion.
 5. Build AUTH facts with exact `project_id`, generated
    `adapter_binding_id`, unchanged `instrument_type`, eligible
    `adapter_actor_id`, and the unchanged canonical non-secret `route_key`.
@@ -256,6 +279,13 @@ The migration follows `0003_submission_lineage` and must update ORM metadata,
 database constraints/triggers, schema manifests, and PostgreSQL tests together.
 It must:
 
+- fail closed before any schema mutation when
+  `project_compensation_adapter_bindings` is non-empty; v0.1 has no deployed
+  compatibility obligation or truthful source for inventing historical
+  operation IDs, request digests, or created events;
+- prove both upgrade cases: an empty table upgrades atomically, while a
+  non-empty table leaves the complete `0003_submission_lineage` schema and data
+  unchanged and requires database recreation;
 - replace the active/version-1-only lifecycle shape with exact active and
   suspended shapes;
 - replace `compensation_binding_updates_deferred` with a fail-closed trigger;
@@ -281,6 +311,8 @@ It must:
 - Denial occurs before binding mutation and lifecycle-event insertion.
 - Stale and concurrent suspend/resume attempts produce one transition.
 - Concurrent create for one project/instrument produces one active binding.
+- Concurrent project ineligibility or adapter-actor revocation observed before
+  AUTH consumption denies and creates neither a binding nor lifecycle event.
 - Active replacement blocks resume of an older suspended binding.
 - PostgreSQL independently rejects forbidden row/event mutations.
 - Rollback removes binding changes, lifecycle events, and staged participant
