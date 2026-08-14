@@ -49,6 +49,7 @@ concurrency, schema, and cross-module public APIs.
 
 ```text
 backend/alembic/versions/0004_compensation_adapter_binding_lifecycle.py
+backend/alembic/env.py (current-head guard update only)
 backend/app/modules/compensation/__init__.py
 backend/app/modules/compensation/api/__init__.py
 backend/app/modules/compensation/api/adapter_bindings.py
@@ -133,6 +134,16 @@ independent commit inside any service, repository, authorization participant, or
 - `AdapterBindingActorEligibilityPort`;
 - bounded unavailable/conflict errors.
 
+`AdapterBindingMutationResult` is immutable and contains exactly
+`event_id`, `operation_id`, `request_digest`, `project_id`,
+`adapter_binding_id`, `event_type`, `actor_profile_id`, `from_status`,
+`to_status`, `from_lifecycle_version`, `to_lifecycle_version`,
+`prior_suspension_event_id`, and `occurred_at`. It contains no mutable current
+binding status or suspension projection. The created result/event uses
+`from_status = null`,
+`to_status = active`, `from_lifecycle_version = 0`, and
+`to_lifecycle_version = 1`, with `prior_suspension_event_id = null`.
+
 Mutation requests carry exact UUID identities plus one stable `operation_id`
 supplied by the trusted server-side command caller and preserved unchanged on
 every retry. External clients never choose it directly; a future route may
@@ -161,6 +172,15 @@ session/transaction, single consumption, replay rejection, and close
 invalidation. CP03 later implements this port using the existing AUTH PREP
 machinery; it must not introduce a second authorization protocol.
 
+Every object returned by `prepare` is closed exactly once from an unconditional
+`finally` path after the prepare call, whether consume or downstream work
+succeeds, denies, conflicts, raises, or rolls back. Closing a consumed object is
+required cleanup, not a second consumption. Recovery never prepares a mutation
+object. Tests must prove that every failure path closes the object and that no
+failed or rolled-back path leaves reusable authority. A `close` exception fails
+the command and forces the caller-owned root transaction to roll back; it may
+never be suppressed after product state or evidence has been staged.
+
 Read uses a separate request-scoped authorization port before disclosure. It
 does not prepare or consume a handle.
 
@@ -186,10 +206,33 @@ and binding insertion.
 
 ## Mutation idempotency and recovery
 
+Every mutation follows one shared order:
+
+```text
+caller-owned root transaction
+-> canonical request digest
+-> operation fence
+-> lifecycle-event recovery check
+-> operation-specific owner/product locks
+-> AUTH prepare/consume with unconditional close
+-> mutation plus immutable lifecycle event
+-> flush only
+```
+
+The operation fence is exactly a PostgreSQL transaction-level advisory lock
+whose signed 64-bit key is the first eight bytes of SHA-256 over the canonical
+16 UUID bytes of `operation_id`, interpreted as a signed big-endian integer by
+one repository-owned helper. It is acquired with `pg_advisory_xact_lock` and
+remains held until the root transaction commits or rolls back. A key collision
+may only serialize unrelated operations; it cannot equate them or
+authorize/recover an effect because every lookup and the
+database uniqueness constraint still compare the complete UUID. An in-process
+mutex, event-table lookup alone, or eventual unique-constraint failure is not
+an acceptable substitute.
+
 Before binding-ID generation, owner eligibility reads, product row locks, AUTH
-preparation, or AUTH consumption, every mutation acquires a
-transaction-scoped database fence keyed by the globally unique `operation_id`
-and checks the lifecycle-event repository by that identity.
+preparation, or AUTH consumption, the fenced mutation checks the lifecycle-event
+repository by the complete globally unique `operation_id`.
 
 - No event: continue the canonical mutation while retaining the operation fence
   until transaction end.
@@ -245,27 +288,43 @@ then observe either the committed event or no event after rollback.
 ### Suspend
 
 1. Require one caller-owned root transaction.
-2. Lock by exact `(project_id, adapter_binding_id)`.
-3. Require active status and the exact positive expected lifecycle version.
-4. Recompose facts from the locked row and compare them to the request.
-5. Prepare and consume authority before mutation.
-6. Transition `active/N -> suspended/N+1`, set current
+2. Compute the canonical request digest, acquire/check the operation fence, and
+   complete concealed authorized recovery when the operation already exists.
+3. Only for a new operation, lock by exact
+   `(project_id, adapter_binding_id)`. Suspend deliberately performs no owner
+   eligibility check so an authorized Finance Authority can disable a binding
+   after its project or adapter actor becomes ineligible.
+4. Require active status and the exact positive expected lifecycle version.
+5. Recompose facts from the locked row and compare them to the request.
+6. Prepare and consume authority before mutation, then close the prepared
+   object from the unconditional `finally` path.
+7. Transition `active/N -> suspended/N+1`, set current
    `suspended_by/suspended_at` from the authorized actor and database clock,
    and append one immutable suspended event.
-7. Flush only.
+8. Flush only.
 
 ### Resume
 
 1. Require one caller-owned root transaction.
-2. Lock by exact `(project_id, adapter_binding_id)`.
-3. Require suspended status and the exact positive expected lifecycle version.
-4. Fail if another active binding exists for the same project and
+2. Compute the canonical request digest, acquire/check the operation fence, and
+   complete concealed authorized recovery when the operation already exists.
+3. Only for a new operation, acquire the PROJECTS eligibility fence, read the
+   exact binding identity without disclosure, acquire the ACTORS eligibility
+   fence for that bound adapter actor, then lock the exact
+   `(project_id, adapter_binding_id)` row and prove its identity fields are
+   unchanged. These are the same fixed-order, transaction-retained owner fences
+   used by create. The project must remain eligible and the exact bound adapter
+   actor must remain active and adapter-eligible. Either failure denies before
+   AUTH consumption.
+4. Require suspended status and the exact positive expected lifecycle version.
+5. Fail if another active binding exists for the same project and
    `instrument_type`.
-5. Recompose facts from the locked row, prepare, and consume before mutation.
-6. Transition `suspended/N -> active/N+1`, clear current suspension fields,
+6. Recompose facts from the locked row, prepare, and consume before mutation,
+   then close the prepared object from the unconditional `finally` path.
+7. Transition `suspended/N -> active/N+1`, clear current suspension fields,
    and append one immutable resumed event containing the prior suspension and
    exact actor/version transition.
-7. Flush only.
+8. Flush only.
 
 Creating a replacement active binding while an older binding is suspended is
 allowed. It does not retire, supersede, or mutate the suspended binding.
@@ -316,6 +375,9 @@ It must:
   unchanged and requires database recreation;
 - update `backend/tests/test_alembic.py::HEAD_REVISION` to
   `0004_compensation_adapter_binding_lifecycle` and prove the single-head graph;
+- update `backend/alembic/env.py::_CURRENT_HEAD_REVISION` to
+  `0004_compensation_adapter_binding_lifecycle`; no second head constant or
+  compatibility path is permitted;
 - replace the active/version-1-only lifecycle shape with exact active and
   suspended shapes;
 - replace `compensation_binding_updates_deferred` with a fail-closed trigger;
@@ -323,7 +385,7 @@ It must:
   `suspended/N -> active/N+1`;
 - require database-owned transition timestamps and exact attribution fields;
 - reject version skips, same-state updates, retired transitions, arbitrary
-  updates, and changes to binding/project/instrument/adapter/route/creation
+  updates, and changes to binding/project/`instrument_type`/adapter/route/creation
   identity;
 - preserve the one-active-binding partial unique index;
 - add the append-only lifecycle-event table, unique binding/version rule,
@@ -340,7 +402,7 @@ It must:
 - Cross-project and absent reads/mutations are concealed.
 - Denial occurs before binding mutation and lifecycle-event insertion.
 - Stale and concurrent suspend/resume attempts produce one transition.
-- Concurrent create for one project/instrument produces one active binding.
+- Concurrent create for one project/`instrument_type` produces one active binding.
 - Concurrent project ineligibility or adapter-actor revocation blocks on the
   retained owner fence; once it commits first, create denies before AUTH
   consumption, and when create holds the fence first, revocation cannot commit
@@ -348,6 +410,16 @@ It must:
 - Duplicate operations are rejected or recovered before binding-ID generation
   and mutation AUTH preparation/consumption; they create no new allowed mutation
   evidence, binding, or lifecycle event.
+- Exact duplicate recovery returns the immutable original result only after
+  current request-scoped authorization of the exact binding. Changed facts,
+  revocation, inactivity, cross-project access, or failed read authorization
+  return the same concealed conflict. Recovery performs no mutation PREP and
+  creates no new AUTH evidence or product effect.
+- Concurrency tests cover create, suspend, and resume duplicates using the
+  exact PostgreSQL advisory fence; a losing request observes the committed
+  event after waiting or proceeds only after the winner rolls back.
+- Every prepared mutation object is closed through `finally` on success,
+  denial, conflict, exception, and rollback, and cannot subsequently be used.
 - Active replacement blocks resume of an older suspended binding.
 - PostgreSQL independently rejects forbidden row/event mutations.
 - Rollback removes binding changes, lifecycle events, and staged participant
@@ -360,6 +432,7 @@ It must:
 cd backend
 uv run ruff check app/modules/compensation app/modules/actors/api app/modules/projects/api tests/compensation
 uv run pytest -q tests/compensation tests/test_compensation.py
+uv run pytest -q tests/authorization/test_adapter_binding_registration.py
 uv run pytest -q tests/test_alembic.py
 uv run pytest -q tests/test_database_reset.py
 uv run python -m scripts.module_boundaries validate --protected-base "$(git merge-base HEAD origin/main)"

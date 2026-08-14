@@ -137,8 +137,9 @@ review. Their presence does not change the implemented-on-`main` list above.
    authority while keeping all nine actions unavailable. CP01C corrects the
    unavailable binding facts before CP02. CP02 now has a proposed executable
    current-main contract; after this planning correction merges and receives
-   explicit human approval, implement its hidden behavior and then separately activate
-   adapter-binding and ContributionPolicy behavior;
+   explicit human approval, the order is CP02 hidden adapter-binding behavior,
+   CP03 adapter-binding activation, CP04 hidden ContributionPolicy behavior,
+   then CP05 ContributionPolicy activation;
    expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and
    lock it on each task before that task becomes claimable. TaskAssignment

@@ -45,6 +45,32 @@ Four additional contract defects and one recovery gap were validated and fixed:
    the stable result without mutation PREP reuse; mismatches or revoked/read-
    denied callers receive the same concealed conflict.
 
+## Second independent exact-head review
+
+Seven additional findings were validated and corrected:
+
+1. Create, suspend, and resume now use one mandatory order: root transaction,
+   digest, operation fence, recovery, operation-specific locks, AUTH, mutation.
+2. Duplicate semantics are singular: exact authorized recovery returns the
+   immutable original result; any mismatch or denied current read returns a
+   concealed conflict. Recovery never prepares mutation authority.
+3. The allowed migration scope now includes `backend/alembic/env.py` and its
+   required `0004_compensation_adapter_binding_lifecycle` head guard.
+4. The operation fence is an exact PostgreSQL transaction advisory-lock
+   mechanism with complete-UUID lookup and uniqueness proof, plus concurrency
+   tests for all three mutations.
+5. Every prepared object is closed in an unconditional `finally` path across
+   every success and failure outcome.
+6. Verification now includes the existing unavailable-action registration
+   test.
+7. The roadmap states CP02 hidden binding behavior, CP03 binding activation,
+   CP04 hidden ContributionPolicy behavior, then CP05 policy activation.
+
+The human decision was resolved explicitly: resume reacquires PROJECTS then
+ACTORS eligibility fences before AUTH; suspend does not require eligibility so
+an authorized Finance Authority can safely disable a revoked binding. The
+mutation result and created-event transition fields are now exact.
+
 ## Verification after correction
 
 - architecture re-review: pass;

@@ -48,8 +48,11 @@ AUTH protocol.
 - Generic service-actor eligibility: unrelated ART/REV identities could bind.
 - AUTH-private imports: violate modular-monolith extraction boundaries.
 - A second CON-local authorization protocol: duplicates security machinery.
-- Replaying success for duplicate operations: complicates revocation and can
-  disclose prior state; duplicates instead receive one concealed conflict.
+- Replaying a mutation without current disclosure authority: rejected. Exact
+  duplicates return the immutable original result only after current
+  request-scoped read authorization; every mismatch or denied read receives
+  one concealed conflict without mutation PREP, new evidence, or a second
+  effect.
 - Clearing suspension fields without immutable history: loses attribution.
 
 ## Scope control
@@ -120,6 +123,8 @@ ContributionPolicy behavior remains in later chunks.
 - Exact `instrument_type` and `route_key` parity without translation.
 - Query-only read versus opaque PREP mutations.
 - Immutable suspension/resume attribution and one-effect duplicate handling.
+- Shared transaction ordering, exact PostgreSQL operation fencing, prepared
+  object closure, and resume-time owner eligibility.
 - No activation or broader CON lifecycle work in this PR.
 
 ## Human merge ownership

@@ -46,8 +46,16 @@ git diff --check
   and existing ART/REV identities cannot substitute.
 - Added immutable CON lifecycle events distinct from AUTH decision evidence.
 - Required a same-binding link from resume to the preceding suspension event.
-- Made `operation_id` globally unique and all duplicates concealed,
-  deterministic conflicts with no replayed success or second effect.
+- Made `operation_id` globally unique and selected an exact PostgreSQL
+  transaction advisory fence for create, suspend, and resume. An exact replay
+  returns the immutable original result only after current read authorization;
+  all mismatches and denied reads remain concealed conflicts, with no second
+  mutation authorization, evidence, or effect.
+- Required unconditional prepared-object closure and create/resume owner
+  eligibility fences; suspend remains available to safely disable an
+  ineligible binding.
+- Added the Alembic environment head guard and unavailable-action registration
+  proof to the future implementation scope.
 - Added schema fingerprint/reset inventory files and checks to implementation
   scope.
 - Defined `route_key` exactly as CON already validates it and retained
@@ -55,5 +63,13 @@ git diff --check
 
 ## Final disposition
 
-Final status: pass for the planning correction. The future CP02 implementation requires a
-fresh review of its actual code, migration, tests, and hosted CI evidence.
+Fresh exact-diff re-review after the second external review:
+
+- architecture: pass with low implementation risk;
+- security/authorization: pass with low implementation risk;
+- product/operations: pass with low implementation risk;
+- senior engineering: pass.
+
+Final status: pass for the planning correction. The future CP02 implementation
+requires a fresh review of its actual code, migration, tests, and hosted CI
+evidence.
