@@ -114,7 +114,7 @@ CP08/ARCH-03B replacement path.
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. The first proposed policy-cutover
-implementation begins with CP01A then CP01B unavailable AUTH registration; no
-product behavior may start until both current-main contracts merge.
+participant after REV's earlier gates merge. CP01B unavailable ContributionPolicy
+AUTH registration is the next policy-cutover gate; no product behavior may start
+until that current-main contract merges.
 Open pull requests determine transient CON work.

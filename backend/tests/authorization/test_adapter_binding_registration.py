@@ -64,14 +64,23 @@ def test_cp01a_public_facts_are_immutable_and_validate_lifecycle_state() -> None
             adapter_binding_id=binding_id,
             expected_status="active",
         )
-    with pytest.raises(ValueError, match="route_key must be"):
-        AdapterBindingCreateFacts(
-            project_id=project_id,
-            instrument="money",
-            unit="USD",
-            adapter_actor_id=uuid4(),
-            route_key="secret route with spaces",
-        )
+    for route_key in ("1adapter", "adapter..secret", "a" * 121, "secret route"):
+        with pytest.raises(ValueError, match="route_key must be canonical"):
+            AdapterBindingCreateFacts(
+                project_id=project_id,
+                instrument="money",
+                unit="USD",
+                adapter_actor_id=uuid4(),
+                route_key=route_key,
+            )
+
+    assert AdapterBindingCreateFacts(
+        project_id=project_id,
+        instrument="money",
+        unit="USD",
+        adapter_actor_id=uuid4(),
+        route_key="a" * 120,
+    ).route_key == "a" * 120
 
 
 def test_cp01a_digest_is_deterministic_and_action_domain_separated() -> None:

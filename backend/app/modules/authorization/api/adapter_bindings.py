@@ -12,6 +12,7 @@ from uuid import UUID
 from .action_ids import ActionId
 
 _TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,159}\Z")
+_ROUTE_KEY = re.compile(r"[A-Za-z][A-Za-z0-9._:-]{0,119}\Z")
 
 
 def _require_token(name: str, value: str) -> None:
@@ -24,6 +25,12 @@ def _require_uuid(name: str, value: UUID) -> None:
     """Reject identifiers that are not already parsed UUID values."""
     if not isinstance(value, UUID):
         raise ValueError(f"{name} must be a UUID")
+
+
+def _require_route_key(value: str) -> None:
+    """Enforce the canonical compensation adapter route-key grammar."""
+    if not isinstance(value, str) or not _ROUTE_KEY.fullmatch(value) or ".." in value:
+        raise ValueError("route_key must be canonical and traversal-free")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -55,7 +62,7 @@ class AdapterBindingCreateFacts:
         _require_uuid("adapter_actor_id", self.adapter_actor_id)
         _require_token("instrument", self.instrument)
         _require_token("unit", self.unit)
-        _require_token("route_key", self.route_key)
+        _require_route_key(self.route_key)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

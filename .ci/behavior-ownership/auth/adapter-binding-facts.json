@@ -7,6 +7,7 @@
     "app.modules.authorization.api.adapter_bindings.AdapterBindingResumeFacts.__post_init__",
     "app.modules.authorization.api.adapter_bindings.AdapterBindingSuspendFacts.__post_init__",
     "app.modules.authorization.api.adapter_bindings._require_token",
+    "app.modules.authorization.api.adapter_bindings._require_route_key",
     "app.modules.authorization.api.adapter_bindings._require_uuid",
     "app.modules.authorization.api.adapter_bindings.adapter_binding_resource_digest"
   ],
