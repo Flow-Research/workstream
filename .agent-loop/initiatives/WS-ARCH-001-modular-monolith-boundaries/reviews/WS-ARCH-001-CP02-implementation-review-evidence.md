@@ -26,9 +26,9 @@ removed names. The same hosted run then proved that the new revision identifier
 exceeds Alembic's default 32-character version column; `0004` now widens that
 column to 64 characters before head stamping, and the schema test asserts it.
 The reset harness fingerprint now records the exact installed `0004` schema,
-and the nonempty-upgrade proof seeds valid foreign-key owners while disabling
-only product custody triggers rather than PostgreSQL system triggers. No
-schema rule or CI gate was weakened.
+and the nonempty-upgrade proof seeds a valid actor, identity link, project, and
+binding while disabling only product custody triggers rather than PostgreSQL
+system triggers. No schema rule or CI gate was weakened.
 
 Full PostgreSQL, migration/reset, semantic-lane, and coverage proof remains in
 the mandatory hosted exact-head checks because the user explicitly requires

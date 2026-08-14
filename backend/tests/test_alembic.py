@@ -51,7 +51,8 @@ async def _database_snapshot(database_url: str) -> dict[str, object]:
             "actor_profile_migration_state",
             "authority_control",
             "iso_4217_currency_codes",
-            "actor_profiles", "projects", "project_compensation_adapter_bindings",
+            "actor_profiles", "actor_identity_links", "projects",
+            "project_compensation_adapter_bindings",
         ):
             if await connection.fetchval("select to_regclass($1) is not null", f"public.{table}"):
                 rows = await connection.fetch(
