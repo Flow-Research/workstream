@@ -138,6 +138,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/actors/api/compensation_adapter.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/actors/legacy_classification.py"
     },
     {
@@ -541,12 +545,24 @@
       "target": "backend/app/modules/checkers/service.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/modules/compensation/api/adapter_bindings.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/modules/compensation/models.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/modules/compensation/repository.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/modules/compensation/schemas.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/compensation/service.py"
     },
     {
       "group": "lifecycle",
@@ -571,6 +587,10 @@
     {
       "group": "shared",
       "target": "backend/app/modules/outbox/service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/compensation_binding.py"
     },
     {
       "group": "lifecycle",
@@ -853,7 +873,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "b3ab085b1c8964cbe157c68575f13dd8384a165fba4d1d5f686911b3c40974b2",
+  "authority_digest": "d6a735d82f7a8437aabee54badc111f2a5bb8e0e27fdd266a078d4325cf0779c",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

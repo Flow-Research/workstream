@@ -81,11 +81,10 @@ historical-row backfill or compatibility behavior.
 - CP01A and CP01B are complete on merge with four exact adapter-binding and five
   exact ContributionPolicy actions registered but unavailable. CP01C is
   complete on merge with corrected binding identity and lifecycle-generation
-  facts. Callback/fulfillment authority stays separate; CP02 is the next boundary.
-- CP02 has a proposed executable contract for hidden, route-unreachable
-  adapter-binding behavior; its planning correction must merge and receive
-  explicit human approval before implementation. CP03-CP05 remain
-  non-executable activation/policy skeletons.
+  facts. Callback/fulfillment authority stays separate.
+- CP02 is complete on merge with hidden, route-unreachable adapter-binding
+  behavior and immutable lifecycle history while all four AUTH actions remain
+  unavailable. CP03-CP05 remain non-executable activation/policy skeletons.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required
   unless current-main discovery proves real deployed data exists.
@@ -117,8 +116,7 @@ CP08/ARCH-03B replacement path.
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. Merge the CP02 executable-contract
-correction, then obtain explicit human approval before implementing its hidden
-adapter-binding behavior. Registration and planning alone activate no product
-behavior.
+participant after REV's earlier gates merge. Expand and review CP03 against
+current main before activating the exact adapter-binding actions. CP02 itself
+remains hidden and route-unreachable.
 Open pull requests determine transient CON work.

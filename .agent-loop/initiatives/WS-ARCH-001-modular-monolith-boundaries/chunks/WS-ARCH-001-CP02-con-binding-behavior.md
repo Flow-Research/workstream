@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ARCH-001-CP02 — Hidden Adapter-Binding Behavior
 
-Status: proposed executable contract; implementation may begin only after this
-planning correction merges and receives explicit human approval. Risk: L1.
+Status: complete on implementation merge; CP03 is the next activation gate.
+Risk: L1.
 
 ## Goal
 
@@ -57,44 +57,46 @@ backend/app/modules/compensation/models.py
 backend/app/modules/compensation/repository.py
 backend/app/modules/compensation/service.py
 backend/app/modules/compensation/schemas.py
+backend/app/db/models.py (new lifecycle-event metadata registration only)
 backend/app/modules/actors/api/__init__.py
 backend/app/modules/actors/api/compensation_adapter.py
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/compensation_binding.py
 backend/tests/compensation/test_adapter_binding_api.py
+backend/tests/adapter_binding_fixtures.py (shared CP02 PostgreSQL facts only)
+backend/tests/adapter_binding_test_support.py (strict CP02 test doubles only)
 backend/tests/compensation/test_adapter_binding_service.py
+backend/tests/compensation/test_adapter_binding_recovery.py
 backend/tests/compensation/test_adapter_binding_persistence.py
 backend/tests/architecture/test_module_boundaries.py
+backend/tests/compensation/test_adapter_binding_partition.py (exact CP02 additive partition proof only)
+backend/tests/compensation/test_adapter_binding_owner_fences.py
 backend/tests/test_compensation.py (removal/replacement of superseded 03A proof only)
 backend/tests/conftest.py (schema fingerprint and reset inventory parity only)
+backend/scripts/run_test_lanes.py (exact new-test lane assignment only)
 backend/tests/test_database_reset.py (new-table reset/guard proof only)
 backend/tests/test_alembic.py (HEAD_REVISION and 0003-to-0004 empty/non-empty upgrade proof only)
-.ci/behavior-ownership/compensation/adapter-binding-behavior.json (new exact ownership entry only)
+.ci/behavior-ownership/lifecycle/adapter-binding-behavior.json (new exact ownership entry only)
 .ci/behavior-ownership/partition.v1.json (exact generated partition parity only)
+backend/scripts/behavior_ownership.py (exact CP02 additive target allowlist only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
 backend/alembic/baseline/v01_approved_manifest_delta.json (generated parity only)
 backend/alembic/baseline/v01_baseline_manifest.json (generated parity only)
 backend/alembic/baseline/v01_pre_reset_source_manifest.json (generated parity only)
 backend/alembic/baseline/v01_schema.sql (generated parity only; do not rewrite 0001)
 docs/spec_contribution_compensation.md
-docs/spec_authorization_service.md
-docs/operations_authorization_service.md
+docs/architecture_data_model.md
 docs/roadmap_status.md
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/RISKS.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/DECISIONS.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP02-con-binding-behavior.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-plan-review-evidence.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-implementation-review-evidence.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-external-review-response.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-pr-trust-bundle.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CHUNK_MAP.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/AUTHORIZATION_HANDOFF.md
-.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CONFORMANCE_MATRIX.md
-.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/RUNTIME_VERIFICATION.md
 ```
 
 The implementation plan review must remove any unused allowance before code is
@@ -495,6 +497,6 @@ changes beyond the exact adapter-binding aggregate and its immutable events.
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- The planned CP02 boundary has an executable implementation contract.
-- Runtime behavior changed by this planning correction: no.
+- Outcome on merge: `complete`
+- Hidden CON adapter-binding behavior and immutable lifecycle history are implemented.
+- Runtime remains route-unreachable and deny-default; all four AUTH actions remain unavailable.

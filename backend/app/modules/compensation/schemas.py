@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.modules.compensation.api.adapter_bindings import validate_adapter_route_key
+
 
 class CompensationInstrumentType(StrEnum):
     """Canonical compensation instrument families."""
@@ -30,7 +32,5 @@ class ProjectCompensationAdapterBindingInput(BaseModel):
     @field_validator("route_key")
     @classmethod
     def reject_path_traversal(cls, value: str) -> str:
-        """Reject traversal-like dot pairs even though dots are route-safe."""
-        if ".." in value:
-            raise ValueError("route_key must not contain path traversal")
-        return value
+        """Apply the canonical CON-owned route-key grammar."""
+        return validate_adapter_route_key(value)

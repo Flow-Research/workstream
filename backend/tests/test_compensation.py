@@ -2,21 +2,18 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import select, update
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.db.base import Base
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
-from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
 from app.modules.compensation.schemas import (
     CompensationInstrumentType,
@@ -56,11 +53,10 @@ async def _seed_binding_facts() -> tuple[str, str, str]:
                 ),
                 ActorProfile(
                     id=adapter_actor_id,
-                    actor_kind="service",
+                    actor_kind="human",
                     status="active",
-                    provisioning_method="manual_service_provisioning",
-                    # Structural FK fixture only; 03A exposes no creation behavior.
-                    service_identity=ServiceIdentity.ARTIFACT_VERIFIER.value,
+                    provisioning_method="automatic_first_access",
+                    # Neutral FK fixture only; CP03 owns the exact service identity.
                     created_by=creator_id,
                 ),
             ]
@@ -83,7 +79,7 @@ async def _seed_binding_facts() -> tuple[str, str, str]:
                     actor_profile_id=adapter_actor_id,
                     issuer="https://compensation.test",
                     subject=f"adapter-{adapter_actor_id}",
-                    subject_kind="service",
+                    subject_kind="human",
                     status="active",
                     linked_by=creator_id,
                 ),
@@ -113,18 +109,6 @@ def _binding_input(
         adapter_actor_id=adapter_actor_id,
         route_key=route_key,
         created_by=creator_id,
-    )
-
-
-def _structural_binding(
-    value: ProjectCompensationAdapterBindingInput,
-) -> ProjectCompensationAdapterBinding:
-    facts = value.model_dump()
-    facts["instrument_type"] = value.instrument_type.value
-    return ProjectCompensationAdapterBinding(
-        **facts,
-        status="active",
-        binding_lifecycle_version=1,
     )
 
 
@@ -195,7 +179,7 @@ async def test_database_rejects_invalid_lifecycle_shape(
             ProjectCompensationAdapterBinding(
                 **values,
                 status=status,
-                binding_lifecycle_version=2,
+                binding_lifecycle_version=1 if status == "suspended" else 2,
                 suspended_by=creator_id if status == "suspended" else None,
                 suspended_at=now if status == "suspended" else None,
                 retired_by=creator_id if status == "retired" else None,
@@ -239,61 +223,3 @@ async def test_database_rejects_noncanonical_route_keys(
                         )
                     )
                     await session.flush()
-
-
-@pytest.mark.asyncio
-async def test_database_defers_all_binding_updates_until_behavior_chunks(
-    compensation_database_env: str,
-) -> None:
-    project_id, actor_id, creator_id = await _seed_binding_facts()
-    value = _binding_input(project_id, actor_id, creator_id)
-    async with db_session.get_session_factory()() as session:
-        session.add(_structural_binding(value))
-        await session.commit()
-
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(DBAPIError):
-            await session.execute(
-                update(ProjectCompensationAdapterBinding)
-                .where(ProjectCompensationAdapterBinding.id == value.id)
-                .values(
-                    status="suspended",
-                    binding_lifecycle_version=2,
-                    suspended_by=creator_id,
-                    suspended_at=datetime.now(UTC),
-                )
-            )
-
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(DBAPIError):
-            await session.execute(
-                update(ProjectCompensationAdapterBinding)
-                .where(ProjectCompensationAdapterBinding.id == value.id)
-                .values(route_key="adapter.changed")
-            )
-
-
-@pytest.mark.asyncio
-async def test_active_binding_duplicate_race_has_one_winner(
-    compensation_database_env: str,
-) -> None:
-    project_id, actor_id, creator_id = await _seed_binding_facts()
-
-    async def create(route_key: str) -> str:
-        async with db_session.get_session_factory()() as session:
-            try:
-                value = _binding_input(project_id, actor_id, creator_id, route_key=route_key)
-                session.add(_structural_binding(value))
-                await session.commit()
-                return "created"
-            except IntegrityError:
-                await session.rollback()
-                return "conflict"
-
-    assert sorted(await asyncio.gather(create("adapter.one"), create("adapter.two"))) == [
-        "conflict",
-        "created",
-    ]
-    async with db_session.get_session_factory()() as session:
-        rows = (await session.scalars(select(ProjectCompensationAdapterBinding))).all()
-        assert len(rows) == 1

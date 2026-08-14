@@ -1,0 +1,35 @@
+{
+  "behavior_id": "lifecycle.compensation.adapter_binding.behavior",
+  "boundaries": ["postgresql", "lock", "concurrency"],
+  "callables": [
+    "app.modules.compensation.service.AdapterBindingService.__init__",
+    "app.modules.compensation.service.AdapterBindingService._consume_and_close",
+    "app.modules.compensation.service.AdapterBindingService._event",
+    "app.modules.compensation.service.AdapterBindingService._lock_transition_binding",
+    "app.modules.compensation.service.AdapterBindingService._recover",
+    "app.modules.compensation.service.AdapterBindingService._recovery_binding_matches",
+    "app.modules.compensation.service.AdapterBindingService._require_root_transaction",
+    "app.modules.compensation.service.AdapterBindingService._result",
+    "app.modules.compensation.service.AdapterBindingService._transition_facts",
+    "app.modules.compensation.service.AdapterBindingService._view",
+    "app.modules.compensation.service.AdapterBindingService.create",
+    "app.modules.compensation.service.AdapterBindingService.read",
+    "app.modules.compensation.service.AdapterBindingService.resume",
+    "app.modules.compensation.service.AdapterBindingService.suspend",
+    "app.modules.compensation.service._request_digest"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["persisted_state", "idempotent_replay", "mapped_error"],
+  "reviewed_by": ["WS-ARCH-001-CP02 required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/compensation/service.py",
+  "tests": [
+    "backend/tests/compensation/test_adapter_binding_owner_fences.py::test_committed_owner_ineligibility_denies_before_authorization",
+    "backend/tests/compensation/test_adapter_binding_recovery.py::test_concurrent_duplicate_transition_recovers_one_effect",
+    "backend/tests/compensation/test_adapter_binding_recovery.py::test_duplicate_mismatch_and_read_denial_are_concealed_without_mutation_prep",
+    "backend/tests/compensation/test_adapter_binding_service.py::test_close_failure_prevents_product_state_and_event",
+    "backend/tests/compensation/test_adapter_binding_service.py::test_create_suspend_resume_persists_contiguous_immutable_history",
+    "backend/tests/compensation/test_adapter_binding_service.py::test_exact_duplicate_recovers_without_second_mutation_authorization"
+  ]
+}

@@ -20,7 +20,7 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0003_submission_lineage"
+HEAD_REVISION = "0004_compensation_adapter_binding_lifecycle"
 BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
@@ -80,6 +80,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0003_submission_lineage",
         "0002_admission_version",
         BASELINE_REVISION,
     ]
@@ -185,6 +186,85 @@ def test_current_head_installs_submission_lineage_contract(
         "ix_submissions_artifact_content_id",
     }
     assert package_nullable == "YES"
+
+
+def test_current_head_installs_compensation_binding_lifecycle(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, HEAD_REVISION)
+
+    async def contract() -> tuple[bool, set[str], set[str]]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            table_exists = await connection.fetchval(
+                "select to_regclass('public.compensation_adapter_binding_lifecycle_events') "
+                "is not null"
+            )
+            triggers = await connection.fetch(
+                "select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid "
+                "where c.relname=any($1::text[]) and not t.tgisinternal",
+                ["project_compensation_adapter_bindings",
+                 "compensation_adapter_binding_lifecycle_events"],
+            )
+            functions = await connection.fetch(
+                "select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='public' and proname=any($1::text[])",
+                ["enforce_compensation_binding_lifecycle",
+                 "guard_compensation_binding_lifecycle_event",
+                 "reject_compensation_binding_lifecycle_event_change",
+                 "require_compensation_binding_lifecycle_event"],
+            )
+            return bool(table_exists), {row["tgname"] for row in triggers}, {
+                row["proname"] for row in functions
+            }
+        finally:
+            await connection.close()
+
+    exists, triggers, functions = asyncio.run(contract())
+    assert exists is True
+    assert triggers >= {
+        "project_compensation_binding_update_guard",
+        "compensation_binding_event_insert_guard",
+        "compensation_binding_event_change_guard",
+        "compensation_binding_event_truncate_guard",
+        "compensation_binding_lifecycle_event_required",
+    }
+    assert len(functions) == 4
+
+
+def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0003_submission_lineage")
+        asyncio.run(
+            _execute(
+                isolated_database_env,
+                "alter table project_compensation_adapter_bindings disable trigger all; "
+                "insert into project_compensation_adapter_bindings "
+                "(id,project_id,instrument_type,adapter_actor_id,route_key,created_by) values "
+                "('00000000-0000-0000-0000-000000000001',"
+                "'00000000-0000-0000-0000-000000000002','money',"
+                "'00000000-0000-0000-0000-000000000003','adapter.primary',"
+                "'00000000-0000-0000-0000-000000000004'); "
+                "alter table project_compensation_adapter_bindings enable trigger all",
+            )
+        )
+        with pytest.raises(RuntimeError, match="requires a fresh database"):
+            command.upgrade(config, HEAD_REVISION)
+
+    snapshot = asyncio.run(_database_snapshot(isolated_database_env))
+    assert snapshot["versions"] == ["0003_submission_lineage"]
+    assert ("r", "compensation_adapter_binding_lifecycle_events") not in snapshot["objects"]
 
 
 def test_manifest_covers_every_required_object_class() -> None:
