@@ -751,21 +751,25 @@ or rebuild identity therefore still requires its own human-approved feature
 manifest followed by AUTH-owned identity/matrix registration, provisioning,
 AUTH-09E admission, evaluator integration, and exact action activation.
 
-### Proposed surface mappings
+### Surface mappings
 
-The following 22 mappings are product proposals, not registered or executable
-identifiers. Existing PermissionIds remain stable. Policy ActionIds use the
+The table contains both registered-unavailable and future proposed mappings.
+CP01A registers the four adapter-binding read/create/suspend/resume ActionIds
+under `WS-ARCH-001-CP01A`; they remain unavailable and have no evaluator,
+identity, service-matrix row, route, or activation. All other rows remain
+proposals, including dependency-aware adapter-binding retirement. Existing
+PermissionIds remain stable. Policy ActionIds use the
 canonical `contribution.policy.*` namespace while mapping to the existing
 `compensation.policy.manage` PermissionId. AUTH must approve exact identifiers,
 principals, contexts, mappings, custodians, and activation in its own chunks.
 
-| Proposed ActionId | PermissionId | Principal / target | Protocol | Feature owner |
+| ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
-| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | Finance / binding | Q | CON-04A |
-| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | Finance / binding collection | T | CON-04A |
-| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | Finance / active binding | T | CON-04A |
-| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | Finance / suspended binding | T | CON-04A |
+| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | Finance / binding | Q | WS-ARCH-001-CP01A (registered, unavailable) |
+| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | Finance / binding collection | T | WS-ARCH-001-CP01A (registered, unavailable) |
+| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | Finance / active binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
+| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | Finance / suspended binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
 | `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | CON-04B |
 | `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | CON-04B |

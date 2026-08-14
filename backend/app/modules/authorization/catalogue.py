@@ -202,6 +202,10 @@ class ActionId(StrEnum):
     ARTIFACT_CHECKER_OUTPUT_WRITE = "artifact.checker_output.write"
     ARTIFACT_REVIEW_PACKET_MATERIALIZE = "artifact.review_packet.materialize"
     ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE = "artifact.review_evidence.binding.create"
+    COMPENSATION_ADAPTER_BINDING_READ = "compensation.adapter_binding.read"
+    COMPENSATION_ADAPTER_BINDING_CREATE = "compensation.adapter_binding.create"
+    COMPENSATION_ADAPTER_BINDING_SUSPEND = "compensation.adapter_binding.suspend"
+    COMPENSATION_ADAPTER_BINDING_RESUME = "compensation.adapter_binding.resume"
 
 
 @unique
@@ -251,6 +255,7 @@ class ActionOwner(StrEnum):
     XINT_002_07 = "WS-XINT-002-07"
     XINT_003_08A = "WS-XINT-003-08A"
     XINT_003_08B = "WS-XINT-003-08B"
+    ARCH_CP01A = "WS-ARCH-001-CP01A"
 
 
 @unique
@@ -764,6 +769,26 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.XINT_002_07,
     ),
+    _planned(
+        ActionId.COMPENSATION_ADAPTER_BINDING_READ,
+        PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
+        ActionOwner.ARCH_CP01A,
+    ),
+    _planned(
+        ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
+        PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
+        ActionOwner.ARCH_CP01A,
+    ),
+    _planned(
+        ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
+        PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
+        ActionOwner.ARCH_CP01A,
+    ),
+    _planned(
+        ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
+        PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
+        ActionOwner.ARCH_CP01A,
+    ),
 )
 
 PERMISSION_IDS = frozenset(PermissionId)
@@ -818,7 +843,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 102:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 106:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")

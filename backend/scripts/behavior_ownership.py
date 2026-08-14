@@ -62,6 +62,7 @@ OWNERSHIP_TEST_NODE_RE = re.compile(
 )
 AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
     {
+        "backend/app/modules/authorization/api/adapter_bindings.py",
         "backend/app/modules/authorization/api/action_ids.py",
         "backend/app/modules/authorization/api/decisions.py",
         "backend/app/modules/authorization/api/errors.py",

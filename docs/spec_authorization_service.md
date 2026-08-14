@@ -261,6 +261,10 @@ planned rows without adding an action or permission. WS-ARCH-001-02H activates
 the existing human `submission.create` and fixed-service
 `artifact.submission.binding.create` rows, producing 57 active and 45 planned
 rows without adding an action or permission.
+WS-ARCH-001-CP01A then adds four planned/unavailable adapter-binding actions,
+producing 106 rows: 57 active and 49 planned. They map only to
+`compensation.adapter_binding.manage`; no retirement, evaluator, identity,
+service-matrix row, route, or activation is added. CP01B remains next.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven

@@ -1,6 +1,13 @@
 """The sole dependency-free public interface of the authorization module."""
 
 from .action_ids import ActionId, PermissionId, action_id, permission_id
+from .adapter_bindings import (
+    AdapterBindingCreateFacts,
+    AdapterBindingReadFacts,
+    AdapterBindingResumeFacts,
+    AdapterBindingSuspendFacts,
+    adapter_binding_resource_digest,
+)
 from .decisions import AuthorizationDecision, DecisionOutcome
 from .errors import (
     AuthorizationBoundaryError,
@@ -23,6 +30,10 @@ from .project_guide_compilation import (
 
 __all__ = (
     "ActionId",
+    "AdapterBindingCreateFacts",
+    "AdapterBindingReadFacts",
+    "AdapterBindingResumeFacts",
+    "AdapterBindingSuspendFacts",
     "ActorIdentityFacts",
     "ActorKind",
     "AuthorizationBoundaryError",
@@ -47,5 +58,6 @@ __all__ = (
     "ResourceFacts",
     "ResourceValue",
     "action_id",
+    "adapter_binding_resource_digest",
     "permission_id",
 )

@@ -51,15 +51,17 @@
 - PLAN3 corrects PLAN2's first implementation dependency. CON-05A is not a
   valid direct start: missing AUTH registration/activation and hidden CON
   behavior must precede owner-separated guide/task lineage. CP01 is the
-  non-executable split parent; CP01A and CP01B are current-main proposed
-  executable contracts, while CP02-CP09 remain non-executable skeletons.
+  non-executable split parent; CP01A is complete on merge with its four actions
+  registered/unavailable, CP01B is the remaining proposed executable contract,
+  and CP02-CP09 remain non-executable skeletons.
 
 ## Proposed PLAN3 children
 
 - WS-ARCH-001-PLAN3 is proposed planning only; runtime behavior is unchanged.
 - WS-ARCH-001-CP01 is a planned split and non-executable. Current-main discovery proved
   adapter binding and ContributionPolicy are distinct resource/action families.
-- WS-ARCH-001-CP01A is proposed: exact unavailable adapter-binding registration.
+- WS-ARCH-001-CP01A is complete on merge: exact adapter-binding identifiers,
+  mappings, typed facts, and digests are registered while unavailable.
 - WS-ARCH-001-CP01B is proposed after CP01A: exact unavailable
   ContributionPolicy registration.
 - WS-ARCH-001-CP02 is proposed: hidden adapter-binding behavior.
