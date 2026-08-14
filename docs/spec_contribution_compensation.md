@@ -10,10 +10,9 @@ The files under `docs/reference_specs/` are immutable archival inputs. Older
 chunk specifications that describe the currently implemented guide-bound
 payment fields remain useful runtime history, but they do not control the
 target contribution or compensation architecture. The clean cut from those
-fields follows CP06/CP07/CP08, replacement activation through
-WS-ARCH-001-03A/03B/03C, and CP09 removal. The former WS-CON-001-05A/05B path
-is historical and non-executable; this specification does not claim that the
-replacement or removal has already occurred.
+fields is implemented only by the approved `WS-CON-001-05A` and
+`WS-CON-001-05B` chunks; this specification does not claim that migration has
+already occurred.
 
 No route, model, action, service identity, or runtime behavior described here
 exists merely because it appears in this document. Each behavior remains
@@ -798,8 +797,8 @@ AUTH must approve an exact ServiceIdentity/ActionId/static-row design or an
 explicitly closed dual-principal evaluator. Discovery candidate strings are
 not canonical catalogue identifiers and MUST NOT be registered by CON.
 
-`task.claim` currently has a stable PermissionId but no ActionId. CP06-CP08 and
-task-owned ARCH-03A/03B readiness/inheritance composition must merge before AUTH registers
+`task.claim` currently has a stable PermissionId but no ActionId. CON-05A and
+task-owned readiness/inheritance composition must merge before AUTH registers
 or activates that future action. `review.claim` and `review.decision` remain
 planned until the inherited task-policy lineage, CON-07, and complete REV
 composition merge. AUTH must transfer the complete
@@ -923,29 +922,27 @@ Missing provisioned service rows keep readiness false but do not block startup
 or administrative provisioning. Optional evidence and ART are not readiness
 dependencies.
 
-## Retired Economic Schema Cutover
+## Legacy Economic Schema Cutover
 
 `ContributionPolicy` is the sole target award-eligibility policy. The existing
 guide-bound economic-policy aggregate, its locked version fields, copied task
 economic terms, and every semantic consumer are retired.
 
-The clean cut is mandatory and owned by the current sequence:
+The clean cut is mandatory and split:
 
-1. CP06 validates ContributionPolicy state, CP07 binds the guide, and CP08
-   installs TASK-owned attempt-lineage persistence.
-2. WS-ARCH-001-03A/03B implements the replacement readiness/claim path and
-   WS-ARCH-001-03C activates it.
-3. CP09 proves zero remaining semantic consumers and removes the retired
-   schema from the consolidated v0.1 baseline.
+1. `WS-CON-001-05A` introduces assignment freezing, removes all semantic
+   consumers of the legacy model, migrates or deterministically rebuilds only
+   the explicitly classified pre-production data, and proves zero fallback.
+2. `WS-CON-001-05B` proves zero remaining consumers and physically removes the
+   dead schema with reviewed upgrade and downgrade behavior.
 
 No alias, dual read, dual write, automatic conversion, compatibility response,
 or historical executable fallback may remain. Until those chunks merge, old
 runtime-oriented chunk specifications describe current implementation only and
 are subordinate to this target contract.
 
-No legacy-row classification, data conversion, or compatibility migration is
-required for the consolidated v0.1 baseline. Discovery must stop and require a
-fresh reviewed migration contract if real deployed data is found.
+The human-owned legacy-row classification MUST be recorded before CON-05A
+starts. Ambiguous rows cause the migration to fail closed.
 
 ## Human And AUTH Gates
 
@@ -955,9 +952,8 @@ answers:
 1. D11 must select the exact AdminRole candidates for project award detail,
    delivery recovery, and CON audit read/export before CON-10A/10B or related
    AUTH registration starts.
-2. The consolidated v0.1 baseline requires no legacy-row classification or
-   compatibility migration; CP09 removes the retired economic path only after
-   its replacement is active.
+2. The human must classify all pre-production legacy economic rows for
+   deterministic rebuild or explicit migration before CON-05A/05B.
 3. The human and AUTH must approve exact fixed-service identity, action, static
    row, context, and evaluator contracts for dispatcher mechanics, outbound
    delivery, reconciliation, projection rebuild, and callback execution before
@@ -977,13 +973,12 @@ CON-01 -> CON-02A
 CON-03A -> CON-03B -> REV lease/policy-freeze persistence
 CON-02C -> REV Review/FinalAcceptance transaction foundation
 REV-04B runtime Review/ReviewLease/FinalAcceptance -> CON-03C -> CON-03D
-WS-ARCH-001-CP01A -> CP01B -> CP02 -> CP03 -> CP04 -> CP05
-CP05 -> CP06 -> CP07 -> CP08
-CP08 -> WS-ARCH-001-03A/03B -> WS-ARCH-001-03C -> CP09
-stable REV revision lineage + CON-03C/03D + CP06/CP08 -> CON-07 -> REV-10
+CON-03A -> CON-04A
+CON-03B + CON-04A -> CON-04B -> CON-05A -> CON-05B
+stable REV revision lineage + CON-03C/03D + CON-05A -> CON-07 -> REV-10
 AUTH dispatcher contract -> CON-02B
-CON-02B + CON-03D + CP02/CP04 + CON-07 -> fresh delivery contracts
-fresh delivery contracts -> CON-10A -> CON-10B
+CON-02B + CON-03D + CON-04A/B + CON-07 -> CON-08A -> CON-08R -> CON-08B
+CON-08B -> CON-10A -> CON-10B
 CON-02B + CON-10B -> CON-10C
 all required hidden behavior and cross-initiative gates -> CON-11
 ```
@@ -996,9 +991,8 @@ not a prerequisite for CON-02C, CON-03A, or CON-03B.
 Cross-initiative interleaving is mandatory:
 
 ```text
-CP06 validation -> CP07 PROJECT guide binding -> CP08 TASK lineage persistence
-  -> ARCH-03A/03B readiness and assignment inheritance -> ARCH-03C activation
-  -> CP09 retired-path removal
+CON-05A guide-activation validation/persistence contract
+  -> PROJECT guide binding -> TASK readiness lock -> assignment inheritance
 
 CON-03B ContributionPolicyVersion persistence
   -> REV-03 ReviewLease foreign key
