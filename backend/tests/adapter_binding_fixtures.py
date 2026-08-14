@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.db import session as db_session
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from project_create_fixtures import insert_historical_project
+from scripts.schema_baseline_manifest import build_manifest, canonical_bytes
 
 BindingSeed = Callable[[], Awaitable[tuple[UUID, UUID, UUID]]]
 
@@ -46,6 +47,24 @@ async def seed_nonempty_0003_adapter_binding(database_url: str) -> None:
             "alter table project_compensation_adapter_bindings enable trigger "
             "project_compensation_binding_update_guard"
         )
+    finally:
+        await connection.close()
+
+
+async def snapshot_nonempty_0003_adapter_binding(database_url: str) -> tuple[bytes, list[str]]:
+    """Capture the full schema and exact legacy seed rows."""
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+    try:
+        rows: list[str] = []
+        for table in (
+            "actor_profiles", "actor_identity_links", "projects",
+            "project_compensation_adapter_bindings", "alembic_version",
+        ):
+            records = await connection.fetch(
+                f'SELECT row_to_json(t)::text value FROM public."{table}" t ORDER BY 1'
+            )
+            rows.extend(f"{table}|{record['value']}" for record in records)
+        return canonical_bytes(await build_manifest(database_url)), rows
     finally:
         await connection.close()
 

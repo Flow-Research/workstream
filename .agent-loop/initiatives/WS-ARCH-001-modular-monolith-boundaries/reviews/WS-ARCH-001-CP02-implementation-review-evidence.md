@@ -28,7 +28,9 @@ column to 64 characters before head stamping, and the schema test asserts it.
 The reset harness fingerprint now records the exact installed `0004` schema,
 and the nonempty-upgrade proof seeds a valid actor, identity link, project, and
 binding while disabling only product custody triggers rather than PostgreSQL
-system triggers. No schema rule or CI gate was weakened.
+system triggers. The current-head ACL effectiveness proof compares against the
+manifest built from that installed head; the separate baseline test continues
+to prove exact `0001` manifest equality. No schema rule or CI gate was weakened.
 
 Full PostgreSQL, migration/reset, semantic-lane, and coverage proof remains in
 the mandatory hosted exact-head checks because the user explicitly requires

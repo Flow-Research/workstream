@@ -12,7 +12,10 @@ from alembic.script import ScriptDirectory
 import asyncpg
 import pytest
 
-from adapter_binding_fixtures import seed_nonempty_0003_adapter_binding
+from adapter_binding_fixtures import (
+    seed_nonempty_0003_adapter_binding,
+    snapshot_nonempty_0003_adapter_binding,
+)
 from scripts.schema_baseline_manifest import (
     APPLICATION_ACL_PRINCIPALS,
     build_manifest,
@@ -51,8 +54,6 @@ async def _database_snapshot(database_url: str) -> dict[str, object]:
             "actor_profile_migration_state",
             "authority_control",
             "iso_4217_currency_codes",
-            "actor_profiles", "actor_identity_links", "projects",
-            "project_compensation_adapter_bindings",
         ):
             if await connection.fetchval("select to_regclass($1) is not null", f"public.{table}"):
                 rows = await connection.fetch(
@@ -60,7 +61,6 @@ async def _database_snapshot(database_url: str) -> dict[str, object]:
                 )
                 reference_rows[table] = [row["value"] for row in rows]
         return {
-            "schema": canonical_bytes(await build_manifest(database_url)),
             "versions": [row["version_num"] for row in versions],
             "objects": [tuple(row.values()) for row in objects],
             "reference_rows": reference_rows,
@@ -273,11 +273,11 @@ def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
         )
         command.upgrade(config, "0003_submission_lineage")
         asyncio.run(seed_nonempty_0003_adapter_binding(isolated_database_env))
-        before = asyncio.run(_database_snapshot(isolated_database_env))
+        before = asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env))
         with pytest.raises(RuntimeError, match="requires a fresh database"):
             command.upgrade(config, HEAD_REVISION)
 
-    assert asyncio.run(_database_snapshot(isolated_database_env)) == before
+    assert asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env)) == before
 
 
 def test_manifest_covers_every_required_object_class() -> None:
@@ -339,7 +339,7 @@ def test_acl_principals_are_closed_and_owner_mapping_is_role_name_independent() 
         canonical_acl_principal("unexpected_role", "database_owner")
 
 
-def test_every_acl_principal_is_effective_on_the_installed_baseline(
+def test_every_acl_principal_is_effective_on_the_installed_head(
     isolated_database_env: str,
 ) -> None:
     async def acl_results() -> tuple[int, int]:
@@ -392,7 +392,7 @@ def test_every_acl_principal_is_effective_on_the_installed_baseline(
             await connection.close()
 
     ineffective, total = asyncio.run(acl_results())
-    manifest = json.loads(_manifest_path().read_text())
+    manifest = asyncio.run(build_manifest(isolated_database_env))
     assert ineffective == 0
     assert total == len(manifest["acl"])
 
