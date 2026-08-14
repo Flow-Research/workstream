@@ -72,12 +72,12 @@ exports, and collection scope. Existing catalogue assertions were strengthened.
 
 ## Reviewer results
 
-- Architecture: PASS.
-- Security/auth: PASS.
-- Senior engineering and QA/test delta: PASS.
-- Product/ops: PASS.
-- Reuse/dedup: PASS.
-- Documentation: PASS.
+- Architecture: pass.
+- Security/auth: pass.
+- Senior engineering and QA/test delta: pass.
+- Product/ops: pass.
+- Reuse/dedup: pass.
+- Documentation: pass.
 
 ## External review
 
