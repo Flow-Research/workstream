@@ -30,7 +30,10 @@ and the nonempty-upgrade proof seeds a valid actor, identity link, project, and
 binding while disabling only product custody triggers rather than PostgreSQL
 system triggers. The current-head ACL effectiveness proof compares against the
 manifest built from that installed head; the separate baseline test continues
-to prove exact `0001` manifest equality. No schema rule or CI gate was weakened.
+to prove exact `0001` manifest equality. Downstream schema fixtures now name
+head `0004`, satisfy the existing verified-human identity invariant, and pair
+pre-existing ContributionPolicy binding seeds with canonical created events.
+No schema rule or CI gate was weakened.
 
 Full PostgreSQL, migration/reset, semantic-lane, and coverage proof remains in
 the mandatory hosted exact-head checks because the user explicitly requires

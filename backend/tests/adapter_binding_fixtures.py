@@ -10,10 +10,27 @@ import pytest
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.compensation.models import CompensationAdapterBindingLifecycleEvent
 from project_create_fixtures import insert_historical_project
 from scripts.schema_baseline_manifest import build_manifest, canonical_bytes
 
 BindingSeed = Callable[[], Awaitable[tuple[UUID, UUID, UUID]]]
+
+
+def created_binding_events(
+    project_id: str, actor_profile_id: str, *binding_ids: UUID
+) -> list[CompensationAdapterBindingLifecycleEvent]:
+    """Build canonical created events for pre-existing test binding seeds."""
+    return [
+        CompensationAdapterBindingLifecycleEvent(
+            id=uuid4(), operation_id=uuid4(), request_digest="sha256:" + "0" * 64,
+            project_id=project_id, adapter_binding_id=binding_id,
+            event_type="created", actor_profile_id=actor_profile_id,
+            from_status=None, to_status="active",
+            from_lifecycle_version=0, to_lifecycle_version=1,
+        )
+        for binding_id in binding_ids
+    ]
 
 
 async def seed_nonempty_0003_adapter_binding(database_url: str) -> None:
@@ -112,6 +129,7 @@ def binding_seed() -> BindingSeed:
                         id=str(uuid4()), actor_profile_id=str(adapter_id),
                         issuer="https://compensation.test", subject=f"adapter-{adapter_id}",
                         subject_kind="human", status="active", linked_by=str(actor_id),
+                        last_verified_at=datetime.now(UTC),
                     ),
                 )
             )
