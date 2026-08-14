@@ -37,6 +37,18 @@ backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/action_ids.py
 backend/app/modules/authorization/api/contribution_policies.py
 backend/tests/authorization/test_contribution_policy_registration.py
+backend/tests/test_authorization.py (closed catalogue/action-owner parity only)
+backend/scripts/behavior_ownership.py (exact CP01B public-API target only)
+backend/scripts/run_test_lanes.py (CP01B test custody only)
+.ci/behavior-ownership/partition.v1.json (additive AUTH target parity only)
+.ci/behavior-ownership/auth/contribution-policy-facts.json
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
+docs/operations_authorization_service.md (catalogue parity only)
+docs/spec_authorization_service.md (catalogue parity only)
+docs/spec_contribution_compensation.md (CP01B registration parity only)
+docs/roadmap_status.md (CP01B capability state only)
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md (catalogue parity only)
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md (CP01B state only)
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/{CHUNK_MAP.md,STATUS.md}
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP01B-auth-contribution-policy-registration.md
@@ -68,18 +80,18 @@ compatibility aliases or non-canonical ContributionPolicy identifiers
 
 ## Acceptance criteria
 
-- [ ] Five canonical `contribution.policy.*` ActionIds map only to existing
+- [x] Five canonical `contribution.policy.*` ActionIds map only to existing
   `compensation.policy.manage` under CP01B custody.
-- [ ] All five definitions remain `PLANNED`; no evaluator, identity, grant,
+- [x] All five definitions remain `PLANNED`; no evaluator, identity, grant,
   matrix row, route, or product behavior can use them.
-- [ ] AUTH public API exposes typed immutable query/mutation fact models and
+- [x] AUTH public API exposes typed immutable query/mutation fact models and
   canonical resource-digest helpers without importing CON internals.
-- [ ] Mutation facts use the existing opaque PREP port; no handle construction,
+- [x] Mutation facts use the existing opaque PREP port; no handle construction,
   serialization, consumption, or runtime evaluator is added.
-- [ ] Independent tests prove identifier spelling, permission/owner mapping,
+- [x] Independent tests prove identifier spelling, permission/owner mapping,
   typed fact validation and digest domain separation, catalogue/API parity,
   and planned denial.
-- [ ] No `compensation.policy.*` ActionId alias is introduced.
+- [x] No `compensation.policy.*` ActionId alias is introduced.
 
 ## Verification commands
 
@@ -119,4 +131,4 @@ identity, migration, or product import; update and re-review the contract first.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`

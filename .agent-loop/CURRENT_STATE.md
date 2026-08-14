@@ -105,9 +105,9 @@ non-executable until PLAN3 merges and its current-main contract is expanded.
 - WS-ARCH-001-CP01 is a planned split and non-executable.
 - WS-ARCH-001-CP01A is complete on merge with adapter-binding actions registered
   but unavailable.
-- WS-ARCH-001-CP01B is proposed after CP01A for unavailable ContributionPolicy
-  registration.
-- WS-ARCH-001-CP02 is proposed and non-executable.
+- WS-ARCH-001-CP01B is complete on merge with five unavailable ContributionPolicy
+  actions registered.
+- WS-ARCH-001-CP02 is the next proposed non-executable boundary.
 - WS-ARCH-001-CP03 is proposed and non-executable.
 - WS-ARCH-001-CP04 is proposed and non-executable.
 - WS-ARCH-001-CP05 is proposed and non-executable.
