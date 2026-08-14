@@ -10,8 +10,10 @@ behavior is included.
 ## Plan review
 
 - Result: pass after conditions.
-- Resolved condition: CP01C is now projected before CP02 in the CP02 skeleton
-  and active ARCH, AUTH, CON, roadmap, and current-state records.
+- Resolved condition: CP01C is now projected before CP02 in active ARCH, AUTH,
+  CON, roadmap, and current-state records. The separate non-executable CP02
+  skeleton remains untouched to preserve the one-contract-per-PR invariant and
+  must be replaced by its own current-main executable contract before coding.
 
 ## Implementation reviews
 

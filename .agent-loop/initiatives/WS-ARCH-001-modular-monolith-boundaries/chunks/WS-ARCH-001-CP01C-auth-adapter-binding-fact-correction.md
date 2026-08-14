@@ -37,7 +37,6 @@ docs/roadmap_status.md (sequence parity only)
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/{PLAN.md,CHUNK_MAP.md,STATUS.md}
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP01C-auth-adapter-binding-fact-correction.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP02-con-binding-behavior.md (sequence parity only)
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP01C-*.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/{CHUNK_MAP.md,STATUS.md,ACTIVATION_CUSTODY.md}
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/{CHUNK_MAP.md,STATUS.md,AUTHORIZATION_HANDOFF.md}
@@ -83,8 +82,9 @@ compatibility aliases, dual digest formats, or acceptance of the retired facts
   admitting new debt.
 - [x] Current plans and status documents project CP01C complete on merge and
   CP02 as the next boundary.
-- [x] The CP02 skeleton, AUTH chunk map/status, CON chunk map/status, and
-  roadmap project CP01C between CP01B and CP02 without expanding CP02.
+- [x] Active ARCH, AUTH, CON, roadmap, and current-state ledgers project CP01C
+  between CP01B and CP02. CP02's non-executable skeleton remains untouched and
+  must be replaced by its own current-main executable contract before coding.
 
 ## Verification commands
 
