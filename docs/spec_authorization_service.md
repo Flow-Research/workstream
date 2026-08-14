@@ -264,7 +264,11 @@ rows without adding an action or permission.
 WS-ARCH-001-CP01A then adds four planned/unavailable adapter-binding actions,
 producing 106 rows: 57 active and 49 planned. They map only to
 `compensation.adapter_binding.manage`; no retirement, evaluator, identity,
-service-matrix row, route, or activation is added. CP01B remains next.
+service-matrix row, route, or activation is added. WS-ARCH-001-CP01B adds five
+planned/unavailable `contribution.policy.*` actions, producing 111 rows: 57
+active and 54 planned. They map only to `compensation.policy.manage`; no
+evaluator, identity, service-matrix row, route, migration, or activation is
+added.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven

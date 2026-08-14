@@ -754,11 +754,11 @@ AUTH-09E admission, evaluator integration, and exact action activation.
 ### Surface mappings
 
 The table contains both registered-unavailable and future proposed mappings.
-CP01A registers the four adapter-binding read/create/suspend/resume ActionIds
-under `WS-ARCH-001-CP01A`; they remain unavailable and have no evaluator,
-identity, service-matrix row, route, or activation. All other rows remain
-proposals, including dependency-aware adapter-binding retirement. Existing
-PermissionIds remain stable. Policy ActionIds use the
+CP01A registers the four adapter-binding read/create/suspend/resume ActionIds,
+and CP01B registers the five ContributionPolicy ActionIds. All nine remain
+unavailable and have no evaluator, identity, service-matrix row, route, or
+activation. All other rows remain proposals, including dependency-aware
+adapter-binding retirement. Existing PermissionIds remain stable. Policy ActionIds use the
 canonical `contribution.policy.*` namespace while mapping to the existing
 `compensation.policy.manage` PermissionId. AUTH must approve exact identifiers,
 principals, contexts, mappings, custodians, and activation in its own chunks.
@@ -771,11 +771,11 @@ principals, contexts, mappings, custodians, and activation in its own chunks.
 | `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | Finance / active binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
 | `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | Finance / suspended binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
-| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | CON-04B |
-| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | CON-04B |
-| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | CON-04B |
-| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | CON-04B |
-| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | CON-04B |
+| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP01B (registered, unavailable) |
 | `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
 | `contribution.read_self` | `contribution.read_self` | contributor / own record | Q | CON-10A |
 | `contribution.read_project` | `contribution.read_project` | eligible AdminRole / project records | Q | CON-10A |

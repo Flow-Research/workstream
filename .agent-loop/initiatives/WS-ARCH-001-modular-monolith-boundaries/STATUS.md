@@ -52,8 +52,8 @@
   valid direct start: missing AUTH registration/activation and hidden CON
   behavior must precede owner-separated guide/task lineage. CP01 is the
   non-executable split parent; CP01A is complete on merge with its four actions
-  registered/unavailable, CP01B is the remaining proposed executable contract,
-  and CP02-CP09 remain non-executable skeletons.
+  registered/unavailable, CP01B is complete on merge with five policy actions
+  registered/unavailable, and CP02-CP09 remain non-executable skeletons.
 
 ## Proposed PLAN3 children
 
@@ -62,9 +62,9 @@
   adapter binding and ContributionPolicy are distinct resource/action families.
 - WS-ARCH-001-CP01A is complete on merge: exact adapter-binding identifiers,
   mappings, typed facts, and digests are registered while unavailable.
-- WS-ARCH-001-CP01B is proposed after CP01A: exact unavailable
+- WS-ARCH-001-CP01B is complete on merge: exact unavailable
   ContributionPolicy registration.
-- WS-ARCH-001-CP02 is proposed: hidden adapter-binding behavior.
+- WS-ARCH-001-CP02 is the next proposed boundary: hidden adapter-binding behavior.
 - WS-ARCH-001-CP03 is proposed: exact adapter-binding activation.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.

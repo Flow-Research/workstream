@@ -206,6 +206,11 @@ class ActionId(StrEnum):
     COMPENSATION_ADAPTER_BINDING_CREATE = "compensation.adapter_binding.create"
     COMPENSATION_ADAPTER_BINDING_SUSPEND = "compensation.adapter_binding.suspend"
     COMPENSATION_ADAPTER_BINDING_RESUME = "compensation.adapter_binding.resume"
+    CONTRIBUTION_POLICY_READ = "contribution.policy.read"
+    CONTRIBUTION_POLICY_CREATE_DRAFT = "contribution.policy.create_draft"
+    CONTRIBUTION_POLICY_UPDATE_DRAFT = "contribution.policy.update_draft"
+    CONTRIBUTION_POLICY_PUBLISH = "contribution.policy.publish"
+    CONTRIBUTION_POLICY_RETIRE = "contribution.policy.retire"
 
 
 @unique
@@ -256,6 +261,7 @@ class ActionOwner(StrEnum):
     XINT_003_08A = "WS-XINT-003-08A"
     XINT_003_08B = "WS-XINT-003-08B"
     ARCH_CP01A = "WS-ARCH-001-CP01A"
+    ARCH_CP01B = "WS-ARCH-001-CP01B"
 
 
 @unique
@@ -789,6 +795,31 @@ ACTION_DEFINITIONS = (
         PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
         ActionOwner.ARCH_CP01A,
     ),
+    _planned(
+        ActionId.CONTRIBUTION_POLICY_READ,
+        PermissionId.COMPENSATION_POLICY_MANAGE,
+        ActionOwner.ARCH_CP01B,
+    ),
+    _planned(
+        ActionId.CONTRIBUTION_POLICY_CREATE_DRAFT,
+        PermissionId.COMPENSATION_POLICY_MANAGE,
+        ActionOwner.ARCH_CP01B,
+    ),
+    _planned(
+        ActionId.CONTRIBUTION_POLICY_UPDATE_DRAFT,
+        PermissionId.COMPENSATION_POLICY_MANAGE,
+        ActionOwner.ARCH_CP01B,
+    ),
+    _planned(
+        ActionId.CONTRIBUTION_POLICY_PUBLISH,
+        PermissionId.COMPENSATION_POLICY_MANAGE,
+        ActionOwner.ARCH_CP01B,
+    ),
+    _planned(
+        ActionId.CONTRIBUTION_POLICY_RETIRE,
+        PermissionId.COMPENSATION_POLICY_MANAGE,
+        ActionOwner.ARCH_CP01B,
+    ),
 )
 
 PERMISSION_IDS = frozenset(PermissionId)
@@ -843,7 +874,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 106:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 111:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")

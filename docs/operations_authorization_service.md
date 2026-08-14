@@ -494,10 +494,11 @@ v0.1 baseline.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 73 PermissionIds, 106 ActionIds, 57 active actions, and
-49 planned actions. CP01A adds four unavailable adapter-binding actions under
+Catalogue totals are 73 PermissionIds, 111 ActionIds, 57 active actions, and
+54 planned actions. CP01A adds four unavailable adapter-binding actions under
 `WS-ARCH-001-CP01A` custody; it adds no evaluator, identity, grant, service
-matrix row, route, or activation. CP01B is the next registration gate.
+matrix row, route, or activation. CP01B adds five unavailable
+`contribution.policy.*` actions with the same non-activation guarantees.
 AUTH-12I adds and activates only the unified compilation
 request/execute pair. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact
