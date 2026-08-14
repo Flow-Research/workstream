@@ -98,7 +98,12 @@ class AdapterBindingRepository:
         event: CompensationAdapterBindingLifecycleEvent,
     ) -> None:
         """Flush a binding and its mandatory created event together."""
-        self._session.add_all((binding, event))
+        self._session.add(binding)
+        # The lifecycle-event trigger validates the binding's persisted status
+        # and version.  Make that ordering explicit instead of relying on ORM
+        # unit-of-work ordering between two independently constructed objects.
+        await self._session.flush()
+        self._session.add(event)
         await self._session.flush()
         await self._session.refresh(binding)
         await self._session.refresh(event)

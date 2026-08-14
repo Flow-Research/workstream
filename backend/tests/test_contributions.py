@@ -129,6 +129,8 @@ async def _seed_project() -> tuple[str, str, str, UUID, UUID]:
                 ),
             ]
         )
+        # Created-event custody validates the persisted binding state.
+        await session.flush()
         session.add_all(
             created_binding_events(
                 project_id, creator_id, money_binding_id, points_binding_id

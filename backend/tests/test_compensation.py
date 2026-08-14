@@ -82,6 +82,7 @@ async def _seed_binding_facts() -> tuple[str, str, str]:
                     subject_kind="human",
                     status="active",
                     linked_by=creator_id,
+                    last_verified_at=now,
                 ),
             ]
         )
