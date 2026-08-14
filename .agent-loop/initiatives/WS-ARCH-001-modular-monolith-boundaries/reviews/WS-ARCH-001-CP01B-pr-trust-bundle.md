@@ -81,7 +81,8 @@ exports, and collection scope. Existing catalogue assertions were strengthened.
 
 ## External review
 
-CodeRabbit and hosted CI are pending on the PR exact head.
+Hosted CI passed. CodeRabbit completed as rate-limited, with no unresolved
+review threads.
 
 ## Remaining risks and follow-up
 

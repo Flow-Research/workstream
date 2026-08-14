@@ -6,6 +6,9 @@
   the PR trust bundle used uppercase `PASS`. They now use the canonical
   lowercase `pass` value; Workstream product review decisions remain limited to
   `accept`, `needs_revision`, and `reject`.
+- A subsequent review correctly identified stale external-check wording in the
+  trust bundle. It now records that hosted CI passed and that CodeRabbit
+  completed as rate-limited with no unresolved review threads.
 
 ## Comments deferred
 
