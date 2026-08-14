@@ -28,14 +28,14 @@ def upgrade() -> None:
         "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
         "ck_project_compensation_adapter_bindings_ck_project_com_da73",
     ):
-        op.drop_constraint(name, "project_compensation_adapter_bindings", type_="check")
+        op.drop_constraint(op.f(name), "project_compensation_adapter_bindings", type_="check")
     op.create_check_constraint(
-        "ck_project_compensation_adapter_bindings_status",
+        op.f("ck_project_compensation_adapter_bindings_status"),
         "project_compensation_adapter_bindings",
         "status in ('active','suspended')",
     )
     op.create_check_constraint(
-        "ck_project_compensation_adapter_bindings_lifecycle_shape",
+        op.f("ck_project_compensation_adapter_bindings_lifecycle_shape"),
         "project_compensation_adapter_bindings",
         "(status='active' and suspended_by is null and suspended_at is null "
         "and retired_by is null and retired_at is null) or "

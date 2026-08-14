@@ -198,7 +198,7 @@ def test_current_head_installs_compensation_binding_lifecycle(
         )
         command.upgrade(config, HEAD_REVISION)
 
-    async def contract() -> tuple[bool, set[str], set[str]]:
+    async def contract() -> tuple[bool, set[str], set[str], set[str]]:
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             table_exists = await connection.fetchval(
@@ -219,13 +219,21 @@ def test_current_head_installs_compensation_binding_lifecycle(
                  "reject_compensation_binding_lifecycle_event_change",
                  "require_compensation_binding_lifecycle_event"],
             )
-            return bool(table_exists), {row["tgname"] for row in triggers}, {
-                row["proname"] for row in functions
-            }
+            binding_checks = await connection.fetch(
+                "select conname from pg_constraint c join pg_class t on t.oid=c.conrelid "
+                "where t.relname='project_compensation_adapter_bindings' "
+                "and c.contype='c' order by conname"
+            )
+            return (
+                bool(table_exists),
+                {row["tgname"] for row in triggers},
+                {row["proname"] for row in functions},
+                {row["conname"] for row in binding_checks},
+            )
         finally:
             await connection.close()
 
-    exists, triggers, functions = asyncio.run(contract())
+    exists, triggers, functions, binding_checks = asyncio.run(contract())
     assert exists is True
     assert triggers >= {
         "project_compensation_binding_update_guard",
@@ -235,6 +243,14 @@ def test_current_head_installs_compensation_binding_lifecycle(
         "compensation_binding_lifecycle_event_required",
     }
     assert len(functions) == 4
+    assert {
+        "ck_project_compensation_adapter_bindings_status",
+        "ck_project_compensation_adapter_bindings_lifecycle_shape",
+    } <= binding_checks
+    assert not {
+        "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
+        "ck_project_compensation_adapter_bindings_ck_project_com_da73",
+    } & binding_checks
 
 
 def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(

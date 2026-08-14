@@ -76,6 +76,9 @@ human identity substitution; and deny-default production composition.
 - Module, authorization, test-structure, and behavior-ownership gates: pass.
 - Stale wording, changed Markdown links, chunk-state synchronization, and
   `git diff --check`: pass.
+- The hosted migration failure caused by double application of SQLAlchemy's
+  constraint naming convention was corrected with finalized Alembic names;
+  the schema test now proves the exact replacement constraints.
 - PostgreSQL behavior, migration, reset, semantic lanes, and repository-wide
   coverage are proven by mandatory hosted GitHub checks, not a local full run.
 

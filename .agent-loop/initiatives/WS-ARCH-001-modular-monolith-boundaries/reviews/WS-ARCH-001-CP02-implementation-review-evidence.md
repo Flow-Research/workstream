@@ -18,6 +18,12 @@ CI ownership/lane metadata, and canonical status/specification updates.
 - behavior-ownership validation: pass;
 - stale wording, Markdown links, chunk-state, and diff checks: pass.
 
+The first hosted implementation run exposed a migration naming-convention
+error: Alembic expanded already-final baseline constraint names a second time.
+Migration `0004` now marks both retired and replacement check-constraint names
+with `op.f(...)`, and the Alembic contract test asserts the exact installed and
+removed names. No schema rule or CI gate was weakened.
+
 Full PostgreSQL, migration/reset, semantic-lane, and coverage proof remains in
 the mandatory hosted exact-head checks because the user explicitly requires
 full-suite execution in GitHub rather than on the slow local machine.
