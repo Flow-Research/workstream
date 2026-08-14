@@ -28,3 +28,7 @@
 | Binding management inherits retirement, fulfillment, callback, or delivery authority | Critical | CP01A through CP03 exclude retirement actions plus fulfillment, callback, and delivery action IDs, permissions, identities, routes, evaluators, and service-matrix rows entirely |
 | CON writes PROJECT or TASK aggregates | Critical | CP06 returns immutable validation facts only; CP07 and CP08 own their respective writes |
 | Consolidated v0.1 schema gains fake compatibility debt | High | CP09 performs a clean current-baseline cut and forbids aliases, dual paths, and invented backfills |
+| Legacy debt becomes a blanket blocker for v0.1 delivery | High | Block new debt and require directly touched debt to shrink; never require unrelated frozen debt in a bounded feature PR |
+| Debt repayment expands a feature beyond a reviewable safety boundary | High | Record exact stranded debt, prove no growth, and create a later owner-sized closure contract rather than mixing product boundaries |
+| Mechanical quotas reward noisy or cosmetic cleanup | Medium | Use exact edge/finding deltas and behavior ownership; prohibit arbitrary per-PR percentages and cosmetic test splitting |
+| Overlapping ledgers are added together and misstate debt | Medium | Report general, AUTH, structural, and behavior-ownership measurements separately under their existing owners |

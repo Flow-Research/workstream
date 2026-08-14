@@ -133,3 +133,17 @@ The consolidated baseline is the current schema authority. The retired
 guide-bound economic path is removed only after canonical lineage is live, with
 no alias, fallback, dual read/write, guessed conversion, or historical backfill
 unless future discovery proves an actual deployed-data obligation.
+
+## D18: Debt retirement follows delivery without blocking unrelated work
+
+New architectural and test debt is prohibited. A capability change removes the
+existing debt it directly exercises, but unrelated frozen debt is not a merge
+prerequisite. When safe removal would enlarge the approved product or safety
+boundary, the exact stranded debt is recorded for a later owner-sized closure
+chunk and cannot grow in the meantime. Repository-wide cleanup, arbitrary
+per-PR quotas, and cosmetic test splitting are rejected.
+
+WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 remains the AUTH
+boundary and structural-debt owner, and WS-QUAL-002 remains the behavior/test
+ownership authority. Their ledgers are reported independently where their
+measurements overlap.
