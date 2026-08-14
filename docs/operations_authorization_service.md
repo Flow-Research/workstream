@@ -500,8 +500,9 @@ Catalogue totals are 73 PermissionIds, 111 ActionIds, 57 active actions, and
 matrix row, route, or activation. CP01B adds five unavailable
 `contribution.policy.*` actions with the same non-activation guarantees. CP01C
 corrects only the unavailable binding fact shapes before CP02: binding identity
-is explicit on create, unit is absent, and suspend/resume include the exact
-lifecycle version.
+and CON's unchanged `instrument_type` are explicit on create, unit is absent,
+and suspend/resume include the exact lifecycle version. AUTH does not translate
+the value or own CON instrument rules.
 AUTH-12I adds and activates only the unified compilation
 request/execute pair. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact

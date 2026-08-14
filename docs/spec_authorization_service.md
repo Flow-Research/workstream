@@ -270,7 +270,8 @@ active and 54 planned. They map only to `compensation.policy.manage`; no
 evaluator, identity, service-matrix row, route, migration, or activation is
 added. WS-ARCH-001-CP01C then corrects only the unavailable adapter-binding
 resource facts: create binds the server-selected binding identity and no unit,
-while suspend/resume bind the exact positive lifecycle version. Catalogue
+copies CON's exact `instrument_type` without translation, while suspend/resume
+bind the exact positive lifecycle version. Catalogue
 counts, mappings, owners, and availability remain unchanged.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates

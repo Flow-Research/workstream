@@ -758,7 +758,7 @@ CP01A registers the four adapter-binding read/create/suspend/resume ActionIds,
 and CP01B registers the five ContributionPolicy ActionIds. All nine remain
 unavailable and have no evaluator, identity, service-matrix row, route, or
 activation. CP01C corrects the unavailable binding facts before behavior:
-create binds project, server-selected binding identity, instrument, adapter
+create binds project, server-selected binding identity, `instrument_type`, adapter
 actor, and non-secret route key; suspend/resume additionally bind the exact
 positive lifecycle version. A binding is project/instrument scoped, so its
 authorization facts do not contain a compensation unit. All other rows remain

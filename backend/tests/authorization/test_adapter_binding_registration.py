@@ -84,7 +84,7 @@ def test_cp01c_public_facts_are_immutable_and_validate_lifecycle_state() -> None
             AdapterBindingCreateFacts(
                 project_id=project_id,
                 adapter_binding_id=binding_id,
-                instrument="money",
+                instrument_type="money",
                 adapter_actor_id=uuid4(),
                 route_key=route_key,
             )
@@ -92,7 +92,15 @@ def test_cp01c_public_facts_are_immutable_and_validate_lifecycle_state() -> None
         AdapterBindingCreateFacts(
             project_id=project_id,
             adapter_binding_id=str(binding_id),  # type: ignore[arg-type]
-            instrument="money",
+            instrument_type="money",
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
+    with pytest.raises(ValueError, match="instrument_type must be a bounded canonical token"):
+        AdapterBindingCreateFacts(
+            project_id=project_id,
+            adapter_binding_id=binding_id,
+            instrument_type=" ",
             adapter_actor_id=uuid4(),
             route_key="adapter.primary",
         )
@@ -101,12 +109,13 @@ def test_cp01c_public_facts_are_immutable_and_validate_lifecycle_state() -> None
     create = AdapterBindingCreateFacts(
         project_id=project_id,
         adapter_binding_id=binding_id,
-        instrument="money",
+        instrument_type="money",
         adapter_actor_id=actor_id,
         route_key="a" * 120,
     )
     assert create.adapter_binding_id == binding_id
     assert create.adapter_actor_id == actor_id
+    assert create.instrument_type == "money"
     assert create.route_key == "a" * 120
     assert not hasattr(create, "unit")
 
@@ -161,20 +170,30 @@ def test_cp01c_digest_is_deterministic_and_action_domain_separated() -> None:
     create = AdapterBindingCreateFacts(
         project_id=project_id,
         adapter_binding_id=binding_id,
-        instrument="money",
+        instrument_type="money",
         adapter_actor_id=actor_id,
         route_key="adapter.primary",
     )
     other_binding = AdapterBindingCreateFacts(
         project_id=project_id,
         adapter_binding_id=uuid4(),
-        instrument="money",
+        instrument_type="money",
         adapter_actor_id=actor_id,
         route_key="adapter.primary",
     )
     assert adapter_binding_resource_digest(
         create_action, create
     ) != adapter_binding_resource_digest(create_action, other_binding)
+    other_instrument_type = AdapterBindingCreateFacts(
+        project_id=project_id,
+        adapter_binding_id=binding_id,
+        instrument_type="project_points",
+        adapter_actor_id=actor_id,
+        route_key="adapter.primary",
+    )
+    assert adapter_binding_resource_digest(
+        create_action, create
+    ) != adapter_binding_resource_digest(create_action, other_instrument_type)
 
 
 def test_cp01c_rejects_retired_create_fact_shape() -> None:
@@ -182,8 +201,16 @@ def test_cp01c_rejects_retired_create_fact_shape() -> None:
         AdapterBindingCreateFacts(
             project_id=uuid4(),
             adapter_binding_id=uuid4(),
-            instrument="money",
+            instrument_type="money",
             unit="USD",  # type: ignore[call-arg]
+            adapter_actor_id=uuid4(),
+            route_key="adapter.primary",
+        )
+    with pytest.raises(TypeError, match="unexpected keyword argument 'instrument'"):
+        AdapterBindingCreateFacts(
+            project_id=uuid4(),
+            adapter_binding_id=uuid4(),
+            instrument="money",  # type: ignore[call-arg]
             adapter_actor_id=uuid4(),
             route_key="adapter.primary",
         )

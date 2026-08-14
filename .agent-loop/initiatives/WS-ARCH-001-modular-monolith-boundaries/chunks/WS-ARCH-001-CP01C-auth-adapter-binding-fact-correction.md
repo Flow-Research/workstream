@@ -56,7 +56,10 @@ compatibility aliases, dual digest formats, or acceptance of the retired facts
 ## Exact corrected facts
 
 - Create binds `project_id`, server-selected `adapter_binding_id`,
-  `instrument`, `adapter_actor_id`, and canonical non-secret `route_key`.
+  `instrument_type`, `adapter_actor_id`, and canonical non-secret `route_key`.
+- `instrument_type` is the exact unchanged closed value read from CON's
+  server-owned adapter binding. CON copies it into the AUTH facts; AUTH does
+  not translate it, import CON models, or redefine CON instrument rules.
 - Create does not bind a compensation unit; units are independent
   `ProjectCompensationUnit` identities.
 - Suspend binds `project_id`, `adapter_binding_id`, `expected_status=active`,
@@ -69,7 +72,8 @@ compatibility aliases, dual digest formats, or acceptance of the retired facts
 ## Acceptance criteria
 
 - [x] `AdapterBindingCreateFacts` requires a UUID binding identity and no
-  longer exposes `unit`.
+  longer exposes `unit`; it names the unchanged CON-owned value exactly
+  `instrument_type` and exposes no compatibility alias named `instrument`.
 - [x] Suspend/resume facts require a strictly positive integer lifecycle
   version; booleans, zero, negatives, and non-integers fail closed.
 - [x] Canonical digests change with binding identity or lifecycle version and

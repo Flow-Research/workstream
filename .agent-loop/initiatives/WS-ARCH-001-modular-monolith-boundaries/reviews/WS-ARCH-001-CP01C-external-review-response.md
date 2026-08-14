@@ -12,6 +12,9 @@
 - CodeRabbit correctly identified ambiguous custody wording. The record now
   distinguishes unchanged action identifiers and fixed-service identity from
   the corrected adapter-binding resource identity facts.
+- Human review correctly identified that AUTH's `instrument` field diverged
+  from CON's canonical `instrument_type`. The fact now uses
+  `instrument_type` exactly, with no translation layer or compatibility alias.
 
 ## Comments deferred
 
@@ -24,8 +27,8 @@
 ## Commands rerun
 
 - `python3 scripts/check_chunk_state_sync.py --base-ref origin/main`
-- Exact-head hosted Agent Gates and Backend checks passed on `8e3e5563` before
-  this evidence-only correction. Fresh checks are required on the final head.
+- Exact-head hosted Agent Gates and Backend checks passed before the naming
+  correction. Fresh checks are required on the final corrected head.
 - CodeRabbit completed as rate-limited; no unresolved live review threads
   remain after the valid earlier comments were fixed.
 

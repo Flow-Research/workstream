@@ -17,17 +17,19 @@ behavior is included.
 
 ## Implementation reviews
 
-- Architecture: pass with low risk; boundaries and scope remain exact.
+- Architecture: pass after corrective re-review; `instrument_type` now matches
+  CON's canonical field exactly, while AUTH owns no translation or CON rules.
 - Security/auth: pass with low risk; binding identity and lifecycle generation
   are digest-bound while all actions remain unavailable.
 - Senior engineering: pass with low risk; implementation is small and follows
   the existing fact-validator pattern.
-- QA: pass with low risk after direct resume validation/digest proof was added.
-- Product/ops: pass with low risk; binding scope remains project/instrument and
-  retirement/callback semantics remain excluded.
+- QA: pass after direct resume proof and exact `instrument_type` validation,
+  digest-sensitivity, and retired-name rejection were added.
+- Product/ops: pass after corrective naming review; binding scope remains
+  project/instrument and retirement/callback semantics remain excluded.
 - Reuse/dedup: pass with low risk; no new duplicate abstraction was introduced.
-- Test delta: pass after direct suspend/resume symmetry and invalid binding-ID
-  proof were added; no tests were removed or weakened.
+- Test delta: pass after direct suspend/resume symmetry, invalid binding-ID,
+  and canonical `instrument_type` proof were added; no tests were weakened.
 - Documentation: pass with low risk after the disposable PostgreSQL prerequisite
   was made explicit in the executable verification command.
 
@@ -39,6 +41,11 @@ behavior is included.
 - Test-structure boundary: pass with no ledger update.
 - Stale authorization docs, chunk-state sync, Markdown links, and diff check:
   pass.
+
+The first review round missed the `instrument`/`instrument_type` vocabulary
+drift. Corrective architecture, plan, product, QA, and test-delta reviews were
+therefore rerun against exact CON-to-AUTH naming parity rather than relying on
+the earlier broad boundary result.
 
 The combined local authorization selection reached its existing PostgreSQL
 tests and refused setup because this worktree has no

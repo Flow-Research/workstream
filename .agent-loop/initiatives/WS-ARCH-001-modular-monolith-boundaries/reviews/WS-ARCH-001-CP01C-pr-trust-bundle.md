@@ -18,8 +18,8 @@ and bind exact lifecycle versions for suspend/resume before proceeding to CP02.
 
 ## What changed
 
-- Create facts now contain project, binding ID, instrument, adapter actor, and
-  non-secret route key.
+- Create facts now contain project, binding ID, exact `instrument_type`,
+  adapter actor, and non-secret route key.
 - Suspend/resume facts require an exact positive lifecycle version.
 - Digest tests prove binding-ID and lifecycle-version sensitivity.
 - The retired create shape containing `unit` is rejected.
@@ -28,6 +28,8 @@ and bind exact lifecycle versions for suspend/resume before proceeding to CP02.
 ## Why it changed
 
 The binding aggregate is project/instrument scoped and does not own a unit.
+CON copies its server-owned closed `instrument_type` value unchanged into the
+AUTH facts; AUTH neither translates the value nor imports CON domain models.
 Omitting its selected ID and lifecycle generation would make the AUTH resource
 digest less precise than the product mutation CP02 must eventually protect.
 
@@ -58,8 +60,9 @@ None. All four adapter-binding actions remain planned and unavailable.
 ## Acceptance criteria proof
 
 All CP01C contract criteria are checked. Tests cover immutable facts, invalid
-UUID/version inputs, retired-shape rejection, digest separation/sensitivity,
-catalogue mappings, and planned denial.
+UUID/version/token inputs, rejection of retired `unit` and `instrument`
+shapes, `instrument_type` digest sensitivity, catalogue mappings, and planned
+denial.
 
 ## Tests/checks run
 
@@ -83,13 +86,14 @@ No workflow, dependency, test runner, coverage threshold, or gate changed.
 
 Plan, architecture, security/auth, senior engineering, QA, product/ops,
 reuse/dedup, test-delta, and documentation reviews all pass. The valid
-suspend/resume symmetry and verification-prerequisite findings were fixed.
+suspend/resume symmetry, verification-prerequisite, and canonical
+`instrument_type` findings were fixed and re-reviewed.
 
 ## External review
 
-Hosted CI passed on exact head `8e3e5563`. CodeRabbit completed as
-rate-limited, and every actionable comment from its earlier review was fixed;
-no unresolved live review threads remain.
+Merge readiness requires hosted CI to pass on the exact final PR head.
+CodeRabbit's earlier actionable comments are fixed; the exact final head must
+also have no unresolved live review threads.
 
 ## Remaining risks
 

@@ -58,7 +58,7 @@ class AdapterBindingCreateFacts:
 
     project_id: UUID
     adapter_binding_id: UUID
-    instrument: str
+    instrument_type: str
     adapter_actor_id: UUID
     route_key: str
 
@@ -67,7 +67,7 @@ class AdapterBindingCreateFacts:
         _require_uuid("project_id", self.project_id)
         _require_uuid("adapter_binding_id", self.adapter_binding_id)
         _require_uuid("adapter_actor_id", self.adapter_actor_id)
-        _require_token("instrument", self.instrument)
+        _require_token("instrument_type", self.instrument_type)
         _require_route_key(self.route_key)
 
 
