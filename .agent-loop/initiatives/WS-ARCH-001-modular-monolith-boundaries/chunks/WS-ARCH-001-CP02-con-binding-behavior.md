@@ -173,13 +173,15 @@ invalidation. CP03 later implements this port using the existing AUTH PREP
 machinery; it must not introduce a second authorization protocol.
 
 Every object returned by `prepare` is closed exactly once from an unconditional
-`finally` path after the prepare call, whether consume or downstream work
-succeeds, denies, conflicts, raises, or rolls back. Closing a consumed object is
-required cleanup, not a second consumption. Recovery never prepares a mutation
-object. Tests must prove that every failure path closes the object and that no
-failed or rolled-back path leaves reusable authority. A `close` exception fails
-the command and forces the caller-owned root transaction to roll back; it may
-never be suppressed after product state or evidence has been staged.
+`finally` around `consume`, before any product mutation or lifecycle-event
+insertion. Consume success, denial, or exception all close the object. Closing
+a consumed object is required cleanup, not a second consumption. Recovery never
+prepares a mutation object. A `close` exception fails the command before product
+mutation and forces the caller-owned root transaction to roll back any staged
+AUTH evidence; it is never suppressed. After successful close, a later product
+failure rolls back the transaction while the authorization object remains
+invalid. Tests must prove these exact paths and that no failed or rolled-back
+path leaves reusable authority.
 
 Read uses a separate request-scoped authorization port before disclosure. It
 does not prepare or consume a handle.
@@ -214,7 +216,9 @@ caller-owned root transaction
 -> operation fence
 -> lifecycle-event recovery check
 -> operation-specific owner/product locks
--> AUTH prepare/consume with unconditional close
+-> AUTH prepare
+-> AUTH consume
+-> unconditional close
 -> mutation plus immutable lifecycle event
 -> flush only
 ```
@@ -279,8 +283,10 @@ then observe either the committed event or no event after rollback.
 6. Build AUTH facts with exact `project_id`, generated
    `adapter_binding_id`, unchanged `instrument_type`, eligible
    `adapter_actor_id`, and the unchanged canonical non-secret `route_key`.
-7. Prepare and consume authority before inserting product state.
-8. Insert one active/version-1 binding and one immutable created event.
+7. Prepare and consume authority, and unconditionally close the prepared
+   object, before inserting product state.
+8. Only after successful close, insert one active/version-1 binding and one
+   immutable created event.
 9. Flush only. The lifecycle-event table independently enforces globally unique
    `operation_id`; the operation fence and database constraint together prove
    one mutation effect.
@@ -296,9 +302,9 @@ then observe either the committed event or no event after rollback.
    after its project or adapter actor becomes ineligible.
 4. Require active status and the exact positive expected lifecycle version.
 5. Recompose facts from the locked row and compare them to the request.
-6. Prepare and consume authority before mutation, then close the prepared
-   object from the unconditional `finally` path.
-7. Transition `active/N -> suspended/N+1`, set current
+6. Prepare and consume authority, then close the prepared object from the
+   unconditional `finally` around consume.
+7. Only after successful close, transition `active/N -> suspended/N+1`, set current
    `suspended_by/suspended_at` from the authorized actor and database clock,
    and append one immutable suspended event.
 8. Flush only.
@@ -319,9 +325,10 @@ then observe either the committed event or no event after rollback.
 4. Require suspended status and the exact positive expected lifecycle version.
 5. Fail if another active binding exists for the same project and
    `instrument_type`.
-6. Recompose facts from the locked row, prepare, and consume before mutation,
-   then close the prepared object from the unconditional `finally` path.
-7. Transition `suspended/N -> active/N+1`, clear current suspension fields,
+6. Recompose facts from the locked row, prepare, consume, and close from the
+   unconditional `finally` around consume.
+7. Only after successful close, transition `suspended/N -> active/N+1`, clear
+   current suspension fields,
    and append one immutable resumed event containing the prior suspension and
    exact actor/version transition.
 8. Flush only.
@@ -407,6 +414,12 @@ It must:
   retained owner fence; once it commits first, create denies before AUTH
   consumption, and when create holds the fence first, revocation cannot commit
   between eligibility proof and binding insertion.
+- Resume concurrency proof separately requires: project ineligibility committed
+  first denies before AUTH consumption; adapter-actor revocation committed
+  first denies before AUTH consumption; when resume holds PROJECTS then ACTORS
+  fences first, neither eligibility change can commit between validation and
+  the binding transition; and every such denial creates no resumed event,
+  allowed AUTH evidence, or binding state/version change.
 - Duplicate operations are rejected or recovered before binding-ID generation
   and mutation AUTH preparation/consumption; they create no new allowed mutation
   evidence, binding, or lifecycle event.
@@ -418,8 +431,10 @@ It must:
 - Concurrency tests cover create, suspend, and resume duplicates using the
   exact PostgreSQL advisory fence; a losing request observes the committed
   event after waiting or proceeds only after the winner rolls back.
-- Every prepared mutation object is closed through `finally` on success,
-  denial, conflict, exception, and rollback, and cannot subsequently be used.
+- Every prepared mutation object is closed through the `finally` surrounding
+  consume before product mutation. Consume denial/exception and close failure
+  produce no product effect; later product failure rolls back staged AUTH
+  evidence and cannot make the already-closed object reusable.
 - Active replacement blocks resume of an older suspended binding.
 - PostgreSQL independently rejects forbidden row/event mutations.
 - Rollback removes binding changes, lifecycle events, and staged participant

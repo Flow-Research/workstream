@@ -50,7 +50,8 @@ Four additional contract defects and one recovery gap were validated and fixed:
 Seven additional findings were validated and corrected:
 
 1. Create, suspend, and resume now use one mandatory order: root transaction,
-   digest, operation fence, recovery, operation-specific locks, AUTH, mutation.
+   digest, operation fence, recovery, operation-specific locks, AUTH prepare,
+   AUTH consume, unconditional close, then mutation.
 2. Duplicate semantics are singular: exact authorized recovery returns the
    immutable original result; any mismatch or denied current read returns a
    concealed conflict. Recovery never prepares mutation authority.
@@ -59,8 +60,9 @@ Seven additional findings were validated and corrected:
 4. The operation fence is an exact PostgreSQL transaction advisory-lock
    mechanism with complete-UUID lookup and uniqueness proof, plus concurrency
    tests for all three mutations.
-5. Every prepared object is closed in an unconditional `finally` path across
-   every success and failure outcome.
+5. Every prepared object is closed in an unconditional `finally` around
+   consume, before any product mutation; consume or close failure therefore
+   creates no product effect.
 6. Verification now includes the existing unavailable-action registration
    test.
 7. The roadmap states CP02 hidden binding behavior, CP03 binding activation,
@@ -70,6 +72,23 @@ The human decision was resolved explicitly: resume reacquires PROJECTS then
 ACTORS eligibility fences before AUTH; suspend does not require eligibility so
 an authorized Finance Authority can safely disable a revoked binding. The
 mutation result and created-event transition fields are now exact.
+
+## Third exact-head external review
+
+Both reported blockers were replayed against head `57ee3503` and validated:
+
+1. PREP closure now has one exact sequence everywhere: prepare, consume, close
+   unconditionally around consume, then product mutation, lifecycle event, and
+   flush. Consume or close failure precedes product mutation; a later product
+   failure rolls back staged evidence without reviving the closed object.
+2. Resume now has explicit concurrency proof for project ineligibility and
+   adapter-actor revocation committing first, as well as owner-fence retention
+   when resume wins. Every denial must produce no AUTH evidence, resumed event,
+   or state/version change.
+
+The earlier exact-diff reviewer passes were marked superseded before fresh
+internal re-review. The latest CodeRabbit check was rate-limited, so it is not
+represented as independent substantive review of the corrective head.
 
 ## Verification after correction
 

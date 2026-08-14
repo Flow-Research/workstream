@@ -63,7 +63,11 @@ git diff --check
 
 ## Final disposition
 
-Fresh exact-diff re-review after the second external review:
+The reviewer-pass record for head `57ee3503` was superseded when exact-head QA
+found ambiguous PREP close ordering and missing resume eligibility-race proof.
+Those findings were replayed against the contract and were valid.
+
+Fresh exact-diff re-review after correcting those findings:
 
 - architecture: pass with low implementation risk;
 - security/authorization: pass with low implementation risk;

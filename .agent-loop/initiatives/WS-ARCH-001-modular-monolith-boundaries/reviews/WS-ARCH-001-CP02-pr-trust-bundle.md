@@ -124,7 +124,8 @@ ContributionPolicy behavior remains in later chunks.
 - Query-only read versus opaque PREP mutations.
 - Immutable suspension/resume attribution and one-effect duplicate handling.
 - Shared transaction ordering, exact PostgreSQL operation fencing, prepared
-  object closure, and resume-time owner eligibility.
+  object closure before product mutation, and resume-time owner eligibility
+  race proof.
 - No activation or broader CON lifecycle work in this PR.
 
 ## Human merge ownership
