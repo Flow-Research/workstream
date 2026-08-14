@@ -96,8 +96,9 @@ weakened. Hosted CI remains required before this PR is ready to merge.
 ## External review
 
 CodeRabbit produced seven valid bounded findings on the first published head.
-All were fixed and recorded in the external-review response. Hosted CI and
-CodeRabbit must rerun against the corrected exact head before merge readiness.
+All were fixed and recorded in the external-review response. GitHub's live
+exact-head checks remain the authority for transient hosted CI and CodeRabbit
+state; this durable bundle does not preserve a stale pending/passing claim.
 
 ## Remaining risks
 

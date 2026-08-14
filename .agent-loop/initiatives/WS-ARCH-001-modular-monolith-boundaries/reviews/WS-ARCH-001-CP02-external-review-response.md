@@ -36,5 +36,6 @@ than applied blindly. Each was valid within the bounded interpretation below.
 - atomic chunk-state synchronization: pass;
 - `git diff --check`: pass.
 
-Hosted CI and CodeRabbit must rerun against the corrected exact head. This file
-does not mark their earlier head as proof for the corrected commit.
+Merge readiness always requires exact-head hosted CI. GitHub's live checks are
+the authority for that transient state; this durable record does not describe a
+check as pending or reuse an earlier head as proof for a later commit.
