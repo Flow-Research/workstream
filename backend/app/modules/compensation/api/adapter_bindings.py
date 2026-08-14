@@ -28,11 +28,13 @@ class AdapterBindingConflict(RuntimeError):
 
 
 def _require_positive_version(value: int) -> None:
+    """Require an exact positive lifecycle version."""
     if type(value) is not int or value < 1:
         raise ValueError("expected_lifecycle_version must be a positive integer")
 
 
 def _require_uuids(**values: object) -> None:
+    """Require already parsed UUID selectors at the public boundary."""
     invalid = next((name for name, value in values.items() if type(value) is not UUID), None)
     if invalid is not None:
         raise ValueError(f"{invalid} must be a UUID")
@@ -58,6 +60,7 @@ def validate_adapter_route_key(value: str) -> str:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingCreateRequest:
+    """Immutable request to create one project adapter binding."""
     operation_id: UUID
     actor_profile_id: UUID
     project_id: UUID
@@ -66,6 +69,7 @@ class AdapterBindingCreateRequest:
     route_key: str
 
     def __post_init__(self) -> None:
+        """Validate canonical create selectors and routing facts."""
         _require_uuids(
             operation_id=self.operation_id,
             actor_profile_id=self.actor_profile_id,
@@ -79,11 +83,13 @@ class AdapterBindingCreateRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingReadRequest:
+    """Immutable request to read one exact project binding."""
     actor_profile_id: UUID
     project_id: UUID
     adapter_binding_id: UUID
 
     def __post_init__(self) -> None:
+        """Validate exact read selectors."""
         _require_uuids(
             actor_profile_id=self.actor_profile_id,
             project_id=self.project_id,
@@ -93,6 +99,7 @@ class AdapterBindingReadRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingSuspendRequest:
+    """Immutable request to suspend one active binding version."""
     operation_id: UUID
     actor_profile_id: UUID
     project_id: UUID
@@ -100,6 +107,7 @@ class AdapterBindingSuspendRequest:
     expected_lifecycle_version: int
 
     def __post_init__(self) -> None:
+        """Validate exact suspend selectors and version."""
         _require_uuids(
             operation_id=self.operation_id,
             actor_profile_id=self.actor_profile_id,
@@ -111,6 +119,7 @@ class AdapterBindingSuspendRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingResumeRequest:
+    """Immutable request to resume one suspended binding version."""
     operation_id: UUID
     actor_profile_id: UUID
     project_id: UUID
@@ -118,6 +127,7 @@ class AdapterBindingResumeRequest:
     expected_lifecycle_version: int
 
     def __post_init__(self) -> None:
+        """Validate exact resume selectors and version."""
         _require_uuids(
             operation_id=self.operation_id,
             actor_profile_id=self.actor_profile_id,
@@ -134,6 +144,7 @@ AdapterBindingMutationRequest: TypeAlias = (
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingView:
+    """Authorized current view of one adapter binding."""
     adapter_binding_id: UUID
     project_id: UUID
     instrument_type: str
@@ -149,6 +160,7 @@ class AdapterBindingView:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingMutationResult:
+    """Immutable result reconstructed from one lifecycle event."""
     event_id: UUID
     operation_id: UUID
     request_digest: str
@@ -166,6 +178,7 @@ class AdapterBindingMutationResult:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AdapterBindingMutationAuthorizationFacts:
+    """Exact immutable facts bound to mutation authorization."""
     action: AdapterBindingAction
     actor_profile_id: UUID
     operation_id: UUID
@@ -179,6 +192,7 @@ class AdapterBindingMutationAuthorizationFacts:
     expected_lifecycle_version: int | None
 
     def __post_init__(self) -> None:
+        """Validate authorization selectors and instrument type."""
         _require_uuids(
             actor_profile_id=self.actor_profile_id,
             operation_id=self.operation_id,
@@ -191,11 +205,13 @@ class AdapterBindingMutationAuthorizationFacts:
 
 
 class AdapterBindingReadAuthorizationPort(Protocol):
+    """Authorize disclosure of one exact adapter binding."""
     async def authorize_adapter_binding_read(self, request: AdapterBindingReadRequest) -> None:
         """Authorize disclosure of one exact project/binding pair."""
 
 
 class AdapterBindingMutationAuthorizationPort(Protocol):
+    """Prepare, consume, and close opaque mutation authority."""
     async def prepare_adapter_binding_mutation(
         self, facts: AdapterBindingMutationAuthorizationFacts
     ) -> object:
@@ -214,22 +230,26 @@ class DenyAdapterBindingAuthorization:
     """Production-safe default until CP03 installs real AUTH adapters."""
 
     async def authorize_adapter_binding_read(self, request: AdapterBindingReadRequest) -> None:
+        """Deny reads until CP03 installs production authorization."""
         del request
         raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable")
 
     async def prepare_adapter_binding_mutation(
         self, facts: AdapterBindingMutationAuthorizationFacts
     ) -> object:
+        """Deny preparation until CP03 installs production authorization."""
         del facts
         raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable")
 
     async def consume_adapter_binding_mutation(
         self, prepared: object, facts: AdapterBindingMutationAuthorizationFacts
     ) -> UUID:
+        """Deny consumption until CP03 installs production authorization."""
         del prepared, facts
         raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable")
 
     def close_adapter_binding_mutation(self, prepared: object) -> None:
+        """Discard the deny-default placeholder without granting authority."""
         del prepared
 
 

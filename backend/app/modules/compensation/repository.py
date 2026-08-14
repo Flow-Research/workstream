@@ -24,9 +24,11 @@ class AdapterBindingRepository:
     """Flush-only repository for one caller-owned root transaction."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind persistence to the caller-owned root transaction."""
         self._session = session
 
     async def lock_operation(self, operation_id: UUID) -> None:
+        """Acquire the transaction-scoped operation fence."""
         await self._session.execute(
             text("select pg_advisory_xact_lock(:lock_key)"),
             {"lock_key": operation_advisory_lock_key(operation_id)},
@@ -35,6 +37,7 @@ class AdapterBindingRepository:
     async def get_event_by_operation(
         self, operation_id: UUID
     ) -> CompensationAdapterBindingLifecycleEvent | None:
+        """Load immutable recovery evidence for one operation."""
         return await self._session.scalar(
             select(CompensationAdapterBindingLifecycleEvent).where(
                 CompensationAdapterBindingLifecycleEvent.operation_id == operation_id
@@ -44,6 +47,7 @@ class AdapterBindingRepository:
     async def get_binding(
         self, project_id: UUID, adapter_binding_id: UUID, *, for_update: bool = False
     ) -> ProjectCompensationAdapterBinding | None:
+        """Load one tenant-scoped binding, optionally for update."""
         query = select(ProjectCompensationAdapterBinding).where(
             ProjectCompensationAdapterBinding.project_id == str(project_id),
             ProjectCompensationAdapterBinding.id == adapter_binding_id,
@@ -53,6 +57,7 @@ class AdapterBindingRepository:
         return await self._session.scalar(query.execution_options(populate_existing=True))
 
     async def lock_creation_scope(self, project_id: UUID, instrument_type: str) -> None:
+        """Serialize active binding changes for a project instrument."""
         key = f"compensation-adapter-binding:{project_id}:{instrument_type}"
         await self._session.execute(
             text("select pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
@@ -62,6 +67,7 @@ class AdapterBindingRepository:
     async def get_active_binding(
         self, project_id: UUID, instrument_type: str
     ) -> ProjectCompensationAdapterBinding | None:
+        """Lock and return the current active project binding."""
         return await self._session.scalar(
             select(ProjectCompensationAdapterBinding)
             .where(
@@ -75,6 +81,7 @@ class AdapterBindingRepository:
     async def get_prior_suspension_event(
         self, adapter_binding_id: UUID, lifecycle_version: int
     ) -> CompensationAdapterBindingLifecycleEvent | None:
+        """Load the immediately preceding suspension event."""
         return await self._session.scalar(
             select(CompensationAdapterBindingLifecycleEvent).where(
                 CompensationAdapterBindingLifecycleEvent.adapter_binding_id
@@ -90,6 +97,7 @@ class AdapterBindingRepository:
         binding: ProjectCompensationAdapterBinding,
         event: CompensationAdapterBindingLifecycleEvent,
     ) -> None:
+        """Flush a binding and its mandatory created event together."""
         self._session.add_all((binding, event))
         await self._session.flush()
         await self._session.refresh(binding)
@@ -98,6 +106,7 @@ class AdapterBindingRepository:
     async def flush_event(
         self, event: CompensationAdapterBindingLifecycleEvent
     ) -> None:
+        """Flush an event with the pending binding transition."""
         self._session.add(event)
         await self._session.flush()
         await self._session.refresh(event)

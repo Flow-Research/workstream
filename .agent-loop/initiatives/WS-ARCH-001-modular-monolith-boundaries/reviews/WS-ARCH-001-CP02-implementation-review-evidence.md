@@ -9,6 +9,7 @@ CI ownership/lane metadata, and canonical status/specification updates.
 ## Deterministic evidence
 
 - touched-code Ruff: pass;
+- repository docstring coverage: 80.2%, pass;
 - focused non-PostgreSQL tests: pass;
 - canonical semantic-lane collection: pass;
 - module-boundary validation: pass;
@@ -46,7 +47,8 @@ Findings fixed include event-attribution guards, read concealment, exact PREP
 closure ordering, owner eligibility races, operation fencing and recovery,
 request runtime validation, all-mutation concurrency coverage, deterministic
 lock tests, schema/lane parity, test-fixture isolation, service-actor proof, and
-stale implementation evidence.
+stale implementation evidence, and documentation coverage for the new public
+and repository surfaces.
 
 ## Residual risk owned by CP03
 

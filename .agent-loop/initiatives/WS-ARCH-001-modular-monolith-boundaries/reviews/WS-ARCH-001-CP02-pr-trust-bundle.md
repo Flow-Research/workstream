@@ -70,6 +70,7 @@ human identity substitution; and deny-default production composition.
 ## Tests and checks run
 
 - Ruff on all touched backend modules and tests: pass.
+- Repository docstring coverage: 80.2%, pass.
 - Focused non-database CP02 and AUTH registration tests: pass.
 - Canonical semantic-lane collection: pass.
 - Module, authorization, test-structure, and behavior-ownership gates: pass.
