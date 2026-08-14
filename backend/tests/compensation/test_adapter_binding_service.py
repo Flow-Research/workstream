@@ -290,22 +290,23 @@ async def test_database_rejects_missing_event_and_mismatched_attribution(
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError, match="attribution mismatch"):
             async with session.begin():
-                session.add_all(
-                    (
-                        ProjectCompensationAdapterBinding(
-                            id=binding_id, project_id=str(project_id),
-                            instrument_type="money", adapter_actor_id=str(adapter_id),
-                            route_key="adapter.primary", status="active",
-                            binding_lifecycle_version=1, created_by=str(actor_id),
-                        ),
-                        CompensationAdapterBindingLifecycleEvent(
-                            id=uuid4(), operation_id=uuid4(),
-                            request_digest="sha256:" + "0" * 64,
-                            project_id=str(project_id), adapter_binding_id=binding_id,
-                            event_type="created", actor_profile_id=str(adapter_id),
-                            from_status=None, to_status="active",
-                            from_lifecycle_version=0, to_lifecycle_version=1,
-                        ),
+                session.add(
+                    ProjectCompensationAdapterBinding(
+                        id=binding_id, project_id=str(project_id),
+                        instrument_type="money", adapter_actor_id=str(adapter_id),
+                        route_key="adapter.primary", status="active",
+                        binding_lifecycle_version=1, created_by=str(actor_id),
+                    )
+                )
+                await session.flush()
+                session.add(
+                    CompensationAdapterBindingLifecycleEvent(
+                        id=uuid4(), operation_id=uuid4(),
+                        request_digest="sha256:" + "0" * 64,
+                        project_id=str(project_id), adapter_binding_id=binding_id,
+                        event_type="created", actor_profile_id=str(adapter_id),
+                        from_status=None, to_status="active",
+                        from_lifecycle_version=0, to_lifecycle_version=1,
                     )
                 )
                 await session.flush()

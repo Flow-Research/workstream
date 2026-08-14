@@ -409,25 +409,29 @@ class AdapterBindingService:
         event: CompensationAdapterBindingLifecycleEvent,
     ) -> AdapterBindingMutationResult:
         return AdapterBindingMutationResult(
-            event_id=event.id,
-            operation_id=event.operation_id,
+            event_id=UUID(str(event.id)),
+            operation_id=UUID(str(event.operation_id)),
             request_digest=event.request_digest,
             project_id=UUID(event.project_id),
-            adapter_binding_id=event.adapter_binding_id,
+            adapter_binding_id=UUID(str(event.adapter_binding_id)),
             event_type=cast(AdapterBindingEventType, event.event_type),
             actor_profile_id=UUID(event.actor_profile_id),
             from_status=cast(AdapterBindingStatus | None, event.from_status),
             to_status=cast(AdapterBindingStatus, event.to_status),
             from_lifecycle_version=event.from_lifecycle_version,
             to_lifecycle_version=event.to_lifecycle_version,
-            prior_suspension_event_id=event.prior_suspension_event_id,
+            prior_suspension_event_id=(
+                UUID(str(event.prior_suspension_event_id))
+                if event.prior_suspension_event_id is not None
+                else None
+            ),
             occurred_at=event.occurred_at,
         )
 
     @staticmethod
     def _view(binding: ProjectCompensationAdapterBinding) -> AdapterBindingView:
         return AdapterBindingView(
-            adapter_binding_id=binding.id,
+            adapter_binding_id=UUID(str(binding.id)),
             project_id=UUID(binding.project_id),
             instrument_type=binding.instrument_type,
             adapter_actor_id=UUID(binding.adapter_actor_id),
