@@ -24,7 +24,10 @@
 ## Commands rerun
 
 - `python3 scripts/check_chunk_state_sync.py --base-ref origin/main`
-- Exact-head hosted Agent Gates and Backend checks.
+- Exact-head hosted Agent Gates and Backend checks passed on `8e3e5563` before
+  this evidence-only correction. Fresh checks are required on the final head.
+- CodeRabbit completed as rate-limited; no unresolved live review threads
+  remain after the valid earlier comments were fixed.
 
 ## Remaining risks
 

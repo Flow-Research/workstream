@@ -87,7 +87,9 @@ suspend/resume symmetry and verification-prerequisite findings were fixed.
 
 ## External review
 
-CodeRabbit and hosted CI are pending after the PR is opened.
+Hosted CI passed on exact head `8e3e5563`. CodeRabbit completed as
+rate-limited, and every actionable comment from its earlier review was fixed;
+no unresolved live review threads remain.
 
 ## Remaining risks
 
