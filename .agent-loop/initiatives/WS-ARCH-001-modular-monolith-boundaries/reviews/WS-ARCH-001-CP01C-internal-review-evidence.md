@@ -9,7 +9,7 @@ behavior is included.
 
 ## Plan review
 
-- Result: pass after conditions.
+- Result: pass.
 - Resolved condition: CP01C is now projected before CP02 in active ARCH, AUTH,
   CON, roadmap, and current-state records. The separate non-executable CP02
   skeleton remains untouched to preserve the one-contract-per-PR invariant and

@@ -6,6 +6,12 @@
   and the non-executable CP02 skeleton. The CP02 edit was removed. Active
   sequencing ledgers still place CP01C before CP02, and CP02 must replace its
   skeleton with a current-main executable contract in its own PR.
+- CodeRabbit correctly identified a non-canonical `pass after conditions`
+  internal-review status. The status is now `pass`, with the resolved condition
+  retained separately.
+- CodeRabbit correctly identified ambiguous custody wording. The record now
+  distinguishes unchanged action identifiers and fixed-service identity from
+  the corrected adapter-binding resource identity facts.
 
 ## Comments deferred
 
