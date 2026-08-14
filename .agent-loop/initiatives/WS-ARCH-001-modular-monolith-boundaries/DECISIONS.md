@@ -147,3 +147,13 @@ WS-ARCH-001 remains the general boundary owner, WS-AUTH-003 remains the AUTH
 boundary and structural-debt owner, and WS-QUAL-002 remains the behavior/test
 ownership authority. Their ledgers are reported independently where their
 measurements overlap.
+
+## D19: Adapter-binding lifecycle truth is CON-owned and authorization remains AUTH-owned
+
+CON owns typed binding commands/results, the active/suspended state machine,
+canonical row locking, and immutable created/suspended/resumed lifecycle
+events. AUTH owns Finance Authority, action availability, opaque PREP handles,
+authorization decisions, and decision evidence. Read uses request-scoped
+authorization; create/suspend/resume use one domain-specific opaque
+prepare/consume/close port backed by AUTH only in CP03. CON never imports AUTH
+internals or translates the CON-owned `instrument_type` value.

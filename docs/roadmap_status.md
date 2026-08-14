@@ -135,8 +135,9 @@ review. Their presence does not change the implemented-on-`main` list above.
    merged through WS-ARCH-001-02H.
 2. CP01A and CP01B have registered exact adapter-binding and ContributionPolicy
    authority while keeping all nine actions unavailable. CP01C corrects the
-   unavailable binding facts before CP02. Next implement and
-   separately activate
+   unavailable binding facts before CP02. CP02 now has a proposed executable
+   current-main contract; after this planning correction merges and receives
+   explicit human approval, implement its hidden behavior and then separately activate
    adapter-binding and ContributionPolicy behavior;
    expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and

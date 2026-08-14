@@ -80,8 +80,9 @@ matrix rows, or evaluators.
 No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01A
 and CP01B separately register binding and policy authority while unavailable.
 CP01C corrects binding identity and lifecycle-generation facts before CP02.
-CP03 and CP05 activate only their respective CP02/CP04
-hidden proof. Before CON
+CP02 must first prove hidden CON behavior through its executable current-main
+contract while every binding action remains unavailable. CP03 and CP05 activate
+only their respective CP02/CP04 hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and
 transaction-participant foundations now needed by REV.
