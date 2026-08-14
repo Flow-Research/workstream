@@ -15,7 +15,8 @@
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete on merge; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
 | `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
-| `WS-ARCH-001-PLAN3` | ContributionPolicy registration, behavior, activation, guide/task lineage and clean legacy-removal sequencing | L1 | Proposed planning correction; no runtime |
+| `WS-ARCH-001-PLAN3` | ContributionPolicy registration, behavior, activation, guide/task lineage and clean legacy-removal sequencing | L1 | Planned; planning correction only and no runtime |
+| `WS-ARCH-001-PLAN4` | Delivery-coupled technical-debt retirement policy and current-main baseline | L1 | Planned on merge; planning only and no unrelated v0.1 delivery block |
 | `WS-ARCH-001-CP01` | Combined AUTH registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |
 | `WS-ARCH-001-CP01A` | AUTH adapter-binding unavailable registration | L1 | Complete on merge; four actions remain planned/unavailable |
 | `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete on merge; five actions remain planned/unavailable |
@@ -54,3 +55,8 @@ each must be replaced with a current-main contract that names exact allowed and
 not-allowed files, migration head, runnable commands, reviewers, and the public
 types it extends. Their sequencing is approved here; their current text does
 not authorize code changes.
+
+PLAN4 does not insert a new prerequisite into the product sequence. Each
+current or future delivery chunk applies its no-new-debt and touched-debt rules
+within the capability it already owns. WS-ARCH-001-07 is refreshed and split
+only for stranded debt after remaining v0.1 delivery boundaries are known.

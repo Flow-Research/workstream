@@ -28,7 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`, including hidden preparation and atomic consumption/binding activation | PLAN2 binds one ContributionPolicyVersion at guide activation, locks it on TASK before claimability, carries it through assignment and 04E `allow_review`, then requires REV lease inheritance and atomic CON contribution/award participation; `02I` remains later |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`, including hidden preparation and atomic consumption/binding activation | PLAN2/PLAN3 govern the product sequence; PLAN4 is planned on merge and makes debt retirement delivery-coupled without blocking a feature on unrelated frozen debt; `02I` remains later |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; ContributionPolicy persistence and shared lifecycle audit are merged | Complete the guide-activation validation/persistence contract before task readiness; assignment copies the task lock, Submission stamps the attempt version, and ReviewLease copies that stamp without claim-time lookup; ContributionRecord/CompensationAward persistence plus the atomic participant precede live Review decisions |
@@ -93,15 +93,15 @@ Merged WS-CON-001-PLAN5 remains historical evidence for same-TaskAssignment
 human revision rebase; current PLAN2 supersedes its independent reviewer-policy
 selection wording.
 
-## Proposed PLAN3 correction
+## Planned PLAN3 correction
 
-Do not start historical CON-05A directly. The proposed CP01-CP09 sequence owns
+Do not start historical CON-05A directly. The planned CP01-CP09 sequence owns
 AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
 activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
 clean v0.1 legacy economic-path removal in that order. Every child remains
-non-executable until PLAN3 merges and its current-main contract is expanded.
+non-executable until its current-main contract is expanded.
 
-- WS-ARCH-001-PLAN3 is proposed planning only.
+- WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.
 - WS-ARCH-001-CP01 is a planned split and non-executable.
 - WS-ARCH-001-CP01A is complete on merge with adapter-binding actions registered
   but unavailable.

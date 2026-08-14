@@ -54,10 +54,17 @@
   non-executable split parent; CP01A is complete on merge with its four actions
   registered/unavailable, CP01B is complete on merge with five policy actions
   registered/unavailable, and CP02-CP09 remain non-executable skeletons.
+- PLAN4 is planned on merge and changes no runtime. It makes the existing incremental strangler
+  operational: unrelated frozen debt cannot block delivery, new debt is
+  prohibited, directly touched debt must shrink, and unsafe adjacent debt is
+  recorded for a later owner-sized closure without widening the feature PR.
+  Current baselines are 115 general protected private edges, 99 AUTH-ledger
+  edges reported separately, and 89 AUTH structural findings. These measures
+  overlap and are never summed into one repository total.
 
-## Proposed PLAN3 children
+## Planned PLAN3 children
 
-- WS-ARCH-001-PLAN3 is proposed planning only; runtime behavior is unchanged.
+- WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.
 - WS-ARCH-001-CP01 is a planned split and non-executable. Current-main discovery proved
   adapter binding and ContributionPolicy are distinct resource/action families.
 - WS-ARCH-001-CP01A is complete on merge: exact adapter-binding identifiers,

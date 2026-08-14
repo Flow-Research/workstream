@@ -50,6 +50,59 @@ feature contract touching `artifacts`, `authorization`, `projects`, `tasks`,
 - proof that debt does not grow;
 - behavior, transaction, authorization, replay, and denial preservation.
 
+## Incremental debt-retirement policy
+
+Technical debt is repaid through the capability work that encounters it. It is
+not a repository-wide prerequisite for v0.1 delivery, and unrelated frozen debt
+cannot block a bounded feature PR.
+
+Every implementation contract classifies its relationship to existing debt:
+
+1. **No relevant debt:** prove that the change adds no private edge, structural
+   violation, duplicated behavior owner, weakened test, or compatibility path.
+2. **Directly touched debt:** when the change modifies or continues through a
+   protected private edge, oversized function, or behavior-owning test surface,
+   it must retire the relevant debt in the same PR. The proof names the exact
+   ledger entries or structural findings removed.
+3. **Adjacent debt unsafe to remove:** when removal would broaden the product,
+   transaction, authorization, migration, or concurrency boundary beyond the
+   approved chunk, the PR records the exact debt and why removal is unsafe. It
+   may merge only if the debt does not grow and the changed capability no
+   longer introduces new work through that debt. A later capability-sized
+   contract owns the stranded repair.
+
+A deferral is durable initiative memory, not PR prose alone. It records the
+exact ledger source/target edge or structural-finding identifier, owning
+initiative, reason the repair exceeds the chunk, and intended owner-capability
+contract or refreshed WS-ARCH-001-07 closure boundary.
+
+No arbitrary percentage, edge quota, or line-count quota applies to every PR.
+Those quotas encourage unrelated edits and make review less reliable. The
+binding rules are exact: no new debt, meaningful retirement of directly
+touched debt, and no test weakening or cosmetic file splitting.
+
+Relevant trust bundles report before/after values from the authoritative
+ledgers without adding overlapping ledgers together:
+
+- general protected private edges from
+  `.ci/module-boundaries/private-edge-debt.v1.json`;
+- AUTH inbound/outbound private edges from the WS-AUTH-003 import ledger when
+  AUTH is touched;
+- scoped structural findings from the WS-AUTH-003 test-structure ledger when
+  an indexed file is touched;
+- behavior-ownership records added or updated under WS-QUAL-002.
+
+The repository-wide 78 percent coverage floor and the 90 percent floor for new
+or materially changed backend subsystems remain blocking. Mutation testing is
+not a current merge requirement; any future changed-line-aware mutation gate
+requires its own approved WS-QUAL plan.
+
+After active v0.1 capability delivery, WS-ARCH-001-07 is refreshed against
+current `main` and split by owner to remove only stranded debt that no remaining
+delivery chunk will naturally encounter. Final closure requires empty general
+and AUTH private-edge ledgers. Test-structure and behavior-ownership completion
+remain owned by WS-AUTH-003 and WS-QUAL-002 respectively.
+
 ## Submission capability correction
 
 Before contributor preparation activation or ART-05A replacement behavior:
