@@ -103,7 +103,7 @@ class ReviewerContractTests(unittest.TestCase):
             "case_id": "architecture-handoff",
             "reviewer": "architecture",
             "evaluated_head": "a" * 40,
-            "result": "handoff",
+            "classification": "handoff",
             "finding_ids": ["ARCH-7"],
             "short_reason": "routed",
             "handoff_specialty": "ci_integrity",
@@ -126,7 +126,7 @@ class ReviewerContractTests(unittest.TestCase):
             "verdict": "PROVISIONAL",
         }
         self.assertEqual(output_failures(output, expectation, receipt), [])
-        for key in ("evaluated_head",):
+        for key in ("evaluated_head", "classification"):
             broken = copy.deepcopy(output)
             broken.pop(key)
             self.assertTrue(output_failures(broken, expectation, receipt))
@@ -138,6 +138,10 @@ class ReviewerContractTests(unittest.TestCase):
         broken = copy.deepcopy(output)
         broken["handoff_specialty"] = "security"
         self.assertIn("output: wrong handoff", output_failures(broken, expectation, receipt))
+
+        # A case classification is not a final review verdict. The canonical
+        # receipt remains PROVISIONAL while its start/end inspections are dirty.
+        self.assertEqual(receipt["verdict"], "PROVISIONAL")
 
         for path in (
             ("target", "base_sha"),

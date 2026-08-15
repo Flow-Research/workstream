@@ -159,7 +159,7 @@ def output_failures(
 ) -> list[str]:
     failures: list[str] = []
     required = {
-        "case_id", "reviewer", "evaluated_head", "result", "finding_ids",
+        "case_id", "reviewer", "evaluated_head", "classification", "finding_ids",
         "short_reason", "handoff_specialty",
     }
     missing = required - output.keys()
@@ -167,8 +167,8 @@ def output_failures(
         failures.append(f"output: missing {sorted(missing)}")
     if output.get("case_id") != expectation.get("case_id"):
         failures.append("output: wrong case")
-    if output.get("result") != expectation.get("outcome"):
-        failures.append("output: wrong outcome")
+    if output.get("classification") != expectation.get("outcome"):
+        failures.append("output: wrong classification")
     finding_ids = output.get("finding_ids")
     if not isinstance(finding_ids, list):
         failures.append("output: finding_ids must be a list")

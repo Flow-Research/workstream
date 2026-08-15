@@ -99,8 +99,11 @@ the separate open implementation PR
   and repository instructions. Reviewer JSON is held in the orchestration
   session or a private temporary directory, validated with
   `scripts/reviewer_contracts.py validate-output`, then published after push as
-  one GitHub PR evidence comment keyed by case, reviewer, evaluated head, result,
-  and finding IDs. It is linked from the PR body and never committed as an
+  one GitHub PR evidence comment keyed by case, reviewer, evaluated head,
+  classification, receipt verdict, and finding IDs. A case classification is
+  evaluation data, never a final reviewer verdict. The canonical receipt is the
+  only verdict and remains provisional when its inspections are dirty or stale.
+  The comment is linked from the PR body and never committed as an
   exact-head receipt. Adoption fails if any reviewer
   misses its owned defect, invents a finding in the negative case, loses a prior
   finding after a head change, omits a required handoff, or omits the protocol
@@ -121,8 +124,8 @@ python3 scripts/reviewer_contracts.py validate-fixtures
 # EXPECTATIONS.json is created; create expectations only after outputs return;
 # validate each JSON against its canonical receipt (or the complete set with
 # `validate-output-set --output <cases> --receipts <receipts>`); after
-# push publish the case/reviewer/head/result/finding-ID summary as one PR comment
-# and link it from the PR body.
+# push publish the case/reviewer/head/classification/receipt-verdict/finding-ID
+# summary as one PR comment and link it from the PR body.
 python3 scripts/review_target.py --base origin/main --head HEAD --format json
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
