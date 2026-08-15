@@ -35,6 +35,14 @@ stale-wording, link, chunk-state, and diff gates pass.
 The full PostgreSQL suite and coverage run in GitHub Actions. No local full
 suite is run on the user's slow machine.
 
+## External review
+
+CodeRabbit's two merge-awareness findings were valid and addressed. The
+current-state ledger now keeps CP03A out of durable `main` state until merge,
+and the CON handoff/matrix distinguish current `main` migration `0004` from
+the CP03A branch migration `0005`. Historical `0050`, `0053`, and `0055`
+identifiers are explicitly not active graph heads.
+
 ## Human review focus
 
 Confirm the new identity is a binding target only, has no service-action matrix
