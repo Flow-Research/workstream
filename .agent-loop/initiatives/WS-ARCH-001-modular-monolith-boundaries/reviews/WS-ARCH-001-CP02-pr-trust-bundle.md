@@ -74,6 +74,9 @@ invariant rather than relying on same-operation recovery. The AUTH participant
 also inspects the live transaction during consume and proves that no binding or
 lifecycle event has been staged before authorization. PostgreSQL proof includes
 suspended-to-active version skips and stale same-binding suspension references.
+The strict PREP fake retains the actual transaction object and compares by
+identity, so Python object-address reuse cannot make a later transaction appear
+to be the prepared transaction.
 
 ## Tests and checks run
 

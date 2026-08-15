@@ -46,7 +46,7 @@ class Eligibility:
 @dataclass(slots=True)
 class Prepared:
     facts: AdapterBindingMutationAuthorizationFacts
-    transaction_id: int
+    transaction: object
     consumed: bool = False
     closed: bool = False
 
@@ -64,11 +64,11 @@ class Authorization:
     def bind_session(self, session) -> None:
         self._session = session
 
-    def _transaction_id(self) -> int:
+    def _transaction(self) -> object:
         assert self._session is not None
         transaction = self._session.sync_session.get_transaction()
         assert transaction is not None
-        return id(transaction)
+        return transaction
 
     async def authorize_adapter_binding_read(self, request: AdapterBindingReadRequest) -> None:
         del request
@@ -80,7 +80,7 @@ class Authorization:
         self, facts: AdapterBindingMutationAuthorizationFacts
     ) -> object:
         self.prepared += 1
-        prepared = Prepared(facts=facts, transaction_id=self._transaction_id())
+        prepared = Prepared(facts=facts, transaction=self._transaction())
         self._prepared[id(prepared)] = prepared
         return prepared
 
@@ -91,7 +91,7 @@ class Authorization:
         assert self._prepared.get(id(prepared)) is prepared
         assert prepared.facts == facts
         assert not prepared.consumed and not prepared.closed
-        assert prepared.transaction_id == self._transaction_id()
+        assert prepared.transaction is self._transaction()
         prepared.consumed = True
         self.consumed += 1
         return facts.actor_profile_id

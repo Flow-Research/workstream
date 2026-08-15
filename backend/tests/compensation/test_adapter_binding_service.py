@@ -203,7 +203,7 @@ async def test_prepared_fake_rejects_copy_replay_and_transaction_replacement(
                 )
             )
         prepared = next(iter(authorization._prepared.values()))
-        copied = _Prepared(prepared.facts, prepared.transaction_id)
+        copied = _Prepared(prepared.facts, prepared.transaction)
         async with session.begin():
             with pytest.raises(AssertionError):
                 await authorization.consume_adapter_binding_mutation(copied, prepared.facts)

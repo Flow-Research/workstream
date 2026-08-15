@@ -70,7 +70,9 @@ repository surfaces, consume denial/exception/wrong-actor rollback proof, and
 the complete promised PostgreSQL forbidden-mutation matrix. Follow-up evidence
 also distinguishes same-operation recovery from distinct-operation create
 competition and verifies inside AUTH consumption that product rows have not
-been staged early.
+been staged early. Hosted CI then exposed object-address reuse in the strict
+fake's transaction token; retaining and comparing the transaction object by
+identity removed that ambiguity without changing production behavior.
 
 ## Residual risk owned by CP03
 

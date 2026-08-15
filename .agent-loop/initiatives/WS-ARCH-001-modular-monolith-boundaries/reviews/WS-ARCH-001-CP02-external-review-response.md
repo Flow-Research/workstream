@@ -142,6 +142,13 @@ observations do not weaken a product or security invariant and are not expanded
 in this corrective diff. CodeRabbit still has not supplied substantive review
 of the corrected implementation head.
 
+The first hosted run of that correction exposed an independent strict-fake
+defect: prepared authority stored `id(transaction)`, and Python could reuse that
+address for a later transaction. The fake now retains the transaction object
+itself and requires object identity during consume. This strengthens the
+existing wrong-transaction proof without changing production behavior or any
+CI threshold.
+
 ## Verification after correction
 
 - architecture re-review: pass;
