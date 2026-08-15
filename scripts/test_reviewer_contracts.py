@@ -10,8 +10,8 @@ from pathlib import Path
 
 from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS
 from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json
-from scripts.reviewer_contracts import output_failures
-from scripts.reviewer_contracts import CASES_PATH
+from scripts.reviewer_contracts import output_failures, output_set_failures
+from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
 
 class ReviewerContractTests(unittest.TestCase):
@@ -53,6 +53,28 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
+    def test_agent_handoff_contract_and_matrix_ids_are_enforced(self) -> None:
+        temporary, root = self.copied_contract_root()
+        try:
+            agent = root / ".codex/agents/architecture-reviewer.toml"
+            agent.write_text(
+                agent.read_text(encoding="utf-8").replace("hand off", "route away", 1),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("agent missing 'hand off'" in item for item in contract_failures(root)))
+        finally:
+            temporary.cleanup()
+        temporary, root = self.copied_contract_root()
+        try:
+            matrix = root / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            matrix.write_text(
+                matrix.read_text(encoding="utf-8").replace("`architecture`", "`architecture_typo`", 1),
+                encoding="utf-8",
+            )
+            self.assertTrue(any("canonical reviewer IDs" in item for item in contract_failures(root)))
+        finally:
+            temporary.cleanup()
+
     def test_every_reviewer_has_every_blind_case_class(self) -> None:
         self.assertEqual(fixture_failures(self.cases, None), [])
         rows = self.cases["cases"]
@@ -91,6 +113,24 @@ class ReviewerContractTests(unittest.TestCase):
         )
         expectations["expectations"][0]["outcome"] = "maybe"
         self.assertTrue(any("invalid outcome" in item for item in fixture_failures(self.cases, expectations)))
+
+    def test_duplicate_expectations_and_unknown_handoffs_fail(self) -> None:
+        expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
+        expectations["expectations"].append(copy.deepcopy(expectations["expectations"][0]))
+        self.assertIn("expectations: duplicate case IDs", fixture_failures(self.cases, expectations))
+        expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
+        expectations["expectations"][0]["handoff_specialty"] = "security_typo"
+        self.assertTrue(
+            any("unknown handoff specialty" in item for item in fixture_failures(self.cases, expectations))
+        )
+
+    def test_duplicate_output_rows_fail(self) -> None:
+        expectations = load_json(EXPECTATIONS_PATH)["expectations"]
+        cases = self.cases["cases"]
+        duplicate = [{"case_id": row["case_id"]} for row in expectations]
+        duplicate[-1] = copy.deepcopy(duplicate[0])
+        failures = output_set_failures(duplicate, {}, expectations, cases)
+        self.assertIn("output set: duplicate or incorrect row count", failures)
 
     def test_output_requires_envelope_replay_and_exact_handoff(self) -> None:
         expectation = {

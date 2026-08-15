@@ -44,6 +44,7 @@ L1 / P1 — engineering review trust infrastructure.
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/CASES.json
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/EXPECTATIONS.json
+.agent-loop/initiatives/WS-CI-004-review-evidence-integrity/reviews/WS-CI-004-02-external-review-response.md
 scripts/reviewer_contracts.py
 scripts/test_reviewer_contracts.py
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/CHUNK_MAP.md

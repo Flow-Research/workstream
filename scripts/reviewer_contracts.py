@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -37,9 +38,17 @@ def load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def matrix_reviewer_ids(matrix: str) -> list[str]:
+    """Return canonical reviewer IDs from the matrix agent-to-skill table."""
+    return re.findall(r"^\|[^|]+\|\s*`([^`]+)`\s*\|", matrix, re.MULTILINE)
+
+
 def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
+    matrix_ids = matrix_reviewer_ids(matrix)
+    if matrix_ids != list(REVIEWERS):
+        failures.append("matrix: canonical reviewer IDs do not match configured reviewers")
     for reviewer, (agent_name, skill_name) in REVIEWERS.items():
         agent_path = root / ".codex/agents" / agent_name
         skill_path = root / ".agents/skills" / skill_name / "SKILL.md"
@@ -59,6 +68,7 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             "executed from inspected",
             "uncertainty",
             "freshness",
+            "hand off",
         ):
             if token not in normalized_agent:
                 failures.append(f"{reviewer}: agent missing {token!r}")
@@ -83,8 +93,13 @@ def contract_failures(root: Path = ROOT) -> list[str]:
     return failures
 
 
-def fixture_failures(cases: dict[str, object], expectations: dict[str, object] | None) -> list[str]:
+def fixture_failures(
+    cases: dict[str, object],
+    expectations: dict[str, object] | None,
+    canonical_ids: set[str] | None = None,
+) -> list[str]:
     failures: list[str] = []
+    canonical_ids = set(REVIEWERS) if canonical_ids is None else canonical_ids
     rows = cases.get("cases")
     if not isinstance(rows, list):
         return ["cases: missing list"]
@@ -120,7 +135,10 @@ def fixture_failures(cases: dict[str, object], expectations: dict[str, object] |
     expected_rows = expectations.get("expectations")
     if not isinstance(expected_rows, list):
         return failures + ["expectations: missing list"]
-    expected_ids = {row.get("case_id") for row in expected_rows if isinstance(row, dict)}
+    expected_id_rows = [row.get("case_id") for row in expected_rows if isinstance(row, dict)]
+    expected_ids = set(expected_id_rows)
+    if len(expected_id_rows) != len(expected_ids):
+        failures.append("expectations: duplicate case IDs")
     if expected_ids != ids:
         failures.append("expectations: case IDs do not match raw fixtures")
     for row in expected_rows:
@@ -133,6 +151,8 @@ def fixture_failures(cases: dict[str, object], expectations: dict[str, object] |
             failures.append(f"{row.get('case_id')}: missing finding requirements")
         if not isinstance(row.get("handoff_specialty"), (str, type(None))):
             failures.append(f"{row.get('case_id')}: invalid handoff")
+        elif row.get("handoff_specialty") not in canonical_ids | {None}:
+            failures.append(f"{row.get('case_id')}: unknown handoff specialty")
     return failures
 
 
@@ -192,6 +212,37 @@ def output_failures(
     return failures
 
 
+def output_set_failures(
+    outputs: object,
+    receipts: object,
+    expectations: list[dict[str, object]],
+    cases: list[dict[str, object]],
+) -> list[str]:
+    """Validate a complete evaluation output set without discarding duplicates."""
+    if not isinstance(outputs, list):
+        return ["output set: expected a list"]
+    if not isinstance(receipts, dict):
+        return ["output set: expected reviewer receipt object"]
+    expected_by_id = {row["case_id"]: row for row in expectations}
+    case_by_id = {row["id"]: row for row in cases}
+    failures: list[str] = []
+    output_id_rows = [row.get("case_id") for row in outputs if isinstance(row, dict)]
+    output_ids = set(output_id_rows)
+    if len(outputs) != len(expectations) or len(output_id_rows) != len(output_ids):
+        failures.append("output set: duplicate or incorrect row count")
+    if output_ids != set(expected_by_id):
+        failures.append("output set: case IDs do not match expectations")
+    for output in outputs:
+        if not isinstance(output, dict) or output.get("case_id") not in expected_by_id:
+            failures.append("output set: invalid row")
+            continue
+        receipt = receipts.get(output.get("reviewer"))
+        failures.extend(output_failures(output, expected_by_id[output["case_id"]], receipt))
+        if output.get("reviewer") != case_by_id[output["case_id"]]["reviewer"]:
+            failures.append("output: wrong reviewer")
+    return failures
+
+
 def print_failures(failures: list[str]) -> int:
     if failures:
         for failure in failures:
@@ -225,30 +276,14 @@ def main(argv: list[str] | None = None) -> int:
         return print_failures(failures)
     if args.command == "validate-output-set":
         outputs = load_json(args.output)
-        if not isinstance(outputs, list):
-            return print_failures(["output set: expected a list"])
         receipts = load_json(args.receipts)
-        if not isinstance(receipts, dict):
-            return print_failures(["output set: expected reviewer receipt object"])
         expectations = load_json(EXPECTATIONS_PATH)["expectations"]
-        expected_by_id = {row["case_id"]: row for row in expectations}
-        case_by_id = {row["id"]: row for row in load_json(CASES_PATH)["cases"]}
-        failures: list[str] = []
-        output_ids = {row.get("case_id") for row in outputs if isinstance(row, dict)}
-        if output_ids != set(expected_by_id):
-            failures.append("output set: case IDs do not match expectations")
-        for output in outputs:
-            if not isinstance(output, dict) or output.get("case_id") not in expected_by_id:
-                failures.append("output set: invalid row")
-                continue
-            receipt = receipts.get(output.get("reviewer"))
-            failures.extend(output_failures(output, expected_by_id[output["case_id"]], receipt))
-            if output.get("reviewer") != case_by_id[output["case_id"]]["reviewer"]:
-                failures.append("output: wrong reviewer")
-        return print_failures(failures)
+        cases = load_json(CASES_PATH)["cases"]
+        return print_failures(output_set_failures(outputs, receipts, expectations, cases))
     cases = load_json(CASES_PATH)
     expectations = load_json(EXPECTATIONS_PATH) if EXPECTATIONS_PATH.exists() else None
-    failures = fixture_failures(cases, expectations)
+    matrix = MATRIX_PATH.read_text(encoding="utf-8")
+    failures = fixture_failures(cases, expectations, set(matrix_reviewer_ids(matrix)))
     if args.command is None:
         failures = contract_failures() + failures
         if expectations is None:
