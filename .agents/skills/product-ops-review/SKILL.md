@@ -7,6 +7,15 @@ description: Review Workstream changes for project manager, worker, reviewer, op
 
 Review the change from the perspective of people operating Workstream.
 
+## Shared evidence
+
+Use `reviewer-evidence-protocol` first. Bind the review to its exact target,
+inspect relevant unchanged lifecycle and operator contracts, replay prior
+findings, separate executed from inspected evidence, state uncertainty and
+freshness, and hand off engineering-only findings without inventing another
+specialty's verdict.
+Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+
 ## Focus
 
 - project manager setup flow
@@ -31,9 +40,14 @@ Review the change from the perspective of people operating Workstream.
 
 ```text
 Result: PASS / PASS WITH LOW RISKS / FAIL
+Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Operator workflow risks:
 Worker/reviewer workflow risks:
 Payment/reputation risks:
 Naming or wording drift:
 Required fixes:
 ```
+
+Critical/High findings block. A Medium finding requires explicit human
+disposition. Keep Low/Informational findings visible. Engineering verdicts must
+never become product decisions (`accept`, `needs_revision`, or `reject`).
