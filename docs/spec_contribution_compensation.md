@@ -779,7 +779,15 @@ and an opaque prepare/consume/close authorization participant before product
 mutation. Every create, suspend, or resume appends one immutable lifecycle
 event atomically. Exact duplicate recovery requires fresh read authorization;
 changed or unauthorized recovery is concealed. Production composition remains
-deny-default and the actions remain unavailable until CP03.
+deny-default and the actions remain unavailable through CP03A.
+
+CP03 is split to preserve owner and activation custody. CP03A first registers
+the closed target-only `workstream.compensation.adapter` service identity and
+installs PROJECTS/ACTORS owner-held eligibility adapters; it grants that target
+no action or service-matrix membership, and all four binding actions remain
+unavailable. CP03B then installs the AUTH read/PREP adapter and activates only
+the four exact Finance Authority binding actions. Neither child adds a public
+route, provider behavior, or ContributionPolicy authority.
 
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|

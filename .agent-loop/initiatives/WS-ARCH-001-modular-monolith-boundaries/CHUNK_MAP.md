@@ -22,8 +22,10 @@
 | `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete on merge; five actions remain planned/unavailable |
 | `WS-ARCH-001-CP01C` | AUTH adapter-binding fact correction | L1 | Complete on merge; corrects unavailable facts before CON behavior |
 | `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Complete on merge; route-unreachable and deny-default while actions remain unavailable |
-| `WS-ARCH-001-CP03` | AUTH exact adapter-binding activation | L1 | Next proposed skeleton; requires a current-main executable contract |
-| `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after CP03 |
+| `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Split into CP03A/CP03B; non-executable |
+| `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Executable contract complete on merge; implementation next |
+| `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Executable contract complete on merge; follows merged CP03A |
+| `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after merged CP03B evidence |
 | `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |
 | `WS-ARCH-001-CP06` | CON guide-activation/revision policy-validation port | L1 | Proposed skeleton after CP05 |
 | `WS-ARCH-001-CP07` | PROJECT guide-bound ContributionPolicyVersion persistence | L1 | Proposed skeleton after CP06 |
@@ -50,11 +52,13 @@ feature contract crosses more than one reviewable mutation boundary. The
 02A-02I sequence is the executable split of parent 02, subject to plan review
 and human approval.
 
-CP03-CP09 and chunks 03A-04F are non-executable planning skeletons. Before implementation,
+CP04-CP09 and chunks 03A-04F are non-executable planning skeletons. Before implementation,
 each must be replaced with a current-main contract that names exact allowed and
 not-allowed files, migration head, runnable commands, reviewers, and the public
 types it extends. Their sequencing is approved here; their current text does
-not authorize code changes.
+not authorize code changes. CP03 is split/non-executable; CP03A and CP03B are
+the current-main executable exceptions and authorize only their ordered exact
+implementations after these contracts merge.
 
 PLAN4 does not insert a new prerequisite into the product sequence. Each
 current or future delivery chunk applies its no-new-debt and touched-debt rules

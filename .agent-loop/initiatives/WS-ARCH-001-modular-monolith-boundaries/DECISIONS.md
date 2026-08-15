@@ -155,5 +155,6 @@ canonical row locking, and immutable created/suspended/resumed lifecycle
 events. AUTH owns Finance Authority, action availability, opaque PREP handles,
 authorization decisions, and decision evidence. Read uses request-scoped
 authorization; create/suspend/resume use one domain-specific opaque
-prepare/consume/close port backed by AUTH only in CP03. CON never imports AUTH
-internals or translates the CON-owned `instrument_type` value.
+prepare/consume/close port backed by AUTH only in CP03B. CP03A owns the exact
+adapter target identity and PROJECTS/ACTORS eligibility prerequisite. CON never
+imports AUTH internals or translates the CON-owned `instrument_type` value.

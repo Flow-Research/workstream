@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-CP04 — Hidden ContributionPolicy Behavior
 
-Status: proposed non-executable skeleton after CP03. Risk: L1.
+Status: proposed non-executable skeleton after merged CP03B evidence. Risk: L1.
 
 CON implements hidden ContributionPolicy read/draft/update/publish/retire
 behavior using the existing persistence aggregate, exact binding lifecycle, and

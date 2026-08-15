@@ -14,6 +14,9 @@ signed-loop records do not make behavior live.
 | `03A` | Adapter-binding persistence | Merged PR #267; migration 0053 |
 | `03B` | Contribution-policy persistence | Merged PR #274; migration 0055 |
 | `WS-ARCH-001-CP02` | Hidden adapter-binding lifecycle behavior | Complete on merge; actions remain unavailable |
+| `WS-ARCH-001-CP03` | Adapter-binding activation parent | Split into CP03A/CP03B; non-executable |
+| `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility | Executable contract complete on merge; actions remain unavailable |
+| `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | Executable contract complete on merge; follows CP03A |
 | `PLAN5` | Historical complete-context human needs-revision rebase reconciliation | Merged PR #270; continuing-TaskAssignment rebase retained, independent reviewer-selection wording superseded by current PLAN2 |
 
 ## Current reconciliation
@@ -61,7 +64,7 @@ PLAN4
   -> 02C ----------------------------------> REV-04B
 
 REV-04B + 03B -> 03C -> 03D
-CP01A -> CP01B -> CP01C -> CP02 -> CP03 -> CP04 -> CP05 -> CP06 -> CP07 -> CP08
+CP01A -> CP01B -> CP01C -> CP02 -> CP03A -> CP03B -> CP04 -> CP05 -> CP06 -> CP07 -> CP08
 CP08 -> WS-ARCH-001-03A/03B replacement behavior -> WS-ARCH-001-03C activation -> CP09
 task-locked policy lineage -> assignment -> Submission-stamped attempt lineage -> allow_review -> ReviewLease
 REV revision lineage + 03C/03D + CP06/CP08 -> 07 -> REV-10 first Review commit
