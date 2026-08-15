@@ -173,6 +173,8 @@ def output_failures(
     if not isinstance(finding_ids, list):
         failures.append("output: finding_ids must be a list")
     else:
+        if expectation.get("outcome") == "finding" and not finding_ids:
+            failures.append("output: finding classification requires a stable finding")
         required_ids = expectation.get("required_finding_ids", [])
         if not set(required_ids).issubset(finding_ids):
             failures.append("output: required finding not replayed")

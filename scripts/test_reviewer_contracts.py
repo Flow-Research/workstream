@@ -165,6 +165,42 @@ class ReviewerContractTests(unittest.TestCase):
             output_failures(output, expectation, broken_receipt),
         )
 
+    def test_positive_finding_requires_stable_receipt_finding(self) -> None:
+        expectation = {
+            "case_id": "architecture-positive",
+            "outcome": "finding",
+            "required_finding_ids": [],
+            "handoff_specialty": None,
+        }
+        output = {
+            "case_id": "architecture-positive",
+            "reviewer": "architecture",
+            "evaluated_head": "a" * 40,
+            "classification": "finding",
+            "finding_ids": [],
+            "short_reason": "defect detected",
+            "handoff_specialty": None,
+        }
+        receipt = {
+            "schema_version": 1,
+            "custody": "advisory_session",
+            "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
+            "reviewer": {"specialty": "architecture", "run_id": "eval-positive"},
+            "inspections": {"start": {"cleanliness": "dirty"}, "end": {"cleanliness": "dirty"}},
+            "evidence": [
+                {"kind": "executed", "source": "review target", "result": "pass"},
+                {"kind": "inspected", "source": "raw case", "result": "pass"},
+            ],
+            "findings": [],
+            "uncertainty": [],
+            "freshness": "current",
+            "verdict": "PROVISIONAL",
+        }
+        self.assertIn(
+            "output: finding classification requires a stable finding",
+            output_failures(output, expectation, receipt),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
