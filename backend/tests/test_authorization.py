@@ -58,7 +58,7 @@ from app.modules.audit import schemas as audit_schemas_module
 from app.modules.audit.service import AuditService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.service import ActorService, ResolvedActor
-from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
+from app.modules.actors.api import SERVICE_IDENTITIES, ServiceIdentity
 from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
 from app.modules.authorization import prepared as authorization_prepared
@@ -2717,7 +2717,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         },
         ServiceIdentity.REVIEW_PROJECTION: {"review.projection.rebuild"},
     }
-    assert set(SERVICE_ACTIONS_BY_IDENTITY) == SERVICE_IDENTITIES
+    assert set(SERVICE_ACTIONS_BY_IDENTITY) == SERVICE_IDENTITIES - {ServiceIdentity.COMPENSATION_ADAPTER}
     assert {
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
@@ -2731,9 +2731,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
         for action in FUTURE_INTENT_REQUIRED_ACTIONS
     )
-    assert FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
-        set().union(*SERVICE_ACTIONS_BY_IDENTITY.values())
-    )
+    assert FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(set().union(*SERVICE_ACTIONS_BY_IDENTITY.values()))
     project_setup_actions = SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.PROJECT_SETUP]
     assert {
         action: (

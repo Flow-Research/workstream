@@ -721,9 +721,9 @@ failed substitution attempt does not consume an otherwise valid handle.
 Reads use request-scoped authorization plus canonical pre-filtered loaders and
 concealment. No authorization or grant cache survives the request.
 
-### Fixed services
+### Service identities
 
-The only fixed-service admission path is:
+An action-bearing fixed service uses this admission path:
 
 ```text
 verified service token
@@ -744,16 +744,23 @@ release readiness, but MUST NOT prevent application startup or Access
 Administrator provisioning. Startup MAY fail on closed catalogue, matrix,
 context, evaluator, or active-behavior parity drift.
 
+A closed target-only service identity is not an action-bearing fixed service.
+It may be provisioned as a typed product resource, but it has no static matrix
+row, AUTH-09E runtime admission, action, permission, or executable feature
+authority. `workstream.compensation.adapter` is the only current target-only
+identity; it is eligible to be referenced by an adapter binding and cannot act
+as the Finance Authority caller.
+
 Merged AUTH-09B provides the human-administrator-controlled
 `POST /api/v1/service-actors` provisioning route and activates only
 `actor.service.provision`. Provisioning creates an ActorProfile and exact
 ActorIdentityLink for an already-approved closed ServiceIdentity; it creates no
 role, grant, database action assignment, runtime admission, or executable
-feature authority. The current closed identities and static rows cover ART
-services only. Every future CON dispatcher, delivery, callback, reconciliation,
-or rebuild identity therefore still requires its own human-approved feature
-manifest followed by AUTH-owned identity/matrix registration, provisioning,
-AUTH-09E admission, evaluator integration, and exact action activation.
+feature authority. Every future action-bearing CON dispatcher, delivery,
+callback, reconciliation, or rebuild identity requires its own human-approved
+feature manifest followed by AUTH-owned identity/matrix registration,
+provisioning, AUTH-09E admission, evaluator integration, and exact action
+activation. Target-only identity registration never satisfies that path.
 
 ### Surface mappings
 
@@ -781,11 +788,11 @@ event atomically. Exact duplicate recovery requires fresh read authorization;
 changed or unauthorized recovery is concealed. Production composition remains
 deny-default and the actions remain unavailable through CP03A.
 
-CP03 is split to preserve owner and activation custody. CP03A first registers
+CP03 is split to preserve owner and activation custody. CP03A registers
 the closed target-only `workstream.compensation.adapter` service identity and
 installs PROJECTS/ACTORS owner-held eligibility adapters; it grants that target
 no action or service-matrix membership, and all four binding actions remain
-unavailable. CP03B then installs the AUTH read/PREP adapter and activates only
+unavailable after CP03A completes. CP03B then installs the AUTH read/PREP adapter and activates only
 the four exact binding actions for an authenticated human Finance Authority
 covering the exact project. Neither child adds a public route, provider
 behavior, or ContributionPolicy authority.

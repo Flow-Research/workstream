@@ -111,12 +111,6 @@
     },
     {
       "source_file": "backend/app/api/deps/authorization.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.service_identities",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/api/deps/authorization.py",
       "target_module": "api_controls",
       "imported_private_path": "app.modules.api_controls.service",
       "repair_owner": "WS-ARCH-001-07"

@@ -76,7 +76,10 @@ contributes five planned/unavailable ContributionPolicy actions; neither
 changes fixed-service identity or matrix membership. CP01C corrects only the
 unavailable adapter-binding resource facts before CP02. It does not change
 catalogue custody, action identifiers, fixed-service identity, availability,
-or matrix membership.
+or matrix membership. CP03A adds the target-only
+`workstream.compensation.adapter` identity and owner eligibility without a
+service-action matrix row; all four binding actions remain unavailable until
+CP03B.
 
 ## REV custody transfer
 

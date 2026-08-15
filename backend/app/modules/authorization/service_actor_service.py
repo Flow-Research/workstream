@@ -7,9 +7,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.actors.api import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.repository import ActorRepository
-from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,

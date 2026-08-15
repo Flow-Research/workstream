@@ -7,11 +7,10 @@ prepared-mutation, project-guide, policy-mutation, and REV-readiness
 foundations plus merged REV PLAN4, ART foundations, and CP02 hidden CON
 adapter-binding behavior. The old `0052_legacy_intake_removal` identifier is
 historical merge evidence. Current main ends at
-`0004_compensation_adapter_binding_lifecycle`, whose tracked predecessor is
-`0003_submission_lineage`. No later numbered migration is part of the active
-tracked graph. CP02's four binding actions
-remain unavailable. CP03 is split: CP03A installs the target identity and owner
-eligibility while actions stay unavailable; CP03B activates only the four exact
+`0005_compensation_adapter_identity`, whose tracked predecessor is
+`0004_compensation_adapter_binding_lifecycle`. CP02's four binding actions
+remain unavailable. CP03A installs the target identity and owner eligibility
+while actions stay unavailable; CP03B activates only the four exact
 Finance Authority boundaries. No public CON route, ContributionPolicy
 behavior, or outbox-dispatcher authority is active.
 

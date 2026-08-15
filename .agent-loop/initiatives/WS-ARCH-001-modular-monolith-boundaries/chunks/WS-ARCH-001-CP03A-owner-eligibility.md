@@ -2,8 +2,8 @@
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- Future implementation target: complete while binding actions remain unavailable.
+- Outcome on merge: `complete`
+- Binding actions remain unavailable; CP03B is the next activation boundary.
 
 ## Parent initiative
 
@@ -87,6 +87,7 @@ backend/app/modules/projects/api/__init__.py
 backend/app/modules/authorization/service_actor_schemas.py (closed identity parity only)
 backend/app/modules/authorization/service_actor_service.py (provisioning admission parity only)
 backend/app/modules/authorization/catalogue.py (separate target-only identities from action-bearing fixed services)
+backend/app/modules/authorization/kernel.py (target-only service identity fail-closed lookup only)
 backend/app/modules/compensation/service.py (owner-adapter injection only)
 backend/app/api/deps/authorization.py (composition only; no route)
 backend/app/main.py (composition only; no route)
@@ -98,7 +99,9 @@ backend/tests/compensation/test_adapter_binding_owner_fences.py
 backend/tests/compensation/test_adapter_binding_authorization_integration.py
 backend/tests/test_auth.py (controlled provisioning parity only)
 backend/tests/test_authorization.py (closed identity/matrix separation only)
+backend/tests/authorization/test_adapter_binding_registration.py (target-only kernel denial only)
 backend/tests/test_alembic.py
+backend/tests/migrations/test_compensation_adapter_identity.py
 backend/tests/test_database_reset.py
 backend/tests/conftest.py (exact current-schema fingerprint/reset parity only)
 backend/alembic/baseline/v01_approved_manifest_delta.json (generated current-head parity only; do not rewrite 0001)
@@ -108,8 +111,8 @@ backend/alembic/baseline/v01_schema.sql (generated current-head parity only; do 
 backend/scripts/behavior_ownership.py
 backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/partition.v1.json
-.ci/behavior-ownership/actors/compensation-adapter-eligibility.json
-.ci/behavior-ownership/projects/compensation-binding-eligibility.json
+.ci/behavior-ownership/shared/compensation-adapter-eligibility.json
+.ci/behavior-ownership/lifecycle/compensation-binding-eligibility.json
 .ci/module-boundaries/private-edge-debt.v1.json (remove only its corrected API-composition edge to ACTORS service identities)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md (remove only the corrected three AUTH-module service-identity entries; it does not inventory API composition)
@@ -128,6 +131,7 @@ backend/scripts/run_test_lanes.py
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/AUTHORIZATION_HANDOFF.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CHUNK_MAP.md
+.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CONFORMANCE_MATRIX.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md
 docs/architecture_data_model.md
 docs/spec_authorization_service.md
@@ -158,6 +162,10 @@ compatibility support for old identities or deployed rows
       identities are explicit separate sets. The target identity belongs only
       to the former; catalogue import succeeds without an empty or invented
       matrix row, and runtime service-action admission rejects it.
+- [ ] Every AUTH kernel service-matrix lookup treats a closed target-only
+      identity with no matrix row as permission-not-granted; it never raises a
+      missing-key exception or creates denial/allowed evidence outside the
+      existing canonical decision path.
 - [ ] Migration `0005_compensation_adapter_identity` updates only the closed
       ActorProfile service-identity constraint and refuses downgrade without
       mutation when the new identity is referenced.
@@ -204,8 +212,8 @@ compatibility support for old identities or deployed rows
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/actors/service_identities.py app/modules/actors/api/service_identities.py app/modules/actors/models.py app/modules/actors/compensation_adapter.py app/modules/actors/api/compensation_adapter.py app/modules/actors/api/__init__.py app/modules/projects/compensation_binding.py app/modules/projects/api/compensation_binding.py app/modules/projects/api/__init__.py app/modules/authorization/service_actor_schemas.py app/modules/authorization/service_actor_service.py app/modules/authorization/catalogue.py app/modules/compensation/service.py app/api/deps/authorization.py app/main.py alembic/env.py alembic/versions/0005_compensation_adapter_identity.py scripts/behavior_ownership.py scripts/run_test_lanes.py tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/test_auth.py tests/test_authorization.py tests/test_alembic.py tests/test_database_reset.py tests/conftest.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/test_alembic.py tests/test_database_reset.py --cov=app.modules.actors.compensation_adapter --cov=app.modules.projects.compensation_binding --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/actors/service_identities.py app/modules/actors/api/service_identities.py app/modules/actors/models.py app/modules/actors/compensation_adapter.py app/modules/actors/api/compensation_adapter.py app/modules/actors/api/__init__.py app/modules/projects/compensation_binding.py app/modules/projects/api/compensation_binding.py app/modules/projects/api/__init__.py app/modules/authorization/service_actor_schemas.py app/modules/authorization/service_actor_service.py app/modules/authorization/catalogue.py app/modules/authorization/kernel.py app/modules/compensation/service.py app/api/deps/authorization.py app/main.py alembic/env.py alembic/versions/0005_compensation_adapter_identity.py scripts/behavior_ownership.py scripts/run_test_lanes.py tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/migrations/test_compensation_adapter_identity.py tests/authorization/test_adapter_binding_registration.py tests/test_auth.py tests/test_authorization.py tests/test_alembic.py tests/test_database_reset.py tests/conftest.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/migrations/test_compensation_adapter_identity.py tests/test_alembic.py tests/test_database_reset.py --cov=app.modules.actors.compensation_adapter --cov=app.modules.projects.compensation_binding --cov-fail-under=90)
 (cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_auth.py -k service_actor)
 (cd backend && .venv/bin/python -m pytest -q tests/test_authorization.py -k "service_actor or service_identity or service_action_matrix")
 (cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json)

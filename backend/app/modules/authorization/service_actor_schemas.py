@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.actors.api import ServiceIdentity
 
 _STRICT = ConfigDict(extra="forbid", hide_input_in_errors=True)
 

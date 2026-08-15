@@ -1,4 +1,4 @@
-"""PostgreSQL proof that CP02 owner-capability fakes retain eligibility fences."""
+"""PostgreSQL proof for CP03A real owner fences and retained CP02 guards."""
 
 import asyncio
 
@@ -18,7 +18,8 @@ from app.modules.actors.api import (
     CompensationAdapterActorUnavailable,
 )
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
-from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.actors.api import ServiceIdentity
+from app.modules.actors.compensation_adapter import CompensationAdapterActorEligibility
 from app.modules.compensation.api import (
     AdapterBindingCreateRequest,
     AdapterBindingConflict,
@@ -36,6 +37,7 @@ from app.modules.projects.api import (
     ProjectCompensationBindingUnavailable,
 )
 from app.modules.projects.models import Project
+from app.modules.projects.compensation_binding import ProjectCompensationBindingEligibility
 
 BindingSeed = Callable[[], Awaitable[tuple[UUID, UUID, UUID]]]
 pytest_plugins = ("adapter_binding_fixtures",)
@@ -107,16 +109,17 @@ class _BlockingAuthorization:
 
 
 async def _prepare_suspended(
-    project_id: UUID, adapter_id: UUID, actor_id: UUID
+    project_id: UUID, adapter_id: UUID, actor_id: UUID, *, real_owners: bool = False
 ) -> UUID:
     authorization = _BlockingAuthorization()
     authorization.release.set()
     async with db_session.get_session_factory()() as session:
+        owners = _OwnerFences(session, _CompensationAdapterEligibilityMarker(adapter_id))
         service = AdapterBindingService(
             session, read_authorization=authorization,
             mutation_authorization=authorization,
-            projects=_OwnerFences(session, _CompensationAdapterEligibilityMarker(adapter_id)),
-            actors=_OwnerFences(session, _CompensationAdapterEligibilityMarker(adapter_id)),
+            projects=ProjectCompensationBindingEligibility(session) if real_owners else owners,
+            actors=CompensationAdapterActorEligibility(session) if real_owners else owners,
         )
         async with session.begin():
             created = await service.create(
@@ -137,8 +140,25 @@ async def _prepare_suspended(
     return created.adapter_binding_id
 
 
+async def _make_adapter_target(adapter_id: UUID) -> None:
+    async with db_session.get_session_factory()() as session:
+        async with session.begin():
+            profile = await session.get(ActorProfile, str(adapter_id))
+            assert profile is not None
+            profile.actor_kind = "service"
+            profile.provisioning_method = "manual_service_provisioning"
+            profile.service_identity = ServiceIdentity.COMPENSATION_ADAPTER.value
+            link = await session.scalar(
+                select(ActorIdentityLink).where(
+                    ActorIdentityLink.actor_profile_id == str(adapter_id)
+                )
+            )
+            assert link is not None
+            link.subject_kind = "service"
+
+
 @pytest.mark.parametrize("operation", ("create", "resume"))
-@pytest.mark.parametrize("locked_owner", ("project", "actor"))
+@pytest.mark.parametrize("locked_owner", ("project", "actor", "identity_link"))
 @pytest.mark.asyncio
 async def test_owner_rows_remain_locked_through_protected_mutation(
     compensation_database_env: str,
@@ -147,8 +167,9 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
     locked_owner: str,
 ) -> None:
     project_id, adapter_id, actor_id = await binding_seed()
+    await _make_adapter_target(adapter_id)
     binding_id = (
-        await _prepare_suspended(project_id, adapter_id, actor_id)
+        await _prepare_suspended(project_id, adapter_id, actor_id, real_owners=True)
         if operation == "resume"
         else None
     )
@@ -156,12 +177,11 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
 
     async def mutate() -> None:
         async with db_session.get_session_factory()() as session:
-            owners = _OwnerFences(
-                session, _CompensationAdapterEligibilityMarker(adapter_id)
-            )
             service = AdapterBindingService(
                 session, read_authorization=authorization,
-                mutation_authorization=authorization, projects=owners, actors=owners,
+                mutation_authorization=authorization,
+                projects=ProjectCompensationBindingEligibility(session),
+                actors=CompensationAdapterActorEligibility(session),
             )
             async with session.begin():
                 if operation == "create":
@@ -187,12 +207,15 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
             with pytest.raises(DBAPIError):
                 async with session.begin():
                     await session.execute(text("SET LOCAL lock_timeout = '100ms'"))
-                    model, value = (
-                        (Project, project_id)
-                        if locked_owner == "project"
-                        else (ActorProfile, adapter_id)
-                    )
-                    await session.scalar(select(model).where(model.id == str(value)).with_for_update())
+                    if locked_owner == "project":
+                        statement = select(Project).where(Project.id == str(project_id))
+                    elif locked_owner == "actor":
+                        statement = select(ActorProfile).where(ActorProfile.id == str(adapter_id))
+                    else:
+                        statement = select(ActorIdentityLink).where(
+                            ActorIdentityLink.actor_profile_id == str(adapter_id)
+                        )
+                    await session.scalar(statement.with_for_update())
 
     mutation = asyncio.create_task(mutate())
     entered = asyncio.create_task(authorization.entered.wait())
@@ -218,7 +241,7 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
 
 
 @pytest.mark.parametrize("operation", ("create", "resume"))
-@pytest.mark.parametrize("ineligible_owner", ("project", "actor"))
+@pytest.mark.parametrize("ineligible_owner", ("project", "actor", "identity_link"))
 @pytest.mark.asyncio
 async def test_committed_owner_ineligibility_denies_before_authorization(
     compensation_database_env: str,
@@ -227,8 +250,9 @@ async def test_committed_owner_ineligibility_denies_before_authorization(
     ineligible_owner: str,
 ) -> None:
     project_id, adapter_id, actor_id = await binding_seed()
+    await _make_adapter_target(adapter_id)
     binding_id = (
-        await _prepare_suspended(project_id, adapter_id, actor_id)
+        await _prepare_suspended(project_id, adapter_id, actor_id, real_owners=True)
         if operation == "resume"
         else None
     )
@@ -238,21 +262,33 @@ async def test_committed_owner_ineligibility_denies_before_authorization(
                 project = await session.get(Project, str(project_id))
                 assert project is not None
                 project.status = "closed"
-            else:
+            elif ineligible_owner == "actor":
                 actor = await session.get(ActorProfile, str(adapter_id))
                 assert actor is not None
                 actor.status = "deactivated"
                 actor.deactivated_by = str(actor_id)
                 actor.deactivated_at = datetime.now(UTC)
                 actor.deactivation_reason = "compensation adapter disabled"
+            else:
+                link = await session.scalar(
+                    select(ActorIdentityLink).where(
+                        ActorIdentityLink.actor_profile_id == str(adapter_id)
+                    )
+                )
+                assert link is not None
+                link.status = "revoked"
+                link.revoked_by = str(actor_id)
+                link.revoked_at = datetime.now(UTC)
+                link.revoked_reason = "compensation adapter credential revoked"
 
     authorization = _BlockingAuthorization()
     authorization.release.set()
     async with db_session.get_session_factory()() as session:
-        owners = _OwnerFences(session, _CompensationAdapterEligibilityMarker(adapter_id))
         service = AdapterBindingService(
             session, read_authorization=authorization,
-            mutation_authorization=authorization, projects=owners, actors=owners,
+            mutation_authorization=authorization,
+            projects=ProjectCompensationBindingEligibility(session),
+            actors=CompensationAdapterActorEligibility(session),
         )
         with pytest.raises(AdapterBindingConflict):
             async with session.begin():

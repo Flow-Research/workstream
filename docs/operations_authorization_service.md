@@ -751,6 +751,12 @@ IDs, subject kind, lifecycle state, and timestamps. Neither response includes
 issuer, subject, contact email, reason, lifecycle actor, token/claim, grant,
 assignment, or service-action-matrix data.
 
+Controlled provisioning may create the target-only
+`workstream.compensation.adapter` profile and service identity link. Operators
+must not add a service-action matrix row for it: it is a binding target, not an
+action-bearing service principal. CP03A leaves all adapter-binding actions unavailable; CP03B
+is the separate Finance Authority activation boundary.
+
 The kernel locks and revalidates the human caller profile, exact link, and
 matched system grant before target lookup and holds those locks through
 disclosure and commit. It does not acquire `AuthorityControl` or lock a distinct

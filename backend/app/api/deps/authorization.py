@@ -21,6 +21,7 @@ from app.api.deps.rate_controls import enforce_rate_control, get_rate_control_se
 from app.api.deps.api_controls import enforce_authorization_read_rate_limit
 from app.core.api_controls import StructuredHTTPException, request_ids
 from app.db.session import get_db_session
+from app.modules.actors.api import ServiceIdentity
 from app.modules.actors.service import (
     ActorRegistryError,
     ActorService,
@@ -46,7 +47,6 @@ from app.modules.authorization.runtime import (
     ProjectDiagnosticReadResourceContext,
     ServiceAuthorizationContext,
 )
-from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId
 from app.schemas.auth import AuthVerificationResult
 

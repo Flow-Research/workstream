@@ -409,10 +409,8 @@ class AuthorizationService:
             raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.UNKNOWN_ACTION)
         context, grant = self._context, None
         if isinstance(context, ServiceAuthorizationContext):
-            if action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
+            if action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(context.service_identity, ()):
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
             if action.availability is not ActionAvailability.ACTIVE:
                 raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
             expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
@@ -969,10 +967,7 @@ class AuthorizationService:
             expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
                 denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if (
-                denial is None
-                and action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]
-            ):
+            if denial is None and action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(context.service_identity, ()):
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             setup_match = project_setup_resource_matches(
                 action_id, resource_context, authority.scope_project_id
@@ -1156,7 +1151,7 @@ class AuthorizationService:
             return lifecycle, context, False
         if action is None:
             return AuthorizationDenialCode.UNKNOWN_ACTION, context, False
-        if requested_action not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
+        if requested_action not in SERVICE_ACTIONS_BY_IDENTITY.get(context.service_identity, ()):
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, context, False
         if action.availability is not ActionAvailability.ACTIVE:
             return AuthorizationDenialCode.ACTION_UNAVAILABLE, context, False
@@ -1170,7 +1165,7 @@ class AuthorizationService:
             return lifecycle, refreshed, True
         if (
             refreshed.service_identity is not context.service_identity
-            or action.action_id not in SERVICE_ACTIONS_BY_IDENTITY[refreshed.service_identity]
+            or action.action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(refreshed.service_identity, ())
             or ACTION_BY_ID[action.action_id].availability is not ActionAvailability.ACTIVE
         ):
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, refreshed, True

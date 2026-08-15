@@ -131,7 +131,6 @@ backend/app/modules/authorization/admin_service.py
   app.modules.audit.schemas
   app.modules.audit.service
 backend/app/modules/authorization/catalogue.py
-  app.modules.actors.service_identities
 backend/app/modules/authorization/kernel.py
   app.modules.audit.schemas
   app.modules.audit.service
@@ -171,11 +170,9 @@ backend/app/modules/authorization/service.py
   app.modules.audit.schemas
   app.modules.audit.service
 backend/app/modules/authorization/service_actor_schemas.py
-  app.modules.actors.service_identities
 backend/app/modules/authorization/service_actor_service.py
   app.modules.actors.models
   app.modules.actors.repository
-  app.modules.actors.service_identities
   app.modules.audit.schemas
   app.modules.audit.service
 ```

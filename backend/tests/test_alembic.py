@@ -24,7 +24,7 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0004_compensation_adapter_binding_lifecycle"
+HEAD_REVISION = "0005_compensation_adapter_identity"
 BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
@@ -84,6 +84,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0004_compensation_adapter_binding_lifecycle",
         "0003_submission_lineage",
         "0002_admission_version",
         BASELINE_REVISION,
@@ -263,6 +264,33 @@ def test_current_head_installs_compensation_binding_lifecycle(
         "ck_project_compensation_adapter_bindings_ck_project_com_da73",
         "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
     } & binding_checks
+
+
+def test_current_head_installs_compensation_adapter_identity(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, HEAD_REVISION)
+
+    async def identity_constraint() -> str:
+        connection = await asyncpg.connect(
+            isolated_database_env.replace("+asyncpg", "")
+        )
+        try:
+            return await connection.fetchval(
+                "select pg_get_constraintdef(c.oid) from pg_constraint c "
+                "join pg_class t on t.oid=c.conrelid where "
+                "t.relname='actor_profiles' and "
+                "c.conname='ck_actor_profiles_kind_service_identity'"
+            )
+        finally:
+            await connection.close()
+
+    assert "workstream.compensation.adapter" in asyncio.run(identity_constraint())
 
 def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
     isolated_database_env: str, migration_lock
