@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workstream.local/schemas/internal-review-receipt-v1.json",
+  "title": "Workstream Internal Review Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "custody", "target", "reviewer", "inspections", "evidence", "findings", "uncertainty", "freshness", "verdict"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "custody": {"const": "advisory_session"},
+    "target": {"$ref": "#/$defs/target"},
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["specialty", "run_id"],
+      "properties": {
+        "specialty": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "inspections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"$ref": "#/$defs/inspection"},
+        "end": {"$ref": "#/$defs/inspection"}
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "source", "result"],
+        "properties": {
+          "kind": {"enum": ["executed", "inspected"]},
+          "source": {"type": "string", "minLength": 1},
+          "result": {"enum": ["pass", "fail", "unavailable"]}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "uncertainty": {"type": "array", "items": {"type": "string"}},
+    "freshness": {"enum": ["current", "stale"]},
+    "verdict": {"enum": ["PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS", "N/A - with approved reason", "PROVISIONAL", "BLOCKED"]}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "findings": {
+            "contains": {
+              "type": "object",
+              "required": ["blocks_pr", "disposition"],
+              "properties": {
+                "blocks_pr": {"const": true},
+                "disposition": {"const": "unresolved"}
+              }
+            }
+          }
+        }
+      },
+      "then": {"properties": {"verdict": {"enum": ["PROVISIONAL", "BLOCKED"]}}}
+    },
+    {
+      "if": {"properties": {"verdict": {"enum": ["PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS"]}}},
+      "then": {
+        "properties": {
+          "freshness": {"const": "current"},
+          "inspections": {
+            "properties": {
+              "start": {"properties": {"cleanliness": {"const": "clean"}}},
+              "end": {"properties": {"cleanliness": {"const": "clean"}}}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_sha", "merge_base_sha", "head_sha"],
+      "properties": {
+        "base_sha": {"$ref": "#/$defs/sha"},
+        "merge_base_sha": {"$ref": "#/$defs/sha"},
+        "head_sha": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "inspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "cleanliness"],
+      "properties": {
+        "target": {"$ref": "#/$defs/target"},
+        "cleanliness": {"enum": ["clean", "dirty"]}
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "severity", "location", "blocks_pr", "disposition", "verification"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["Critical", "High", "Medium", "Low", "Informational"]},
+        "location": {"type": "string", "minLength": 1},
+        "blocks_pr": {"type": "boolean"},
+        "disposition": {"enum": ["unresolved", "fixed", "accepted_risk", "deferred_with_owner", "not_valid"]},
+        "verification": {"type": "string"}
+      }
+    }
+  }
+}

@@ -1,5 +1,9 @@
 # Internal Review Evidence
 
+Machine-readable session receipts use
+`INTERNAL_REVIEW_RECEIPT.schema.json`. They are advisory evidence, not durable
+GitHub evidence or contribution/merge authority.
+
 ## Chunk
 
 `<chunk-id>`
@@ -12,7 +16,15 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: <40-character commit sha>
+Base SHA: <40-character commit sha>
+
+Merge-base SHA: <40-character commit sha>
+
+Reviewed head SHA: <40-character commit sha>
+
+Start worktree: clean / dirty
+
+End worktree: clean / dirty
 
 Reviewed at: <UTC timestamp, for example 2026-06-18T00:00:00Z>
 
@@ -50,6 +62,9 @@ Allowed result values:
 
 List each Critical, High, and Medium finding and how it was fixed, accepted, or
 deferred by the human reviewer.
+
+Record stable finding IDs, source target, disposition, verification, and
+final-target replay. A final verdict requires matching clean start/end targets.
 
 ## Commands Run
 
