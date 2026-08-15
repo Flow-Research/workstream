@@ -96,9 +96,9 @@
     "inspection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["target", "cleanliness"],
+      "description": "Inspection state bound to the receipt's single top-level target.",
+      "required": ["cleanliness"],
       "properties": {
-        "target": {"$ref": "#/$defs/target"},
         "cleanliness": {"enum": ["clean", "dirty"]}
       }
     },

@@ -64,7 +64,8 @@ List each Critical, High, and Medium finding and how it was fixed, accepted, or
 deferred by the human reviewer.
 
 Record stable finding IDs, source target, disposition, verification, and
-final-target replay. A final verdict requires matching clean start/end targets.
+final-target replay. Record the matching target once; start/end inspection
+states bind to it and must both be clean for a final verdict.
 
 ## Commands Run
 

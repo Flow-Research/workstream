@@ -15,8 +15,10 @@ their own questions; they do not replace or duplicate this protocol.
 3. Inspect relevant unchanged owners, consumers, policies, ADRs, and ledgers—not
    only changed lines.
 4. Run the target command again immediately before the verdict.
-5. A final verdict is valid only when both snapshots have the same target triple
-   and both worktrees are clean. Dirty state permits provisional findings only.
+5. Compare both snapshots before constructing the receipt. The receipt stores
+   their matching target triple once; its start/end inspections cannot redefine
+   that target. A final verdict is valid only when the snapshots match and both
+   worktrees are clean. Dirty state permits provisional findings only.
 
 ## Evidence and findings
 

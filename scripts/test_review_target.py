@@ -176,8 +176,8 @@ class ReceiptSchemaTests(unittest.TestCase):
             "target": target,
             "reviewer": {"specialty": "security", "run_id": "run-1"},
             "inspections": {
-                "start": {"target": target, "cleanliness": "clean"},
-                "end": {"target": target, "cleanliness": "clean"},
+                "start": {"cleanliness": "clean"},
+                "end": {"cleanliness": "clean"},
             },
             "evidence": [{"kind": "executed", "source": "unit test", "result": "pass"}],
             "findings": [],
@@ -230,6 +230,16 @@ class ReceiptSchemaTests(unittest.TestCase):
         self.assert_invalid(
             lambda receipt: receipt["inspections"]["end"].__setitem__("cleanliness", "dirty")
         )
+
+    def test_inspections_cannot_redefine_any_target_sha(self) -> None:
+        for inspection in ("start", "end"):
+            for field in ("base_sha", "merge_base_sha", "head_sha"):
+                with self.subTest(inspection=inspection, field=field):
+                    self.assert_invalid(
+                        lambda receipt, inspection=inspection, field=field: receipt[
+                            "inspections"
+                        ][inspection].update(target={field: "b" * 40})
+                    )
 
 
 if __name__ == "__main__":
