@@ -119,6 +119,29 @@ The active AUTH handoff now distinguishes current main at migration `0003`
 from the `0004` head that CP02 installs on merge. No compatibility path was
 added.
 
+## Test-integrity review at `b043c846`
+
+All three reported evidence gaps were replayed and found valid:
+
+1. A new concurrency test uses distinct operation identities and route keys
+   for the same project and instrument. It proves one create succeeds, one
+   receives the concealed conflict, only one mutation authorization is
+   prepared, and exactly one active binding/event commits. The existing
+   same-operation test remains the separate idempotent-recovery proof.
+2. The authorization participant now queries the live transaction during
+   consume and requires zero binding rows and zero lifecycle events before it
+   stages its own effect. Rollback assertions remain as the separate atomicity
+   proof after denial, exception, wrong actor, or downstream product failure.
+3. Direct PostgreSQL tests now additionally cover a valid-shape active no-op
+   update, suspended-to-active version skipping, and a resumed event that
+   references an older same-binding suspension instead of the immediately
+   preceding event.
+
+The unused allowed-file, generic constraint-name, and indirect route-validator
+observations do not weaken a product or security invariant and are not expanded
+in this corrective diff. CodeRabbit still has not supplied substantive review
+of the corrected implementation head.
+
 ## Verification after correction
 
 - architecture re-review: pass;

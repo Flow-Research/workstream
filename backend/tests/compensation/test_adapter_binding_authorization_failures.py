@@ -48,6 +48,12 @@ class _ParticipantAuthorization(Authorization):
     ) -> UUID:
         assert type(prepared) is Prepared and not prepared.closed
         assert self._session is not None
+        assert await self._session.scalar(
+            select(func.count()).select_from(ProjectCompensationAdapterBinding)
+        ) == 0
+        assert await self._session.scalar(
+            select(func.count()).select_from(CompensationAdapterBindingLifecycleEvent)
+        ) == 0
         await self._session.execute(
             text("insert into cp02_staged_authorization_effects values (:operation_id)"),
             {"operation_id": str(facts.operation_id)},

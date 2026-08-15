@@ -12,6 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from app.db import session as db_session
 from app.modules.compensation.api import (
     AdapterBindingCreateRequest,
+    AdapterBindingResumeRequest,
     AdapterBindingSuspendRequest,
 )
 from app.modules.compensation.models import (
@@ -52,7 +53,7 @@ async def _create_and_suspend(
 @pytest.mark.parametrize(
     "changes",
     (
-        {"status": "active", "binding_lifecycle_version": 2},
+        {"status": "active", "binding_lifecycle_version": 1},
         {
             "status": "suspended", "binding_lifecycle_version": 3,
             "suspended_by": "actor", "suspended_at": datetime.now(UTC),
@@ -122,6 +123,99 @@ async def test_database_rejects_suspended_to_suspended_transition(
                     .where(ProjectCompensationAdapterBinding.id == binding_id)
                     .values(binding_lifecycle_version=3)
                 )
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_suspended_to_active_version_skip(
+    compensation_database_env: str,
+    binding_seed: BindingSeed,
+) -> None:
+    project_id, adapter_id, actor_id = await binding_seed()
+    binding_id, _ = await _create_and_suspend(
+        project_id, adapter_id, actor_id, "adapter.primary"
+    )
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(DBAPIError):
+            async with session.begin_nested():
+                await session.execute(
+                    update(ProjectCompensationAdapterBinding)
+                    .where(ProjectCompensationAdapterBinding.id == binding_id)
+                    .values(
+                        status="active", binding_lifecycle_version=4,
+                        suspended_by=None, suspended_at=None,
+                        resumed_by=str(actor_id),
+                    )
+                )
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_older_same_binding_suspension_reference(
+    compensation_database_env: str,
+    binding_seed: BindingSeed,
+) -> None:
+    project_id, adapter_id, actor_id = await binding_seed()
+    authorization = Authorization()
+    async with db_session.get_session_factory()() as session:
+        binding_service = service(session, authorization)
+        async with session.begin():
+            created = await binding_service.create(
+                AdapterBindingCreateRequest(
+                    operation_id=uuid4(), actor_profile_id=actor_id,
+                    project_id=project_id, instrument_type="money",
+                    adapter_actor_id=adapter_id, route_key="adapter.primary",
+                )
+            )
+        async with session.begin():
+            first = await binding_service.suspend(
+                AdapterBindingSuspendRequest(
+                    operation_id=uuid4(), actor_profile_id=actor_id,
+                    project_id=project_id, adapter_binding_id=created.adapter_binding_id,
+                    expected_lifecycle_version=1,
+                )
+            )
+        async with session.begin():
+            await binding_service.resume(
+                AdapterBindingResumeRequest(
+                    operation_id=uuid4(), actor_profile_id=actor_id,
+                    project_id=project_id, adapter_binding_id=created.adapter_binding_id,
+                    expected_lifecycle_version=2,
+                )
+            )
+        async with session.begin():
+            await binding_service.suspend(
+                AdapterBindingSuspendRequest(
+                    operation_id=uuid4(), actor_profile_id=actor_id,
+                    project_id=project_id, adapter_binding_id=created.adapter_binding_id,
+                    expected_lifecycle_version=3,
+                )
+            )
+        with pytest.raises(DBAPIError):
+            async with session.begin_nested():
+                await session.execute(
+                    update(ProjectCompensationAdapterBinding)
+                    .where(
+                        ProjectCompensationAdapterBinding.id
+                        == created.adapter_binding_id
+                    )
+                    .values(
+                        status="active", binding_lifecycle_version=5,
+                        suspended_by=None, suspended_at=None,
+                        resumed_by=str(actor_id),
+                    )
+                )
+                session.add(
+                    CompensationAdapterBindingLifecycleEvent(
+                        id=uuid4(), operation_id=uuid4(),
+                        request_digest="sha256:" + "0" * 64,
+                        project_id=str(project_id),
+                        adapter_binding_id=created.adapter_binding_id,
+                        event_type="resumed", actor_profile_id=str(actor_id),
+                        from_status="suspended", to_status="active",
+                        from_lifecycle_version=4, to_lifecycle_version=5,
+                        prior_suspension_event_id=first.event_id,
+                    )
+                )
+                await session.flush()
 
 
 @pytest.mark.parametrize("prior_case", ("missing", "cross_binding", "forged_actor"))

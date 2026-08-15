@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 
 from app.db import session as db_session
@@ -275,6 +275,47 @@ async def test_concurrent_duplicate_waits_then_recovers_one_effect(
         assert len((await session.scalars(select(ProjectCompensationAdapterBinding))).all()) == 1
         assert len(
             (await session.scalars(select(CompensationAdapterBindingLifecycleEvent))).all()
+        ) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_distinct_creates_allow_one_active_binding(
+    compensation_database_env: str,
+    binding_seed: BindingSeed,
+) -> None:
+    project_id, adapter_id, actor_id = await binding_seed()
+    winner_auth = _BlockingAuthorization()
+    loser_auth = _Authorization()
+
+    async def run(operation_id: UUID, route_key: str, authorization: _Authorization):
+        async with db_session.get_session_factory()() as session:
+            try:
+                async with session.begin():
+                    return await _service(session, authorization).create(
+                        AdapterBindingCreateRequest(
+                            operation_id=operation_id, actor_profile_id=actor_id,
+                            project_id=project_id, instrument_type="money",
+                            adapter_actor_id=adapter_id, route_key=route_key,
+                        )
+                    )
+            except AdapterBindingConflict:
+                return "conflict"
+
+    winner = asyncio.create_task(run(uuid4(), "adapter.first", winner_auth))
+    await winner_auth.entered.wait()
+    loser = asyncio.create_task(run(uuid4(), "adapter.second", loser_auth))
+    await asyncio.sleep(0.05)
+    assert not loser.done()
+    winner_auth.release.set()
+    results = await asyncio.gather(winner, loser)
+    assert sum(result == "conflict" for result in results) == 1
+    assert winner_auth.prepared + loser_auth.prepared == 1
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(
+            select(func.count()).select_from(ProjectCompensationAdapterBinding)
+        ) == 1
+        assert await session.scalar(
+            select(func.count()).select_from(CompensationAdapterBindingLifecycleEvent)
         ) == 1
 
 

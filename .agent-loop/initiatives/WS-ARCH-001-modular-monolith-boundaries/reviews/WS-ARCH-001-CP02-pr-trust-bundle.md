@@ -69,6 +69,11 @@ human identity substitution; deny-default production composition; consume
 denial/exception/wrong-actor closure and rollback; failure after successful
 close; complete forbidden-transition and immutable-identity rejection; forged
 resume-attribution rejection; and event update/delete/truncate rejection.
+Distinct-operation create races separately prove the one-active-binding
+invariant rather than relying on same-operation recovery. The AUTH participant
+also inspects the live transaction during consume and proves that no binding or
+lifecycle event has been staged before authorization. PostgreSQL proof includes
+suspended-to-active version skips and stale same-binding suspension references.
 
 ## Tests and checks run
 

@@ -67,7 +67,10 @@ request runtime validation, all-mutation concurrency coverage, deterministic
 lock tests, schema/lane parity, test-fixture isolation, service-actor proof, and
 stale implementation evidence, documentation coverage for the new public and
 repository surfaces, consume denial/exception/wrong-actor rollback proof, and
-the complete promised PostgreSQL forbidden-mutation matrix.
+the complete promised PostgreSQL forbidden-mutation matrix. Follow-up evidence
+also distinguishes same-operation recovery from distinct-operation create
+competition and verifies inside AUTH consumption that product rows have not
+been staged early.
 
 ## Residual risk owned by CP03
 
