@@ -6,6 +6,64 @@ import subprocess
 from pathlib import Path
 
 
+class GitCommandError(RuntimeError):
+    """A checked Git command failed or returned invalid output."""
+
+    def __init__(self, code: str, command: list[str], detail: str = "") -> None:
+        super().__init__(code)
+        self.code = code
+        self.command = tuple(command)
+        self.detail = detail
+
+
+def run_checked(
+    command: list[str],
+    *,
+    repository_root: Path | None = None,
+    timeout_seconds: float = 10,
+) -> str:
+    """Return stdout for Git, raising a stable error on any failure."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=repository_root,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        code = "GIT_TIMEOUT" if isinstance(exc, subprocess.TimeoutExpired) else "GIT_EXEC_ERROR"
+        raise GitCommandError(code, command, str(exc)) from exc
+    if result.returncode != 0:
+        raise GitCommandError("GIT_COMMAND_FAILED", command, result.stderr.strip())
+    return result.stdout
+
+
+def resolve_commit(ref: str, *, repository_root: Path | None = None) -> str:
+    """Resolve a ref to one full commit SHA or fail closed."""
+    command = ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"]
+    output = run_checked(command, repository_root=repository_root).strip()
+    if len(output) != 40 or any(character not in "0123456789abcdef" for character in output):
+        raise GitCommandError("GIT_INVALID_COMMIT", command, output)
+    return output
+
+
+def resolve_merge_base(
+    base_sha: str,
+    head_sha: str,
+    *,
+    repository_root: Path | None = None,
+) -> str:
+    """Resolve the unique merge base for two commits or fail closed."""
+    command = ["git", "merge-base", base_sha, head_sha]
+    output = run_checked(command, repository_root=repository_root).strip()
+    if len(output) != 40 or any(character not in "0123456789abcdef" for character in output):
+        raise GitCommandError("GIT_INVALID_MERGE_BASE", command, output)
+    return output
+
+
 def maybe_run(command: list[str], *, repository_root: Path | None = None) -> str:
     """Return stdout for a successful Git command, otherwise an empty string."""
     result = subprocess.run(
