@@ -2,7 +2,7 @@
 
 ## Result
 
-Pass after correction.
+pass
 
 ## Reviewed intent
 
@@ -40,7 +40,8 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 - Required ACTORS to expose its unchanged closed `ServiceIdentity` contract
   through `actors.api`, moved the three CP03A-touched AUTH consumers and the
   touched API-composition consumer to that public surface, and scoped each
-  boundary ledger to retire exactly the edges it inventories.
+  boundary ledger to retire exactly the edges it inventories: three in the
+  AUTH outbound ledger and one composition edge in the machine ledger.
 - Defined a target-only identity that cannot enter the service action matrix.
 - Added exact migration, reset fingerprint, fixed-baseline, provisioning, and
   downgrade-refusal proof for CP03A.
@@ -56,14 +57,14 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 
 ## Reviewer results
 
-| Track | Result | Remaining blocker |
-|---|---|---|
-| Architecture / senior engineering | pass after closed-identity public-API and exact-ledger correction | none |
-| Security / authorization | pass with low evidence-cleanup risk resolved in this document | none |
-| Product / operations | pass | none |
-| Reuse / QA / test delta | pass | none |
-| CI integrity | pass | none |
-| Documentation | pass for current entry points and executable contracts | completed CP02 contract retained as historical exact-change evidence by the atomic-state gate |
+| Track | Result | Notes | Remaining blocker |
+|---|---|---|---|
+| Architecture / senior engineering | pass | Closed-identity public API and exact ledger scope corrected | none |
+| Security / authorization | pass | Low evidence-cleanup risk resolved in this document | none |
+| Product / operations | pass | — | none |
+| Reuse / QA / test delta | pass | — | none |
+| CI integrity | pass | — | none |
+| Documentation | pass | Current entry points and executable contracts are consistent; completed CP02 remains historical exact-change evidence under the atomic-state gate | none |
 
 ## Deterministic evidence
 

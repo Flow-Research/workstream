@@ -786,8 +786,9 @@ the closed target-only `workstream.compensation.adapter` service identity and
 installs PROJECTS/ACTORS owner-held eligibility adapters; it grants that target
 no action or service-matrix membership, and all four binding actions remain
 unavailable. CP03B then installs the AUTH read/PREP adapter and activates only
-the four exact Finance Authority binding actions. Neither child adds a public
-route, provider behavior, or ContributionPolicy authority.
+the four exact binding actions for an authenticated human Finance Authority
+covering the exact project. Neither child adds a public route, provider
+behavior, or ContributionPolicy authority.
 
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|

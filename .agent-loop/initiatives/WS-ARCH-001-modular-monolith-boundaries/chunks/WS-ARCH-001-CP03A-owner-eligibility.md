@@ -110,7 +110,7 @@ backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/actors/compensation-adapter-eligibility.json
 .ci/behavior-ownership/projects/compensation-binding-eligibility.json
-.ci/module-boundaries/private-edge-debt.v1.json (remove only the corrected three AUTH-module edges and API-composition edge to ACTORS service identities)
+.ci/module-boundaries/private-edge-debt.v1.json (remove only its corrected API-composition edge to ACTORS service identities)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md (remove only the corrected three AUTH-module service-identity entries; it does not inventory API composition)
 .agent-loop/CURRENT_STATE.md
@@ -179,10 +179,10 @@ compatibility support for old identities or deployed rows
       direct `actors.service_identities` import.
 - [ ] The module-boundary debt ledger and human-readable import ledger remove
       exactly their respective corrected private edges: the machine ledger
-      removes the three AUTH-module edges plus the API-composition edge, while
-      the AUTH outbound ledger removes only its three inventoried AUTH-module
-      entries. CP03A adds no new private edge and does not claim unrelated
-      existing AUTH-to-ACTORS debt as repaired.
+      removes its one inventoried API-composition edge, while the AUTH outbound
+      ledger removes its three inventoried AUTH-module entries. CP03A adds no
+      new private edge and does not claim unrelated existing AUTH-to-ACTORS
+      debt as repaired.
 - [ ] PROJECTS locks and validates only the exact project's PROJECTS-owned
       binding eligibility through the immutable public
       `ProjectCompensationBindingEligibilityPort`; absent, ineligible, and
@@ -204,7 +204,7 @@ compatibility support for old identities or deployed rows
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/actors/service_identities.py app/modules/actors/compensation_adapter.py app/modules/projects/compensation_binding.py app/modules/authorization/catalogue.py tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/test_auth.py tests/test_authorization.py tests/test_alembic.py tests/test_database_reset.py)
+(cd backend && .venv/bin/python -m ruff check app/modules/actors/service_identities.py app/modules/actors/api/service_identities.py app/modules/actors/models.py app/modules/actors/compensation_adapter.py app/modules/actors/api/compensation_adapter.py app/modules/actors/api/__init__.py app/modules/projects/compensation_binding.py app/modules/projects/api/compensation_binding.py app/modules/projects/api/__init__.py app/modules/authorization/service_actor_schemas.py app/modules/authorization/service_actor_service.py app/modules/authorization/catalogue.py app/modules/compensation/service.py app/api/deps/authorization.py app/main.py alembic/env.py alembic/versions/0005_compensation_adapter_identity.py scripts/behavior_ownership.py scripts/run_test_lanes.py tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/test_auth.py tests/test_authorization.py tests/test_alembic.py tests/test_database_reset.py tests/conftest.py)
 (cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/actors/test_compensation_adapter_eligibility.py tests/projects/test_compensation_binding_eligibility.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_authorization_integration.py tests/test_alembic.py tests/test_database_reset.py --cov=app.modules.actors.compensation_adapter --cov=app.modules.projects.compensation_binding --cov-fail-under=90)
 (cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/test_auth.py -k service_actor)
 (cd backend && .venv/bin/python -m pytest -q tests/test_authorization.py -k "service_actor or service_identity or service_action_matrix")
@@ -212,6 +212,7 @@ compatibility support for old identities or deployed rows
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 ! rg -n "app\.modules\.actors\.service_identities" backend/app/modules/authorization/catalogue.py backend/app/modules/authorization/service_actor_schemas.py backend/app/modules/authorization/service_actor_service.py backend/app/api/deps/authorization.py
 python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_markdown_links.py
 git diff --check
@@ -220,6 +221,9 @@ gh pr checks <PR-number> --watch
 
 Hosted GitHub Actions owns the full PostgreSQL matrix and repository coverage.
 The local machine must not run the full suite.
+
+Sub-agent session closure is verified by the executing agent at completion; it
+is orchestration state, not a repository command.
 
 ## Required reviewers
 

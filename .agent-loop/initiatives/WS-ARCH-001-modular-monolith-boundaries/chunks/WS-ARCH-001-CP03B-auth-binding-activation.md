@@ -266,11 +266,12 @@ Project Manager, Operator, Access Administrator, Audit Authority, project-role, 
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/authorization/api/adapter_bindings.py app/modules/authorization/runtime.py app/modules/authorization/domain/adapter_bindings.py app/modules/authorization/domain/prepared_adapter_bindings.py app/modules/authorization/adapter_binding_authorization.py app/adapters/auth/adapter_bindings.py tests/authorization/test_adapter_binding_activation.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py tests/test_audit.py)
+(cd backend && .venv/bin/python -m ruff check app/modules/authorization/api/adapter_bindings.py app/modules/authorization/api/__init__.py app/modules/authorization/catalogue.py app/modules/authorization/runtime.py app/modules/authorization/prepared.py app/modules/authorization/kernel.py app/modules/authorization/domain/adapter_bindings.py app/modules/authorization/domain/prepared_adapter_bindings.py app/modules/authorization/adapter_binding_authorization.py app/adapters/auth/adapter_bindings.py app/adapters/auth/__init__.py app/api/deps/authorization.py app/main.py app/modules/compensation/api/adapter_bindings.py app/modules/compensation/service.py tests/authorization/test_adapter_binding_activation.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py tests/test_audit.py)
 (cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/authorization/test_adapter_binding_activation.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py tests/test_audit.py --cov=app.modules.authorization.adapter_binding_authorization --cov=app.modules.authorization.api.adapter_bindings --cov=app.modules.authorization.domain.adapter_bindings --cov=app.modules.authorization.domain.prepared_adapter_bindings --cov=app.adapters.auth.adapter_bindings --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_markdown_links.py
 git diff --check
@@ -279,6 +280,14 @@ gh pr checks <PR-number> --watch
 
 Hosted GitHub Actions owns the full PostgreSQL matrix and repository-wide
 coverage run. The local machine must not run the full suite.
+
+The focused coverage command measures the materially changed AUTH
+adapter/evaluator modules. Existing catalogue, kernel, PREP, package-export,
+composition-root, and CON injection files receive exact behavioral assertions
+in the listed tests plus GitHub's repository-wide coverage gate; adding those
+large parity surfaces to one combined focused percentage would obscure rather
+than prove the new boundary. Sub-agent session closure is verified by the
+executing agent at completion, not by an invented repository command.
 
 ## Required reviewers
 
