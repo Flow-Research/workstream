@@ -82,9 +82,11 @@ historical-row backfill or compatibility behavior.
   exact ContributionPolicy actions registered but unavailable. CP01C is
   complete on merge with corrected binding identity and lifecycle-generation
   facts. Callback/fulfillment authority stays separate.
-- CP02 is complete on merge with hidden, route-unreachable adapter-binding
-  behavior and immutable lifecycle history while all four AUTH actions remain
-  unavailable. CP03-CP05 remain non-executable activation/policy skeletons.
+- CP02 is merged with hidden, route-unreachable adapter-binding behavior and
+  immutable lifecycle history while all four AUTH actions remain unavailable.
+  CP03 is split: CP03A's executable target-identity/owner-eligibility contract
+  precedes CP03B's executable Finance Authority activation contract. CP04-CP05
+  remain non-executable policy behavior/activation skeletons.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required
   unless current-main discovery proves real deployed data exists.
@@ -116,7 +118,8 @@ CP08/ARCH-03B replacement path.
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. Expand and review CP03 against
-current main before activating the exact adapter-binding actions. CP02 itself
-remains hidden and route-unreachable.
+participant after REV's earlier gates merge. Implement reviewed CP03A while all
+binding actions remain unavailable, then CP03B to activate exactly those four
+actions for covered Finance Authority. CP02 remains hidden and route-unreachable;
+neither child adds a route.
 Open pull requests determine transient CON work.

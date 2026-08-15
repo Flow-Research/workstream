@@ -1,11 +1,26 @@
-# Chunk Contract: WS-ARCH-001-CP03 — Adapter-Binding AUTH Activation
+# Chunk Contract: WS-ARCH-001-CP03 — Adapter-Binding Activation Split Parent
 
-Status: proposed non-executable skeleton after CP02. Risk: L1.
+## Status
 
-AUTH integrates the exact adapter-binding evaluator and activates only the
-binding create/read/suspend/resume actions proven by CP02. It adds no CON
-behavior, callback authority, policy activation, or generic compensation
-management permission.
+Split and non-executable.
+
+## Goal
+
+Coordinate the two independently reviewable prerequisites for safe
+adapter-binding activation.
+
+## Approved split
+
+```text
+CP02 hidden adapter-binding lifecycle behavior
+-> CP03A compensation-adapter identity and owner eligibility
+-> CP03B exact Finance Authority AUTH activation
+-> CP04 hidden ContributionPolicy behavior
+```
+
+CP03A owns no AUTH action activation. CP03B owns no identity registration,
+schema change, or owner eligibility behavior. Neither child adds a public
+adapter-binding route.
 
 ## Merge state
 

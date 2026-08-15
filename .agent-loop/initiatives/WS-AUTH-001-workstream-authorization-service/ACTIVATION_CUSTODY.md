@@ -198,6 +198,25 @@ focused coverage commands for every changed subsystem at 90 percent or higher,
 and the full backend suite preserving the global 78 percent floor. Generic “as
 applicable” proof or AUTH-only tests cannot authorize activation.
 
+`WS-ARCH-001-CP03` is split/non-executable. CP03A is the prerequisite executable
+contract for the closed adapter target identity and real owner eligibility; it
+activates no action. CP03B is the activation executable contract. CP02 provides
+the immutable hidden feature manifest, transaction custody, recovery behavior,
+and deny-default composition. After CP03A merges, CP03B may activate only:
+
+```text
+compensation.adapter_binding.read
+compensation.adapter_binding.create
+compensation.adapter_binding.suspend
+compensation.adapter_binding.resume
+```
+
+All four remain unavailable until CP03B implementation merges. They admit only
+an active human Finance Authority covering the exact project, use the existing
+request-scoped read and opaque PREP protocols, add no service identity or
+route, and do not activate ContributionPolicy, retirement, fulfillment,
+callback, delivery, dispatcher, or reconciliation authority.
+
 `WS-AUTH-001-ART-02D-INTERNAL` requires the exact merged ART-02C2 verification,
 resolution, and scanner behavior plus ART-02C3 recovery/fencing foundations and
 any ART-02D resource-composer dependency. ART-02D does not own the internal

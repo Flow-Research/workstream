@@ -54,7 +54,9 @@
   non-executable split parent; CP01A is complete on merge with its four actions
   registered/unavailable, CP01B is complete on merge with five policy actions
   registered/unavailable. CP02 is complete on merge with hidden CON behavior
-  while its AUTH actions remain unavailable; CP03-CP09 remain non-executable skeletons.
+  while its AUTH actions remain unavailable; CP03 is split with executable
+  CP03A/CP03B contracts complete on merge, while CP04-CP09 remain
+  non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned on merge
   and changes no runtime. It makes the existing incremental strangler
   operational: unrelated frozen debt cannot block delivery, new debt is
@@ -77,8 +79,14 @@
   match exact binding identity and lifecycle generation without a unit alias.
 - WS-ARCH-001-CP02 is complete on merge: hidden, route-unreachable
   adapter-binding behavior while its AUTH actions remain unavailable.
-- WS-ARCH-001-CP03 is the next proposed boundary: exact adapter-binding
-  activation after its current-main contract is expanded and reviewed.
+- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A's executable
+  contract specifies the closed compensation-adapter target identity and
+  PROJECTS/ACTORS owner eligibility while actions remain unavailable. CP03B's
+  executable contract specifies and requires proof of exact Finance Authority
+  activation without adding a route or adjacent compensation authority.
+- WS-ARCH-001-CP03A is planned with an executable implementation contract.
+- WS-ARCH-001-CP03B is planned with an executable implementation contract after
+  merged CP03A.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.

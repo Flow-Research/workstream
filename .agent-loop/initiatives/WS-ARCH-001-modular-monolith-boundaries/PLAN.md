@@ -350,7 +350,8 @@ CP01A AUTH adapter-binding unavailable registration
 -> CP01B AUTH ContributionPolicy unavailable registration
 -> CP01C AUTH adapter-binding fact correction
 -> CP02 CON hidden adapter-binding behavior
--> CP03 AUTH adapter-binding activation
+-> CP03A adapter target identity and owner eligibility
+-> CP03B AUTH Finance Authority adapter-binding activation
 -> CP04 CON hidden ContributionPolicy behavior
 -> CP05 AUTH ContributionPolicy activation
 -> CP06 CON validation port
