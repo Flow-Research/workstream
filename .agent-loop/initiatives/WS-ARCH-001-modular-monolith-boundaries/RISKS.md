@@ -32,6 +32,6 @@
 | Debt repayment expands a feature beyond a reviewable safety boundary | High | Record exact stranded debt, prove no growth, and create a later owner-sized closure contract rather than mixing product boundaries |
 | Mechanical quotas reward noisy or cosmetic cleanup | Medium | Use exact edge/finding deltas and behavior ownership; prohibit arbitrary per-PR percentages and cosmetic test splitting |
 | Overlapping ledgers are added together and misstate debt | Medium | Report general, AUTH, structural, and behavior-ownership measurements separately under their existing owners |
-| Adapter-binding resume erases suspension attribution | Critical | CP02 appends one immutable CON lifecycle event per version in the same transaction; CP03 later stages AUTH decision evidence atomically beside it |
+| Adapter-binding resume erases suspension attribution | Critical | CP02 appends one immutable CON lifecycle event per version in the same transaction; CP03B later stages AUTH decision evidence atomically beside it |
 | Unrelated internal service is bound as a compensation adapter | Critical | CP02 requires an injected exact ACTORS eligibility capability; generic service kind and existing ART/REV identities fail closed; CP03A installs the exact target identity/owner rule before CP03B activation |
-| CP02 invents a second authorization protocol or imports AUTH internals | Critical | CON defines only a domain-facing opaque prepare/consume/close port; production denies until CP03 adapts the existing AUTH PREP implementation |
+| CP02 invents a second authorization protocol or imports AUTH internals | Critical | CON defines only a domain-facing opaque prepare/consume/close port; production denies until CP03B adapts the existing AUTH PREP implementation |

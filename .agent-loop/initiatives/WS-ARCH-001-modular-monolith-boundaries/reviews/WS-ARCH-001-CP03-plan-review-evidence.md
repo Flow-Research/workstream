@@ -33,6 +33,10 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 - Distinguished duplicate-recovery read evidence from mutation PREP/evidence.
 - Split identity/schema/owner eligibility from action activation.
 - Added exact PROJECTS/ACTORS owner adapter files and retained-lock/race proof.
+- Made ACTORS identity eligibility and PROJECTS project eligibility explicit
+  public owner APIs consumed by injected CON ports; AUTH imports neither owner
+  implementation, PROJECTS interprets no CON lifecycle state, and CON alone
+  decides which lifecycle operations require the ports.
 - Defined a target-only identity that cannot enter the service action matrix.
 - Added exact migration, reset fingerprint, fixed-baseline, provisioning, and
   downgrade-refusal proof for CP03A.
@@ -50,12 +54,12 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 
 | Track | Result | Remaining blocker |
 |---|---|---|
-| Architecture / senior engineering | pass | none |
-| Security / authorization | pass with completed stale-doc condition | none |
+| Architecture / senior engineering | pass after exact-head public-owner-boundary correction | none |
+| Security / authorization | pass with low evidence-cleanup risk resolved in this document | none |
 | Product / operations | pass | none |
 | Reuse / QA / test delta | pass | none |
 | CI integrity | pass | none |
-| Documentation | pass after CP04 dependency wording correction | none |
+| Documentation | pass after exact-head evidence and CP02 successor reconciliation | none |
 
 ## Deterministic evidence
 

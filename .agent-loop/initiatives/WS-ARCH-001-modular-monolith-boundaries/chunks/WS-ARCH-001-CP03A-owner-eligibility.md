@@ -13,7 +13,8 @@ WS-ARCH-001 — Modular Monolith Boundaries
 
 Register one closed compensation-adapter target identity and implement the real
 PROJECTS- and ACTORS-owned eligibility adapters required by CP02 create/resume,
-without activating any adapter-binding action.
+through their owner modules' public APIs and without activating any
+adapter-binding action.
 
 ## Why this chunk exists
 
@@ -50,10 +51,22 @@ Eligibility requires, under ACTORS-owned transaction-held row locks:
 - the actor's exact service ActorIdentityLink exists, is active, and has
   `subject_kind=service`.
 
-PROJECTS independently locks the exact project and accepts only the existing
-CP02-approved binding lifecycle states. Both owner adapters flush nothing,
-commit nothing, and return only their public immutable facts. CP02 retains the
-locks through the caller-owned root transaction.
+ACTORS exposes these facts only through
+`app.modules.actors.api.CompensationAdapterActorEligibilityPort`; its concrete
+implementation remains private to ACTORS. CON consumes that injected public
+port. AUTH may register/provision the closed identity through existing public
+composition surfaces, but AUTH must not import the ACTORS implementation or
+create an AUTH-to-ACTORS domain adapter.
+
+PROJECTS independently locks the exact project and validates only
+PROJECTS-owned binding eligibility through
+`app.modules.projects.api.ProjectCompensationBindingEligibilityPort`. PROJECTS
+does not inspect or decide a CON binding lifecycle state. CON owns the binding
+lifecycle and decides that create and resume require the PROJECTS and ACTORS
+eligibility ports, while suspend remains possible after owner ineligibility.
+Both owner adapters flush nothing, commit nothing, and return only their public
+immutable facts. CP02 retains the locks through the caller-owned root
+transaction.
 
 ## Allowed files
 
@@ -148,8 +161,16 @@ compatibility support for old identities or deployed rows
       identity link; human actors, generic service kind, missing/revoked links,
       inactive profiles, and every existing ART/REV/project/checker identity
       deny with one concealed unavailable result.
-- [ ] PROJECTS locks and validates the exact project under the CP02-approved
-      lifecycle rule; absent/ineligible/cross-project targets deny.
+- [ ] ACTORS exposes and CP02/CON consumes only the immutable public
+      `CompensationAdapterActorEligibilityPort`; AUTH and CON import no ACTORS
+      private model, repository, service, or concrete adapter.
+- [ ] PROJECTS locks and validates only the exact project's PROJECTS-owned
+      binding eligibility through the immutable public
+      `ProjectCompensationBindingEligibilityPort`; absent, ineligible, and
+      cross-project targets deny, and PROJECTS contains no CON lifecycle rule.
+- [ ] CON alone decides that create/resume invoke both owner eligibility ports
+      and that suspend does not; no owner module interprets binding status or
+      lifecycle version.
 - [ ] Owner locks remain held through CP02 authorization and mutation for
       create/resume; a competing revocation or project-ineligibility commit
       cannot enter between validation and product transition.

@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-CP02 — Hidden Adapter-Binding Behavior
 
-Status: complete on implementation merge; CP03 is the next activation gate.
+Status: complete on implementation merge; CP03A then CP03B are the next gates.
 Risk: L1.
 
 ## Goal
@@ -9,8 +9,8 @@ Implement CON-owned, route-unreachable create/read/suspend/resume behavior for
 `ProjectCompensationAdapterBinding` while all four registered AUTH actions
 remain unavailable. Prove the complete product state machine, public module
 boundaries, PostgreSQL guards, immutable lifecycle history, and deny-default
-authorization seams before CP03 installs real AUTH adapters and activates the
-actions.
+authorization seams before CP03A installs the target identity and owner
+eligibility and CP03B installs real AUTH adapters and activates the actions.
 
 ## Why this correction exists
 
@@ -36,9 +36,10 @@ Current main also proves that:
 - Hidden CON behavior is complete and route-unreachable.
 - Production composition remains deny-default.
 - All four actions remain planned/unavailable.
-- CP03 becomes the next gate and must install the real AUTH/ACTORS adapters,
-  approved compensation-adapter identity rule, atomic authorization evidence,
-  and exact activation before any surface becomes usable.
+- CP03A becomes the next gate and must install the approved target identity
+  plus PROJECTS/ACTORS public owner eligibility while every action remains
+  unavailable. CP03B then installs atomic AUTH authorization evidence and exact
+  activation before any surface becomes usable.
 
 ## Risk class
 
@@ -196,7 +197,7 @@ close(object) -> None
 CON neither recognizes nor constructs the concrete object. Production defaults
 deny. CP02 fakes must enforce identity, action, actor, project, facts, operation,
 session/transaction, single consumption, replay rejection, and close
-invalidation. CP03 later implements this port using the existing AUTH PREP
+invalidation. CP03B later implements this port using the existing AUTH PREP
 machinery; it must not introduce a second authorization protocol.
 
 Every object returned by `prepare` is closed exactly once from an unconditional
@@ -223,8 +224,10 @@ Create depends on narrow public owner facts rather than foreign repositories:
 
 Neither port returns private models. Generic `actor_kind=service` is
 insufficient. Existing ART, REV, checker, dispatcher, or other internal service
-identities must fail. CP03 must not activate create until AUTH/ACTORS has an explicitly
-approved compensation-adapter identity rule and real adapter composition.
+identities must fail. CP03A must establish the explicitly approved
+compensation-adapter target identity and real PROJECTS/ACTORS public owner
+composition while all actions remain unavailable; CP03B must not activate
+create before that prerequisite is merged.
 
 PROJECTS and ACTORS eligibility ports must acquire owner-controlled database
 row locks or equivalent transaction-scoped eligibility fences in the fixed
@@ -517,7 +520,8 @@ No local full-suite run is required on the user's slow machine.
 - unrelated service identities cannot become adapter bindings.
 - lifecycle history and authorization evidence are distinct and atomic on
   eventual activation.
-- CP02 remains hidden/unavailable and CP03 is the only activation successor.
+- CP02 remains hidden/unavailable; CP03A is the owner-eligibility prerequisite
+  and CP03B is the only activation successor.
 
 ## Stop conditions
 
