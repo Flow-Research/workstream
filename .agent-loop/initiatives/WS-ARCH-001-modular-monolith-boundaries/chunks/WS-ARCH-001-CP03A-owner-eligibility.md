@@ -56,7 +56,11 @@ ACTORS exposes these facts only through
 implementation remains private to ACTORS. CON consumes that injected public
 port. AUTH may register/provision the closed identity through existing public
 composition surfaces, but AUTH must not import the ACTORS implementation or
-create an AUTH-to-ACTORS domain adapter.
+create an AUTH-to-ACTORS domain adapter. ACTORS also exposes the closed
+`ServiceIdentity` vocabulary and immutable identity collections through
+`app.modules.actors.api`; AUTH catalogue, request-schema, provisioning, and API
+composition code must import that public contract rather than
+`app.modules.actors.service_identities`.
 
 PROJECTS independently locks the exact project and validates only
 PROJECTS-owned binding eligibility through
@@ -72,6 +76,7 @@ transaction.
 
 ```text
 backend/app/modules/actors/service_identities.py
+backend/app/modules/actors/api/service_identities.py
 backend/app/modules/actors/models.py (constraint parity only)
 backend/app/modules/actors/compensation_adapter.py
 backend/app/modules/actors/api/compensation_adapter.py (fact/port parity only)
@@ -105,7 +110,9 @@ backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/actors/compensation-adapter-eligibility.json
 .ci/behavior-ownership/projects/compensation-binding-eligibility.json
+.ci/module-boundaries/private-edge-debt.v1.json (remove only the corrected three AUTH-module edges and API-composition edge to ACTORS service identities)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
+.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md (remove only the corrected three AUTH-module service-identity entries; it does not inventory API composition)
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
@@ -164,6 +171,18 @@ compatibility support for old identities or deployed rows
 - [ ] ACTORS exposes and CP02/CON consumes only the immutable public
       `CompensationAdapterActorEligibilityPort`; AUTH and CON import no ACTORS
       private model, repository, service, or concrete adapter.
+- [ ] ACTORS exposes `ServiceIdentity`, `SERVICE_IDENTITIES`, and any required
+      immutable closed-identity values through `app.modules.actors.api` without
+      duplicating or translating the vocabulary. AUTH `catalogue.py`,
+      `service_actor_schemas.py`, `service_actor_service.py`, and API composition
+      `app/api/deps/authorization.py` consume only that public API and have no
+      direct `actors.service_identities` import.
+- [ ] The module-boundary debt ledger and human-readable import ledger remove
+      exactly their respective corrected private edges: the machine ledger
+      removes the three AUTH-module edges plus the API-composition edge, while
+      the AUTH outbound ledger removes only its three inventoried AUTH-module
+      entries. CP03A adds no new private edge and does not claim unrelated
+      existing AUTH-to-ACTORS debt as repaired.
 - [ ] PROJECTS locks and validates only the exact project's PROJECTS-owned
       binding eligibility through the immutable public
       `ProjectCompensationBindingEligibilityPort`; absent, ineligible, and
@@ -191,6 +210,7 @@ compatibility support for old identities or deployed rows
 (cd backend && .venv/bin/python -m pytest -q tests/test_authorization.py -k "service_actor or service_identity or service_action_matrix")
 (cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
+! rg -n "app\.modules\.actors\.service_identities" backend/app/modules/authorization/catalogue.py backend/app/modules/authorization/service_actor_schemas.py backend/app/modules/authorization/service_actor_service.py backend/app/api/deps/authorization.py
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_markdown_links.py

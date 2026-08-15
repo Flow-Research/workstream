@@ -52,8 +52,9 @@ were corrected. The detailed dispositions are in
 ## Human review focus
 
 Confirm the linear CP03A-before-CP03B dependency, target-only identity with no
-matrix authority, owner-module lock custody, exact Finance Authority principal,
-no public route, and complete exclusion of adjacent compensation behavior.
+matrix authority, ACTORS-owned public identity contracts with no AUTH private
+import, owner-module lock custody, exact Finance Authority principal, no public
+route, and complete exclusion of adjacent compensation behavior.
 
 Only an authorized human may merge the planning PR. CP03A implementation must
 not start until this plan merges.

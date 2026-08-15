@@ -37,6 +37,10 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
   public owner APIs consumed by injected CON ports; AUTH imports neither owner
   implementation, PROJECTS interprets no CON lifecycle state, and CON alone
   decides which lifecycle operations require the ports.
+- Required ACTORS to expose its unchanged closed `ServiceIdentity` contract
+  through `actors.api`, moved the three CP03A-touched AUTH consumers and the
+  touched API-composition consumer to that public surface, and scoped each
+  boundary ledger to retire exactly the edges it inventories.
 - Defined a target-only identity that cannot enter the service action matrix.
 - Added exact migration, reset fingerprint, fixed-baseline, provisioning, and
   downgrade-refusal proof for CP03A.
@@ -54,7 +58,7 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 
 | Track | Result | Remaining blocker |
 |---|---|---|
-| Architecture / senior engineering | pass after exact-head public-owner-boundary correction | none |
+| Architecture / senior engineering | pass after closed-identity public-API and exact-ledger correction | none |
 | Security / authorization | pass with low evidence-cleanup risk resolved in this document | none |
 | Product / operations | pass | none |
 | Reuse / QA / test delta | pass | none |
