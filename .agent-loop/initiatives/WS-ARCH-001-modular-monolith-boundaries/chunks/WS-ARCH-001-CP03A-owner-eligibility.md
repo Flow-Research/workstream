@@ -100,6 +100,7 @@ backend/tests/compensation/test_adapter_binding_authorization_integration.py
 backend/tests/test_auth.py (controlled provisioning parity only)
 backend/tests/test_authorization.py (closed identity/matrix separation only)
 backend/tests/authorization/test_adapter_binding_registration.py (target-only kernel denial only)
+backend/tests/authorization/guide_compilation/test_migration_contract.py (current-head parity only)
 backend/tests/test_alembic.py
 backend/tests/migrations/test_compensation_adapter_identity.py
 backend/tests/test_database_reset.py

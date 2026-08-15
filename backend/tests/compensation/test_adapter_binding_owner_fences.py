@@ -140,21 +140,27 @@ async def _prepare_suspended(
     return created.adapter_binding_id
 
 
-async def _make_adapter_target(adapter_id: UUID) -> None:
+async def _create_adapter_target(actor_id: UUID) -> UUID:
+    adapter_id = uuid4()
     async with db_session.get_session_factory()() as session:
         async with session.begin():
-            profile = await session.get(ActorProfile, str(adapter_id))
-            assert profile is not None
-            profile.actor_kind = "service"
-            profile.provisioning_method = "manual_service_provisioning"
-            profile.service_identity = ServiceIdentity.COMPENSATION_ADAPTER.value
-            link = await session.scalar(
-                select(ActorIdentityLink).where(
-                    ActorIdentityLink.actor_profile_id == str(adapter_id)
+            session.add(
+                ActorProfile(
+                    id=str(adapter_id), actor_kind="service", status="active",
+                    provisioning_method="manual_service_provisioning",
+                    service_identity=ServiceIdentity.COMPENSATION_ADAPTER.value,
+                    created_by=str(actor_id),
                 )
             )
-            assert link is not None
-            link.subject_kind = "service"
+            await session.flush()
+            session.add(
+                ActorIdentityLink(
+                    id=str(uuid4()), actor_profile_id=str(adapter_id),
+                    issuer="https://compensation.test", subject=f"target-{adapter_id}",
+                    subject_kind="service", status="active", linked_by=str(actor_id),
+                )
+            )
+    return adapter_id
 
 
 @pytest.mark.parametrize("operation", ("create", "resume"))
@@ -166,8 +172,8 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
     operation: str,
     locked_owner: str,
 ) -> None:
-    project_id, adapter_id, actor_id = await binding_seed()
-    await _make_adapter_target(adapter_id)
+    project_id, _, actor_id = await binding_seed()
+    adapter_id = await _create_adapter_target(actor_id)
     binding_id = (
         await _prepare_suspended(project_id, adapter_id, actor_id, real_owners=True)
         if operation == "resume"
@@ -249,8 +255,8 @@ async def test_committed_owner_ineligibility_denies_before_authorization(
     operation: str,
     ineligible_owner: str,
 ) -> None:
-    project_id, adapter_id, actor_id = await binding_seed()
-    await _make_adapter_target(adapter_id)
+    project_id, _, actor_id = await binding_seed()
+    adapter_id = await _create_adapter_target(actor_id)
     binding_id = (
         await _prepare_suspended(project_id, adapter_id, actor_id, real_owners=True)
         if operation == "resume"
