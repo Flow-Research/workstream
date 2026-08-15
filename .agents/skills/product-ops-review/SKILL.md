@@ -1,6 +1,6 @@
 ---
 name: product-ops-review
-description: Review Workstream changes for project manager, worker, reviewer, operator, payment, revision, and audit workflow correctness.
+description: Review Workstream changes for project manager, contributor, reviewer, operator, payment, revision, and audit workflow correctness.
 ---
 
 # Product/Ops Review
@@ -19,7 +19,7 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 ## Focus
 
 - project manager setup flow
-- worker task claiming and submission flow
+- contributor task claiming and submission flow
 - reviewer packet and finding flow
 - revision loop clarity
 - checker results and operator actions
@@ -32,7 +32,7 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 
 - Treat naming drift as a real product risk.
 - Do not approve a flow that requires chat memory or Slack memory to understand.
-- Do not collapse worker-facing decisions with internal checker states.
+- Do not collapse contributor-facing decisions with internal checker states.
 - Confirm user-facing review decisions remain `accept`, `needs_revision`, and `reject`.
 - Confirm out-of-band guidance becomes a guide, policy, template, checker, or ADR before it is enforceable.
 
@@ -42,7 +42,7 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 Result: PASS / PASS WITH LOW RISKS / FAIL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Operator workflow risks:
-Worker/reviewer workflow risks:
+Contributor/reviewer workflow risks:
 Payment/reputation risks:
 Naming or wording drift:
 Required fixes:

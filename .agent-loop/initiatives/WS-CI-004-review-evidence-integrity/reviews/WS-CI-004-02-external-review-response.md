@@ -39,6 +39,7 @@ cd backend && uv run ruff check ../scripts/reviewer_contracts.py \
 
 ## Remaining risks
 
-The reviewer registry is still represented in both the human-readable matrix
-and the validator, but exact ordered equality is now enforced so drift fails
-closed.
+No known unresolved external-review risk. The human-readable reviewer matrix is
+an audited projection of the executable registry: canonical IDs must match in
+exact order, every configured agent and skill path must appear, and every
+handoff must use that closed ID set. Any drift fails validation.
