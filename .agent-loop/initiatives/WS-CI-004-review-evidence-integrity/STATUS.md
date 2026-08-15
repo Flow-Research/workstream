@@ -2,7 +2,7 @@
 
 ## Current status
 
-Implementing `WS-CI-004-01`.
+`WS-CI-004-01` is complete on merge.
 
 ## Current focus
 
