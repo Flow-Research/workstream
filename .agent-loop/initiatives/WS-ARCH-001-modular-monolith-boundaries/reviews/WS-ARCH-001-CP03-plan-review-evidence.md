@@ -59,7 +59,7 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 | Product / operations | pass | none |
 | Reuse / QA / test delta | pass | none |
 | CI integrity | pass | none |
-| Documentation | pass after exact-head evidence and CP02 successor reconciliation | none |
+| Documentation | pass for current entry points and executable contracts | completed CP02 contract retained as historical exact-change evidence by the atomic-state gate |
 
 ## Deterministic evidence
 
@@ -72,3 +72,10 @@ AUTH read/PREP machinery and activates only read/create/suspend/resume.
 
 No runtime code, action availability, service identity, schema, route, or
 product behavior changes in this planning PR.
+
+The merged CP02 contract retains its then-current umbrella `CP03` wording as
+historical exact-change evidence. Editing that completed contract in this
+planning PR would combine a `complete` outcome with the planned CP03/CP03A/CP03B
+outcomes and is rejected by the atomic chunk-state gate. Current implementation
+authority is instead explicit in `CURRENT_STATE.md`, the initiative maps and
+statuses, and the executable CP03A/CP03B contracts.
