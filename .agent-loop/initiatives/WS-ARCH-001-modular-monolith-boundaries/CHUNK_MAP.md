@@ -22,7 +22,7 @@
 | `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete on merge; five actions remain planned/unavailable |
 | `WS-ARCH-001-CP01C` | AUTH adapter-binding fact correction | L1 | Complete on merge; corrects unavailable facts before CON behavior |
 | `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Complete on merge; route-unreachable and deny-default while actions remain unavailable |
-| `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Split into CP03A/CP03B; non-executable |
+| `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Planned split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Executable contract complete on merge; implementation next |
 | `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Executable contract complete on merge; follows merged CP03A |
 | `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after merged CP03B evidence |

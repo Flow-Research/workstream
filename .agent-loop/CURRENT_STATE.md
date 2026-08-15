@@ -113,7 +113,7 @@ non-executable until their current-main contracts are expanded.
   adapter-binding identity and lifecycle-version facts.
 - WS-ARCH-001-CP02 is complete on merge with hidden, route-unreachable behavior,
   exact lifecycle history, and deny-default production composition.
-- WS-ARCH-001-CP03 is split/non-executable. CP03A and CP03B have executable
+- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A and CP03B have executable
   contracts complete on merge and are the next ordered bounded boundaries.
 - WS-ARCH-001-CP04 is proposed and non-executable.
 - WS-ARCH-001-CP05 is proposed and non-executable.

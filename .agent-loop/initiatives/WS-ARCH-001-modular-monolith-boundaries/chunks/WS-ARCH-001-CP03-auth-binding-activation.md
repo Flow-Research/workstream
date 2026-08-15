@@ -12,7 +12,7 @@ adapter-binding activation.
 ## Approved split
 
 ```text
-CP02 hidden lifecycle behavior
+CP02 hidden adapter-binding lifecycle behavior
 -> CP03A compensation-adapter identity and owner eligibility
 -> CP03B exact Finance Authority AUTH activation
 -> CP04 hidden ContributionPolicy behavior
@@ -24,4 +24,4 @@ adapter-binding route.
 
 ## Merge state
 
-- Outcome on merge: `split parent recorded; no runtime behavior`
+- Outcome on merge: `planned`
