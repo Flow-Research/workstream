@@ -119,7 +119,8 @@ python3 scripts/reviewer_contracts.py
 python3 scripts/reviewer_contracts.py validate-fixtures
 # Manual gate before ready-for-review: run every isolated case before
 # EXPECTATIONS.json is created; create expectations only after outputs return;
-# validate each JSON (or the complete set with `validate-output-set`); after
+# validate each JSON against its canonical receipt (or the complete set with
+# `validate-output-set --output <cases> --receipts <receipts>`); after
 # push publish the case/reviewer/head/result/finding-ID summary as one PR comment
 # and link it from the PR body.
 python3 scripts/review_target.py --base origin/main --head HEAD --format json

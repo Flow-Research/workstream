@@ -107,19 +107,59 @@ class ReviewerContractTests(unittest.TestCase):
             "finding_ids": ["ARCH-7"],
             "short_reason": "routed",
             "handoff_specialty": "ci_integrity",
-            "uncertainty": [],
         }
-        self.assertEqual(output_failures(output, expectation), [])
-        for key in ("evaluated_head", "uncertainty"):
+        receipt = {
+            "schema_version": 1,
+            "custody": "advisory_session",
+            "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
+            "reviewer": {"specialty": "architecture", "run_id": "eval-1"},
+            "inspections": {"start": {"cleanliness": "dirty"}, "end": {"cleanliness": "dirty"}},
+            "evidence": [
+                {"kind": "executed", "source": "review target", "result": "pass"},
+                {"kind": "inspected", "source": "raw case", "result": "pass"},
+            ],
+            "findings": [
+                {"id": "ARCH-7", "severity": "Medium", "location": "case", "blocks_pr": False, "disposition": "fixed", "verification": "replayed"}
+            ],
+            "uncertainty": [],
+            "freshness": "current",
+            "verdict": "PROVISIONAL",
+        }
+        self.assertEqual(output_failures(output, expectation, receipt), [])
+        for key in ("evaluated_head",):
             broken = copy.deepcopy(output)
             broken.pop(key)
-            self.assertTrue(output_failures(broken, expectation))
+            self.assertTrue(output_failures(broken, expectation, receipt))
         broken = copy.deepcopy(output)
         broken["finding_ids"] = []
-        self.assertIn("output: required finding not replayed", output_failures(broken, expectation))
+        self.assertIn(
+            "output: required finding not replayed", output_failures(broken, expectation, receipt)
+        )
         broken = copy.deepcopy(output)
         broken["handoff_specialty"] = "security"
-        self.assertIn("output: wrong handoff", output_failures(broken, expectation))
+        self.assertIn("output: wrong handoff", output_failures(broken, expectation, receipt))
+
+        for path in (
+            ("target", "base_sha"),
+            ("reviewer", "run_id"),
+            ("inspections", "end"),
+            ("uncertainty",),
+            ("freshness",),
+            ("verdict",),
+        ):
+            with self.subTest(path=path):
+                broken_receipt = copy.deepcopy(receipt)
+                parent = broken_receipt
+                for key in path[:-1]:
+                    parent = parent[key]
+                parent.pop(path[-1])
+                self.assertTrue(output_failures(output, expectation, broken_receipt))
+        broken_receipt = copy.deepcopy(receipt)
+        broken_receipt["evidence"] = [broken_receipt["evidence"][0]]
+        self.assertIn(
+            "output: receipt must separate executed and inspected evidence",
+            output_failures(output, expectation, broken_receipt),
+        )
 
 
 if __name__ == "__main__":

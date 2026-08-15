@@ -9,12 +9,15 @@ import sys
 import tomllib
 from pathlib import Path
 
+import jsonschema
+
 
 ROOT = Path(__file__).resolve().parents[1]
 INITIATIVE = ROOT / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity"
 CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
+RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
 REVIEWERS = {
@@ -133,11 +136,31 @@ def fixture_failures(cases: dict[str, object], expectations: dict[str, object] |
     return failures
 
 
-def output_failures(output: dict[str, object], expectation: dict[str, object]) -> list[str]:
+def receipt_failures(receipt: object, reviewer: object, evaluated_head: object) -> list[str]:
+    if not isinstance(receipt, dict):
+        return ["output: missing protocol receipt"]
+    try:
+        jsonschema.validate(receipt, load_json(RECEIPT_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        return [f"output: invalid protocol receipt: {exc.message}"]
+    failures: list[str] = []
+    if receipt["reviewer"]["specialty"] != reviewer:
+        failures.append("output: receipt reviewer mismatch")
+    if receipt["target"]["head_sha"] != evaluated_head:
+        failures.append("output: receipt head mismatch")
+    evidence_kinds = {item["kind"] for item in receipt["evidence"]}
+    if evidence_kinds != {"executed", "inspected"}:
+        failures.append("output: receipt must separate executed and inspected evidence")
+    return failures
+
+
+def output_failures(
+    output: dict[str, object], expectation: dict[str, object], receipt: object | None = None
+) -> list[str]:
     failures: list[str] = []
     required = {
         "case_id", "reviewer", "evaluated_head", "result", "finding_ids",
-        "short_reason", "handoff_specialty", "uncertainty",
+        "short_reason", "handoff_specialty",
     }
     missing = required - output.keys()
     if missing:
@@ -158,8 +181,12 @@ def output_failures(output: dict[str, object], expectation: dict[str, object]) -
     head = output.get("evaluated_head")
     if not isinstance(head, str) or len(head) != 40 or any(c not in "0123456789abcdef" for c in head):
         failures.append("output: invalid evaluated head")
-    if not isinstance(output.get("uncertainty"), list):
-        failures.append("output: uncertainty must be a list")
+    receipt = output.get("receipt") if receipt is None else receipt
+    failures.extend(receipt_failures(receipt, output.get("reviewer"), evaluated_head=head))
+    if isinstance(receipt, dict) and isinstance(finding_ids, list):
+        receipt_ids = {finding["id"] for finding in receipt.get("findings", [])}
+        if not set(finding_ids).issubset(receipt_ids):
+            failures.append("output: case finding absent from receipt")
     return failures
 
 
@@ -181,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     output_parser.add_argument("--output", required=True, type=Path)
     output_set_parser = subparsers.add_parser("validate-output-set")
     output_set_parser.add_argument("--output", required=True, type=Path)
+    output_set_parser.add_argument("--receipts", required=True, type=Path)
     args = parser.parse_args(argv)
     if args.command == "validate-output":
         expectations = load_json(EXPECTATIONS_PATH)["expectations"]
@@ -197,6 +225,9 @@ def main(argv: list[str] | None = None) -> int:
         outputs = load_json(args.output)
         if not isinstance(outputs, list):
             return print_failures(["output set: expected a list"])
+        receipts = load_json(args.receipts)
+        if not isinstance(receipts, dict):
+            return print_failures(["output set: expected reviewer receipt object"])
         expectations = load_json(EXPECTATIONS_PATH)["expectations"]
         expected_by_id = {row["case_id"]: row for row in expectations}
         case_by_id = {row["id"]: row for row in load_json(CASES_PATH)["cases"]}
@@ -208,7 +239,8 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(output, dict) or output.get("case_id") not in expected_by_id:
                 failures.append("output set: invalid row")
                 continue
-            failures.extend(output_failures(output, expected_by_id[output["case_id"]]))
+            receipt = receipts.get(output.get("reviewer"))
+            failures.extend(output_failures(output, expected_by_id[output["case_id"]], receipt))
             if output.get("reviewer") != case_by_id[output["case_id"]]["reviewer"]:
                 failures.append("output: wrong reviewer")
         return print_failures(failures)
