@@ -1177,18 +1177,19 @@ Fields:
 - `instrument_type`: `money | project_points`
 - `adapter_actor_id`
 - `route_key`
-- `status`: `active | suspended | retired`
-- `binding_lifecycle_version`, starting at 1 and incrementing once per future
-  authorized lifecycle transition
-- creation, suspension, and retirement actor/timestamp fields
+- `status`: `active | suspended`; retirement remains a future lifecycle extension
+- `binding_lifecycle_version`, starting at 1 and incrementing once per valid
+  active-to-suspended or suspended-to-active transition
+- creation, suspension, resume, and retirement actor/timestamp fields; only the
+  current suspension or resume attribution is populated after version 1
 
 `route_key` is a non-secret 1-120 character ASCII identifier matching
 `^[A-Za-z][A-Za-z0-9._:-]{0,119}$`; traversal pairs, whitespace, path/URL/query
 syntax, controls, and Unicode are forbidden. Provider endpoints, credentials,
 and tokens are deployment secrets, not domain fields. At most one binding is
-active per project and instrument. Persistence rejects all updates until the
-owning lifecycle behavior chunks install their authorized transition guards;
-until then, only active version-1 rows with null lifecycle fields may be inserted.
+active per project and instrument. CP02 installs hidden, route-unreachable
+create/read/suspend/resume behavior and immutable transition events while AUTH
+actions remain unavailable. Retirement is not implemented.
 
 ## ProjectLesson
 

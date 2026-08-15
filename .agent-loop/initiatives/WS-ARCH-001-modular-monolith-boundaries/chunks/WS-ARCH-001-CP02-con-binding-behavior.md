@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ARCH-001-CP02 — Hidden Adapter-Binding Behavior
 
-Status: proposed executable contract; implementation may begin only after this
-planning correction merges and receives explicit human approval. Risk: L1.
+Status: complete on implementation merge; CP03 is the next activation gate.
+Risk: L1.
 
 ## Goal
 
@@ -57,49 +57,76 @@ backend/app/modules/compensation/models.py
 backend/app/modules/compensation/repository.py
 backend/app/modules/compensation/service.py
 backend/app/modules/compensation/schemas.py
+backend/app/db/models.py (new lifecycle-event metadata registration only)
 backend/app/modules/actors/api/__init__.py
 backend/app/modules/actors/api/compensation_adapter.py
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/compensation_binding.py
 backend/tests/compensation/test_adapter_binding_api.py
+backend/tests/compensation/test_adapter_binding_authorization_failures.py
+backend/tests/compensation/test_adapter_binding_database_guards.py
+backend/tests/adapter_binding_fixtures.py (shared CP02 PostgreSQL facts only)
+backend/tests/adapter_binding_test_support.py (strict CP02 test doubles only)
 backend/tests/compensation/test_adapter_binding_service.py
+backend/tests/compensation/test_adapter_binding_recovery.py
 backend/tests/compensation/test_adapter_binding_persistence.py
 backend/tests/architecture/test_module_boundaries.py
+backend/tests/compensation/test_adapter_binding_partition.py (exact CP02 additive partition proof only)
+backend/tests/compensation/test_adapter_binding_owner_fences.py
 backend/tests/test_compensation.py (removal/replacement of superseded 03A proof only)
 backend/tests/conftest.py (schema fingerprint and reset inventory parity only)
+backend/scripts/run_test_lanes.py (exact new-test lane assignment only)
 backend/tests/test_database_reset.py (new-table reset/guard proof only)
 backend/tests/test_alembic.py (HEAD_REVISION and 0003-to-0004 empty/non-empty upgrade proof only)
-.ci/behavior-ownership/compensation/adapter-binding-behavior.json (new exact ownership entry only)
+backend/tests/authorization/guide_compilation/test_migration_contract.py (current-head assertion only)
+backend/tests/projects/guide_compilation/test_migration_contract.py (current-head assertion only)
+backend/tests/test_contributions.py (canonical binding-event seed parity only)
+.ci/behavior-ownership/lifecycle/adapter-binding-behavior.json (new exact ownership entry only)
 .ci/behavior-ownership/partition.v1.json (exact generated partition parity only)
+backend/scripts/behavior_ownership.py (exact CP02 additive target allowlist only)
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json (generated parity only)
 backend/alembic/baseline/v01_approved_manifest_delta.json (generated parity only)
 backend/alembic/baseline/v01_baseline_manifest.json (generated parity only)
 backend/alembic/baseline/v01_pre_reset_source_manifest.json (generated parity only)
 backend/alembic/baseline/v01_schema.sql (generated parity only; do not rewrite 0001)
 docs/spec_contribution_compensation.md
-docs/spec_authorization_service.md
-docs/operations_authorization_service.md
+docs/architecture_data_model.md
 docs/roadmap_status.md
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/RISKS.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/DECISIONS.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP02-con-binding-behavior.md
-.agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-plan-review-evidence.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-implementation-review-evidence.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-external-review-response.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/reviews/WS-ARCH-001-CP02-pr-trust-bundle.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CHUNK_MAP.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md
 .agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/AUTHORIZATION_HANDOFF.md
-.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CONFORMANCE_MATRIX.md
-.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/RUNTIME_VERIFICATION.md
 ```
 
 The implementation plan review must remove any unused allowance before code is
 written. New files remain subject to the repository size and behavior-ownership
 gates.
+
+## Reviewed scope correction
+
+The original merged CP02 contract did not contain every file now required by
+the implementation. The expanded allowances are a correction discovered while
+executing and reviewing the chunk, not evidence of prior approval. They require
+explicit human acceptance with this PR. The additions are limited to:
+
+- ORM metadata registration for the lifecycle-event table;
+- shared CP02 PostgreSQL fixtures and strict authorization doubles;
+- split recovery, owner-fence, partition, authorization-failure, and database-
+  guard tests needed to keep each test file bounded by one primary behavior;
+- exact semantic-lane and behavior-ownership registration for those tests;
+- current-head assertions and legacy contribution fixtures affected by `0004`;
+- generated schema/test-structure parity artifacts; and
+- the canonical data-model document and CP02 review/trust records.
+
+Human approval of PR #337 accepts this corrected scope. It does not authorize
+routes, activation, ContributionPolicy behavior, retirement, fulfillment, or
+any change outside the explicit allowed-file list above.
 
 ## Not allowed
 
@@ -328,7 +355,8 @@ then observe either the committed event or no event after rollback.
 6. Recompose facts from the locked row, prepare, consume, and close from the
    unconditional `finally` around consume.
 7. Only after successful close, transition `suspended/N -> active/N+1`, clear
-   current suspension fields,
+   current suspension fields, persist the database-verifiable `resumed_by`
+   attribution anchor (with database-owned `resumed_at`),
    and append one immutable resumed event containing the prior suspension and
    exact actor/version transition.
 8. Flush only.
@@ -362,7 +390,9 @@ deletes fail at the database boundary. A resumed event must reference the exact
 immediately preceding suspended event for the same binding, and
 `prior_suspended_event.to_lifecycle_version` must equal
 `resumed_event.from_lifecycle_version`. That immutable suspended event remains the source of
-the cleared suspension actor/time. Events are product lifecycle truth, not
+the cleared suspension actor/time. PostgreSQL also requires every resumed
+event actor to equal the binding row's `resumed_by` anchor for that transition;
+service-supplied event attribution alone is insufficient. Events are product lifecycle truth, not
 authorization decisions. CP03 separately proves AUTH allowed-decision evidence
 is staged atomically by the real PREP consumer in the same transaction. Planned
 actions cannot produce allowed AUTH evidence before CP03 activation.
@@ -390,7 +420,8 @@ It must:
 - replace `compensation_binding_updates_deferred` with a fail-closed trigger;
 - permit only `active/N -> suspended/N+1` and
   `suspended/N -> active/N+1`;
-- require database-owned transition timestamps and exact attribution fields;
+- require database-owned transition timestamps and exact created, suspended,
+  and resumed attribution fields;
 - reject version skips, same-state updates, retired transitions, arbitrary
   updates, and changes to binding/project/`instrument_type`/adapter/route/creation
   identity;
@@ -436,7 +467,9 @@ It must:
   produce no product effect; later product failure rolls back staged AUTH
   evidence and cannot make the already-closed object reusable.
 - Active replacement blocks resume of an older suspended binding.
-- PostgreSQL independently rejects forbidden row/event mutations.
+- PostgreSQL independently rejects same-state updates, version skips, retired
+  transitions, immutable identity changes, malformed or cross-binding resume
+  lineage, forged resume attribution, and every event update/delete/truncate.
 - Rollback removes binding changes, lifecycle events, and staged participant
   effects together.
 - No denial produces allowed AUTH evidence.
@@ -495,6 +528,6 @@ changes beyond the exact adapter-binding aggregate and its immutable events.
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- The planned CP02 boundary has an executable implementation contract.
-- Runtime behavior changed by this planning correction: no.
+- Outcome on merge: `complete`
+- Hidden CON adapter-binding behavior and immutable lifecycle history are implemented.
+- Runtime remains route-unreachable and deny-default; all four AUTH actions remain unavailable.

@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import delete, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from adapter_binding_fixtures import created_binding_events
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.db.base import Base
@@ -127,6 +128,13 @@ async def _seed_project() -> tuple[str, str, str, UUID, UUID]:
                     created_by=creator_id,
                 ),
             ]
+        )
+        # Created-event custody validates the persisted binding state.
+        await session.flush()
+        session.add_all(
+            created_binding_events(
+                project_id, creator_id, money_binding_id, points_binding_id
+            )
         )
         session.add_all(
             [

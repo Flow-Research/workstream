@@ -12,6 +12,10 @@ from alembic.script import ScriptDirectory
 import asyncpg
 import pytest
 
+from adapter_binding_fixtures import (
+    seed_nonempty_0003_adapter_binding,
+    snapshot_nonempty_0003_adapter_binding,
+)
 from scripts.schema_baseline_manifest import (
     APPLICATION_ACL_PRINCIPALS,
     build_manifest,
@@ -20,7 +24,7 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0003_submission_lineage"
+HEAD_REVISION = "0004_compensation_adapter_binding_lifecycle"
 BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
@@ -80,6 +84,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0003_submission_lineage",
         "0002_admission_version",
         BASELINE_REVISION,
     ]
@@ -98,7 +103,6 @@ def test_fresh_database_matches_committed_manifest(
         command.upgrade(config, BASELINE_REVISION)
     expected = _manifest_path().read_bytes()
     actual = canonical_bytes(asyncio.run(build_manifest(isolated_database_env)))
-
     assert hashlib.sha256(actual).hexdigest() == hashlib.sha256(expected).hexdigest()
     assert actual == expected
 
@@ -187,6 +191,95 @@ def test_current_head_installs_submission_lineage_contract(
     assert package_nullable == "YES"
 
 
+def test_current_head_installs_compensation_binding_lifecycle(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, HEAD_REVISION)
+
+    async def contract() -> tuple[bool, int, set[str], set[str], set[str]]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            table_exists = await connection.fetchval(
+                "select to_regclass('public.compensation_adapter_binding_lifecycle_events') "
+                "is not null"
+            )
+            revision_length = await connection.fetchval(
+                "select character_maximum_length from information_schema.columns "
+                "where table_schema='public' and table_name='alembic_version' "
+                "and column_name='version_num'"
+            )
+            triggers = await connection.fetch(
+                "select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid "
+                "where c.relname=any($1::text[]) and not t.tgisinternal",
+                ["project_compensation_adapter_bindings",
+                 "compensation_adapter_binding_lifecycle_events"],
+            )
+            functions = await connection.fetch(
+                "select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+                "where n.nspname='public' and proname=any($1::text[])",
+                ["enforce_compensation_binding_lifecycle",
+                 "guard_compensation_binding_lifecycle_event",
+                 "reject_compensation_binding_lifecycle_event_change",
+                 "require_compensation_binding_lifecycle_event"],
+            )
+            binding_checks = await connection.fetch(
+                "select conname from pg_constraint c join pg_class t on t.oid=c.conrelid "
+                "where t.relname='project_compensation_adapter_bindings' "
+                "and c.contype='c' order by conname"
+            )
+            return (
+                bool(table_exists),
+                revision_length,
+                {row["tgname"] for row in triggers},
+                {row["proname"] for row in functions},
+                {row["conname"] for row in binding_checks},
+            )
+        finally:
+            await connection.close()
+
+    exists, revision_length, triggers, functions, binding_checks = asyncio.run(contract())
+    assert exists is True
+    assert revision_length == 64
+    assert triggers >= {
+        "project_compensation_binding_update_guard",
+        "compensation_binding_event_insert_guard",
+        "compensation_binding_event_change_guard",
+        "compensation_binding_event_truncate_guard",
+        "compensation_binding_lifecycle_event_required",
+    }
+    assert functions == {"enforce_compensation_binding_lifecycle", "guard_compensation_binding_lifecycle_event", "reject_compensation_binding_lifecycle_event_change", "require_compensation_binding_lifecycle_event"}
+    assert {
+        "ck_project_compensation_adapter_bindings_status",
+        "ck_project_compensation_adapter_bindings_lifecycle_shape",
+        "ck_project_compensation_adapter_bindings_lifecycle_timestamps",
+    } <= binding_checks
+    assert not {
+        "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
+        "ck_project_compensation_adapter_bindings_ck_project_com_da73",
+        "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
+    } & binding_checks
+
+def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
+    isolated_database_env: str, migration_lock
+) -> None:
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0003_submission_lineage")
+        asyncio.run(seed_nonempty_0003_adapter_binding(isolated_database_env))
+        before = asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env))
+        with pytest.raises(RuntimeError, match="requires a fresh database"):
+            command.upgrade(config, HEAD_REVISION)
+
+    assert asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env)) == before
+
 def test_manifest_covers_every_required_object_class() -> None:
     manifest = json.loads(_manifest_path().read_text(encoding="utf-8"))
     assert manifest["format"] == "workstream-v01-schema-manifest-1"
@@ -246,7 +339,7 @@ def test_acl_principals_are_closed_and_owner_mapping_is_role_name_independent() 
         canonical_acl_principal("unexpected_role", "database_owner")
 
 
-def test_every_acl_principal_is_effective_on_the_installed_baseline(
+def test_every_acl_principal_is_effective_on_the_installed_head(
     isolated_database_env: str,
 ) -> None:
     async def acl_results() -> tuple[int, int]:
@@ -299,7 +392,7 @@ def test_every_acl_principal_is_effective_on_the_installed_baseline(
             await connection.close()
 
     ineffective, total = asyncio.run(acl_results())
-    manifest = json.loads(_manifest_path().read_text())
+    manifest = asyncio.run(build_manifest(isolated_database_env))
     assert ineffective == 0
     assert total == len(manifest["acl"])
 

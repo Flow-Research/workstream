@@ -1,5 +1,10 @@
 """Dependency-safe public API for the PROJECTS business module."""
 
+from app.modules.projects.api.compensation_binding import (
+    ProjectCompensationBindingEligibilityFacts,
+    ProjectCompensationBindingEligibilityPort,
+    ProjectCompensationBindingUnavailable,
+)
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
@@ -14,6 +19,9 @@ from app.modules.projects.api.locked_policy import (
 
 __all__ = (
     "CanonicalJsonObject",
+    "ProjectCompensationBindingEligibilityFacts",
+    "ProjectCompensationBindingEligibilityPort",
+    "ProjectCompensationBindingUnavailable",
     "ProjectLockedPolicyContextFacts",
     "ProjectLockedPolicyContextPort",
     "ProjectLockedPolicyContextRequest",

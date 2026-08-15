@@ -107,6 +107,22 @@ ARCH_02H_AUTH_CONSUMPTION_TARGETS = frozenset(
         "backend/app/modules/authorization/submission_creation_authorization.py",
     }
 )
+ARCH_CP02_ADAPTER_BINDING_TARGETS = frozenset(
+    {
+        "backend/app/modules/actors/api/compensation_adapter.py",
+        "backend/app/modules/compensation/api/adapter_bindings.py",
+        "backend/app/modules/compensation/repository.py",
+        "backend/app/modules/compensation/service.py",
+        "backend/app/modules/projects/api/compensation_binding.py",
+    }
+)
+ARCH_CP02_CON_LIFECYCLE_TARGETS = frozenset(
+    {
+        "backend/app/modules/compensation/api/adapter_bindings.py",
+        "backend/app/modules/compensation/repository.py",
+        "backend/app/modules/compensation/service.py",
+    }
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -207,6 +223,8 @@ def changed_callable_names(root: Path, base_sha: str, head_sha: str, target: str
 
 def group_for_target(target: str) -> str:
     """Assign one exact population group without wildcard authority."""
+    if target in ARCH_CP02_CON_LIFECYCLE_TARGETS:
+        return "lifecycle"
     if "/authorization/" in target or target.endswith("/auth.py"):
         return "auth"
     if "/artifacts/" in target or any(
@@ -296,6 +314,7 @@ def _validate_additive_partition_transition(
         | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | ARCH_02G_AUTH_PREPARATION_TARGETS
         | ARCH_02H_AUTH_CONSUMPTION_TARGETS
+        | ARCH_CP02_ADAPTER_BINDING_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

@@ -221,21 +221,25 @@ project_id
 instrument_type: money | project_points
 adapter_actor_id
 route_key
-status: active | suspended | retired
+status: active | suspended
 binding_lifecycle_version
 created_by
 created_at
 suspended_by
 suspended_at
+resumed_by
+resumed_at
 retired_by
 retired_at
 ```
 
 At most one binding is active for each project and instrument.
-`binding_lifecycle_version` starts at 1 and, once lifecycle behavior is
-authorized, increments exactly once per valid transition. This persistence
-chunk permits only active version-1 inserts and rejects all updates until those
-behavior guards exist. `route_key` is a
+`binding_lifecycle_version` starts at 1 and increments exactly once per valid
+active-to-suspended or suspended-to-active transition. CP02 installs the hidden
+transition guards and immutable created/suspended/resumed lifecycle history;
+the current transition projection stores database-timestamped suspend or resume
+attribution so PostgreSQL can verify the matching immutable event independently.
+Retirement remains future and unavailable. `route_key` is a
 1-120 character non-secret ASCII domain routing identifier matching
 `^[A-Za-z][A-Za-z0-9._:-]{0,119}$`; it rejects traversal pairs (`..`),
 whitespace, slashes, URL/query syntax, `@`, control characters, and Unicode.
@@ -767,6 +771,15 @@ adapter-binding retirement. Existing PermissionIds remain stable. Policy ActionI
 canonical `contribution.policy.*` namespace while mapping to the existing
 `compensation.policy.manage` PermissionId. AUTH must approve exact identifiers,
 principals, contexts, mappings, custodians, and activation in its own chunks.
+
+CP02 implements the route-unreachable CON behavior behind those four binding
+actions. Mutations require a caller-owned root transaction, a canonical
+operation digest, a PostgreSQL transaction advisory fence, exact owner facts,
+and an opaque prepare/consume/close authorization participant before product
+mutation. Every create, suspend, or resume appends one immutable lifecycle
+event atomically. Exact duplicate recovery requires fresh read authorization;
+changed or unauthorized recovery is concealed. Production composition remains
+deny-default and the actions remain unavailable until CP03.
 
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|

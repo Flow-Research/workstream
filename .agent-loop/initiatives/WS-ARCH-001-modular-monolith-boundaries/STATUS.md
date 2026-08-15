@@ -1,7 +1,7 @@
 # Status: WS-ARCH-001 Modular Monolith Boundaries
 
 - Initiative state: active; boundary foundation complete
-- Runtime behavior changed: no
+- Runtime behavior changed: hidden CON adapter-binding behavior only; no route or action activation
 - Canonical target: nine business modules and three supporting modules
 - Recovery model: freeze exact debt, prohibit growth, repair touched
   capabilities incrementally
@@ -53,8 +53,8 @@
   behavior must precede owner-separated guide/task lineage. CP01 is the
   non-executable split parent; CP01A is complete on merge with its four actions
   registered/unavailable, CP01B is complete on merge with five policy actions
-  registered/unavailable. CP02 now has a proposed executable contract for the
-  hidden CON behavior; CP03-CP09 remain non-executable skeletons.
+  registered/unavailable. CP02 is complete on merge with hidden CON behavior
+  while its AUTH actions remain unavailable; CP03-CP09 remain non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned on merge
   and changes no runtime. It makes the existing incremental strangler
   operational: unrelated frozen debt cannot block delivery, new debt is
@@ -75,11 +75,10 @@
   ContributionPolicy registration.
 - WS-ARCH-001-CP01C is complete on merge: unavailable adapter-binding facts
   match exact binding identity and lifecycle generation without a unit alias.
-- WS-ARCH-001-CP02 is the next planned implementation boundary after this planning
-  correction merges and receives explicit human approval: hidden,
-  route-unreachable adapter-binding behavior while its AUTH actions remain
-  unavailable.
-- WS-ARCH-001-CP03 is proposed: exact adapter-binding activation.
+- WS-ARCH-001-CP02 is complete on merge: hidden, route-unreachable
+  adapter-binding behavior while its AUTH actions remain unavailable.
+- WS-ARCH-001-CP03 is the next proposed boundary: exact adapter-binding
+  activation after its current-main contract is expanded and reviewed.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.
