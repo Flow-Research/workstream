@@ -93,12 +93,13 @@ class ReviewTargetTests(unittest.TestCase):
         self.assertEqual(deleted, [{"path": "renamed.txt", "status": "D"}])
 
     def test_base_drift_changes_target(self) -> None:
-        first = self.inspect()
-        (self.repository / "base-drift.txt").write_text("drift\n", encoding="utf-8")
-        git(self.repository, "add", "base-drift.txt")
-        git(self.repository, "commit", "-qm", "drift")
-        second = inspect_review_target(self.base_sha, "HEAD", self.repository)
-        self.assertNotEqual(first["head_sha"], second["head_sha"])
+        git(self.repository, "branch", "review-base", self.base_sha)
+        first = inspect_review_target("review-base", self.head_sha, self.repository)
+        git(self.repository, "branch", "-f", "review-base", self.head_sha)
+        second = inspect_review_target("review-base", self.head_sha, self.repository)
+        self.assertEqual(first["head_sha"], second["head_sha"])
+        self.assertNotEqual(first["base_sha"], second["base_sha"])
+        self.assertNotEqual(first["merge_base_sha"], second["merge_base_sha"])
 
     def test_invalid_refs_and_non_repository_fail_closed(self) -> None:
         with self.assertRaises(GitCommandError):
@@ -210,6 +211,7 @@ class ReceiptSchemaTests(unittest.TestCase):
     def test_closed_tokens_and_unknown_claims_are_rejected(self) -> None:
         self.assert_invalid(lambda receipt: receipt.__setitem__("verdict", "APPROVED"))
         self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("kind", "claimed"))
+        self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("result", "unknown"))
         self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("command", "run me"))
         self.assert_invalid(lambda receipt: receipt.__setitem__("merge_authorized", True))
 
