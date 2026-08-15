@@ -1,0 +1,60 @@
+# Reviewer Responsibility And Evaluation Matrix
+
+The shared evidence protocol owns target, provenance, freshness, finding, and
+output mechanics. Each custom agent and matching repository skill must prove the
+distinct specialty value below.
+
+## Agent-to-skill map
+
+| Reviewer | Custom agent | Repository skill |
+|---|---|---|
+| Architecture | `.codex/agents/architecture-reviewer.toml` | `.agents/skills/architecture-review/SKILL.md` |
+| CI integrity | `.codex/agents/ci-integrity-reviewer.toml` | `.agents/skills/ci-integrity-review/SKILL.md` |
+| Documentation | `.codex/agents/docs-reviewer.toml` | `.agents/skills/docs-review/SKILL.md` |
+| Product/operations | `.codex/agents/product-ops-reviewer.toml` | `.agents/skills/product-ops-review/SKILL.md` |
+| QA | `.codex/agents/qa-reviewer.toml` | `.agents/skills/qa-review/SKILL.md` |
+| Reuse/dedup | `.codex/agents/reuse-dedup-reviewer.toml` | `.agents/skills/reuse-dedup-review/SKILL.md` |
+| Security | `.codex/agents/security-reviewer.toml` | `.agents/skills/security-review/SKILL.md` |
+| Senior engineering | `.codex/agents/senior-engineer-reviewer.toml` | `.agents/skills/senior-engineer-review/SKILL.md` |
+| Test delta | `.codex/agents/test-delta-reviewer.toml` | `.agents/skills/test-delta-review/SKILL.md` |
+
+`plan-review` remains outside this nine-pair map because it has no matching
+custom reviewer agent.
+
+| Reviewer | Must inspect | Representative must-find evaluation | Must-not-flag control |
+|---|---|---|---|
+| Architecture | ownership, public ports, private imports, dependency direction, ADRs, ledgers, scope | private cross-owner import or asymmetric owner/debt ledger | valid dependency through the canonical public port |
+| CI integrity | workflows, commands, coverage floors, skips, runners, trust boundary | required gate weakened or PR-controlled code executed by a privileged workflow | separate advisory check that cannot mask required gates |
+| Documentation | README, contributor path, current-state pages, glossary, links, historical/current distinction | merged capability still described as planned or a stale timeline presented as authority | clearly labeled historical evidence intentionally preserved |
+| Product/operations | project manager, contributor, review assignee, revision, contribution, compensation, audit flow | engineering findings leaking into product review decisions | engineering evidence that does not change product lifecycle truth |
+| QA | acceptance criteria, behavior, edges, negative paths, regressions | acceptance claim without a behavior test or a missed boundary case | implementation detail change with unchanged verified behavior |
+| Reuse/dedup | existing ports, helpers, policies, templates, schemas, duplicated semantics | second target resolver, evidence schema, or owner adapter | specialty extension of the canonical abstraction |
+| Security | authentication, authorization, data, secrets, untrusted input, audit, privilege | fail-open authorization or execution of untrusted PR content | read-only parsing of untrusted evidence with no execution |
+| Senior engineering | simplicity, maintainability, operational failure, size, ownership | monolithic gate with coupled responsibilities and no rollback boundary | cohesive module within its explicit size and ownership contract |
+| Test delta | weakened assertions, skips, deselection, coverage gaming, behavior fidelity | test rewritten to accept broken behavior or coverage-only assertions | refactor preserving assertions and observable behavior |
+
+## Evaluation contract
+
+Every reviewer/skill pair is evaluated independently with raw artifacts and
+minimal task context. Each row requires:
+
+1. a positive must-find fixture;
+2. a negative false-positive control;
+3. a stale-target or prior-finding replay fixture;
+4. a malformed or incomplete receipt fixture;
+5. a cross-specialty case proving the reviewer reports its own portion and
+   routes, rather than invents, the other specialty's conclusion.
+
+Fixtures record the expected finding class; prompts do not leak the prose answer.
+Results bind to the exact review target. Repeated misses or invented evidence
+prevent that reviewer/skill pair from being marked adopted.
+The first adoption evidence must verify every path pair above exists, remains
+one-to-one, and loads the shared evidence protocol.
+
+## Historical replay set
+
+The first suite includes the PR #338 misses: contract-path continuity, invalid
+atomic outcomes, owner/public-port and private-import violations, mutation of
+completed history, and machine/human debt-ledger asymmetry. It also includes a
+stale README/current-state fixture and a CI gate-weakening fixture so docs and CI
+reviewers prove distinct value rather than sharing architecture's examples.
