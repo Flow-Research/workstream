@@ -2,8 +2,8 @@
 
 ## Merge state
 
-- Contract outcome on merge: `executable contract complete; implementation next`
-- Implementation outcome on merge: `complete`
+- Outcome on merge: `planned`
+- Future implementation target: complete.
 
 ## Parent initiative
 

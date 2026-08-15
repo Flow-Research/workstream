@@ -84,6 +84,9 @@
   owner eligibility while actions remain unavailable. CP03B's executable
   contract then installs and proves exact Finance Authority activation without
   adding a route or adjacent compensation authority.
+- WS-ARCH-001-CP03A is planned with an executable implementation contract.
+- WS-ARCH-001-CP03B is planned with an executable implementation contract after
+  merged CP03A.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.

@@ -115,6 +115,9 @@ non-executable until their current-main contracts are expanded.
   exact lifecycle history, and deny-default production composition.
 - WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A and CP03B have executable
   contracts complete on merge and are the next ordered bounded boundaries.
+- WS-ARCH-001-CP03A is planned with an executable implementation contract.
+- WS-ARCH-001-CP03B is planned with an executable implementation contract after
+  merged CP03A.
 - WS-ARCH-001-CP04 is proposed and non-executable.
 - WS-ARCH-001-CP05 is proposed and non-executable.
 - WS-ARCH-001-CP06 is proposed and non-executable.
