@@ -25,6 +25,8 @@
   "status": "reviewed",
   "target": "backend/app/modules/compensation/service.py",
   "tests": [
+    "backend/tests/compensation/test_adapter_binding_authorization_failures.py::test_consume_failure_closes_once_and_creates_no_effect",
+    "backend/tests/compensation/test_adapter_binding_authorization_failures.py::test_product_failure_rolls_back_closed_authority_and_all_effects",
     "backend/tests/compensation/test_adapter_binding_owner_fences.py::test_committed_owner_ineligibility_denies_before_authorization",
     "backend/tests/compensation/test_adapter_binding_recovery.py::test_concurrent_duplicate_transition_recovers_one_effect",
     "backend/tests/compensation/test_adapter_binding_recovery.py::test_duplicate_mismatch_and_read_denial_are_concealed_without_mutation_prep",

@@ -5,8 +5,9 @@
 Current `main` contains the AUTH actor, grant, fixed-service,
 prepared-mutation, project-guide, policy-mutation, and REV-readiness
 foundations plus merged REV PLAN4 and ART foundations. The old
-`0052_legacy_intake_removal` identifier is historical merge evidence; the
-active consolidated graph ends at `0003_submission_lineage`. These foundations do
+`0052_legacy_intake_removal` identifier is historical merge evidence. Current
+main ends at `0003_submission_lineage`; CP02 installs
+`0004_compensation_adapter_binding_lifecycle` as the active head on merge. These foundations do
 not create CON runtime, activate CON behavior, or give an outbox dispatcher
 feature authority.
 

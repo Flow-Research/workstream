@@ -63,6 +63,8 @@ backend/app/modules/actors/api/compensation_adapter.py
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/compensation_binding.py
 backend/tests/compensation/test_adapter_binding_api.py
+backend/tests/compensation/test_adapter_binding_authorization_failures.py
+backend/tests/compensation/test_adapter_binding_database_guards.py
 backend/tests/adapter_binding_fixtures.py (shared CP02 PostgreSQL facts only)
 backend/tests/adapter_binding_test_support.py (strict CP02 test doubles only)
 backend/tests/compensation/test_adapter_binding_service.py
@@ -105,6 +107,26 @@ docs/roadmap_status.md
 The implementation plan review must remove any unused allowance before code is
 written. New files remain subject to the repository size and behavior-ownership
 gates.
+
+## Reviewed scope correction
+
+The original merged CP02 contract did not contain every file now required by
+the implementation. The expanded allowances are a correction discovered while
+executing and reviewing the chunk, not evidence of prior approval. They require
+explicit human acceptance with this PR. The additions are limited to:
+
+- ORM metadata registration for the lifecycle-event table;
+- shared CP02 PostgreSQL fixtures and strict authorization doubles;
+- split recovery, owner-fence, partition, authorization-failure, and database-
+  guard tests needed to keep each test file bounded by one primary behavior;
+- exact semantic-lane and behavior-ownership registration for those tests;
+- current-head assertions and legacy contribution fixtures affected by `0004`;
+- generated schema/test-structure parity artifacts; and
+- the canonical data-model document and CP02 review/trust records.
+
+Human approval of PR #337 accepts this corrected scope. It does not authorize
+routes, activation, ContributionPolicy behavior, retirement, fulfillment, or
+any change outside the explicit allowed-file list above.
 
 ## Not allowed
 
@@ -333,7 +355,8 @@ then observe either the committed event or no event after rollback.
 6. Recompose facts from the locked row, prepare, consume, and close from the
    unconditional `finally` around consume.
 7. Only after successful close, transition `suspended/N -> active/N+1`, clear
-   current suspension fields,
+   current suspension fields, persist the database-verifiable `resumed_by`
+   attribution anchor (with database-owned `resumed_at`),
    and append one immutable resumed event containing the prior suspension and
    exact actor/version transition.
 8. Flush only.
@@ -367,7 +390,9 @@ deletes fail at the database boundary. A resumed event must reference the exact
 immediately preceding suspended event for the same binding, and
 `prior_suspended_event.to_lifecycle_version` must equal
 `resumed_event.from_lifecycle_version`. That immutable suspended event remains the source of
-the cleared suspension actor/time. Events are product lifecycle truth, not
+the cleared suspension actor/time. PostgreSQL also requires every resumed
+event actor to equal the binding row's `resumed_by` anchor for that transition;
+service-supplied event attribution alone is insufficient. Events are product lifecycle truth, not
 authorization decisions. CP03 separately proves AUTH allowed-decision evidence
 is staged atomically by the real PREP consumer in the same transaction. Planned
 actions cannot produce allowed AUTH evidence before CP03 activation.
@@ -395,7 +420,8 @@ It must:
 - replace `compensation_binding_updates_deferred` with a fail-closed trigger;
 - permit only `active/N -> suspended/N+1` and
   `suspended/N -> active/N+1`;
-- require database-owned transition timestamps and exact attribution fields;
+- require database-owned transition timestamps and exact created, suspended,
+  and resumed attribution fields;
 - reject version skips, same-state updates, retired transitions, arbitrary
   updates, and changes to binding/project/`instrument_type`/adapter/route/creation
   identity;
@@ -441,7 +467,9 @@ It must:
   produce no product effect; later product failure rolls back staged AUTH
   evidence and cannot make the already-closed object reusable.
 - Active replacement blocks resume of an older suspended binding.
-- PostgreSQL independently rejects forbidden row/event mutations.
+- PostgreSQL independently rejects same-state updates, version skips, retired
+  transitions, immutable identity changes, malformed or cross-binding resume
+  lineage, forged resume attribution, and every event update/delete/truncate.
 - Rollback removes binding changes, lifecycle events, and staged participant
   effects together.
 - No denial produces allowed AUTH evidence.

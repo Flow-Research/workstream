@@ -227,6 +227,8 @@ created_by
 created_at
 suspended_by
 suspended_at
+resumed_by
+resumed_at
 retired_by
 retired_at
 ```
@@ -235,7 +237,9 @@ At most one binding is active for each project and instrument.
 `binding_lifecycle_version` starts at 1 and increments exactly once per valid
 active-to-suspended or suspended-to-active transition. CP02 installs the hidden
 transition guards and immutable created/suspended/resumed lifecycle history;
-retirement remains future and unavailable. `route_key` is a
+the current transition projection stores database-timestamped suspend or resume
+attribution so PostgreSQL can verify the matching immutable event independently.
+Retirement remains future and unavailable. `route_key` is a
 1-120 character non-secret ASCII domain routing identifier matching
 `^[A-Za-z][A-Za-z0-9._:-]{0,119}$`; it rejects traversal pairs (`..`),
 whitespace, slashes, URL/query syntax, `@`, control characters, and Unicode.

@@ -190,6 +190,8 @@ class AdapterBindingService:
         binding.binding_lifecycle_version = from_version + 1
         binding.suspended_by = str(authorized_actor)
         binding.suspended_at = suspended_at
+        binding.resumed_by = None
+        binding.resumed_at = None
         event = self._event(
             operation_id=request.operation_id,
             request_digest=digest,
@@ -260,6 +262,7 @@ class AdapterBindingService:
         binding.binding_lifecycle_version = from_version + 1
         binding.suspended_by = None
         binding.suspended_at = None
+        binding.resumed_by = str(authorized_actor)
         event = self._event(
             operation_id=request.operation_id,
             request_digest=digest,
@@ -442,4 +445,6 @@ class AdapterBindingService:
             created_at=binding.created_at,
             suspended_by=UUID(binding.suspended_by) if binding.suspended_by else None,
             suspended_at=binding.suspended_at,
+            resumed_by=UUID(binding.resumed_by) if binding.resumed_by else None,
+            resumed_at=binding.resumed_at,
         )

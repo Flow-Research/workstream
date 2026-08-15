@@ -51,14 +51,18 @@ class ProjectCompensationAdapterBinding(Base):
         ),
         CheckConstraint(
             "(status='active' and suspended_by is null and suspended_at is null "
-            "and retired_by is null and retired_at is null) or "
+            "and ((binding_lifecycle_version=1 and resumed_by is null and resumed_at is null) "
+            "or (binding_lifecycle_version>1 and resumed_by is not null "
+            "and resumed_at is not null)) and retired_by is null and retired_at is null) or "
             "(status='suspended' and binding_lifecycle_version > 1 "
             "and suspended_by is not null and suspended_at is not null "
+            "and resumed_by is null and resumed_at is null "
             "and retired_by is null and retired_at is null)",
             name="lifecycle_shape",
         ),
         CheckConstraint(
             "(suspended_at is null or suspended_at >= created_at) and "
+            "(resumed_at is null or resumed_at >= created_at) and "
             "(retired_at is null or retired_at >= created_at) and "
             "(retired_at is null or suspended_at is null or retired_at >= suspended_at)",
             name="lifecycle_timestamps",
@@ -103,6 +107,10 @@ class ProjectCompensationAdapterBinding(Base):
         ForeignKey("actor_profiles.id", name="fk_compensation_binding_suspended_by")
     )
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resumed_by: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id", name="fk_compensation_binding_resumed_by")
+    )
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retired_by: Mapped[str | None] = mapped_column(
         ForeignKey("actor_profiles.id", name="fk_compensation_binding_retired_by")
     )

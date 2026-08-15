@@ -18,8 +18,8 @@ authorization adapters.
 - Added CON repository/service orchestration with PostgreSQL advisory operation
   fencing, exact authorized recovery, row locking, and concealed conflicts.
 - Added migration `0004` with immutable contiguous lifecycle-event history,
-  attribution guards, one-active-binding constraints, and empty-table-only
-  upgrade protection.
+  database-verifiable create/suspend/resume attribution guards,
+  one-active-binding constraints, and empty-table-only upgrade protection.
 - Added focused unit, PostgreSQL, concurrency, boundary, ownership, reset, and
   Alembic tests; split fixtures and test doubles into named files so no test
   file reaches 500 lines or shadows repository pytest configuration.
@@ -65,7 +65,10 @@ and binding identity; exact duplicate recovery for all mutations; mismatch and
 read-denial concealment; one-effect concurrency; owner ineligibility before
 AUTH; retained project and actor locks; close-before-mutation failure; copied,
 replayed, closed, or wrong-transaction fake PREP rejection; no existing ART or
-human identity substitution; and deny-default production composition.
+human identity substitution; deny-default production composition; consume
+denial/exception/wrong-actor closure and rollback; failure after successful
+close; complete forbidden-transition and immutable-identity rejection; forged
+resume-attribution rejection; and event update/delete/truncate rejection.
 
 ## Tests and checks run
 
@@ -93,6 +96,16 @@ The superseded 03A deny-all-update and raw-table race tests were replaced by
 service-bound lifecycle, advisory-lock, recovery, and database-guard tests. No
 skip, xfail, omission, threshold reduction, workflow bypass, or coverage
 weakening was introduced. Repository coverage floors remain unchanged.
+
+## Reviewed scope correction
+
+Implementation revealed necessary parity and proof files outside the originally
+merged allowed-file list: ORM aggregation, canonical architecture text, CI
+ownership/lane metadata, shared test support, schema-reset/Alembic contracts,
+and split authorization/database guard tests. The executable contract records
+the exact paths and rationale. Approval of PR #337 explicitly accepts this
+corrected scope; it is not represented as part of the earlier approval and does
+not authorize adjacent CON behavior.
 
 ## Reviewer results
 

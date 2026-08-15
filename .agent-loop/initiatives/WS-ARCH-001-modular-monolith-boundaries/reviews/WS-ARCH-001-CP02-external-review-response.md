@@ -90,6 +90,35 @@ The earlier exact-diff reviewer passes were marked superseded before fresh
 internal re-review. The latest CodeRabbit check was rate-limited, so it is not
 represented as independent substantive review of the corrective head.
 
+## Exact-diff correction after implementation review at `7f189f1a`
+
+The five reported blockers and the handoff correction were replayed against
+the implementation rather than applied automatically. All were valid:
+
+1. Resume attribution had no database-verifiable anchor. The binding now
+   persists `resumed_by` and database-owned `resumed_at`, and PostgreSQL rejects
+   a resumed event whose actor differs from the transition anchor.
+2. Dedicated PREP failure tests now cover consume denial, consume exception,
+   wrong returned actor, exactly-once closure, no mutation after failure, and a
+   product failure after successful close. The latter proves rollback of both
+   product and staged participant effects and rejection of the closed object.
+3. PostgreSQL negative tests now cover same-state transitions, version skips,
+   retired transitions, every immutable binding identity, malformed and
+   cross-binding prior-suspension references, forged resume attribution, and
+   event update, delete, and truncate attempts.
+4. The implementation exceeded the originally merged allowed-file list. The
+   executable contract now records the exact expansion as a reviewed scope
+   correction, explains why each category was required, and makes human
+   approval of PR #337 the acceptance boundary. It does not misrepresent the
+   files as part of the original approval.
+5. The trust bundle and implementation evidence were revised after the new
+   proof was added; earlier reviewer conclusions do not stand in for fresh
+   exact-diff review.
+
+The active AUTH handoff now distinguishes current main at migration `0003`
+from the `0004` head that CP02 installs on merge. No compatibility path was
+added.
+
 ## Verification after correction
 
 - architecture re-review: pass;

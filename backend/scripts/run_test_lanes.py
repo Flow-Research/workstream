@@ -109,6 +109,8 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_config.py",
     "tests/test_compensation.py",
     "tests/compensation/test_adapter_binding_api.py",
+    "tests/compensation/test_adapter_binding_authorization_failures.py",
+    "tests/compensation/test_adapter_binding_database_guards.py",
     "tests/compensation/test_adapter_binding_partition.py",
     "tests/compensation/test_adapter_binding_owner_fences.py",
     "tests/compensation/test_adapter_binding_persistence.py",

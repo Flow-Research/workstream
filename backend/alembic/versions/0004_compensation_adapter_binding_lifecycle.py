@@ -35,8 +35,24 @@ def upgrade() -> None:
     for name in (
         "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
         "ck_project_compensation_adapter_bindings_ck_project_com_da73",
+        "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
     ):
         op.drop_constraint(op.f(name), "project_compensation_adapter_bindings", type_="check")
+    op.add_column(
+        "project_compensation_adapter_bindings",
+        sa.Column("resumed_by", sa.String(36), nullable=True),
+    )
+    op.add_column(
+        "project_compensation_adapter_bindings",
+        sa.Column("resumed_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.create_foreign_key(
+        "fk_compensation_binding_resumed_by",
+        "project_compensation_adapter_bindings",
+        "actor_profiles",
+        ["resumed_by"],
+        ["id"],
+    )
     op.create_check_constraint(
         op.f("ck_project_compensation_adapter_bindings_status"),
         "project_compensation_adapter_bindings",
@@ -46,10 +62,21 @@ def upgrade() -> None:
         op.f("ck_project_compensation_adapter_bindings_lifecycle_shape"),
         "project_compensation_adapter_bindings",
         "(status='active' and suspended_by is null and suspended_at is null "
-        "and retired_by is null and retired_at is null) or "
+        "and ((binding_lifecycle_version=1 and resumed_by is null and resumed_at is null) "
+        "or (binding_lifecycle_version>1 and resumed_by is not null "
+        "and resumed_at is not null)) and retired_by is null and retired_at is null) or "
         "(status='suspended' and binding_lifecycle_version > 1 "
         "and suspended_by is not null and suspended_at is not null "
+        "and resumed_by is null and resumed_at is null "
         "and retired_by is null and retired_at is null)",
+    )
+    op.create_check_constraint(
+        op.f("ck_project_compensation_adapter_bindings_lifecycle_timestamps"),
+        "project_compensation_adapter_bindings",
+        "(suspended_at is null or suspended_at >= created_at) and "
+        "(resumed_at is null or resumed_at >= created_at) and "
+        "(retired_at is null or retired_at >= created_at) and "
+        "(retired_at is null or suspended_at is null or retired_at >= suspended_at)",
     )
 
     op.create_table(
@@ -140,13 +167,16 @@ def upgrade() -> None:
           end if;
           if old.status='active' and new.status='suspended'
              and new.binding_lifecycle_version=old.binding_lifecycle_version+1
-             and new.suspended_by is not null then
+             and new.suspended_by is not null
+             and new.resumed_by is null and new.resumed_at is null then
             new.suspended_at := clock_timestamp();
             return new;
           end if;
           if old.status='suspended' and new.status='active'
              and new.binding_lifecycle_version=old.binding_lifecycle_version+1
-             and new.suspended_by is null and new.suspended_at is null then
+             and new.suspended_by is null and new.suspended_at is null
+             and new.resumed_by is not null then
+            new.resumed_at := clock_timestamp();
             return new;
           end if;
           raise exception 'invalid compensation binding lifecycle transition' using errcode='23514';
@@ -176,7 +206,8 @@ def upgrade() -> None:
             raise exception 'invalid compensation binding lifecycle event' using errcode='23514';
           end if;
           if (new.event_type='created' and binding.created_by<>new.actor_profile_id)
-             or (new.event_type='suspended' and binding.suspended_by<>new.actor_profile_id) then
+             or (new.event_type='suspended' and binding.suspended_by<>new.actor_profile_id)
+             or (new.event_type='resumed' and binding.resumed_by<>new.actor_profile_id) then
             raise exception 'compensation binding lifecycle attribution mismatch'
               using errcode='23514';
           end if;

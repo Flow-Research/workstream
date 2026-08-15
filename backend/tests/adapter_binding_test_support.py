@@ -90,8 +90,8 @@ class Authorization:
         assert type(prepared) is Prepared
         assert self._prepared.get(id(prepared)) is prepared
         assert prepared.facts == facts
-        assert prepared.transaction_id == self._transaction_id()
         assert not prepared.consumed and not prepared.closed
+        assert prepared.transaction_id == self._transaction_id()
         prepared.consumed = True
         self.consumed += 1
         return facts.actor_profile_id

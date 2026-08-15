@@ -156,6 +156,8 @@ class AdapterBindingView:
     created_at: datetime
     suspended_by: UUID | None
     suspended_at: datetime | None
+    resumed_by: UUID | None
+    resumed_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -256,12 +256,13 @@ def test_current_head_installs_compensation_binding_lifecycle(
     assert {
         "ck_project_compensation_adapter_bindings_status",
         "ck_project_compensation_adapter_bindings_lifecycle_shape",
+        "ck_project_compensation_adapter_bindings_lifecycle_timestamps",
     } <= binding_checks
     assert not {
         "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
         "ck_project_compensation_adapter_bindings_ck_project_com_da73",
+        "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
     } & binding_checks
-
 
 def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
     isolated_database_env: str, migration_lock
@@ -278,7 +279,6 @@ def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
             command.upgrade(config, HEAD_REVISION)
 
     assert asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env)) == before
-
 
 def test_manifest_covers_every_required_object_class() -> None:
     manifest = json.loads(_manifest_path().read_text(encoding="utf-8"))

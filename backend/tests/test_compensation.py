@@ -128,6 +128,8 @@ def test_binding_model_is_registered_without_secret_or_provider_columns() -> Non
         "created_at",
         "suspended_by",
         "suspended_at",
+        "resumed_by",
+        "resumed_at",
         "retired_by",
         "retired_at",
     }

@@ -68,6 +68,13 @@ async def test_create_suspend_resume_persists_contiguous_immutable_history(
                     expected_lifecycle_version=2,
                 )
             )
+        view = await service.read(
+            AdapterBindingReadRequest(
+                actor_profile_id=actor_id,
+                project_id=project_id,
+                adapter_binding_id=created.adapter_binding_id,
+            )
+        )
     assert resumed.prior_suspension_event_id == suspended.event_id
     assert (authorization.prepared, authorization.consumed, authorization.closed) == (3, 3, 3)
     async with db_session.get_session_factory()() as session:
@@ -85,6 +92,10 @@ async def test_create_suspend_resume_persists_contiguous_immutable_history(
     assert binding is not None and (binding.status, binding.binding_lifecycle_version) == (
         "active", 3
     )
+    assert binding.resumed_by == str(actor_id)
+    assert binding.resumed_at is not None
+    assert view.resumed_by == actor_id
+    assert view.resumed_at == binding.resumed_at
 
 
 @pytest.mark.asyncio

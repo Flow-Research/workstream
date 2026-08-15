@@ -60,12 +60,14 @@ full-suite execution in GitHub rather than on the slow local machine.
 
 ## Valid findings fixed
 
-Findings fixed include event-attribution guards, read concealment, exact PREP
+Findings fixed include database-verifiable create/suspend/resume attribution
+guards, read concealment, exact PREP
 closure ordering, owner eligibility races, operation fencing and recovery,
 request runtime validation, all-mutation concurrency coverage, deterministic
 lock tests, schema/lane parity, test-fixture isolation, service-actor proof, and
-stale implementation evidence, and documentation coverage for the new public
-and repository surfaces.
+stale implementation evidence, documentation coverage for the new public and
+repository surfaces, consume denial/exception/wrong-actor rollback proof, and
+the complete promised PostgreSQL forbidden-mutation matrix.
 
 ## Residual risk owned by CP03
 
