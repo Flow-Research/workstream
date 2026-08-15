@@ -3,6 +3,7 @@
 import asyncio
 
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -194,10 +195,26 @@ async def test_owner_rows_remain_locked_through_protected_mutation(
                     await session.scalar(select(model).where(model.id == str(value)).with_for_update())
 
     mutation = asyncio.create_task(mutate())
-    await authorization.entered.wait()
-    await eligibility_change()
-    authorization.release.set()
-    await mutation
+    entered = asyncio.create_task(authorization.entered.wait())
+    try:
+        done, _ = await asyncio.wait(
+            {entered, mutation}, timeout=30, return_when=asyncio.FIRST_COMPLETED
+        )
+        if mutation in done:
+            await mutation
+            raise AssertionError("mutation completed before authorization")
+        assert entered in done, "mutation did not reach authorization"
+        await eligibility_change()
+        authorization.release.set()
+        await mutation
+    finally:
+        authorization.release.set()
+        entered.cancel()
+        mutation.cancel()
+        with suppress(asyncio.CancelledError):
+            await entered
+        with suppress(asyncio.CancelledError):
+            await mutation
 
 
 @pytest.mark.parametrize("operation", ("create", "resume"))
@@ -264,7 +281,11 @@ async def test_committed_owner_ineligibility_denies_before_authorization(
         event_count = await session.scalar(
             select(func.count()).select_from(CompensationAdapterBindingLifecycleEvent)
         )
-        binding = await session.get(ProjectCompensationAdapterBinding, binding_id)
+        binding = (
+            await session.get(ProjectCompensationAdapterBinding, binding_id)
+            if binding_id is not None
+            else None
+        )
     expected_count = 0 if operation == "create" else 1
     assert binding_count == expected_count and event_count == expected_count * 2
     if binding is not None:

@@ -327,7 +327,7 @@ async def test_database_rejects_missing_event_and_mismatched_attribution(
     project_id, adapter_id, actor_id = await binding_seed()
     binding_id = uuid4()
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(DBAPIError):
+        with pytest.raises(DBAPIError, match="transition requires lifecycle event"):
             async with session.begin():
                 session.add(
                     ProjectCompensationAdapterBinding(

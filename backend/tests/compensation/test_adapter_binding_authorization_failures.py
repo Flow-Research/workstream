@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import session as db_session
 from app.modules.compensation.api import (
@@ -112,7 +113,10 @@ async def test_consume_failure_closes_once_and_creates_no_effect(
     project_id, adapter_id, actor_id = await binding_seed()
     authorization = _ParticipantAuthorization(mode)
     expected = RuntimeError if mode == "exception" else AdapterBindingUnavailable
-    async with db_session.get_session_factory()() as session:
+    async with (
+        db_session.get_engine().connect() as connection,
+        AsyncSession(bind=connection, expire_on_commit=False) as session,
+    ):
         await _install_participant_probe(session)
         with pytest.raises(expected):
             async with session.begin():
@@ -141,7 +145,10 @@ async def test_product_failure_rolls_back_closed_authority_and_all_effects(
 ) -> None:
     project_id, adapter_id, actor_id = await binding_seed()
     authorization = _ParticipantAuthorization()
-    async with db_session.get_session_factory()() as session:
+    async with (
+        db_session.get_engine().connect() as connection,
+        AsyncSession(bind=connection, expire_on_commit=False) as session,
+    ):
         await _install_participant_probe(session)
         binding_service = service(session, authorization)
         binding_service._repository = _FailingRepository(session)

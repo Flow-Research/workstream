@@ -13,7 +13,7 @@ class CompensationAdapterActorUnavailable(RuntimeError):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CompensationAdapterActorEligibilityFacts:
-    """Exact active service actor retained under an ACTORS-owned fence."""
+    """Exact active adapter actor retained under an ACTORS-owned fence."""
 
     adapter_actor_id: UUID
 

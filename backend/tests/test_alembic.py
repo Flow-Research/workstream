@@ -252,7 +252,7 @@ def test_current_head_installs_compensation_binding_lifecycle(
         "compensation_binding_event_truncate_guard",
         "compensation_binding_lifecycle_event_required",
     }
-    assert len(functions) == 4
+    assert functions == {"enforce_compensation_binding_lifecycle", "guard_compensation_binding_lifecycle_event", "reject_compensation_binding_lifecycle_event_change", "require_compensation_binding_lifecycle_event"}
     assert {
         "ck_project_compensation_adapter_bindings_status",
         "ck_project_compensation_adapter_bindings_lifecycle_shape",

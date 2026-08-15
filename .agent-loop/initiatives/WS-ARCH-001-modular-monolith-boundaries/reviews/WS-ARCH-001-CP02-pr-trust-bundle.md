@@ -124,10 +124,12 @@ carried to CP03 where the real adapters and identity are installed.
 
 ## External review
 
-The planning-stage external findings and their validated disposition remain in
-`WS-ARCH-001-CP02-external-review-response.md`. Implementation-head GitHub and
-CodeRabbit findings must be replayed against the code before any fix. GitHub's
-live exact-head checks are the authority for transient status.
+The planning-stage and implementation-head external findings and their
+validated dispositions remain in
+`WS-ARCH-001-CP02-external-review-response.md`. CodeRabbit's seven substantive
+implementation findings were replayed and repaired without changing product
+scope or weakening a gate. GitHub's live exact-head checks are the authority
+for transient status.
 
 ## Remaining risks and follow-up
 

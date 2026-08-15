@@ -149,6 +149,32 @@ itself and requires object identity during consume. This strengthens the
 existing wrong-transaction proof without changing production behavior or any
 CI threshold.
 
+## CodeRabbit implementation review at `31f6d730`
+
+All seven threads were replayed against the exact head and found valid. The
+repair remains within CP02 and changes no production activation or lifecycle
+semantics:
+
+1. `CURRENT_STATE.md` now describes CP02 as complete on merge, consistent with
+   the capability ledger while PR #337 remains open.
+2. The ACTORS public fact describes an eligible adapter actor rather than
+   prematurely classifying it as the future CP03 service identity.
+3. Transaction-participant rollback tests pin their temporary-table probe,
+   mutation, and assertion transactions to one physical PostgreSQL connection.
+4. Owner-fence concurrency tests observe both the authorization event and the
+   mutation task with a timeout, propagate early failures, and cancel and await
+   both tasks during cleanup instead of hanging.
+5. The committed-ineligibility test avoids a null-primary-key ORM lookup for
+   create operations.
+6. The missing-event PostgreSQL assertion matches the lifecycle-event guard's
+   error rather than accepting an unrelated `DBAPIError`.
+7. Alembic proof compares the exact four PostgreSQL function names rather than
+   accepting any four overload rows.
+
+CodeRabbit's advisory repository-external docstring percentage is not a
+Workstream merge gate. The repository's own docstring and coverage gates remain
+unchanged.
+
 ## Verification after correction
 
 - architecture re-review: pass;
