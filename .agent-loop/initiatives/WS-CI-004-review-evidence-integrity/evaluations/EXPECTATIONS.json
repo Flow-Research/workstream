@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "created_after_blind_runs": true,
+  "expectations": [
+    {"case_id":"architecture-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"architecture-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"architecture-stale","outcome":"replayed","required_finding_ids":["ARCH-7"],"handoff_specialty":null},
+    {"case_id":"architecture-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"architecture-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"ci_integrity"},
+
+    {"case_id":"ci_integrity-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"ci_integrity-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"ci_integrity-stale","outcome":"replayed","required_finding_ids":["CI-4"],"handoff_specialty":null},
+    {"case_id":"ci_integrity-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"ci_integrity-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"security"},
+
+    {"case_id":"documentation-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"documentation-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"documentation-stale","outcome":"replayed","required_finding_ids":["DOC-2"],"handoff_specialty":null},
+    {"case_id":"documentation-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"documentation-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"architecture"},
+
+    {"case_id":"product_ops-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"product_ops-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"product_ops-stale","outcome":"replayed","required_finding_ids":["OPS-3"],"handoff_specialty":null},
+    {"case_id":"product_ops-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"product_ops-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"ci_integrity"},
+
+    {"case_id":"qa-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"qa-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"qa-stale","outcome":"replayed","required_finding_ids":["QA-8"],"handoff_specialty":null},
+    {"case_id":"qa-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"qa-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"security"},
+
+    {"case_id":"reuse_dedup-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"reuse_dedup-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"reuse_dedup-stale","outcome":"replayed","required_finding_ids":["REUSE-5"],"handoff_specialty":null},
+    {"case_id":"reuse_dedup-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"reuse_dedup-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"test_delta"},
+
+    {"case_id":"security-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"security-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"security-stale","outcome":"replayed","required_finding_ids":["SEC-9"],"handoff_specialty":null},
+    {"case_id":"security-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"security-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"documentation"},
+
+    {"case_id":"senior_engineering-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"senior_engineering-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"senior_engineering-stale","outcome":"replayed","required_finding_ids":["SENIOR-4"],"handoff_specialty":null},
+    {"case_id":"senior_engineering-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"senior_engineering-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"product_ops"},
+
+    {"case_id":"test_delta-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"test_delta-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"test_delta-stale","outcome":"replayed","required_finding_ids":["TEST-6"],"handoff_specialty":null},
+    {"case_id":"test_delta-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"test_delta-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"architecture"}
+  ]
+}

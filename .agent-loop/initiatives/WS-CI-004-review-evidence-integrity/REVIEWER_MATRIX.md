@@ -6,20 +6,27 @@ distinct specialty value below.
 
 ## Agent-to-skill map
 
-| Reviewer | Custom agent | Repository skill |
-|---|---|---|
-| Architecture | `.codex/agents/architecture-reviewer.toml` | `.agents/skills/architecture-review/SKILL.md` |
-| CI integrity | `.codex/agents/ci-integrity-reviewer.toml` | `.agents/skills/ci-integrity-review/SKILL.md` |
-| Documentation | `.codex/agents/docs-reviewer.toml` | `.agents/skills/docs-review/SKILL.md` |
-| Product/operations | `.codex/agents/product-ops-reviewer.toml` | `.agents/skills/product-ops-review/SKILL.md` |
-| QA | `.codex/agents/qa-reviewer.toml` | `.agents/skills/qa-review/SKILL.md` |
-| Reuse/dedup | `.codex/agents/reuse-dedup-reviewer.toml` | `.agents/skills/reuse-dedup-review/SKILL.md` |
-| Security | `.codex/agents/security-reviewer.toml` | `.agents/skills/security-review/SKILL.md` |
-| Senior engineering | `.codex/agents/senior-engineer-reviewer.toml` | `.agents/skills/senior-engineer-review/SKILL.md` |
-| Test delta | `.codex/agents/test-delta-reviewer.toml` | `.agents/skills/test-delta-review/SKILL.md` |
+This table is the single canonical reviewer registry. The deterministic
+validator derives reviewer IDs and agent/skill paths directly from these rows;
+there is no separately maintained code registry.
+
+| Reviewer | Canonical ID | Custom agent | Repository skill |
+|---|---|---|---|
+| Architecture | `architecture` | `.codex/agents/architecture-reviewer.toml` | `.agents/skills/architecture-review/SKILL.md` |
+| CI integrity | `ci_integrity` | `.codex/agents/ci-integrity-reviewer.toml` | `.agents/skills/ci-integrity-review/SKILL.md` |
+| Documentation | `documentation` | `.codex/agents/docs-reviewer.toml` | `.agents/skills/docs-review/SKILL.md` |
+| Product/operations | `product_ops` | `.codex/agents/product-ops-reviewer.toml` | `.agents/skills/product-ops-review/SKILL.md` |
+| QA | `qa` | `.codex/agents/qa-reviewer.toml` | `.agents/skills/qa-review/SKILL.md` |
+| Reuse/dedup | `reuse_dedup` | `.codex/agents/reuse-dedup-reviewer.toml` | `.agents/skills/reuse-dedup-review/SKILL.md` |
+| Security | `security` | `.codex/agents/security-reviewer.toml` | `.agents/skills/security-review/SKILL.md` |
+| Senior engineering | `senior_engineering` | `.codex/agents/senior-engineer-reviewer.toml` | `.agents/skills/senior-engineer-review/SKILL.md` |
+| Test delta | `test_delta` | `.codex/agents/test-delta-reviewer.toml` | `.agents/skills/test-delta-review/SKILL.md` |
 
 `plan-review` remains outside this nine-pair map because it has no matching
 custom reviewer agent.
+
+Use only the canonical IDs above in machine-readable reviewer and handoff
+fields. Human-readable labels may still appear in prose.
 
 | Reviewer | Must inspect | Representative must-find evaluation | Must-not-flag control |
 |---|---|---|---|

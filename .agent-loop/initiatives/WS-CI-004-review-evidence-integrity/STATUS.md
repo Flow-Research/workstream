@@ -2,29 +2,29 @@
 
 ## Current status
 
-`WS-CI-004-01` is complete on merge.
+`WS-CI-004-01` is merged; `WS-CI-004-02` is complete on merge.
 
 ## Current focus
 
-Land the shared protocol, canonical schema, and read-only target sensor without
-changing reviewer-agent behavior or CI.
+Adopt the shared protocol across all nine reviewer skills and custom agents and
+prove their contracts without changing CI or product behavior.
 
 ## Chunk status
 
 | Chunk | Status | Notes |
 |---|---|---|
 | `WS-CI-004-PLAN` | Planned on merge | Research and contracts only |
-| `WS-CI-004-01` | Complete on merge | Protocol, schema, target tool, and focused tests in one PR |
-| Proposed step 2 | Not active | Reviewer/skill adoption; no implementation contract exists |
+| `WS-CI-004-01` | Merged | Protocol, schema, target tool, and focused tests landed through PR #341 |
+| `WS-CI-004-02` | Complete on merge | Nine reviewer skills and agents plus deterministic evaluation harness |
 | Proposed step 3 | Not active | Local session convergence; no implementation contract exists |
 
 ## Durable current state
 
-Reviewer agents, specialty skills, workflows, product behavior, and GitHub merge
-authority remain unchanged. This chunk adds only the shared protocol/schema and
-a local read-only target sensor.
+The shared protocol, schema, and target sensor are merged. This chunk changes
+only reviewer instructions and their offline contract evaluation; workflows,
+product behavior, and GitHub merge authority remain unchanged.
 
 ## Next action
 
-Human review and merge of `WS-CI-004-01`. Do not start reviewer adoption or
-local convergence automatically.
+Human review and merge of `WS-CI-004-02`. Do not start local convergence
+automatically.
