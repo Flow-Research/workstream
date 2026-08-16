@@ -1,4 +1,6 @@
-"""CP03A composition proof while adapter-binding AUTH remains unavailable."""
+"""Public-port composition proof for CON-to-AUTH adapter binding."""
+
+from __future__ import annotations
 
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -7,16 +9,60 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import session as db_session
+from app.adapters.auth.adapter_bindings import CompensationAdapterBindingAuthorization
 from app.modules.actors.api import ServiceIdentity
 from app.modules.actors.compensation_adapter import CompensationAdapterActorEligibility
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
-from app.modules.compensation.api import AdapterBindingCreateRequest, AdapterBindingUnavailable
+from app.modules.authorization.api import AuthorizationDenied
+from app.modules.compensation.api import (
+    AdapterBindingCreateRequest,
+    AdapterBindingMutationAuthorizationFacts,
+    AdapterBindingReadRequest,
+    AdapterBindingUnavailable,
+)
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
 from app.modules.compensation.service import AdapterBindingService
 from app.modules.projects.compensation_binding import ProjectCompensationBindingEligibility
 from project_create_fixtures import insert_historical_project
 
+
 pytest_plugins = ("adapter_binding_fixtures",)
+
+
+class _Authorization:
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+        self.handle = object()
+
+    async def authorize_read(self, **kwargs) -> None:
+        self.calls.append(("read", kwargs))
+
+    async def prepare_mutation(self, facts):
+        self.calls.append(("prepare", facts))
+        return self.handle
+
+    async def consume_mutation(self, prepared, facts):
+        self.calls.append(("consume", prepared, facts))
+        return facts.actor_profile_id
+
+    def close_mutation(self, prepared) -> None:
+        self.calls.append(("close", prepared))
+
+
+def _facts() -> AdapterBindingMutationAuthorizationFacts:
+    return AdapterBindingMutationAuthorizationFacts(
+        action="compensation.adapter_binding.suspend",
+        actor_profile_id=uuid4(),
+        operation_id=uuid4(),
+        request_digest="sha256:" + "b" * 64,
+        project_id=uuid4(),
+        adapter_binding_id=uuid4(),
+        instrument_type="project_points",
+        adapter_actor_id=uuid4(),
+        route_key="points.primary",
+        expected_status="active",
+        expected_lifecycle_version=3,
+    )
 
 
 @pytest.mark.asyncio
@@ -97,3 +143,41 @@ async def test_real_owner_eligibility_does_not_activate_binding_authority(
             select(func.count()).select_from(ProjectCompensationAdapterBinding)
         )
         assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_public_adapter_preserves_exact_read_and_mutation_facts() -> None:
+    authorization = _Authorization()
+    adapter = CompensationAdapterBindingAuthorization(authorization)
+    read = AdapterBindingReadRequest(
+        actor_profile_id=uuid4(), project_id=uuid4(), adapter_binding_id=uuid4()
+    )
+    await adapter.authorize_adapter_binding_read(read)
+    facts = _facts()
+    prepared = await adapter.prepare_adapter_binding_mutation(facts)
+    actor = await adapter.consume_adapter_binding_mutation(prepared, facts)
+    adapter.close_adapter_binding_mutation(prepared)
+    translated = authorization.calls[1][1]
+    assert authorization.calls[0][1]["actor_profile_id"] == read.actor_profile_id
+    assert translated.instrument_type == facts.instrument_type
+    assert translated.expected_lifecycle_version == 3
+    assert actor == facts.actor_profile_id
+    assert authorization.calls[-1] == ("close", authorization.handle)
+
+
+@pytest.mark.asyncio
+async def test_public_adapter_conceals_auth_boundary_denial() -> None:
+    class _Denied(_Authorization):
+        async def authorize_read(self, **kwargs) -> None:
+            del kwargs
+            raise AuthorizationDenied("denied")
+
+    adapter = CompensationAdapterBindingAuthorization(_Denied())
+    with pytest.raises(AdapterBindingUnavailable, match="unavailable"):
+        await adapter.authorize_adapter_binding_read(
+            AdapterBindingReadRequest(
+                actor_profile_id=uuid4(),
+                project_id=uuid4(),
+                adapter_binding_id=uuid4(),
+            )
+        )

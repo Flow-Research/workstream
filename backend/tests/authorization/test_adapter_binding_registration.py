@@ -46,14 +46,13 @@ _ACTIONS = {
 }
 
 
-def test_cp01a_registers_only_exact_planned_binding_actions() -> None:
+def test_cp03b_activates_only_exact_binding_actions() -> None:
     for action in _ACTIONS:
         definition = ACTION_BY_ID[action]
         assert definition.permission_id is PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE
         assert definition.owner is ActionOwner.ARCH_CP01A
-        assert definition.availability is ActionAvailability.PLANNED
-        with pytest.raises(ValueError, match="authorization action is not active"):
-            resolve_executable_action(action)
+        assert definition.availability is ActionAvailability.ACTIVE
+        assert resolve_executable_action(action) is definition
 
     assert "compensation.adapter_binding.retire" not in {item.value for item in ActionId}
     assert all(_ACTIONS.isdisjoint(actions) for actions in SERVICE_ACTIONS_BY_IDENTITY.values())

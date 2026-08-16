@@ -48,8 +48,8 @@ not current start requirements.
   policy actions while unavailable; CP01C is complete on merge with corrected
   unavailable binding identity and lifecycle-generation facts; CP03 is split.
   CP03A is complete on merge with only the target identity and owner
-  eligibility while actions remain unavailable; CP03B's implementation then
-  activates only CP02's four exact Finance Authority boundaries. CP05 later activates
+  eligibility while actions remain unavailable; CP03B is complete on merge
+  and activates only CP02's four exact Finance Authority boundaries. CP05 later activates
   only CP04's merged hidden policy behavior. Fulfillment callback authority
   remains separate and cannot be bundled into adapter-binding registration.
 

@@ -278,9 +278,10 @@ counts, mappings, owners, and availability remain unchanged.
 WS-ARCH-001-CP03 is split after merged CP02 hidden behavior. CP03A adds only
 the closed target identity `workstream.compensation.adapter` and real
 PROJECTS/ACTORS eligibility adapters; it adds no service-matrix membership and
-is complete on merge while keeping all four binding actions unavailable. CP03B then installs the exact
-read/PREP adapter for an authenticated human Finance Authority covering the
-exact project and activates only those four actions.
+is complete on merge while keeping all four binding actions unavailable. CP03B
+then installs the exact read/PREP adapter for an authenticated human Finance
+Authority covering the exact project and activates only those four actions,
+producing the current 111-row catalogue with 61 active and 50 planned actions.
 AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven

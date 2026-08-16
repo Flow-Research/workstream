@@ -775,22 +775,22 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.XINT_002_07,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_ADAPTER_BINDING_READ,
         PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
         ActionOwner.ARCH_CP01A,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
         PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
         ActionOwner.ARCH_CP01A,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
         PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
         ActionOwner.ARCH_CP01A,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
         PermissionId.COMPENSATION_ADAPTER_BINDING_MANAGE,
         ActionOwner.ARCH_CP01A,
@@ -938,6 +938,10 @@ def _index_actions(
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ActionId.COMPENSATION_ADAPTER_BINDING_READ,
+        ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
+        ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
+        ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
     }
     if {
         definition.action_id

@@ -2,8 +2,8 @@
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- Future implementation target: complete.
+- Outcome on merge: `complete`
+- Implementation outcome: complete.
 
 ## Parent initiative
 
@@ -118,6 +118,8 @@ backend/app/modules/authorization/api/adapter_bindings.py
 backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/runtime.py (closed resource-context union only)
+backend/app/modules/audit/schemas.py (register the exact `compensation_adapter_binding`
+  audit resource type only)
 backend/app/modules/authorization/prepared.py (reuse/integration only)
 backend/app/modules/authorization/kernel.py (exact Finance Authority evaluator integration only)
 backend/app/modules/authorization/adapter_binding_authorization.py
@@ -131,7 +133,7 @@ backend/app/api/deps/authorization.py (composition only; no route)
 backend/app/main.py (composition only; no route)
 backend/app/modules/compensation/api/adapter_bindings.py (public-port parity only)
 backend/app/modules/compensation/service.py (dependency injection only; no lifecycle behavior change)
-backend/tests/authorization/test_adapter_binding_activation.py
+backend/tests/authorization/test_adapter_binding_registration.py
 backend/tests/authorization/test_adapter_binding_authorization.py
 backend/tests/compensation/test_adapter_binding_authorization_integration.py
 backend/tests/compensation/test_adapter_binding_authorization_failures.py
@@ -141,6 +143,9 @@ backend/tests/compensation/test_adapter_binding_service.py
 backend/tests/compensation/test_adapter_binding_database_guards.py
 backend/tests/compensation/test_adapter_binding_persistence.py
 backend/tests/architecture/test_authorization_boundary.py
+backend/scripts/authorization_boundary.py (exact AUTH adapter-root ownership only)
+backend/scripts/module_boundaries.py (AUTH adapter-root parity only; no general adapter exception)
+backend/tests/architecture/test_module_boundaries.py (repository-wide AUTH-view parity proof only)
 backend/tests/test_authorization.py (closed catalogue/evaluator parity only)
 backend/tests/test_audit.py (atomic evidence parity only)
 backend/scripts/behavior_ownership.py (exact changed-target ownership only)
@@ -193,44 +198,49 @@ Project Manager, Operator, Access Administrator, Audit Authority, project-role, 
 
 ## Acceptance criteria
 
-- [ ] Exactly the four manifest actions become `ACTIVE`, remain mapped only to
+- [x] Exactly the four manifest actions become `ACTIVE`, remain mapped only to
       `compensation.adapter_binding.manage`, and retain their existing owner.
-- [ ] The active catalogue count increases by exactly four; every adjacent
+- [x] The active catalogue count increases by exactly four; every adjacent
       ContributionPolicy, retirement, award, fulfillment, callback, delivery,
       dispatcher, and reconciliation action remains unavailable or absent.
-- [ ] Only an active human profile with the exact active identity link and an
+- [x] Only an active human profile with the exact active identity link and an
       effective system- or same-project `finance_authority` grant can read or
       mutate a binding in that covered project.
-- [ ] Project Manager, Operator, Access Administrator, Audit Authority,
+- [x] Project Manager, Operator, Access Administrator, Audit Authority,
       Submitter, Reviewer, Adjudicator, fixed services, unrelated services,
       wrong-project Finance Authority, revoked/inactive profiles or links, and
       revoked/stale grants deny without target disclosure.
-- [ ] Read authorization binds the exact project and binding identity.
-- [ ] Create PREP binds actor, link, action, permission, project, generated
+- [x] Read authorization binds the exact project and binding identity.
+- [x] Create PREP binds actor, link, action, permission, project, generated
       binding ID, `instrument_type`, adapter actor, route key, operation,
       request digest, resource digest, session, and transaction.
-- [ ] Suspend/resume PREP additionally binds the exact expected status and
+- [x] Suspend/resume PREP additionally binds the exact expected status and
       positive lifecycle version. Wrong action/status/version/resource,
       copied handle, replay, wrong session, wrong transaction, replaced root
       transaction, or mutated facts deny.
-- [ ] Every prepared object closes exactly once on success, denial, conflict,
+- [x] Every prepared object closes exactly once on success, denial, conflict,
       exception, and rollback; no handle can be serialized or reused.
-- [ ] AUTH evidence commits atomically with the exact CP02 binding/lifecycle
+- [x] AUTH evidence commits atomically with the exact CP02 binding/lifecycle
       event. Denial or downstream failure leaves no binding change, lifecycle
       event, or allowed evidence.
-- [ ] Exact duplicate recovery uses fresh read authority and produces the
+- [x] Exact duplicate recovery uses fresh read authority and produces the
       immutable original result without a second mutation PREP or mutation
       evidence effect; any read evidence remains query-only, and changed facts
       or denied current read remain concealed.
-- [ ] CP02's PROJECTS-then-ACTORS eligibility fences and operation ordering
+- [x] CP02's PROJECTS-then-ACTORS eligibility fences and operation ordering
       remain intact for create/resume, including revocation races.
-- [ ] The application composition root injects one AUTH-owned adapter through
+- [x] The application composition root injects one AUTH-owned adapter through
       public ports; no reachable composed production command intentionally
       omits it. This is application wiring, not compensation delivery,
       fulfillment, callback, or provider behavior. CP02's safe deny-default
       constructor remains for uncomposed/isolated use.
-- [ ] No public route becomes reachable and no migration is added.
-- [ ] AUTH and changed compensation authorization coverage remain at or above
+- [x] Both authorization boundary scanners treat only
+      `backend/app/adapters/auth/__init__.py` as AUTH-owned composition for
+      same-owner private AUTH wiring; nested auth adapter files remain external
+      consumers restricted to `authorization.api`, and root imports of
+      non-AUTH private modules remain AUTH outbound debt.
+- [x] No public route becomes reachable and no migration is added.
+- [x] AUTH and changed compensation authorization coverage remain at or above
       90 percent; repository coverage remains at or above the protected floor.
 
 ## Required focused proof
@@ -270,8 +280,8 @@ Project Manager, Operator, Access Administrator, Audit Authority, project-role, 
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/authorization/api/adapter_bindings.py app/modules/authorization/api/__init__.py app/modules/authorization/catalogue.py app/modules/authorization/runtime.py app/modules/authorization/prepared.py app/modules/authorization/kernel.py app/modules/authorization/domain/adapter_bindings.py app/modules/authorization/domain/prepared_adapter_bindings.py app/modules/authorization/adapter_binding_authorization.py app/adapters/auth/adapter_bindings.py app/adapters/auth/__init__.py app/api/deps/authorization.py app/main.py app/modules/compensation/api/adapter_bindings.py app/modules/compensation/service.py tests/authorization/test_adapter_binding_activation.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py tests/test_audit.py)
-(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/authorization/test_adapter_binding_activation.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py tests/test_audit.py --cov=app.modules.authorization.adapter_binding_authorization --cov=app.modules.authorization.api.adapter_bindings --cov=app.modules.authorization.domain.adapter_bindings --cov=app.modules.authorization.domain.prepared_adapter_bindings --cov=app.adapters.auth.adapter_bindings --cov-fail-under=90)
+(cd backend && .venv/bin/python -m ruff check app/modules/audit/schemas.py app/modules/authorization/api/adapter_bindings.py app/modules/authorization/api/__init__.py app/modules/authorization/catalogue.py app/modules/authorization/runtime.py app/modules/authorization/prepared.py app/modules/authorization/kernel.py app/modules/authorization/domain/adapter_bindings.py app/modules/authorization/domain/prepared_adapter_bindings.py app/modules/authorization/adapter_binding_authorization.py app/adapters/auth/adapter_bindings.py app/adapters/auth/__init__.py app/api/deps/authorization.py app/main.py app/modules/compensation/api/adapter_bindings.py app/modules/compensation/service.py tests/authorization/test_adapter_binding_registration.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/architecture/test_module_boundaries.py tests/test_authorization.py tests/test_audit.py)
+(cd backend && export WORKSTREAM_TEST_DATABASE_URL="${WORKSTREAM_TEST_DATABASE_URL:?set WORKSTREAM_TEST_DATABASE_URL}" && .venv/bin/python -m pytest -q tests/authorization/test_adapter_binding_registration.py tests/authorization/test_adapter_binding_authorization.py tests/compensation/test_adapter_binding_authorization_integration.py tests/compensation/test_adapter_binding_authorization_failures.py tests/compensation/test_adapter_binding_recovery.py tests/compensation/test_adapter_binding_owner_fences.py tests/compensation/test_adapter_binding_service.py tests/compensation/test_adapter_binding_database_guards.py tests/compensation/test_adapter_binding_persistence.py tests/architecture/test_authorization_boundary.py tests/architecture/test_module_boundaries.py tests/test_authorization.py tests/test_audit.py --cov=app.modules.authorization.adapter_binding_authorization --cov=app.modules.authorization.api.adapter_bindings --cov=app.modules.authorization.domain.adapter_bindings --cov=app.modules.authorization.domain.prepared_adapter_bindings --cov=app.adapters.auth.adapter_bindings --cov-fail-under=90)
 (cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json)
 (cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base origin/main)
 python3 scripts/check_stale_authorization_docs.py

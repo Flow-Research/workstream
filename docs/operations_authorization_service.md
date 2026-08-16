@@ -494,8 +494,8 @@ v0.1 baseline.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 73 PermissionIds, 111 ActionIds, 57 active actions, and
-54 planned actions. CP01A adds four unavailable adapter-binding actions under
+Catalogue totals are 73 PermissionIds, 111 ActionIds, 61 active actions, and
+50 planned actions. CP01A added four initially unavailable adapter-binding actions under
 `WS-ARCH-001-CP01A` custody; it adds no evaluator, identity, grant, service
 matrix row, route, or activation. CP01B adds five unavailable
 `contribution.policy.*` actions with the same non-activation guarantees. CP01C
@@ -756,8 +756,9 @@ assignment, or service-action-matrix data.
 Controlled provisioning may create the target-only
 `workstream.compensation.adapter` profile and service identity link. Operators
 must not add a service-action matrix row for it: it is a binding target, not an
-action-bearing service principal. CP03A leaves all adapter-binding actions unavailable; CP03B
-is the separate Finance Authority activation boundary.
+action-bearing service principal. CP03A left all adapter-binding actions
+unavailable; CP03B is the separate completed Finance Authority activation
+boundary.
 
 The kernel locks and revalidates the human caller profile, exact link, and
 matched system grant before target lookup and holds those locks through

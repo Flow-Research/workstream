@@ -44,6 +44,29 @@ def test_repository_private_import_edges_equal_the_frozen_ledger() -> None:
     boundary.validate(ROOT, LEDGER)
 
 
+def test_only_exact_auth_adapter_root_has_same_owner_private_access(
+    tmp_path: Path,
+) -> None:
+    """Nested adapters remain public consumers while the exact root may compose AUTH."""
+    root = _minimal_root(tmp_path)
+    _write_module(
+        root,
+        "backend/app/adapters/auth/__init__.py",
+        "from app.modules.authorization.kernel import AuthorizationService\n",
+    )
+    nested = "backend/app/adapters/auth/adapter_bindings.py"
+    _write_module(
+        root,
+        nested,
+        "from app.modules.authorization.kernel import AuthorizationService\n",
+    )
+    inbound, outbound = boundary.scan_edges(root)
+    assert inbound == {
+        boundary.ImportEdge(nested, "app.modules.authorization.kernel")
+    }
+    assert outbound == set()
+
+
 def test_public_api_reachability_contains_no_private_runtime_module() -> None:
     """Every public value is defined by the API package or the standard library."""
     forbidden = (

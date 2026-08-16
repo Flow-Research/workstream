@@ -87,10 +87,10 @@
 - WS-ARCH-001-CP03A is complete on merge: the closed target-only identity and
   PROJECTS/ACTORS owner eligibility are implemented while all binding actions
   remain unavailable.
-- WS-ARCH-001-CP03B is planned with an executable implementation contract after
-  merged CP03A. Implementation-start review confines private same-owner wiring
-  to the exact AUTH adapter root; nested adapters consume the public AUTH API,
-  and application composition does not add delivery or fulfillment behavior.
+- WS-ARCH-001-CP03B is complete on merge: the four exact hidden adapter-binding
+  actions are active only for covered human Finance Authority, nested adapters
+  consume the public AUTH API, and private wiring remains at the AUTH adapter
+  root without delivery or fulfillment behavior.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.

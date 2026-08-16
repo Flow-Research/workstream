@@ -24,7 +24,7 @@
 | `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Complete on merge; route-unreachable and deny-default while actions remain unavailable |
 | `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Planned split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Complete on merge; actions remain unavailable |
-| `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Planned executable contract after merged CP03A; nested adapters use public AUTH API and private wiring stays at the AUTH adapter root |
+| `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Complete on merge; four exact hidden actions active through public ports, with private wiring confined to the AUTH adapter root |
 | `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after merged CP03B evidence |
 | `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |
 | `WS-ARCH-001-CP06` | CON guide-activation/revision policy-validation port | L1 | Proposed skeleton after CP05 |

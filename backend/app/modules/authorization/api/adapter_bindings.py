@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 import re
-from typing import TypeAlias
+from typing import Protocol, TypeAlias
 from uuid import UUID
 
 from .action_ids import ActionId
@@ -113,6 +113,67 @@ AdapterBindingFacts: TypeAlias = (
     | AdapterBindingSuspendFacts
     | AdapterBindingResumeFacts
 )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AdapterBindingMutationAuthorityFacts:
+    """Complete operation and resource facts for one binding mutation."""
+
+    action_id: ActionId
+    actor_profile_id: UUID
+    operation_id: UUID
+    request_digest: str
+    project_id: UUID
+    adapter_binding_id: UUID
+    instrument_type: str
+    adapter_actor_id: UUID
+    route_key: str
+    expected_status: str | None
+    expected_lifecycle_version: int | None
+
+    def __post_init__(self) -> None:
+        """Reject incomplete or action-inconsistent mutation authority facts."""
+        _require_uuid("actor_profile_id", self.actor_profile_id)
+        _require_uuid("operation_id", self.operation_id)
+        _require_uuid("project_id", self.project_id)
+        _require_uuid("adapter_binding_id", self.adapter_binding_id)
+        _require_uuid("adapter_actor_id", self.adapter_actor_id)
+        if self.instrument_type not in {"money", "project_points"}:
+            raise ValueError("instrument_type must be money or project_points")
+        _require_route_key(self.route_key)
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", self.request_digest):
+            raise ValueError("request_digest must be canonical sha256")
+        action = str(self.action_id)
+        expected = {
+            "compensation.adapter_binding.create": (None, False),
+            "compensation.adapter_binding.suspend": ("active", True),
+            "compensation.adapter_binding.resume": ("suspended", True),
+        }.get(action)
+        actual = (
+            self.expected_status,
+            self.expected_lifecycle_version is not None,
+        )
+        if expected is None or actual != expected:
+            raise ValueError("adapter-binding action and transition facts do not match")
+        if self.expected_lifecycle_version is not None:
+            _require_positive_int("expected_lifecycle_version", self.expected_lifecycle_version)
+
+
+class AdapterBindingAuthorizationPort(Protocol):
+    """Authorize exact adapter-binding reads and prepared mutations."""
+
+    async def authorize_read(
+        self, *, actor_profile_id: UUID, facts: AdapterBindingReadFacts
+    ) -> None: ...
+
+    async def prepare_mutation(self, facts: AdapterBindingMutationAuthorityFacts) -> object: ...
+
+    async def consume_mutation(
+        self, prepared: object, facts: AdapterBindingMutationAuthorityFacts
+    ) -> UUID: ...
+
+    def close_mutation(self, prepared: object) -> None: ...
+
 
 _FACT_TYPE_BY_ACTION = {
     "compensation.adapter_binding.read": AdapterBindingReadFacts,

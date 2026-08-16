@@ -36,6 +36,13 @@ from app.modules.authorization.domain.prepared_compilation import (
     parse_prepared_compilation,
     prepared_compilation_matches,
 )
+from app.modules.authorization.domain.adapter_bindings import (
+    AdapterBindingMutationResourceContext,
+)
+from app.modules.authorization.domain.prepared_adapter_bindings import (
+    parse_prepared_adapter_binding,
+    prepared_adapter_binding_matches,
+)
 from app.modules.authorization.domain.prepared_service import project_setup_resource_matches
 from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
@@ -195,6 +202,8 @@ class _PreparedAuthorizationBinding:
     submission_preparation_final_digest: str | None = None
     guide_compilation_context: dict | None = None
     guide_compilation_resource_digest: str | None = None
+    adapter_binding_context: dict | None = None
+    adapter_binding_resource_digest: str | None = None
 
 
 @dataclass(slots=True)
@@ -466,6 +475,14 @@ class PreparedAuthorizationService:
         ) and not _guide_mutation_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(
+            final_resource_context, AdapterBindingMutationResourceContext
+        ) and not prepared_adapter_binding_matches(
+            issuance.binding.adapter_binding_context,
+            issuance.binding.adapter_binding_resource_digest,
+            final_resource_context,
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(
             final_resource_context,
             (
                 ProjectReviewPolicyMutationResourceContext,
@@ -561,6 +578,16 @@ class PreparedAuthorizationService:
         self._closed = True
         self._issued.clear()
 
+    def close_handle(self, handle: PreparedAuthorizationHandle) -> None:
+        """Invalidate one exact capability without closing the request service."""
+        if self._closed or type(handle) is not PreparedAuthorizationHandle:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        issuance = self._issued.pop(handle, None)
+        if issuance is None:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if isinstance(issuance, _Issuance):
+            self._authorization._discard_prelocked(issuance.authority)
+
     def _root_transaction(self) -> object:
         if self._closed or self._session.in_nested_transaction():
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -576,7 +603,7 @@ class PreparedAuthorizationService:
             issuance = self._issued[handle]
             if isinstance(issuance, _Issuance):
                 self._authorization._discard_prelocked(issuance.authority)
-            del self._issued[handle]
+            self._issued[handle] = _CONSUMED
         return transaction
 
     def _binding(
@@ -585,10 +612,8 @@ class PreparedAuthorizationService:
         caller_input: PreparedAuthorizationInput,
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
-        operation_id = project_id = None
-        operation_generation = None
-        guide_mutation_project_id = guide_mutation_guide_id = None
-        guide_mutation_target_resource_id = guide_mutation_operation_id = None
+        operation_id = project_id = operation_generation = None
+        guide_mutation_project_id = guide_mutation_guide_id = guide_mutation_target_resource_id = guide_mutation_operation_id = None
         policy_mutation_project_id = policy_mutation_guide_id = None
         policy_mutation_policy_id = policy_mutation_operation_id = None
         policy_mutation_request_digest = None
@@ -856,6 +881,7 @@ class PreparedAuthorizationService:
                 )
             ),
             **compilation_binding,
+            **parse_prepared_adapter_binding(action_id, caller_input.request_value),
         )
 
     @staticmethod
@@ -882,6 +908,11 @@ class PreparedAuthorizationService:
         expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
             action_id
         ) or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
+        if isinstance(resource, AdapterBindingMutationResourceContext):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=resource.scope_project_id,
+            )
         if action_id in {
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,
