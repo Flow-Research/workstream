@@ -104,9 +104,28 @@ caller-supplied publication truth, compatibility paths, service commits or seria
 
 ## Verification
 
+### Acceptance-to-test map
+
+| Criterion | Required future proof | Execution custody |
+|---|---|---|
+| Publish/retire remain concealed, route-unreachable, and production deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
+| Publish consumes exact server-recomputed graph digest and binding ids | `tests/contributions/test_policy_publish.py::{test_publish_uses_locked_server_owned_graph,test_caller_supplied_graph_mismatch_denies}` | focused local command and hosted CI |
+| PREP denial/exception/wrong actor/session/transaction/copy/replay/close failure occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py` with one primary failure behavior per test and an in-consume assertion that no lifecycle change/event is staged | focused local command and hosted CI |
+| Replacement publication atomically retires the prior current version with matching actor/time and emits one recoverable `published` event | `tests/contributions/test_policy_publish.py::{test_replacement_publication_is_one_atomic_event,test_replacement_preserves_prior_content_and_frozen_references}` | focused local command and hosted PostgreSQL lane |
+| Exact duplicate recovery returns immutable event facts only after current read authorization | `tests/contributions/test_policy_publication_recovery.py` covering publish and retire duplicates, digest mismatch, revoked read, and no second effect/evidence | focused local command and hosted CI |
+| Child mutation, binding suspension, unit retirement, and competing publication cannot cross held owner fences | `tests/contributions/test_policy_publication_concurrency.py` using independent PostgreSQL sessions and deterministic commit ordering | hosted PostgreSQL lane only |
+| PostgreSQL rejects incomplete publication, lifecycle skips, forged attribution, event mutation/deletion/truncation, and stale prior-current identity | `tests/contributions/test_policy_lifecycle_postgresql.py` using direct SQL negative cases | hosted PostgreSQL lane only |
+| Explicit retirement is terminal and cannot rewrite frozen downstream lineage or resurrect the aggregate | `tests/contributions/test_policy_retire.py::{test_retire_blocks_future_selection_without_rewriting_history,test_retired_aggregate_cannot_be_resurrected}` | focused local command and hosted CI |
+| Database failure after close rolls back lifecycle state and staged AUTH evidence; closed authority remains unusable | `tests/contributions/test_policy_publication_authorization.py::{test_post_close_failure_rolls_back_all_effects,test_closed_publication_authority_cannot_be_reused}` | focused local command and hosted PostgreSQL lane |
+
+The focused pytest command must name every non-hosted-only module above. Hosted
+CI must additionally run `test_policy_publication_concurrency.py` and
+`test_policy_lifecycle_postgresql.py` against real PostgreSQL; mock locks or an
+in-memory database do not satisfy the contract.
+
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions
-cd backend && .venv/bin/python -m pytest -q tests/contributions tests/architecture/test_module_boundaries.py tests/test_alembic.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_publication_authorization.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_publish.py tests/contributions/test_policy_publication_recovery.py tests/contributions/test_policy_retire.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
 cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov-report=term-missing --cov-fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
@@ -116,8 +135,10 @@ python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
-Hosted CI owns complete publication, retirement, concurrency, PostgreSQL,
-semantic-lane, and repository aggregate coverage proof.
+Hosted CI additionally runs
+`tests/contributions/test_policy_publication_concurrency.py` and
+`tests/contributions/test_policy_lifecycle_postgresql.py` with real PostgreSQL,
+then owns complete semantic-lane and repository aggregate coverage proof.
 
 ## Required reviewers
 

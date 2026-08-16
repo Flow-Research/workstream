@@ -138,9 +138,27 @@ partial graph, event, reusable authority, or allowed evidence.
 
 ## Verification
 
+### Acceptance-to-test map
+
+| Criterion | Required future proof | Execution custody |
+|---|---|---|
+| Read remains concealed, route-unreachable, and production deny-default | `tests/contributions/test_policy_read.py::{test_read_denies_without_composed_authority,test_read_conceals_cross_project_and_missing_policy}` and `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
+| Create/update hold owner fences and produce one complete graph | `tests/contributions/test_policy_draft_create.py`, `tests/contributions/test_policy_draft_update.py` | focused local command and hosted CI |
+| PREP denial, exception, wrong actor/session/transaction, copy/replay, and close failure precede product mutation | `tests/contributions/test_policy_authorization_atomicity.py` with one primary failure behavior per test and an in-consume assertion that no policy/event row is staged | focused local command and hosted CI |
+| Exact duplicate recovery returns the immutable original result only after current read authorization | `tests/contributions/test_policy_operation_recovery.py::{test_exact_duplicate_recovers_after_authorized_read,test_digest_mismatch_is_concealed,test_revoked_read_cannot_recover,test_recovery_creates_no_second_effect_or_evidence}` | focused local command and hosted CI |
+| Distinct operations cannot race into duplicate open drafts or consume AUTH twice | `tests/contributions/test_policy_draft_concurrency.py` using independent PostgreSQL sessions and operation ids | hosted PostgreSQL lane only |
+| Operation events are immutable, attributed, transition-valid, and cannot be mutated, deleted, or truncated | `tests/contributions/test_policy_event_postgresql.py` using direct SQL negative cases | hosted PostgreSQL lane only |
+| Product/database failure after close rolls back product rows and staged participant evidence; closed authority stays unusable | `tests/contributions/test_policy_authorization_atomicity.py::{test_post_close_database_failure_rolls_back_all_effects,test_closed_authority_cannot_be_reused}` | focused local command and hosted PostgreSQL lane |
+| No new oversized behavior container or weak aggregate test is introduced | test-structure boundary validation plus one-primary-behavior inspection for every named module above | local gate and hosted preflight |
+
+The focused pytest command must name every non-hosted-only module above. Hosted
+CI must additionally run `test_policy_draft_concurrency.py` and
+`test_policy_event_postgresql.py` against real PostgreSQL; SQLite or mocked-lock
+substitution is not acceptance evidence.
+
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/modules/projects/api app/modules/projects/contribution_policy.py app/adapters/contributions app/adapters/projects tests/contributions
-cd backend && .venv/bin/python -m pytest -q tests/contributions tests/architecture/test_module_boundaries.py tests/test_alembic.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
 cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.policy_binding_service --cov-report=term-missing --cov-fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
@@ -150,8 +168,10 @@ python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
-Hosted CI owns complete PostgreSQL, semantic-lane, and repository aggregate
-coverage proof; the focused command above owns the changed CP04A surface.
+Hosted CI additionally runs `tests/contributions/test_policy_draft_concurrency.py`
+and `tests/contributions/test_policy_event_postgresql.py` with real PostgreSQL,
+then owns complete semantic-lane and repository aggregate coverage proof; the
+focused commands above own the remaining changed CP04A surface.
 
 ## Required reviewers
 
