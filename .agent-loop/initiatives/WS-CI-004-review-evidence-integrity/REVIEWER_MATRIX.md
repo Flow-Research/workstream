@@ -6,6 +6,10 @@ distinct specialty value below.
 
 ## Agent-to-skill map
 
+This table is the single canonical reviewer registry. The deterministic
+validator derives reviewer IDs and agent/skill paths directly from these rows;
+there is no separately maintained code registry.
+
 | Reviewer | Canonical ID | Custom agent | Repository skill |
 |---|---|---|---|
 | Architecture | `architecture` | `.codex/agents/architecture-reviewer.toml` | `.agents/skills/architecture-review/SKILL.md` |

@@ -21,35 +21,42 @@ MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
-REVIEWERS = {
-    "architecture": ("architecture-reviewer.toml", "architecture-review"),
-    "ci_integrity": ("ci-integrity-reviewer.toml", "ci-integrity-review"),
-    "documentation": ("docs-reviewer.toml", "docs-review"),
-    "product_ops": ("product-ops-reviewer.toml", "product-ops-review"),
-    "qa": ("qa-reviewer.toml", "qa-review"),
-    "reuse_dedup": ("reuse-dedup-reviewer.toml", "reuse-dedup-review"),
-    "security": ("security-reviewer.toml", "security-review"),
-    "senior_engineering": ("senior-engineer-reviewer.toml", "senior-engineer-review"),
-    "test_delta": ("test-delta-reviewer.toml", "test-delta-review"),
-}
+MATRIX_ROW = re.compile(
+    r"^\|[^|]+\|\s*`([^`]+)`\s*\|\s*`\.codex/agents/([^`/]+\.toml)`\s*\|"
+    r"\s*`\.agents/skills/([^`/]+)/SKILL\.md`\s*\|$",
+    re.MULTILINE,
+)
 
 
 def load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def matrix_reviewer_ids(matrix: str) -> list[str]:
-    """Return canonical reviewer IDs from the matrix agent-to-skill table."""
-    return re.findall(r"^\|[^|]+\|\s*`([^`]+)`\s*\|", matrix, re.MULTILINE)
+def matrix_reviewers(matrix: str) -> dict[str, tuple[str, str]]:
+    """Load the canonical reviewer registry from the initiative matrix."""
+    rows = MATRIX_ROW.findall(matrix)
+    return {reviewer: (agent_name, skill_name) for reviewer, agent_name, skill_name in rows}
+
+
+REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
 def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
-    matrix_ids = matrix_reviewer_ids(matrix)
-    if matrix_ids != list(REVIEWERS):
-        failures.append("matrix: canonical reviewer IDs do not match configured reviewers")
-    for reviewer, (agent_name, skill_name) in REVIEWERS.items():
+    reviewers = matrix_reviewers(matrix)
+    if len(reviewers) != 9 or len(MATRIX_ROW.findall(matrix)) != 9:
+        failures.append("matrix: expected nine unique reviewer contracts")
+    cases_path = root / CASES_PATH.relative_to(ROOT)
+    if cases_path.is_file():
+        case_reviewers = {
+            row.get("reviewer")
+            for row in load_json(cases_path).get("cases", [])
+            if isinstance(row, dict)
+        }
+        if case_reviewers != set(reviewers):
+            failures.append("matrix: canonical reviewer IDs do not match evaluation cases")
+    for reviewer, (agent_name, skill_name) in reviewers.items():
         agent_path = root / ".codex/agents" / agent_name
         skill_path = root / ".agents/skills" / skill_name / "SKILL.md"
         if not agent_path.is_file() or not skill_path.is_file():
@@ -104,7 +111,7 @@ def fixture_failures(
     if not isinstance(rows, list):
         return ["cases: missing list"]
     ids: set[str] = set()
-    coverage = {reviewer: set() for reviewer in REVIEWERS}
+    coverage = {reviewer: set() for reviewer in canonical_ids}
     for row in rows:
         if not isinstance(row, dict):
             failures.append("cases: non-object row")
@@ -116,7 +123,7 @@ def fixture_failures(
             failures.append(f"cases: invalid or duplicate id {case_id!r}")
         else:
             ids.add(case_id)
-        if reviewer not in REVIEWERS:
+        if reviewer not in canonical_ids:
             failures.append(f"{case_id}: unknown reviewer")
         elif case_class not in CASE_CLASSES:
             failures.append(f"{case_id}: unknown case class")
@@ -283,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = load_json(CASES_PATH)
     expectations = load_json(EXPECTATIONS_PATH) if EXPECTATIONS_PATH.exists() else None
     matrix = MATRIX_PATH.read_text(encoding="utf-8")
-    failures = fixture_failures(cases, expectations, set(matrix_reviewer_ids(matrix)))
+    failures = fixture_failures(cases, expectations, set(matrix_reviewers(matrix)))
     if args.command is None:
         failures = contract_failures() + failures
         if expectations is None:

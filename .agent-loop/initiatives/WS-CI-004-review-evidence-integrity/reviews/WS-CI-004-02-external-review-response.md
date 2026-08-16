@@ -39,7 +39,7 @@ cd backend && uv run ruff check ../scripts/reviewer_contracts.py \
 
 ## Remaining risks
 
-No known unresolved external-review risk. The human-readable reviewer matrix is
-an audited projection of the executable registry: canonical IDs must match in
-exact order, every configured agent and skill path must appear, and every
-handoff must use that closed ID set. Any drift fails validation.
+No known unresolved external-review risk. The reviewer matrix is the single
+canonical registry; the validator derives reviewer IDs and agent/skill paths
+from it and cross-checks them against evaluation ownership. Every handoff must
+use that closed ID set. There is no separately maintained registry to drift.

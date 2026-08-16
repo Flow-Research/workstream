@@ -35,8 +35,13 @@ class ReviewerContractTests(unittest.TestCase):
         matrix = Path(
             ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
         )
+        cases = Path(
+            ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/CASES.json"
+        )
         (root / matrix).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(matrix, root / matrix)
+        (root / cases).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(cases, root / cases)
         return temporary, root
 
     def test_missing_protocol_output_or_handoff_contract_fails(self) -> None:
