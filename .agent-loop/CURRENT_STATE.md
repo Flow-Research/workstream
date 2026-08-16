@@ -119,7 +119,10 @@ non-executable until their current-main contracts are expanded.
 - WS-ARCH-001-CP03A is complete on merge with exact target identity and owner
   eligibility while all four actions remain unavailable.
 - WS-ARCH-001-CP03B is planned with an executable implementation contract after
-  merged CP03A.
+  merged CP03A. Its implementation-start review requires nested AUTH adapters
+  to consume only the public AUTH API; same-owner private wiring is confined to
+  the exact AUTH adapter root. Application composition is not compensation
+  delivery or fulfillment behavior.
 - WS-ARCH-001-CP04 is proposed and non-executable.
 - WS-ARCH-001-CP05 is proposed and non-executable.
 - WS-ARCH-001-CP06 is proposed and non-executable.
