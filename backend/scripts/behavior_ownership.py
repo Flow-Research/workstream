@@ -130,6 +130,14 @@ ARCH_CP03A_OWNER_ELIGIBILITY_TARGETS = frozenset(
         "backend/app/modules/projects/compensation_binding.py",
     }
 )
+ARCH_CP03B_ADAPTER_BINDING_AUTH_TARGETS = frozenset(
+    {
+        "backend/app/adapters/auth/adapter_bindings.py",
+        "backend/app/modules/authorization/adapter_binding_authorization.py",
+        "backend/app/modules/authorization/domain/adapter_bindings.py",
+        "backend/app/modules/authorization/domain/prepared_adapter_bindings.py",
+    }
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -323,6 +331,7 @@ def _validate_additive_partition_transition(
         | ARCH_02H_AUTH_CONSUMPTION_TARGETS
         | ARCH_CP02_ADAPTER_BINDING_TARGETS
         | ARCH_CP03A_OWNER_ELIGIBILITY_TARGETS
+        | ARCH_CP03B_ADAPTER_BINDING_AUTH_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

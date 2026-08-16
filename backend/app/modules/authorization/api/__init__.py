@@ -3,6 +3,8 @@
 from .action_ids import ActionId, PermissionId, action_id, permission_id
 from .adapter_bindings import (
     AdapterBindingCreateFacts,
+    AdapterBindingAuthorizationPort,
+    AdapterBindingMutationAuthorityFacts,
     AdapterBindingReadFacts,
     AdapterBindingResumeFacts,
     AdapterBindingSuspendFacts,
@@ -39,6 +41,8 @@ from .project_guide_compilation import (
 __all__ = (
     "ActionId",
     "AdapterBindingCreateFacts",
+    "AdapterBindingAuthorizationPort",
+    "AdapterBindingMutationAuthorityFacts",
     "AdapterBindingReadFacts",
     "AdapterBindingResumeFacts",
     "AdapterBindingSuspendFacts",

@@ -6,14 +6,13 @@ Current `main` contains the AUTH actor, grant, fixed-service,
 prepared-mutation, project-guide, policy-mutation, and REV-readiness
 foundations plus merged REV PLAN4, ART foundations, and CP02 hidden CON
 adapter-binding behavior. The old `0052_legacy_intake_removal` identifier is
-historical merge evidence. Until CP03A merges, current `main` ends at
-`0004_compensation_adapter_binding_lifecycle`, whose tracked predecessor is
-`0003_submission_lineage`. The CP03A branch advances that graph to
-`0005_compensation_adapter_identity` on merge. Older `0050`, `0053`, and `0055`
+historical merge evidence. Current `main` ends at
+`0005_compensation_adapter_identity`, whose tracked predecessor is
+`0004_compensation_adapter_binding_lifecycle`. Older `0050`, `0053`, and `0055`
 identifiers are historical pre-baseline merge evidence, not active graph heads.
-CP02's four binding actions remain unavailable. CP03A installs the target
-identity and owner eligibility while actions stay unavailable; CP03B activates only the four exact
-Finance Authority boundaries. No public CON route, ContributionPolicy
+CP03A installs the target identity and owner eligibility without action-bearing
+service membership; CP03B activates only the four exact Finance Authority
+boundaries. No public CON route, ContributionPolicy
 behavior, or outbox-dispatcher authority is active.
 
 AUTH owns identifiers, stable permission mappings, principals, grants,
@@ -87,10 +86,9 @@ matrix rows, or evaluators.
 No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01A
 and CP01B separately register binding and policy authority while unavailable.
 CP01C corrects binding identity and lifecycle-generation facts before CP02.
-CP02 is merged with hidden CON behavior while every binding action remains
-unavailable. CP03 is split: CP03A first installs the exact target identity and
-owner eligibility without activation; CP03B then activates only the four exact
-CP02 Finance Authority boundaries. CP05 later
+CP02 is merged with hidden CON behavior. CP03A installs the exact target identity
+and owner eligibility without activation; CP03B is complete and
+activates only the four exact CP02 Finance Authority boundaries. CP05 later
 activates only CP04's hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and

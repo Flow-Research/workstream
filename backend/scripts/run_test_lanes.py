@@ -151,6 +151,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/guide_compilation/test_domain_contract.py",
     "tests/authorization/guide_compilation/test_migration_contract.py",
     "tests/authorization/test_fixed_service_action_context.py",
+    "tests/authorization/test_adapter_binding_authorization.py",
     "tests/authorization/test_adapter_binding_registration.py",
     "tests/authorization/test_contribution_policy_registration.py",
     "tests/test_behavior_ownership.py",

@@ -1,7 +1,8 @@
 # Status: WS-ARCH-001 Modular Monolith Boundaries
 
 - Initiative state: active; boundary foundation complete
-- Runtime behavior changed: hidden CON adapter-binding behavior only; no route or action activation
+- Runtime behavior changed: hidden CON adapter-binding behavior plus exactly four
+  Finance Authority actions; no public route
 - Canonical target: nine business modules and three supporting modules
 - Recovery model: freeze exact debt, prohibit growth, repair touched
   capabilities incrementally
@@ -55,8 +56,8 @@
   registered/unavailable, CP01B is merged with five policy actions
   registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split, CP03A is merged,
-  and CP03B has a complete executable contract but remains planned for
-  implementation, while CP04-CP09 remain
+  and CP03B is complete with four exact hidden Finance Authority actions
+  active, while CP04-CP09 remain
   non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
@@ -88,8 +89,10 @@
 - WS-ARCH-001-CP03A is merged through PR #340: the closed target-only identity and
   PROJECTS/ACTORS owner eligibility are implemented while all binding actions
   remain unavailable.
-- WS-ARCH-001-CP03B is planned with an executable implementation contract after
-  merged CP03A.
+- WS-ARCH-001-CP03B is complete: the four exact hidden adapter-binding
+  actions are active only for covered human Finance Authority, nested adapters
+  consume the public AUTH API, and private wiring remains at the AUTH adapter
+  root without delivery or fulfillment behavior.
 - WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.

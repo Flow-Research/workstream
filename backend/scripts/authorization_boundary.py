@@ -25,6 +25,7 @@ DYNAMIC_LOADING_MODULES = {
 }
 INBOUND_HEADING = "## Inbound private-import debt"
 OUTBOUND_HEADING = "## AUTH outbound private-import debt"
+AUTH_ADAPTER_ROOT = "backend/app/adapters/auth/__init__.py"
 
 
 class AuthorizationBoundaryError(RuntimeError):
@@ -259,7 +260,11 @@ def scan_edges(root: Path) -> tuple[set[ImportEdge], set[ImportEdge]]:
         source = _repository_path(path, root)
         module = _module_name(path, root)
         imports = source_imports(path, root)
-        inside_auth = module == AUTH_PACKAGE or module.startswith(f"{AUTH_PACKAGE}.")
+        inside_auth = (
+            module == AUTH_PACKAGE
+            or module.startswith(f"{AUTH_PACKAGE}.")
+            or source == AUTH_ADAPTER_ROOT
+        )
         if inside_auth:
             outbound.update(
                 ImportEdge(source, target) for target in imports if _private_product_target(target)

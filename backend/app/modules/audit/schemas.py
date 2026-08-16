@@ -34,7 +34,7 @@ _ENTITY_TYPES = frozenset(
 )
 _RESOURCE_TYPES = frozenset(
     """actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
-    submission review contribution compensation_award compensation_delivery operations
+    submission review contribution compensation_award compensation_delivery compensation_adapter_binding operations
     audit_event project_create_operation project_submission_artifact_policy_mutation
     pre_submit_checker_input project_guide_compilation_request
     project_guide_compilation_attempt""".split()

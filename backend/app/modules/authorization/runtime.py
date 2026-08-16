@@ -15,6 +15,7 @@ from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationRequestResourceContext,
     persisted_result_digest,
 )
+from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
@@ -30,13 +31,10 @@ PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: "submission_artifact_policy",
     ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: ("post_submit_checker_policy_setup"),
 }
-
 PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: "effective_policy",
     ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: "pre_submit_checker_policy",
 }
-
-
 class ActorKind(StrEnum):
     """Canonical actor kinds visible to authorization."""
 
@@ -1520,6 +1518,7 @@ AuthorizationResourceContext = (
     | PreSubmitCheckerInputResourceContext
     | SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext
+    | AdapterBindingReadResourceContext | AdapterBindingMutationResourceContext
 )
 
 
@@ -1610,7 +1609,7 @@ class AuthorizationDecision(BaseModel):
         "pre_submit_checker_input",
         "submission_bundle_preparation_preflight",
         "submission_bundle_preparation",
-        "submission_creation", "submission_binding",
+        "submission_creation", "submission_binding", "compensation_adapter_binding",
     ]
     resource_id: (
         UUID
