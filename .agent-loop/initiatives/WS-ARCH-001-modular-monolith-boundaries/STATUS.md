@@ -56,8 +56,8 @@
   registered/unavailable, CP01B is merged with five policy actions
   registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split, CP03A is merged,
-  and CP03B has a complete executable contract but remains planned for
-  implementation, while CP04-CP09 remain
+  and CP03B is complete with four exact hidden Finance Authority actions
+  active, while CP04-CP09 remain
   non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
