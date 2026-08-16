@@ -6643,11 +6643,11 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
     action_id: ActionId,
     owning_identity: ServiceIdentity,
 ):
-    wrong_identity = next(
-        identity
-        for identity in ServiceIdentity
-        if identity is not owning_identity
-        and action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(identity, frozenset())
+    wrong_identity = ServiceIdentity.COMPENSATION_ADAPTER
+    assert wrong_identity is not owning_identity
+    assert (
+        action_id
+        not in SERVICE_ACTIONS_BY_IDENTITY.get(wrong_identity, frozenset())
     )
     context = _runtime_context(
         actor_kind=ActorKind.SERVICE,
