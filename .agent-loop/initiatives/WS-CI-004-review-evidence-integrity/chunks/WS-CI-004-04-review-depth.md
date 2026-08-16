@@ -44,7 +44,8 @@ automatic merge
 - [ ] Final receipts name relevant unchanged owners, consumers, policies,
       boundaries, or ledgers and explain their relevance.
 - [ ] Final receipts record at least one specialty-appropriate adversarial
-      probe and its observed result.
+      probe and its observed result; a final passing verdict requires at least
+      one successful probe.
 - [ ] The canonical schema rejects receipts missing either proof.
 - [ ] Reviewer agents invoke the target sensor through `python3` at both review
       boundaries.

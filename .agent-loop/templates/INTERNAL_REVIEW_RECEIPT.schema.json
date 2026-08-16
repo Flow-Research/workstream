@@ -103,6 +103,14 @@
               "start": {"properties": {"cleanliness": {"const": "clean"}}},
               "end": {"properties": {"cleanliness": {"const": "clean"}}}
             }
+          },
+          "adversarial_probes": {
+            "contains": {
+              "type": "object",
+              "required": ["result"],
+              "properties": {"result": {"const": "pass"}}
+            },
+            "minContains": 1
           }
         }
       }

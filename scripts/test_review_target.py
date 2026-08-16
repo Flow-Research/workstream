@@ -234,6 +234,27 @@ class ReceiptSchemaTests(unittest.TestCase):
         self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("command", "run me"))
         self.assert_invalid(lambda receipt: receipt.__setitem__("merge_authorized", True))
 
+    def test_final_verdict_requires_a_successful_adversarial_probe(self) -> None:
+        for result in ("fail", "unavailable"):
+            with self.subTest(result=result):
+                self.assert_invalid(
+                    lambda receipt, result=result: receipt.__setitem__(
+                        "adversarial_probes",
+                        [
+                            {
+                                "hypothesis": "authority bypass",
+                                "method": "targeted inspection",
+                                "result": result,
+                            }
+                        ],
+                    )
+                )
+
+        receipt = copy.deepcopy(self.receipt)
+        receipt["verdict"] = "PROVISIONAL"
+        receipt["adversarial_probes"][0]["result"] = "unavailable"
+        jsonschema.validate(receipt, self.schema)
+
     def test_unresolved_blocker_and_dirty_pass_are_rejected(self) -> None:
         def add_blocker(receipt):
             receipt["findings"].append(
