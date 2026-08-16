@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id":"architecture-positive","reviewer":"architecture","class":"positive","task":"Review the supplied change within your specialty.","evidence":"A tasks service imports _resolve_actor from the private authorization service module instead of the published actors.api port."},
+    {"id":"architecture-negative","reviewer":"architecture","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A tasks service imports ServiceIdentity from actors.api, the documented public owner port."},
+    {"id":"architecture-stale","reviewer":"architecture","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding ARCH-7 reported a private owner import at head aaa. Head bbb replaces it with actors.api; replay ARCH-7 and preserve its disposition."},
+    {"id":"architecture-output","reviewer":"architecture","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"Start head and end head differ. No clean end-target inspection is supplied."},
+    {"id":"architecture-handoff","reviewer":"architecture","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"The dependency direction is valid, but a changed workflow lowers the coverage threshold."},
+
+    {"id":"ci_integrity-positive","reviewer":"ci_integrity","class":"positive","task":"Review the supplied change within your specialty.","evidence":"A required test command now ends with || true and the workflow uses continue-on-error."},
+    {"id":"ci_integrity-negative","reviewer":"ci_integrity","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A new advisory job runs separately and cannot mask or replace any required gate."},
+    {"id":"ci_integrity-stale","reviewer":"ci_integrity","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding CI-4 reported --fail-under=70. The new head restores 78; replay CI-4 and retain its closure evidence."},
+    {"id":"ci_integrity-output","reviewer":"ci_integrity","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"The test log is described as passing, but it was inspected in prose and no command execution evidence exists."},
+    {"id":"ci_integrity-handoff","reviewer":"ci_integrity","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"All gates remain blocking, but application code accepts an unauthenticated administrative action."},
+
+    {"id":"documentation-positive","reviewer":"documentation","class":"positive","task":"Review the supplied change within your specialty.","evidence":"The capability merged, but README and CURRENT_STATE still describe it as a future planned feature."},
+    {"id":"documentation-negative","reviewer":"documentation","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A dated review file is clearly labeled historical evidence and is not linked as current authority."},
+    {"id":"documentation-stale","reviewer":"documentation","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding DOC-2 identified a stale week plan. The new head removes the timeline; replay DOC-2 and record closure."},
+    {"id":"documentation-output","reviewer":"documentation","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"The reviewer inspected README but provides no base SHA, merge-base SHA, head SHA, or uncertainty."},
+    {"id":"documentation-handoff","reviewer":"documentation","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"Documentation matches behavior, but a service imports another subsystem private module."},
+
+    {"id":"product_ops-positive","reviewer":"product_ops","class":"positive","task":"Review the supplied change within your specialty.","evidence":"An internal engineering FAIL is persisted as the Workstream product review decision reject."},
+    {"id":"product_ops-negative","reviewer":"product_ops","class":"negative","task":"Review the supplied change within your specialty.","evidence":"Engineering findings remain advisory evidence while product review decisions stay accept, needs_revision, or reject."},
+    {"id":"product_ops-stale","reviewer":"product_ops","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding OPS-3 reported reviewer self-assignment. The new head enforces separate assignment; replay OPS-3."},
+    {"id":"product_ops-output","reviewer":"product_ops","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"A Medium workflow ambiguity is found but no human disposition is recorded."},
+    {"id":"product_ops-handoff","reviewer":"product_ops","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"The contributor lifecycle is correct, but a CI workflow skips failed tests."},
+
+    {"id":"qa-positive","reviewer":"qa","class":"positive","task":"Review the supplied change within your specialty.","evidence":"Acceptance requires denial for an expired lease, but tests cover only the successful active-lease path."},
+    {"id":"qa-negative","reviewer":"qa","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A private refactor preserves observable behavior and all boundary and negative assertions remain unchanged."},
+    {"id":"qa-stale","reviewer":"qa","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding QA-8 reported no expired-lease regression. The new head adds it; replay QA-8 and verify the behavior."},
+    {"id":"qa-output","reviewer":"qa","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"Tests ran on head aaa, but the requested final head is bbb."},
+    {"id":"qa-handoff","reviewer":"qa","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"Behavior coverage is complete, but the implementation logs an authentication token."},
+
+    {"id":"reuse_dedup-positive","reviewer":"reuse_dedup","class":"positive","task":"Review the supplied change within your specialty.","evidence":"A new module reimplements commit resolution although scripts.git_delta.resolve_commit already owns it."},
+    {"id":"reuse_dedup-negative","reviewer":"reuse_dedup","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A specialty parser extends the canonical Git helper because the existing helper intentionally lacks that output."},
+    {"id":"reuse_dedup-stale","reviewer":"reuse_dedup","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding REUSE-5 found a duplicate schema. The new head imports the canonical schema; replay REUSE-5."},
+    {"id":"reuse_dedup-output","reviewer":"reuse_dedup","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"The review says no duplication but does not identify which existing helpers were inspected."},
+    {"id":"reuse_dedup-handoff","reviewer":"reuse_dedup","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"The canonical helper is reused, but a required failure test was deleted."},
+
+    {"id":"security-positive","reviewer":"security","class":"positive","task":"Review the supplied change within your specialty.","evidence":"A privileged workflow checks out and executes scripts from an untrusted pull-request head."},
+    {"id":"security-negative","reviewer":"security","class":"negative","task":"Review the supplied change within your specialty.","evidence":"Untrusted evidence is parsed as data by a read-only command and is never executed or used as authority."},
+    {"id":"security-stale","reviewer":"security","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding SEC-9 found fail-open authorization. The new head denies on verifier error; replay SEC-9."},
+    {"id":"security-output","reviewer":"security","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"The worktree is dirty but the proposed receipt claims PASS and freshness current."},
+    {"id":"security-handoff","reviewer":"security","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"Authorization remains deny-by-default, but README describes the merged capability as planned."},
+
+    {"id":"senior_engineering-positive","reviewer":"senior_engineering","class":"positive","task":"Review the supplied change within your specialty.","evidence":"One new 900-line gate mixes Git inspection, receipt storage, GitHub calls, policy, and merge decisions."},
+    {"id":"senior_engineering-negative","reviewer":"senior_engineering","class":"negative","task":"Review the supplied change within your specialty.","evidence":"A cohesive 120-line read-only module has one owner, explicit errors, tests, and a rollback boundary."},
+    {"id":"senior_engineering-stale","reviewer":"senior_engineering","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding SENIOR-4 reported a monolith. The new head separates parsing and orchestration; replay SENIOR-4."},
+    {"id":"senior_engineering-output","reviewer":"senior_engineering","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"A Low maintainability risk is known but omitted from the proposed final output."},
+    {"id":"senior_engineering-handoff","reviewer":"senior_engineering","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"The module is maintainable, but the API allows a contributor to review their own submission."},
+
+    {"id":"test_delta-positive","reviewer":"test_delta","class":"positive","task":"Review the supplied change within your specialty.","evidence":"A test formerly asserting forbidden returns 403 now accepts either 200 or 403 to match the implementation."},
+    {"id":"test_delta-negative","reviewer":"test_delta","class":"negative","task":"Review the supplied change within your specialty.","evidence":"Tests are reorganized across files with the same assertions, parameters, negative cases, and behavior coverage."},
+    {"id":"test_delta-stale","reviewer":"test_delta","class":"stale_replay","task":"Re-evaluate after the supplied update.","evidence":"Prior finding TEST-6 found a removed denial assertion. The new head restores it; replay TEST-6."},
+    {"id":"test_delta-output","reviewer":"test_delta","class":"output_contract","task":"Assess whether a final review result is possible.","evidence":"The reviewer reports tests passed but does not distinguish tests executed from logs merely inspected."},
+    {"id":"test_delta-handoff","reviewer":"test_delta","class":"handoff","task":"Review the supplied change within your specialty.","evidence":"Assertions are preserved, but the implementation adds a private cross-owner import."}
+  ]
+}

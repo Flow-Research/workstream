@@ -7,6 +7,14 @@ description: Review a diff like a senior engineer for maintainability, simplicit
 
 Review for engineering judgment.
 
+## Shared evidence
+
+Use `reviewer-evidence-protocol` first. Bind the review to its exact target,
+inspect relevant unchanged ownership and operational context, replay prior
+findings, separate executed from inspected evidence, state uncertainty and
+freshness, and hand off specialty findings without inventing their verdicts.
+Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+
 ## Focus
 
 - Simplicity
@@ -24,8 +32,12 @@ Review for engineering judgment.
 
 ```text
 Result: PASS / PASS WITH LOW RISKS / FAIL
+Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Maintainability risks:
 Simplicity improvements:
 Operational concerns:
 Required fixes:
 ```
+
+Critical/High findings block. A Medium finding requires explicit human
+disposition. Keep Low/Informational findings visible.

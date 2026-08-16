@@ -7,6 +7,14 @@ description: Review CI, lint, typecheck, test, coverage, workflow, and package-s
 
 CI is the wall. It must not move to make the agent pass.
 
+## Shared evidence
+
+Use `reviewer-evidence-protocol` first. Bind the review to its exact target,
+inspect relevant unchanged workflows and commands, replay prior findings,
+separate executed from inspected evidence, state uncertainty and freshness, and
+hand off non-CI findings without inventing another specialty's verdict.
+Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+
 ## Inspect
 
 - GitHub Actions or other CI workflows
@@ -31,7 +39,11 @@ CI is the wall. It must not move to make the agent pass.
 
 ```text
 Result: PASS / PASS WITH LOW RISKS / FAIL
+Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 CI files changed:
 Integrity concerns:
 Required fixes:
 ```
+
+Critical/High findings block. A Medium finding requires explicit human
+disposition. Keep Low/Informational findings visible.

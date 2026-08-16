@@ -7,6 +7,14 @@ description: Review a diff for architecture drift, wrong abstractions, boundary 
 
 Review current changes against the initiative plan and architecture boundaries.
 
+## Shared evidence
+
+Use `reviewer-evidence-protocol` first. Bind the review to its exact target,
+inspect relevant unchanged owners and consumers, replay prior findings, separate
+executed from inspected evidence, state uncertainty and freshness, and hand off
+non-architecture findings without inventing another specialty's verdict.
+Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+
 ## Focus
 
 - Did the change stay inside the approved chunk?
@@ -28,9 +36,13 @@ Architecture drift is blocking even when tests pass.
 
 ```text
 Result: PASS / PASS WITH LOW RISKS / FAIL
+Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Boundary violations:
 Abstraction risks:
 Coupling risks:
 Simpler alternative:
 Required fixes:
 ```
+
+Critical/High findings block. A Medium finding requires explicit human
+disposition. Keep Low/Informational findings visible.

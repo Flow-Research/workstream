@@ -1,5 +1,13 @@
 # Review Finding
 
+## Finding ID
+
+Stable reviewer-scoped identifier.
+
+## Source target
+
+Base SHA / merge-base SHA / head SHA.
+
 ## Severity
 
 Critical / High / Medium / Low / Informational
@@ -31,6 +39,10 @@ Yes / No
 ## Engineering Resolution
 
 fixed / accepted_risk / deferred_with_owner / not_valid
+
+## Fix commit and verification
+
+Commit when any, verification performed, and final-target replay result.
 
 Use engineering review-finding resolutions here. Do not use Workstream product
 review decision tokens (`accept`, `needs_revision`, `reject`) for engineering
