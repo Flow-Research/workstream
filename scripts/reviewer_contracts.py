@@ -208,6 +208,8 @@ def output_failures(
     finding_ids = output.get("finding_ids")
     if not isinstance(finding_ids, list):
         failures.append("output: finding_ids must be a list")
+    elif not all(isinstance(finding_id, str) for finding_id in finding_ids):
+        failures.append("output: finding_ids must contain only strings")
     else:
         if expectation.get("outcome") == "finding" and not finding_ids:
             failures.append("output: finding classification requires a stable finding")
@@ -221,7 +223,11 @@ def output_failures(
         failures.append("output: invalid evaluated head")
     receipt = output.get("receipt") if receipt is None else receipt
     failures.extend(receipt_failures(receipt, output.get("reviewer"), evaluated_head=head))
-    if isinstance(receipt, dict) and isinstance(finding_ids, list):
+    if (
+        isinstance(receipt, dict)
+        and isinstance(finding_ids, list)
+        and all(isinstance(finding_id, str) for finding_id in finding_ids)
+    ):
         receipt_ids = {finding["id"] for finding in receipt.get("findings", [])}
         if not set(finding_ids).issubset(receipt_ids):
             failures.append("output: case finding absent from receipt")
@@ -242,17 +248,29 @@ def output_set_failures(
     expected_by_id = {row["case_id"]: row for row in expectations}
     case_by_id = {row["id"]: row for row in cases}
     failures: list[str] = []
-    output_id_rows = [row.get("case_id") for row in outputs if isinstance(row, dict)]
+    output_id_rows = [
+        row.get("case_id")
+        for row in outputs
+        if isinstance(row, dict) and isinstance(row.get("case_id"), str)
+    ]
     output_ids = set(output_id_rows)
     if len(outputs) != len(expectations) or len(output_id_rows) != len(output_ids):
         failures.append("output set: duplicate or incorrect row count")
     if output_ids != set(expected_by_id):
         failures.append("output set: case IDs do not match expectations")
     for output in outputs:
-        if not isinstance(output, dict) or output.get("case_id") not in expected_by_id:
+        if (
+            not isinstance(output, dict)
+            or not isinstance(output.get("case_id"), str)
+            or output.get("case_id") not in expected_by_id
+        ):
             failures.append("output set: invalid row")
             continue
-        receipt = receipts.get(output.get("reviewer"))
+        reviewer = output.get("reviewer")
+        if not isinstance(reviewer, str):
+            failures.append("output set: invalid reviewer")
+            continue
+        receipt = receipts.get(reviewer)
         failures.extend(output_failures(output, expected_by_id[output["case_id"]], receipt))
         if output.get("reviewer") != case_by_id[output["case_id"]]["reviewer"]:
             failures.append("output: wrong reviewer")

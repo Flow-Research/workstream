@@ -154,6 +154,24 @@ class ReviewerContractTests(unittest.TestCase):
         failures = output_set_failures(duplicate, {}, expectations, cases)
         self.assertIn("output set: duplicate or incorrect row count", failures)
 
+    def test_unhashable_output_identity_values_fail_cleanly(self) -> None:
+        expectations = load_json(EXPECTATIONS_PATH)["expectations"]
+        cases = self.cases["cases"]
+        for invalid_case_id in ([], {}):
+            with self.subTest(case_id=invalid_case_id):
+                outputs = [{"case_id": row["case_id"]} for row in expectations]
+                outputs[0]["case_id"] = invalid_case_id
+                self.assertIn(
+                    "output set: invalid row",
+                    output_set_failures(outputs, {}, expectations, cases),
+                )
+        outputs = [{"case_id": row["case_id"]} for row in expectations]
+        outputs[0]["reviewer"] = []
+        self.assertIn(
+            "output set: invalid reviewer",
+            output_set_failures(outputs, {}, expectations, cases),
+        )
+
     def test_output_requires_envelope_replay_and_exact_handoff(self) -> None:
         expectation = {
             "case_id": "architecture-handoff",
@@ -196,6 +214,12 @@ class ReviewerContractTests(unittest.TestCase):
         broken["finding_ids"] = []
         self.assertIn(
             "output: required finding not replayed", output_failures(broken, expectation, receipt)
+        )
+        broken = copy.deepcopy(output)
+        broken["finding_ids"] = [{}]
+        self.assertIn(
+            "output: finding_ids must contain only strings",
+            output_failures(broken, expectation, receipt),
         )
         broken = copy.deepcopy(output)
         broken["handoff_specialty"] = "security"
