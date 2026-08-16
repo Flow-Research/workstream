@@ -211,6 +211,12 @@ class ReviewerContractTests(unittest.TestCase):
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
             ],
+            "impact_cone": [
+                {"source": "case owner", "relevance": "owns evaluated behavior"}
+            ],
+            "adversarial_probes": [
+                {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
+            ],
             "findings": [
                 {"id": "ARCH-7", "severity": "Medium", "location": "case", "blocks_pr": False, "disposition": "fixed", "verification": "replayed"}
             ],
@@ -289,6 +295,12 @@ class ReviewerContractTests(unittest.TestCase):
             "evidence": [
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
+            ],
+            "impact_cone": [
+                {"source": "case owner", "relevance": "owns evaluated behavior"}
+            ],
+            "adversarial_probes": [
+                {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
             ],
             "findings": [],
             "uncertainty": [],

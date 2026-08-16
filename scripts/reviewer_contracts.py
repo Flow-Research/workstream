@@ -85,6 +85,7 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             "uncertainty",
             "freshness",
             "hand off",
+            "python3 scripts/review_target.py",
         ):
             if token not in normalized_agent:
                 failures.append(f"{reviewer}: agent missing {token!r}")
