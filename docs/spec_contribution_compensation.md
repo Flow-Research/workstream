@@ -659,10 +659,15 @@ AUTH alone owns:
 - `PermissionId` and `ActionId` catalogues and stable mappings;
 - `ActionOwner` activation custody;
 - human grants and fixed-service admission;
-- ServiceIdentity and the static service-action matrix;
+- action-bearing fixed-service admission and the static service-action matrix;
 - typed principal and resource-context contracts;
 - prepared mutation handles and evaluator dispatch;
 - authorization decisions, evidence, invalidation, and availability.
+
+ACTORS owns and publicly exposes the closed ActorProfile `ServiceIdentity`
+vocabulary. AUTH consumes that vocabulary for controlled provisioning and owns
+which identities are action-bearing; a target-only identity does not acquire a
+service-action matrix row or execution authority.
 
 CON owns canonical resource loading, product guards, hidden behavior, and
 feature tests. Neither subsystem imports the other's repositories or mutates
