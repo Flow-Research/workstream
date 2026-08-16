@@ -17,6 +17,7 @@ from app.modules.authorization.api import (
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.adapter_bindings import (
+    ADAPTER_BINDING_MUTATION_ACTIONS,
     AdapterBindingMutationResourceContext,
     AdapterBindingReadResourceContext,
 )
@@ -34,15 +35,6 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
 )
-
-_MUTATION_ACTIONS = frozenset(
-    {
-        ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
-        ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
-        ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
-    }
-)
-
 
 class AdapterBindingAuthorizationAdapter:
     """Bind public adapter-binding facts to the kernel and existing PREP service."""
@@ -71,7 +63,7 @@ class AdapterBindingAuthorizationAdapter:
             action = ActionId(raw)
         except ValueError as exc:
             raise BoundaryAuthorizationDenied("adapter-binding authority denied") from exc
-        if action not in _MUTATION_ACTIONS:
+        if action not in ADAPTER_BINDING_MUTATION_ACTIONS:
             raise BoundaryAuthorizationDenied("adapter-binding authority denied")
         return action
 

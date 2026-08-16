@@ -7,6 +7,7 @@ from uuid import UUID
 
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.adapter_bindings import (
+    ADAPTER_BINDING_MUTATION_ACTIONS,
     AdapterBindingMutationResourceContext,
 )
 from app.modules.authorization.runtime import (
@@ -14,20 +15,11 @@ from app.modules.authorization.runtime import (
     authorization_resource_digest,
 )
 
-_MUTATIONS = frozenset(
-    {
-        ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
-        ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
-        ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
-    }
-)
-
-
 def parse_prepared_adapter_binding(
     action_id: ActionId, request_value: Mapping[str, object]
 ) -> dict[str, object]:
     """Parse exact adapter-binding facts for the three mutation actions."""
-    if action_id not in _MUTATIONS:
+    if action_id not in ADAPTER_BINDING_MUTATION_ACTIONS:
         return {}
     try:
         value = dict(request_value)

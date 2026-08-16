@@ -229,11 +229,12 @@ Project Manager, Operator, Access Administrator, Audit Authority, project-role, 
       or denied current read remain concealed.
 - [x] CP02's PROJECTS-then-ACTORS eligibility fences and operation ordering
       remain intact for create/resume, including revocation races.
-- [x] The application composition root injects one AUTH-owned adapter through
-      public ports; no reachable composed production command intentionally
-      omits it. This is application wiring, not compensation delivery,
-      fulfillment, callback, or provider behavior. CP02's safe deny-default
-      constructor remains for uncomposed/isolated use.
+- [x] The AUTH application composition root exposes one real adapter factory
+      through public ports. This chunk intentionally creates no route or
+      reachable internal command caller; any future caller must explicitly
+      inject that factory. CP02's safe deny-default constructor remains for
+      uncomposed/isolated use. This is not compensation delivery, fulfillment,
+      callback, or provider behavior.
 - [x] Both authorization boundary scanners treat only
       `backend/app/adapters/auth/__init__.py` as AUTH-owned composition for
       same-owner private AUTH wiring; nested auth adapter files remain external

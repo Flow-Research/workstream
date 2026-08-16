@@ -805,10 +805,10 @@ behavior, or ContributionPolicy authority.
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
-| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | Finance / binding | Q | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | Finance / binding collection | T | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | Finance / active binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | Finance / suspended binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
+| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | covered human Finance Authority / binding | Q | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | covered human Finance Authority / binding collection | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
 | `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP01B (registered, unavailable) |
 | `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP01B (registered, unavailable) |
