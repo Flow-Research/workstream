@@ -22,9 +22,11 @@ class CompensationAdapterBindingAuthorization:
     """Translate immutable CON facts without importing either private domain."""
 
     def __init__(self, authorization: AdapterBindingAuthorizationPort) -> None:
+        """Bind the CON-facing adapter to AUTH's public authorization port."""
         self._authorization = authorization
 
     async def authorize_adapter_binding_read(self, request: AdapterBindingReadRequest) -> None:
+        """Authorize one exact adapter-binding read or return a concealed denial."""
         try:
             await self._authorization.authorize_read(
                 actor_profile_id=request.actor_profile_id,
@@ -40,6 +42,7 @@ class CompensationAdapterBindingAuthorization:
     def _facts(
         facts: AdapterBindingMutationAuthorizationFacts,
     ) -> AdapterBindingMutationAuthorityFacts:
+        """Copy immutable CON facts into AUTH's public mutation contract."""
         return AdapterBindingMutationAuthorityFacts(
             action_id=action_id(facts.action),
             actor_profile_id=facts.actor_profile_id,
@@ -57,6 +60,7 @@ class CompensationAdapterBindingAuthorization:
     async def prepare_adapter_binding_mutation(
         self, facts: AdapterBindingMutationAuthorizationFacts
     ) -> object:
+        """Prepare opaque authority for one exact adapter-binding mutation."""
         try:
             return await self._authorization.prepare_mutation(self._facts(facts))
         except AuthorizationBoundaryError as exc:
@@ -65,12 +69,14 @@ class CompensationAdapterBindingAuthorization:
     async def consume_adapter_binding_mutation(
         self, prepared: object, facts: AdapterBindingMutationAuthorizationFacts
     ) -> UUID:
+        """Consume prepared mutation authority and return its authorized actor."""
         try:
             return await self._authorization.consume_mutation(prepared, self._facts(facts))
         except AuthorizationBoundaryError as exc:
             raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable") from exc
 
     def close_adapter_binding_mutation(self, prepared: object) -> None:
+        """Invalidate prepared mutation authority through AUTH's public port."""
         try:
             self._authorization.close_mutation(prepared)
         except AuthorizationBoundaryError as exc:

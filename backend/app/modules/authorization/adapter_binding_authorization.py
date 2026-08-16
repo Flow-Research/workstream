@@ -44,12 +44,14 @@ class AdapterBindingAuthorizationAdapter:
         authorization: AuthorizationService,
         prepared: PreparedAuthorizationService,
     ) -> None:
+        """Require the query kernel and PREP service to share one composition."""
         if prepared._authorization is not authorization:
             raise TypeError("adapter-binding authorization requires one composition")
         self._authorization = authorization
         self._prepared = prepared
 
     def _assert_human_actor(self, actor_profile_id: UUID) -> None:
+        """Reject non-human or mismatched authenticated actor contexts."""
         context = self._authorization._context
         if (
             not isinstance(context, HumanAuthorizationContext)
@@ -59,6 +61,7 @@ class AdapterBindingAuthorizationAdapter:
 
     @staticmethod
     def _action(raw: str) -> ActionId:
+        """Resolve a public action value within the closed mutation action set."""
         try:
             action = ActionId(raw)
         except ValueError as exc:
@@ -69,6 +72,7 @@ class AdapterBindingAuthorizationAdapter:
 
     @staticmethod
     def _resource_facts(facts: AdapterBindingMutationAuthorityFacts):
+        """Build the action-specific immutable facts used by the resource digest."""
         action = str(facts.action_id)
         if action == ActionId.COMPENSATION_ADAPTER_BINDING_CREATE.value:
             return AdapterBindingCreateFacts(
@@ -95,6 +99,7 @@ class AdapterBindingAuthorizationAdapter:
     def _mutation_context(
         self, facts: AdapterBindingMutationAuthorityFacts
     ) -> tuple[ActionId, AdapterBindingMutationResourceContext]:
+        """Bind mutation facts to the authenticated actor and canonical resource."""
         self._assert_human_actor(facts.actor_profile_id)
         action = self._action(str(facts.action_id))
         resource_facts = self._resource_facts(facts)
@@ -114,6 +119,7 @@ class AdapterBindingAuthorizationAdapter:
 
     @staticmethod
     async def _invoke(operation):
+        """Translate private PREP failures into the stable public AUTH boundary."""
         try:
             return await operation
         except PreparedAuthorizationHandleInvalid as exc:
@@ -126,6 +132,7 @@ class AdapterBindingAuthorizationAdapter:
     async def authorize_read(
         self, *, actor_profile_id: UUID, facts: AdapterBindingReadFacts
     ) -> None:
+        """Authorize a fresh read of one exact project-owned adapter binding."""
         self._assert_human_actor(actor_profile_id)
         resource = AdapterBindingReadResourceContext(
             resource_type="compensation_adapter_binding",
@@ -144,6 +151,7 @@ class AdapterBindingAuthorizationAdapter:
     async def prepare_mutation(
         self, facts: AdapterBindingMutationAuthorityFacts
     ) -> PreparedAuthorizationHandle:
+        """Prepare transaction-bound authority for one canonical mutation request."""
         action, resource = self._mutation_context(facts)
         return await self._invoke(
             self._prepared.prepare(
@@ -162,6 +170,7 @@ class AdapterBindingAuthorizationAdapter:
     async def consume_mutation(
         self, prepared: object, facts: AdapterBindingMutationAuthorityFacts
     ) -> UUID:
+        """Consume exact prepared authority and return the authenticated actor."""
         if type(prepared) is not PreparedAuthorizationHandle:
             raise PreparedAuthorizationInvalid("prepared adapter-binding authority is invalid")
         action, resource = self._mutation_context(facts)
@@ -179,6 +188,7 @@ class AdapterBindingAuthorizationAdapter:
         return self._authorization._context.actor_profile_id
 
     def close_mutation(self, prepared: object) -> None:
+        """Invalidate an exact prepared handle without exposing its internals."""
         if type(prepared) is not PreparedAuthorizationHandle:
             raise PreparedAuthorizationInvalid("prepared adapter-binding authority is invalid")
         try:
