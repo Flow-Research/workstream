@@ -1,0 +1,32 @@
+{
+  "behavior_id": "auth.adapter_binding.activation",
+  "boundaries": ["postgresql"],
+  "callables": [
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter.__init__",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter._action",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter._assert_human_actor",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter._invoke",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter._mutation_context",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter._resource_facts",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter.authorize_read",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter.close_mutation",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter.consume_mutation",
+    "app.modules.authorization.adapter_binding_authorization.AdapterBindingAuthorizationAdapter.prepare_mutation"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-ARCH-001-CP03B required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/adapter_binding_authorization.py",
+  "tests": [
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_system_and_project_finance_authority_can_read_exact_binding",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_system_and_project_finance_authority_can_consume_every_mutation",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_inactive_actor_or_identity_link_denies_before_authority_issuance",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_missing_or_stale_finance_grant_denies_every_binding_operation",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_non_human_context_cannot_receive_finance_authority",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_wrong_actor_and_cross_project_deny_before_authority_issuance",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_replaced_transaction_invalidates_prepared_authority",
+    "backend/tests/authorization/test_adapter_binding_authorization.py::test_mutation_action_cannot_bypass_prep_through_direct_kernel_require"
+  ]
+}

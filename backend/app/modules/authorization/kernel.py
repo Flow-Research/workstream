@@ -23,7 +23,7 @@ from app.modules.authorization.catalogue import (
     ActionId,
     PermissionId,
 )
-from app.modules.authorization.domain import guide_compilation as compilation
+from app.modules.authorization.domain import adapter_bindings, guide_compilation as compilation
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.prepared_service import (
     is_project_setup_scope,
@@ -163,7 +163,7 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-)
+) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS
 _SERIALIZED_ADMIN_READS = frozenset(
     {
         ActionId.ACTOR_PROFILE_READ,
@@ -178,7 +178,7 @@ _SERIALIZED_ADMIN_READS = frozenset(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-)
+) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS
 _ADMIN_MUTATIONS = frozenset(
     {
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
@@ -192,7 +192,7 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
-)
+) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS
 
 _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
@@ -258,10 +258,10 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ),
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
         ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
+        **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
     }
 )
-
 
 def project_action_available_for_status(action_id: ActionId, project_status: str) -> bool:
     """Apply project-only lifecycle guards shared by decisions and projections."""
@@ -277,7 +277,6 @@ def project_action_available_for_status(action_id: ActionId, project_status: str
     }:
         return project_status == "active"
     return True
-
 
 class _PrelockedAuthority:
     """AUTH-private authority facts locked by the prepared protocol."""
@@ -334,9 +333,7 @@ class _PrelockedAuthority:
     def __setattr__(self, _name: str, _value: object) -> None:
         raise AttributeError("prelocked authority is immutable")
 
-
 _PRELOCKED_CONSTRUCTOR_TOKEN = object()
-
 
 class AuthorizationService:
     """Evaluate one request against closed action definitions and stage evidence."""
@@ -465,15 +462,13 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
-            if scope.kind not in {
-                PreparedAuthorityScopeKind.SYSTEM,
-                PreparedAuthorityScopeKind.PROJECT,
-            }:
+            if scope.kind not in {PreparedAuthorityScopeKind.SYSTEM, PreparedAuthorityScopeKind.PROJECT}:
                 raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
             if scope.kind is PreparedAuthorityScopeKind.PROJECT and action_id not in {
                 ActionId.ADMIN_ROLE_GRANT_ISSUE,
                 ActionId.PROJECT_ROLE_GRANT_ISSUE,
                 ActionId.PROJECT_ROLE_GRANT_REVOKE,
+                *adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS,
             }:
                 raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
             await self._admin.lock_control()
@@ -502,6 +497,7 @@ class AuthorizationService:
                 scope_project_id=scope.project_id,
                 system_scope_only=scope.project_id is None,
                 for_update=True,
+                **adapter_bindings.finance_authority_grant_filters(action_id),
             )
             if grant is None:
                 raise PreparedAuthorizationUnsupported(
@@ -1226,6 +1222,10 @@ class AuthorizationService:
         grant_filters: dict[str, object] = {}
         if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ:
             grant_filters["allowed_roles"] = ACTIVE_GUIDE_ADMIN_ROLES
+        else:
+            grant_filters.update(
+                adapter_bindings.finance_authority_grant_filters(action.action_id)
+            )
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
@@ -1504,13 +1504,11 @@ class AuthorizationService:
             resource_context,
             (
                 PreSubmitCheckerInputResourceContext,
-                compilation.ProjectGuideCompilationRequestResourceContext,
-                compilation.ProjectGuideCompilationExecuteResourceContext,
+                compilation.ProjectGuideCompilationRequestResourceContext, compilation.ProjectGuideCompilationExecuteResourceContext,
+                adapter_bindings.AdapterBindingReadResourceContext, adapter_bindings.AdapterBindingMutationResourceContext,
             ),
         ):
-            project_id = getattr(resource_context, "project_id", None) or getattr(
-                resource_context, "scope_project_id"
-            )
+            project_id = getattr(resource_context, "project_id", None) or getattr(resource_context, "scope_project_id")
             audit_project_id = str(project_id)
             audit_resource_type = resource_context.resource_type
             audit_resource_id = str(resource_context.resource_id)
@@ -1530,6 +1528,7 @@ class AuthorizationService:
             ActionId.PROJECT_CREATE,
             *_GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS,
             *_SUBMISSION_POLICY_MUTATIONS,
+            *adapter_bindings.ADAPTER_BINDING_ACTIONS,
         }:
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:

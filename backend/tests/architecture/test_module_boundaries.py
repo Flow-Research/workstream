@@ -549,6 +549,38 @@ def test_authorization_adapter_root_is_present_in_canonical_auth_view(
     }
 
 
+def test_exact_auth_adapter_root_uses_owner_parity_without_nested_exception(
+    tmp_path: Path,
+) -> None:
+    """Root wiring is AUTH-owned while nested/private product edges stay visible."""
+    _registry(tmp_path / "registry.json")
+    _write(
+        tmp_path / "backend/app/adapters/auth/__init__.py",
+        "import app.modules.authorization.runtime\n"
+        "import app.modules.tasks.repository\n",
+    )
+    nested = "backend/app/adapters/auth/adapter_bindings.py"
+    _write(
+        tmp_path / nested,
+        "import app.modules.authorization.kernel\n",
+    )
+    registry = boundary.load_registry(tmp_path / "registry.json")
+
+    private, _, actual_auth = boundary.scan(tmp_path, registry)
+
+    assert private == set()
+    assert actual_auth == {
+        boundary.authorization_boundary.ImportEdge(
+            "backend/app/adapters/auth/__init__.py",
+            "app.modules.tasks.repository",
+        ),
+        boundary.authorization_boundary.ImportEdge(
+            nested,
+            "app.modules.authorization.kernel",
+        ),
+    }
+
+
 @pytest.mark.parametrize(
     "source",
     (

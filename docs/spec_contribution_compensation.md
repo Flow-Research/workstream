@@ -771,9 +771,11 @@ activation. Target-only identity registration never satisfies that path.
 
 The table contains both registered-unavailable and future proposed mappings.
 CP01A registers the four adapter-binding read/create/suspend/resume ActionIds,
-and CP01B registers the five ContributionPolicy ActionIds. All nine remain
-unavailable and have no evaluator, identity, service-matrix row, route, or
-activation. CP01C corrects the unavailable binding facts before behavior:
+and CP01B registers the five ContributionPolicy ActionIds. CP03B now activates
+only the four adapter-binding actions for covered human Finance Authority
+through the hidden AUTH factory; it adds no public route, fixed-service
+identity, or service-matrix row. The five ContributionPolicy actions remain
+unavailable with no evaluator or activation. CP01C corrected the binding facts before behavior:
 create binds project, server-selected binding identity, `instrument_type`, adapter
 actor, and non-secret route key; suspend/resume additionally bind the exact
 positive lifecycle version. A binding is project/instrument scoped, so its
@@ -805,10 +807,10 @@ behavior, or ContributionPolicy authority.
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
-| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | Finance / binding | Q | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | Finance / binding collection | T | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | Finance / active binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
-| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | Finance / suspended binding | T | WS-ARCH-001-CP01A (registered, unavailable) |
+| `compensation.adapter_binding.read` | `compensation.adapter_binding.manage` | covered human Finance Authority / binding | Q | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.create` | `compensation.adapter_binding.manage` | covered human Finance Authority / binding collection | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
+| `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
 | `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP01B (registered, unavailable) |
 | `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP01B (registered, unavailable) |
