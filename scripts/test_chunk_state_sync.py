@@ -147,6 +147,30 @@ class ChunkStateSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_REVIEW_WORDING"):
             self._validate()
 
+    def test_chunk_map_cannot_land_temporal_merge_state(self) -> None:
+        self._write(
+            f"{self.initiative}/CHUNK_MAP.md",
+            "| `WS-EXAMPLE-001-01` | Example | L1 | Complete on merge |\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_TEMPORAL_PROJECTION"):
+            self._validate()
+
+    def test_status_cannot_land_temporal_merge_state(self) -> None:
+        self._write(
+            f"{self.initiative}/STATUS.md",
+            "WS-EXAMPLE-001-01 is complete on merge.\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_TEMPORAL_PROJECTION"):
+            self._validate()
+
+    def test_current_state_cannot_land_temporal_merge_state(self) -> None:
+        self._write(
+            ".agent-loop/CURRENT_STATE.md",
+            "WS-EXAMPLE-001-01 is complete on merge.\n",
+        )
+        with self.assertRaisesRegex(gate.ChunkStateError, "CHUNK_STATE_TEMPORAL_PROJECTION"):
+            self._validate()
+
     def test_planning_outcome_is_supported(self) -> None:
         self._write(self.chunk, "## Merge state\n\n- Outcome on merge: `planned`\n")
         self._write(

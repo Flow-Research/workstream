@@ -78,14 +78,15 @@ historical-row backfill or compatibility behavior.
 
 - CON-02B: missing `outbox.dispatch`, `workstream.outbox.dispatcher`, exact
   matrix/context/PREP support, and AUTH activation plan.
-- CP01A and CP01B are complete on merge with four exact adapter-binding and five
+- CP01A and CP01B are merged with four exact adapter-binding and five
   exact ContributionPolicy actions registered but unavailable. CP01C is
-  complete on merge with corrected binding identity and lifecycle-generation
+  merged with corrected binding identity and lifecycle-generation
   facts. Callback/fulfillment authority stays separate.
 - CP02 is merged with hidden, route-unreachable adapter-binding behavior and
   immutable lifecycle history while all four AUTH actions remain unavailable.
-  CP03A is complete on merge with target identity and owner eligibility while
-  actions remain unavailable. CP03B completes Finance Authority activation on merge. CP04-CP05
+  CP03A is merged through PR #340 with target identity and owner eligibility while
+  actions remain unavailable. CP03B completes Finance Authority activation.
+  CP04-CP05
   remain non-executable policy behavior/activation skeletons.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required

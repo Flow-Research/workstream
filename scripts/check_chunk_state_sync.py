@@ -31,6 +31,7 @@ OUTCOME_WORDS = {
     "superseded": ("superseded",),
 }
 REVIEW_ONLY_WORDS = ("in review", "pending review", "ready for review")
+TEMPORAL_PROJECTION = re.compile(r"\bon merge\b", re.IGNORECASE)
 
 
 class ChunkStateError(RuntimeError):
@@ -129,6 +130,8 @@ def _validate_chunk(chunk_path: str, changed: set[str]) -> str:
     status = _read(status_path)
     current_state = _read(current_state_path)
     row = _chunk_row(chunk_map, chunk_id)
+    if TEMPORAL_PROJECTION.search(row):
+        raise ChunkStateError(f"CHUNK_STATE_TEMPORAL_PROJECTION: {chunk_id}")
     if not _has_outcome(row, outcome):
         raise ChunkStateError(f"CHUNK_STATE_MAP_OUTCOME_MISMATCH: {chunk_id}")
     if outcome == "complete" and any(word in row.casefold() for word in REVIEW_ONLY_WORDS):
@@ -142,6 +145,10 @@ def _validate_chunk(chunk_path: str, changed: set[str]) -> str:
             raise ChunkStateError(f"CHUNK_STATE_ID_MISSING: {projection_path}: {chunk_id}")
         if not any(_has_outcome(line, outcome) for line in lines):
             raise ChunkStateError(f"CHUNK_STATE_OUTCOME_MISMATCH: {projection_path}: {chunk_id}")
+        if any(TEMPORAL_PROJECTION.search(line) for line in lines):
+            raise ChunkStateError(
+                f"CHUNK_STATE_TEMPORAL_PROJECTION: {projection_path}: {chunk_id}"
+            )
     return outcome
 
 

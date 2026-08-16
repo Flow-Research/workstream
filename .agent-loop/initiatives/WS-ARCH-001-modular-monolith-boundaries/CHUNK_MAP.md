@@ -11,20 +11,20 @@
 | `WS-ARCH-001-02D` | ART hidden preparation public API and private-edge migration | L1 | Complete; production remains deny-only |
 | `WS-ARCH-001-02E` | ART ready-admission consumption and binding hidden module-level capability | L1 | Complete; production remains deny-only and route-unreachable |
 | `WS-ARCH-001-02F` | TASK-owned immutable Submission command and hidden composed transaction | L1 | Complete; production remains deny-only and route-unreachable |
-| `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Complete on merge |
-| `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete on merge; public route remains unchanged |
+| `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Complete |
+| `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
-| `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
+| `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planning contract complete; implementation sequencing remains planned |
 | `WS-ARCH-001-PLAN3` | ContributionPolicy registration, behavior, activation, guide/task lineage and clean legacy-removal sequencing | L1 | Planned; planning correction only and no runtime |
-| `WS-ARCH-001-PLAN4` | Delivery-coupled technical-debt retirement policy and current-main baseline | L1 | Planned on merge; planning only and no unrelated v0.1 delivery block |
+| `WS-ARCH-001-PLAN4` | Delivery-coupled technical-debt retirement policy and current-main baseline | L1 | Planned; planning only and no unrelated v0.1 delivery block |
 | `WS-ARCH-001-CP01` | Combined AUTH registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |
-| `WS-ARCH-001-CP01A` | AUTH adapter-binding unavailable registration | L1 | Complete on merge; four actions remain planned/unavailable |
-| `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete on merge; five actions remain planned/unavailable |
-| `WS-ARCH-001-CP01C` | AUTH adapter-binding fact correction | L1 | Complete on merge; corrects unavailable facts before CON behavior |
-| `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Complete on merge; route-unreachable and deny-default while actions remain unavailable |
+| `WS-ARCH-001-CP01A` | AUTH adapter-binding unavailable registration | L1 | Complete; four actions remain planned/unavailable |
+| `WS-ARCH-001-CP01B` | AUTH ContributionPolicy unavailable registration | L1 | Complete; five actions remain planned/unavailable |
+| `WS-ARCH-001-CP01C` | AUTH adapter-binding fact correction | L1 | Complete; corrects unavailable facts before CON behavior |
+| `WS-ARCH-001-CP02` | CON hidden adapter-binding behavior | L1 | Complete; route-unreachable and deny-default while actions remain unavailable |
 | `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Planned split into CP03A/CP03B; non-executable |
-| `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Complete on merge; actions remain unavailable |
-| `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Complete on merge; four exact hidden actions active through public ports, with private wiring confined to the AUTH adapter root |
+| `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Merged through PR #340; actions remain unavailable |
+| `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Complete; four exact hidden actions active through public ports, with private wiring confined to the AUTH adapter root |
 | `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after merged CP03B evidence |
 | `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |
 | `WS-ARCH-001-CP06` | CON guide-activation/revision policy-validation port | L1 | Proposed skeleton after CP05 |

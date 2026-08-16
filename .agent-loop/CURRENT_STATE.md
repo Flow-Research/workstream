@@ -28,7 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish hidden CON adapter-binding behavior and exact Finance Authority activation; PLAN4 planned incremental debt retirement | Prepare CP04's executable hidden ContributionPolicy behavior contract; PLAN4 keeps debt retirement delivery-coupled without blocking features on unrelated frozen debt; the wider PLAN2 path still targets durable `allow_review`, and `02I` remains later |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish hidden CON adapter-binding behavior and exact Finance Authority activation; PLAN4 continues incremental debt retirement | Prepare CP04's executable hidden ContributionPolicy behavior contract; PLAN4 keeps debt retirement delivery-coupled without blocking features on unrelated frozen debt; the wider PLAN2 path still targets durable `allow_review`, and `02I` remains later |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; CP03B completes hidden adapter-binding behavior and exact Finance Authority activation; ContributionPolicy persistence and shared lifecycle audit foundations are merged | Prepare CP04 hidden ContributionPolicy behavior; later complete guide-activation validation/persistence before task readiness, preserving immutable attempt lineage through Submission and ReviewLease |
@@ -44,9 +44,9 @@ authority; these records do not grant or withhold it.
 | [WS-CI-001](initiatives/WS-CI-001-backend-ci-acceleration/STATUS.md) | Semantic distributed backend lanes complete | Treat further CI optimization as a fresh measured bounded change |
 | [WS-CI-002](initiatives/WS-CI-002-deterministic-agent-gates/STATUS.md) | `WS-CI-002-01` complete through PR #311; Agent Gates is deterministic per PR head | Preserve protected-branch review as the independent approval authority |
 | [WS-CI-003](initiatives/WS-CI-003-atomic-chunk-state/STATUS.md) | `WS-CI-003-01` complete | Require every chunk PR to land its final contract and initiative state atomically |
-| [WS-CI-004](initiatives/WS-CI-004-review-evidence-integrity/STATUS.md) | `WS-CI-004-01` merged through PR #341; `WS-CI-004-02` is complete on merge with nine-reviewer protocol adoption | Human review this chunk; do not start local convergence automatically |
+| [WS-CI-004](initiatives/WS-CI-004-review-evidence-integrity/STATUS.md) | Exact-target protocol and nine-reviewer adoption are merged through PRs #341 and #342; `WS-CI-004-03` is complete with final-head approval and durable-state closure | Human review `WS-CI-004-03`; do not start another successor automatically |
 | [WS-DB-001](initiatives/WS-DB-001-v01-schema-baseline/STATUS.md) | v0.1 schema baseline complete through PRs #316 and #317 | Extend `0001_v01_baseline` only through future bounded migrations |
-| [WS-SEC-001](initiatives/WS-SEC-001-dependency-alert-remediation/STATUS.md) | `WS-SEC-001-01` complete on merge with patched runtime and tooling dependencies | Handle future security alerts through fresh bounded dependency changes |
+| [WS-SEC-001](initiatives/WS-SEC-001-dependency-alert-remediation/STATUS.md) | `WS-SEC-001-01` is complete with patched runtime and tooling dependencies | Handle future security alerts through fresh bounded dependency changes |
 | [WS-DOCS-001](initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md) | Current v0.1 entry documentation complete | Keep current pages synchronized with merged capability changes |
 | [WS-DOCS-002](initiatives/WS-DOCS-002-workstream-definition/STATUS.md) | Canonical Workstream definition complete | Preserve terminology across current documentation and generated artifacts |
 | [WS-XINT-001](initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/STATUS.md) | Planning reconciliation complete and closed | Owner initiatives implement the resulting boundaries |
@@ -99,26 +99,27 @@ selection wording.
 Do not start historical CON-05A directly. The CP01-CP09 sequence owns
 AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
 activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
-clean v0.1 legacy economic-path removal in that order. CP02 is complete on
-merge while all four actions remain unavailable. CP03 is split with executable
-CP03A/CP03B contracts complete on merge; later CP04-CP09 children remain
+clean v0.1 legacy economic-path removal in that order. CP02 is complete while
+all four actions remain unavailable. CP03 is split: the CP03A implementation is
+merged, and the CP03B implementation contract is complete but its implementation
+remains planned; later CP04-CP09 children remain
 non-executable until their current-main contracts are expanded.
 
 - WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.
 - WS-ARCH-001-CP01 is a planned split and non-executable.
-- WS-ARCH-001-CP01A is complete on merge with adapter-binding actions registered
+- WS-ARCH-001-CP01A is merged with adapter-binding actions registered
   but unavailable.
-- WS-ARCH-001-CP01B is complete on merge with five unavailable ContributionPolicy
+- WS-ARCH-001-CP01B is merged with five unavailable ContributionPolicy
   actions registered.
-- WS-ARCH-001-CP01C is complete on merge with corrected unavailable
+- WS-ARCH-001-CP01C is merged with corrected unavailable
   adapter-binding identity and lifecycle-version facts.
-- WS-ARCH-001-CP02 is complete on merge with hidden, route-unreachable behavior,
+- WS-ARCH-001-CP02 is merged with hidden, route-unreachable behavior,
   exact lifecycle history, and deny-default production composition.
-- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A and CP03B have executable
-  contracts complete on merge and are the next ordered bounded boundaries.
-- WS-ARCH-001-CP03A is complete on merge with exact target identity and owner
+- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A is merged
+  and CP03B is complete.
+- WS-ARCH-001-CP03A is merged with exact target identity and owner
   eligibility while all four actions remain unavailable.
-- WS-ARCH-001-CP03B is complete on merge: exactly four hidden adapter-binding
+- WS-ARCH-001-CP03B is complete: exactly four hidden adapter-binding
   actions are active only for covered human Finance Authority; nested adapters
   consume the public AUTH API and same-owner private wiring is confined to the
   exact AUTH adapter root. No compensation delivery or fulfillment behavior is

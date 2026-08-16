@@ -43,13 +43,13 @@ not current start requirements.
   owner behavior and typed manifests are merged. Their activation order lives
   in the matching XINT and feature-owner records.
 - PLAN3 defines the missing contribution-policy sequence: WS-ARCH-001-CP01A is
-  complete on merge with exact adapter-binding actions still unavailable; CP01B is
-  complete on merge and separately registers
-  policy actions while unavailable; CP01C is complete on merge with corrected
+  merged with exact adapter-binding actions still unavailable; CP01B is
+  merged and separately registers
+  policy actions while unavailable; CP01C is merged with corrected
   unavailable binding identity and lifecycle-generation facts; CP03 is split.
-  CP03A is complete on merge with only the target identity and owner
-  eligibility while actions remain unavailable; CP03B is complete on merge
-  and activates only CP02's four exact Finance Authority boundaries. CP05 later activates
+  CP03A is merged through PR #340 with only the target identity and owner
+  eligibility while actions remain unavailable; CP03B is complete and
+  activates only CP02's four exact Finance Authority boundaries. CP05 later activates
   only CP04's merged hidden policy behavior. Fulfillment callback authority
   remains separate and cannot be bundled into adapter-binding registration.
 
