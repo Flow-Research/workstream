@@ -49,9 +49,19 @@ class _Session:
 
 
 class _FinanceRepository:
-    def __init__(self, grant_project_id: UUID | None) -> None:
+    def __init__(
+        self,
+        grant_project_id: UUID | None,
+        *,
+        grant_available: bool = True,
+        actor_status: ActorStatus = ActorStatus.ACTIVE,
+        link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
+    ) -> None:
         self.grant_id = uuid4()
         self.grant_project_id = grant_project_id
+        self.grant_available = grant_available
+        self.actor_status = actor_status
+        self.link_status = link_status
 
     async def lock_control(self) -> None:
         return None
@@ -61,13 +71,17 @@ class _FinanceRepository:
             SimpleNamespace(
                 id=str(identity_link_id),
                 actor_profile_id=str(actor_profile_id),
-                status="active",
+                status=self.link_status.value,
             ),
-            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
+            SimpleNamespace(
+                id=str(actor_profile_id), actor_kind="human", status=self.actor_status.value
+            ),
         )
 
     async def find_effective_grant(self, *_args, **kwargs):
         assert {role.value for role in kwargs["allowed_roles"]} == {"finance_authority"}
+        if not self.grant_available:
+            return None
         requested = kwargs["scope_project_id"]
         if self.grant_project_id is not None and requested != self.grant_project_id:
             return None
@@ -92,18 +106,29 @@ class _Evidence:
         self.events.append(event)
 
 
-def _adapter(project_id: UUID | None):
+def _adapter(
+    project_id: UUID | None,
+    *,
+    actor_status: ActorStatus = ActorStatus.ACTIVE,
+    link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
+    grant_available: bool = True,
+):
     context = HumanAuthorizationContext(
         actor_profile_id=uuid4(),
         actor_kind=ActorKind.HUMAN,
-        actor_status=ActorStatus.ACTIVE,
+        actor_status=actor_status,
         identity_link_id=uuid4(),
-        identity_link_status=IdentityLinkStatus.ACTIVE,
+        identity_link_status=link_status,
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
     session = _Session()
-    repository = _FinanceRepository(project_id)
+    repository = _FinanceRepository(
+        project_id,
+        grant_available=grant_available,
+        actor_status=actor_status,
+        link_status=link_status,
+    )
     kernel = AuthorizationService(
         session,
         context,
@@ -152,6 +177,102 @@ def _transition_facts(
         expected_status=("active" if action.endswith("suspend") else "suspended"),
         expected_lifecycle_version=4,
     )
+
+
+def _facts_for_action(
+    actor_id: UUID, project_id: UUID, action: str
+) -> AdapterBindingMutationAuthorityFacts:
+    return (
+        _create_facts(actor_id, project_id)
+        if action.endswith("create")
+        else _transition_facts(actor_id, project_id, action)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("project_scoped", (False, True))
+async def test_system_and_project_finance_authority_can_read_exact_binding(
+    project_scoped: bool,
+) -> None:
+    project_id = uuid4()
+    adapter, context, _session, evidence = _adapter(project_id if project_scoped else None)
+    await adapter.authorize_read(
+        actor_profile_id=context.actor_profile_id,
+        facts=AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=uuid4()),
+    )
+    assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("project_scoped", (False, True))
+@pytest.mark.parametrize(
+    "action",
+    (
+        "compensation.adapter_binding.create",
+        "compensation.adapter_binding.suspend",
+        "compensation.adapter_binding.resume",
+    ),
+)
+async def test_system_and_project_finance_authority_can_consume_every_mutation(
+    project_scoped: bool,
+    action: str,
+) -> None:
+    project_id = uuid4()
+    adapter, context, _session, evidence = _adapter(project_id if project_scoped else None)
+    facts = _facts_for_action(context.actor_profile_id, project_id, action)
+    prepared = await adapter.prepare_mutation(facts)
+    assert await adapter.consume_mutation(prepared, facts) == context.actor_profile_id
+    adapter.close_mutation(prepared)
+    assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("actor_status", "link_status"),
+    (
+        (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE),
+        (ActorStatus.DEACTIVATED, IdentityLinkStatus.ACTIVE),
+        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED),
+    ),
+)
+async def test_inactive_actor_or_identity_link_denies_before_authority_issuance(
+    actor_status: ActorStatus,
+    link_status: IdentityLinkStatus,
+) -> None:
+    project_id = uuid4()
+    adapter, context, _session, evidence = _adapter(
+        project_id, actor_status=actor_status, link_status=link_status
+    )
+    with pytest.raises(AuthorizationDenied):
+        await adapter.prepare_mutation(_create_facts(context.actor_profile_id, project_id))
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_missing_or_stale_finance_grant_denies_every_binding_operation() -> None:
+    project_id = uuid4()
+    adapter, context, _session, evidence = _adapter(project_id, grant_available=False)
+    with pytest.raises(AuthorizationDenied):
+        await adapter.authorize_read(
+            actor_profile_id=context.actor_profile_id,
+            facts=AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=uuid4()),
+        )
+    with pytest.raises(AuthorizationDenied):
+        await adapter.prepare_mutation(_create_facts(context.actor_profile_id, project_id))
+    assert len(evidence.events) == 1 and not evidence.events[0].after_facts["allowed"]
+
+
+@pytest.mark.asyncio
+async def test_non_human_context_cannot_receive_finance_authority() -> None:
+    project_id = uuid4()
+    adapter, context, _session, evidence = _adapter(project_id)
+    adapter._authorization._context = SimpleNamespace(
+        actor_profile_id=context.actor_profile_id,
+        actor_kind=ActorKind.SERVICE,
+    )
+    with pytest.raises(AuthorizationDenied):
+        await adapter.prepare_mutation(_create_facts(context.actor_profile_id, project_id))
+    assert evidence.events == []
 
 
 @pytest.mark.asyncio

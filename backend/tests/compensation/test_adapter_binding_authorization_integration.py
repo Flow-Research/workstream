@@ -159,8 +159,19 @@ async def test_public_adapter_preserves_exact_read_and_mutation_facts() -> None:
     adapter.close_adapter_binding_mutation(prepared)
     translated = authorization.calls[1][1]
     assert authorization.calls[0][1]["actor_profile_id"] == read.actor_profile_id
+    assert authorization.calls[0][1]["facts"].project_id == read.project_id
+    assert authorization.calls[0][1]["facts"].adapter_binding_id == read.adapter_binding_id
+    assert translated.action_id == facts.action
+    assert translated.actor_profile_id == facts.actor_profile_id
+    assert translated.operation_id == facts.operation_id
+    assert translated.request_digest == facts.request_digest
+    assert translated.project_id == facts.project_id
+    assert translated.adapter_binding_id == facts.adapter_binding_id
     assert translated.instrument_type == facts.instrument_type
-    assert translated.expected_lifecycle_version == 3
+    assert translated.adapter_actor_id == facts.adapter_actor_id
+    assert translated.route_key == facts.route_key
+    assert translated.expected_status == facts.expected_status
+    assert translated.expected_lifecycle_version == facts.expected_lifecycle_version
     assert actor == facts.actor_profile_id
     assert authorization.calls[-1] == ("close", authorization.handle)
 

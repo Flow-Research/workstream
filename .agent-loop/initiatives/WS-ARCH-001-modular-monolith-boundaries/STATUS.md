@@ -1,7 +1,8 @@
 # Status: WS-ARCH-001 Modular Monolith Boundaries
 
 - Initiative state: active; boundary foundation complete
-- Runtime behavior changed: hidden CON adapter-binding behavior only; no route or action activation
+- Runtime behavior changed: hidden CON adapter-binding behavior plus exactly four
+  Finance Authority actions; no public route
 - Canonical target: nine business modules and three supporting modules
 - Recovery model: freeze exact debt, prohibit growth, repair touched
   capabilities incrementally
