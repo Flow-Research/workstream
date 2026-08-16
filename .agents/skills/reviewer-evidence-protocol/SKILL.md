@@ -10,12 +10,21 @@ their own questions; they do not replace or duplicate this protocol.
 
 ## Review target
 
-1. Run `scripts/review_target.py` at review start with the intended base and head.
+1. Run `python3 scripts/review_target.py` at review start with the intended base
+   and head.
 2. Record base SHA, merge-base SHA, head SHA, changed paths, and worktree state.
 3. Inspect relevant unchanged owners, consumers, policies, ADRs, and ledgers—not
    only changed lines.
-4. Run the target command again immediately before the verdict.
-5. Compare both snapshots before constructing the receipt. The receipt stores
+4. Record the impact cone as exact paths or symbols plus why each source can
+   confirm or contradict the change. A generic statement such as "consumers
+   inspected" is not evidence.
+5. Perform at least one specialty-appropriate adversarial probe for a final
+   verdict. State the failure or bypass hypothesis, the inspection or command
+   used to test it, and the observed result. Passing tests alone are not an
+   adversarial probe.
+6. Run the same `python3 scripts/review_target.py` command again immediately
+   before the verdict.
+7. Compare both snapshots before constructing the receipt. The receipt stores
    their matching target triple once; its start/end inspections cannot redefine
    that target. A final verdict is valid only when the snapshots match and both
    worktrees are clean. Dirty state permits provisional findings only.
@@ -42,5 +51,8 @@ implementation, merge, or Workstream product lifecycle decisions.
 ## Output
 
 Return the exact target, reviewer/run identity, start/end inspection, evidence,
-findings and replay dispositions, uncertainty, freshness, and verdict. Use the
-canonical schema and templates. Do not write receipt custody from a reviewer.
+impact cone, adversarial probes, findings and replay dispositions, uncertainty,
+freshness, and verdict. Use the canonical schema and templates. Receipts remain
+private out-of-tree session evidence written only by the orchestrator; a PR
+summary may mirror a verdict but is neither receipt custody nor an attestation.
+Do not write receipt custody from a reviewer.

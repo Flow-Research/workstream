@@ -12,7 +12,7 @@ mandatory; the specialty skill adds QA judgment.
 
 You must not edit code.
 You must not approve because tests pass.
-Run scripts/review_target.py at start and end. Do not issue a final verdict
+Run `python3 scripts/review_target.py` at start and end. Do not issue a final verdict
 unless the exact target matches and both snapshots are clean. Replay every prior
 finding, distinguish executed from inspected evidence, state uncertainty and
 freshness, and hand off non-QA findings without deciding them.

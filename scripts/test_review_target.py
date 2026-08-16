@@ -181,6 +181,16 @@ class ReceiptSchemaTests(unittest.TestCase):
                 "end": {"cleanliness": "clean"},
             },
             "evidence": [{"kind": "executed", "source": "unit test", "result": "pass"}],
+            "impact_cone": [
+                {"source": "owner.py:Owner", "relevance": "owns the reviewed behavior"}
+            ],
+            "adversarial_probes": [
+                {
+                    "hypothesis": "invalid input bypasses denial",
+                    "method": "negative test",
+                    "result": "pass",
+                }
+            ],
             "findings": [],
             "uncertainty": [],
             "freshness": "current",
@@ -201,12 +211,21 @@ class ReceiptSchemaTests(unittest.TestCase):
             json.loads("{")
 
     def test_required_identity_target_and_inspection_fields(self) -> None:
-        for key in ("target", "reviewer", "uncertainty", "inspections"):
+        for key in (
+            "target",
+            "reviewer",
+            "uncertainty",
+            "inspections",
+            "impact_cone",
+            "adversarial_probes",
+        ):
             with self.subTest(key=key):
                 self.assert_invalid(lambda receipt, key=key: receipt.pop(key))
         self.assert_invalid(lambda receipt: receipt["target"].__setitem__("head_sha", "bad"))
         self.assert_invalid(lambda receipt: receipt["reviewer"].pop("run_id"))
         self.assert_invalid(lambda receipt: receipt["inspections"].pop("end"))
+        self.assert_invalid(lambda receipt: receipt.__setitem__("impact_cone", []))
+        self.assert_invalid(lambda receipt: receipt.__setitem__("adversarial_probes", []))
 
     def test_closed_tokens_and_unknown_claims_are_rejected(self) -> None:
         self.assert_invalid(lambda receipt: receipt.__setitem__("verdict", "APPROVED"))
