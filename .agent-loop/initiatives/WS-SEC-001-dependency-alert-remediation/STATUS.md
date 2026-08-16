@@ -1,6 +1,6 @@
 # Status: WS-SEC-001 Dependency Alert Remediation
 
-- Initiative state: complete on merge of `WS-SEC-001-01`
+- Initiative state: complete through merged `WS-SEC-001-01`
 - Runtime dependency outcome: `cryptography` and `pypdf` use patched versions.
 - Tooling dependency outcome: backend manifests use patched `pytest` and
   `pytest-asyncio`; mutation-tool manifests use patched `pytest` and `uv`
