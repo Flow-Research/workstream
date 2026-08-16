@@ -162,16 +162,11 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
             assert allowed.action_id is not None
             allowed_action_ids.add(allowed.action_id)
     assert allowed_action_ids == {
-        ActionId.ACTOR_PROFILE_READ_SELF,
-        ActionId.ACTOR_PROFILE_UPDATE_SELF,
-        ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ,
-        ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ,
-        ActionId.ADMIN_ROLE_GRANT_LIST,
-        ActionId.ACTOR_ADMIN_ROLE_GRANT_HISTORY_READ,
-        ActionId.ADMIN_ROLE_GRANT_ISSUE,
-        ActionId.ADMIN_ROLE_GRANT_REVOKE,
-        ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
-        ActionId.ACTOR_PROFILE_READ,
+        ActionId.ACTOR_PROFILE_READ_SELF, ActionId.ACTOR_PROFILE_UPDATE_SELF,
+        ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ, ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ,
+        ActionId.ADMIN_ROLE_GRANT_LIST, ActionId.ACTOR_ADMIN_ROLE_GRANT_HISTORY_READ,
+        ActionId.ADMIN_ROLE_GRANT_ISSUE, ActionId.ADMIN_ROLE_GRANT_REVOKE,
+        ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP, ActionId.ACTOR_PROFILE_READ,
         ActionId.ACTOR_IDENTITY_LINK_READ,
         ActionId.ACTOR_SERVICE_PROVISION,
         ActionId.ACTOR_PROFILE_SUSPEND,

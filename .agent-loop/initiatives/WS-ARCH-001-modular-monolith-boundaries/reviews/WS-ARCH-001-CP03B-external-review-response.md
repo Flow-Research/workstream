@@ -14,6 +14,10 @@
 - The first complete shared-foundation execution then found one stale audit
   parity assertion. Its closed expected active-action set now includes the four
   CP03B actions, while the same test continues to reject every planned action.
+- Structural-debt preflight then correctly rejected line growth in that frozen
+  legacy audit test. The parity update was reformatted to shrink both the test
+  and its oversized function by one line, and the generated debt ledger was
+  reconciled without accepting new structural debt.
 - CodeRabbit's fail-closed translation findings were valid. Malformed CON facts
   are now concealed at both mutation preparation and consumption, and failed
   persistence of mandatory AUTH evidence becomes the public unavailable error
