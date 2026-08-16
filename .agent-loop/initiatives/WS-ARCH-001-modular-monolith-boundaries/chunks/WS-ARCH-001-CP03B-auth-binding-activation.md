@@ -123,8 +123,10 @@ backend/app/modules/authorization/kernel.py (exact Finance Authority evaluator i
 backend/app/modules/authorization/adapter_binding_authorization.py
 backend/app/modules/authorization/domain/adapter_bindings.py
 backend/app/modules/authorization/domain/prepared_adapter_bindings.py
-backend/app/adapters/auth/adapter_bindings.py
-backend/app/adapters/auth/__init__.py
+backend/app/adapters/auth/adapter_bindings.py (public AUTH API consumption only;
+  no private AUTH implementation import)
+backend/app/adapters/auth/__init__.py (exact AUTH adapter-root composition;
+  same-owner private wiring is permitted only here)
 backend/app/api/deps/authorization.py (composition only; no route)
 backend/app/main.py (composition only; no route)
 backend/app/modules/compensation/api/adapter_bindings.py (public-port parity only)
@@ -222,9 +224,11 @@ Project Manager, Operator, Access Administrator, Audit Authority, project-role, 
       or denied current read remain concealed.
 - [ ] CP02's PROJECTS-then-ACTORS eligibility fences and operation ordering
       remain intact for create/resume, including revocation races.
-- [ ] Delivery composition injects one AUTH-owned adapter through public ports;
-      no reachable composed production command intentionally omits it. CP02's
-      safe deny-default constructor remains for uncomposed/isolated use.
+- [ ] The application composition root injects one AUTH-owned adapter through
+      public ports; no reachable composed production command intentionally
+      omits it. This is application wiring, not compensation delivery,
+      fulfillment, callback, or provider behavior. CP02's safe deny-default
+      constructor remains for uncomposed/isolated use.
 - [ ] No public route becomes reachable and no migration is added.
 - [ ] AUTH and changed compensation authorization coverage remain at or above
       90 percent; repository coverage remains at or above the protected floor.
