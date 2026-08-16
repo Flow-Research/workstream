@@ -7,6 +7,10 @@
   floor. Every callable introduced by the CON-to-AUTH adapter and the AUTH
   implementation adapter now documents its boundary responsibility. The
   coverage threshold, workflow, and test selection remain unchanged.
+- After that gate cleared, hosted CI correctly failed closed because the new
+  authorization test module had no semantic-lane assignment. It is now part of
+  the shared AUTH foundation inventory, so every collected test remains owned
+  exactly once under the lane partition rules.
 - CodeRabbit's fail-closed translation findings were valid. Malformed CON facts
   are now concealed at both mutation preparation and consumption, and failed
   persistence of mandatory AUTH evidence becomes the public unavailable error
