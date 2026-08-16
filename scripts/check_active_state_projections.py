@@ -36,6 +36,7 @@ def temporal_projection_failures(root: Path = ROOT) -> list[str]:
 
 
 def main() -> int:
+    """Print deterministic failures and return a process status."""
     failures = temporal_projection_failures()
     if failures:
         print("\n".join(failures), file=sys.stderr)
