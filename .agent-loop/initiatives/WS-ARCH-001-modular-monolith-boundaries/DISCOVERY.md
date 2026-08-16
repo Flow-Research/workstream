@@ -239,9 +239,12 @@ Resolved design:
   only after current read authorization.
 - Draft update replaces the complete two-rule graph atomically. It never
   patches published content and never creates ContributionRecords or awards.
-- Publish locks the aggregate, version, rules, definitions, units, and adapter
-  bindings; recomputes canonical digest/binding facts from server-owned rows;
-  consumes/closes PREP before mutation; and makes the exact version current.
+- Publish first acquires the operation fence and checks immutable replay
+  recovery; only a new operation then locks the aggregate, version, rules,
+  definitions, units, and adapter bindings, recomputes canonical digest/binding
+  facts from server-owned rows, consumes/closes PREP before mutation, and makes
+  the exact version current. Exact recovery returns the immutable event result
+  and performs no row mutation or second AUTH consumption.
 - Retire targets the exact current published version and prevents future
   selection without rewriting any frozen downstream history.
 

@@ -10,6 +10,10 @@
   without criterion-to-test ownership. Valid. Both contracts now map each
   security/product criterion to named future test modules and distinguish local
   proof from hosted-only PostgreSQL/concurrency proof.
+- `CR-CP04-001` Low: `DISCOVERY.md` summarized publication as starting with
+  aggregate locks even though the executable contracts fence the operation and
+  check immutable recovery first. Valid. The summary now states the exact
+  fence/recovery-before-lock/PREP order and preserves no-second-effect recovery.
 
 ## Comments deferred
 
