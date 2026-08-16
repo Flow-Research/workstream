@@ -48,6 +48,15 @@ class ActiveStateProjectionTests(unittest.TestCase):
         self.assertEqual(len(failures), 3)
         self.assertTrue(all(item.startswith("ACTIVE_STATE_TEMPORAL_PROJECTION:") for item in failures))
 
+    def test_equivalent_temporal_merge_phrases_are_rejected(self) -> None:
+        self._write(".agent-loop/CURRENT_STATE.md", "Outcome on merge: complete.\n")
+        self._write(
+            ".agent-loop/initiatives/WS-ONE-001-one/CHUNK_MAP.md",
+            "| Plan | Planning contract lands on merge |\n",
+        )
+        failures = temporal_projection_failures(self.root)
+        self.assertEqual(len(failures), 2)
+
     def test_contracts_and_historical_reviews_are_not_active_projections(self) -> None:
         self._write(".agent-loop/CURRENT_STATE.md", "Current state is complete.\n")
         self._write(

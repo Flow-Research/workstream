@@ -30,7 +30,7 @@ sequence.
 | `WS-ARCH-001-CP01C` | Adapter-binding fact correction | L1 | Complete; unavailable facts match binding identity and lifecycle generation |
 | `WS-ARCH-001-CP03` | Adapter-binding activation parent | L1 | Split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Merged through PR #340; actions remain unavailable |
-| `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract is complete; follows merged CP03A |
+| `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract is complete; implementation remains planned after merged CP03A |
 | `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |
 | `WS-AUTH-001-01` | Adopt Authorization Baseline And Repository Contracts | L1 | Merged through PR #93 as `772af1d` |

@@ -8,10 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPORAL_OUTCOME = re.compile(
-    r"\b(?:complete|planned|cancelled|superseded)\s+on\s+merge\b",
-    re.IGNORECASE,
-)
+TEMPORAL_OUTCOME = re.compile(r"\bon\s+merge\b", re.IGNORECASE)
 
 
 def projection_paths(root: Path = ROOT) -> list[Path]:

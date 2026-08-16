@@ -37,6 +37,7 @@ scripts/test_active_state_projections.py
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/CHUNK_MAP.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/STATUS.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/chunks/WS-CI-004-03-final-head-state-closure.md
+.agent-loop/initiatives/WS-CI-004-review-evidence-integrity/reviews/WS-CI-004-03-external-review-response.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/CHUNK_MAP.md
 .agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md
@@ -89,15 +90,24 @@ post-merge state-repair automation
 ## Verification commands
 
 ```bash
-python3 -m unittest -v scripts.test_chunk_state_sync scripts.test_lightweight_agent_gates
+python3 -m unittest -v scripts.test_chunk_state_sync scripts.test_active_state_projections scripts.test_lightweight_agent_gates
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
-python3 -m unittest -v scripts.test_active_state_projections
 python3 scripts/check_active_state_projections.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py
 git diff --check
-gh api repos/Flow-Research/workstream/branches/main/protection
+gh api repos/Flow-Research/workstream/branches/main/protection | jq -e '
+  .required_status_checks.strict == true and
+  (["test", "agent-gates"] - (.required_status_checks.contexts // [])) == [] and
+  .required_pull_request_reviews.required_approving_review_count == 1 and
+  .required_pull_request_reviews.dismiss_stale_reviews == true and
+  .required_pull_request_reviews.require_last_push_approval == true and
+  .required_conversation_resolution.enabled == true and
+  .enforce_admins.enabled == true and
+  .allow_force_pushes.enabled == false and
+  .allow_deletions.enabled == false
+' >/dev/null
 ```
 
 ## Required reviewers

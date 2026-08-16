@@ -99,9 +99,10 @@ selection wording.
 Do not start historical CON-05A directly. The CP01-CP09 sequence owns
 AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
 activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
-clean v0.1 legacy economic-path removal in that order. CP02 is complete on
-merge while all four actions remain unavailable. CP03 is split with executable
-CP03A/CP03B contracts are merged; later CP04-CP09 children remain
+clean v0.1 legacy economic-path removal in that order. CP02 is complete while
+all four actions remain unavailable. CP03 is split: the CP03A implementation is
+merged, and the CP03B implementation contract is complete but its implementation
+remains planned; later CP04-CP09 children remain
 non-executable until their current-main contracts are expanded.
 
 - WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.
@@ -114,8 +115,8 @@ non-executable until their current-main contracts are expanded.
   adapter-binding identity and lifecycle-version facts.
 - WS-ARCH-001-CP02 is merged with hidden, route-unreachable behavior,
   exact lifecycle history, and deny-default production composition.
-- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A and CP03B have executable
-  contracts are merged and are the next ordered bounded boundaries.
+- WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A is merged;
+  CP03B has a complete executable contract and its implementation remains planned.
 - WS-ARCH-001-CP03A is merged with exact target identity and owner
   eligibility while all four actions remain unavailable.
 - WS-ARCH-001-CP03B is planned with an executable implementation contract after

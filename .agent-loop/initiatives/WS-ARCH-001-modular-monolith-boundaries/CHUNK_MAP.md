@@ -14,7 +14,7 @@
 | `WS-ARCH-001-02G` | AUTH contributor preparation activation after the complete hidden path | L1 | Complete |
 | `WS-ARCH-001-02H` | AUTH human/fixed-service consumption activation | L1 | Complete; public route remains unchanged |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and complete legacy removal | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
-| `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planned; planning contract lands on merge |
+| `WS-ARCH-001-PLAN2` | Current-main reconciliation around canonical Submission-to-`allow_review` | L1 | Planning contract complete; implementation sequencing remains planned |
 | `WS-ARCH-001-PLAN3` | ContributionPolicy registration, behavior, activation, guide/task lineage and clean legacy-removal sequencing | L1 | Planned; planning correction only and no runtime |
 | `WS-ARCH-001-PLAN4` | Delivery-coupled technical-debt retirement policy and current-main baseline | L1 | Planned; planning only and no unrelated v0.1 delivery block |
 | `WS-ARCH-001-CP01` | Combined AUTH registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |

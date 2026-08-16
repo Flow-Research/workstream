@@ -101,8 +101,9 @@ to contribute.
 
 GitHub CI validates repository quality. CodeRabbit and internal agents
 supplement human review. A maintainer must explicitly approve the final pull
-request before it is merged. A new push invalidates affected internal evidence
-and stale GitHub approval. Branch protection requires an eligible human other
+request before it is merged, and the user must explicitly approve that specific
+pull request for merge. A new push invalidates affected internal evidence and
+stale GitHub approval. Branch protection requires an eligible human other
 than the latest pusher to approve the most recent reviewable push, and requires
 all review conversations to be resolved before merge.
 
