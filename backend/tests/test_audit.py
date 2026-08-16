@@ -213,6 +213,10 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE, ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+        ActionId.COMPENSATION_ADAPTER_BINDING_READ,
+        ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,
+        ActionId.COMPENSATION_ADAPTER_BINDING_SUSPEND,
+        ActionId.COMPENSATION_ADAPTER_BINDING_RESUME,
     }
     artifact_allowed = _authority_input(
         AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,

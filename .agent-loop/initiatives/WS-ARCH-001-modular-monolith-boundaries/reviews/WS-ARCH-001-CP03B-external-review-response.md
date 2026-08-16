@@ -11,6 +11,9 @@
   authorization test module had no semantic-lane assignment. It is now part of
   the shared AUTH foundation inventory, so every collected test remains owned
   exactly once under the lane partition rules.
+- The first complete shared-foundation execution then found one stale audit
+  parity assertion. Its closed expected active-action set now includes the four
+  CP03B actions, while the same test continues to reject every planned action.
 - CodeRabbit's fail-closed translation findings were valid. Malformed CON facts
   are now concealed at both mutation preparation and consumption, and failed
   persistence of mandatory AUTH evidence becomes the public unavailable error
