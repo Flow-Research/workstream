@@ -51,13 +51,13 @@
 - PLAN3 corrects PLAN2's first implementation dependency. CON-05A is not a
   valid direct start: missing AUTH registration/activation and hidden CON
   behavior must precede owner-separated guide/task lineage. CP01 is the
-  non-executable split parent; CP01A is complete on merge with its four actions
-  registered/unavailable, CP01B is complete on merge with five policy actions
-  registered/unavailable. CP02 is complete on merge with hidden CON behavior
+  non-executable split parent; CP01A is merged with its four actions
+  registered/unavailable, CP01B is merged with five policy actions
+  registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split with executable
-  CP03A/CP03B contracts complete on merge, while CP04-CP09 remain
+  CP03A/CP03B contracts are merged, while CP04-CP09 remain
   non-executable skeletons.
-- [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned on merge
+- [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
   operational: unrelated frozen debt cannot block delivery, new debt is
   prohibited, directly touched debt must shrink, and unsafe adjacent debt is
@@ -71,20 +71,20 @@
 - WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.
 - WS-ARCH-001-CP01 is a planned split and non-executable. Current-main discovery proved
   adapter binding and ContributionPolicy are distinct resource/action families.
-- WS-ARCH-001-CP01A is complete on merge: exact adapter-binding identifiers,
+- WS-ARCH-001-CP01A is merged: exact adapter-binding identifiers,
   mappings, typed facts, and digests are registered while unavailable.
-- WS-ARCH-001-CP01B is complete on merge: exact unavailable
+- WS-ARCH-001-CP01B is merged: exact unavailable
   ContributionPolicy registration.
-- WS-ARCH-001-CP01C is complete on merge: unavailable adapter-binding facts
+- WS-ARCH-001-CP01C is merged: unavailable adapter-binding facts
   match exact binding identity and lifecycle generation without a unit alias.
-- WS-ARCH-001-CP02 is complete on merge: hidden, route-unreachable
+- WS-ARCH-001-CP02 is merged: hidden, route-unreachable
   adapter-binding behavior while its AUTH actions remain unavailable.
 - WS-ARCH-001-CP03 is a planned split/non-executable parent. CP03A implements
   the closed compensation-adapter target identity and PROJECTS/ACTORS owner
   eligibility while actions remain unavailable. CP03B's executable contract
   specifies and requires proof of exact Finance Authority activation without
   adding a route or adjacent compensation authority.
-- WS-ARCH-001-CP03A is complete on merge: the closed target-only identity and
+- WS-ARCH-001-CP03A is merged through PR #340: the closed target-only identity and
   PROJECTS/ACTORS owner eligibility are implemented while all binding actions
   remain unavailable.
 - WS-ARCH-001-CP03B is planned with an executable implementation contract after

@@ -30,7 +30,7 @@ sequence.
 | `WS-ARCH-001-CP01C` | Adapter-binding fact correction | L1 | Complete on merge; unavailable facts match binding identity and lifecycle generation |
 | `WS-ARCH-001-CP03` | Adapter-binding activation parent | L1 | Split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Complete on merge; actions remain unavailable |
-| `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract complete on merge; follows CP03A |
+| `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract is complete; follows merged CP03A |
 | `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |
 | `WS-AUTH-001-01` | Adopt Authorization Baseline And Repository Contracts | L1 | Merged through PR #93 as `772af1d` |
@@ -107,7 +107,7 @@ feature manifest exists and then uses the ordinary bounded contribution loop.
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
 | `WS-XINT-002-06A` | Pre-Submit Materialization Activation | L1 | Merged through PR #293; ART-04C1 is its next ART consumer |
 | `WS-XINT-002-05A` | Historical Submission Bundle Preparation Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02G requires 02A-02F |
-| `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H is complete on merge |
+| `WS-XINT-002-05B` | Historical Submission Binding Activation | L1 | Superseded/non-executable; replacement WS-ARCH-001-02H is merged |
 | `WS-XINT-002-06B` | Historical Post-Submit Materialization And Checker Output Activation | L1 | Superseded/non-executable; WS-ARCH-001 PLAN2/04A-04E owns the current split |
 | `WS-AUTH-001-REV-05` | REV 05 Queue Read Activation | L1 | Feature-gated |
 | `WS-AUTH-001-REV-06` | REV 06 Claim Lease And Expiry Activation | L1 | Feature/service-gated |

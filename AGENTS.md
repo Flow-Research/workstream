@@ -81,8 +81,10 @@ definition or ownership boundary of Workstream.
 - One implementation chunk equals one pull request. The chunk contract must
   declare its outcome on merge, and the same pull request must update the
   initiative chunk map, initiative status, and `.agent-loop/CURRENT_STATE.md`
-  to that final state. Do not use `in review`, `pending review`, or `ready for
-  review` as the state that will land on `main`.
+  to that final state. Projection lines must say `Complete`, `Planned`,
+  `Cancelled`, or `Superseded` as applicable; do not land temporal wording such
+  as `complete on merge`, `in review`, `pending review`, or `ready for review`
+  on `main`.
 - Do not begin the next chunk automatically after finishing the current chunk.
 - Use internal sub-agent review proportionate to risk. Security, authorization,
   payment, architecture, workflow, and broad product changes require focused
@@ -94,6 +96,10 @@ definition or ownership boundary of Workstream.
   it ready for merge until applicable internal reviewers have run and valid
   findings are addressed or documented.
 - Do not merge a PR unless the user explicitly approves that specific PR for merge.
+- Any push invalidates affected internal evidence and stale GitHub approval.
+  Fetch the PR head again after all checks and reviews finish. The most recent
+  reviewable push requires approval from an eligible human other than its
+  pusher, and every review conversation must be resolved before merge.
 - New or materially changed backend subsystems must remain at or above 90
   percent test coverage. Until the dedicated global-coverage work reaches 90
   percent, CI must also preserve the current repository-wide 78 percent

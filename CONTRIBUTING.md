@@ -81,8 +81,10 @@ active queue or approval gate.
 - For a chunk PR, declare `Outcome on merge` in the chunk contract and update
   its initiative `CHUNK_MAP.md`, initiative `STATUS.md`, and
   `.agent-loop/CURRENT_STATE.md` to the state that will exist after human
-  merge. Code and durable state land together; there is no second pre-merge or
-  post-merge memory PR.
+  merge. Write that projection as the final durable value (`Complete`,
+  `Planned`, `Cancelled`, or `Superseded`), never as temporal `on merge`
+  wording. Code and durable state land together; there is no second pre-merge
+  or post-merge memory PR.
 
 Run the same atomic check locally before pushing:
 
@@ -99,7 +101,10 @@ to contribute.
 
 GitHub CI validates repository quality. CodeRabbit and internal agents
 supplement human review. A maintainer must explicitly approve the final pull
-request before it is merged.
+request before it is merged. A new push invalidates affected internal evidence
+and stale GitHub approval. Branch protection requires an eligible human other
+than the latest pusher to approve the most recent reviewable push, and requires
+all review conversations to be resolved before merge.
 
 Different initiatives may proceed concurrently in separate branches or
 worktrees. If another pull request changes the base, inspect the new delta and
