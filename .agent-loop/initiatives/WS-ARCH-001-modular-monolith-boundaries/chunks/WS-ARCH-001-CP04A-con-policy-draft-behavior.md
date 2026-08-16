@@ -14,17 +14,23 @@ planned/unavailable.
   are merged.
 - Current main still contains the discovered structural policy graph and guards.
 - Risk: L1.
-- Outcome: `complete` when the implementation PR merges.
+
+## Merge state
+
+- Outcome on merge: `planned`
+- The later CP04A implementation PR changes this outcome to `complete`.
 
 ## Allowed files
 
 ```text
 backend/app/modules/contributions/api/**
 backend/app/modules/contributions/{schemas.py,models.py,repository.py,service.py}
-backend/app/modules/compensation/api/** (instrument type and locked unit/binding facts only)
-backend/app/modules/projects/api/** (policy-project eligibility contract only)
-backend/app/adapters/contributions/** (same-owner composition only)
-backend/app/adapters/projects/** (PROJECTS-owned policy-project eligibility only)
+backend/app/modules/compensation/api/{__init__.py,policy_bindings.py} (instrument type and locked binding facts only)
+backend/app/modules/compensation/policy_binding_service.py (owner implementation only)
+backend/app/modules/projects/api/{__init__.py,contribution_policy.py} (policy-project eligibility contract only)
+backend/app/modules/projects/contribution_policy.py (owner implementation only)
+backend/app/adapters/contributions/__init__.py (same-owner composition only)
+backend/app/adapters/projects/__init__.py (PROJECTS-owned policy-project eligibility only)
 backend/app/db/models.py (metadata parity only if required)
 backend/alembic/versions/<next-current-head-policy-operation-migration>.py
 backend/alembic/env.py (head parity only)
@@ -63,9 +69,11 @@ commits inside repositories/services or serialized prepared handles
 - Add immutable requests/results/views, stable concealed errors, and Protocol
   ports under `app.modules.contributions.api`; expose no ORM/session/repository.
 - Expose COMPENSATION's closed instrument enum and a transaction-held lookup
-  for exact active same-project unit/binding facts through its public API;
-  remove the exact private schemas import from CONTRIBUTIONS. COMPENSATION
-  remains the only owner of adapter-binding and instrument lifecycle truth.
+  for exact active same-project adapter-binding facts through its public API
+  and owner-side service; remove the exact private schemas import from
+  CONTRIBUTIONS. COMPENSATION remains the only owner of adapter-binding and
+  instrument lifecycle truth. `ProjectCompensationUnit` stays
+  CONTRIBUTIONS-owned and is locked by the policy repository.
 - Add and consume a PROJECTS-owned public transaction-held policy-project
   eligibility port. CONTRIBUTIONS decides when policy lifecycle requires that
   fence; PROJECTS only validates and retains its own eligibility state.
@@ -78,17 +86,18 @@ commits inside repositories/services or serialized prepared handles
   graph: one `accepted_submission` and one `completed_review` rule; unpaid has
   zero definitions; compensated has one or two unique money/project-points
   definitions with canonical positive quantities.
-- Update consumes the COMPENSATION public lookup to validate same-project
-  active unit and adapter-binding identities for early failure; CP04B
-  revalidates them under publication locks. It never imports COMPENSATION
-  models, repository, service, or private schemas.
+- Update locks its CONTRIBUTIONS-owned same-project active units and consumes
+  the COMPENSATION public lookup for active adapter-binding identities as early
+  validation; CP04B revalidates both under publication locks. It never imports
+  COMPENSATION models, repository, service, or private schemas.
 - Every mutation carries `operation_id` and `request_digest`, acquires a
   transaction advisory fence before product locks/AUTH, and persists one
   immutable recoverable event.
 - Event types are exactly `draft_created`, `draft_updated`, `published`, and
   `retired`. Each event stores `event_id`, `operation_id`, `request_digest`,
   `event_type`, `actor_profile_id`, `project_id`, `policy_id`, `version_id`,
-  `version_number`, `from_policy_status`, `to_policy_status`,
+  `version_number`, nullable `prior_current_version_id`, nullable
+  `prior_current_version_number`, `from_policy_status`, `to_policy_status`,
   `from_version_status`, `to_version_status`, and database-owned `occurred_at`.
   The immutable mutation result contains the same fields, so recovery never
   reconstructs success from mutable current state.
@@ -130,8 +139,9 @@ partial graph, event, reusable authority, or allowed evidence.
 ## Verification
 
 ```bash
-cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/projects/api app/adapters/contributions app/adapters/projects tests/contributions
+cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/modules/projects/api app/modules/projects/contribution_policy.py app/adapters/contributions app/adapters/projects tests/contributions
 cd backend && .venv/bin/python -m pytest -q tests/contributions tests/architecture/test_module_boundaries.py tests/test_alembic.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.policy_binding_service --cov-report=term-missing --cov-fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 python3 scripts/check_active_state_projections.py
@@ -140,7 +150,8 @@ python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
-Hosted CI owns complete PostgreSQL, semantic-lane, and aggregate coverage proof.
+Hosted CI owns complete PostgreSQL, semantic-lane, and repository aggregate
+coverage proof; the focused command above owns the changed CP04A surface.
 
 ## Required reviewers
 

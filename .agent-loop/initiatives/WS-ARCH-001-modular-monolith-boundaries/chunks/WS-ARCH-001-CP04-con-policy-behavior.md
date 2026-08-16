@@ -15,4 +15,5 @@ activates only the five registered actions after both children merge.
 
 ## Merge state
 
-- Outcome: split parent; no implementation targets this parent directly.
+- Outcome on merge: `planned`
+- This is a split parent; no implementation targets it directly.

@@ -10,7 +10,12 @@ actions unavailable and add no route or downstream product behavior.
 
 - CP04A is merged and current-main discovery is replayed.
 - Risk: L1.
-- Outcome: `complete` when the implementation PR merges; CP05 becomes next.
+
+## Merge state
+
+- Outcome on merge: `planned`
+- The later CP04B implementation PR changes this outcome to `complete`; CP05
+  then becomes next.
 
 ## Allowed files
 
@@ -58,6 +63,12 @@ caller-supplied publication truth, compatibility paths, service commits or seria
   currently published, retire that prior version in the same transaction with
   exact actor/time attribution before installing the new current version.
   Prior content and every downstream frozen reference remain immutable.
+- One `published` operation event represents that entire atomic replacement.
+  Its nullable `prior_current_version_id` and
+  `prior_current_version_number` identify the automatically retired version;
+  no second `retired` operation event is emitted. An explicit retire command
+  emits one `retired` event. Recovery returns only these immutable event facts,
+  never mutable aggregate state.
 - Serialize same-project publication so the one-active-policy race has a
   deterministic winner before AUTH consumption.
 
@@ -89,13 +100,27 @@ caller-supplied publication truth, compatibility paths, service commits or seria
   debt growth; focused coverage remains at least 90%.
 - [ ] CP05 alone becomes the next activation boundary.
 
-## Verification and reviewers
+## Verification
 
-Use CP04A's boundary/state commands plus focused publication, retirement,
-concurrency, PostgreSQL guard, and recovery tests. Hosted CI owns complete lanes
-and aggregate coverage. Required reviewers: architecture, security/auth,
-product/operations, QA, test-delta, CI integrity, senior engineering,
-reuse/dedup, and documentation.
+```bash
+cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions
+cd backend && .venv/bin/python -m pytest -q tests/contributions tests/architecture/test_module_boundaries.py tests/test_alembic.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov-report=term-missing --cov-fail-under=90
+cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
+cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
+python3 scripts/check_active_state_projections.py
+python3 scripts/check_chunk_state_sync.py --base-ref <base-sha>
+python3 scripts/check_markdown_links.py
+git diff --check
+```
+
+Hosted CI owns complete publication, retirement, concurrency, PostgreSQL,
+semantic-lane, and repository aggregate coverage proof.
+
+## Required reviewers
+
+Architecture, security/auth, product/operations, QA, test-delta, CI integrity,
+senior engineering, reuse/dedup, and documentation.
 
 ## Human review focus and stop conditions
 

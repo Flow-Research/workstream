@@ -125,6 +125,8 @@ remain non-executable until their current-main contracts are expanded.
   activated.
 - WS-ARCH-001-CP04 is a planned non-executable parent. CP04A and CP04B have
   executable contracts; CP04A is the next implementation boundary.
+- WS-ARCH-001-CP04A is planned and is the next hidden policy-draft boundary.
+- WS-ARCH-001-CP04B is planned after CP04A for hidden publication/retirement.
 - WS-ARCH-001-CP05 is proposed and non-executable.
 - WS-ARCH-001-CP06 is proposed and non-executable.
 - WS-ARCH-001-CP07 is proposed and non-executable.
