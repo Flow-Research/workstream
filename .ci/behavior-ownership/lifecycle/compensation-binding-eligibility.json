@@ -1,0 +1,18 @@
+{
+  "behavior_id": "projects.compensation.binding.eligibility",
+  "boundaries": ["postgresql", "lock"],
+  "callables": [
+    "app.modules.projects.compensation_binding.ProjectCompensationBindingEligibility.__init__",
+    "app.modules.projects.compensation_binding.ProjectCompensationBindingEligibility.lock_compensation_binding_project"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-ARCH-001-CP03A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/compensation_binding.py",
+  "tests": [
+    "backend/tests/projects/test_compensation_binding_eligibility.py::test_non_retired_project_is_eligible",
+    "backend/tests/projects/test_compensation_binding_eligibility.py::test_absent_or_retired_project_is_concealed"
+  ]
+}

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum, unique
 from types import MappingProxyType
 
-from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
+from app.modules.actors.api import SERVICE_IDENTITIES, ServiceIdentity
 
 
 @unique
@@ -1002,6 +1002,10 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
 }
 
+ACTION_BEARING_SERVICE_IDENTITIES = SERVICE_IDENTITIES - {
+    ServiceIdentity.COMPENSATION_ADAPTER
+}
+
 _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
     (identity, action)
     for identity, action in (
@@ -1151,14 +1155,11 @@ def _index_service_actions(
             ActionOwner.AUTH_REV_12,
         ),
     }
-    if set(rows) != SERVICE_IDENTITIES:
+    if set(rows) != ACTION_BEARING_SERVICE_IDENTITIES:
         raise RuntimeError("service action matrix identity mismatch")
     if any(not actions for actions in rows.values()):
         raise RuntimeError("service action matrix row mismatch")
-    if (
-        frozenset((i, a) for i, actions in rows.items() for a in actions)
-        != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS
-    ):
+    if frozenset((i, a) for i, actions in rows.items() for a in actions) != _EXPECTED_SERVICE_ACTION_MEMBERSHIPS:
         raise RuntimeError("service action matrix row mismatch")
     if not FUTURE_INTENT_REQUIRED_ACTIONS.isdisjoint(
         action for actions in rows.values() for action in actions

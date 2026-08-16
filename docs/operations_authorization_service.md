@@ -651,12 +651,14 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has fourteen fixed-service identities and twenty-three
-matrix memberships: seven ART identities, project setup, and six exact REV
+The closed registry now has fifteen fixed-service identities: fourteen
+action-bearing identities with twenty-three matrix memberships, plus the
+target-only `workstream.compensation.adapter` identity. The action-bearing
+set comprises seven ART identities, project setup, and six exact REV
 identities. Missing provisioned rows deny without stopping the application.
-The REV actions remain unavailable, so registry membership alone grants no
-authority. Do not create a shared review service or a database service-grant
-table.
+The target-only identity has no matrix membership, and the REV actions remain
+unavailable, so registry membership alone grants no authority. Do not create a
+shared review service or a database service-grant table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
 `workstream.project.setup`, now with exactly five static memberships:
@@ -750,6 +752,12 @@ a service actor (`null` for a human). The link response includes only its local
 IDs, subject kind, lifecycle state, and timestamps. Neither response includes
 issuer, subject, contact email, reason, lifecycle actor, token/claim, grant,
 assignment, or service-action-matrix data.
+
+Controlled provisioning may create the target-only
+`workstream.compensation.adapter` profile and service identity link. Operators
+must not add a service-action matrix row for it: it is a binding target, not an
+action-bearing service principal. CP03A leaves all adapter-binding actions unavailable; CP03B
+is the separate Finance Authority activation boundary.
 
 The kernel locks and revalidates the human caller profile, exact link, and
 matched system grant before target lookup and holds those locks through

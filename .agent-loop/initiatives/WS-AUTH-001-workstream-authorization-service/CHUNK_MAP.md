@@ -29,7 +29,7 @@ sequence.
 | `WS-ARCH-001-CP01B` | ContributionPolicy unavailable registration | L1 | Complete on merge; excludes binding behavior, evaluator, and activation |
 | `WS-ARCH-001-CP01C` | Adapter-binding fact correction | L1 | Complete on merge; unavailable facts match binding identity and lifecycle generation |
 | `WS-ARCH-001-CP03` | Adapter-binding activation parent | L1 | Split into CP03A/CP03B; non-executable |
-| `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Executable contract complete on merge; actions remain unavailable |
+| `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Complete on merge; actions remain unavailable |
 | `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract complete on merge; follows CP03A |
 | `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |

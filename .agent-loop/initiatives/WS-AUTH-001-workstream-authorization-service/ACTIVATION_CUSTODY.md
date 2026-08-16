@@ -68,15 +68,19 @@ gated `artifact.verification_job.retry`
 remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
-reconciles PostgreSQL parity through migration `0036`. The current catalogue
-has 73 PermissionIds, 111 ActionIds, 57 active actions, and 54 planned actions,
-with fourteen fixed-service identities and twenty-two matrix memberships.
+reconciles PostgreSQL parity through migration `0036`. On the CP03A branch, the
+current catalogue has 73 PermissionIds, 111 ActionIds, 57 active actions, and
+54 planned actions. Its closed registry contains fifteen service identities:
+fourteen action-bearing identities with twenty-three matrix memberships plus
+the target-only `workstream.compensation.adapter` identity.
 CP01A contributes four planned/unavailable adapter-binding actions and CP01B
 contributes five planned/unavailable ContributionPolicy actions; neither
 changes fixed-service identity or matrix membership. CP01C corrects only the
 unavailable adapter-binding resource facts before CP02. It does not change
 catalogue custody, action identifiers, fixed-service identity, availability,
-or matrix membership.
+or matrix membership. CP03A establishes that target-only identity and owner
+eligibility without a service-action matrix row; all four binding actions
+remain unavailable until CP03B.
 
 ## REV custody transfer
 

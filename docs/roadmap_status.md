@@ -137,8 +137,8 @@ review. Their presence does not change the implemented-on-`main` list above.
    authority while keeping all nine actions unavailable. CP01C corrects the
    unavailable binding facts before CP02. CP02 is complete on merge with hidden,
    route-unreachable adapter-binding behavior and immutable lifecycle history.
-   CP03 is split with executable CP03A/CP03B contracts complete on merge. The
-   remaining order is CP03A target identity/owner eligibility, CP03B activation
+   CP03A is complete on merge with the target identity and owner eligibility
+   while all four actions remain unavailable. The remaining order is CP03B activation
    for an authenticated human Finance Authority covering the exact project,
    CP04 hidden ContributionPolicy behavior,
    then CP05 ContributionPolicy activation;

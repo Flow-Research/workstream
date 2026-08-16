@@ -53,7 +53,7 @@ from app.modules.audit.service import AuditService
 from app.modules.actors.service import ActorService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.repository import ActorRepository
-from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.models import (
     AdminRoleGrant,
     AuthorityIdempotencyRecord,
@@ -3542,11 +3542,10 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                 pause_kind = None
 
 
-async def test_xint003_02c_provisions_all_six_review_service_identities(
+async def test_controlled_endpoint_provisions_review_and_adapter_target_identities(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
 ) -> None:
-    """The existing controlled endpoint provisions every exact REV principal."""
     private_key, jwk = rsa_signing_material
     settings = production_verifier_settings(database_url=auth_database_env)
     app = create_app(settings)
@@ -3563,8 +3562,8 @@ async def test_xint003_02c_provisions_all_six_review_service_identities(
         ServiceIdentity.REVIEW_RECONCILIATION,
         ServiceIdentity.REVIEW_ARTIFACT_REFERENCE_RECONCILIATION,
         ServiceIdentity.REVIEW_PROJECTION,
+        ServiceIdentity.COMPENSATION_ADAPTER,
     )
-
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:

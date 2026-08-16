@@ -75,10 +75,12 @@ Required concepts:
 
 A profile status is a guard, not a grant. Active humans receive only self
 profile capability until an administrative or exact-project grant exists.
-For a service, the profile is the stable local principal. Its immutable
-`service_identity` selects one closed typed service-action matrix row; it is
-never inferred from display data, token claims, issuer, or subject. Profile ID,
-service identity, and external credential binding remain separate concepts.
+For a service, the profile is the stable local identity. Its immutable
+`service_identity` is either action-bearing with one closed typed service-action
+matrix row or target-only with no matrix row and no executable authority. The
+identity kind is never inferred from display data, token claims, issuer, or
+subject. Profile ID, service identity, and external credential binding remain
+separate concepts.
 
 ### ActorIdentityLink
 
@@ -276,7 +278,7 @@ counts, mappings, owners, and availability remain unchanged.
 WS-ARCH-001-CP03 is split after merged CP02 hidden behavior. CP03A adds only
 the closed target identity `workstream.compensation.adapter` and real
 PROJECTS/ACTORS eligibility adapters; it adds no service-matrix membership and
-keeps all four binding actions unavailable. CP03B then installs the exact
+is complete on merge while keeping all four binding actions unavailable. CP03B then installs the exact
 read/PREP adapter for an authenticated human Finance Authority covering the
 exact project and activates only those four actions.
 AUTH-10A added five project-role read/manage rows;

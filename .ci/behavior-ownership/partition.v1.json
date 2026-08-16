@@ -142,6 +142,14 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/actors/api/service_identities.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/actors/compensation_adapter.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/actors/legacy_classification.py"
     },
     {
@@ -602,6 +610,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/compensation_binding.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/create_repository.py"
     },
     {
@@ -873,7 +885,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "d6a735d82f7a8437aabee54badc111f2a5bb8e0e27fdd266a078d4325cf0779c",
+  "authority_digest": "c66c2a45108fd07fc3041cc8c14e67dd8d2bf7959dca1cad64ced5af536a7d9a",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

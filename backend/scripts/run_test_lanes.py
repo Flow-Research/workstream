@@ -110,6 +110,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_compensation.py",
     "tests/compensation/test_adapter_binding_api.py",
     "tests/compensation/test_adapter_binding_authorization_failures.py",
+    "tests/compensation/test_adapter_binding_authorization_integration.py",
     "tests/compensation/test_adapter_binding_database_guards.py",
     "tests/compensation/test_adapter_binding_partition.py",
     "tests/compensation/test_adapter_binding_owner_fences.py",
@@ -133,6 +134,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_guide_pptx.py",
     "tests/test_local_artifact_store.py",
     "tests/test_merge_test_lane_evidence.py",
+    "tests/migrations/test_compensation_adapter_identity.py",
     "tests/test_mutation_policy.py",
     "tests/test_s3_artifact_store.py",
     "tests/test_submission_archive.py",
@@ -140,6 +142,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_submission_manifest.py",
     "tests/test_test_lane_evidence.py",
     "tests/test_actors.py",
+    "tests/actors/test_compensation_adapter_eligibility.py",
     "tests/test_api_rate_controls.py",
     "tests/test_audit.py",
     "tests/test_auth.py",
@@ -165,6 +168,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_outbox.py",
     "tests/test_policy_identity_lineage.py",
     "tests/test_project_policy_mutations.py",
+    "tests/projects/test_compensation_binding_eligibility.py",
     "tests/test_review_authorization_contracts.py",
 )
 

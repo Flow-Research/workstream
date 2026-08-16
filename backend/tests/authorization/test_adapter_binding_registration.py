@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -24,6 +26,17 @@ from app.modules.authorization.catalogue import (
     PermissionId,
     resolve_executable_action,
 )
+from app.modules.actors.api import ServiceIdentity
+from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.runtime import (
+    ActorKind,
+    ActorStatus,
+    AuthorizationDenialCode,
+    AuthorizationDenied,
+    IdentityLinkStatus,
+    ProjectReadResourceContext,
+    ServiceAuthorizationContext,
+)
 
 _ACTIONS = {
     ActionId.COMPENSATION_ADAPTER_BINDING_READ,
@@ -44,6 +57,35 @@ def test_cp01a_registers_only_exact_planned_binding_actions() -> None:
 
     assert "compensation.adapter_binding.retire" not in {item.value for item in ActionId}
     assert all(_ACTIONS.isdisjoint(actions) for actions in SERVICE_ACTIONS_BY_IDENTITY.values())
+
+
+@pytest.mark.asyncio
+async def test_target_only_identity_denies_without_matrix_key_error() -> None:
+    actor_id, project_id = uuid4(), uuid4()
+    context = ServiceAuthorizationContext(
+        actor_profile_id=actor_id,
+        actor_kind=ActorKind.SERVICE,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        service_identity=ServiceIdentity.COMPENSATION_ADAPTER,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    service = AuthorizationService(object(), context)  # type: ignore[arg-type]
+    service._audit = SimpleNamespace(add_authority_event=AsyncMock())  # type: ignore[assignment]
+    resource = ProjectReadResourceContext(
+        resource_type="project",
+        resource_id=project_id,
+        scope_project_id=project_id,
+        project_exists=True,
+        project_status="active",
+    )
+
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.PROJECT_READ, resource)
+
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
 
 
 def test_cp01c_public_facts_are_immutable_and_validate_lifecycle_state() -> None:
