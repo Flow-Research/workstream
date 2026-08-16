@@ -139,8 +139,9 @@ review. Their presence does not change the implemented-on-`main` list above.
    route-unreachable adapter-binding behavior and immutable lifecycle history.
    CP03A is complete with the target identity and owner eligibility.
    CP03B is complete with exact hidden Finance Authority read/PREP
-   activation for those four actions. The remaining order is CP04 hidden ContributionPolicy behavior,
-   then CP05 ContributionPolicy activation;
+   activation for those four actions. CP04 is a non-executable split parent.
+   The remaining order is CP04A hidden read/create/update-draft behavior,
+   CP04B hidden publish/retire behavior, then CP05 ContributionPolicy activation;
    expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and
    lock it on each task before that task becomes claimable. TaskAssignment

@@ -22,7 +22,7 @@ actions unavailable and add no route or downstream product behavior.
 ```text
 backend/app/modules/contributions/api/**
 backend/app/modules/contributions/{models.py,repository.py,service.py}
-backend/app/adapters/contributions/**
+backend/app/adapters/contributions/__init__.py
 backend/alembic/versions/<next-current-head-policy-lifecycle-migration>.py (only if schema proof requires correction)
 backend/alembic/env.py (head parity only if migration exists)
 backend/tests/contributions/**
@@ -66,6 +66,8 @@ caller-supplied publication truth, compatibility paths, service commits or seria
 - One `published` operation event represents that entire atomic replacement.
   Its nullable `prior_current_version_id` and
   `prior_current_version_number` identify the automatically retired version;
+  the event's `actor_profile_id` and database-owned `occurred_at` are also the
+  exact `retired_by` and `retired_at` attribution stored on that prior version;
   no second `retired` operation event is emitted. An explicit retire command
   emits one `retired` event. Recovery returns only these immutable event facts,
   never mutable aggregate state.
