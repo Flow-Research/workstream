@@ -369,3 +369,26 @@ adapter-binding registration. CON validates policy facts; PROJECTS owns guide
 writes; CP08 supplies TASK-owned persistence/public facts; ARCH-03B alone owns
 Task readiness, claim, assignment, and Submission command writes; REV later
 copies only the immutable Submission policy stamp.
+
+CP04 is split at the irreversible lifecycle boundary:
+
+```text
+CP04A public API + read/create/update-draft + mutation recovery foundation
+-> CP04B publish/retire + immutable lifecycle proof
+-> CP05 exact AUTH activation
+```
+
+Both children remain hidden, route-unreachable, and production deny-default
+because all five actions stay unavailable until CP05. Every mutation uses one
+ordering:
+
+```text
+root transaction -> request digest -> operation fence -> recovery check
+-> owner and eligibility locks -> prepare -> consume -> close in finally
+-> product mutation + immutable event -> flush without commit
+```
+
+No policy row is staged before successful consumption and closure. Publish
+recomputes the complete graph digest after locking server-owned rules,
+definitions, units, and bindings. Retire disables future selection only and
+never rewrites frozen downstream lineage.

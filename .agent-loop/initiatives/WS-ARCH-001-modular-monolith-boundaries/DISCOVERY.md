@@ -202,3 +202,52 @@ remain non-executable until refreshed against current `main`.
   repository evidence requiring a compatibility alias, deployed-history
   backfill, or guessed legacy-row conversion.
 - No open pull request currently owns this sequence.
+
+## CP04 current-main discovery after CP03B
+
+Observations:
+
+- Policy persistence is owned by `app.modules.contributions`, not the
+  adapter-binding `app.modules.compensation` module. The existing policy,
+  version, rule, and award-definition ORM graph has no public contributions
+  API, repository, or lifecycle service.
+- Database guards already enforce complete two-rule publication, explicit
+  unpaid/compensated shapes, immutable published/retired content,
+  project/unit/binding ownership, exact numeric bounds, and one active policy
+  per project. Existing tests manipulate ORM rows directly; they do not prove
+  application commands, authorization ordering, idempotent recovery, or
+  concealed cross-project denial.
+- CP01B registered exactly five typed AUTH actions and fact digests: read,
+  create draft, update draft, publish, and retire. They remain unavailable; no
+  additional policy action or permission is required.
+- `contributions/schemas.py` imports the private
+  `compensation.schemas.CompensationInstrumentType`. CP04 touches this edge and
+  must expose the closed enum through COMPENSATION's public API, then remove the
+  private import without transferring behavior ownership.
+- No durable policy mutation-operation reservation or immutable lifecycle event
+  currently supports unknown-commit recovery. Final-row uniqueness alone
+  cannot stop concurrent requests from both consuming authorization.
+
+Resolved design:
+
+- CP04 is a non-executable parent split into CP04A and CP04B. CP04A owns the
+  public policy API, read/create/update-draft behavior, and shared durable
+  operation/event foundation. CP04B owns publish and retire.
+- A project has at most one open draft version. Draft creation creates a new
+  aggregate/version when none is reusable, or the next version on the current
+  non-retired aggregate. Exact duplicate recovery returns the immutable result
+  only after current read authorization.
+- Draft update replaces the complete two-rule graph atomically. It never
+  patches published content and never creates ContributionRecords or awards.
+- Publish locks the aggregate, version, rules, definitions, units, and adapter
+  bindings; recomputes canonical digest/binding facts from server-owned rows;
+  consumes/closes PREP before mutation; and makes the exact version current.
+- Retire targets the exact current published version and prevents future
+  selection without rewriting any frozen downstream history.
+
+Implementation-time unknowns:
+
+- the next Alembic revision identifier;
+- the exact boundary/structural debt entries on then-current main;
+- whether existing baseline guards need a narrow correction in addition to the
+  required operation/event persistence.

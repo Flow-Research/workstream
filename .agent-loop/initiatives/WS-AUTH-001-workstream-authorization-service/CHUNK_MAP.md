@@ -18,7 +18,7 @@ may proceed concurrently; open pull requests show transient ownership.
 ## Chunks
 
 `WS-ARCH-001/CHUNK_MAP.md` owns the ordered cross-module sequence
-`WS-ARCH-001-CP01A -> CP01B -> CP01C -> CP02 -> CP03A -> CP03B -> CP04 -> CP05`; the AUTH entries below
+`WS-ARCH-001-CP01A -> CP01B -> CP01C -> CP02 -> CP03A -> CP03B -> CP04A -> CP04B -> CP05`; the AUTH entries below
 project only AUTH-owned registration and activation responsibilities from that
 sequence.
 
@@ -31,7 +31,7 @@ sequence.
 | `WS-ARCH-001-CP03` | Adapter-binding activation parent | L1 | Split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Merged through PR #340; actions remain unavailable |
 | `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Complete; four exact hidden actions active only for covered human Finance Authority |
-| `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
+| `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04A/CP04B hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |
 | `WS-AUTH-001-01` | Adopt Authorization Baseline And Repository Contracts | L1 | Merged through PR #93 as `772af1d` |
 | `WS-AUTH-001-02` | Verified Issuer Token And JWKS Boundary | L1 | Merged through PR #107 as `060b780` |

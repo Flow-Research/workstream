@@ -119,8 +119,7 @@ CP08/ARCH-03B replacement path.
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. Prepare CP04's executable hidden
-ContributionPolicy behavior contract. CP03B keeps adapter-binding behavior
-hidden and route-unreachable while activating only its four covered Finance
-Authority actions.
+participant after REV's earlier gates merge. Implement CP04A's hidden
+ContributionPolicy read/create/update-draft behavior, then CP04B's hidden
+publish/retire behavior. All five policy actions remain unavailable until CP05.
 Open pull requests determine transient CON work.

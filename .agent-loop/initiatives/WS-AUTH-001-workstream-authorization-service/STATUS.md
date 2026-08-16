@@ -50,7 +50,7 @@ not current start requirements.
   CP03A is merged through PR #340 with only the target identity and owner
   eligibility while actions remain unavailable; CP03B is complete and
   activates only CP02's four exact Finance Authority boundaries. CP05 later activates
-  only CP04's merged hidden policy behavior. Fulfillment callback authority
+  only CP04A/CP04B's merged hidden policy behavior. Fulfillment callback authority
   remains separate and cannot be bundled into adapter-binding registration.
 
 Open pull requests are the transient-work view. This status page does not name
