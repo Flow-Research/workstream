@@ -25,11 +25,11 @@ sequence.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-ARCH-001-CP01` | Combined registration planning parent | L1 | Planned split into CP01A/CP01B; non-executable |
-| `WS-ARCH-001-CP01A` | Adapter-binding unavailable registration | L1 | Complete on merge; excludes retirement, callback/fulfillment, identity, evaluator, and activation |
-| `WS-ARCH-001-CP01B` | ContributionPolicy unavailable registration | L1 | Complete on merge; excludes binding behavior, evaluator, and activation |
-| `WS-ARCH-001-CP01C` | Adapter-binding fact correction | L1 | Complete on merge; unavailable facts match binding identity and lifecycle generation |
+| `WS-ARCH-001-CP01A` | Adapter-binding unavailable registration | L1 | Complete; excludes retirement, callback/fulfillment, identity, evaluator, and activation |
+| `WS-ARCH-001-CP01B` | ContributionPolicy unavailable registration | L1 | Complete; excludes binding behavior, evaluator, and activation |
+| `WS-ARCH-001-CP01C` | Adapter-binding fact correction | L1 | Complete; unavailable facts match binding identity and lifecycle generation |
 | `WS-ARCH-001-CP03` | Adapter-binding activation parent | L1 | Split into CP03A/CP03B; non-executable |
-| `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Complete on merge; actions remain unavailable |
+| `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility prerequisite | L1 | Merged through PR #340; actions remain unavailable |
 | `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | L1 | Executable contract is complete; follows merged CP03A |
 | `WS-ARCH-001-CP05` | Exact ContributionPolicy activation | L1 | Proposed after merged CP04 hidden proof |
 | `WS-AUTH-001-PLAN` | Authorization Service Planning | L0 | Merged through PR #91 as `ad6d644` |

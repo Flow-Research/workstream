@@ -30,6 +30,9 @@ AGENTS.md
 CONTRIBUTING.md
 scripts/check_chunk_state_sync.py
 scripts/test_chunk_state_sync.py
+scripts/check_active_state_projections.py
+scripts/test_active_state_projections.py
+.github/workflows/agent-gates.yml
 .agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/CHUNK_MAP.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/STATUS.md
@@ -88,6 +91,8 @@ post-merge state-repair automation
 ```bash
 python3 -m unittest -v scripts.test_chunk_state_sync scripts.test_lightweight_agent_gates
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
+python3 -m unittest -v scripts.test_active_state_projections
+python3 scripts/check_active_state_projections.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py

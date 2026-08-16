@@ -30,9 +30,9 @@
 - WS-ARCH-001-02F is complete. TASK owns the immutable
   admission-backed Submission command and the adapter owns one hidden root
   transaction; production remains deny-only and route-unreachable.
-- Complete on merge: WS-ARCH-001-02G AUTH contributor-preparation
+- Complete: WS-ARCH-001-02G AUTH contributor-preparation
   activation. Open pull requests show transient ownership.
-- Complete on merge: WS-ARCH-001-02H activates exact human Submission
+- Complete: WS-ARCH-001-02H activates exact human Submission
   consumption and fixed ART binding authority against the hidden atomic
   transaction. The public route remains unchanged.
 - WS-ARCH-001-PLAN2 is planned and lands as the current-main planning
