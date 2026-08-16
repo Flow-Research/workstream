@@ -47,6 +47,15 @@ def contract_failures(root: Path = ROOT) -> list[str]:
     reviewers = matrix_reviewers(matrix)
     if len(reviewers) != 9 or len(MATRIX_ROW.findall(matrix)) != 9:
         failures.append("matrix: expected nine unique reviewer contracts")
+    reviewer_pairs = list(reviewers.values())
+    agent_names = [agent_name for agent_name, _ in reviewer_pairs]
+    skill_names = [skill_name for _, skill_name in reviewer_pairs]
+    if len(set(agent_names)) != len(agent_names):
+        failures.append("matrix: custom agent paths must be one-to-one")
+    if len(set(skill_names)) != len(skill_names):
+        failures.append("matrix: repository skill paths must be one-to-one")
+    if len(set(reviewer_pairs)) != len(reviewer_pairs):
+        failures.append("matrix: agent and skill pairs must be one-to-one")
     cases_path = root / CASES_PATH.relative_to(ROOT)
     if cases_path.is_file():
         case_reviewers = {

@@ -80,6 +80,23 @@ class ReviewerContractTests(unittest.TestCase):
         finally:
             temporary.cleanup()
 
+    def test_matrix_agent_and_skill_pairs_are_one_to_one(self) -> None:
+        temporary, root = self.copied_contract_root()
+        try:
+            matrix = root / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            matrix.write_text(
+                matrix.read_text(encoding="utf-8")
+                .replace("security-reviewer.toml", "qa-reviewer.toml", 1)
+                .replace("security-review/SKILL.md", "qa-review/SKILL.md", 1),
+                encoding="utf-8",
+            )
+            failures = contract_failures(root)
+            self.assertIn("matrix: custom agent paths must be one-to-one", failures)
+            self.assertIn("matrix: repository skill paths must be one-to-one", failures)
+            self.assertIn("matrix: agent and skill pairs must be one-to-one", failures)
+        finally:
+            temporary.cleanup()
+
     def test_every_reviewer_has_every_blind_case_class(self) -> None:
         self.assertEqual(fixture_failures(self.cases, None), [])
         rows = self.cases["cases"]
