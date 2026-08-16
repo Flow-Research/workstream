@@ -301,7 +301,10 @@ adapter/evaluator modules. Existing catalogue, kernel, PREP, package-export,
 composition-root, and CON injection files receive exact behavioral assertions
 in the listed tests plus GitHub's repository-wide coverage gate; adding those
 large parity surfaces to one combined focused percentage would obscure rather
-than prove the new boundary. Sub-agent session closure is verified by the
+than prove the new boundary. The unchanged
+`app.modules.compensation.api.adapter_bindings` public contract and its existing
+API tests are explicitly outside this changed-module percentage; CP03B only
+injects its already-defined port. Sub-agent session closure is verified by the
 executing agent at completion, not by an invented repository command.
 
 ## Required reviewers

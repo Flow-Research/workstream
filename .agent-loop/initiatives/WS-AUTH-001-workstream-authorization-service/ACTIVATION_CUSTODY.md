@@ -68,7 +68,7 @@ gated `artifact.verification_job.retry`
 remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
-reconciles PostgreSQL parity through migration `0036`. On the CP03A branch, the
+reconciles PostgreSQL parity through migration `0036`. On the CP03B activation branch, the
 current catalogue has 73 PermissionIds, 111 ActionIds, 61 active actions, and
 50 planned actions. Its closed registry contains fifteen service identities:
 fourteen action-bearing identities with twenty-three matrix memberships plus

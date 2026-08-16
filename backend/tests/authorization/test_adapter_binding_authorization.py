@@ -15,9 +15,11 @@ from app.modules.authorization.api import (
     AdapterBindingMutationAuthorityFacts,
     AdapterBindingReadFacts,
     AuthorizationDenied,
+    AuthorizationUnavailable,
     PreparedAuthorizationInvalid,
     action_id,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.adapter_bindings import (
@@ -104,6 +106,13 @@ class _Evidence:
 
     async def add_authority_event(self, event: AuthorityAuditEventInput) -> None:
         self.events.append(event)
+
+
+class _UnavailableEvidence(_Evidence):
+    async def add_authority_event(self, event: AuthorityAuditEventInput) -> None:
+        """Simulate failure to persist mandatory authorization evidence."""
+        del event
+        raise SQLAlchemyError("evidence unavailable")
 
 
 def _adapter(
@@ -249,7 +258,17 @@ async def test_inactive_actor_or_identity_link_denies_before_authority_issuance(
 
 
 @pytest.mark.asyncio
-async def test_missing_or_stale_finance_grant_denies_every_binding_operation() -> None:
+@pytest.mark.parametrize(
+    "action",
+    (
+        "compensation.adapter_binding.create",
+        "compensation.adapter_binding.suspend",
+        "compensation.adapter_binding.resume",
+    ),
+)
+async def test_missing_or_stale_finance_grant_denies_every_binding_operation(
+    action: str,
+) -> None:
     project_id = uuid4()
     adapter, context, _session, evidence = _adapter(project_id, grant_available=False)
     with pytest.raises(AuthorizationDenied):
@@ -258,8 +277,33 @@ async def test_missing_or_stale_finance_grant_denies_every_binding_operation() -
             facts=AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=uuid4()),
         )
     with pytest.raises(AuthorizationDenied):
-        await adapter.prepare_mutation(_create_facts(context.actor_profile_id, project_id))
+        await adapter.prepare_mutation(
+            _facts_for_action(context.actor_profile_id, project_id, action)
+        )
     assert len(evidence.events) == 1 and not evidence.events[0].after_facts["allowed"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ("read", "consume"))
+async def test_evidence_failure_is_a_stable_unavailable_boundary(operation: str) -> None:
+    project_id = uuid4()
+    adapter, context, _session, _evidence = _adapter(project_id)
+    facts = _create_facts(context.actor_profile_id, project_id)
+    prepared = await adapter.prepare_mutation(facts) if operation == "consume" else None
+    adapter._authorization._audit = _UnavailableEvidence()  # type: ignore[assignment]
+
+    with pytest.raises(AuthorizationUnavailable, match="unavailable"):
+        if operation == "read":
+            await adapter.authorize_read(
+                actor_profile_id=context.actor_profile_id,
+                facts=AdapterBindingReadFacts(
+                    project_id=project_id,
+                    adapter_binding_id=uuid4(),
+                ),
+            )
+        else:
+            assert prepared is not None
+            await adapter.consume_mutation(prepared, facts)
 
 
 @pytest.mark.asyncio

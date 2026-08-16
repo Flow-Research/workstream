@@ -11,6 +11,7 @@ from app.modules.authorization.api import (
     AdapterBindingResumeFacts,
     AdapterBindingSuspendFacts,
     AuthorizationDenied as BoundaryAuthorizationDenied,
+    AuthorizationUnavailable,
     PreparedAuthorizationInvalid,
     action_id as public_action_id,
     adapter_binding_resource_digest,
@@ -28,6 +29,7 @@ from app.modules.authorization.prepared import (
 )
 from app.modules.authorization.runtime import (
     AuthorizationDenied,
+    AuthorizationEvidenceUnavailable,
     HumanAuthorizationContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
@@ -128,6 +130,8 @@ class AdapterBindingAuthorizationAdapter:
             ) from exc
         except (PreparedAuthorizationUnsupported, AuthorizationDenied) as exc:
             raise BoundaryAuthorizationDenied("adapter-binding authority denied") from exc
+        except AuthorizationEvidenceUnavailable as exc:
+            raise AuthorizationUnavailable("adapter-binding authority unavailable") from exc
 
     async def authorize_read(
         self, *, actor_profile_id: UUID, facts: AdapterBindingReadFacts
@@ -147,6 +151,8 @@ class AdapterBindingAuthorizationAdapter:
             await self._authorization.require(ActionId.COMPENSATION_ADAPTER_BINDING_READ, resource)
         except AuthorizationDenied as exc:
             raise BoundaryAuthorizationDenied("adapter-binding authority denied") from exc
+        except AuthorizationEvidenceUnavailable as exc:
+            raise AuthorizationUnavailable("adapter-binding authority unavailable") from exc
 
     async def prepare_mutation(
         self, facts: AdapterBindingMutationAuthorityFacts

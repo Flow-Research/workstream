@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -158,6 +159,7 @@ async def test_public_adapter_preserves_exact_read_and_mutation_facts() -> None:
     actor = await adapter.consume_adapter_binding_mutation(prepared, facts)
     adapter.close_adapter_binding_mutation(prepared)
     translated = authorization.calls[1][1]
+    consumed = authorization.calls[2][2]
     assert authorization.calls[0][1]["actor_profile_id"] == read.actor_profile_id
     assert authorization.calls[0][1]["facts"].project_id == read.project_id
     assert authorization.calls[0][1]["facts"].adapter_binding_id == read.adapter_binding_id
@@ -172,6 +174,7 @@ async def test_public_adapter_preserves_exact_read_and_mutation_facts() -> None:
     assert translated.route_key == facts.route_key
     assert translated.expected_status == facts.expected_status
     assert translated.expected_lifecycle_version == facts.expected_lifecycle_version
+    assert consumed == translated
     assert actor == facts.actor_profile_id
     assert authorization.calls[-1] == ("close", authorization.handle)
 
@@ -192,3 +195,44 @@ async def test_public_adapter_conceals_auth_boundary_denial() -> None:
                 adapter_binding_id=uuid4(),
             )
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ("prepare", "consume", "close"))
+async def test_public_adapter_conceals_each_mutation_boundary_denial(
+    operation: str,
+) -> None:
+    class _Denied(_Authorization):
+        async def prepare_mutation(self, facts):
+            del facts
+            raise AuthorizationDenied("denied")
+
+        async def consume_mutation(self, prepared, facts):
+            del prepared, facts
+            raise AuthorizationDenied("denied")
+
+        def close_mutation(self, prepared) -> None:
+            del prepared
+            raise AuthorizationDenied("denied")
+
+    adapter = CompensationAdapterBindingAuthorization(_Denied())
+    facts = _facts()
+    with pytest.raises(AdapterBindingUnavailable, match="unavailable"):
+        if operation == "prepare":
+            await adapter.prepare_adapter_binding_mutation(facts)
+        elif operation == "consume":
+            await adapter.consume_adapter_binding_mutation(object(), facts)
+        else:
+            adapter.close_adapter_binding_mutation(object())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ("prepare", "consume"))
+async def test_public_adapter_conceals_invalid_fact_translation(operation: str) -> None:
+    adapter = CompensationAdapterBindingAuthorization(_Authorization())
+    invalid = replace(_facts(), action="invalid.action")  # type: ignore[arg-type]
+    with pytest.raises(AdapterBindingUnavailable, match="unavailable"):
+        if operation == "prepare":
+            await adapter.prepare_adapter_binding_mutation(invalid)
+        else:
+            await adapter.consume_adapter_binding_mutation(object(), invalid)

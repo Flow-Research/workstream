@@ -35,7 +35,7 @@ class CompensationAdapterBindingAuthorization:
                     adapter_binding_id=request.adapter_binding_id,
                 ),
             )
-        except AuthorizationBoundaryError as exc:
+        except (AuthorizationBoundaryError, ValueError) as exc:
             raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable") from exc
 
     @staticmethod
@@ -63,7 +63,7 @@ class CompensationAdapterBindingAuthorization:
         """Prepare opaque authority for one exact adapter-binding mutation."""
         try:
             return await self._authorization.prepare_mutation(self._facts(facts))
-        except AuthorizationBoundaryError as exc:
+        except (AuthorizationBoundaryError, ValueError) as exc:
             raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable") from exc
 
     async def consume_adapter_binding_mutation(
@@ -72,7 +72,7 @@ class CompensationAdapterBindingAuthorization:
         """Consume prepared mutation authority and return its authorized actor."""
         try:
             return await self._authorization.consume_mutation(prepared, self._facts(facts))
-        except AuthorizationBoundaryError as exc:
+        except (AuthorizationBoundaryError, ValueError) as exc:
             raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable") from exc
 
     def close_adapter_binding_mutation(self, prepared: object) -> None:

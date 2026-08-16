@@ -37,6 +37,7 @@ from app.modules.authorization.domain.prepared_compilation import (
     prepared_compilation_matches,
 )
 from app.modules.authorization.domain.adapter_bindings import (
+    ADAPTER_BINDING_MUTATION_ACTIONS,
     AdapterBindingMutationResourceContext,
 )
 from app.modules.authorization.domain.prepared_adapter_bindings import (
@@ -908,7 +909,9 @@ class PreparedAuthorizationService:
         expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
             action_id
         ) or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
-        if isinstance(resource, AdapterBindingMutationResourceContext):
+        if action_id in ADAPTER_BINDING_MUTATION_ACTIONS and isinstance(
+            resource, AdapterBindingMutationResourceContext
+        ):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,
