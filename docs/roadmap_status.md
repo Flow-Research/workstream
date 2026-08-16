@@ -135,10 +135,10 @@ review. Their presence does not change the implemented-on-`main` list above.
    merged through WS-ARCH-001-02H.
 2. CP01A and CP01B have registered exact adapter-binding and ContributionPolicy
    authority while keeping all nine actions unavailable. CP01C corrects the
-   unavailable binding facts before CP02. CP02 is complete on merge with hidden,
+   unavailable binding facts before CP02. CP02 is complete with hidden,
    route-unreachable adapter-binding behavior and immutable lifecycle history.
-   CP03A is complete on merge with the target identity and owner eligibility.
-   CP03B is complete on merge with exact hidden Finance Authority read/PREP
+   CP03A is complete with the target identity and owner eligibility.
+   CP03B is complete with exact hidden Finance Authority read/PREP
    activation for those four actions. The remaining order is CP04 hidden ContributionPolicy behavior,
    then CP05 ContributionPolicy activation;
    expose CON validation; then bind one exact published,

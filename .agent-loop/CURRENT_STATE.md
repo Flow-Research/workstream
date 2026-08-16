@@ -99,10 +99,9 @@ selection wording.
 Do not start historical CON-05A directly. The CP01-CP09 sequence owns
 AUTH unavailable registration, hidden CON binding/policy behavior, exact AUTH
 activations, CON validation, PROJECT guide binding, TASK attempt lineage, and
-clean v0.1 legacy economic-path removal in that order. CP02 is complete while
-all four actions remain unavailable. CP03 is split: the CP03A implementation is
-merged, and the CP03B implementation contract is complete but its implementation
-remains planned; later CP04-CP09 children remain
+clean v0.1 legacy economic-path removal in that order. CP02 and CP03A are
+merged, and CP03B is complete with the four exact hidden Finance Authority
+actions active. Later CP04-CP09 children remain
 non-executable until their current-main contracts are expanded.
 
 - WS-ARCH-001-PLAN3 is planned; its planning merge changed no runtime behavior.

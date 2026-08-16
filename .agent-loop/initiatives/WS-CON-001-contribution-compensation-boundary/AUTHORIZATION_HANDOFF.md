@@ -87,7 +87,7 @@ No AUTH change blocks planning or completed CON `03A`, `03B`, or `02C`. CP01A
 and CP01B separately register binding and policy authority while unavailable.
 CP01C corrects binding identity and lifecycle-generation facts before CP02.
 CP02 is merged with hidden CON behavior. CP03A installs the exact target identity
-and owner eligibility without activation; CP03B is complete on merge and
+and owner eligibility without activation; CP03B is complete and
 activates only the four exact CP02 Finance Authority boundaries. CP05 later
 activates only CP04's hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
