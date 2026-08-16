@@ -191,8 +191,10 @@ def receipt_failures(receipt: object, reviewer: object, evaluated_head: object) 
 
 
 def output_failures(
-    output: dict[str, object], expectation: dict[str, object], receipt: object | None = None
+    output: object, expectation: dict[str, object], receipt: object | None = None
 ) -> list[str]:
+    if not isinstance(output, dict):
+        return ["output: expected an object"]
     failures: list[str] = []
     required = {
         "case_id", "reviewer", "evaluated_head", "classification", "finding_ids",
@@ -286,7 +288,7 @@ def print_failures(failures: list[str]) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("validate-fixtures")
@@ -305,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
         case = next(row for row in load_json(CASES_PATH)["cases"] if row["id"] == args.case)
         output = load_json(args.output)
         failures = output_failures(output, expected)
+        if not isinstance(output, dict):
+            return print_failures(failures)
         if output.get("reviewer") != case["reviewer"]:
             failures.append("output: wrong reviewer")
         return print_failures(failures)
@@ -323,6 +327,14 @@ def main(argv: list[str] | None = None) -> int:
         if expectations is None:
             failures.append("expectations: missing after forward evaluation")
     return print_failures(failures)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the validator and report malformed JSON/files without a traceback."""
+    try:
+        return _main(argv)
+    except (OSError, json.JSONDecodeError) as exc:
+        return print_failures([f"input: unable to load JSON: {exc}"])
 
 
 if __name__ == "__main__":

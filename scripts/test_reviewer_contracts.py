@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS
-from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json
+from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
 from scripts.reviewer_contracts import output_failures, output_set_failures
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
@@ -171,6 +171,19 @@ class ReviewerContractTests(unittest.TestCase):
             "output set: invalid reviewer",
             output_set_failures(outputs, {}, expectations, cases),
         )
+
+    def test_direct_output_rejects_non_object_and_malformed_json_cleanly(self) -> None:
+        expectation = load_json(EXPECTATIONS_PATH)["expectations"][0]
+        self.assertEqual(output_failures([], expectation), ["output: expected an object"])
+        for payload in ("[]", '"invalid"', "{"):
+            with self.subTest(payload=payload):
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as output_file:
+                    output_file.write(payload)
+                    output_file.flush()
+                    self.assertEqual(
+                        main(["validate-output", "--case", expectation["case_id"], "--output", output_file.name]),
+                        1,
+                    )
 
     def test_output_requires_envelope_replay_and_exact_handoff(self) -> None:
         expectation = {

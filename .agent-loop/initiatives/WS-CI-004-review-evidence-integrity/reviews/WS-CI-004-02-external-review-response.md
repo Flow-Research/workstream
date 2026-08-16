@@ -17,6 +17,9 @@ External review sources: CodeRabbit reviews of PR #342 at implementation heads
   validation failures instead of allowing unhashable values to raise.
 - `PRRT_kwDOSwL_U86Zj4yb`: distinguish private session evidence from durable
   PR evidence and bind the published summary to its evaluated target.
+- `REUSE-LOW-001`: make direct single-output validation share the same
+  non-object input guard as complete output-set validation; malformed JSON and
+  unreadable files now return controlled validation failures.
 
 Each correction has a focused regression test. The complete saved blind output
 set still passes the strengthened validator.
@@ -68,7 +71,8 @@ updated.
 
 ## Remaining risks
 
-The two findings from the second CodeRabbit review remain open until this fix is
-pushed, final-head deterministic and internal reviews pass, the PR evidence is
-updated, and CodeRabbit re-reviews the new head. No claim of zero unresolved
-risk is made while those steps remain pending.
+The findings from the second CodeRabbit review and the later internal reuse
+review remain open until these fixes are pushed, final-head deterministic and
+internal reviews pass, the PR evidence is updated, and CodeRabbit re-reviews
+the new head. No claim of zero unresolved risk is made while those steps remain
+pending.
