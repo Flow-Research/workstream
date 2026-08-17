@@ -574,7 +574,19 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/compensation/api/instruments.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/api/policy_bindings.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/compensation/models.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/policy_binding_service.py"
     },
     {
       "group": "lifecycle",
@@ -590,11 +602,27 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/contributions/api/policies.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/contributions/models.py"
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/contributions/policy_validation.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/contributions/repository.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/contributions/schemas.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/contributions/service.py"
     },
     {
       "group": "shared",
@@ -618,6 +646,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/contribution_policy.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/locked_policy.py"
     },
     {
@@ -627,6 +659,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/compensation_binding.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/contribution_policy.py"
     },
     {
       "group": "lifecycle",
@@ -901,7 +937,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "66b00a99047c16c7f10904e4749485f8cbc14c42575b53b8934562979448d575",
+  "authority_digest": "392b05ff8dec5f67c2b0de49ecc6d24af8b5c89b5acacd0038a02ff44413bb45",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

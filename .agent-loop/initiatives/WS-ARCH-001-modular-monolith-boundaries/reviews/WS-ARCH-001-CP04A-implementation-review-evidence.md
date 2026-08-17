@@ -1,0 +1,152 @@
+# WS-ARCH-001-CP04A Implementation Review Evidence
+
+## Scope inspected
+
+The hidden policy public API, CONTRIBUTIONS service/repository/validation,
+COMPENSATION and PROJECTS owner ports, adapter-root composition, migration
+`0006`, event/model metadata, focused tests, boundary debt, canonical docs, and
+state projections.
+
+## Deterministic evidence
+
+- Ruff passed on all touched CP04A application and test surfaces.
+- 155 contract-listed focused/schema tests passed through an isolated
+  PostgreSQL database; zero were skipped or deselected.
+- 10 dedicated real PostgreSQL integration/concurrency/event tests passed.
+- 186 combined CP04A coverage tests passed.
+- Every changed application surface independently exceeds 90% coverage; the
+  broad CONTRIBUTIONS package is 94.56% in the focused collection.
+- Fresh-head Alembic install and committed schema-manifest parity passed.
+- Module-boundary protected-base validation removed one touched private edge
+  and added none.
+- Test-structure, active-state, atomic chunk-state, Markdown-link, stale
+  wording/authorization/review/artifact, and `git diff --check` gates passed.
+
+## Integrity disposition
+
+No CI, test, or threshold change weakens coverage, selection, assertion, skip,
+xfail, or deselection custody. PostgreSQL-required tests retain
+isolated-database custody; the contract and lane inventory were strengthened
+rather than weakening their fixture.
+
+## Exact-head reviewer custody
+
+Required architecture, security, product/operations, QA, test-delta,
+CI-integrity, senior-engineering, reuse/dedup, and documentation reviewers run
+only after this evidence is committed to a clean exact head. Their private
+receipts and PR-body mirrors—not this file—own the final advisory verdicts.
+
+## First implementation-review corrections
+
+The first exact-head reviewer wave found and this implementation corrects:
+
+- closed-domain validation for compensation mode and canonical instrument type
+  before authorization preparation;
+- discriminating successful-view, cross-project policy/version/request, public
+  dataclass immutability, and operation-order tests;
+- semantic-lane ownership for every new CP04A test module;
+- hosted 90-percent gates for every changed CP04A owner/composition surface;
+- public lifecycle event vocabulary parity for the shared CP04A/CP04B event
+  foundation.
+
+All affected reviewers must replay against the corrective exact head before a
+passing verdict is claimed.
+
+## Second implementation-review correction
+
+The exact-head test-delta replay found that the retired-policy test configured
+the repository to return no reusable policy, so it could not detect accidental
+reuse of a retired aggregate. The service now rejects a retired aggregate even
+if repository filtering regresses, and the focused test supplies an actual
+retired policy and proves that a distinct version-one aggregate is created.
+The six create-draft behavior tests and Ruff pass after this correction. All
+required reviewers must bind their final verdict to the resulting clean head.
+
+## Third implementation-review correction
+
+The final security replay found that update-draft could accept a draft version
+attached to a retired policy aggregate. Update now permits only `draft` or
+`active` policy aggregates and rejects a retired aggregate before resource
+composition or authorization preparation. Its focused negative test proves no
+PREP, consume, or graph replacement. Security and all required reviewers must
+replay against the new clean head before approval is claimed.
+
+## Final documentation-review correction
+
+The canonical action table now distinguishes CP04A hidden behavior ownership
+from CP01B registration custody while preserving unavailable action status.
+The current-state entry now identifies CP04B, not completed CP04A, as the next
+implementation boundary. Documentation and every required reviewer must bind
+their final verdict to the resulting clean head.
+
+## Hosted preflight correction
+
+The first hosted run exposed a stale behavior-ownership partition: CP04A's nine
+new executable targets were absent, so preflight failed closed before semantic
+lanes. The canonical partition now includes exactly those targets, the trusted
+transition allowlist names exactly the CP04A set, and a focused negative test
+rejects any additional target. Local partition validation, all 106 ownership
+tests, Ruff, and diff checks pass. No ownership or CI gate was weakened. All
+required reviewers must replay against the corrected clean head.
+
+The first test-delta replay found the transition test derived its expectation
+from the production allowlist, allowing both to broaden together. The test now
+owns an independent literal nine-path contract, asserts exact equality with the
+production set, and still proves a tenth target is rejected.
+
+## Hosted docstring-gate correction
+
+The first full hosted semantic run on head `547f69a4` failed only the unchanged
+80-percent repository docstring gate: CP04A's new callables reduced aggregate
+coverage to 79.8 percent. Meaningful ownership and behavior docstrings were
+added only to the new CP04A callables. The same unchanged gate now reports
+80.8 percent, Ruff passes, the focused non-PostgreSQL collection passes 206
+tests, and the production service and repository remain below 500 lines. The
+10 database-backed tests remain under hosted PostgreSQL custody. All required
+reviewers must replay against the resulting exact clean head.
+
+## Hosted migration-isolation and test-delta correction
+
+The next hosted run passed the restored docstring gate and exposed two
+migration-0005 tests that rebuilt or downgraded the shared schema without the
+repository's schema-contract marker. They now own isolated schema custody, so
+fixture teardown rebuilds the current `0006` head rather than treating the
+intentional `0005` schema as leaked state. The exact-head test-delta review also
+found that mutation-result/event parity was underasserted. Create, update, and
+recovery proofs now compare every immutable result field with lifecycle-event
+truth. Ruff, the focused recovery tests, structure checks, and diff checks pass;
+hosted PostgreSQL must replay both corrections before approval.
+
+The following exact-head test-delta replay correctly found that recovery proof
+covered create-draft but not update-draft. Update duplicate recovery now proves
+the exact immutable result, current read authorization, digest mismatch denial,
+and absence of a second PREP, graph replacement, or lifecycle event. The
+focused recovery/structure collection passes 14 tests and the test module
+remains 226 lines.
+
+The final documentation replay found that the migration-isolation correction
+was not projected into the chunk's allowed files or hosted verification
+command. The contract now names only the exact migration-0005 test file and
+includes it in isolated PostgreSQL custody; it does not broaden CP04A into
+general migration ownership.
+
+The hosted replay confirmed schema teardown was repaired: 1,470 tests passed
+and no schema leak remained. Its sole failure exposed a stale migration-0005
+error expectation. Because the clean v0.1 baseline permits no backward
+compatibility or partial-head downgrade, Alembic correctly rejects downgrade
+from predecessor `0005` with the repository's canonical fresh-database guard
+before invoking that revision's local downgrade function. The test now asserts
+that canonical refusal and still proves the referenced adapter identity and
+constraint snapshot remain unchanged.
+
+## Adversarial exact-head correction
+
+An adversarial review of head `58b977ac` invalidated the prior completion
+claim. It found integer-scale project-points validation, complete returned
+owner-fact parity, malformed-rule concealment, and real late-rollback evidence
+gaps. It also found that fake rejection labels were being presented as genuine
+AUTH handle-binding proof. The corrective delta fixes the four owned behavior
+and evidence gaps and narrows CP04A authorization claims to port rejection,
+close-once, and no product effect. Genuine session/transaction/copy/replay
+handle proof remains CP05/AUTH activation custody. Every earlier reviewer
+verdict is historical until the corrected clean head receives a full replay.

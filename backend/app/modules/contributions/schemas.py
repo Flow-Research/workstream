@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from enum import StrEnum
 import re
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.modules.compensation.schemas import (
+from app.modules.compensation.api import (
     CompensationInstrumentType as ContributionInstrumentType,
 )
+from app.modules.contributions.policy_validation import canonical_award_quantity
 
 
-_QUANTITY_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,18})?$")
 _PROJECT_ID_PATTERN = r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
 _MONEY_UNIT_PATTERN = re.compile(r"^[A-Z]{3}$")
 _POINTS_UNIT_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9._:-]{0,31}$")
@@ -135,14 +135,9 @@ class ContributionAwardDefinitionInput(BaseModel):
     @field_validator("quantity", mode="before")
     @classmethod
     def require_canonical_decimal_string(cls, value: object) -> str:
-        if not isinstance(value, str) or _QUANTITY_PATTERN.fullmatch(value) is None:
+        if not isinstance(value, str):
             raise ValueError("quantity must be a canonical positive decimal string")
-        try:
-            quantity = Decimal(value)
-        except InvalidOperation as error:
-            raise ValueError("quantity must be a canonical positive decimal string") from error
-        if not quantity.is_finite() or quantity <= 0:
-            raise ValueError("quantity must be greater than zero")
+        canonical_award_quantity(value)
         return value
 
     @model_validator(mode="after")
@@ -159,11 +154,7 @@ class ContributionAwardDefinitionInput(BaseModel):
             and self.unit_code not in ISO_4217_CURRENCY_CODES
         ):
             raise ValueError("money unit_code must be a current ISO 4217 code")
-        if (
-            self.instrument_type is ContributionInstrumentType.PROJECT_POINTS
-            and Decimal(self.quantity).as_tuple().exponent < 0
-        ):
-            raise ValueError("project_points quantity must be a whole-number string")
+        canonical_award_quantity(self.quantity, self.instrument_type)
         return self
 
     def quantity_decimal(self) -> Decimal:

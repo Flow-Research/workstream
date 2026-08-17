@@ -20,6 +20,12 @@ from app.modules.compensation.api.adapter_bindings import (
     DenyAdapterBindingAuthorization,
     validate_adapter_route_key,
 )
+from app.modules.compensation.api.instruments import CompensationInstrumentType
+from app.modules.compensation.api.policy_bindings import (
+    LockedPolicyAdapterBindingFacts,
+    PolicyAdapterBindingPort,
+    PolicyAdapterBindingUnavailable,
+)
 
 __all__ = (
     "AdapterBindingActorEligibilityPort",
@@ -39,5 +45,9 @@ __all__ = (
     "AdapterBindingUnavailable",
     "AdapterBindingView",
     "DenyAdapterBindingAuthorization",
+    "CompensationInstrumentType",
+    "LockedPolicyAdapterBindingFacts",
+    "PolicyAdapterBindingPort",
+    "PolicyAdapterBindingUnavailable",
     "validate_adapter_route_key",
 )

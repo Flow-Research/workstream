@@ -155,6 +155,10 @@ class ContributionPolicyVersion(Base):
         ForeignKey("actor_profiles.id", name="fk_contribution_policy_version_retired_by")
     )
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_updated_by: Mapped[str | None] = mapped_column(
+        ForeignKey("actor_profiles.id", name="fk_contribution_policy_version_updated_by")
+    )
+    last_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     policy: Mapped[ContributionPolicy] = relationship(
         back_populates="versions",
@@ -346,3 +350,74 @@ class ContributionAwardDefinition(Base):
     adapter_binding_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
 
     rule: Mapped[ContributionRule] = relationship(back_populates="award_definitions")
+
+
+class ContributionPolicyLifecycleEvent(Base):
+    """Immutable recoverable truth for one policy-version mutation."""
+
+    __tablename__ = "contribution_policy_lifecycle_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["contribution_policy_id", "project_id"],
+            ["contribution_policies.id", "contribution_policies.project_id"],
+            name="fk_contribution_policy_event_policy_ownership",
+        ),
+        ForeignKeyConstraint(
+            [
+                "contribution_policy_version_id",
+                "contribution_policy_id",
+                "project_id",
+            ],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.contribution_policy_id",
+                "contribution_policy_versions.project_id",
+            ],
+            name="fk_contribution_policy_event_version_ownership",
+        ),
+        UniqueConstraint("operation_id", name="uq_contribution_policy_event_operation"),
+        CheckConstraint(
+            "request_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_contribution_policy_event_digest",
+        ),
+        CheckConstraint(
+            "event_type in ('draft_created','draft_updated','published','retired')",
+            name="ck_contribution_policy_event_type",
+        ),
+        CheckConstraint(
+            "(event_type='draft_created' and from_version_status is null "
+            "and to_version_status='draft') or "
+            "(event_type='draft_updated' and from_version_status='draft' "
+            "and to_version_status='draft') or "
+            "(event_type='published' and from_version_status='draft' "
+            "and to_version_status='published') or "
+            "(event_type='retired' and from_version_status='published' "
+            "and to_version_status='retired')",
+            name="ck_contribution_policy_event_transition",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", name="fk_contribution_policy_event_actor"),
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", name="fk_contribution_policy_event_project"),
+        nullable=False,
+    )
+    contribution_policy_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    prior_current_version_id: Mapped[UUID | None] = mapped_column(Uuid())
+    prior_current_version_number: Mapped[int | None] = mapped_column(Integer)
+    from_policy_status: Mapped[str | None] = mapped_column(String(16))
+    to_policy_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    from_version_status: Mapped[str | None] = mapped_column(String(16))
+    to_version_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )

@@ -228,6 +228,43 @@ def test_partition_accepts_only_exact_02d_behavior_targets() -> None:
         )
 
 
+def test_partition_accepts_only_exact_cp04a_policy_targets() -> None:
+    """CP04A adds only its reviewed policy and owner-port targets."""
+    expected = frozenset(
+        {
+            "backend/app/modules/compensation/api/instruments.py",
+            "backend/app/modules/compensation/api/policy_bindings.py",
+            "backend/app/modules/compensation/policy_binding_service.py",
+            "backend/app/modules/contributions/api/policies.py",
+            "backend/app/modules/contributions/policy_validation.py",
+            "backend/app/modules/contributions/repository.py",
+            "backend/app/modules/contributions/service.py",
+            "backend/app/modules/projects/api/contribution_policy.py",
+            "backend/app/modules/projects/contribution_policy.py",
+        }
+    )
+    assert ownership.ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS == expected
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    current = _partition(sorted({retained, *expected}))
+
+    ownership._validate_additive_partition_transition(current, trusted)
+
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(
+                sorted(
+                    {
+                        retained,
+                        *expected,
+                        "backend/app/modules/contributions/extra.py",
+                    }
+                )
+            ),
+            trusted,
+        )
+
+
 def test_partition_rejects_reordered_trusted_assignments(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -2,7 +2,9 @@
 
 - Initiative state: active; boundary foundation complete
 - Runtime behavior changed: hidden CON adapter-binding behavior plus exactly four
-  Finance Authority actions; no public route
+  Finance Authority actions, and hidden ContributionPolicy read/create-draft/
+  update-draft behavior; all five policy actions remain unavailable and no
+  public route exists
 - Canonical target: nine business modules and three supporting modules
 - Recovery model: freeze exact debt, prohibit growth, repair touched
   capabilities incrementally
@@ -57,7 +59,7 @@
   registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split, CP03A is merged,
   and CP03B is complete with four exact hidden Finance Authority actions
-  active. CP04 is split into executable CP04A/CP04B contracts, while CP05-CP09
+  active. CP04A is complete and CP04B remains executable, while CP05-CP09
   remain non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
@@ -95,11 +97,12 @@
   root without delivery or fulfillment behavior.
 - WS-ARCH-001-CP04 is a planned non-executable parent split into CP04A hidden
   read/create/update-draft behavior and CP04B hidden publish/retire behavior.
-- WS-ARCH-001-CP04A is planned with an executable hidden policy-draft contract
-  strengthened by exact public-owner composition and atomic named proof
-  custody; it is next.
+- WS-ARCH-001-CP04A is complete: CONTRIBUTIONS owns hidden read/create/update
+  draft behavior, public owner ports preserve COMPENSATION and PROJECTS
+  boundaries, PostgreSQL operation/event custody is durable, and all five
+  policy actions remain unavailable.
 - WS-ARCH-001-CP04B is planned with an executable hidden publish/retire
-  contract after CP04A.
+  contract and is the next policy-behavior boundary after CP04A.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.
 - WS-ARCH-001-CP07 is proposed: PROJECT guide binding.

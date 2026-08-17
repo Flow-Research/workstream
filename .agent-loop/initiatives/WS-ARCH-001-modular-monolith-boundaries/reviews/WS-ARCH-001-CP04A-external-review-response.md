@@ -55,3 +55,68 @@ hosted GitHub gates before merge readiness is claimed.
 The named tests and coverage commands are future implementation obligations.
 Their semantic adequacy must be reviewed against the implementation diff; this
 planning response is not runtime proof.
+
+## PR #349 adversarial implementation replay
+
+All five findings reported against head `58b977ac` were replayed and found
+valid:
+
+- `project_points` now requires integer scale, so `1.0` is rejected before
+  owner locking or authorization;
+- CONTRIBUTIONS verifies the exact binding ID and instrument type returned by
+  the COMPENSATION public owner port, not only its project ID;
+- malformed rule objects are type-checked before field access and return the
+  concealed domain conflict;
+- a real PostgreSQL test stages authorization evidence, flushes the complete
+  product graph and event, then forces a late failure and proves transaction
+  rollback removes every effect;
+- misleading fake-handle claims were removed. CP04A proves port rejection and
+  close/no-product-effect behavior; CP05/AUTH owns genuine handle-binding
+  semantics.
+
+Fresh exact-head review and hosted CI are required after these corrections.
+
+A subsequent reuse review found that CP04A had duplicated but weakened the
+existing CONTRIBUTIONS quantity bounds. The schema and hidden behavior now use
+one canonical validator for positivity, canonical form, maximum magnitude,
+maximum scale, and integer-scale project points. Overflow and over-scale input
+is rejected before owner locks, authorization, or graph replacement. This
+finding invalidates all earlier exact-head receipts until replayed.
+
+## PR #349 substantive CodeRabbit replay
+
+CodeRabbit's eight threads against `3ee52b65` were replayed rather than applied
+mechanically. All eight were valid:
+
+- nullable event-state and attribution comparisons are now NULL-safe, with
+  direct PostgreSQL regression proof;
+- lifecycle events now enforce composite policy/project and
+  version/policy/project ownership in ORM and migration truth;
+- cross-project read concealment now exercises the real repository;
+- create-draft owner mismatch returns concealed `not_found`;
+- update-draft always type-checks its required version selector;
+- boundary proof uses the repository's AST import scanner;
+- project, binding, and instrument owner-fact mismatches have exact tests; and
+- ARCH status records hidden CP04A behavior and continued unavailability.
+
+The schema-validation nit was also valid: its first pass no longer uses
+`assert` or a fake money instrument. The suggestion to consume AUTH before
+owner-resource locking was not applied because it contradicts the approved
+fail-closed order and would authorize before exact owner-held resource facts
+are fenced against time-of-check/time-of-use drift.
+
+These changes make every earlier review and CI receipt historical. Fresh
+exact-head review and hosted CI are required before merge readiness is claimed.
+
+The first corrective hosted run then failed closed because the intentional
+composite-constraint change altered the canonical public-schema fingerprint.
+The reset guard was updated to the exact hosted-observed fingerprint; this is
+schema parity, not a weakened reset check. That failed run remains historical
+evidence and a new exact-head hosted run is required.
+
+Test-delta replay then found that two cross-project PostgreSQL tests duplicated
+a globally unique fixed service identity during setup, so they never reached
+their intended assertions. They now create only the second project. It also
+found that the required-version regression used a malformed string that the old
+code already rejected; the discriminating input is now the previously accepted
+`None` selector. These corrections invalidate the intervening review receipts.

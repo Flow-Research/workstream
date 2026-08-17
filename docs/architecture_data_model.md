@@ -1114,12 +1114,23 @@ Fields:
 - `project_id`
 - `version_number`
 - `status`: `draft | published | retired`
+- `last_updated_by` and `last_updated_at` for the authorized complete-draft
+  replacement anchor
 - publication and retirement actor/timestamp fields
 
 Published and retired versions are immutable. Guide activation binds one
 version; WorkstreamTask locks it before claimability, TaskAssignment copies it,
 Submission stamps the attempt value, and ReviewLease copies that immutable
 stamp.
+
+## ContributionPolicyLifecycleEvent
+
+Each policy mutation appends one immutable event containing the operation and
+request digest, actor/project/policy/version identity, version number, prior
+published-version identity, exact policy/version state transition, and
+database-owned occurrence time. PostgreSQL rejects event update, delete, and
+truncate. Exact operation replay may return only this immutable result after a
+fresh authorized read; it never reconstructs success from mutable policy state.
 
 ## ContributionRule
 

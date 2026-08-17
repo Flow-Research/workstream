@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.modules.compensation.api.adapter_bindings import validate_adapter_route_key
-
-
-class CompensationInstrumentType(StrEnum):
-    """Canonical compensation instrument families."""
-
-    MONEY = "money"
-    PROJECT_POINTS = "project_points"
+from app.modules.compensation.api.instruments import CompensationInstrumentType
 
 
 class ProjectCompensationAdapterBindingInput(BaseModel):

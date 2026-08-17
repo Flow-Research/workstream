@@ -804,6 +804,14 @@ the four exact binding actions for an authenticated human Finance Authority
 covering the exact project. Neither child adds a public route, provider
 behavior, or ContributionPolicy authority.
 
+CP04A implements route-unreachable ContributionPolicy read, create-draft, and
+complete update-draft behavior. CONTRIBUTIONS owns policy and unit truth;
+COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
+mutation uses a caller-owned root transaction, advisory operation fence,
+opaque prepare/consume/close participant, complete graph replacement, and one
+immutable recoverable lifecycle event. Production authorization remains
+deny-default and all five policy actions remain unavailable until CP05.
+
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
@@ -812,9 +820,9 @@ behavior, or ContributionPolicy authority.
 | `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
-| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP01B (registered, unavailable) |
-| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP01B (registered, unavailable) |
-| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
+| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
+| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
 | `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP01B (registered, unavailable) |
 | `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP01B (registered, unavailable) |
 | `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |

@@ -28,10 +28,10 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
-| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish hidden CON adapter-binding behavior and exact Finance Authority activation; CP04A's executable contract has atomic owner/proof/custody mapping | Implement CP04A hidden ContributionPolicy read/create/update-draft behavior; CP04B then owns publish/retire, and the wider PLAN2 path still targets durable `allow_review` |
+| [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish adapter-binding behavior/activation; CP04A completes hidden policy read/create/update-draft behavior with durable operation/event custody | Implement CP04B hidden publish/retire behavior; CP05 later activates the proven policy actions, and PLAN2 still targets durable `allow_review` |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
-| [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; CP03B completes hidden adapter-binding behavior and exact Finance Authority activation; ContributionPolicy persistence and shared lifecycle audit foundations are merged | Implement CP04A hidden policy draft behavior, then CP04B publication/retirement; later complete guide-activation validation/persistence before task readiness |
+| [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; CP03B completes adapter-binding activation and CP04A completes hidden ContributionPolicy draft behavior; shared lifecycle audit foundations are merged | Implement CP04B publication/retirement; later activate policy actions and complete guide-activation validation/persistence before task readiness |
 | [WS-AUTH-003](initiatives/WS-AUTH-003-module-boundary-recovery/STATUS.md) | AUTH boundary foundation and first public-capability proof through POL-03A are merged | Repair each touched AUTH capability through `authorization.api` and shrink the canonical AUTH ledger |
 | [WS-POL-003](initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md) | Active delivery initiative; hidden compilation custody and AUTH-12I activation are merged | Implement POL-03B authorized compilation persistence, then continue the reviewed dependency order |
 | [WS-REV-001](initiatives/WS-REV-001-review-revision-lifecycle/STATUS.md) | Independent foundations through queue admission and reviewer-lease persistence are merged through `03A2`; schema/packet foundations may continue behind their own gates | Live admission/claim requires canonical 04E `allow_review`; ReviewLease copies the admitted Submission's immutable attempt policy version, and the first Review commit requires CON-03C/07 atomic contribution/award behavior |
@@ -124,9 +124,10 @@ remain non-executable until their current-main contracts are expanded.
   exact AUTH adapter root. No compensation delivery or fulfillment behavior is
   activated.
 - WS-ARCH-001-CP04 is a planned non-executable parent. CP04A and CP04B have
-  executable contracts; CP04A is the next implementation boundary.
-- WS-ARCH-001-CP04A is planned and is the next hidden policy-draft boundary.
-- WS-ARCH-001-CP04B is planned after CP04A for hidden publication/retirement.
+  executable contracts; CP04B is the next implementation boundary.
+- WS-ARCH-001-CP04A is complete with hidden policy read/create/update-draft
+  behavior; it exposes no route and activates no policy action.
+- WS-ARCH-001-CP04B is planned next for hidden publication/retirement.
 - WS-ARCH-001-CP05 is proposed and non-executable.
 - WS-ARCH-001-CP06 is proposed and non-executable.
 - WS-ARCH-001-CP07 is proposed and non-executable.
