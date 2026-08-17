@@ -132,30 +132,17 @@ partial graph, event, reusable authority, or allowed evidence.
 
 ## Acceptance criteria
 
-- [ ] Public API/implementation add no private cross-module edge.
-- [ ] PROJECTS and COMPENSATION eligibility is consumed only through their
-  public transaction-held ports, with owner fences retained through mutation.
-- [ ] Read/create/update remain route-unreachable and production deny-default.
-- [ ] Operation fencing proves duplicate recovery and distinct-operation races
-  without double AUTH consumption.
-- [ ] PREP denial/exception/wrong actor/session/transaction/copy/replay, close
-  failure, and post-close database failure fail atomically.
-- [ ] PostgreSQL proves immutable operation events, exact attribution,
-  transition shape, operation uniqueness, and rejection of mutation/deletion/
-  truncation.
-- [ ] One primary behavior per test; no new test or production file reaches 500
-  lines; touched frozen debt does not grow.
-- [ ] Every changed CP04A application surface is independently at least 90%
-  covered by its named focused coverage report.
-- [ ] Hosted repository-wide coverage independently remains at or above the
-  protected 78-percent baseline.
+The acceptance-to-test map below is the governing acceptance checklist. Every
+row is independently required. No grouped summary criterion may substitute for
+one row's named proof and execution custody.
 
 ## Verification
 
 ### Acceptance-to-test map
 
-Every row is one material behavior atom. A module-level pytest invocation is
-execution convenience, not acceptance evidence for an unlisted behavior.
+Every row is one material behavior atom and an independently required
+acceptance criterion. A module-level pytest invocation is execution
+convenience, not acceptance evidence for an unlisted behavior.
 
 #### Public boundaries and read behavior
 

@@ -10,10 +10,11 @@
 
 - CodeRabbit found that the governing acceptance checklist still named only
   CONTRIBUTIONS/COMPENSATION even though the detailed coverage atom covered
-  every changed CP04A application surface. The checklist now has two separate
-  requirements: each changed application surface must independently meet 90
-  percent through its named focused report, and hosted repository-wide
-  coverage must independently preserve the protected 78-percent baseline.
+  every changed CP04A application surface. Exact-head replay then found that
+  the same summary checklist grouped other independently failing behaviors.
+  The duplicate grouped checklist is removed: every atomized row in the
+  acceptance-to-test map is now explicitly an independently required governing
+  criterion with its own named proof and execution custody.
 - Coverage proof omitted changed COMPENSATION composition/schema surfaces and
   combined the focused 90-percent requirement with the repository-wide
   78-percent baseline. The contract now names all changed production packages
