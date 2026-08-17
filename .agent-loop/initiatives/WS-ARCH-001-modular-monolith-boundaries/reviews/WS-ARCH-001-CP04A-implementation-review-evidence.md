@@ -88,3 +88,8 @@ transition allowlist names exactly the CP04A set, and a focused negative test
 rejects any additional target. Local partition validation, all 106 ownership
 tests, Ruff, and diff checks pass. No ownership or CI gate was weakened. All
 required reviewers must replay against the corrected clean head.
+
+The first test-delta replay found the transition test derived its expectation
+from the production allowlist, allowing both to broaden together. The test now
+owns an independent literal nine-path contract, asserts exact equality with the
+production set, and still proves a tenth target is rejected.
