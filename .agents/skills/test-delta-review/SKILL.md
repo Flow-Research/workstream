@@ -14,6 +14,8 @@ inspect relevant unchanged tests and behavior owners, replay prior findings,
 separate executed from inspected evidence, state uncertainty and freshness, and
 hand off non-test findings without inventing another specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -34,6 +36,13 @@ For every changed test:
 - Coverage lowered without approval.
 - Bug fix without regression coverage when feasible.
 
+## Completeness probe
+
+Map each changed or claimed behavior atom to the exact assertion that would fail
+if that atom regressed. Check actor/resource/state/failure variants separately,
+and compare with the old behavior. A test name without a discriminating
+assertion is not verified traceability.
+
 ## Output
 
 ```text
@@ -43,6 +52,8 @@ Tests added:
 Tests modified:
 Tests removed/skipped:
 Weakening concerns:
+Atomic behavior/assertion traceability:
+residual escape hypothesis:
 Required fixes:
 ```
 

@@ -27,6 +27,7 @@
     {"case_id":"product_ops-handoff","outcome":"handoff","required_finding_ids":[],"handoff_specialty":"ci_integrity"},
 
     {"case_id":"qa-positive","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
+    {"case_id":"qa-compound-trace","outcome":"finding","required_finding_ids":[],"handoff_specialty":null},
     {"case_id":"qa-negative","outcome":"clear","required_finding_ids":[],"handoff_specialty":null},
     {"case_id":"qa-stale","outcome":"replayed","required_finding_ids":["QA-8"],"handoff_specialty":null},
     {"case_id":"qa-output","outcome":"provisional","required_finding_ids":[],"handoff_specialty":null},

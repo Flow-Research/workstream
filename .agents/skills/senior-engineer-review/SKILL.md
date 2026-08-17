@@ -14,6 +14,8 @@ inspect relevant unchanged ownership and operational context, replay prior
 findings, separate executed from inspected evidence, state uncertainty and
 freshness, and hand off specialty findings without inventing their verdicts.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -28,6 +30,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Ownership in 3-6 months
 - Fit with existing conventions
 
+## Completeness probe
+
+Trace each responsibility to one owner, one failure boundary, one operational
+signal, and one maintenance path. Inspect size, branching, transaction/error
+handling, and rollback independently. State the most plausible maintenance or
+operational defect still hidden by otherwise green proof.
+
 ## Output
 
 ```text
@@ -36,6 +45,7 @@ Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Maintainability risks:
 Simplicity improvements:
 Operational concerns:
+Responsibility traceability and residual escape:
 Required fixes:
 ```
 

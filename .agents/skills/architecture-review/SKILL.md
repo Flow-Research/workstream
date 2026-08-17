@@ -14,6 +14,8 @@ inspect relevant unchanged owners and consumers, replay prior findings, separate
 executed from inspected evidence, state uncertainty and freshness, and hand off
 non-architecture findings without inventing another specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -32,6 +34,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 
 Architecture drift is blocking even when tests pass.
 
+## Completeness probe
+
+Build an owner/consumer/public-port matrix for every changed boundary. Trace
+construction, runtime composition, persistence ownership, and every known
+consumer. Search for private imports and parallel paths. Treat an uninspected
+consumer or unmapped ownership transition as missing proof.
+
 ## Output
 
 ```text
@@ -40,6 +49,7 @@ Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Boundary violations:
 Abstraction risks:
 Coupling risks:
+Atomic traceability and residual escape:
 Simpler alternative:
 Required fixes:
 ```

@@ -15,6 +15,8 @@ findings, separate executed from inspected evidence, state uncertainty and
 freshness, and hand off non-security findings without inventing another
 specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -39,6 +41,14 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Findings must be concrete.
 - Critical/High findings block PR.
 
+## Completeness probe
+
+Decompose each protected behavior across actor/context, action, project or
+resource, lifecycle state, failure mode, and forbidden evidence/side effect.
+Trace both allow and deny paths, including cross-tenant/resource substitution,
+replay, revocation, and transaction failure. Missing negative-path proof blocks
+a passing verdict.
+
 ## Output
 
 For each finding:
@@ -51,6 +61,8 @@ Why it matters:
 Suggested fix:
 Blocks PR: yes/no
 ```
+
+Include atomic traceability and the residual escape hypothesis for authorization.
 
 End with PASS / PASS WITH LOW RISKS / FAIL.
 

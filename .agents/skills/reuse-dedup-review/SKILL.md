@@ -15,6 +15,8 @@ findings, separate executed from inspected evidence, state uncertainty and
 freshness, and hand off non-reuse findings without inventing another
 specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -25,6 +27,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Similar abstractions now exist in multiple places.
 - Shared behavior belongs in existing module.
 
+## Completeness probe
+
+For each new helper, schema, policy path, or abstraction, search by behavior,
+types, call sites, and ownership—not name alone. Map the new responsibility to
+the closest existing public owner and explain why reuse or extension is or is
+not valid. Unsearched likely owners are missing proof.
+
 ## Output
 
 ```text
@@ -32,6 +41,7 @@ Result: PASS / PASS WITH LOW RISKS / FAIL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Possible duplicates:
 Existing code to reuse:
+Responsibility traceability and residual escape:
 Required fixes:
 ```
 

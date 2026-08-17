@@ -21,6 +21,22 @@ MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
+SEMANTIC_SKILL_REQUIREMENTS = {
+    "semantic.atomization": "Atomize every material criterion",
+    "semantic.ownership": "record its owner",
+    "semantic.implementation_source": "implementation source",
+    "semantic.named_proof": "named proof",
+    "semantic.execution_custody": "execution custody",
+    "semantic.result": "and result",
+    "semantic.traceability": "traceability",
+    "semantic.residual_escape": "residual escape",
+    "semantic.fail_closed": "Missing or narrative-only rows block PASS",
+}
+SEMANTIC_AGENT_REQUIREMENTS = {
+    **SEMANTIC_SKILL_REQUIREMENTS,
+    "semantic.atomization": "Atomize material criteria",
+    "semantic.ownership": "to owner",
+}
 MATRIX_ROW = re.compile(
     r"^\|[^|]+\|\s*`([^`]+)`\s*\|\s*`\.codex/agents/([^`/]+\.toml)`\s*\|"
     r"\s*`\.agents/skills/([^`/]+)/SKILL\.md`\s*\|$",
@@ -86,9 +102,16 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             "freshness",
             "hand off",
             "python3 scripts/review_target.py",
+            "Atomize material criteria",
+            "traceability",
+            "residual escape hypothesis",
+            "Missing or narrative-only rows block PASS",
         ):
             if token not in normalized_agent:
                 failures.append(f"{reviewer}: agent missing {token!r}")
+        for requirement_id, token in SEMANTIC_AGENT_REQUIREMENTS.items():
+            if token not in normalized_agent:
+                failures.append(f"{reviewer}: agent missing {requirement_id} ({token!r})")
         for token in (
             "reviewer-evidence-protocol",
             "exact target",
@@ -103,6 +126,9 @@ def contract_failures(root: Path = ROOT) -> list[str]:
         ):
             if token not in normalized_skill:
                 failures.append(f"{reviewer}: skill missing {token!r}")
+        for requirement_id, token in SEMANTIC_SKILL_REQUIREMENTS.items():
+            if token not in normalized_skill:
+                failures.append(f"{reviewer}: skill missing {requirement_id} ({token!r})")
         if agent_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:
             failures.append(f"{reviewer}: agent absent from matrix")
         if skill_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:

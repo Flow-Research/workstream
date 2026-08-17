@@ -172,7 +172,7 @@ class ReceiptSchemaTests(unittest.TestCase):
         sha = "a" * 40
         target = {"base_sha": sha, "merge_base_sha": sha, "head_sha": sha}
         cls.receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "custody": "advisory_session",
             "target": target,
             "reviewer": {"specialty": "security", "run_id": "run-1"},
@@ -191,6 +191,22 @@ class ReceiptSchemaTests(unittest.TestCase):
                     "result": "pass",
                 }
             ],
+            "traceability": [
+                {
+                    "criterion": "deny invalid input",
+                    "behavior": "invalid input cannot bypass denial",
+                    "owner": "security",
+                    "implementation_source": "owner.py:Owner",
+                    "proof_source": "negative test",
+                    "execution_custody": "unit test",
+                    "result": "verified",
+                }
+            ],
+            "residual_escape": {
+                "hypothesis": "another invalid form bypasses denial",
+                "method": "negative test inventory",
+                "result": "falsified",
+            },
             "findings": [],
             "uncertainty": [],
             "freshness": "current",
@@ -218,6 +234,8 @@ class ReceiptSchemaTests(unittest.TestCase):
             "inspections",
             "impact_cone",
             "adversarial_probes",
+            "traceability",
+            "residual_escape",
         ):
             with self.subTest(key=key):
                 self.assert_invalid(lambda receipt, key=key: receipt.pop(key))
@@ -226,6 +244,36 @@ class ReceiptSchemaTests(unittest.TestCase):
         self.assert_invalid(lambda receipt: receipt["inspections"].pop("end"))
         self.assert_invalid(lambda receipt: receipt.__setitem__("impact_cone", []))
         self.assert_invalid(lambda receipt: receipt.__setitem__("adversarial_probes", []))
+        self.assert_invalid(lambda receipt: receipt.__setitem__("traceability", []))
+
+    def test_final_verdict_requires_verified_trace_and_closed_escape(self) -> None:
+        for result in ("missing", "unavailable"):
+            with self.subTest(trace_result=result):
+                self.assert_invalid(
+                    lambda receipt, result=result: receipt["traceability"][0].__setitem__(
+                        "result", result
+                    )
+                )
+        for result in ("survives", "unavailable"):
+            with self.subTest(escape_result=result):
+                self.assert_invalid(
+                    lambda receipt, result=result: receipt["residual_escape"].__setitem__(
+                        "result", result
+                    )
+                )
+
+        def append_unverified_row(receipt):
+            row = copy.deepcopy(receipt["traceability"][0])
+            row["behavior"] = "second independent behavior"
+            row["result"] = "missing"
+            receipt["traceability"].append(row)
+
+        self.assert_invalid(append_unverified_row)
+        receipt = copy.deepcopy(self.receipt)
+        receipt["verdict"] = "PROVISIONAL"
+        receipt["traceability"][0]["result"] = "unavailable"
+        receipt["residual_escape"]["result"] = "unavailable"
+        jsonschema.validate(receipt, self.schema)
 
     def test_closed_tokens_and_unknown_claims_are_rejected(self) -> None:
         self.assert_invalid(lambda receipt: receipt.__setitem__("verdict", "APPROVED"))

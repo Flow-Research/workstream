@@ -8,7 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS
+from scripts.reviewer_contracts import (
+    CASE_CLASSES,
+    REVIEWERS,
+    SEMANTIC_AGENT_REQUIREMENTS,
+    SEMANTIC_SKILL_REQUIREMENTS,
+)
 from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
 from scripts.reviewer_contracts import output_failures, output_set_failures
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
@@ -58,6 +63,38 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
+    def test_each_semantic_skill_requirement_is_independently_enforced(self) -> None:
+        for requirement_id, token in SEMANTIC_SKILL_REQUIREMENTS.items():
+            with self.subTest(requirement_id=requirement_id):
+                temporary, root = self.copied_contract_root()
+                try:
+                    skill = root / ".agents/skills/architecture-review/SKILL.md"
+                    skill.write_text(
+                        skill.read_text(encoding="utf-8").replace(token, "removed"),
+                        encoding="utf-8",
+                    )
+                    self.assertTrue(
+                        any(requirement_id in failure for failure in contract_failures(root))
+                    )
+                finally:
+                    temporary.cleanup()
+
+    def test_each_semantic_agent_requirement_is_independently_enforced(self) -> None:
+        for requirement_id, token in SEMANTIC_AGENT_REQUIREMENTS.items():
+            with self.subTest(requirement_id=requirement_id):
+                temporary, root = self.copied_contract_root()
+                try:
+                    agent = root / ".codex/agents/architecture-reviewer.toml"
+                    agent.write_text(
+                        agent.read_text(encoding="utf-8").replace(token, "removed"),
+                        encoding="utf-8",
+                    )
+                    self.assertTrue(
+                        any(requirement_id in failure for failure in contract_failures(root))
+                    )
+                finally:
+                    temporary.cleanup()
+
     def test_agent_handoff_contract_and_matrix_ids_are_enforced(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
@@ -100,7 +137,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_every_reviewer_has_every_blind_case_class(self) -> None:
         self.assertEqual(fixture_failures(self.cases, None), [])
         rows = self.cases["cases"]
-        self.assertEqual(len(rows), len(REVIEWERS) * len(CASE_CLASSES))
+        self.assertGreaterEqual(len(rows), len(REVIEWERS) * len(CASE_CLASSES))
 
     def test_missing_reviewer_or_case_class_fails(self) -> None:
         cases = copy.deepcopy(self.cases)
@@ -202,7 +239,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": "ci_integrity",
         }
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-1"},
@@ -217,6 +254,10 @@ class ReviewerContractTests(unittest.TestCase):
             "adversarial_probes": [
                 {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
             ],
+            "traceability": [
+                {"criterion": "routing", "behavior": "route finding", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+            ],
+            "residual_escape": {"hypothesis": "a second route is hidden", "method": "inspect supplied evidence", "result": "falsified"},
             "findings": [
                 {"id": "ARCH-7", "severity": "Medium", "location": "case", "blocks_pr": False, "disposition": "fixed", "verification": "replayed"}
             ],
@@ -252,6 +293,8 @@ class ReviewerContractTests(unittest.TestCase):
             ("target", "base_sha"),
             ("reviewer", "run_id"),
             ("inspections", "end"),
+            ("traceability",),
+            ("residual_escape",),
             ("uncertainty",),
             ("freshness",),
             ("verdict",),
@@ -269,6 +312,22 @@ class ReviewerContractTests(unittest.TestCase):
             "output: receipt must separate executed and inspected evidence",
             output_failures(output, expectation, broken_receipt),
         )
+        passing_receipt = copy.deepcopy(receipt)
+        passing_receipt["inspections"] = {"start": {"cleanliness": "clean"}, "end": {"cleanliness": "clean"}}
+        passing_receipt["verdict"] = "PASS"
+        for result in ("missing", "unavailable"):
+            passing_receipt["traceability"][0]["result"] = result
+            self.assertTrue(output_failures(output, expectation, passing_receipt))
+        passing_receipt["traceability"][0]["result"] = "verified"
+        second_row = copy.deepcopy(passing_receipt["traceability"][0])
+        second_row["behavior"] = "second independent behavior"
+        second_row["result"] = "missing"
+        passing_receipt["traceability"].append(second_row)
+        self.assertTrue(output_failures(output, expectation, passing_receipt))
+        passing_receipt["traceability"].pop()
+        for result in ("survives", "unavailable"):
+            passing_receipt["residual_escape"]["result"] = result
+            self.assertTrue(output_failures(output, expectation, passing_receipt))
 
     def test_positive_finding_requires_stable_receipt_finding(self) -> None:
         expectation = {
@@ -287,7 +346,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": None,
         }
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-positive"},
@@ -302,6 +361,10 @@ class ReviewerContractTests(unittest.TestCase):
             "adversarial_probes": [
                 {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
             ],
+            "traceability": [
+                {"criterion": "finding", "behavior": "detect defect", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+            ],
+            "residual_escape": {"hypothesis": "defect is concealed", "method": "inspect supplied evidence", "result": "falsified"},
             "findings": [],
             "uncertainty": [],
             "freshness": "current",

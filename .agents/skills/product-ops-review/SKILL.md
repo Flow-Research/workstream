@@ -15,6 +15,8 @@ findings, separate executed from inspected evidence, state uncertainty and
 freshness, and hand off engineering-only findings without inventing another
 specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 
@@ -36,6 +38,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Confirm user-facing review decisions remain `accept`, `needs_revision`, and `reject`.
 - Confirm out-of-band guidance becomes a guide, policy, template, checker, or ADR before it is enforceable.
 
+## Completeness probe
+
+Trace every lifecycle atom through actor, prerequisite, state transition,
+failure/retry/revision path, evidence produced, and downstream consumer. Include
+separation-of-duty and cross-project variants. Missing operator recovery or
+user-visible failure behavior blocks a passing verdict.
+
 ## Output
 
 ```text
@@ -45,6 +54,7 @@ Operator workflow risks:
 Contributor/reviewer workflow risks:
 Payment/reputation risks:
 Naming or wording drift:
+Lifecycle traceability and residual escape:
 Required fixes:
 ```
 
