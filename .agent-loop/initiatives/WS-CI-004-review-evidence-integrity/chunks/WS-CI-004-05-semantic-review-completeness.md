@@ -32,6 +32,7 @@ L1 — reviewer protocol, skills, agents, evidence schema, and evaluation harnes
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/{CHUNK_MAP.md,STATUS.md,REVIEWER_MATRIX.md}
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/chunks/WS-CI-004-05-semantic-review-completeness.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/{CASES.json,EXPECTATIONS.json}
+.agent-loop/initiatives/WS-CI-004-review-evidence-integrity/reviews/WS-CI-004-05-external-review-response.md
 .agent-loop/CURRENT_STATE.md
 scripts/{reviewer_contracts.py,test_reviewer_contracts.py,test_review_target.py}
 ```
@@ -47,22 +48,33 @@ coverage, CI, branch-protection, or existing test weakening
 
 ## Acceptance criteria
 
-- [ ] Every material criterion is decomposed into atomic observable behaviors,
+- [x] Every material criterion is decomposed into atomic observable behaviors,
       including actors, resources/tenants, lifecycle states, failures, and
       forbidden side effects where relevant.
-- [ ] Every behavior atom maps to its owner, implementation source, named proof,
+- [x] Every behavior atom maps to its owner, implementation source, named proof,
       and execution custody; missing or narrative-only mappings block PASS.
-- [ ] Every final review states a residual escape hypothesis and how the reviewer
+- [x] Every final review states a residual escape hypothesis and how the reviewer
       attempted to falsify it.
-- [ ] Architecture, security, QA, test-delta, docs, product/ops, CI, reuse, and
+- [x] Architecture, security, QA, test-delta, docs, product/ops, CI, reuse, and
       senior-review skills and agents contain specialty-specific completeness
       probes instead of generic boilerplate alone.
-- [ ] The canonical receipt schema rejects missing trace rows or residual escape
+- [x] The canonical receipt schema rejects missing trace rows or residual escape
       analysis, requires all trace rows to be verified for a passing verdict,
       and advances the breaking receipt contract to schema version 2.
-- [ ] Realistic multi-file evaluation fixtures reproduce the semantic omission
+- [x] Realistic multi-file evaluation fixtures reproduce the semantic omission
       observed during PR #346 review without leaking the expected answer.
-- [ ] Session evidence remains advisory and GitHub remains the sole merge authority.
+- [x] Session evidence remains advisory and GitHub remains the sole merge authority.
+
+## Completion evidence
+
+| Behavior | Owner | Implementation source | Named proof | Execution custody | Result |
+|---|---|---|---|---|---|
+| Atomize material criteria | Shared reviewer protocol | `reviewer-evidence-protocol/SKILL.md` and nine specialty agents/skills | `test_all_agent_skill_contracts_compose_with_protocol` plus blind `qa-compound-trace` replay | local deterministic tests and exact-head QA review | verified |
+| Trace every atom through owner, implementation, proof and custody | Shared protocol and receipt schema | protocol steps 6-7 and receipt `traceability` | receipt schema tests and reviewer-contract mutation tests | local deterministic tests | verified |
+| Require residual escape falsification | Shared protocol and receipt schema | protocol step 8 and receipt `residual_escape` | `test_final_verdict_requires_verified_trace_and_closed_escape` | local deterministic tests | verified |
+| Preserve specialty-specific depth | Nine specialty reviewer owners | matching skills and `.codex/agents/*-reviewer.toml` | `scripts/reviewer_contracts.py` and exact-head reviewer fanout | local validation and advisory review sessions | verified |
+| Reproduce the PR #346 omission | Evaluation harness | `CASES.json` / `EXPECTATIONS.json` | blind `qa-compound-trace` classification plus fixture validation | isolated QA review and local tests | verified |
+| Keep evidence advisory | GitHub authority boundary | receipt `custody`, schema closed fields, contract non-goals | authority-field adversarial schema probe and security review | local deterministic tests and advisory review session | verified |
 
 ## Verification commands
 
@@ -72,6 +84,8 @@ python3 scripts/reviewer_contracts.py
 python3 scripts/check_chunk_state_sync.py --base-ref origin/main
 python3 scripts/check_active_state_projections.py
 python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_stale_review_contracts.py
 git diff --check
 ```
 

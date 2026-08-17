@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS
+from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS, SEMANTIC_SKILL_REQUIREMENTS
 from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
 from scripts.reviewer_contracts import output_failures, output_set_failures
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
@@ -55,6 +55,22 @@ class ReviewerContractTests(unittest.TestCase):
                         encoding="utf-8",
                     )
                     self.assertTrue(contract_failures(root))
+                finally:
+                    temporary.cleanup()
+
+    def test_each_semantic_skill_requirement_is_independently_enforced(self) -> None:
+        for requirement_id, token in SEMANTIC_SKILL_REQUIREMENTS.items():
+            with self.subTest(requirement_id=requirement_id):
+                temporary, root = self.copied_contract_root()
+                try:
+                    skill = root / ".agents/skills/architecture-review/SKILL.md"
+                    skill.write_text(
+                        skill.read_text(encoding="utf-8").replace(token, "removed"),
+                        encoding="utf-8",
+                    )
+                    self.assertTrue(
+                        any(requirement_id in failure for failure in contract_failures(root))
+                    )
                 finally:
                     temporary.cleanup()
 
@@ -278,11 +294,19 @@ class ReviewerContractTests(unittest.TestCase):
         passing_receipt = copy.deepcopy(receipt)
         passing_receipt["inspections"] = {"start": {"cleanliness": "clean"}, "end": {"cleanliness": "clean"}}
         passing_receipt["verdict"] = "PASS"
-        passing_receipt["traceability"][0]["result"] = "missing"
-        self.assertTrue(output_failures(output, expectation, passing_receipt))
+        for result in ("missing", "unavailable"):
+            passing_receipt["traceability"][0]["result"] = result
+            self.assertTrue(output_failures(output, expectation, passing_receipt))
         passing_receipt["traceability"][0]["result"] = "verified"
-        passing_receipt["residual_escape"]["result"] = "survives"
+        second_row = copy.deepcopy(passing_receipt["traceability"][0])
+        second_row["behavior"] = "second independent behavior"
+        second_row["result"] = "missing"
+        passing_receipt["traceability"].append(second_row)
         self.assertTrue(output_failures(output, expectation, passing_receipt))
+        passing_receipt["traceability"].pop()
+        for result in ("survives", "unavailable"):
+            passing_receipt["residual_escape"]["result"] = result
+            self.assertTrue(output_failures(output, expectation, passing_receipt))
 
     def test_positive_finding_requires_stable_receipt_finding(self) -> None:
         expectation = {

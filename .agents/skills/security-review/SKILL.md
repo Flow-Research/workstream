@@ -15,6 +15,8 @@ findings, separate executed from inspected evidence, state uncertainty and
 freshness, and hand off non-security findings without inventing another
 specialty's verdict.
 Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
+Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
+execution custody, and result. Missing or narrative-only rows block PASS.
 
 ## Focus
 

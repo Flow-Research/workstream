@@ -247,12 +247,28 @@ class ReceiptSchemaTests(unittest.TestCase):
         self.assert_invalid(lambda receipt: receipt.__setitem__("traceability", []))
 
     def test_final_verdict_requires_verified_trace_and_closed_escape(self) -> None:
-        self.assert_invalid(
-            lambda receipt: receipt["traceability"][0].__setitem__("result", "missing")
-        )
-        self.assert_invalid(
-            lambda receipt: receipt["residual_escape"].__setitem__("result", "survives")
-        )
+        for result in ("missing", "unavailable"):
+            with self.subTest(trace_result=result):
+                self.assert_invalid(
+                    lambda receipt, result=result: receipt["traceability"][0].__setitem__(
+                        "result", result
+                    )
+                )
+        for result in ("survives", "unavailable"):
+            with self.subTest(escape_result=result):
+                self.assert_invalid(
+                    lambda receipt, result=result: receipt["residual_escape"].__setitem__(
+                        "result", result
+                    )
+                )
+
+        def append_unverified_row(receipt):
+            row = copy.deepcopy(receipt["traceability"][0])
+            row["behavior"] = "second independent behavior"
+            row["result"] = "missing"
+            receipt["traceability"].append(row)
+
+        self.assert_invalid(append_unverified_row)
         receipt = copy.deepcopy(self.receipt)
         receipt["verdict"] = "PROVISIONAL"
         receipt["traceability"][0]["result"] = "unavailable"
