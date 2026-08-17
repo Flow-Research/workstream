@@ -77,5 +77,6 @@ does not add contribution or merge authority.
 
 - Outcome on merge: `planned`
 
-Shared proof-strength structure is available; reviewer adoption remains
-unstarted until explicit human direction.
+After this implementation chunk merges, the shared proof-strength structure
+will be available; reviewer adoption will remain unstarted until explicit
+human direction.

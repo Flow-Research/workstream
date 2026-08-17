@@ -88,6 +88,7 @@ and that readiness remains advisory until human merge.
 
 - Outcome on merge: `planned`
 
-The reviewer contracts are behaviorally adopted and the semantic proof-quality
-initiative is complete. Future escaped findings are added only when they
-represent a reusable failure class.
+Only after this chunk's independent blind evaluation succeeds will the
+reviewer contracts be behaviorally adopted and the semantic proof-quality
+initiative become complete. Future escaped findings will be added only when
+they represent a reusable failure class.

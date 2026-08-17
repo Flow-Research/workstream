@@ -57,7 +57,11 @@ a material claim. The probe states:
 For changed tests, QA/test-delta must inspect whether the test would fail under
 the defect. For unchanged trusted proof, a targeted mutation or equivalent
 source-level counterexample may be used when execution is unavailable, but the
-receipt must label it as inspected rather than executed.
+receipt must label it as inspected rather than executed. Source inspection may
+satisfy only a compatible source-level claim. Repository, transaction,
+concurrency, and direct-SQL claims still require existing executed proof with
+the custody declared by the compatibility table; a source-level counterexample
+is supplemental evidence and cannot support `PASS` for those claims by itself.
 
 ## Shared escaped-failure patterns
 
