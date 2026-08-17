@@ -7,13 +7,14 @@ prepared-mutation, project-guide, policy-mutation, and REV-readiness
 foundations plus merged REV PLAN4, ART foundations, and CP02 hidden CON
 adapter-binding behavior. The old `0052_legacy_intake_removal` identifier is
 historical merge evidence. Current `main` ends at
-`0005_compensation_adapter_identity`, whose tracked predecessor is
-`0004_compensation_adapter_binding_lifecycle`. Older `0050`, `0053`, and `0055`
+`0006_contribution_policy_operations`, whose tracked predecessor is
+`0005_compensation_adapter_identity`. Older `0050`, `0053`, and `0055`
 identifiers are historical pre-baseline merge evidence, not active graph heads.
 CP03A installs the target identity and owner eligibility without action-bearing
 service membership; CP03B activates only the four exact Finance Authority
-boundaries. No public CON route, ContributionPolicy
-behavior, or outbox-dispatcher authority is active.
+boundaries. CP04A implements hidden policy draft behavior behind deny-default
+authorization. No public CON route, ContributionPolicy authority, or
+outbox-dispatcher authority is active.
 
 AUTH owns identifiers, stable permission mappings, principals, grants,
 fixed-service identities and matrix rows, prepared authorization, evaluators,
@@ -89,7 +90,8 @@ CP01C corrects binding identity and lifecycle-generation facts before CP02.
 CP02 is merged with hidden CON behavior. CP03A installs the exact target identity
 and owner eligibility without activation; CP03B is complete and
 activates only the four exact CP02 Finance Authority boundaries. CP05 later
-activates only CP04A/CP04B's merged hidden proof. Before CON
+activates only CP04A/CP04B's merged hidden proof. CP04A is complete; CP04B is
+the remaining hidden behavior prerequisite. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and
 transaction-participant foundations now needed by REV.

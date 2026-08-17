@@ -283,6 +283,8 @@ def test_contribution_models_register_closed_canonical_tables() -> None:
         "published_at",
         "retired_by",
         "retired_at",
+        "last_updated_by",
+        "last_updated_at",
     }
     assert {
         "iso_4217_currency_codes",

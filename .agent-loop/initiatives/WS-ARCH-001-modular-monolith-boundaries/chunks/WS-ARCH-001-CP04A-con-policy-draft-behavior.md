@@ -17,14 +17,14 @@ planned/unavailable.
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- The later CP04A implementation PR changes this outcome to `complete`.
+- Outcome on merge: `complete`
+- CP04B becomes the next bounded policy-behavior implementation.
 
 ## Allowed files
 
 ```text
 backend/app/modules/contributions/api/**
-backend/app/modules/contributions/{schemas.py,models.py,repository.py,service.py}
+backend/app/modules/contributions/{schemas.py,models.py,repository.py,service.py,policy_validation.py}
 backend/app/modules/compensation/api/{__init__.py,instruments.py,policy_bindings.py} (canonical instrument type and locked binding facts only)
 backend/app/modules/compensation/schemas.py (same-owner import of the canonical public instrument enum only)
 backend/app/modules/compensation/policy_binding_service.py (owner implementation only)
@@ -37,6 +37,8 @@ backend/app/db/models.py (metadata parity only if required)
 backend/alembic/versions/0006_contribution_policy_operations.py
 backend/alembic/env.py (head parity only)
 backend/tests/contributions/**
+backend/tests/conftest.py (register the new resettable lifecycle-event table only)
+backend/tests/{projects,authorization}/guide_compilation/test_migration_contract.py (current-head parity only)
 backend/tests/architecture/** (exact boundary/API proof only)
 backend/tests/test_alembic.py (head/schema parity only)
 backend/tests/test_contributions.py (preserved DB regressions only; no new primary behavior container)
@@ -262,13 +264,19 @@ substitution is not acceptance evidence.
 
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/schemas.py app/modules/compensation/policy_binding_service.py app/modules/projects/api app/modules/projects/contribution_policy.py app/adapters/contributions app/adapters/compensation app/adapters/projects tests/contributions
-cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py tests/test_alembic.py
-cd backend && .venv/bin/python -m coverage erase && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.schemas --cov=app.modules.compensation.policy_binding_service --cov=app.modules.projects.api --cov=app.modules.projects.contribution_policy --cov=app.adapters.contributions --cov=app.adapters.compensation --cov=app.adapters.projects --cov-report=
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/*' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/api/*' --fail-under=90
+cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py
+cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-url> .venv/bin/python -m scripts.run_isolated_tests --metadata-json /tmp/cp04a-postgresql.json --timeout-seconds 1800 --lane cp04a_postgresql -- .venv/bin/python -m pytest -q tests/contributions/test_policy_integration_postgresql.py tests/contributions/test_policy_draft_concurrency.py tests/contributions/test_policy_event_postgresql.py tests/test_alembic.py
+cd backend && .venv/bin/python -m coverage erase && .venv/bin/python -m pytest -q tests/contributions tests/test_contributions.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.schemas --cov=app.modules.compensation.policy_binding_service --cov=app.modules.projects.api --cov=app.modules.projects.contribution_policy --cov=app.adapters.contributions --cov=app.adapters.compensation --cov=app.adapters.projects --cov-report=
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/api/*' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/models.py' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/schemas.py' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/repository.py' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/service.py' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/policy_validation.py' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/api/__init__.py,app/modules/compensation/api/instruments.py,app/modules/compensation/api/policy_bindings.py' --fail-under=90
 cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/schemas.py' --fail-under=90
 cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/policy_binding_service.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/projects/api/*' --fail-under=90
+cd backend && .venv/bin/python -m coverage report --include='app/modules/projects/api/__init__.py,app/modules/projects/api/contribution_policy.py' --fail-under=90
 cd backend && .venv/bin/python -m coverage report --include='app/modules/projects/contribution_policy.py' --fail-under=90
 cd backend && .venv/bin/python -m coverage report --include='app/adapters/contributions/__init__.py' --fail-under=90
 cd backend && .venv/bin/python -m coverage report --include='app/adapters/compensation/__init__.py' --fail-under=90

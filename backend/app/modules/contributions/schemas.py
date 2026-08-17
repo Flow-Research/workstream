@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.modules.compensation.schemas import (
+from app.modules.compensation.api import (
     CompensationInstrumentType as ContributionInstrumentType,
 )
 

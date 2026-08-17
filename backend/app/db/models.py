@@ -40,6 +40,7 @@ from app.modules.contributions.models import (  # noqa: F401
     ContributionAwardDefinition,
     ContributionPolicy,
     ContributionPolicyVersion,
+    ContributionPolicyLifecycleEvent,
     ContributionRule,
     Iso4217CurrencyCode,
     ProjectCompensationUnit,

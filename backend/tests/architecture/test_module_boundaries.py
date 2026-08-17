@@ -599,3 +599,41 @@ def test_dynamic_and_wildcard_imports_fail_repository_wide(
     _write(tmp_path / "backend/app/modules/tasks/service.py", source)
     with pytest.raises(AuthorizationBoundaryError):
         boundary.scan(tmp_path, boundary.load_registry(tmp_path / "registry.json"))
+
+
+def test_policy_public_api_exports_immutable_contracts() -> None:
+    from dataclasses import is_dataclass
+    import app.modules.contributions.api as policy_api
+
+    assert is_dataclass(policy_api.ContributionPolicyReadRequest)
+    assert policy_api.ContributionPolicyReadRequest.__dataclass_params__.frozen
+
+
+def test_policy_public_api_exports_no_private_persistence_values() -> None:
+    import app.modules.contributions.api as policy_api
+
+    exported = set(policy_api.__all__)
+    assert not exported & {"AsyncSession", "ContributionPolicyRepository", "Base"}
+
+
+def test_cp04a_public_policy_api_has_no_private_cross_module_edge() -> None:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2] / "app/modules/contributions"
+    source = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
+    assert "app.modules.compensation.schemas" not in source
+    assert "app.modules.projects.models" not in source
+
+
+def test_policy_uses_public_compensation_instrument_enum_only() -> None:
+    from app.modules.compensation.api import CompensationInstrumentType as public_type
+    from app.modules.compensation.schemas import CompensationInstrumentType as schema_type
+
+    assert public_type is schema_type
+
+
+def test_cp04a_uses_only_public_projects_policy_eligibility_port() -> None:
+    root = ROOT / "backend/app/modules/contributions"
+    source = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
+    assert "app.modules.projects.models" not in source
+    assert "app.modules.projects.repository" not in source

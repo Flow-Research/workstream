@@ -5,6 +5,11 @@ from app.modules.projects.api.compensation_binding import (
     ProjectCompensationBindingEligibilityPort,
     ProjectCompensationBindingUnavailable,
 )
+from app.modules.projects.api.contribution_policy import (
+    ProjectContributionPolicyEligibilityFacts,
+    ProjectContributionPolicyEligibilityPort,
+    ProjectContributionPolicyUnavailable,
+)
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
@@ -22,6 +27,9 @@ __all__ = (
     "ProjectCompensationBindingEligibilityFacts",
     "ProjectCompensationBindingEligibilityPort",
     "ProjectCompensationBindingUnavailable",
+    "ProjectContributionPolicyEligibilityFacts",
+    "ProjectContributionPolicyEligibilityPort",
+    "ProjectContributionPolicyUnavailable",
     "ProjectLockedPolicyContextFacts",
     "ProjectLockedPolicyContextPort",
     "ProjectLockedPolicyContextRequest",

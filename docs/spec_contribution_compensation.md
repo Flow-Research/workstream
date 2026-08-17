@@ -804,6 +804,14 @@ the four exact binding actions for an authenticated human Finance Authority
 covering the exact project. Neither child adds a public route, provider
 behavior, or ContributionPolicy authority.
 
+CP04A implements route-unreachable ContributionPolicy read, create-draft, and
+complete update-draft behavior. CONTRIBUTIONS owns policy and unit truth;
+COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
+mutation uses a caller-owned root transaction, advisory operation fence,
+opaque prepare/consume/close participant, complete graph replacement, and one
+immutable recoverable lifecycle event. Production authorization remains
+deny-default and all five policy actions remain unavailable until CP05.
+
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |

@@ -446,12 +446,6 @@
       "repair_owner": "WS-ARCH-001-03"
     },
     {
-      "source_file": "backend/app/modules/contributions/schemas.py",
-      "target_module": "compensation",
-      "imported_private_path": "app.modules.compensation.schemas",
-      "repair_owner": "WS-ARCH-001-06"
-    },
-    {
       "source_file": "backend/app/modules/projects/create_router.py",
       "target_module": "actors",
       "imported_private_path": "app.modules.actors.service",
