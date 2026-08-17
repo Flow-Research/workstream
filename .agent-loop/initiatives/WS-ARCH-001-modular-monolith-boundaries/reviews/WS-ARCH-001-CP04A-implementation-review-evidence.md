@@ -24,10 +24,10 @@ state projections.
 
 ## Integrity disposition
 
-No CI file, package dependency, test threshold, test selection, assertion,
-skip, xfail, or deselection mechanism changed. PostgreSQL-required tests retain
-isolated-database custody; the contract was corrected rather than weakening
-their fixture.
+No CI, test, or threshold change weakens coverage, selection, assertion, skip,
+xfail, or deselection custody. PostgreSQL-required tests retain
+isolated-database custody; the contract and lane inventory were strengthened
+rather than weakening their fixture.
 
 ## Exact-head reviewer custody
 

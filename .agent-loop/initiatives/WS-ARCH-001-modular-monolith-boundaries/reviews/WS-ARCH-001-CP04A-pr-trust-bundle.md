@@ -61,6 +61,9 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
 - Adversarial exact-head replay found and corrected integer-scale
   project-points validation, exact COMPENSATION owner-fact parity, malformed
   rule concealment, and a missing real-PostgreSQL late-rollback proof.
+- Reuse replay then found a fork between schema and behavior quantity bounds.
+  Both now consume one CONTRIBUTIONS-owned canonical validator, and regression
+  tests prove overflow/over-scale values stop before authorization or mutation.
 - CP04A's authorization claim is deliberately narrow: opaque port rejection
   creates no product effect and every prepared object is closed once. CP05/AUTH
   owns real handle session, transaction, copy, and replay semantics.

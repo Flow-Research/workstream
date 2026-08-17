@@ -75,3 +75,10 @@ valid:
   semantics.
 
 Fresh exact-head review and hosted CI are required after these corrections.
+
+A subsequent reuse review found that CP04A had duplicated but weakened the
+existing CONTRIBUTIONS quantity bounds. The schema and hidden behavior now use
+one canonical validator for positivity, canonical form, maximum magnitude,
+maximum scale, and integer-scale project points. Overflow and over-scale input
+is rejected before owner locks, authorization, or graph replacement. This
+finding invalidates all earlier exact-head receipts until replayed.

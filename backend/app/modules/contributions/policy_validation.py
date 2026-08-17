@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
+import re
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
@@ -12,6 +13,29 @@ from app.modules.contributions.api import (
     PolicyDefinitionInput,
     PolicyRuleInput,
 )
+
+
+_QUANTITY_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,18})?$")
+
+
+def canonical_award_quantity(
+    value: object, instrument_type: CompensationInstrumentType
+) -> Decimal:
+    """Return one bounded canonical quantity shared by schema and behavior."""
+    if not isinstance(value, str) or _QUANTITY_PATTERN.fullmatch(value) is None:
+        raise ValueError("quantity must be a canonical positive decimal string")
+    try:
+        quantity = Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError("quantity must be a canonical positive decimal string") from exc
+    if not quantity.is_finite() or quantity <= 0:
+        raise ValueError("quantity must be greater than zero")
+    if (
+        instrument_type is CompensationInstrumentType.PROJECT_POINTS
+        and quantity.as_tuple().exponent < 0
+    ):
+        raise ValueError("project_points quantity must be a whole-number string")
+    return quantity
 
 
 def _json_value(value: object) -> object:
@@ -83,13 +107,6 @@ def _validate_definition(item: PolicyDefinitionInput) -> None:
     ):
         raise ContributionPolicyConflict("contribution_policy_conflict")
     try:
-        quantity = Decimal(item.quantity)
-    except (InvalidOperation, TypeError):
+        canonical_award_quantity(item.quantity, item.instrument_type)
+    except ValueError:
         raise ContributionPolicyConflict("contribution_policy_conflict") from None
-    if not quantity.is_finite() or quantity <= 0 or format(quantity, "f") != item.quantity:
-        raise ContributionPolicyConflict("contribution_policy_conflict")
-    if (
-        item.instrument_type is CompensationInstrumentType.PROJECT_POINTS
-        and (quantity != quantity.to_integral() or quantity.as_tuple().exponent != 0)
-    ):
-        raise ContributionPolicyConflict("contribution_policy_conflict")

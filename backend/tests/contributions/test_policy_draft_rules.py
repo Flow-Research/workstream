@@ -16,7 +16,8 @@ from app.modules.contributions.policy_validation import (
     validate_policy_graph,
     validate_policy_name,
 )
-from tests.contributions.policy_test_support import complete_rules
+from tests.contributions.policy_test_support import complete_rules, service_fixture
+from tests.contributions.test_policy_draft_update import install_draft, update_request
 
 
 def test_update_requires_exactly_one_accepted_submission_rule() -> None:
@@ -134,6 +135,30 @@ def test_update_rejects_non_integer_scale_project_points(quantity: str) -> None:
 def test_update_conceals_malformed_rule_input() -> None:
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
         validate_policy_graph((object(), complete_rules()[1]))  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "quantity",
+    ("100000000000000000000", "1.0000000000000000000"),
+)
+async def test_update_rejects_out_of_bounds_quantity_before_authorization(
+    quantity: str,
+) -> None:
+    fixture = service_fixture()
+    request = update_request(fixture)
+    paid, review = request.rules
+    definition = replace(paid.definitions[0], quantity=quantity)
+    request = replace(request, rules=(replace(paid, definitions=(definition,)), review))
+    install_draft(fixture, request)
+
+    with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
+        await fixture.service.update_draft(request)
+
+    fixture.repository.get_policy.assert_not_awaited()
+    assert fixture.authorization.prepared == []
+    assert fixture.authorization.consumed == []
+    fixture.repository.replace_graph.assert_not_awaited()
 
 
 def test_update_rejects_unknown_compensation_mode_before_authorization() -> None:
