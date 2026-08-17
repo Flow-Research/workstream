@@ -46,7 +46,9 @@ Architecture, CI integrity, security, QA/test-delta, senior engineering,
 reuse/dedup, and documentation. Product/operations verifies that engineering
 review language does not alter Workstream product review decisions.
 
-## Outcome on merge
+## Merge state
+
+- Outcome on merge: `planned`
 
 The initiative plan becomes durable and `WS-CI-005-01` remains planned. No
 implementation begins automatically.

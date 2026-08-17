@@ -71,7 +71,9 @@ handoff boundary. No reviewer validates itself as the sole evidence.
 
 Confirm the prompts remain concise, proportionate, and useful for small changes.
 
-## Outcome on merge
+## Merge state
+
+- Outcome on merge: `planned`
 
 Candidate reviewer proof-quality contracts are installed. They are not called
 adopted until `WS-CI-005-03` passes independent blind forward evaluation.

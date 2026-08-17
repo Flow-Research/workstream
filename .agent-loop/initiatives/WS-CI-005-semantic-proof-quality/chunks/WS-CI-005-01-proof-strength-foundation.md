@@ -73,7 +73,9 @@ reuse/dedup, documentation, and product/operations.
 Confirm the taxonomy is minimal, does not infer semantics from filenames, and
 does not add contribution or merge authority.
 
-## Outcome on merge
+## Merge state
+
+- Outcome on merge: `planned`
 
 Shared proof-strength structure is available; reviewer adoption remains
 unstarted until explicit human direction.

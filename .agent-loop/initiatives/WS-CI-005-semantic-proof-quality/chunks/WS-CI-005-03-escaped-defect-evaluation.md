@@ -84,7 +84,9 @@ evaluation independence.
 Confirm the fixtures test transferable reasoning rather than memorized wording,
 and that readiness remains advisory until human merge.
 
-## Outcome on merge
+## Merge state
+
+- Outcome on merge: `planned`
 
 The reviewer contracts are behaviorally adopted and the semantic proof-quality
 initiative is complete. Future escaped findings are added only when they
