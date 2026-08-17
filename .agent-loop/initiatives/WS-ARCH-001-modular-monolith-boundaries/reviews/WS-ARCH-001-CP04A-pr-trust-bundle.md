@@ -48,6 +48,9 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
   composition surfaces are 92-100%.
 - Module boundary, test-structure, state projection, chunk-state, Markdown,
   stale-document, Ruff, action-unavailability, and diff checks pass.
+- The behavior-ownership partition includes exactly the nine new CP04A
+  executable targets; its trusted transition rejects any additional target,
+  and all 106 focused ownership tests pass.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

@@ -42,6 +42,7 @@ backend/tests/{projects,authorization}/guide_compilation/test_migration_contract
 backend/tests/architecture/** (exact boundary/API proof only)
 backend/tests/test_alembic.py (head/schema parity only)
 backend/tests/test_contributions.py (preserved DB regressions only; no new primary behavior container)
+backend/tests/test_behavior_ownership.py (exact CP04A partition transition proof only)
 backend/scripts/{behavior_ownership.py,module_boundaries.py,run_test_lanes.py} (exact parity only)
 .github/workflows/backend.yml (exact CP04A changed-surface coverage gates only)
 .ci/behavior-ownership/** (exact CP04A targets only)

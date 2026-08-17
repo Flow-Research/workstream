@@ -78,3 +78,13 @@ from CP01B registration custody while preserving unavailable action status.
 The current-state entry now identifies CP04B, not completed CP04A, as the next
 implementation boundary. Documentation and every required reviewer must bind
 their final verdict to the resulting clean head.
+
+## Hosted preflight correction
+
+The first hosted run exposed a stale behavior-ownership partition: CP04A's nine
+new executable targets were absent, so preflight failed closed before semantic
+lanes. The canonical partition now includes exactly those targets, the trusted
+transition allowlist names exactly the CP04A set, and a focused negative test
+rejects any additional target. Local partition validation, all 106 ownership
+tests, Ruff, and diff checks pass. No ownership or CI gate was weakened. All
+required reviewers must replay against the corrected clean head.
