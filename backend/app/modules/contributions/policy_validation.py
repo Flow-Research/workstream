@@ -72,8 +72,7 @@ def validate_policy_graph(rules: tuple[PolicyRuleInput, ...]) -> tuple[PolicyRul
         type(rules) is not tuple
         or len(rules) != 2
         or any(type(rule) is not PolicyRuleInput for rule in rules)
-        or {rule.contribution_type for rule in rules}
-        != {"accepted_submission", "completed_review"}
+        or {rule.contribution_type for rule in rules} != {"accepted_submission", "completed_review"}
     ):
         raise ContributionPolicyConflict("contribution_policy_conflict")
     for rule in rules:

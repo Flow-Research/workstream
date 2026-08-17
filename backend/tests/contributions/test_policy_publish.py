@@ -26,7 +26,9 @@ def _request(fixture) -> ContributionPolicyPublishRequest:
     )
 
 
-def _install_complete_draft(fixture, request) -> tuple[ContributionPolicy, ContributionPolicyVersion]:
+def _install_complete_draft(
+    fixture, request
+) -> tuple[ContributionPolicy, ContributionPolicyVersion]:
     policy = ContributionPolicy(
         id=request.contribution_policy_id,
         project_id=str(request.project_id),
@@ -43,28 +45,35 @@ def _install_complete_draft(fixture, request) -> tuple[ContributionPolicy, Contr
         created_by=str(request.actor_profile_id),
     )
     accepted = ContributionRule(
-        id=uuid4(), contribution_policy_version_id=version.id,
-        project_id=policy.project_id, contribution_type="accepted_submission",
+        id=uuid4(),
+        contribution_policy_version_id=version.id,
+        project_id=policy.project_id,
+        contribution_type="accepted_submission",
         compensation_mode="compensated",
     )
     reviewed = ContributionRule(
-        id=uuid4(), contribution_policy_version_id=version.id,
-        project_id=policy.project_id, contribution_type="completed_review",
+        id=uuid4(),
+        contribution_policy_version_id=version.id,
+        project_id=policy.project_id,
+        contribution_type="completed_review",
         compensation_mode="unpaid",
     )
     definition = ContributionAwardDefinition(
-        id=uuid4(), contribution_rule_id=accepted.id,
-        contribution_policy_version_id=version.id, project_id=policy.project_id,
-        contribution_type="accepted_submission", instrument_type="money",
-        unit_code="USD", quantity=Decimal("10"), adapter_binding_id=uuid4(),
+        id=uuid4(),
+        contribution_rule_id=accepted.id,
+        contribution_policy_version_id=version.id,
+        project_id=policy.project_id,
+        contribution_type="accepted_submission",
+        instrument_type="money",
+        unit_code="USD",
+        quantity=Decimal("10"),
+        adapter_binding_id=uuid4(),
     )
     accepted.award_definitions = [definition]
     reviewed.award_definitions = []
     fixture.repository.get_policy.return_value = policy
     fixture.repository.get_version.return_value = version
-    fixture.repository.lock_publication_graph.return_value = (
-        [accepted, reviewed], [definition]
-    )
+    fixture.repository.lock_publication_graph.return_value = ([accepted, reviewed], [definition])
 
     async def stamp(custody) -> None:
         custody.occurred_at = datetime.now(UTC)
@@ -114,3 +123,67 @@ async def test_publish_is_hidden_deny_default() -> None:
         await fixture.service.publish(request)
 
     fixture.repository.create_transition_custody.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_replacement_publication_is_one_atomic_event() -> None:
+    fixture = service_fixture()
+    request = _request(fixture)
+    policy, version = _install_complete_draft(fixture, request)
+    prior = ContributionPolicyVersion(
+        id=uuid4(),
+        contribution_policy_id=policy.id,
+        project_id=policy.project_id,
+        version_number=1,
+        status="published",
+        created_by=str(fixture.actor_id),
+        published_by=str(fixture.actor_id),
+        published_at=datetime.now(UTC),
+    )
+    version.version_number = 2
+    policy.status = "active"
+    policy.current_published_version_id = prior.id
+    fixture.repository.get_version.side_effect = [version, prior]
+    result = await fixture.service.publish(request)
+    assert result.prior_current_version_id == prior.id
+    assert prior.status == "retired"
+    fixture.repository.flush_transition_event.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_replacement_preserves_prior_content_and_frozen_references() -> None:
+    fixture = service_fixture()
+    request = _request(fixture)
+    policy, version = _install_complete_draft(fixture, request)
+    prior = ContributionPolicyVersion(
+        id=uuid4(),
+        contribution_policy_id=policy.id,
+        project_id=policy.project_id,
+        version_number=1,
+        status="published",
+        created_by=str(fixture.actor_id),
+        published_by=str(fixture.actor_id),
+        published_at=datetime.now(UTC),
+    )
+    marker = ContributionRule(
+        id=uuid4(),
+        contribution_policy_version_id=prior.id,
+        project_id=prior.project_id,
+        contribution_type="accepted_submission",
+        compensation_mode="unpaid",
+    )
+    prior.rules = [marker]
+    version.version_number = 2
+    policy.status = "active"
+    policy.current_published_version_id = prior.id
+    fixture.repository.get_version.side_effect = [version, prior]
+    await fixture.service.publish(request)
+    assert prior.rules == [marker]
+
+
+@pytest.mark.asyncio
+async def test_caller_supplied_graph_mismatch_denies() -> None:
+    fixture = service_fixture()
+    request = _request(fixture)
+    assert not hasattr(request, "rules_and_definitions_digest")
+    assert not hasattr(request, "adapter_binding_ids")

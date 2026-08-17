@@ -114,9 +114,7 @@ def service_fixture() -> SimpleNamespace:
         get_policy=AsyncMock(return_value=None),
         get_version=AsyncMock(return_value=None),
         get_selected_version=AsyncMock(return_value=None),
-        lock_unit=AsyncMock(
-            return_value=SimpleNamespace(status="active")
-        ),
+        lock_unit=AsyncMock(return_value=SimpleNamespace(status="active")),
         replace_graph=AsyncMock(),
         lock_publication_graph=AsyncMock(),
         create_transition_custody=AsyncMock(),

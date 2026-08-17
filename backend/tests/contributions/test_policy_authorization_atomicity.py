@@ -41,7 +41,9 @@ async def test_consume_exception_creates_no_effect() -> None:
 
 
 @pytest.mark.asyncio
-async def test_close_failure_rolls_back_staged_authorization_evidence_before_product_effect() -> None:
+async def test_close_failure_rolls_back_staged_authorization_evidence_before_product_effect() -> (
+    None
+):
     fixture = service_fixture()
 
     def fail(prepared: object) -> None:

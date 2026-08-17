@@ -33,9 +33,7 @@ def recovered_event(fixture: SimpleNamespace, request: object) -> SimpleNamespac
         actor_profile_id=str(fixture.actor_id),
         project_id=str(fixture.project_id),
         contribution_policy_id=getattr(request, "contribution_policy_id", uuid4()),
-        contribution_policy_version_id=getattr(
-            request, "contribution_policy_version_id", uuid4()
-        ),
+        contribution_policy_version_id=getattr(request, "contribution_policy_version_id", uuid4()),
         version_number=1,
         prior_current_version_id=None,
         prior_current_version_number=None,

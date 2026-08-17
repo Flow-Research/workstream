@@ -20,7 +20,6 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishAuthorizationFacts,
     ContributionPolicyPublishRequest,
     ContributionPolicyReadAuthorizationPort,
-    ContributionPolicyReadRequest,
     ContributionPolicyRetireAuthorizationFacts,
     ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
@@ -30,7 +29,10 @@ from app.modules.contributions.models import (
     ContributionPolicyTransitionCustody,
 )
 from app.modules.contributions.policy_graph import publication_graph_facts
-from app.modules.contributions.policy_mutation_support import consume_and_close_policy_authority
+from app.modules.contributions.policy_mutation_support import (
+    begin_and_recover_policy_mutation,
+    consume_and_close_policy_authority,
+)
 from app.modules.contributions.policy_validation import policy_request_digest
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.projects.api import ProjectContributionPolicyUnavailable
@@ -137,29 +139,14 @@ class ContributionPolicyPublicationService:
         return self._result(event)
 
     async def _begin_and_recover(self, request, digest: str, event_type: str):
-        await self._repository.lock_operation(request.operation_id)
-        event = await self._repository.get_event_by_operation(request.operation_id)
-        if event is None:
-            return None
-        if (
-            event.event_type != event_type
-            or event.request_digest != digest
-            or event.actor_profile_id != str(request.actor_profile_id)
-            or event.project_id != str(request.project_id)
-        ):
-            raise ContributionPolicyConflict("contribution_policy_conflict")
-        try:
-            await self._read_authorization.authorize_contribution_policy_read(
-                ContributionPolicyReadRequest(
-                    actor_profile_id=request.actor_profile_id,
-                    project_id=request.project_id,
-                    contribution_policy_id=event.contribution_policy_id,
-                    contribution_policy_version_id=event.contribution_policy_version_id,
-                )
-            )
-        except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
-            raise ContributionPolicyConflict("contribution_policy_conflict") from exc
-        return self._result(event)
+        return await begin_and_recover_policy_mutation(
+            repository=self._repository,
+            read_authorization=self._read_authorization,
+            request=request,
+            request_digest=digest,
+            expected_event_type=event_type,
+            result_factory=self._result,
+        )
 
     async def _lock_project(self, project_id: UUID) -> None:
         if self._projects is None:
@@ -287,32 +274,42 @@ class ContributionPolicyPublicationService:
     @staticmethod
     def _event(request, digest, event_type, policy, version, prior, custody):
         return ContributionPolicyLifecycleEvent(
-            id=uuid4(), operation_id=request.operation_id,
+            id=uuid4(),
+            operation_id=request.operation_id,
             publication_custody_operation_id=request.operation_id,
-            request_digest=digest, event_type=event_type,
-            actor_profile_id=str(request.actor_profile_id), project_id=str(request.project_id),
-            contribution_policy_id=policy.id, contribution_policy_version_id=version.id,
+            request_digest=digest,
+            event_type=event_type,
+            actor_profile_id=str(request.actor_profile_id),
+            project_id=str(request.project_id),
+            contribution_policy_id=policy.id,
+            contribution_policy_version_id=version.id,
             version_number=version.version_number,
             prior_current_version_id=prior.id if prior else None,
             prior_current_version_number=prior.version_number if prior else None,
             from_policy_status="active" if event_type == "retired" or prior else "draft",
             to_policy_status=policy.status,
             from_version_status="draft" if event_type == "published" else "published",
-            to_version_status=version.status, occurred_at=custody.occurred_at,
+            to_version_status=version.status,
+            occurred_at=custody.occurred_at,
         )
 
     @staticmethod
     def _result(event):
         return ContributionPolicyMutationResult(
-            event_id=event.id, operation_id=event.operation_id,
-            request_digest=event.request_digest, event_type=event.event_type,
-            actor_profile_id=UUID(event.actor_profile_id), project_id=UUID(event.project_id),
+            event_id=event.id,
+            operation_id=event.operation_id,
+            request_digest=event.request_digest,
+            event_type=event.event_type,
+            actor_profile_id=UUID(event.actor_profile_id),
+            project_id=UUID(event.project_id),
             contribution_policy_id=event.contribution_policy_id,
             contribution_policy_version_id=event.contribution_policy_version_id,
             version_number=event.version_number,
             prior_current_version_id=event.prior_current_version_id,
             prior_current_version_number=event.prior_current_version_number,
-            from_policy_status=event.from_policy_status, to_policy_status=event.to_policy_status,
+            from_policy_status=event.from_policy_status,
+            to_policy_status=event.to_policy_status,
             from_version_status=event.from_version_status,
-            to_version_status=event.to_version_status, occurred_at=event.occurred_at,
+            to_version_status=event.to_version_status,
+            occurred_at=event.occurred_at,
         )

@@ -149,9 +149,7 @@ class ContributionPolicyRepository:
                     )
                 )
             )
-        return await self.get_version(
-            UUID(policy.project_id), policy.id, selected, graph=True
-        )
+        return await self.get_version(UUID(policy.project_id), policy.id, selected, graph=True)
 
     async def lock_unit(
         self, project_id: UUID, instrument_type: str, unit_code: str
@@ -185,10 +183,7 @@ class ContributionPolicyRepository:
             (
                 await self._session.scalars(
                     select(ContributionAwardDefinition)
-                    .where(
-                        ContributionAwardDefinition.contribution_policy_version_id
-                        == version_id
-                    )
+                    .where(ContributionAwardDefinition.contribution_policy_version_id == version_id)
                     .order_by(
                         ContributionAwardDefinition.instrument_type,
                         ContributionAwardDefinition.unit_code,
@@ -199,26 +194,20 @@ class ContributionPolicyRepository:
                 )
             ).all()
         )
-        by_rule: dict[UUID, list[ContributionAwardDefinition]] = {
-            rule.id: [] for rule in rules
-        }
+        by_rule: dict[UUID, list[ContributionAwardDefinition]] = {rule.id: [] for rule in rules}
         for definition in definitions:
             by_rule[definition.contribution_rule_id].append(definition)
         for rule in rules:
             set_committed_value(rule, "award_definitions", by_rule[rule.id])
         return rules, definitions
 
-    async def create_transition_custody(
-        self, custody: ContributionPolicyTransitionCustody
-    ) -> None:
+    async def create_transition_custody(self, custody: ContributionPolicyTransitionCustody) -> None:
         """Flush custody first and load its database-owned transition time."""
         self._session.add(custody)
         await self._session.flush()
         await self._session.refresh(custody)
 
-    async def flush_transition_event(
-        self, event: ContributionPolicyLifecycleEvent
-    ) -> None:
+    async def flush_transition_event(self, event: ContributionPolicyLifecycleEvent) -> None:
         """Flush one protected lifecycle transition and its immutable event."""
         await self._session.flush()
         self._session.add(event)

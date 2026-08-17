@@ -111,6 +111,7 @@ def upgrade() -> None:
     )
     _install_custody_guards()
     _replace_event_guard()
+    _install_row_transition_guards()
     _install_graph_guards()
 
 
@@ -329,6 +330,116 @@ def _install_graph_guards() -> None:
             f"before insert or update or delete on {table} for each row execute function "
             "guard_published_contribution_policy_graph()"
         )
+
+
+def _install_row_transition_guards() -> None:
+    op.execute(
+        """
+        create function guard_contribution_policy_row_transition()
+        returns trigger language plpgsql as $$
+        declare custody contribution_policy_transition_custody%rowtype;
+        begin
+          if old.id is distinct from new.id
+             or old.project_id is distinct from new.project_id
+             or old.name is distinct from new.name
+             or old.created_by is distinct from new.created_by
+             or old.created_at is distinct from new.created_at then
+            raise exception 'immutable contribution policy identity changed'
+              using errcode='55000';
+          end if;
+          if old.status='retired'
+             or (old.status in ('active','retired') and
+                 new.last_transition_operation_id is not distinct from
+                   old.last_transition_operation_id) then
+            raise exception 'final contribution policy row is immutable'
+              using errcode='55000';
+          end if;
+          if old.status is distinct from new.status
+             or old.current_published_version_id is distinct from
+                  new.current_published_version_id
+             or old.last_transition_operation_id is distinct from
+                  new.last_transition_operation_id then
+            select * into custody from contribution_policy_transition_custody
+              where operation_id=new.last_transition_operation_id;
+            if custody.operation_id is null
+               or custody.contribution_policy_id is distinct from new.id
+               or custody.project_id is distinct from new.project_id
+               or (new.status='active' and (
+                    custody.event_type <> 'published'
+                    or new.current_published_version_id is distinct from
+                         custody.contribution_policy_version_id
+                    or new.retired_by is not null or new.retired_at is not null))
+               or (new.status='retired' and (
+                    custody.event_type <> 'retired'
+                    or new.retired_by is distinct from custody.actor_profile_id
+                    or new.retired_at is distinct from custody.occurred_at)) then
+              raise exception 'invalid contribution policy row transition'
+                using errcode='23514';
+            end if;
+          end if;
+          return new;
+        end;
+        $$
+        """
+    )
+    op.execute(
+        "create trigger contribution_policy_row_transition_guard before update on "
+        "contribution_policies for each row execute function "
+        "guard_contribution_policy_row_transition()"
+    )
+    op.execute(
+        """
+        create function guard_contribution_policy_version_row_transition()
+        returns trigger language plpgsql as $$
+        declare custody contribution_policy_transition_custody%rowtype;
+        begin
+          if old.id is distinct from new.id
+             or old.contribution_policy_id is distinct from new.contribution_policy_id
+             or old.project_id is distinct from new.project_id
+             or old.version_number is distinct from new.version_number
+             or old.created_by is distinct from new.created_by
+             or old.created_at is distinct from new.created_at then
+            raise exception 'immutable contribution policy version identity changed'
+              using errcode='55000';
+          end if;
+          if old.status='retired'
+             or (old.status='published' and new.status='published') then
+            raise exception 'final contribution policy version row is immutable'
+              using errcode='55000';
+          end if;
+          if old.status is distinct from new.status
+             or old.last_transition_operation_id is distinct from
+                  new.last_transition_operation_id then
+            select * into custody from contribution_policy_transition_custody
+              where operation_id=new.last_transition_operation_id;
+            if custody.operation_id is null
+               or (custody.contribution_policy_version_id is distinct from new.id
+                   and not (custody.event_type='published'
+                            and custody.prior_current_version_id is not distinct from new.id
+                            and new.status='retired'))
+               or custody.contribution_policy_id is distinct from new.contribution_policy_id
+               or custody.project_id is distinct from new.project_id
+               or (new.status='published' and (
+                    custody.event_type <> 'published'
+                    or new.published_by is distinct from custody.actor_profile_id
+                    or new.published_at is distinct from custody.occurred_at))
+               or (new.status='retired' and (
+                    new.retired_by is distinct from custody.actor_profile_id
+                    or new.retired_at is distinct from custody.occurred_at)) then
+              raise exception 'invalid contribution policy version row transition'
+                using errcode='23514';
+            end if;
+          end if;
+          return new;
+        end;
+        $$
+        """
+    )
+    op.execute(
+        "create trigger contribution_policy_version_row_transition_guard before update on "
+        "contribution_policy_versions for each row execute function "
+        "guard_contribution_policy_version_row_transition()"
+    )
 
 
 def downgrade() -> None:

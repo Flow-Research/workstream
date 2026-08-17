@@ -15,10 +15,7 @@ SURFACES = (
 
 
 def test_cp04b_application_files_remain_below_five_hundred_lines() -> None:
-    sizes = {
-        path: len((ROOT / path).read_text(encoding="utf-8").splitlines())
-        for path in SURFACES
-    }
+    sizes = {path: len((ROOT / path).read_text(encoding="utf-8").splitlines()) for path in SURFACES}
     assert all(size < 500 for size in sizes.values()), sizes
 
 

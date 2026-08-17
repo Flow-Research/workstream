@@ -58,16 +58,10 @@ async def test_event_matches_immutable_mutation_result(policy_database_env: str)
             assert str(result.actor_profile_id) == event.actor_profile_id
             assert result.project_id == project_id == UUID(event.project_id)
             assert result.contribution_policy_id == event.contribution_policy_id
-            assert (
-                result.contribution_policy_version_id
-                == event.contribution_policy_version_id
-            )
+            assert result.contribution_policy_version_id == event.contribution_policy_version_id
             assert result.version_number == event.version_number
             assert result.prior_current_version_id == event.prior_current_version_id
-            assert (
-                result.prior_current_version_number
-                == event.prior_current_version_number
-            )
+            assert result.prior_current_version_number == event.prior_current_version_number
             assert result.from_policy_status == event.from_policy_status
             assert result.to_policy_status == event.to_policy_status
             assert result.from_version_status == event.from_version_status
@@ -82,9 +76,7 @@ async def test_event_actor_matches_authorized_actor(policy_database_env: str) ->
     async with db_session.get_session_factory()() as session:
         event = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
         assert event is not None
-        version = await session.get(
-            ContributionPolicyVersion, event.contribution_policy_version_id
-        )
+        version = await session.get(ContributionPolicyVersion, event.contribution_policy_version_id)
         assert version is not None
         assert event.actor_profile_id == version.created_by
 

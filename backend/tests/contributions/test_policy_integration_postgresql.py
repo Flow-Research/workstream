@@ -174,9 +174,9 @@ async def test_real_service_persists_complete_graph_and_events(
     project_id, created, updated, published = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         count = await session.scalar(
-            select(func.count()).select_from(ContributionPolicyLifecycleEvent).where(
-                ContributionPolicyLifecycleEvent.project_id == str(project_id)
-            )
+            select(func.count())
+            .select_from(ContributionPolicyLifecycleEvent)
+            .where(ContributionPolicyLifecycleEvent.project_id == str(project_id))
         )
         assert count == 3
         assert created.event_id != updated.event_id
@@ -291,9 +291,7 @@ async def test_late_database_failure_rolls_back_product_and_authorization_effect
                         actor_profile_id=actor_id,
                         project_id=project_id,
                         contribution_policy_id=created.contribution_policy_id,
-                        contribution_policy_version_id=(
-                            created.contribution_policy_version_id
-                        ),
+                        contribution_policy_version_id=(created.contribution_policy_version_id),
                         rules=(
                             PolicyRuleInput(
                                 contribution_type="accepted_submission",
@@ -324,6 +322,9 @@ async def test_late_database_failure_rolls_back_product_and_authorization_effect
                 ContributionPolicy,
             ):
                 assert await session.scalar(select(func.count()).select_from(model)) == 0
-            assert await session.scalar(
-                text("select count(*) from cp04a_staged_authorization_effects")
-            ) == 0
+            assert (
+                await session.scalar(
+                    text("select count(*) from cp04a_staged_authorization_effects")
+                )
+                == 0
+            )

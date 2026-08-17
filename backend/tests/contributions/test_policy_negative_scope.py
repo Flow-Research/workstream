@@ -24,41 +24,41 @@ def _assert_no_downstream_command(name: str) -> None:
     assert not hasattr(ContributionPolicyService, name)
 
 
-def test_cp04a_creates_no_project_guide_effect() -> None:
+def test_cp04b_creates_no_project_guide_effect() -> None:
     _assert_no_downstream_command("update_project_guide")
 
 
-def test_cp04a_creates_no_task_effect() -> None:
+def test_cp04b_creates_no_task_effect() -> None:
     _assert_no_downstream_command("create_task")
 
 
-def test_cp04a_creates_no_submission_effect() -> None:
+def test_cp04b_creates_no_submission_effect() -> None:
     _assert_no_downstream_command("create_submission")
 
 
-def test_cp04a_creates_no_review_effect() -> None:
+def test_cp04b_creates_no_review_effect() -> None:
     _assert_no_downstream_command("create_review")
 
 
-def test_cp04a_creates_no_contribution_record_effect() -> None:
+def test_cp04b_creates_no_contribution_record_effect() -> None:
     _assert_no_downstream_command("create_contribution_record")
 
 
-def test_cp04a_creates_no_compensation_award_effect() -> None:
+def test_cp04b_creates_no_compensation_award_effect() -> None:
     _assert_no_downstream_command("create_compensation_award")
 
 
-def test_cp04a_creates_no_fulfillment_effect() -> None:
+def test_cp04b_creates_no_fulfillment_effect() -> None:
     _assert_no_downstream_command("fulfill")
 
 
-def test_cp04a_creates_no_callback_effect() -> None:
+def test_cp04b_creates_no_callback_effect() -> None:
     _assert_no_downstream_command("callback")
 
 
-def test_cp04a_creates_no_delivery_effect() -> None:
+def test_cp04b_creates_no_delivery_effect() -> None:
     _assert_no_downstream_command("deliver")
 
 
-def test_cp04a_creates_no_reputation_effect() -> None:
+def test_cp04b_creates_no_reputation_effect() -> None:
     _assert_no_downstream_command("project_reputation")
