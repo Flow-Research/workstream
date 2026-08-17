@@ -145,8 +145,10 @@ partial graph, event, reusable authority, or allowed evidence.
   truncation.
 - [ ] One primary behavior per test; no new test or production file reaches 500
   lines; touched frozen debt does not grow.
-- [ ] Focused changed CONTRIBUTIONS/COMPENSATION coverage is at least 90%;
-  hosted repository coverage is not weakened.
+- [ ] Every changed CP04A application surface is independently at least 90%
+  covered by its named focused coverage report.
+- [ ] Hosted repository-wide coverage independently remains at or above the
+  protected 78-percent baseline.
 
 ## Verification
 

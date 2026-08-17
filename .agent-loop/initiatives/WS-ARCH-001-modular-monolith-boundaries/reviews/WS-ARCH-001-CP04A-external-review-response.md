@@ -8,6 +8,12 @@
 
 ## Comments addressed
 
+- CodeRabbit found that the governing acceptance checklist still named only
+  CONTRIBUTIONS/COMPENSATION even though the detailed coverage atom covered
+  every changed CP04A application surface. The checklist now has two separate
+  requirements: each changed application surface must independently meet 90
+  percent through its named focused report, and hosted repository-wide
+  coverage must independently preserve the protected 78-percent baseline.
 - Coverage proof omitted changed COMPENSATION composition/schema surfaces and
   combined the focused 90-percent requirement with the repository-wide
   78-percent baseline. The contract now names all changed production packages
