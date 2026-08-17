@@ -37,7 +37,7 @@ backend/app/db/models.py (metadata parity only if required)
 backend/alembic/versions/0006_contribution_policy_operations.py
 backend/alembic/env.py (head parity only)
 backend/tests/contributions/**
-backend/tests/conftest.py (register the new resettable lifecycle-event table only)
+backend/tests/conftest.py (resettable lifecycle-event table and exact schema-fingerprint parity only)
 backend/tests/{projects,authorization}/guide_compilation/test_migration_contract.py (current-head parity only)
 backend/tests/architecture/** (exact boundary/API proof only)
 backend/tests/test_alembic.py (head/schema parity only)

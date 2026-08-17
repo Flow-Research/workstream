@@ -107,3 +107,9 @@ are fenced against time-of-check/time-of-use drift.
 
 These changes make every earlier review and CI receipt historical. Fresh
 exact-head review and hosted CI are required before merge readiness is claimed.
+
+The first corrective hosted run then failed closed because the intentional
+composite-constraint change altered the canonical public-schema fingerprint.
+The reset guard was updated to the exact hosted-observed fingerprint; this is
+schema parity, not a weakened reset check. That failed run remains historical
+evidence and a new exact-head hosted run is required.
