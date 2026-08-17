@@ -84,5 +84,8 @@ async def test_retire_facts_match_public_auth_digest() -> None:
         contribution_policy_id=facts.contribution_policy_id,
         contribution_policy_version_id=facts.contribution_policy_version_id,
     )
-    digest = contribution_policy_resource_digest(ActionId("contribution.policy.retire"), auth_facts)
-    assert digest.startswith("sha256:") and len(digest) == 71
+    expected = contribution_policy_resource_digest(
+        ActionId("contribution.policy.retire"), auth_facts
+    )
+    actual = contribution_policy_resource_digest(ActionId(facts.action), auth_facts)
+    assert actual == expected
