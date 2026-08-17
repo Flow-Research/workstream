@@ -92,6 +92,21 @@ async def test_update_conceals_cross_project_policy_before_authorization() -> No
 
 
 @pytest.mark.asyncio
+async def test_update_rejects_retired_policy_before_authorization() -> None:
+    fixture = service_fixture()
+    request = update_request(fixture)
+    install_draft(fixture, request)
+    fixture.repository.get_policy.return_value.status = "retired"
+
+    with pytest.raises(ContributionPolicyConflict, match="not_found"):
+        await fixture.service.update_draft(request)
+
+    assert fixture.authorization.prepared == []
+    assert fixture.authorization.consumed == []
+    fixture.repository.replace_graph.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_update_draft_denies_without_composed_authority() -> None:
     fixture = service_fixture()
     request = update_request(fixture)

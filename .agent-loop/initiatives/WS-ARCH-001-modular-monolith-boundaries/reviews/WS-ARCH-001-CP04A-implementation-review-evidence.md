@@ -61,3 +61,12 @@ if repository filtering regresses, and the focused test supplies an actual
 retired policy and proves that a distinct version-one aggregate is created.
 The six create-draft behavior tests and Ruff pass after this correction. All
 required reviewers must bind their final verdict to the resulting clean head.
+
+## Third implementation-review correction
+
+The final security replay found that update-draft could accept a draft version
+attached to a retired policy aggregate. Update now permits only `draft` or
+`active` policy aggregates and rejects a retired aggregate before resource
+composition or authorization preparation. Its focused negative test proves no
+PREP, consume, or graph replacement. Security and all required reviewers must
+replay against the new clean head before approval is claimed.

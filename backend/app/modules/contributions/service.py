@@ -175,7 +175,12 @@ class ContributionPolicyService:
             request.contribution_policy_version_id,
             for_update=True,
         )
-        if policy is None or version is None or version.status != "draft":
+        if (
+            policy is None
+            or policy.status not in {"draft", "active"}
+            or version is None
+            or version.status != "draft"
+        ):
             raise ContributionPolicyConflict("contribution_policy_not_found")
         built_rules, definitions = await self._lock_resources_and_build(request, rules)
         facts = self._facts(
