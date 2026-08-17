@@ -113,3 +113,10 @@ composite-constraint change altered the canonical public-schema fingerprint.
 The reset guard was updated to the exact hosted-observed fingerprint; this is
 schema parity, not a weakened reset check. That failed run remains historical
 evidence and a new exact-head hosted run is required.
+
+Test-delta replay then found that two cross-project PostgreSQL tests duplicated
+a globally unique fixed service identity during setup, so they never reached
+their intended assertions. They now create only the second project. It also
+found that the required-version regression used a malformed string that the old
+code already rejected; the discriminating input is now the previously accepted
+`None` selector. These corrections invalidate the intervening review receipts.

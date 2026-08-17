@@ -13,9 +13,9 @@ from app.modules.contributions.models import (
 )
 from tests.contributions.test_policy_integration_postgresql import (
     _exercise_policy,
+    _seed_project_only,
     _policy_database_env as _policy_database_env_fixture,  # noqa: F401
 )
-from test_contributions import _seed_project
 
 
 @pytest.mark.asyncio
@@ -246,7 +246,7 @@ async def test_event_rejects_cross_project_policy_version_ownership(
 ) -> None:
     del policy_database_env
     _, created, _ = await _exercise_policy()
-    foreign_project, _, _, _, _ = await _seed_project()
+    foreign_project = await _seed_project_only()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
         assert source is not None

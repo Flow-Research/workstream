@@ -81,10 +81,10 @@ async def test_update_draft_locks_exact_project_policy_version() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_draft_rejects_non_uuid_required_version_selector() -> None:
+async def test_update_draft_rejects_missing_required_version_selector() -> None:
     fixture = service_fixture()
     request = update_request(fixture)
-    object.__setattr__(request, "contribution_policy_version_id", "not-a-uuid")
+    object.__setattr__(request, "contribution_policy_version_id", None)
 
     with pytest.raises(ContributionPolicyUnavailable):
         await fixture.service.update_draft(request)

@@ -31,6 +31,7 @@ from app.modules.contributions.models import (
 )
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.contributions.service import ContributionPolicyService
+from project_create_fixtures import insert_historical_project
 from test_contributions import _seed_project
 from tests.contributions.policy_test_support import AllowAuthorization
 
@@ -137,6 +138,20 @@ async def _exercise_policy() -> tuple[
     return project_id, created, updated
 
 
+async def _seed_project_only() -> str:
+    """Create one foreign project without duplicating global service identity."""
+    project_id = str(uuid4())
+    async with db_session.get_session_factory()() as session:
+        async with session.begin():
+            await insert_historical_project(
+                session,
+                project_id=project_id,
+                name="Foreign contribution project",
+                slug=f"foreign-contribution-{project_id[:8]}",
+            )
+    return project_id
+
+
 @pytest.mark.asyncio
 async def test_real_service_persists_complete_graph_and_events(
     policy_database_env: str,
@@ -159,7 +174,7 @@ async def test_real_repository_conceals_foreign_project_policy(
 ) -> None:
     del policy_database_env
     owner_project, creator, _, _, _ = await _seed_project()
-    foreign_project, _, _, _, _ = await _seed_project()
+    foreign_project = await _seed_project_only()
     actor_id = UUID(creator)
     authorization = AllowAuthorization(actor_id)
     async with db_session.get_session_factory()() as session:
