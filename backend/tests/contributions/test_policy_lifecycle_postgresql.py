@@ -7,6 +7,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.db import session as db_session
+from app.adapters.compensation import policy_adapter_binding_port
+from app.adapters.projects import project_contribution_policy_eligibility_port
+from app.modules.contributions.api import ContributionPolicyRetireRequest
+from app.modules.contributions.service import ContributionPolicyService
+from tests.contributions.policy_test_support import AllowAuthorization
 from tests.contributions.test_policy_integration_postgresql import (
     _exercise_policy,
     _policy_database_env,  # noqa: F401
@@ -126,6 +131,26 @@ async def test_database_rejects_published_version_downgrade(
 
 
 @pytest.mark.asyncio
+async def test_database_rejects_retirement_with_publication_custody(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    _, _, _, published = await _exercise_policy()
+    with pytest.raises(DBAPIError):
+        async with db_session.get_session_factory()() as session, session.begin():
+            await session.execute(
+                text(
+                    "update contribution_policy_versions v set status='retired',"
+                    "retired_by=c.actor_profile_id,retired_at=c.occurred_at "
+                    "from contribution_policy_transition_custody c "
+                    "where v.id=:version and c.operation_id="
+                    "v.last_transition_operation_id"
+                ),
+                {"version": published.contribution_policy_version_id},
+            )
+
+
+@pytest.mark.asyncio
 async def test_database_rejects_forged_publication_attribution(
     policy_database_env: str,
 ) -> None:
@@ -137,6 +162,37 @@ async def test_database_rejects_forged_publication_attribution(
                 text(
                     "update contribution_policy_versions set published_by=:actor where id=:version"
                 ),
+                {"actor": uuid4(), "version": published.contribution_policy_version_id},
+            )
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_forged_retirement_attribution(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    project_id, created, _, published = await _exercise_policy()
+    async with db_session.get_session_factory()() as session, session.begin():
+        service = ContributionPolicyService(
+            session,
+            read_authorization=AllowAuthorization(created.actor_profile_id),
+            mutation_authorization=AllowAuthorization(created.actor_profile_id),
+            projects=project_contribution_policy_eligibility_port(session),
+            bindings=policy_adapter_binding_port(session),
+        )
+        await service.retire(
+            ContributionPolicyRetireRequest(
+                operation_id=uuid4(),
+                actor_profile_id=created.actor_profile_id,
+                project_id=project_id,
+                contribution_policy_id=created.contribution_policy_id,
+                contribution_policy_version_id=published.contribution_policy_version_id,
+            )
+        )
+    with pytest.raises(DBAPIError):
+        async with db_session.get_session_factory()() as session, session.begin():
+            await session.execute(
+                text("update contribution_policy_versions set retired_by=:actor where id=:version"),
                 {"actor": uuid4(), "version": published.contribution_policy_version_id},
             )
 

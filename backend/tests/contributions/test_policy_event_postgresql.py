@@ -21,7 +21,7 @@ from tests.contributions.test_policy_integration_postgresql import (
 @pytest.mark.asyncio
 async def test_event_update_is_rejected(policy_database_env: str) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError):
             await session.execute(
@@ -34,7 +34,7 @@ async def test_event_update_is_rejected(policy_database_env: str) -> None:
 @pytest.mark.asyncio
 async def test_event_delete_is_rejected(policy_database_env: str) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         with pytest.raises(DBAPIError):
             await session.execute(
@@ -47,7 +47,7 @@ async def test_event_delete_is_rejected(policy_database_env: str) -> None:
 @pytest.mark.asyncio
 async def test_event_matches_immutable_mutation_result(policy_database_env: str) -> None:
     del policy_database_env
-    project_id, created, updated = await _exercise_policy()
+    project_id, created, updated, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         for result in (created, updated):
             event = await session.get(ContributionPolicyLifecycleEvent, result.event_id)
@@ -72,7 +72,7 @@ async def test_event_matches_immutable_mutation_result(policy_database_env: str)
 @pytest.mark.asyncio
 async def test_event_actor_matches_authorized_actor(policy_database_env: str) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         event = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
         assert event is not None
@@ -86,7 +86,7 @@ async def test_event_rejects_invalid_transition_shape(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
         assert source is not None
@@ -118,7 +118,7 @@ async def test_event_rejects_duplicate_operation_id(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
         assert source is not None
@@ -150,7 +150,7 @@ async def test_event_rejects_null_prior_policy_status(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    _, _, updated = await _exercise_policy()
+    _, _, updated, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, updated.event_id)
         assert source is not None
@@ -182,36 +182,16 @@ async def test_event_rejects_null_mutation_actor_anchor(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    _, _, updated = await _exercise_policy()
+    _, _, updated, _ = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, updated.event_id)
         assert source is not None
-        await session.execute(
-            update(ContributionPolicyVersion)
-            .where(ContributionPolicyVersion.id == source.contribution_policy_version_id)
-            .values(last_updated_by=None)
-        )
-        session.add(
-            ContributionPolicyLifecycleEvent(
-                id=uuid4(),
-                operation_id=uuid4(),
-                request_digest="sha256:" + "3" * 64,
-                event_type="draft_updated",
-                actor_profile_id=source.actor_profile_id,
-                project_id=source.project_id,
-                contribution_policy_id=source.contribution_policy_id,
-                contribution_policy_version_id=source.contribution_policy_version_id,
-                version_number=source.version_number,
-                prior_current_version_id=source.prior_current_version_id,
-                prior_current_version_number=source.prior_current_version_number,
-                from_policy_status=source.from_policy_status,
-                to_policy_status=source.to_policy_status,
-                from_version_status="draft",
-                to_version_status="draft",
-            )
-        )
         with pytest.raises(DBAPIError):
-            await session.flush()
+            await session.execute(
+                update(ContributionPolicyVersion)
+                .where(ContributionPolicyVersion.id == source.contribution_policy_version_id)
+                .values(last_updated_by=None)
+            )
 
 
 @pytest.mark.asyncio
@@ -237,7 +217,7 @@ async def test_event_rejects_cross_project_policy_version_ownership(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    _, created, _ = await _exercise_policy()
+    _, created, _, _ = await _exercise_policy()
     foreign_project = await _seed_project_only()
     async with db_session.get_session_factory()() as session:
         source = await session.get(ContributionPolicyLifecycleEvent, created.event_id)

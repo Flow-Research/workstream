@@ -5,10 +5,46 @@ from uuid import uuid4
 
 import pytest
 
-from app.modules.contributions.api import ContributionPolicyConflict, ContributionPolicyUnavailable
+from app.modules.contributions.api import (
+    ContributionPolicyConflict,
+    ContributionPolicyRetireRequest,
+    ContributionPolicyUnavailable,
+)
 from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
 from tests.contributions.policy_test_support import service_fixture
 from tests.contributions.test_policy_publish import _install_complete_draft, _request
+
+
+def _install_active_policy(fixture):
+    policy_id, version_id = uuid4(), uuid4()
+    request = ContributionPolicyRetireRequest(
+        operation_id=uuid4(),
+        actor_profile_id=fixture.actor_id,
+        project_id=fixture.project_id,
+        contribution_policy_id=policy_id,
+        contribution_policy_version_id=version_id,
+    )
+    policy = ContributionPolicy(
+        id=policy_id,
+        project_id=str(fixture.project_id),
+        name="Policy",
+        status="active",
+        current_published_version_id=version_id,
+        created_by=str(fixture.actor_id),
+    )
+    version = ContributionPolicyVersion(
+        id=version_id,
+        contribution_policy_id=policy_id,
+        project_id=str(fixture.project_id),
+        version_number=1,
+        status="published",
+        created_by=str(fixture.actor_id),
+        published_by=str(fixture.actor_id),
+        published_at=datetime.now(UTC),
+    )
+    fixture.repository.get_policy.return_value = policy
+    fixture.repository.get_version.return_value = version
+    return request, policy, version
 
 
 class _FailureAuthorization:
@@ -165,37 +201,32 @@ async def test_retire_denies_without_composed_authority() -> None:
     fixture.service._publication._mutation_authorization = _FailureAuthorization(  # noqa: SLF001
         fixture.actor_id, phase="prepare"
     )
-    from app.modules.contributions.api import ContributionPolicyRetireRequest
-
-    policy_id, version_id = uuid4(), uuid4()
-    fixture.repository.get_policy.return_value = ContributionPolicy(
-        id=policy_id,
-        project_id=str(fixture.project_id),
-        name="Policy",
-        status="active",
-        current_published_version_id=version_id,
-        created_by=str(fixture.actor_id),
-    )
-    fixture.repository.get_version.return_value = ContributionPolicyVersion(
-        id=version_id,
-        contribution_policy_id=policy_id,
-        project_id=str(fixture.project_id),
-        version_number=1,
-        status="published",
-        created_by=str(fixture.actor_id),
-        published_by=str(fixture.actor_id),
-        published_at=datetime.now(UTC),
-    )
+    request, _, _ = _install_active_policy(fixture)
     with pytest.raises(ContributionPolicyUnavailable):
-        await fixture.service.retire(
-            ContributionPolicyRetireRequest(
-                operation_id=uuid4(),
-                actor_profile_id=fixture.actor_id,
-                project_id=fixture.project_id,
-                contribution_policy_id=policy_id,
-                contribution_policy_version_id=version_id,
-            )
-        )
+        await fixture.service.retire(request)
+
+
+@pytest.mark.asyncio
+async def test_retire_closes_prepared_authority_exactly_once() -> None:
+    fixture = service_fixture()
+    request, _, _ = _install_active_policy(fixture)
+    await fixture.service.retire(request)
+    assert len(fixture.authorization.closed) == 1
+
+
+@pytest.mark.asyncio
+async def test_retire_consume_observes_no_staged_product_state() -> None:
+    fixture = service_fixture()
+    request, policy, version = _install_active_policy(fixture)
+
+    async def consume(prepared, facts):
+        del prepared, facts
+        assert policy.status == "active" and version.status == "published"
+        fixture.repository.create_transition_custody.assert_not_awaited()
+        return fixture.actor_id
+
+    fixture.authorization.consume_contribution_policy_mutation = consume
+    await fixture.service.retire(request)
 
 
 @pytest.mark.asyncio

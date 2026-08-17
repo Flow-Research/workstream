@@ -424,6 +424,11 @@ def _install_row_transition_guards() -> None:
                     or new.published_by is distinct from custody.actor_profile_id
                     or new.published_at is distinct from custody.occurred_at))
                or (new.status='retired' and (
+                    not ((custody.event_type='retired'
+                          and custody.contribution_policy_version_id=new.id)
+                         or (custody.event_type='published'
+                             and custody.prior_current_version_id=new.id))
+                    or
                     new.retired_by is distinct from custody.actor_profile_id
                     or new.retired_at is distinct from custody.occurred_at)) then
               raise exception 'invalid contribution policy version row transition'
