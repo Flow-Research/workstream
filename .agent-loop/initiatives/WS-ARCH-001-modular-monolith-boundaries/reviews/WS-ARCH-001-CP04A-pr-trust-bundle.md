@@ -58,6 +58,12 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
   create, update, and recovery tests compare all immutable mutation-result
   fields with lifecycle-event truth. Duplicate update recovery additionally
   proves read reauthorization, digest mismatch denial, and no second mutation.
+- Adversarial exact-head replay found and corrected integer-scale
+  project-points validation, exact COMPENSATION owner-fact parity, malformed
+  rule concealment, and a missing real-PostgreSQL late-rollback proof.
+- CP04A's authorization claim is deliberately narrow: opaque port rejection
+  creates no product effect and every prepared object is closed once. CP05/AUTH
+  owns real handle session, transaction, copy, and replay semantics.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

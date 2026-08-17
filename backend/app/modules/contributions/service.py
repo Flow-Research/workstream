@@ -277,7 +277,11 @@ class ContributionPolicyService:
                     )
                 except PolicyAdapterBindingUnavailable as exc:
                     raise ContributionPolicyConflict("contribution_policy_not_found") from exc
-                if binding.project_id != request.project_id:
+                if (
+                    binding.project_id != request.project_id
+                    or binding.adapter_binding_id != item.adapter_binding_id
+                    or binding.instrument_type is not item.instrument_type
+                ):
                     raise ContributionPolicyConflict("contribution_policy_not_found")
                 definitions.append(
                     ContributionAwardDefinition(

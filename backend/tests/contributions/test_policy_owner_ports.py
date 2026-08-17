@@ -59,6 +59,9 @@ async def test_compensation_policy_binding_lookup_retains_transaction_fence() ->
         instrument_type=CompensationInstrumentType.MONEY,
     )
     statement = session.scalar.await_args.args[0]
+    assert facts.project_id == project_id
+    assert facts.adapter_binding_id == binding_id
+    assert facts.instrument_type is CompensationInstrumentType.MONEY
     assert facts.binding_lifecycle_version == 3
     assert statement._for_update_arg is not None  # noqa: SLF001
 

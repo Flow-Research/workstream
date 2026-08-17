@@ -23,31 +23,6 @@ async def _assert_consume_rejection(reason: str) -> None:
     fixture.repository.add_policy_version_event.assert_not_awaited()
 
 
-async def _assert_replayed_prepared_object_denied() -> None:
-    fixture = service_fixture()
-    prepared = object()
-    consumed = False
-
-    async def prepare(facts: object) -> object:
-        del facts
-        return prepared
-
-    async def consume(handle: object, facts: object) -> object:
-        nonlocal consumed
-        del facts
-        if handle is not prepared or consumed:
-            raise ContributionPolicyUnavailable("replayed")
-        consumed = True
-        return fixture.actor_id
-
-    fixture.authorization.prepare_contribution_policy_mutation = prepare
-    fixture.authorization.consume_contribution_policy_mutation = consume
-    await fixture.service.create_draft(create_request(fixture))
-    with pytest.raises(ContributionPolicyUnavailable, match="replayed"):
-        await fixture.service.create_draft(create_request(fixture))
-    fixture.repository.add_policy_version_event.assert_awaited_once()
-
-
 @pytest.mark.asyncio
 async def test_wrong_consumed_actor_creates_no_effect() -> None:
     fixture = service_fixture()
@@ -151,40 +126,5 @@ async def test_consume_denial_creates_no_effect() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["wrong_session", "wrong_transaction", "copied"])
-async def test_prepared_authority_closes_once_for_each_failure_exit(failure: str) -> None:
-    await _assert_consume_rejection(failure)
-
-
-@pytest.mark.asyncio
-async def test_wrong_session_handle_creates_no_effect() -> None:
-    await _assert_consume_rejection("wrong_session")
-
-
-@pytest.mark.asyncio
-async def test_wrong_transaction_handle_creates_no_effect() -> None:
-    await _assert_consume_rejection("wrong_transaction")
-
-
-@pytest.mark.asyncio
-async def test_copied_handle_creates_no_effect() -> None:
-    await _assert_consume_rejection("copied")
-
-
-@pytest.mark.asyncio
-async def test_replayed_handle_creates_no_second_effect() -> None:
-    await _assert_replayed_prepared_object_denied()
-
-
-@pytest.mark.asyncio
-async def test_post_close_database_failure_rolls_back_all_effects() -> None:
-    fixture = service_fixture()
-    fixture.repository.add_policy_version_event.side_effect = RuntimeError("database_failed")
-    with pytest.raises(RuntimeError, match="database_failed"):
-        await fixture.service.create_draft(create_request(fixture))
-    assert len(fixture.authorization.closed) == 1
-
-
-@pytest.mark.asyncio
-async def test_closed_authority_cannot_be_reused() -> None:
-    await _assert_replayed_prepared_object_denied()
+async def test_prepared_authority_closes_once_after_port_rejection() -> None:
+    await _assert_consume_rejection("port_rejected")

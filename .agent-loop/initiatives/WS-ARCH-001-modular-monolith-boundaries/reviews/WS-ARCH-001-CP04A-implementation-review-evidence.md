@@ -138,3 +138,15 @@ from predecessor `0005` with the repository's canonical fresh-database guard
 before invoking that revision's local downgrade function. The test now asserts
 that canonical refusal and still proves the referenced adapter identity and
 constraint snapshot remain unchanged.
+
+## Adversarial exact-head correction
+
+An adversarial review of head `58b977ac` invalidated the prior completion
+claim. It found integer-scale project-points validation, complete returned
+owner-fact parity, malformed-rule concealment, and real late-rollback evidence
+gaps. It also found that fake rejection labels were being presented as genuine
+AUTH handle-binding proof. The corrective delta fixes the four owned behavior
+and evidence gaps and narrows CP04A authorization claims to port rejection,
+close-once, and no product effect. Genuine session/transaction/copy/replay
+handle proof remains CP05/AUTH activation custody. Every earlier reviewer
+verdict is historical until the corrected clean head receives a full replay.

@@ -102,7 +102,9 @@ commits inside repositories/services or serialized prepared handles
 - Update-draft locks the exact project/policy/version and replaces the entire
   graph: one `accepted_submission` and one `completed_review` rule; unpaid has
   zero definitions; compensated has one or two unique money/project-points
-  definitions with canonical positive quantities.
+  definitions with canonical positive quantities. Project-points quantities
+  use integer scale; values such as `1.0` are rejected before owner locks or
+  authorization.
 - Update locks its CONTRIBUTIONS-owned same-project active units and consumes
   the COMPENSATION public lookup for active adapter-binding identities as early
   validation; CP04B revalidates both under publication locks. It never imports
@@ -133,7 +135,9 @@ caller-owned root transaction -> request digest -> operation fence
 ```
 
 Denial, conflict, close failure, database failure, and rollback produce no
-partial graph, event, reusable authority, or allowed evidence.
+partial graph, event, or allowed evidence. CP04A proves the opaque port is
+closed exactly once and that a port rejection has no product effect; CP05/AUTH
+owns genuine session, transaction, copy, and replay handle-binding proof.
 
 ## Acceptance criteria
 
@@ -193,10 +197,13 @@ convenience, not acceptance evidence for an unlisted behavior.
 | Compensated rules reject a duplicate instrument definition | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_duplicate_instrument_definition` | focused local command and hosted CI |
 | Non-positive instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_positive_quantity` | focused local command and hosted CI |
 | Non-canonical instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_canonical_quantity` | focused local command and hosted CI |
+| Project-points quantities require integer scale, including rejection of `1.0` | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_integer_scale_project_points` | focused local command and hosted CI |
+| Malformed rule objects produce the concealed domain conflict | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_conceals_malformed_rule_input` | focused local command and hosted CI |
 | Retired units are rejected without effect | CONTRIBUTIONS-owned units | `tests/contributions/test_policy_draft_resources.py::test_update_rejects_retired_unit_without_effect` | focused local command and hosted PostgreSQL CI |
 | Cross-project units are concealed without effect | CONTRIBUTIONS-owned units | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_unit_without_effect` | focused local command and hosted PostgreSQL CI |
 | Inactive adapter bindings are rejected without effect | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::test_update_rejects_inactive_adapter_binding_without_effect` | focused local command and hosted PostgreSQL CI |
 | Cross-project adapter bindings are concealed without effect | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_adapter_binding_without_effect` | focused local command and hosted PostgreSQL CI |
+| Returned binding identity and instrument facts must exactly match the request | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::test_update_rejects_mismatched_adapter_binding_owner_facts` | focused local command and hosted CI |
 | Foreign policy substitution is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_policy_before_authorization` | focused local command and hosted PostgreSQL CI |
 | Foreign version substitution is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_version_before_authorization` | focused local command and hosted PostgreSQL CI |
 | A cross-project update request is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_request_before_authorization` | focused local command and hosted PostgreSQL CI |
@@ -211,15 +218,10 @@ convenience, not acceptance evidence for an unlisted behavior.
 | Consume denial creates no product/event/evidence | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_consume_denial_creates_no_effect` | focused local command and hosted CI |
 | Consume exception creates no product/event/evidence | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_consume_exception_creates_no_effect` | focused local command and hosted CI |
 | Wrong actor returned from consume creates no effect | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_wrong_consumed_actor_creates_no_effect` | focused local command and hosted CI |
-| Wrong session handle is denied with no effect | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_wrong_session_handle_creates_no_effect` | focused local command and hosted CI |
-| Wrong transaction handle is denied with no effect | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_wrong_transaction_handle_creates_no_effect` | focused local command and hosted CI |
-| Copied handle is denied with no effect | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_copied_handle_creates_no_effect` | focused local command and hosted CI |
-| Replayed handle is denied with no second effect/evidence | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_replayed_handle_creates_no_second_effect` | focused local command and hosted CI |
 | Prepared object closes exactly once on success | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_prepared_authority_closes_once_on_success` | focused local command and hosted CI |
-| Prepared object closes exactly once on each failure exit | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_prepared_authority_closes_once_for_each_failure_exit` | focused local command and hosted CI; each parametrized failure id is independent evidence |
+| Authorization-port rejection creates no product effect and closes the prepared object once | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_prepared_authority_closes_once_after_port_rejection` | focused local command and hosted CI |
 | Close failure precedes product mutation and rolls back staged AUTH evidence | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_close_failure_rolls_back_staged_authorization_evidence_before_product_effect` | focused local command and hosted CI |
-| Post-close database failure rolls back product and staged participant effects | CONTRIBUTIONS transaction | `tests/contributions/test_policy_authorization_atomicity.py::test_post_close_database_failure_rolls_back_all_effects` | focused local command and hosted PostgreSQL CI |
-| Closed authority cannot be reused after downstream failure | CONTRIBUTIONS authorization port | `tests/contributions/test_policy_authorization_atomicity.py::test_closed_authority_cannot_be_reused` | focused local command and hosted CI |
+| Late post-close database failure rolls back policy, version, graph, event, and staged participant effects | CONTRIBUTIONS transaction | `tests/contributions/test_policy_integration_postgresql.py::test_late_database_failure_rolls_back_product_and_authorization_effects` | hosted PostgreSQL CI |
 | Exact duplicate recovery requires current read authorization | CONTRIBUTIONS operation recovery | `tests/contributions/test_policy_operation_recovery.py::test_exact_duplicate_requires_current_read_authorization` | focused local command and hosted CI |
 | Authorized exact duplicate returns the immutable original result | CONTRIBUTIONS operation recovery | `tests/contributions/test_policy_operation_recovery.py::test_exact_duplicate_returns_immutable_original_result` | focused local command and hosted CI |
 | Digest mismatch is concealed | CONTRIBUTIONS operation recovery | `tests/contributions/test_policy_operation_recovery.py::test_digest_mismatch_is_concealed` | focused local command and hosted CI |

@@ -119,15 +119,21 @@ def test_update_rejects_compensated_rule_without_definitions() -> None:
         validate_policy_graph((replace(paid, definitions=()), review))
 
 
-def test_update_rejects_fractional_project_points() -> None:
+@pytest.mark.parametrize("quantity", ("1.5", "1.0"))
+def test_update_rejects_non_integer_scale_project_points(quantity: str) -> None:
     item = PolicyDefinitionInput(
         instrument_type=CompensationInstrumentType.PROJECT_POINTS,
         unit_code="POINT",
-        quantity="1.5",
+        quantity=quantity,
         adapter_binding_id=uuid4(),
     )
     with pytest.raises(ContributionPolicyConflict):
         _validate_definition(item)
+
+
+def test_update_conceals_malformed_rule_input() -> None:
+    with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
+        validate_policy_graph((object(), complete_rules()[1]))  # type: ignore[arg-type]
 
 
 def test_update_rejects_unknown_compensation_mode_before_authorization() -> None:

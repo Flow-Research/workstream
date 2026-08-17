@@ -55,3 +55,23 @@ hosted GitHub gates before merge readiness is claimed.
 The named tests and coverage commands are future implementation obligations.
 Their semantic adequacy must be reviewed against the implementation diff; this
 planning response is not runtime proof.
+
+## PR #349 adversarial implementation replay
+
+All five findings reported against head `58b977ac` were replayed and found
+valid:
+
+- `project_points` now requires integer scale, so `1.0` is rejected before
+  owner locking or authorization;
+- CONTRIBUTIONS verifies the exact binding ID and instrument type returned by
+  the COMPENSATION public owner port, not only its project ID;
+- malformed rule objects are type-checked before field access and return the
+  concealed domain conflict;
+- a real PostgreSQL test stages authorization evidence, flushes the complete
+  product graph and event, then forces a late failure and proves transaction
+  rollback removes every effect;
+- misleading fake-handle claims were removed. CP04A proves port rejection and
+  close/no-product-effect behavior; CP05/AUTH owns genuine handle-binding
+  semantics.
+
+Fresh exact-head review and hosted CI are required after these corrections.

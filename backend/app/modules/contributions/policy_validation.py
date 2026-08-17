@@ -47,6 +47,7 @@ def validate_policy_graph(rules: tuple[PolicyRuleInput, ...]) -> tuple[PolicyRul
     if (
         type(rules) is not tuple
         or len(rules) != 2
+        or any(type(rule) is not PolicyRuleInput for rule in rules)
         or {rule.contribution_type for rule in rules}
         != {"accepted_submission", "completed_review"}
     ):
@@ -89,6 +90,6 @@ def _validate_definition(item: PolicyDefinitionInput) -> None:
         raise ContributionPolicyConflict("contribution_policy_conflict")
     if (
         item.instrument_type is CompensationInstrumentType.PROJECT_POINTS
-        and quantity != quantity.to_integral()
+        and (quantity != quantity.to_integral() or quantity.as_tuple().exponent != 0)
     ):
         raise ContributionPolicyConflict("contribution_policy_conflict")
