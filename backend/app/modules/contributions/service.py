@@ -103,6 +103,10 @@ class ContributionPolicyService:
         ) is not None:
             raise ContributionPolicyConflict("contribution_policy_conflict")
         policy = await self._repository.get_reusable_policy(request.project_id)
+        # Keep the service boundary fail-closed if repository filtering regresses:
+        # retired aggregates are terminal and must never receive another draft.
+        if policy is not None and policy.status == "retired":
+            policy = None
         if policy is None:
             policy = ContributionPolicy(
                 id=uuid4(),

@@ -78,6 +78,19 @@ async def test_create_draft_retains_project_policy_fence_through_mutation() -> N
 @pytest.mark.asyncio
 async def test_create_draft_does_not_reuse_retired_policy() -> None:
     fixture = service_fixture()
-    fixture.repository.get_reusable_policy.return_value = None
+    retired_policy = ContributionPolicy(
+        id=uuid4(),
+        project_id=str(fixture.project_id),
+        name="Retired",
+        status="retired",
+        current_published_version_id=uuid4(),
+        created_by=str(fixture.actor_id),
+    )
+    fixture.repository.get_reusable_policy.return_value = retired_policy
+
     result = await fixture.service.create_draft(create_request(fixture))
+
+    assert result.contribution_policy_id != retired_policy.id
     assert result.version_number == 1
+    created_version = fixture.repository.add_policy_version_event.await_args.args[1]
+    assert created_version.contribution_policy_id == result.contribution_policy_id

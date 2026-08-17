@@ -51,3 +51,13 @@ The first exact-head reviewer wave found and this implementation corrects:
 
 All affected reviewers must replay against the corrective exact head before a
 passing verdict is claimed.
+
+## Second implementation-review correction
+
+The exact-head test-delta replay found that the retired-policy test configured
+the repository to return no reusable policy, so it could not detect accidental
+reuse of a retired aggregate. The service now rejects a retired aggregate even
+if repository filtering regresses, and the focused test supplies an actual
+retired policy and proves that a distinct version-one aggregate is created.
+The six create-draft behavior tests and Ruff pass after this correction. All
+required reviewers must bind their final verdict to the resulting clean head.
