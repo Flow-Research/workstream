@@ -96,7 +96,8 @@
 - WS-ARCH-001-CP04 is a planned non-executable parent split into CP04A hidden
   read/create/update-draft behavior and CP04B hidden publish/retire behavior.
 - WS-ARCH-001-CP04A is planned with an executable hidden policy-draft contract
-  and is next.
+  strengthened by exact public-owner composition and atomic named proof
+  custody; it is next.
 - WS-ARCH-001-CP04B is planned with an executable hidden publish/retire
   contract after CP04A.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
