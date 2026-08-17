@@ -636,12 +636,16 @@ def test_policy_public_api_exports_no_private_persistence_values() -> None:
 
 
 def test_cp04a_public_policy_api_has_no_private_cross_module_edge() -> None:
-    from pathlib import Path
-
     root = Path(__file__).resolve().parents[2] / "app/modules/contributions"
-    source = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
-    assert "app.modules.compensation.schemas" not in source
-    assert "app.modules.projects.models" not in source
+    forbidden = {
+        "app.modules.compensation.schemas",
+        "app.modules.projects.models",
+        "app.modules.projects.repository",
+    }
+    imported = set().union(
+        *(boundary.exact_source_imports(path, ROOT) for path in root.rglob("*.py"))
+    )
+    assert imported.isdisjoint(forbidden)
 
 
 def test_policy_uses_public_compensation_instrument_enum_only() -> None:
@@ -652,7 +656,6 @@ def test_policy_uses_public_compensation_instrument_enum_only() -> None:
 
 
 def test_cp04a_uses_only_public_projects_policy_eligibility_port() -> None:
-    root = ROOT / "backend/app/modules/contributions"
-    source = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.py"))
-    assert "app.modules.projects.models" not in source
-    assert "app.modules.projects.repository" not in source
+    # The import-aware repository boundary proof above covers direct and
+    # package-level imports of both private PROJECTS modules.
+    test_cp04a_public_policy_api_has_no_private_cross_module_edge()

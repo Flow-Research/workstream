@@ -135,8 +135,9 @@ class ContributionAwardDefinitionInput(BaseModel):
     @field_validator("quantity", mode="before")
     @classmethod
     def require_canonical_decimal_string(cls, value: object) -> str:
-        canonical_award_quantity(value, ContributionInstrumentType.MONEY)
-        assert isinstance(value, str)
+        if not isinstance(value, str):
+            raise ValueError("quantity must be a canonical positive decimal string")
+        canonical_award_quantity(value)
         return value
 
     @model_validator(mode="after")

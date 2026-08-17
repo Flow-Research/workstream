@@ -15,6 +15,7 @@ from tests.contributions.test_policy_integration_postgresql import (
     _exercise_policy,
     _policy_database_env as _policy_database_env_fixture,  # noqa: F401
 )
+from test_contributions import _seed_project
 
 
 @pytest.mark.asyncio
@@ -137,6 +138,126 @@ async def test_event_rejects_duplicate_operation_id(
                 event_type=source.event_type,
                 actor_profile_id=source.actor_profile_id,
                 project_id=source.project_id,
+                contribution_policy_id=source.contribution_policy_id,
+                contribution_policy_version_id=source.contribution_policy_version_id,
+                version_number=source.version_number,
+                prior_current_version_id=source.prior_current_version_id,
+                prior_current_version_number=source.prior_current_version_number,
+                from_policy_status=source.from_policy_status,
+                to_policy_status=source.to_policy_status,
+                from_version_status=source.from_version_status,
+                to_version_status=source.to_version_status,
+            )
+        )
+        with pytest.raises(DBAPIError):
+            await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_event_rejects_null_prior_policy_status(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    _, _, updated = await _exercise_policy()
+    async with db_session.get_session_factory()() as session:
+        source = await session.get(ContributionPolicyLifecycleEvent, updated.event_id)
+        assert source is not None
+        session.add(
+            ContributionPolicyLifecycleEvent(
+                id=uuid4(),
+                operation_id=uuid4(),
+                request_digest="sha256:" + "2" * 64,
+                event_type="draft_updated",
+                actor_profile_id=source.actor_profile_id,
+                project_id=source.project_id,
+                contribution_policy_id=source.contribution_policy_id,
+                contribution_policy_version_id=source.contribution_policy_version_id,
+                version_number=source.version_number,
+                prior_current_version_id=source.prior_current_version_id,
+                prior_current_version_number=source.prior_current_version_number,
+                from_policy_status=None,
+                to_policy_status=source.to_policy_status,
+                from_version_status="draft",
+                to_version_status="draft",
+            )
+        )
+        with pytest.raises(DBAPIError):
+            await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_event_rejects_null_mutation_actor_anchor(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    _, _, updated = await _exercise_policy()
+    async with db_session.get_session_factory()() as session:
+        source = await session.get(ContributionPolicyLifecycleEvent, updated.event_id)
+        assert source is not None
+        await session.execute(
+            update(ContributionPolicyVersion)
+            .where(ContributionPolicyVersion.id == source.contribution_policy_version_id)
+            .values(last_updated_by=None)
+        )
+        session.add(
+            ContributionPolicyLifecycleEvent(
+                id=uuid4(),
+                operation_id=uuid4(),
+                request_digest="sha256:" + "3" * 64,
+                event_type="draft_updated",
+                actor_profile_id=source.actor_profile_id,
+                project_id=source.project_id,
+                contribution_policy_id=source.contribution_policy_id,
+                contribution_policy_version_id=source.contribution_policy_version_id,
+                version_number=source.version_number,
+                prior_current_version_id=source.prior_current_version_id,
+                prior_current_version_number=source.prior_current_version_number,
+                from_policy_status=source.from_policy_status,
+                to_policy_status=source.to_policy_status,
+                from_version_status="draft",
+                to_version_status="draft",
+            )
+        )
+        with pytest.raises(DBAPIError):
+            await session.flush()
+
+
+@pytest.mark.asyncio
+async def test_event_schema_has_composite_ownership_constraints(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    async with db_session.get_session_factory()() as session:
+        names = set(
+            await session.scalars(
+                text(
+                    "select conname from pg_constraint "
+                    "where conrelid='contribution_policy_lifecycle_events'::regclass"
+                )
+            )
+        )
+    assert "fk_contribution_policy_event_policy_ownership" in names
+    assert "fk_contribution_policy_event_version_ownership" in names
+
+
+@pytest.mark.asyncio
+async def test_event_rejects_cross_project_policy_version_ownership(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    _, created, _ = await _exercise_policy()
+    foreign_project, _, _, _, _ = await _seed_project()
+    async with db_session.get_session_factory()() as session:
+        source = await session.get(ContributionPolicyLifecycleEvent, created.event_id)
+        assert source is not None
+        session.add(
+            ContributionPolicyLifecycleEvent(
+                id=uuid4(),
+                operation_id=uuid4(),
+                request_digest="sha256:" + "4" * 64,
+                event_type=source.event_type,
+                actor_profile_id=source.actor_profile_id,
+                project_id=foreign_project,
                 contribution_policy_id=source.contribution_policy_id,
                 contribution_policy_version_id=source.contribution_policy_version_id,
                 version_number=source.version_number,

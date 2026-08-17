@@ -19,7 +19,7 @@ _QUANTITY_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,18})?$")
 
 
 def canonical_award_quantity(
-    value: object, instrument_type: CompensationInstrumentType
+    value: object, instrument_type: CompensationInstrumentType | None = None
 ) -> Decimal:
     """Return one bounded canonical quantity shared by schema and behavior."""
     if not isinstance(value, str) or _QUANTITY_PATTERN.fullmatch(value) is None:

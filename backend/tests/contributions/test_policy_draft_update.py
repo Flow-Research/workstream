@@ -7,6 +7,7 @@ import pytest
 
 from app.modules.contributions.api import (
     ContributionPolicyConflict,
+    ContributionPolicyUnavailable,
     ContributionPolicyUpdateDraftRequest,
 )
 from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
@@ -77,6 +78,18 @@ async def test_update_draft_locks_exact_project_policy_version() -> None:
         request.contribution_policy_version_id,
         for_update=True,
     )
+
+
+@pytest.mark.asyncio
+async def test_update_draft_rejects_non_uuid_required_version_selector() -> None:
+    fixture = service_fixture()
+    request = update_request(fixture)
+    object.__setattr__(request, "contribution_policy_version_id", "not-a-uuid")
+
+    with pytest.raises(ContributionPolicyUnavailable):
+        await fixture.service.update_draft(request)
+
+    fixture.repository.lock_operation.assert_not_awaited()
 
 
 @pytest.mark.asyncio

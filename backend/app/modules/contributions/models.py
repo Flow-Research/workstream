@@ -357,6 +357,24 @@ class ContributionPolicyLifecycleEvent(Base):
 
     __tablename__ = "contribution_policy_lifecycle_events"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["contribution_policy_id", "project_id"],
+            ["contribution_policies.id", "contribution_policies.project_id"],
+            name="fk_contribution_policy_event_policy_ownership",
+        ),
+        ForeignKeyConstraint(
+            [
+                "contribution_policy_version_id",
+                "contribution_policy_id",
+                "project_id",
+            ],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.contribution_policy_id",
+                "contribution_policy_versions.project_id",
+            ],
+            name="fk_contribution_policy_event_version_ownership",
+        ),
         UniqueConstraint("operation_id", name="uq_contribution_policy_event_operation"),
         CheckConstraint(
             "request_digest ~ '^sha256:[0-9a-f]{64}$'",
@@ -391,19 +409,8 @@ class ContributionPolicyLifecycleEvent(Base):
         ForeignKey("projects.id", name="fk_contribution_policy_event_project"),
         nullable=False,
     )
-    contribution_policy_id: Mapped[UUID] = mapped_column(
-        Uuid(),
-        ForeignKey("contribution_policies.id", name="fk_contribution_policy_event_policy"),
-        nullable=False,
-    )
-    contribution_policy_version_id: Mapped[UUID] = mapped_column(
-        Uuid(),
-        ForeignKey(
-            "contribution_policy_versions.id",
-            name="fk_contribution_policy_event_version",
-        ),
-        nullable=False,
-    )
+    contribution_policy_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     prior_current_version_id: Mapped[UUID | None] = mapped_column(Uuid())
     prior_current_version_number: Mapped[int | None] = mapped_column(Integer)

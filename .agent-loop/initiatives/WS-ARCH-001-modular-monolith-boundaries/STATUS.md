@@ -2,7 +2,9 @@
 
 - Initiative state: active; boundary foundation complete
 - Runtime behavior changed: hidden CON adapter-binding behavior plus exactly four
-  Finance Authority actions; no public route
+  Finance Authority actions, and hidden ContributionPolicy read/create-draft/
+  update-draft behavior; all five policy actions remain unavailable and no
+  public route exists
 - Canonical target: nine business modules and three supporting modules
 - Recovery model: freeze exact debt, prohibit growth, repair touched
   capabilities incrementally

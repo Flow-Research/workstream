@@ -111,19 +111,6 @@ async def test_read_denies_without_composed_authority() -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_conceals_cross_project_policy() -> None:
-    fixture = service_fixture()
-    with pytest.raises(ContributionPolicyConflict, match="not_found"):
-        await fixture.service.read(
-            ContributionPolicyReadRequest(
-                actor_profile_id=fixture.actor_id,
-                project_id=uuid4(),
-                contribution_policy_id=uuid4(),
-            )
-        )
-
-
-@pytest.mark.asyncio
 async def test_read_view_contains_immutable_server_owned_graph_facts() -> None:
     view = await _read_version_view()
     with pytest.raises((AttributeError, TypeError)):

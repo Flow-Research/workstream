@@ -73,7 +73,7 @@ async def test_update_conceals_cross_project_adapter_binding_without_effect() ->
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mismatch", ("binding_id", "instrument_type"))
+@pytest.mark.parametrize("mismatch", ("project_id", "binding_id", "instrument_type"))
 async def test_update_rejects_mismatched_adapter_binding_owner_facts(
     mismatch: str,
 ) -> None:
@@ -85,7 +85,7 @@ async def test_update_rejects_mismatched_adapter_binding_owner_facts(
     async def mismatched(**facts: object) -> LockedPolicyAdapterBindingFacts:
         del facts
         return LockedPolicyAdapterBindingFacts(
-            project_id=request.project_id,
+            project_id=uuid4() if mismatch == "project_id" else request.project_id,
             adapter_binding_id=(
                 uuid4() if mismatch == "binding_id" else definition.adapter_binding_id
             ),

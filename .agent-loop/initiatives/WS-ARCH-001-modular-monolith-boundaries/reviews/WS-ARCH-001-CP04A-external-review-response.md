@@ -82,3 +82,28 @@ one canonical validator for positivity, canonical form, maximum magnitude,
 maximum scale, and integer-scale project points. Overflow and over-scale input
 is rejected before owner locks, authorization, or graph replacement. This
 finding invalidates all earlier exact-head receipts until replayed.
+
+## PR #349 substantive CodeRabbit replay
+
+CodeRabbit's eight threads against `3ee52b65` were replayed rather than applied
+mechanically. All eight were valid:
+
+- nullable event-state and attribution comparisons are now NULL-safe, with
+  direct PostgreSQL regression proof;
+- lifecycle events now enforce composite policy/project and
+  version/policy/project ownership in ORM and migration truth;
+- cross-project read concealment now exercises the real repository;
+- create-draft owner mismatch returns concealed `not_found`;
+- update-draft always type-checks its required version selector;
+- boundary proof uses the repository's AST import scanner;
+- project, binding, and instrument owner-fact mismatches have exact tests; and
+- ARCH status records hidden CP04A behavior and continued unavailability.
+
+The schema-validation nit was also valid: its first pass no longer uses
+`assert` or a fake money instrument. The suggestion to consume AUTH before
+owner-resource locking was not applied because it contradicts the approved
+fail-closed order and would authorize before exact owner-held resource facts
+are fenced against time-of-check/time-of-use drift.
+
+These changes make every earlier review and CI receipt historical. Fresh
+exact-head review and hosted CI are required before merge readiness is claimed.

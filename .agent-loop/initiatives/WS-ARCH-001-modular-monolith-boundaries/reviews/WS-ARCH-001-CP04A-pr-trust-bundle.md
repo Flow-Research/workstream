@@ -38,6 +38,8 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
 
 ## Acceptance proof
 
+- The counts below are historical evidence from the preceding reviewed head;
+  the substantive CodeRabbit corrections require fresh exact-head replay.
 - 89 focused behavior tests passed before final additions; the contract-listed
   isolated regression set passed 155/155.
 - Real PostgreSQL create/update/read, concurrency, and immutable-event proof
@@ -67,6 +69,9 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
 - CP04A's authorization claim is deliberately narrow: opaque port rejection
   creates no product effect and every prepared object is closed once. CP05/AUTH
   owns real handle session, transaction, copy, and replay semantics.
+- Substantive CodeRabbit replay added NULL-safe event custody, composite event
+  ownership, real cross-project repository concealment, import-aware boundary
+  proof, required-selector validation, and exact owner-fact mismatch tests.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

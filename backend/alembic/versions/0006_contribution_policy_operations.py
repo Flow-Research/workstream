@@ -57,12 +57,22 @@ def upgrade() -> None:
             name="fk_contribution_policy_event_project",
         ),
         sa.ForeignKeyConstraint(
-            ["contribution_policy_id"], ["contribution_policies.id"],
-            name="fk_contribution_policy_event_policy",
+            ["contribution_policy_id", "project_id"],
+            ["contribution_policies.id", "contribution_policies.project_id"],
+            name="fk_contribution_policy_event_policy_ownership",
         ),
         sa.ForeignKeyConstraint(
-            ["contribution_policy_version_id"], ["contribution_policy_versions.id"],
-            name="fk_contribution_policy_event_version",
+            [
+                "contribution_policy_version_id",
+                "contribution_policy_id",
+                "project_id",
+            ],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.contribution_policy_id",
+                "contribution_policy_versions.project_id",
+            ],
+            name="fk_contribution_policy_event_version_ownership",
         ),
         sa.UniqueConstraint(
             "operation_id", name="uq_contribution_policy_event_operation"
@@ -101,12 +111,12 @@ def upgrade() -> None:
           select * into version from contribution_policy_versions
             where id=new.contribution_policy_version_id;
           if policy.id is null or version.id is null
-             or policy.project_id<>new.project_id
-             or version.project_id<>new.project_id
-             or version.contribution_policy_id<>new.contribution_policy_id
-             or version.version_number<>new.version_number
-             or version.status<>new.to_version_status
-             or policy.status<>new.to_policy_status then
+             or policy.project_id is distinct from new.project_id
+             or version.project_id is distinct from new.project_id
+             or version.contribution_policy_id is distinct from new.contribution_policy_id
+             or version.version_number is distinct from new.version_number
+             or version.status is distinct from new.to_version_status
+             or policy.status is distinct from new.to_policy_status then
             raise exception 'invalid contribution policy lifecycle event'
               using errcode='23514';
           end if;
@@ -123,21 +133,24 @@ def upgrade() -> None:
               using errcode='23514';
           end if;
           if (new.event_type='draft_created' and version.version_number=1
-                 and (new.from_policy_status is not null or policy.status<>'draft'))
+                 and (new.from_policy_status is not null
+                      or policy.status is distinct from 'draft'))
              or (new.event_type='draft_created' and version.version_number>1
-                 and (new.from_policy_status<>'active' or policy.status<>'active'))
+                 and (new.from_policy_status is distinct from 'active'
+                      or policy.status is distinct from 'active'))
              or (new.event_type='draft_updated'
-                 and new.from_policy_status<>policy.status) then
+                 and new.from_policy_status is distinct from policy.status) then
             raise exception 'contribution policy event prior state mismatch'
               using errcode='23514';
           end if;
-          if (new.event_type='draft_created' and version.created_by<>new.actor_profile_id)
+          if (new.event_type='draft_created'
+                 and version.created_by is distinct from new.actor_profile_id)
              or (new.event_type='draft_updated'
-                 and version.last_updated_by<>new.actor_profile_id)
+                 and version.last_updated_by is distinct from new.actor_profile_id)
              or (new.event_type='published'
-                 and version.published_by<>new.actor_profile_id)
+                 and version.published_by is distinct from new.actor_profile_id)
              or (new.event_type='retired'
-                 and version.retired_by<>new.actor_profile_id) then
+                 and version.retired_by is distinct from new.actor_profile_id) then
             raise exception 'contribution policy event attribution mismatch'
               using errcode='23514';
           end if;

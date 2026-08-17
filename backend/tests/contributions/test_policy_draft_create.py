@@ -36,6 +36,23 @@ async def test_create_draft_rejects_second_open_draft_for_project_without_effect
 
 
 @pytest.mark.asyncio
+async def test_create_draft_conceals_project_owner_mismatch() -> None:
+    fixture = service_fixture()
+
+    async def wrong_project(project_id: object) -> object:
+        del project_id
+        return SimpleNamespace(project_id=uuid4())
+
+    fixture.service._projects.lock_contribution_policy_project = wrong_project  # noqa: SLF001
+
+    with pytest.raises(ContributionPolicyConflict, match="not_found"):
+        await fixture.service.create_draft(create_request(fixture))
+
+    assert fixture.authorization.prepared == []
+    fixture.repository.add_policy_version_event.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_create_draft_creates_next_version_on_current_non_retired_policy() -> None:
     fixture = service_fixture()
     policy = ContributionPolicy(

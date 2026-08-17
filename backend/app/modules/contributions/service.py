@@ -101,9 +101,9 @@ class ContributionPolicyService:
             return recovered
         project = await self._lock_project(request.project_id)
         await self._repository.lock_project_scope(request.project_id)
-        if project != request.project_id or await self._repository.get_open_draft(
-            request.project_id
-        ) is not None:
+        if project != request.project_id:
+            raise ContributionPolicyConflict("contribution_policy_not_found")
+        if await self._repository.get_open_draft(request.project_id) is not None:
             raise ContributionPolicyConflict("contribution_policy_conflict")
         policy = await self._repository.get_reusable_policy(request.project_id)
         # Keep the service boundary fail-closed if repository filtering regresses:
@@ -223,10 +223,11 @@ class ContributionPolicyService:
             selectors += ("operation_id",)
         if type(request) is not ContributionPolicyCreateDraftRequest:
             selectors += ("contribution_policy_id",)
-        if type(request) in {
-            ContributionPolicyReadRequest,
-            ContributionPolicyUpdateDraftRequest,
-        } and getattr(request, "contribution_policy_version_id", None) is not None:
+        if type(request) is ContributionPolicyUpdateDraftRequest:
+            selectors += ("contribution_policy_version_id",)
+        elif type(request) is ContributionPolicyReadRequest and getattr(
+            request, "contribution_policy_version_id", None
+        ) is not None:
             selectors += ("contribution_policy_version_id",)
         for name in selectors:
             if not isinstance(getattr(request, name), UUID):

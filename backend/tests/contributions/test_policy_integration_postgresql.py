@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.db import session as db_session
 from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api import (
+    ContributionPolicyConflict,
     ContributionPolicyCreateDraftRequest,
     ContributionPolicyMutationAuthorizationFacts,
     ContributionPolicyMutationResult,
@@ -150,6 +151,43 @@ async def test_real_service_persists_complete_graph_and_events(
         )
         assert count == 2
         assert created.event_id != updated.event_id
+
+
+@pytest.mark.asyncio
+async def test_real_repository_conceals_foreign_project_policy(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    owner_project, creator, _, _, _ = await _seed_project()
+    foreign_project, _, _, _, _ = await _seed_project()
+    actor_id = UUID(creator)
+    authorization = AllowAuthorization(actor_id)
+    async with db_session.get_session_factory()() as session:
+        async with session.begin():
+            service = ContributionPolicyService(
+                session,
+                read_authorization=authorization,
+                mutation_authorization=authorization,
+                projects=project_contribution_policy_eligibility_port(session),
+                bindings=policy_adapter_binding_port(session),
+            )
+            created = await service.create_draft(
+                ContributionPolicyCreateDraftRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=UUID(owner_project),
+                    name="Owner project policy",
+                )
+            )
+        async with session.begin():
+            with pytest.raises(ContributionPolicyConflict, match="not_found"):
+                await service.read(
+                    ContributionPolicyReadRequest(
+                        actor_profile_id=actor_id,
+                        project_id=UUID(foreign_project),
+                        contribution_policy_id=created.contribution_policy_id,
+                    )
+                )
 
 
 @pytest.mark.asyncio
