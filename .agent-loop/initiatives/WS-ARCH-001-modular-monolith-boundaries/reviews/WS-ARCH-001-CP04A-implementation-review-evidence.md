@@ -123,3 +123,9 @@ the exact immutable result, current read authorization, digest mismatch denial,
 and absence of a second PREP, graph replacement, or lifecycle event. The
 focused recovery/structure collection passes 14 tests and the test module
 remains 226 lines.
+
+The final documentation replay found that the migration-isolation correction
+was not projected into the chunk's allowed files or hosted verification
+command. The contract now names only the exact migration-0005 test file and
+includes it in isolated PostgreSQL custody; it does not broaden CP04A into
+general migration ownership.
