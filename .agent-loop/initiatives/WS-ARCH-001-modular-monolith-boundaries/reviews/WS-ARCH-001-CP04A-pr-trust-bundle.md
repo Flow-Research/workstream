@@ -56,7 +56,8 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
   production service and repository remain below 500 lines.
 - Migration-0005 tests use isolated schema-contract custody, and CP04A's
   create, update, and recovery tests compare all immutable mutation-result
-  fields with lifecycle-event truth.
+  fields with lifecycle-event truth. Duplicate update recovery additionally
+  proves read reauthorization, digest mismatch denial, and no second mutation.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

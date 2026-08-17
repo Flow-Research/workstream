@@ -116,3 +116,10 @@ found that mutation-result/event parity was underasserted. Create, update, and
 recovery proofs now compare every immutable result field with lifecycle-event
 truth. Ruff, the focused recovery tests, structure checks, and diff checks pass;
 hosted PostgreSQL must replay both corrections before approval.
+
+The following exact-head test-delta replay correctly found that recovery proof
+covered create-draft but not update-draft. Update duplicate recovery now proves
+the exact immutable result, current read authorization, digest mismatch denial,
+and absence of a second PREP, graph replacement, or lifecycle event. The
+focused recovery/structure collection passes 14 tests and the test module
+remains 226 lines.
