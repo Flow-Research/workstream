@@ -28,6 +28,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Ownership in 3-6 months
 - Fit with existing conventions
 
+## Completeness probe
+
+Trace each responsibility to one owner, one failure boundary, one operational
+signal, and one maintenance path. Inspect size, branching, transaction/error
+handling, and rollback independently. State the most plausible maintenance or
+operational defect still hidden by otherwise green proof.
+
 ## Output
 
 ```text
@@ -36,6 +43,7 @@ Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Maintainability risks:
 Simplicity improvements:
 Operational concerns:
+Responsibility traceability and residual escape:
 Required fixes:
 ```
 

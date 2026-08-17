@@ -27,6 +27,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - README or runbook updates
 - Architecture decision records
 
+## Completeness probe
+
+Map each changed fact to every current entry page, canonical specification,
+status projection, example, and historical record that could contradict it.
+Verify lifecycle state and tense independently; a generally correct document
+does not excuse one stale authority claim.
+
 ## Output
 
 ```text
@@ -35,6 +42,7 @@ Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Docs required: yes/no
 Missing docs:
 Suggested doc locations:
+Fact-to-document traceability and residual escape:
 Required fixes:
 ```
 

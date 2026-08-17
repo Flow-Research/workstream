@@ -22,9 +22,22 @@ their own questions; they do not replace or duplicate this protocol.
    verdict. State the failure or bypass hypothesis, the inspection or command
    used to test it, and the observed result. Passing tests alone are not an
    adversarial probe.
-6. Run the same `python3 scripts/review_target.py` command again immediately
+6. Atomize every material acceptance criterion or claimed invariant into
+   independently observable behaviors. Include relevant actor/context, action,
+   resource or tenant, lifecycle state, failure mode, and forbidden side effect;
+   do not preserve a compound sentence as one row when its parts can fail
+   independently.
+7. Build a traceability row for every behavior atom: criterion, behavior,
+   owner, implementation source, proof source, execution custody, and
+   verification result. For planning-only changes, name the future symbol/path
+   and future test. Narrative coverage, a module name without a test, or one
+   test mapped to an unexamined compound criterion is incomplete.
+8. State a residual escape hypothesis: the most plausible material defect that
+   could still pass the named proof. Attempt to falsify it through a concrete
+   inspection or command and record the result.
+9. Run the same `python3 scripts/review_target.py` command again immediately
    before the verdict.
-7. Compare both snapshots before constructing the receipt. The receipt stores
+10. Compare both snapshots before constructing the receipt. The receipt stores
    their matching target triple once; its start/end inspections cannot redefine
    that target. A final verdict is valid only when the snapshots match and both
    worktrees are clean. Dirty state permits provisional findings only.
@@ -38,6 +51,7 @@ their own questions; they do not replace or duplicate this protocol.
 - Replay every prior finding on the final target. Record its disposition and
   verification; never silently drop it.
 - State uncertainty and unavailable proof explicitly.
+- A missing, unverified, or merely narrative trace row blocks a passing verdict.
 - Route another specialty's issue to that reviewer; do not invent its verdict.
 
 ## Verdict
@@ -51,8 +65,9 @@ implementation, merge, or Workstream product lifecycle decisions.
 ## Output
 
 Return the exact target, reviewer/run identity, start/end inspection, evidence,
-impact cone, adversarial probes, findings and replay dispositions, uncertainty,
-freshness, and verdict. Use the canonical schema and templates. Receipts remain
+impact cone, adversarial probes, atomic traceability rows, residual escape
+analysis, findings and replay dispositions, uncertainty, freshness, and verdict.
+Use the canonical schema and templates. Receipts remain
 private out-of-tree session evidence written only by the orchestrator; a PR
 summary may mirror a verdict but is neither receipt custody nor an attestation.
 Do not write receipt custody from a reviewer.

@@ -35,6 +35,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Removed lint/typecheck/test gate.
 - Package script changed to hide errors.
 
+## Completeness probe
+
+Trace each required gate from trigger and path filter through job dependency,
+command, exit propagation, artifact/coverage aggregation, and protected-branch
+status. Probe cancellation, skipped-job, empty-selection, and rerun behavior;
+green status alone is not proof that the intended command ran.
+
 ## Output
 
 ```text
@@ -42,6 +49,7 @@ Result: PASS / PASS WITH LOW RISKS / FAIL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 CI files changed:
 Integrity concerns:
+Gate traceability and residual escape:
 Required fixes:
 ```
 

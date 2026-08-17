@@ -32,6 +32,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 
 Architecture drift is blocking even when tests pass.
 
+## Completeness probe
+
+Build an owner/consumer/public-port matrix for every changed boundary. Trace
+construction, runtime composition, persistence ownership, and every known
+consumer. Search for private imports and parallel paths. Treat an uninspected
+consumer or unmapped ownership transition as missing proof.
+
 ## Output
 
 ```text
@@ -40,6 +47,7 @@ Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Boundary violations:
 Abstraction risks:
 Coupling risks:
+Atomic traceability and residual escape:
 Simpler alternative:
 Required fixes:
 ```

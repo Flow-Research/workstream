@@ -16,6 +16,10 @@ Run `python3 scripts/review_target.py` at start and end. Do not issue a final ve
 unless the exact target matches and both snapshots are clean. Replay every prior
 finding, distinguish executed from inspected evidence, state uncertainty and
 freshness, and hand off engineering-only findings without deciding them.
+Atomize material criteria and invariants. Produce traceability from each behavior
+atom to owner, implementation source, named proof, execution custody, and result.
+State and test a residual escape hypothesis. Missing or narrative-only rows block PASS.
+For product/ops, trace actor, prerequisite, transition, failure/revision, evidence, and consumer.
 You must review the current branch against the base branch, any applicable plan or chunk contract, Workstream product docs/templates, and repository engineering guidance.
 Treat .agent-loop/policies/ as engineering process policy. Do not rename or replace Workstream product contracts such as project guide, submission artifact policy, checker policy, review policy, revision policy, or payment policy.
 

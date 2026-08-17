@@ -33,6 +33,9 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Do not approve because code looks clean.
 - Do not request broad rewrites unless necessary.
 - Tie findings to acceptance criteria or observable behavior.
+- Split compound criteria into behavior atoms. For each atom name the owner,
+  implementation source, exact test, execution custody, and observed result.
+- A test module name, broad command, or prose promise is not proof of every atom.
 
 ## Output
 
@@ -41,6 +44,8 @@ Result: PASS / PASS WITH LOW RISKS / FAIL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Covered criteria:
 Missing criteria:
+Atomic criterion-to-proof traceability:
+residual escape hypothesis:
 Findings:
 Required fixes:
 Suggested tests:

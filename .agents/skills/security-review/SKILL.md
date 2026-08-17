@@ -39,6 +39,14 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Findings must be concrete.
 - Critical/High findings block PR.
 
+## Completeness probe
+
+Decompose each protected behavior across actor/context, action, project or
+resource, lifecycle state, failure mode, and forbidden evidence/side effect.
+Trace both allow and deny paths, including cross-tenant/resource substitution,
+replay, revocation, and transaction failure. Missing negative-path proof blocks
+a passing verdict.
+
 ## Output
 
 For each finding:
@@ -51,6 +59,8 @@ Why it matters:
 Suggested fix:
 Blocks PR: yes/no
 ```
+
+Include atomic traceability and the residual escape hypothesis for authorization.
 
 End with PASS / PASS WITH LOW RISKS / FAIL.
 

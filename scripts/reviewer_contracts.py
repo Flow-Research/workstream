@@ -86,6 +86,10 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             "freshness",
             "hand off",
             "python3 scripts/review_target.py",
+            "Atomize material criteria",
+            "traceability",
+            "residual escape hypothesis",
+            "Missing or narrative-only rows block PASS",
         ):
             if token not in normalized_agent:
                 failures.append(f"{reviewer}: agent missing {token!r}")
@@ -100,6 +104,8 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             "Medium",
             "Low/Informational",
             "Protocol envelope",
+            "traceability",
+            "residual escape",
         ):
             if token not in normalized_skill:
                 failures.append(f"{reviewer}: skill missing {token!r}")

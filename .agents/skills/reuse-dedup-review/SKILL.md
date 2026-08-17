@@ -25,6 +25,13 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 - Similar abstractions now exist in multiple places.
 - Shared behavior belongs in existing module.
 
+## Completeness probe
+
+For each new helper, schema, policy path, or abstraction, search by behavior,
+types, call sites, and ownership—not name alone. Map the new responsibility to
+the closest existing public owner and explain why reuse or extension is or is
+not valid. Unsearched likely owners are missing proof.
+
 ## Output
 
 ```text
@@ -32,6 +39,7 @@ Result: PASS / PASS WITH LOW RISKS / FAIL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Possible duplicates:
 Existing code to reuse:
+Responsibility traceability and residual escape:
 Required fixes:
 ```
 

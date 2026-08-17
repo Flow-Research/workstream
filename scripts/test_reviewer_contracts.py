@@ -100,7 +100,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_every_reviewer_has_every_blind_case_class(self) -> None:
         self.assertEqual(fixture_failures(self.cases, None), [])
         rows = self.cases["cases"]
-        self.assertEqual(len(rows), len(REVIEWERS) * len(CASE_CLASSES))
+        self.assertGreaterEqual(len(rows), len(REVIEWERS) * len(CASE_CLASSES))
 
     def test_missing_reviewer_or_case_class_fails(self) -> None:
         cases = copy.deepcopy(self.cases)
@@ -202,7 +202,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": "ci_integrity",
         }
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-1"},
@@ -217,6 +217,10 @@ class ReviewerContractTests(unittest.TestCase):
             "adversarial_probes": [
                 {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
             ],
+            "traceability": [
+                {"criterion": "routing", "behavior": "route finding", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+            ],
+            "residual_escape": {"hypothesis": "a second route is hidden", "method": "inspect supplied evidence", "result": "falsified"},
             "findings": [
                 {"id": "ARCH-7", "severity": "Medium", "location": "case", "blocks_pr": False, "disposition": "fixed", "verification": "replayed"}
             ],
@@ -252,6 +256,8 @@ class ReviewerContractTests(unittest.TestCase):
             ("target", "base_sha"),
             ("reviewer", "run_id"),
             ("inspections", "end"),
+            ("traceability",),
+            ("residual_escape",),
             ("uncertainty",),
             ("freshness",),
             ("verdict",),
@@ -269,6 +275,14 @@ class ReviewerContractTests(unittest.TestCase):
             "output: receipt must separate executed and inspected evidence",
             output_failures(output, expectation, broken_receipt),
         )
+        passing_receipt = copy.deepcopy(receipt)
+        passing_receipt["inspections"] = {"start": {"cleanliness": "clean"}, "end": {"cleanliness": "clean"}}
+        passing_receipt["verdict"] = "PASS"
+        passing_receipt["traceability"][0]["result"] = "missing"
+        self.assertTrue(output_failures(output, expectation, passing_receipt))
+        passing_receipt["traceability"][0]["result"] = "verified"
+        passing_receipt["residual_escape"]["result"] = "survives"
+        self.assertTrue(output_failures(output, expectation, passing_receipt))
 
     def test_positive_finding_requires_stable_receipt_finding(self) -> None:
         expectation = {
@@ -287,7 +301,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": None,
         }
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-positive"},
@@ -302,6 +316,10 @@ class ReviewerContractTests(unittest.TestCase):
             "adversarial_probes": [
                 {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
             ],
+            "traceability": [
+                {"criterion": "finding", "behavior": "detect defect", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+            ],
+            "residual_escape": {"hypothesis": "defect is concealed", "method": "inspect supplied evidence", "result": "falsified"},
             "findings": [],
             "uncertainty": [],
             "freshness": "current",

@@ -34,6 +34,13 @@ For every changed test:
 - Coverage lowered without approval.
 - Bug fix without regression coverage when feasible.
 
+## Completeness probe
+
+Map each changed or claimed behavior atom to the exact assertion that would fail
+if that atom regressed. Check actor/resource/state/failure variants separately,
+and compare with the old behavior. A test name without a discriminating
+assertion is not verified traceability.
+
 ## Output
 
 ```text
@@ -43,6 +50,8 @@ Tests added:
 Tests modified:
 Tests removed/skipped:
 Weakening concerns:
+Atomic behavior/assertion traceability:
+residual escape hypothesis:
 Required fixes:
 ```
 
