@@ -129,3 +129,12 @@ was not projected into the chunk's allowed files or hosted verification
 command. The contract now names only the exact migration-0005 test file and
 includes it in isolated PostgreSQL custody; it does not broaden CP04A into
 general migration ownership.
+
+The hosted replay confirmed schema teardown was repaired: 1,470 tests passed
+and no schema leak remained. Its sole failure exposed a stale migration-0005
+error expectation. Because the clean v0.1 baseline permits no backward
+compatibility or partial-head downgrade, Alembic correctly rejects downgrade
+from predecessor `0005` with the repository's canonical fresh-database guard
+before invoking that revision's local downgrade function. The test now asserts
+that canonical refusal and still proves the referenced adapter identity and
+constraint snapshot remain unchanged.

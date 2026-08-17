@@ -87,7 +87,7 @@ def test_0005_accepts_only_the_closed_adapter_identity(
             )
 
 
-def test_0005_downgrade_refuses_without_mutating_referenced_identity(
+def test_repository_downgrade_refuses_without_mutating_referenced_identity(
     isolated_database_env: str, migration_lock
 ) -> None:
     with migration_lock():
@@ -97,6 +97,6 @@ def test_0005_downgrade_refuses_without_mutating_referenced_identity(
         command.upgrade(_config(), "0005_compensation_adapter_identity")
         asyncio.run(_insert_adapter_actor(isolated_database_env))
         before = asyncio.run(_snapshot(isolated_database_env))
-        with pytest.raises(RuntimeError, match="cannot be downgraded"):
+        with pytest.raises(RuntimeError, match="requires a fresh database"):
             command.downgrade(_config(), "0004_compensation_adapter_binding_lifecycle")
         assert asyncio.run(_snapshot(isolated_database_env)) == before
