@@ -149,7 +149,13 @@ class ReviewerContractTests(unittest.TestCase):
         self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
 
     def test_weaker_proof_cannot_satisfy_infrastructure_claims(self) -> None:
-        for boundary in ("repository", "transaction", "concurrency", "direct_sql"):
+        for boundary in (
+            "repository",
+            "transaction",
+            "concurrency",
+            "direct_sql",
+            "composition",
+        ):
             with self.subTest(boundary=boundary):
                 receipt = valid_receipt()
                 row = receipt["traceability"][0]
@@ -160,9 +166,9 @@ class ReviewerContractTests(unittest.TestCase):
                         "kind": "executed",
                         "observations": ["service_orchestration"],
                     },
-                    proof_compatibility="incompatible",
+                    proof_compatibility="compatible",
                 )
-                self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+                self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
 
     def test_isolation_proof_rejects_missing_row_mock(self) -> None:
         receipt = valid_receipt()
@@ -210,6 +216,10 @@ class ReviewerContractTests(unittest.TestCase):
                 "observations": ["independent_sessions"],
             },
             "direct_sql": {"kind": "executed", "observations": ["orm_bypassed"]},
+            "composition": {
+                "kind": "executed",
+                "observations": ["composition_root"],
+            },
         }
         for boundary, custody in valid_custody.items():
             with self.subTest(boundary=boundary):
