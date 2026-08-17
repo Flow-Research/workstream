@@ -72,11 +72,29 @@ changed. Required Agent Gates commands pass locally.
 
 ## Reviewer results
 
-Architecture, CI integrity, QA, security, documentation/product, and senior
-engineering reviewed exact head `c848ccfeccb96001cc7689060311b6acccd435d6`.
-All prior findings were replayed and closed; final results were `PASS` or
-`PASS WITH LOW RISKS`. These results become stale after the external-review
-repair and must be replayed on its final exact head.
+Initial reviewed code SHA: `c848ccfeccb96001cc7689060311b6acccd435d6`
+
+Reviewed at: 2026-08-17
+
+Reviewer run IDs: `ci005_plan_arch`, `ci005_plan_ci`, `ci005_plan_qa`,
+`ci005_plan_security`, `ci005_plan_docs_product`, `ci005_plan_senior`
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | PASS WITH LOW RISKS | None | Adoption remains conditional on blind evaluation. |
+| QA/test | PASS | None | Exact proof selectors and all ten escaped classes verified. |
+| security/auth | PASS | None | Untrusted evidence and custody boundaries verified. |
+| product/ops | PASS | None | Same focused docs/product session; no product lifecycle change. |
+| architecture | PASS | None | Canonical WS-CI-004 ownership and three-chunk boundary verified. |
+| CI integrity | PASS WITH LOW RISKS | None | No CI surface changed; required local gates passed. |
+| docs | PASS | None | Durable state, terminology, and links verified. |
+| reuse/dedup | N/A - with approved reason | None | Planning-only Markdown adds no implementation helper or abstraction. Architecture still verified canonical validator and registry reuse. |
+| test delta | N/A - with approved reason | None | No test file, assertion, selection, or coverage command changed. QA still verified future proof obligations. |
+
+The external-review repair makes these committed results historical. Final
+exact-head receipts are create-once local session evidence and must replay the
+applicable tracks after every push; the GitHub PR body mirrors their current
+status without making this committed bundle self-referential.
 
 ## External review
 
