@@ -12,7 +12,8 @@
 - `CR-347-004` Major: specialty-skill adoption checks did not enforce the full
   shared semantic contract. Valid. Stable requirement IDs now cover
   atomization, owner, implementation source, named proof, execution custody,
-  result, residual escape, and fail-closed PASS behavior, with mutation proof.
+  result, residual escape, and fail-closed PASS behavior for both skills and
+  custom agent TOMLs, with independent mutation proof.
 - `CR-347-005` Minor: both receipt test suites needed unavailable and multi-row
   PASS rejection. Valid. Both suites now exercise those boundaries while
   preserving PROVISIONAL acceptance for unavailable proof.

@@ -8,7 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.reviewer_contracts import CASE_CLASSES, REVIEWERS, SEMANTIC_SKILL_REQUIREMENTS
+from scripts.reviewer_contracts import (
+    CASE_CLASSES,
+    REVIEWERS,
+    SEMANTIC_AGENT_REQUIREMENTS,
+    SEMANTIC_SKILL_REQUIREMENTS,
+)
 from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
 from scripts.reviewer_contracts import output_failures, output_set_failures
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
@@ -66,6 +71,22 @@ class ReviewerContractTests(unittest.TestCase):
                     skill = root / ".agents/skills/architecture-review/SKILL.md"
                     skill.write_text(
                         skill.read_text(encoding="utf-8").replace(token, "removed"),
+                        encoding="utf-8",
+                    )
+                    self.assertTrue(
+                        any(requirement_id in failure for failure in contract_failures(root))
+                    )
+                finally:
+                    temporary.cleanup()
+
+    def test_each_semantic_agent_requirement_is_independently_enforced(self) -> None:
+        for requirement_id, token in SEMANTIC_AGENT_REQUIREMENTS.items():
+            with self.subTest(requirement_id=requirement_id):
+                temporary, root = self.copied_contract_root()
+                try:
+                    agent = root / ".codex/agents/architecture-reviewer.toml"
+                    agent.write_text(
+                        agent.read_text(encoding="utf-8").replace(token, "removed"),
                         encoding="utf-8",
                     )
                     self.assertTrue(
