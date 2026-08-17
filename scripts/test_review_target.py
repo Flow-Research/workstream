@@ -126,7 +126,9 @@ class ReviewTargetTests(unittest.TestCase):
     def test_command_failure_timeout_and_empty_output_fail_closed(self) -> None:
         with self.assertRaises(GitCommandError):
             run_checked(["git", "definitely-not-a-command"], repository_root=self.repository)
-        with patch("scripts.git_delta.subprocess.run", side_effect=subprocess.TimeoutExpired(["git"], 1)):
+        with patch(
+            "scripts.git_delta.subprocess.run", side_effect=subprocess.TimeoutExpired(["git"], 1)
+        ):
             with self.assertRaisesRegex(GitCommandError, "GIT_TIMEOUT"):
                 run_checked(["git", "status"], repository_root=self.repository)
         with patch("scripts.git_delta.run_checked", return_value=""):
@@ -172,7 +174,7 @@ class ReceiptSchemaTests(unittest.TestCase):
         sha = "a" * 40
         target = {"base_sha": sha, "merge_base_sha": sha, "head_sha": sha}
         cls.receipt = {
-            "schema_version": 2,
+            "schema_version": 3,
             "custody": "advisory_session",
             "target": target,
             "reviewer": {"specialty": "security", "run_id": "run-1"},
@@ -188,6 +190,10 @@ class ReceiptSchemaTests(unittest.TestCase):
                 {
                     "hypothesis": "invalid input bypasses denial",
                     "method": "negative test",
+                    "defect": "remove the invalid-input denial",
+                    "expected_observation": "negative test fails",
+                    "actual_observation": "negative test failed",
+                    "proof_survived": False,
                     "result": "pass",
                 }
             ],
@@ -199,6 +205,9 @@ class ReceiptSchemaTests(unittest.TestCase):
                     "implementation_source": "owner.py:Owner",
                     "proof_source": "negative test",
                     "execution_custody": "unit test",
+                    "claimed_boundary": "service",
+                    "proof_strength": "service",
+                    "proof_compatibility": "compatible",
                     "result": "verified",
                 }
             ],
@@ -292,6 +301,10 @@ class ReceiptSchemaTests(unittest.TestCase):
                             {
                                 "hypothesis": "authority bypass",
                                 "method": "targeted inspection",
+                                "defect": "remove the authority guard",
+                                "expected_observation": "inspection finds the missing guard",
+                                "actual_observation": "inspection found the missing guard",
+                                "proof_survived": False,
                                 "result": result,
                             }
                         ],
@@ -313,6 +326,7 @@ class ReceiptSchemaTests(unittest.TestCase):
                     "blocks_pr": True,
                     "disposition": "unresolved",
                     "verification": "",
+                    "failure_pattern_ids": [],
                 }
             )
 
@@ -326,9 +340,9 @@ class ReceiptSchemaTests(unittest.TestCase):
             for field in ("base_sha", "merge_base_sha", "head_sha"):
                 with self.subTest(inspection=inspection, field=field):
                     self.assert_invalid(
-                        lambda receipt, inspection=inspection, field=field: receipt[
-                            "inspections"
-                        ][inspection].update(target={field: "b" * 40})
+                        lambda receipt, inspection=inspection, field=field: receipt["inspections"][
+                            inspection
+                        ].update(target={field: "b" * 40})
                     )
 
 

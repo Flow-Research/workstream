@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://workstream.local/schemas/internal-review-receipt-v2.json",
+  "$id": "https://workstream.local/schemas/internal-review-receipt-v3.json",
   "title": "Workstream Internal Review Receipt",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "custody", "target", "reviewer", "inspections", "evidence", "impact_cone", "adversarial_probes", "traceability", "residual_escape", "findings", "uncertainty", "freshness", "verdict"],
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "custody": {"const": "advisory_session"},
     "target": {"$ref": "#/$defs/target"},
     "reviewer": {
@@ -59,10 +59,14 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["hypothesis", "method", "result"],
+        "required": ["hypothesis", "method", "defect", "expected_observation", "actual_observation", "proof_survived", "result"],
         "properties": {
           "hypothesis": {"type": "string", "minLength": 1},
           "method": {"type": "string", "minLength": 1},
+          "defect": {"type": "string", "minLength": 1},
+          "expected_observation": {"type": "string", "minLength": 1},
+          "actual_observation": {"type": "string", "minLength": 1},
+          "proof_survived": {"type": "boolean"},
           "result": {"enum": ["pass", "fail", "unavailable"]}
         }
       }
@@ -73,7 +77,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["criterion", "behavior", "owner", "implementation_source", "proof_source", "execution_custody", "result"],
+        "required": ["criterion", "behavior", "owner", "implementation_source", "proof_source", "execution_custody", "claimed_boundary", "proof_strength", "proof_compatibility", "result"],
         "properties": {
           "criterion": {"type": "string", "minLength": 1},
           "behavior": {"type": "string", "minLength": 1},
@@ -81,6 +85,9 @@
           "implementation_source": {"type": "string", "minLength": 1},
           "proof_source": {"type": "string", "minLength": 1},
           "execution_custody": {"type": "string", "minLength": 1},
+          "claimed_boundary": {"$ref": "#/$defs/proof_strength"},
+          "proof_strength": {"$ref": "#/$defs/proof_strength"},
+          "proof_compatibility": {"enum": ["compatible", "incompatible", "unavailable"]},
           "result": {"enum": ["verified", "missing", "unavailable"]}
         }
       }
@@ -133,18 +140,23 @@
             }
           },
           "adversarial_probes": {
-            "contains": {
+            "items": {
               "type": "object",
-              "required": ["result"],
-              "properties": {"result": {"const": "pass"}}
-            },
-            "minContains": 1
+              "required": ["proof_survived", "result"],
+              "properties": {
+                "proof_survived": {"const": false},
+                "result": {"const": "pass"}
+              }
+            }
           },
           "traceability": {
             "items": {
               "type": "object",
-              "required": ["result"],
-              "properties": {"result": {"const": "verified"}}
+              "required": ["proof_compatibility", "result"],
+              "properties": {
+                "proof_compatibility": {"const": "compatible"},
+                "result": {"const": "verified"}
+              }
             }
           },
           "residual_escape": {
@@ -156,6 +168,7 @@
   ],
   "$defs": {
     "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "proof_strength": {"enum": ["pure", "service", "repository", "transaction", "concurrency", "direct_sql", "composition", "negative_structure"]},
     "target": {
       "type": "object",
       "additionalProperties": false,
@@ -178,14 +191,19 @@
     "finding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "severity", "location", "blocks_pr", "disposition", "verification"],
+      "required": ["id", "severity", "location", "blocks_pr", "disposition", "verification", "failure_pattern_ids"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "severity": {"enum": ["Critical", "High", "Medium", "Low", "Informational"]},
         "location": {"type": "string", "minLength": 1},
         "blocks_pr": {"type": "boolean"},
         "disposition": {"enum": ["unresolved", "fixed", "accepted_risk", "deferred_with_owner", "not_valid"]},
-        "verification": {"type": "string"}
+        "verification": {"type": "string"},
+        "failure_pattern_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^PQ-[0-9]{3}$"}
+        }
       }
     }
   }

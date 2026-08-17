@@ -12,10 +12,12 @@ without changing specialty reviewer prompts yet.
 .agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md
 .agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json
 .agent-loop/templates/INTERNAL_REVIEW_EVIDENCE.md
+.agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md
 .agent-loop/initiatives/WS-CI-005-semantic-proof-quality/**
 scripts/reviewer_contracts.py
 scripts/test_reviewer_contracts.py
+scripts/test_review_target.py
 ```
 
 ## Not allowed
@@ -75,8 +77,7 @@ does not add contribution or merge authority.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`
 
-After this implementation chunk merges, the shared proof-strength structure
-will be available; reviewer adoption will remain unstarted until explicit
-human direction.
+The shared proof-strength structure is complete. Reviewer adoption remains
+unstarted until explicit human direction.

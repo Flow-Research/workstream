@@ -19,8 +19,24 @@ CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
+PROOF_PATTERNS_PATH = (
+    ROOT / ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md"
+)
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
+PROOF_STRENGTHS = {
+    "pure",
+    "service",
+    "repository",
+    "transaction",
+    "concurrency",
+    "direct_sql",
+    "composition",
+    "negative_structure",
+}
+PASSING_VERDICTS = {"PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS"}
+FAILURE_PATTERN_IDS = {f"PQ-{number:03d}" for number in range(1, 14)}
+FAILURE_PATTERN_ROW = re.compile(r"^\| `(PQ-[0-9]{3})` \|", re.MULTILINE)
 SEMANTIC_SKILL_REQUIREMENTS = {
     "semantic.atomization": "Atomize every material criterion",
     "semantic.ownership": "record its owner",
@@ -54,6 +70,11 @@ def matrix_reviewers(matrix: str) -> dict[str, tuple[str, str]]:
     return {reviewer: (agent_name, skill_name) for reviewer, agent_name, skill_name in rows}
 
 
+def failure_pattern_ids(patterns: str) -> list[str]:
+    """Return registered escaped-failure IDs without discarding duplicates."""
+    return FAILURE_PATTERN_ROW.findall(patterns)
+
+
 REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
@@ -61,6 +82,15 @@ def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
+    patterns_path = root / PROOF_PATTERNS_PATH.relative_to(ROOT)
+    if not patterns_path.is_file():
+        failures.append("proof patterns: missing registry")
+    else:
+        pattern_rows = failure_pattern_ids(patterns_path.read_text(encoding="utf-8"))
+        if len(pattern_rows) != len(set(pattern_rows)):
+            failures.append("proof patterns: duplicate IDs")
+        if set(pattern_rows) != FAILURE_PATTERN_IDS:
+            failures.append("proof patterns: incomplete registry")
     if len(reviewers) != 9 or len(MATRIX_ROW.findall(matrix)) != 9:
         failures.append("matrix: expected nine unique reviewer contracts")
     reviewer_pairs = list(reviewers.values())
@@ -214,6 +244,22 @@ def receipt_failures(receipt: object, reviewer: object, evaluated_head: object) 
     evidence_kinds = {item["kind"] for item in receipt["evidence"]}
     if evidence_kinds != {"executed", "inspected"}:
         failures.append("output: receipt must separate executed and inspected evidence")
+    for index, row in enumerate(receipt["traceability"]):
+        if row["proof_compatibility"] == "unavailable":
+            continue
+        expected = (
+            "compatible" if row["claimed_boundary"] == row["proof_strength"] else "incompatible"
+        )
+        if row["proof_compatibility"] != expected:
+            failures.append(f"output: traceability row {index} proof compatibility mismatch")
+    if receipt["verdict"] in PASSING_VERDICTS and any(
+        row["proof_compatibility"] != "compatible" for row in receipt["traceability"]
+    ):
+        failures.append("output: incompatible or unavailable proof blocks PASS")
+    for finding in receipt["findings"]:
+        unknown = set(finding["failure_pattern_ids"]) - FAILURE_PATTERN_IDS
+        if unknown:
+            failures.append(f"output: finding {finding['id']} has unknown failure pattern IDs")
     return failures
 
 
@@ -224,8 +270,13 @@ def output_failures(
         return ["output: expected an object"]
     failures: list[str] = []
     required = {
-        "case_id", "reviewer", "evaluated_head", "classification", "finding_ids",
-        "short_reason", "handoff_specialty",
+        "case_id",
+        "reviewer",
+        "evaluated_head",
+        "classification",
+        "finding_ids",
+        "short_reason",
+        "handoff_specialty",
     }
     missing = required - output.keys()
     if missing:
@@ -248,7 +299,11 @@ def output_failures(
     if output.get("handoff_specialty") != expectation.get("handoff_specialty"):
         failures.append("output: wrong handoff")
     head = output.get("evaluated_head")
-    if not isinstance(head, str) or len(head) != 40 or any(c not in "0123456789abcdef" for c in head):
+    if (
+        not isinstance(head, str)
+        or len(head) != 40
+        or any(c not in "0123456789abcdef" for c in head)
+    ):
         failures.append("output: invalid evaluated head")
     receipt = output.get("receipt") if receipt is None else receipt
     failures.extend(receipt_failures(receipt, output.get("reviewer"), evaluated_head=head))

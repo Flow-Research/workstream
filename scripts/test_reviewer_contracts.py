@@ -10,13 +10,69 @@ from pathlib import Path
 
 from scripts.reviewer_contracts import (
     CASE_CLASSES,
+    FAILURE_PATTERN_IDS,
+    PROOF_PATTERNS_PATH,
+    PROOF_STRENGTHS,
     REVIEWERS,
     SEMANTIC_AGENT_REQUIREMENTS,
     SEMANTIC_SKILL_REQUIREMENTS,
 )
 from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
-from scripts.reviewer_contracts import output_failures, output_set_failures
+from scripts.reviewer_contracts import output_failures, output_set_failures, receipt_failures
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
+
+
+def valid_receipt() -> dict[str, object]:
+    sha = "a" * 40
+    return {
+        "schema_version": 3,
+        "custody": "advisory_session",
+        "target": {"base_sha": sha, "merge_base_sha": sha, "head_sha": sha},
+        "reviewer": {"specialty": "architecture", "run_id": "proof-test"},
+        "inspections": {
+            "start": {"cleanliness": "clean"},
+            "end": {"cleanliness": "clean"},
+        },
+        "evidence": [
+            {"kind": "executed", "source": "focused test", "result": "pass"},
+            {"kind": "inspected", "source": "owner source", "result": "pass"},
+        ],
+        "impact_cone": [{"source": "owner", "relevance": "owns behavior"}],
+        "adversarial_probes": [
+            {
+                "hypothesis": "proof misses the defect",
+                "method": "remove the owner guard",
+                "defect": "owner guard removed",
+                "expected_observation": "focused test fails",
+                "actual_observation": "focused test failed",
+                "proof_survived": False,
+                "result": "pass",
+            }
+        ],
+        "traceability": [
+            {
+                "criterion": "owner guard",
+                "behavior": "invalid owner is denied",
+                "owner": "architecture",
+                "implementation_source": "owner",
+                "proof_source": "focused test",
+                "execution_custody": "local unit",
+                "claimed_boundary": "service",
+                "proof_strength": "service",
+                "proof_compatibility": "compatible",
+                "result": "verified",
+            }
+        ],
+        "residual_escape": {
+            "hypothesis": "another owner path bypasses",
+            "method": "inspect all owner entry points",
+            "result": "falsified",
+        },
+        "findings": [],
+        "uncertainty": [],
+        "freshness": "current",
+        "verdict": "PASS",
+    }
 
 
 class ReviewerContractTests(unittest.TestCase):
@@ -26,6 +82,180 @@ class ReviewerContractTests(unittest.TestCase):
 
     def test_all_agent_skill_contracts_compose_with_protocol(self) -> None:
         self.assertEqual(contract_failures(), [])
+
+    def assert_receipt_invalid(self, receipt: dict[str, object], message: str) -> None:
+        self.assertTrue(
+            any(
+                message in failure
+                for failure in receipt_failures(receipt, "architecture", "a" * 40)
+            )
+        )
+
+    def test_receipt_rejects_unknown_proof_strength(self) -> None:
+        self.assertEqual(
+            PROOF_STRENGTHS,
+            {
+                "pure",
+                "service",
+                "repository",
+                "transaction",
+                "concurrency",
+                "direct_sql",
+                "composition",
+                "negative_structure",
+            },
+        )
+        receipt = valid_receipt()
+        receipt["traceability"][0]["proof_strength"] = "integration"
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_receipt_requires_boundary_and_strength_per_trace_row(self) -> None:
+        for field in ("claimed_boundary", "proof_strength", "proof_compatibility"):
+            with self.subTest(field=field):
+                receipt = valid_receipt()
+                receipt["traceability"][0].pop(field)
+                self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_reviewer_cannot_self_attest_compatibility(self) -> None:
+        receipt = valid_receipt()
+        row = receipt["traceability"][0]
+        row.update(
+            claimed_boundary="repository",
+            proof_strength="service",
+            proof_compatibility="compatible",
+        )
+        self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
+
+    def test_weaker_proof_cannot_satisfy_infrastructure_claims(self) -> None:
+        for boundary in ("repository", "transaction", "concurrency", "direct_sql"):
+            with self.subTest(boundary=boundary):
+                receipt = valid_receipt()
+                row = receipt["traceability"][0]
+                row.update(
+                    claimed_boundary=boundary,
+                    proof_strength="service",
+                    proof_compatibility="incompatible",
+                )
+                self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_isolation_proof_rejects_missing_row_mock(self) -> None:
+        receipt = valid_receipt()
+        row = receipt["traceability"][0]
+        row.update(
+            claimed_boundary="repository",
+            proof_strength="service",
+            proof_compatibility="compatible",
+            proof_source="mock returns None instead of a stored foreign row",
+        )
+        self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
+
+    def test_unavailable_proof_blocks_pass(self) -> None:
+        receipt = valid_receipt()
+        receipt["traceability"][0]["proof_compatibility"] = "unavailable"
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_provisional_receipt_can_record_unavailable_proof(self) -> None:
+        receipt = valid_receipt()
+        receipt["verdict"] = "PROVISIONAL"
+        receipt["traceability"][0].update(
+            proof_compatibility="unavailable",
+            result="unavailable",
+        )
+        receipt["residual_escape"]["result"] = "unavailable"
+        self.assertEqual(receipt_failures(receipt, "architecture", "a" * 40), [])
+
+    def test_compatible_pure_and_service_proof_types_pass(self) -> None:
+        for proof_type in ("pure", "service"):
+            with self.subTest(proof_type=proof_type):
+                receipt = valid_receipt()
+                receipt["traceability"][0].update(
+                    claimed_boundary=proof_type,
+                    proof_strength=proof_type,
+                    proof_compatibility="compatible",
+                )
+                self.assertEqual(receipt_failures(receipt, "architecture", "a" * 40), [])
+
+    def test_proof_types_are_not_a_strength_hierarchy(self) -> None:
+        for boundary, strength in (("pure", "direct_sql"), ("service", "repository")):
+            with self.subTest(boundary=boundary, strength=strength):
+                receipt = valid_receipt()
+                row = receipt["traceability"][0]
+                row.update(
+                    claimed_boundary=boundary,
+                    proof_strength=strength,
+                    proof_compatibility="compatible",
+                )
+                self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
+
+    def test_pass_requires_test_of_the_test_probe(self) -> None:
+        for field in (
+            "defect",
+            "expected_observation",
+            "actual_observation",
+            "proof_survived",
+        ):
+            with self.subTest(field=field):
+                receipt = valid_receipt()
+                receipt["adversarial_probes"][0].pop(field)
+                self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+        receipt = valid_receipt()
+        receipt["adversarial_probes"][0]["proof_survived"] = True
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_unknown_failure_pattern_id_is_rejected(self) -> None:
+        receipt = valid_receipt()
+        receipt["findings"] = [
+            {
+                "id": "ARCH-1",
+                "severity": "Low",
+                "location": "owner:1",
+                "blocks_pr": False,
+                "disposition": "fixed",
+                "verification": "replayed",
+                "failure_pattern_ids": ["PQ-999"],
+            }
+        ]
+        self.assert_receipt_invalid(receipt, "unknown failure pattern IDs")
+
+    def test_failure_pattern_ids_are_required_and_unique(self) -> None:
+        finding = {
+            "id": "ARCH-1",
+            "severity": "Low",
+            "location": "owner:1",
+            "blocks_pr": False,
+            "disposition": "fixed",
+            "verification": "replayed",
+            "failure_pattern_ids": ["PQ-009"],
+        }
+        receipt = valid_receipt()
+        receipt["findings"] = [finding]
+        self.assertEqual(receipt_failures(receipt, "architecture", "a" * 40), [])
+        receipt = valid_receipt()
+        finding_without_ids = copy.deepcopy(finding)
+        finding_without_ids.pop("failure_pattern_ids")
+        receipt["findings"] = [finding_without_ids]
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+        receipt = valid_receipt()
+        duplicate_ids = copy.deepcopy(finding)
+        duplicate_ids["failure_pattern_ids"] = ["PQ-009", "PQ-009"]
+        receipt["findings"] = [duplicate_ids]
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+
+    def test_failure_pattern_registry_is_complete_and_unique(self) -> None:
+        self.assertEqual(FAILURE_PATTERN_IDS, {f"PQ-{number:03d}" for number in range(1, 14)})
+        self.assertEqual(contract_failures(), [])
+        temporary, root = self.copied_contract_root()
+        try:
+            patterns = root / PROOF_PATTERNS_PATH.relative_to(Path.cwd())
+            patterns.write_text(
+                patterns.read_text(encoding="utf-8").replace("`PQ-013`", "`PQ-012`"),
+                encoding="utf-8",
+            )
+            failures = contract_failures(root)
+            self.assertIn("proof patterns: duplicate IDs", failures)
+            self.assertIn("proof patterns: incomplete registry", failures)
+        finally:
+            temporary.cleanup()
 
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
         temporary = tempfile.TemporaryDirectory()
@@ -47,6 +277,9 @@ class ReviewerContractTests(unittest.TestCase):
         shutil.copy2(matrix, root / matrix)
         (root / cases).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(cases, root / cases)
+        patterns = PROOF_PATTERNS_PATH.relative_to(Path.cwd())
+        (root / patterns).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(patterns, root / patterns)
         return temporary, root
 
     def test_missing_protocol_output_or_handoff_contract_fails(self) -> None:
@@ -103,24 +336,36 @@ class ReviewerContractTests(unittest.TestCase):
                 agent.read_text(encoding="utf-8").replace("hand off", "route away", 1),
                 encoding="utf-8",
             )
-            self.assertTrue(any("agent missing 'hand off'" in item for item in contract_failures(root)))
+            self.assertTrue(
+                any("agent missing 'hand off'" in item for item in contract_failures(root))
+            )
         finally:
             temporary.cleanup()
         temporary, root = self.copied_contract_root()
         try:
-            matrix = root / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            matrix = (
+                root
+                / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            )
             matrix.write_text(
-                matrix.read_text(encoding="utf-8").replace("`architecture`", "`architecture_typo`", 1),
+                matrix.read_text(encoding="utf-8").replace(
+                    "`architecture`", "`architecture_typo`", 1
+                ),
                 encoding="utf-8",
             )
-            self.assertTrue(any("canonical reviewer IDs" in item for item in contract_failures(root)))
+            self.assertTrue(
+                any("canonical reviewer IDs" in item for item in contract_failures(root))
+            )
         finally:
             temporary.cleanup()
 
     def test_matrix_agent_and_skill_pairs_are_one_to_one(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
-            matrix = root / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            matrix = (
+                root
+                / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            )
             matrix.write_text(
                 matrix.read_text(encoding="utf-8")
                 .replace("security-reviewer.toml", "qa-reviewer.toml", 1)
@@ -142,7 +387,9 @@ class ReviewerContractTests(unittest.TestCase):
     def test_missing_reviewer_or_case_class_fails(self) -> None:
         cases = copy.deepcopy(self.cases)
         cases["cases"] = [row for row in cases["cases"] if row["reviewer"] != "security"]
-        self.assertTrue(any("security: missing cases" in item for item in fixture_failures(cases, None)))
+        self.assertTrue(
+            any("security: missing cases" in item for item in fixture_failures(cases, None))
+        )
         cases = copy.deepcopy(self.cases)
         cases["cases"] = [row for row in cases["cases"] if row["id"] != "qa-handoff"]
         self.assertTrue(any("qa: missing cases" in item for item in fixture_failures(cases, None)))
@@ -171,16 +418,23 @@ class ReviewerContractTests(unittest.TestCase):
             fixture_failures(self.cases, expectations),
         )
         expectations["expectations"][0]["outcome"] = "maybe"
-        self.assertTrue(any("invalid outcome" in item for item in fixture_failures(self.cases, expectations)))
+        self.assertTrue(
+            any("invalid outcome" in item for item in fixture_failures(self.cases, expectations))
+        )
 
     def test_duplicate_expectations_and_unknown_handoffs_fail(self) -> None:
         expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
         expectations["expectations"].append(copy.deepcopy(expectations["expectations"][0]))
-        self.assertIn("expectations: duplicate case IDs", fixture_failures(self.cases, expectations))
+        self.assertIn(
+            "expectations: duplicate case IDs", fixture_failures(self.cases, expectations)
+        )
         expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
         expectations["expectations"][0]["handoff_specialty"] = "security_typo"
         self.assertTrue(
-            any("unknown handoff specialty" in item for item in fixture_failures(self.cases, expectations))
+            any(
+                "unknown handoff specialty" in item
+                for item in fixture_failures(self.cases, expectations)
+            )
         )
 
     def test_duplicate_output_rows_fail(self) -> None:
@@ -218,7 +472,15 @@ class ReviewerContractTests(unittest.TestCase):
                     output_file.write(payload)
                     output_file.flush()
                     self.assertEqual(
-                        main(["validate-output", "--case", expectation["case_id"], "--output", output_file.name]),
+                        main(
+                            [
+                                "validate-output",
+                                "--case",
+                                expectation["case_id"],
+                                "--output",
+                                output_file.name,
+                            ]
+                        ),
                         1,
                     )
 
@@ -239,7 +501,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": "ci_integrity",
         }
         receipt = {
-            "schema_version": 2,
+            "schema_version": 3,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-1"},
@@ -248,18 +510,47 @@ class ReviewerContractTests(unittest.TestCase):
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
             ],
-            "impact_cone": [
-                {"source": "case owner", "relevance": "owns evaluated behavior"}
-            ],
+            "impact_cone": [{"source": "case owner", "relevance": "owns evaluated behavior"}],
             "adversarial_probes": [
-                {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
+                {
+                    "hypothesis": "case bypass",
+                    "method": "inspect raw case",
+                    "defect": "remove the required route",
+                    "expected_observation": "inspection detects the missing route",
+                    "actual_observation": "inspection detected the missing route",
+                    "proof_survived": False,
+                    "result": "pass",
+                }
             ],
             "traceability": [
-                {"criterion": "routing", "behavior": "route finding", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+                {
+                    "criterion": "routing",
+                    "behavior": "route finding",
+                    "owner": "architecture",
+                    "implementation_source": "raw case",
+                    "proof_source": "inspection",
+                    "execution_custody": "review session",
+                    "claimed_boundary": "negative_structure",
+                    "proof_strength": "negative_structure",
+                    "proof_compatibility": "compatible",
+                    "result": "verified",
+                }
             ],
-            "residual_escape": {"hypothesis": "a second route is hidden", "method": "inspect supplied evidence", "result": "falsified"},
+            "residual_escape": {
+                "hypothesis": "a second route is hidden",
+                "method": "inspect supplied evidence",
+                "result": "falsified",
+            },
             "findings": [
-                {"id": "ARCH-7", "severity": "Medium", "location": "case", "blocks_pr": False, "disposition": "fixed", "verification": "replayed"}
+                {
+                    "id": "ARCH-7",
+                    "severity": "Medium",
+                    "location": "case",
+                    "blocks_pr": False,
+                    "disposition": "fixed",
+                    "verification": "replayed",
+                    "failure_pattern_ids": ["PQ-009"],
+                }
             ],
             "uncertainty": [],
             "freshness": "current",
@@ -313,7 +604,10 @@ class ReviewerContractTests(unittest.TestCase):
             output_failures(output, expectation, broken_receipt),
         )
         passing_receipt = copy.deepcopy(receipt)
-        passing_receipt["inspections"] = {"start": {"cleanliness": "clean"}, "end": {"cleanliness": "clean"}}
+        passing_receipt["inspections"] = {
+            "start": {"cleanliness": "clean"},
+            "end": {"cleanliness": "clean"},
+        }
         passing_receipt["verdict"] = "PASS"
         for result in ("missing", "unavailable"):
             passing_receipt["traceability"][0]["result"] = result
@@ -346,7 +640,7 @@ class ReviewerContractTests(unittest.TestCase):
             "handoff_specialty": None,
         }
         receipt = {
-            "schema_version": 2,
+            "schema_version": 3,
             "custody": "advisory_session",
             "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
             "reviewer": {"specialty": "architecture", "run_id": "eval-positive"},
@@ -355,16 +649,37 @@ class ReviewerContractTests(unittest.TestCase):
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
             ],
-            "impact_cone": [
-                {"source": "case owner", "relevance": "owns evaluated behavior"}
-            ],
+            "impact_cone": [{"source": "case owner", "relevance": "owns evaluated behavior"}],
             "adversarial_probes": [
-                {"hypothesis": "case bypass", "method": "inspect raw case", "result": "pass"}
+                {
+                    "hypothesis": "case bypass",
+                    "method": "inspect raw case",
+                    "defect": "remove the expected defect",
+                    "expected_observation": "inspection detects the missing defect",
+                    "actual_observation": "inspection detected the missing defect",
+                    "proof_survived": False,
+                    "result": "pass",
+                }
             ],
             "traceability": [
-                {"criterion": "finding", "behavior": "detect defect", "owner": "architecture", "implementation_source": "raw case", "proof_source": "inspection", "execution_custody": "review session", "result": "verified"}
+                {
+                    "criterion": "finding",
+                    "behavior": "detect defect",
+                    "owner": "architecture",
+                    "implementation_source": "raw case",
+                    "proof_source": "inspection",
+                    "execution_custody": "review session",
+                    "claimed_boundary": "negative_structure",
+                    "proof_strength": "negative_structure",
+                    "proof_compatibility": "compatible",
+                    "result": "verified",
+                }
             ],
-            "residual_escape": {"hypothesis": "defect is concealed", "method": "inspect supplied evidence", "result": "falsified"},
+            "residual_escape": {
+                "hypothesis": "defect is concealed",
+                "method": "inspect supplied evidence",
+                "result": "falsified",
+            },
             "findings": [],
             "uncertainty": [],
             "freshness": "current",
