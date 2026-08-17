@@ -1,0 +1,46 @@
+# WS-ARCH-001-CP04A External Review Response
+
+## Reviewed target
+
+- External finding target: `965ef61e8e5715979867e8aea2a1649f71c0e130`
+- Pull request: `#348`
+- Scope: executable-contract correction only; no runtime implementation
+
+## Comments addressed
+
+- Coverage proof omitted changed COMPENSATION composition/schema surfaces and
+  combined the focused 90-percent requirement with the repository-wide
+  78-percent baseline. The contract now names all changed production packages
+  in the focused command and gives focused and global coverage separate atoms,
+  commands/custody, and CI-integrity ownership.
+- Compound trace rows could hide independently failing behavior. The contract
+  now separates acceptance versus duplicate rejection, active versus
+  same-project resources, transition shape versus operation uniqueness, each
+  immutable-event database guard, file size versus test behavior, focused
+  versus global coverage, and the remaining compound negative-scope/resource
+  cases found during replay.
+- The canonical `CompensationInstrumentType` home was ambiguous. The contract
+  now requires the dedicated public module
+  `app.modules.compensation.api.instruments`, re-exported by the package while
+  private COMPENSATION schemas and external consumers import the public source.
+
+## Comments deferred
+
+None.
+
+## Human decisions needed
+
+None beyond normal approval and merge authority. The corrections do not alter
+the approved product lifecycle or activate runtime behavior.
+
+## Commands rerun
+
+The corrected head must rerun diff, Markdown, stale-wording, active-state,
+chunk-state, exact-head reviewer, CodeRabbit/GitHub review, and hosted CI gates
+before merge readiness is claimed.
+
+## Remaining risks
+
+The named tests and coverage commands are future implementation obligations.
+Their semantic adequacy must be reviewed against the implementation diff; this
+planning response is not runtime proof.

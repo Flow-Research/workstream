@@ -25,7 +25,7 @@ planned/unavailable.
 ```text
 backend/app/modules/contributions/api/**
 backend/app/modules/contributions/{schemas.py,models.py,repository.py,service.py}
-backend/app/modules/compensation/api/{__init__.py,policy_bindings.py} (instrument type and locked binding facts only)
+backend/app/modules/compensation/api/{__init__.py,instruments.py,policy_bindings.py} (canonical instrument type and locked binding facts only)
 backend/app/modules/compensation/schemas.py (same-owner import of the canonical public instrument enum only)
 backend/app/modules/compensation/policy_binding_service.py (owner implementation only)
 backend/app/modules/projects/api/{__init__.py,contribution_policy.py} (policy-project eligibility contract only)
@@ -71,9 +71,11 @@ commits inside repositories/services or serialized prepared handles
 
 - Add immutable requests/results/views, stable concealed errors, and Protocol
   ports under `app.modules.contributions.api`; expose no ORM/session/repository.
-- Move COMPENSATION's closed `CompensationInstrumentType` enum to its public API
-  as the single canonical definition. COMPENSATION private schemas import that
-  public definition; CONTRIBUTIONS consumes it only through the public API.
+- Move COMPENSATION's closed `CompensationInstrumentType` enum to the dedicated
+  public module `app.modules.compensation.api.instruments` as the single
+  canonical definition. The public package initializer re-exports it;
+  COMPENSATION private schemas import the dedicated public module and
+  CONTRIBUTIONS consumes it only through the public API.
   Do not duplicate or translate the enum. Expose a transaction-held lookup
   for exact active same-project adapter-binding facts through its public API
   and owner-side service; remove the exact private schemas import from
@@ -159,11 +161,13 @@ execution convenience, not acceptance evidence for an unlisted behavior.
 |---|---|---|---|
 | Public policy API exports immutable requests, results, views and ports without ORM/session/repository values | CONTRIBUTIONS; `app.modules.contributions.api` | `tests/architecture/test_module_boundaries.py::test_policy_public_api_exports_only_immutable_ports_and_views` | focused local command and hosted CI; architecture reviewer owns verdict |
 | CONTRIBUTIONS has no private COMPENSATION import | CONTRIBUTIONS/COMPENSATION; public APIs plus adapter roots | `tests/architecture/test_module_boundaries.py::test_cp04a_public_policy_api_has_no_private_cross_module_edge` | focused local command and hosted CI; architecture reviewer owns verdict |
-| One canonical public instrument enum is used without duplication or translation | COMPENSATION public API and private schema parity | `tests/architecture/test_module_boundaries.py::test_policy_uses_public_compensation_instrument_enum_only` | focused local command and hosted CI; architecture reviewer owns verdict |
+| One canonical public instrument enum lives in `compensation.api.instruments` without duplication or translation | COMPENSATION public API and private schema parity | `tests/architecture/test_module_boundaries.py::test_policy_uses_public_compensation_instrument_enum_only` | focused local command and hosted CI; architecture reviewer owns verdict |
 | COMPENSATION lookup returns only transaction-held active same-project binding facts | COMPENSATION public port, owner service and adapter root | `tests/contributions/test_policy_owner_ports.py::test_compensation_policy_binding_lookup_returns_only_active_same_project_facts` | focused local command and hosted CI |
-| PROJECTS eligibility is consumed only through its public transaction-held port with no private import | PROJECTS public port, owner implementation and adapter root | `tests/architecture/test_module_boundaries.py::test_cp04a_uses_only_public_projects_policy_eligibility_port` and `tests/contributions/test_policy_owner_ports.py::test_projects_policy_eligibility_port_retains_transaction_fence` | focused local command and hosted PostgreSQL CI; architecture reviewer owns edge verdict |
+| CONTRIBUTIONS has no private PROJECTS eligibility import | PROJECTS public port and adapter root | `tests/architecture/test_module_boundaries.py::test_cp04a_uses_only_public_projects_policy_eligibility_port` | focused local command and hosted CI; architecture reviewer owns verdict |
+| PROJECTS eligibility port retains its transaction fence through mutation | PROJECTS owner implementation and CONTRIBUTIONS consumer | `tests/contributions/test_policy_owner_ports.py::test_projects_policy_eligibility_port_retains_transaction_fence` | focused local command and hosted PostgreSQL CI |
 | Read denies without composed production authority | CONTRIBUTIONS deny-default authorization port | `tests/contributions/test_policy_read.py::test_read_denies_without_composed_authority` | focused local command and hosted CI |
-| Read conceals missing and cross-project policy identity | CONTRIBUTIONS read service | `tests/contributions/test_policy_read.py::test_read_conceals_cross_project_and_missing_policy` | focused local command and hosted CI |
+| Read conceals a missing policy identity | CONTRIBUTIONS read service | `tests/contributions/test_policy_read.py::test_read_conceals_missing_policy` | focused local command and hosted CI |
+| Read conceals a cross-project policy identity | CONTRIBUTIONS read service | `tests/contributions/test_policy_read.py::test_read_conceals_cross_project_policy` | focused local command and hosted CI |
 | Optional version selects only the exact requested version | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_read.py::test_read_returns_requested_version_only` | focused local command and hosted CI |
 | Read returns immutable server-owned graph facts and no ORM rows | CONTRIBUTIONS public views | `tests/contributions/test_policy_read.py::test_read_view_is_immutable_and_contains_no_orm_rows` | focused local command and hosted CI |
 | No ContributionPolicy route is registered | Delivery API registry | `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
@@ -182,13 +186,20 @@ execution convenience, not acceptance evidence for an unlisted behavior.
 | Update locks and mutates only the exact project/policy/version draft | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_draft_update.py::test_update_draft_locks_exact_project_policy_version` | focused local command and hosted PostgreSQL CI |
 | Update replaces the complete graph and leaves no stale/orphan children | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_draft_update.py::test_update_draft_replaces_entire_rule_definition_graph` | focused local command and hosted CI |
 | Graph contains exactly one accepted-submission and one completed-review rule | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_rule_of_each_supported_kind` | focused local command and hosted CI |
-| Missing or duplicate required rules are rejected without effect | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::{test_update_rejects_missing_required_rule_without_effect,test_update_rejects_duplicate_required_rule_without_effect}` | focused local command and hosted CI |
+| A missing required rule is rejected without effect | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_missing_required_rule_without_effect` | focused local command and hosted CI |
+| A duplicate required rule is rejected without effect | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_duplicate_required_rule_without_effect` | focused local command and hosted CI |
 | Unpaid rules contain zero instrument definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_instrument_definition_for_unpaid_rule` | focused local command and hosted CI |
-| Compensated rules contain one or two unique money/project-points definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::{test_update_accepts_one_or_two_unique_compensated_definitions,test_update_rejects_duplicate_instrument_definition}` | focused local command and hosted CI |
-| Instrument quantities use canonical positive values | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_positive_or_non_canonical_quantity` | focused local command and hosted CI |
-| Units are active and belong to the exact project | CONTRIBUTIONS-owned units | `tests/contributions/test_policy_draft_resources.py::{test_update_rejects_retired_unit_without_effect,test_update_conceals_cross_project_unit_without_effect}` | focused local command and hosted PostgreSQL CI |
-| Adapter bindings are active and belong to the exact project | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::{test_update_rejects_inactive_adapter_binding_without_effect,test_update_conceals_cross_project_adapter_binding_without_effect}` | focused local command and hosted PostgreSQL CI |
-| Foreign project/policy/version substitution is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::{test_update_conceals_cross_project_policy_before_authorization,test_update_conceals_cross_project_version_before_authorization}` | focused local command and hosted PostgreSQL CI |
+| Compensated rules accept one or two unique money/project-points definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_accepts_one_or_two_unique_compensated_definitions` | focused local command and hosted CI |
+| Compensated rules reject a duplicate instrument definition | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_duplicate_instrument_definition` | focused local command and hosted CI |
+| Non-positive instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_positive_quantity` | focused local command and hosted CI |
+| Non-canonical instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_canonical_quantity` | focused local command and hosted CI |
+| Retired units are rejected without effect | CONTRIBUTIONS-owned units | `tests/contributions/test_policy_draft_resources.py::test_update_rejects_retired_unit_without_effect` | focused local command and hosted PostgreSQL CI |
+| Cross-project units are concealed without effect | CONTRIBUTIONS-owned units | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_unit_without_effect` | focused local command and hosted PostgreSQL CI |
+| Inactive adapter bindings are rejected without effect | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::test_update_rejects_inactive_adapter_binding_without_effect` | focused local command and hosted PostgreSQL CI |
+| Cross-project adapter bindings are concealed without effect | COMPENSATION public held lookup | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_adapter_binding_without_effect` | focused local command and hosted PostgreSQL CI |
+| Foreign policy substitution is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_policy_before_authorization` | focused local command and hosted PostgreSQL CI |
+| Foreign version substitution is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_version_before_authorization` | focused local command and hosted PostgreSQL CI |
+| A cross-project update request is concealed before AUTH or mutation | PROJECTS and CONTRIBUTIONS owner fences | `tests/contributions/test_policy_draft_resources.py::test_update_conceals_cross_project_request_before_authorization` | focused local command and hosted PostgreSQL CI |
 
 #### Authorization, operation recovery and database custody
 
@@ -213,19 +224,36 @@ execution convenience, not acceptance evidence for an unlisted behavior.
 | Revoked current read cannot recover | CONTRIBUTIONS operation recovery | `tests/contributions/test_policy_operation_recovery.py::test_revoked_read_cannot_recover` | focused local command and hosted CI |
 | Recovery creates no second mutation authorization, event or evidence | CONTRIBUTIONS operation recovery | `tests/contributions/test_policy_operation_recovery.py::test_recovery_creates_no_second_effect_or_evidence` | focused local command and hosted CI |
 | Distinct create operations race to one open draft and one AUTH consumption | CONTRIBUTIONS operation fence | `tests/contributions/test_policy_draft_concurrency.py::test_distinct_create_race_allows_one_draft_and_one_auth_consumption` | hosted PostgreSQL lane only |
-| Event stores the exact immutable mutation-result shape and actor attribution | CONTRIBUTIONS event model/migration | `tests/contributions/test_policy_event_postgresql.py::{test_event_matches_immutable_mutation_result,test_event_actor_matches_authorized_actor}` | hosted PostgreSQL lane only |
-| Event transition and operation uniqueness reject malformed/direct-SQL rows | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::{test_event_rejects_invalid_transition_shape,test_event_rejects_duplicate_operation_id}` | hosted PostgreSQL lane only |
-| Event update, delete and truncate are rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::{test_event_update_is_rejected,test_event_delete_is_rejected,test_event_truncate_is_rejected}` | hosted PostgreSQL lane only |
+| Event stores the exact immutable mutation-result shape | CONTRIBUTIONS event model/migration | `tests/contributions/test_policy_event_postgresql.py::test_event_matches_immutable_mutation_result` | hosted PostgreSQL lane only |
+| Event actor attribution matches the authorized actor | CONTRIBUTIONS event model/migration | `tests/contributions/test_policy_event_postgresql.py::test_event_actor_matches_authorized_actor` | hosted PostgreSQL lane only |
+| Invalid event transition shape is rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::test_event_rejects_invalid_transition_shape` | hosted PostgreSQL lane only |
+| Duplicate event operation identity is rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::test_event_rejects_duplicate_operation_id` | hosted PostgreSQL lane only |
+| Event update is rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::test_event_update_is_rejected` | hosted PostgreSQL lane only |
+| Event delete is rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::test_event_delete_is_rejected` | hosted PostgreSQL lane only |
+| Event truncate is rejected | CONTRIBUTIONS migration guards | `tests/contributions/test_policy_event_postgresql.py::test_event_truncate_is_rejected` | hosted PostgreSQL lane only |
 
 #### Negative scope and structural custody
 
 | Behavior atom | Owner and implementation surface | Required future proof | Execution custody |
 |---|---|---|---|
-| CP04A cannot publish, retire, or change current-version identity | CONTRIBUTIONS service/public API | `tests/contributions/test_policy_negative_scope.py::test_cp04a_exposes_no_publish_retire_or_current_version_mutation` | focused local command and hosted CI |
-| CP04A creates no guide/task/submission/review/contribution/award/fulfillment/callback/delivery/reputation effect | Cross-product negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_downstream_product_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A exposes no publish behavior | CONTRIBUTIONS service/public API | `tests/contributions/test_policy_negative_scope.py::test_cp04a_exposes_no_publish_behavior` | focused local command and hosted CI |
+| CP04A exposes no retire behavior | CONTRIBUTIONS service/public API | `tests/contributions/test_policy_negative_scope.py::test_cp04a_exposes_no_retire_behavior` | focused local command and hosted CI |
+| CP04A cannot change current-version identity | CONTRIBUTIONS service/public API | `tests/contributions/test_policy_negative_scope.py::test_cp04a_cannot_change_current_version_identity` | focused local command and hosted CI |
+| CP04A creates no ProjectGuide effect | PROJECTS negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_project_guide_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no Task effect | TASKS negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_task_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no Submission effect | TASKS negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_submission_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no Review effect | REV negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_review_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no ContributionRecord effect | CONTRIBUTIONS negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_contribution_record_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no CompensationAward effect | CONTRIBUTIONS negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_compensation_award_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no fulfillment effect | COMPENSATION negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_fulfillment_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no callback effect | Delivery negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_callback_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no delivery effect | Delivery negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_delivery_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
+| CP04A creates no reputation effect | Reputation negative boundary | `tests/contributions/test_policy_negative_scope.py::test_cp04a_creates_no_reputation_effect` | focused local command and hosted CI; product/ops reviewer owns verdict |
 | All five AUTH policy actions remain planned/unavailable | AUTH catalogue | `tests/authorization/test_contribution_policy_registration.py::test_cp01b_registers_only_exact_planned_policy_actions` | focused local command and hosted CI; security reviewer owns verdict |
-| No production or test behavior container reaches 500 lines and every test has one primary behavior | CP04A production/tests plus structural-debt ledger | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_changed_behavior_files_remain_below_500_lines` plus `scripts.test_structure_boundary validate` | focused local preflight and hosted CI; test-delta reviewer owns one-primary-behavior inspection |
-| Changed CONTRIBUTIONS/COMPENSATION coverage stays at least 90% and global coverage is not weakened | CP04A test lanes | focused coverage command and hosted aggregate | CI-integrity reviewer owns verdict |
+| No production or test behavior container reaches 500 lines | CP04A production/tests | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_changed_behavior_files_remain_below_500_lines` | focused local preflight and hosted CI |
+| Every test has one primary behavior | CP04A tests and structural-debt ledger | exact named-test inspection plus `scripts.test_structure_boundary validate` | local preflight and hosted CI; test-delta reviewer owns verdict |
+| Focused changed CONTRIBUTIONS and COMPENSATION surfaces remain at least 90% covered | CP04A focused test lane | focused coverage command covering every changed production package | local focused proof and hosted CI; CI-integrity reviewer owns verdict |
+| Repository-wide coverage remains at or above the protected 78% baseline | Hosted aggregate test job and unchanged CI threshold | hosted repository aggregate coverage report | hosted CI only; CI-integrity reviewer owns verdict |
 
 The focused pytest command must name every non-hosted-only module above. Hosted
 CI must additionally run `test_policy_draft_concurrency.py` and
@@ -235,7 +263,7 @@ substitution is not acceptance evidence.
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/schemas.py app/modules/compensation/policy_binding_service.py app/modules/projects/api app/modules/projects/contribution_policy.py app/adapters/contributions app/adapters/compensation app/adapters/projects tests/contributions
 cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py tests/test_alembic.py
-cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.policy_binding_service --cov-report=term-missing --cov-fail-under=90
+cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.schemas --cov=app.modules.compensation.policy_binding_service --cov=app.adapters.compensation --cov=app.modules.projects.contribution_policy --cov=app.adapters.projects --cov-report=term-missing --cov-fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 python3 scripts/check_active_state_projections.py
@@ -245,9 +273,11 @@ git diff --check
 ```
 
 Hosted CI additionally runs `tests/contributions/test_policy_draft_concurrency.py`
-and `tests/contributions/test_policy_event_postgresql.py` with real PostgreSQL,
-then owns complete semantic-lane and repository aggregate coverage proof; the
-focused commands above own the remaining changed CP04A surface.
+and `tests/contributions/test_policy_event_postgresql.py` with real PostgreSQL.
+The focused coverage command independently owns the at-least-90-percent proof
+for every changed CP04A production surface. The hosted aggregate test job
+independently owns the unchanged repository-wide 78-percent baseline and full
+semantic-lane proof.
 
 ## Required reviewers
 
