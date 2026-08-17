@@ -70,3 +70,11 @@ attached to a retired policy aggregate. Update now permits only `draft` or
 composition or authorization preparation. Its focused negative test proves no
 PREP, consume, or graph replacement. Security and all required reviewers must
 replay against the new clean head before approval is claimed.
+
+## Final documentation-review correction
+
+The canonical action table now distinguishes CP04A hidden behavior ownership
+from CP01B registration custody while preserving unavailable action status.
+The current-state entry now identifies CP04B, not completed CP04A, as the next
+implementation boundary. Documentation and every required reviewer must bind
+their final verdict to the resulting clean head.

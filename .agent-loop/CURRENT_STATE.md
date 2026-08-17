@@ -124,7 +124,7 @@ remain non-executable until their current-main contracts are expanded.
   exact AUTH adapter root. No compensation delivery or fulfillment behavior is
   activated.
 - WS-ARCH-001-CP04 is a planned non-executable parent. CP04A and CP04B have
-  executable contracts; CP04A is the next implementation boundary.
+  executable contracts; CP04B is the next implementation boundary.
 - WS-ARCH-001-CP04A is complete with hidden policy read/create/update-draft
   behavior; it exposes no route and activates no policy action.
 - WS-ARCH-001-CP04B is planned next for hidden publication/retirement.
