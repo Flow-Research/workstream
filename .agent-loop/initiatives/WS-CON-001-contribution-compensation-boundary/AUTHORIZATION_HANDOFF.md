@@ -48,7 +48,7 @@ protocol and one caller-owned commit.
 | `CP01A` binding registration | exact binding actions, typed contexts, custody and permission mapping; retirement/callback/fulfillment excluded | register unavailable first |
 | `CP01B` policy registration | exact `contribution.policy.*` actions, typed contexts, custody and permission mapping | register unavailable after CP01A and before hidden services |
 | `CP03A/CP03B` binding prerequisite/activation | exact adapter target identity and owner eligibility, then exact CP02-proven binding actions only | keep unavailable through CP03A; activate in CP03B |
-| `CP05` policy activation | exact CP04-proven policy actions only | activate after hidden proof |
+| `CP05` policy activation | exact CP04A/CP04B-proven policy actions only | activate after both hidden proofs |
 | `CP06-CP08` validation and owner persistence | existing guide activation authority; later TASK readiness/claim authority remains TASK/AUTH-owned | CON validates only; PROJECT/TASK own writes |
 | `06` former review-claim lookup | none | planned retirement; REV copies the admitted Submission's immutable attempt version, verifies Task/Assignment only for equality, and performs no CON/current-policy lookup |
 | `07` review decision participant | existing planned `review.decision` contract | REV owns composition/commit; AUTH later activates |
@@ -89,7 +89,7 @@ CP01C corrects binding identity and lifecycle-generation facts before CP02.
 CP02 is merged with hidden CON behavior. CP03A installs the exact target identity
 and owner eligibility without activation; CP03B is complete and
 activates only the four exact CP02 Finance Authority boundaries. CP05 later
-activates only CP04's hidden proof. Before CON
+activates only CP04A/CP04B's merged hidden proof. Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and
 transaction-participant foundations now needed by REV.

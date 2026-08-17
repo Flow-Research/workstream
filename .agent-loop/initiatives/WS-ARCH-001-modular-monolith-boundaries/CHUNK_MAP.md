@@ -25,7 +25,9 @@
 | `WS-ARCH-001-CP03` | Adapter-binding activation coordination parent | L1 | Planned split into CP03A/CP03B; non-executable |
 | `WS-ARCH-001-CP03A` | Closed adapter target identity and PROJECTS/ACTORS owner eligibility | L1 | Merged through PR #340; actions remain unavailable |
 | `WS-ARCH-001-CP03B` | AUTH exact Finance Authority adapter-binding activation | L1 | Complete; four exact hidden actions active through public ports, with private wiring confined to the AUTH adapter root |
-| `WS-ARCH-001-CP04` | CON hidden ContributionPolicy behavior | L1 | Proposed skeleton after merged CP03B evidence |
+| `WS-ARCH-001-CP04` | Hidden ContributionPolicy behavior coordination parent | L1 | Planned split into CP04A/CP04B; non-executable |
+| `WS-ARCH-001-CP04A` | CONTRIBUTIONS public API and hidden read/create/update-draft behavior | L1 | Planned executable contract; first CP04 implementation |
+| `WS-ARCH-001-CP04B` | Hidden ContributionPolicy publish/retire behavior | L1 | Planned executable contract after merged CP04A |
 | `WS-ARCH-001-CP05` | AUTH exact ContributionPolicy activation | L1 | Proposed skeleton after CP04 evidence |
 | `WS-ARCH-001-CP06` | CON guide-activation/revision policy-validation port | L1 | Proposed skeleton after CP05 |
 | `WS-ARCH-001-CP07` | PROJECT guide-bound ContributionPolicyVersion persistence | L1 | Proposed skeleton after CP06 |
@@ -52,8 +54,9 @@ feature contract crosses more than one reviewable mutation boundary. The
 02A-02I sequence is the executable split of parent 02, subject to plan review
 and human approval.
 
-CP04-CP09 and chunks 03A-04F are non-executable planning skeletons. Before implementation,
-each must be replaced with a current-main contract that names exact allowed and
+CP04 is a non-executable split parent; CP04A and CP04B are executable contracts.
+CP05-CP09 and chunks 03A-04F are non-executable planning skeletons. Before implementation,
+each remaining skeleton must be replaced with a current-main contract that names exact allowed and
 not-allowed files, migration head, runnable commands, reviewers, and the public
 types it extends. Their sequencing is approved here; their current text does
 not authorize code changes. CP03 is split/non-executable; CP03A and CP03B are

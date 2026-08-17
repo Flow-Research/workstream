@@ -66,3 +66,10 @@ compatibility or invented historical migration work.
 
 PLAN3 changes planning only. It does not register an action, activate a route,
 write policy behavior, mutate schema, or start a runtime child.
+
+CP04 planning succeeds when editable draft behavior and irreversible
+publication are separately reviewable, every mutation is replay-safe and
+transaction-bound, publication authority is derived only from locked
+server-owned graph facts, and production remains deny-default until CP05.
+It does not authorize a route, guide/task/review write, contribution/award
+creation, fulfillment, or compatibility path.

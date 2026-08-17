@@ -86,8 +86,8 @@ historical-row backfill or compatibility behavior.
   immutable lifecycle history while all four AUTH actions remain unavailable.
   CP03A is merged through PR #340 with target identity and owner eligibility while
   actions remain unavailable. CP03B completes Finance Authority activation.
-  CP04-CP05
-  remain non-executable policy behavior/activation skeletons.
+  CP04 is a non-executable split parent; CP04A and CP04B are executable policy
+  behavior contracts. CP05 remains the non-executable activation skeleton.
 - CP06-CP09: validation, owner schema lineage, and clean legacy removal wait for
   the preceding public behavior. No historical-row classification is required
   unless current-main discovery proves real deployed data exists.
@@ -119,8 +119,7 @@ CP08/ARCH-03B replacement path.
 ## Immediate next action
 
 CON-02C merged through PR #277. REV-04B may consume its shared lifecycle-audit
-participant after REV's earlier gates merge. Prepare CP04's executable hidden
-ContributionPolicy behavior contract. CP03B keeps adapter-binding behavior
-hidden and route-unreachable while activating only its four covered Finance
-Authority actions.
+participant after REV's earlier gates merge. Implement CP04A's hidden
+ContributionPolicy read/create/update-draft behavior, then CP04B's hidden
+publish/retire behavior. All five policy actions remain unavailable until CP05.
 Open pull requests determine transient CON work.

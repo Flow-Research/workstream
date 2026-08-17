@@ -57,8 +57,8 @@
   registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split, CP03A is merged,
   and CP03B is complete with four exact hidden Finance Authority actions
-  active, while CP04-CP09 remain
-  non-executable skeletons.
+  active. CP04 is split into executable CP04A/CP04B contracts, while CP05-CP09
+  remain non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
   operational: unrelated frozen debt cannot block delivery, new debt is
@@ -93,7 +93,12 @@
   actions are active only for covered human Finance Authority, nested adapters
   consume the public AUTH API, and private wiring remains at the AUTH adapter
   root without delivery or fulfillment behavior.
-- WS-ARCH-001-CP04 is proposed: hidden ContributionPolicy behavior.
+- WS-ARCH-001-CP04 is a planned non-executable parent split into CP04A hidden
+  read/create/update-draft behavior and CP04B hidden publish/retire behavior.
+- WS-ARCH-001-CP04A is planned with an executable hidden policy-draft contract
+  and is next.
+- WS-ARCH-001-CP04B is planned with an executable hidden publish/retire
+  contract after CP04A.
 - WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.
 - WS-ARCH-001-CP07 is proposed: PROJECT guide binding.

@@ -158,3 +158,18 @@ authorization; create/suspend/resume use one domain-specific opaque
 prepare/consume/close port backed by AUTH only in CP03B. CP03A owns the exact
 adapter target identity and PROJECTS/ACTORS eligibility prerequisite. CON never
 imports AUTH internals or translates the CON-owned `instrument_type` value.
+
+## D20: CP04 splits editable drafts from irreversible publication
+
+`app.modules.contributions` owns ContributionPolicy lifecycle truth;
+`app.modules.compensation` owns adapter-binding and instrument identity. CP04A
+introduces the contributions public API, hidden read/create/update-draft
+behavior, and shared mutation recovery. CP04B adds publish and retire after
+CP04A merges. All actions remain unavailable until CP05 and neither child adds
+a route.
+
+Draft updates replace one complete two-rule graph. Publication authorizes only
+the digest recomputed from locked server-owned rows and exact active
+unit/binding facts. Retirement affects future selection without rewriting
+previously frozen lineage. No compatibility or alternate economic-policy path
+is introduced.
