@@ -104,3 +104,15 @@ added only to the new CP04A callables. The same unchanged gate now reports
 tests, and the production service and repository remain below 500 lines. The
 10 database-backed tests remain under hosted PostgreSQL custody. All required
 reviewers must replay against the resulting exact clean head.
+
+## Hosted migration-isolation and test-delta correction
+
+The next hosted run passed the restored docstring gate and exposed two
+migration-0005 tests that rebuilt or downgraded the shared schema without the
+repository's schema-contract marker. They now own isolated schema custody, so
+fixture teardown rebuilds the current `0006` head rather than treating the
+intentional `0005` schema as leaked state. The exact-head test-delta review also
+found that mutation-result/event parity was underasserted. Create, update, and
+recovery proofs now compare every immutable result field with lifecycle-event
+truth. Ruff, the focused recovery tests, structure checks, and diff checks pass;
+hosted PostgreSQL must replay both corrections before approval.

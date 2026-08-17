@@ -9,6 +9,9 @@ import asyncpg
 import pytest
 
 
+pytestmark = pytest.mark.postgres_schema_contract
+
+
 def _config() -> Config:
     return Config(Path(__file__).resolve().parents[2] / "alembic.ini")
 

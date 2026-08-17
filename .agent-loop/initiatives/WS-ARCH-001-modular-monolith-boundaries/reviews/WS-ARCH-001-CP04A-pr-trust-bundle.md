@@ -54,6 +54,9 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
 - The unchanged repository docstring gate reports 80.8 percent after adding
   meaningful docstrings only to CP04A's new callables; Ruff passes, and the
   production service and repository remain below 500 lines.
+- Migration-0005 tests use isolated schema-contract custody, and CP04A's
+  create, update, and recovery tests compare all immutable mutation-result
+  fields with lifecycle-event truth.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

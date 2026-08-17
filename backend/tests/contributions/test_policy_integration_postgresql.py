@@ -13,6 +13,7 @@ from app.db import session as db_session
 from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api import (
     ContributionPolicyCreateDraftRequest,
+    ContributionPolicyMutationResult,
     ContributionPolicyReadRequest,
     ContributionPolicyUpdateDraftRequest,
     PolicyDefinitionInput,
@@ -37,7 +38,9 @@ def _policy_database_env(
         get_settings.cache_clear()
 
 
-async def _exercise_policy() -> tuple[UUID, UUID, UUID]:
+async def _exercise_policy() -> tuple[
+    UUID, ContributionPolicyMutationResult, ContributionPolicyMutationResult
+]:
     project, creator, _, money_binding, _ = await _seed_project()
     actor_id, project_id = UUID(creator), UUID(project)
     authorization = AllowAuthorization(actor_id)
@@ -95,7 +98,7 @@ async def _exercise_policy() -> tuple[UUID, UUID, UUID]:
             )
             assert updated.event_type == "draft_updated"
             assert len(view.rules) == 2
-    return project_id, created.event_id, updated.event_id
+    return project_id, created, updated
 
 
 @pytest.mark.asyncio
@@ -103,7 +106,7 @@ async def test_real_service_persists_complete_graph_and_events(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    project_id, created_event, updated_event = await _exercise_policy()
+    project_id, created, updated = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         count = await session.scalar(
             select(func.count()).select_from(ContributionPolicyLifecycleEvent).where(
@@ -111,4 +114,4 @@ async def test_real_service_persists_complete_graph_and_events(
             )
         )
         assert count == 2
-        assert created_event != updated_event
+        assert created.event_id != updated.event_id

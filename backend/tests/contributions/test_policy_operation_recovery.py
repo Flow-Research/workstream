@@ -42,6 +42,21 @@ async def test_exact_duplicate_returns_immutable_original_result() -> None:
     result = await fixture.service.create_draft(request)
 
     assert result.event_id == event.id
+    assert result.operation_id == event.operation_id
+    assert result.request_digest == event.request_digest
+    assert result.event_type == event.event_type
+    assert str(result.actor_profile_id) == event.actor_profile_id
+    assert str(result.project_id) == event.project_id
+    assert result.contribution_policy_id == event.contribution_policy_id
+    assert result.contribution_policy_version_id == event.contribution_policy_version_id
+    assert result.version_number == event.version_number
+    assert result.prior_current_version_id == event.prior_current_version_id
+    assert result.prior_current_version_number == event.prior_current_version_number
+    assert result.from_policy_status == event.from_policy_status
+    assert result.to_policy_status == event.to_policy_status
+    assert result.from_version_status == event.from_version_status
+    assert result.to_version_status == event.to_version_status
+    assert result.occurred_at == event.occurred_at
     assert fixture.authorization.reads
     assert fixture.authorization.prepared == []
 
