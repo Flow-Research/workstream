@@ -79,8 +79,10 @@ unavailable and no route or worker is added.
 
 The CP04A and CP04B contracts include criterion-to-test matrices for PREP
 atomicity, concealed recovery, route absence, concurrency, immutable events,
+cross-project publish/retire denial without lifecycle or AUTH side effects,
 replacement publication, and terminal retirement. PostgreSQL-only proof is
-explicitly assigned to hosted semantic lanes.
+explicitly assigned to hosted semantic lanes while named focused denial tests
+remain runnable locally.
 
 ## Tests/checks run
 

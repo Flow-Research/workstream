@@ -14,6 +14,10 @@
   aggregate locks even though the executable contracts fence the operation and
   check immutable recovery first. Valid. The summary now states the exact
   fence/recovery-before-lock/PREP order and preserves no-second-effect recovery.
+- `EXT-CP04-003` High: CP04B required cross-project publish/retire denial but
+  did not name future proof for policy, version, unit, and adapter-binding
+  mismatches. Valid. CP04B now names focused concealed-denial/no-effect tests
+  and a separate hosted-only PostgreSQL transaction/row-custody module.
 
 ## Comments deferred
 
@@ -25,8 +29,9 @@ None beyond normal approval and merge ownership.
 
 ## Commands rerun
 
-Final-head state, wording, Markdown-link, diff, upgraded internal review, hosted
-CI, and thread-aware external-review checks must be rerun after this correction.
+Final-head state, wording, Markdown-link, diff, affected upgraded internal
+reviews, hosted CI, and thread-aware external-review checks must be rerun after
+this correction.
 
 ## Remaining risks
 
