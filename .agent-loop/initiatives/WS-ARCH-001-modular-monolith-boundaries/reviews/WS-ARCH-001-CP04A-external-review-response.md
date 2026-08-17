@@ -38,9 +38,10 @@ the approved product lifecycle or activate runtime behavior.
 
 ## Commands rerun
 
-The corrected head must rerun diff, Markdown, stale-wording, active-state,
-chunk-state, exact-head reviewer, CodeRabbit/GitHub review, and hosted CI gates
-before merge readiness is claimed.
+Corrective head `77f615f8` passed diff, Markdown, stale-wording, active-state,
+chunk-state, architecture, security, product/operations, QA, test-delta, and
+CI-integrity review. The final metadata head must replay exact-head closure and
+hosted GitHub gates before merge readiness is claimed.
 
 ## Remaining risks
 

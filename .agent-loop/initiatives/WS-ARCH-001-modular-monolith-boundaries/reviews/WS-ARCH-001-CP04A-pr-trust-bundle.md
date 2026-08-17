@@ -36,10 +36,12 @@ ContributionPolicy AUTH actions remain planned and unavailable.
 
 ## Review status
 
-The original `965ef61e` review is historical after external corrections. Fresh
-exact-head architecture, QA, test-delta, and CI-integrity review is required;
-security and product/operations findings must be replayed if the impact cone
-changes. CodeRabbit skip or rate limiting is never represented as approval.
+The original `965ef61e` review is historical after external corrections.
+Architecture, security, product/operations, QA, test-delta, and CI-integrity
+review all passed on corrective code/content head `77f615f8`. This trust-bundle
+metadata update requires a final exact-head closure replay before merge
+readiness is claimed. CodeRabbit skip or rate limiting is never represented as
+approval.
 
 ## Human review focus
 
