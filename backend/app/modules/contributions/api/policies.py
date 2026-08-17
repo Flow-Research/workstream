@@ -185,22 +185,26 @@ class DenyContributionPolicyAuthorization:
     async def authorize_contribution_policy_read(
         self, request: ContributionPolicyReadRequest
     ) -> None:
+        """Deny reads until the CP05 authorization activation."""
         del request
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def prepare_contribution_policy_mutation(
         self, facts: ContributionPolicyMutationAuthorizationFacts
     ) -> object:
+        """Deny mutation preparation until CP05 activation."""
         del facts
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def consume_contribution_policy_mutation(
         self, prepared: object, facts: ContributionPolicyMutationAuthorizationFacts
     ) -> UUID:
+        """Deny mutation consumption until CP05 activation."""
         del prepared, facts
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     def close_contribution_policy_mutation(self, prepared: object) -> None:
+        """Discard a deny-default prepared value without side effects."""
         del prepared
 
 

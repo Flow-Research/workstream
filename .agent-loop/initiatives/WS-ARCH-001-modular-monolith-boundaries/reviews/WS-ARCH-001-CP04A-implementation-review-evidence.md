@@ -93,3 +93,14 @@ The first test-delta replay found the transition test derived its expectation
 from the production allowlist, allowing both to broaden together. The test now
 owns an independent literal nine-path contract, asserts exact equality with the
 production set, and still proves a tenth target is rejected.
+
+## Hosted docstring-gate correction
+
+The first full hosted semantic run on head `547f69a4` failed only the unchanged
+80-percent repository docstring gate: CP04A's new callables reduced aggregate
+coverage to 79.8 percent. Meaningful ownership and behavior docstrings were
+added only to the new CP04A callables. The same unchanged gate now reports
+80.8 percent, Ruff passes, the focused non-PostgreSQL collection passes 206
+tests, and the production service and repository remain below 500 lines. The
+10 database-backed tests remain under hosted PostgreSQL custody. All required
+reviewers must replay against the resulting exact clean head.

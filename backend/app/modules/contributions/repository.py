@@ -27,15 +27,18 @@ class ContributionPolicyRepository:
     """Persist policy behavior inside the caller-owned root transaction."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind persistence to the caller-owned session and transaction."""
         self._session = session
 
     async def lock_operation(self, operation_id: UUID) -> None:
+        """Serialize requests sharing one immutable operation identifier."""
         await self._session.execute(
             text("select pg_advisory_xact_lock(:key)"),
             {"key": policy_operation_lock_key(operation_id)},
         )
 
     async def lock_project_scope(self, project_id: UUID) -> None:
+        """Serialize policy creation within one project scope."""
         await self._session.execute(
             text("select pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
             {"scope": f"contribution-policy:{project_id}"},
@@ -44,6 +47,7 @@ class ContributionPolicyRepository:
     async def get_event_by_operation(
         self, operation_id: UUID
     ) -> ContributionPolicyLifecycleEvent | None:
+        """Load immutable recovery evidence for one operation."""
         return await self._session.scalar(
             select(ContributionPolicyLifecycleEvent).where(
                 ContributionPolicyLifecycleEvent.operation_id == operation_id
@@ -53,6 +57,7 @@ class ContributionPolicyRepository:
     async def get_policy(
         self, project_id: UUID, policy_id: UUID, *, for_update: bool = False
     ) -> ContributionPolicy | None:
+        """Load an exact same-project policy, optionally retaining its row lock."""
         query = select(ContributionPolicy).where(
             ContributionPolicy.project_id == str(project_id),
             ContributionPolicy.id == policy_id,
@@ -62,6 +67,7 @@ class ContributionPolicyRepository:
         return await self._session.scalar(query.execution_options(populate_existing=True))
 
     async def get_reusable_policy(self, project_id: UUID) -> ContributionPolicy | None:
+        """Lock the newest non-retired policy aggregate for draft creation."""
         return await self._session.scalar(
             select(ContributionPolicy)
             .where(
@@ -74,6 +80,7 @@ class ContributionPolicyRepository:
         )
 
     async def get_open_draft(self, project_id: UUID) -> ContributionPolicyVersion | None:
+        """Lock any open draft version for the exact project."""
         return await self._session.scalar(
             select(ContributionPolicyVersion)
             .where(
@@ -85,6 +92,7 @@ class ContributionPolicyRepository:
         )
 
     async def next_version_number(self, policy_id: UUID) -> int:
+        """Return the next monotonic version number for a policy aggregate."""
         current = await self._session.scalar(
             select(func.max(ContributionPolicyVersion.version_number)).where(
                 ContributionPolicyVersion.contribution_policy_id == policy_id
@@ -101,6 +109,7 @@ class ContributionPolicyRepository:
         for_update: bool = False,
         graph: bool = False,
     ) -> ContributionPolicyVersion | None:
+        """Load an exact policy version with optional graph and row custody."""
         query = select(ContributionPolicyVersion).where(
             ContributionPolicyVersion.project_id == str(project_id),
             ContributionPolicyVersion.contribution_policy_id == policy_id,
@@ -121,6 +130,7 @@ class ContributionPolicyRepository:
         policy: ContributionPolicy,
         version_id: UUID | None,
     ) -> ContributionPolicyVersion | None:
+        """Resolve an explicit or current version with its immutable graph."""
         selected = version_id or policy.current_published_version_id
         if selected is None:
             return await self._session.scalar(
@@ -144,6 +154,7 @@ class ContributionPolicyRepository:
     async def lock_unit(
         self, project_id: UUID, instrument_type: str, unit_code: str
     ) -> ProjectCompensationUnit | None:
+        """Lock one exact project-owned compensation unit."""
         return await self._session.scalar(
             select(ProjectCompensationUnit)
             .where(
@@ -160,6 +171,7 @@ class ContributionPolicyRepository:
         version: ContributionPolicyVersion,
         event: ContributionPolicyLifecycleEvent,
     ) -> None:
+        """Flush a new policy, version, and lifecycle event atomically."""
         self._session.add_all((policy, version))
         await self._session.flush()
         self._session.add(event)
@@ -173,6 +185,7 @@ class ContributionPolicyRepository:
         definitions: list[ContributionAwardDefinition],
         event: ContributionPolicyLifecycleEvent,
     ) -> None:
+        """Replace the complete draft graph and append its lifecycle event."""
         rule_ids = select(ContributionRule.id).where(
             ContributionRule.contribution_policy_version_id == version.id
         )

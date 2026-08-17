@@ -16,6 +16,7 @@ class ProjectContributionPolicyEligibility:
     """Retain one eligible project lock in the caller transaction."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind project eligibility checks to the caller transaction."""
         self._session = session
 
     async def lock_contribution_policy_project(

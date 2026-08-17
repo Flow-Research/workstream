@@ -51,6 +51,9 @@ award state, perform fulfillment/delivery/callback work, or project reputation.
 - The behavior-ownership partition includes exactly the nine new CP04A
   executable targets; its trusted transition rejects any additional target,
   and all 106 focused ownership tests pass.
+- The unchanged repository docstring gate reports 80.8 percent after adding
+  meaningful docstrings only to CP04A's new callables; Ruff passes, and the
+  production service and repository remain below 500 lines.
 
 GitHub's hosted semantic lanes own the full suite and unchanged 78% global
 coverage threshold. No workflow, test selection, skip policy, dependency, or

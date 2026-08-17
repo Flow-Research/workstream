@@ -59,6 +59,7 @@ class ContributionPolicyService:
         projects: ContributionPolicyProjectEligibilityPort | None = None,
         bindings: PolicyAdapterBindingPort | None = None,
     ) -> None:
+        """Compose hidden policy behavior inside a caller-owned session."""
         deny = DenyContributionPolicyAuthorization()
         self._session = session
         self._repository = ContributionPolicyRepository(session)
@@ -68,6 +69,7 @@ class ContributionPolicyService:
         self._bindings = bindings
 
     async def read(self, request: ContributionPolicyReadRequest) -> ContributionPolicyView:
+        """Return one authorized immutable policy-version view."""
         self._require_request(request, ContributionPolicyReadRequest, mutation=False)
         try:
             await self._read_authorization.authorize_contribution_policy_read(request)
@@ -88,6 +90,7 @@ class ContributionPolicyService:
     async def create_draft(
         self, request: ContributionPolicyCreateDraftRequest
     ) -> ContributionPolicyMutationResult:
+        """Create a first or next draft under exact project custody."""
         self._require_request(request, ContributionPolicyCreateDraftRequest, mutation=True)
         validate_policy_name(request.name)
         action: PolicyAction = "contribution.policy.create_draft"
@@ -155,6 +158,7 @@ class ContributionPolicyService:
     async def update_draft(
         self, request: ContributionPolicyUpdateDraftRequest
     ) -> ContributionPolicyMutationResult:
+        """Replace one exact draft graph after all owner and AUTH checks."""
         self._require_request(request, ContributionPolicyUpdateDraftRequest, mutation=True)
         rules = validate_policy_graph(request.rules)
         action: PolicyAction = "contribution.policy.update_draft"
@@ -207,6 +211,7 @@ class ContributionPolicyService:
         return self._result(event)
 
     def _require_request(self, request: object, expected: type[object], *, mutation: bool) -> None:
+        """Reject wrong request types, transaction shape, or selector types."""
         if type(request) is not expected:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         if mutation and (
@@ -228,6 +233,7 @@ class ContributionPolicyService:
                 raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def _lock_project(self, project_id: UUID) -> UUID:
+        """Acquire the PROJECTS-owned eligibility fence or conceal failure."""
         if self._projects is None:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         try:
@@ -241,6 +247,7 @@ class ContributionPolicyService:
         request: ContributionPolicyUpdateDraftRequest,
         rules: tuple[PolicyRuleInput, ...],
     ) -> tuple[list[ContributionRule], list[ContributionAwardDefinition]]:
+        """Lock referenced resources and build a complete replacement graph."""
         if self._bindings is None:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         built_rules: list[ContributionRule] = []
@@ -297,6 +304,7 @@ class ContributionPolicyService:
         policy_status: str | None,
         version_status: str | None,
     ) -> ContributionPolicyMutationAuthorizationFacts:
+        """Bind exact command and lifecycle facts for mutation authorization."""
         return ContributionPolicyMutationAuthorizationFacts(
             action=action,
             actor_profile_id=cast(UUID, getattr(request, "actor_profile_id")),
@@ -312,6 +320,7 @@ class ContributionPolicyService:
     async def _consume_and_close(
         self, facts: ContributionPolicyMutationAuthorizationFacts
     ) -> UUID:
+        """Prepare, consume, and always close exact mutation authority."""
         prepared = await self._mutation_authorization.prepare_contribution_policy_mutation(facts)
         try:
             actor = await self._mutation_authorization.consume_contribution_policy_mutation(
@@ -326,6 +335,7 @@ class ContributionPolicyService:
     async def _recover(
         self, action: PolicyAction, request: object, digest: str
     ) -> ContributionPolicyMutationResult | None:
+        """Recover an exact prior result only after current read authorization."""
         event = await self._repository.get_event_by_operation(
             cast(UUID, getattr(request, "operation_id"))
         )
@@ -355,6 +365,7 @@ class ContributionPolicyService:
     async def _prior_version_number(
         self, policy: ContributionPolicy, version_id: UUID | None
     ) -> int | None:
+        """Resolve the prior published version number for event lineage."""
         if version_id is None:
             return None
         version = await self._repository.get_version(
@@ -376,6 +387,7 @@ class ContributionPolicyService:
         from_policy_status: str | None,
         from_version_status: str | None,
     ) -> ContributionPolicyLifecycleEvent:
+        """Build one immutable, attributable lifecycle event."""
         return ContributionPolicyLifecycleEvent(
             id=uuid4(),
             operation_id=getattr(request, "operation_id"),
@@ -396,6 +408,7 @@ class ContributionPolicyService:
 
     @staticmethod
     def _result(event: ContributionPolicyLifecycleEvent) -> ContributionPolicyMutationResult:
+        """Project immutable lifecycle evidence into a mutation result."""
         return ContributionPolicyMutationResult(
             event_id=event.id,
             operation_id=event.operation_id,
@@ -419,6 +432,7 @@ class ContributionPolicyService:
     def _view(
         policy: ContributionPolicy, version: ContributionPolicyVersion
     ) -> ContributionPolicyView:
+        """Project an ORM graph into immutable public policy facts."""
         rules = tuple(
             PolicyRuleView(
                 rule_id=rule.id,

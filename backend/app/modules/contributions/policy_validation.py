@@ -15,6 +15,7 @@ from app.modules.contributions.api import (
 
 
 def _json_value(value: object) -> object:
+    """Convert immutable command values into canonical JSON values."""
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, tuple):
@@ -56,6 +57,7 @@ def validate_policy_graph(rules: tuple[PolicyRuleInput, ...]) -> tuple[PolicyRul
 
 
 def _validate_rule(rule: PolicyRuleInput) -> None:
+    """Validate one contribution rule and its closed definition set."""
     if type(rule) is not PolicyRuleInput or type(rule.definitions) is not tuple:
         raise ContributionPolicyConflict("contribution_policy_conflict")
     if rule.compensation_mode not in {"unpaid", "compensated"}:
@@ -72,6 +74,7 @@ def _validate_rule(rule: PolicyRuleInput) -> None:
 
 
 def _validate_definition(item: PolicyDefinitionInput) -> None:
+    """Validate one canonical award definition without coercion."""
     if (
         type(item) is not PolicyDefinitionInput
         or type(item.instrument_type) is not CompensationInstrumentType

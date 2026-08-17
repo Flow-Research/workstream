@@ -17,6 +17,7 @@ class PolicyAdapterBindingLookup:
     """Retain one active same-project adapter-binding lock."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind the lookup to the caller-owned database session."""
         self._session = session
 
     async def lock_policy_adapter_binding(
