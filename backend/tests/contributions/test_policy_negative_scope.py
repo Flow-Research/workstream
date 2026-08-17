@@ -1,22 +1,22 @@
-"""CP04A exposes no later lifecycle or downstream behavior."""
+"""CP04B exposes only hidden policy lifecycle behavior."""
 
 from app.modules.contributions.service import ContributionPolicyService
 
 
-def test_cp04a_exposes_no_publish_behavior() -> None:
-    assert not hasattr(ContributionPolicyService, "publish")
+def test_cp04b_exposes_publish_behavior() -> None:
+    assert hasattr(ContributionPolicyService, "publish")
 
 
-def test_cp04a_exposes_no_retire_behavior() -> None:
-    assert not hasattr(ContributionPolicyService, "retire")
+def test_cp04b_exposes_retire_behavior() -> None:
+    assert hasattr(ContributionPolicyService, "retire")
 
 
-def test_cp04a_exposes_only_hidden_policy_commands() -> None:
+def test_cp04b_exposes_only_hidden_policy_commands() -> None:
     public = {name for name in dir(ContributionPolicyService) if not name.startswith("_")}
-    assert public == {"create_draft", "read", "update_draft"}
+    assert public == {"create_draft", "publish", "read", "retire", "update_draft"}
 
 
-def test_cp04a_cannot_change_current_version_identity() -> None:
+def test_cp04b_cannot_bypass_publication_to_change_current_version() -> None:
     assert not hasattr(ContributionPolicyService, "set_current_version")
 
 

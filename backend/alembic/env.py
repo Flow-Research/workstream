@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_v01_baseline"
-_CURRENT_HEAD_REVISION = "0006_contribution_policy_operations"
+_CURRENT_HEAD_REVISION = "0007_contribution_policy_publication_custody"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_v01_baseline migration"

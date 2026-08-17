@@ -812,6 +812,15 @@ opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Production authorization remains
 deny-default and all five policy actions remain unavailable until CP05.
 
+CP04B adds hidden publication and terminal retirement. Publication locks and
+revalidates the complete server-owned graph, project units, and adapter
+bindings, computes canonical digest/binding facts, consumes and closes opaque
+authority before product effects, and atomically replaces any prior published
+version. Database-owned transition custody binds every affected row and event
+to one actor, operation, and timestamp. The behavior remains route-unreachable
+and deny-default; CP05 alone installs the real AUTH adapter and activates the
+five policy actions.
+
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |

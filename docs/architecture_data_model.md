@@ -1094,6 +1094,7 @@ Fields:
 - `name`
 - `status`: `draft | active | retired`
 - `current_published_version_id`
+- `last_transition_operation_id`
 - `created_by`
 - `created_at`
 - `retired_by`
@@ -1116,6 +1117,8 @@ Fields:
 - `status`: `draft | published | retired`
 - `last_updated_by` and `last_updated_at` for the authorized complete-draft
   replacement anchor
+- `last_transition_operation_id` for database-verifiable publication or
+  retirement custody
 - publication and retirement actor/timestamp fields
 
 Published and retired versions are immutable. Guide activation binds one
@@ -1131,6 +1134,19 @@ published-version identity, exact policy/version state transition, and
 database-owned occurrence time. PostgreSQL rejects event update, delete, and
 truncate. Exact operation replay may return only this immutable result after a
 fresh authorized read; it never reconstructs success from mutable policy state.
+Publish and retire events additionally carry a conditional publication-custody
+operation reference; draft events never carry it.
+
+## ContributionPolicyTransitionCustody
+
+Each publish or retire operation owns one immutable custody row binding the
+operation/request digest, actor, project, policy, target version, optional prior
+current version, event type, and database-generated occurrence time. Deferred
+PostgreSQL guards require the aggregate, affected versions, and lifecycle event
+to carry the same unique transition operation. Replacement publication retires
+the prior version with the same actor and time. Custody rows reject update,
+delete, and truncate and roll back with product state and authorization
+evidence.
 
 ## ContributionRule
 

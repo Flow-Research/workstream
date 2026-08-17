@@ -59,7 +59,7 @@
   registered/unavailable. CP02 is merged with hidden CON behavior
   while its AUTH actions remain unavailable; CP03 is split, CP03A is merged,
   and CP03B is complete with four exact hidden Finance Authority actions
-  active. CP04A is complete and CP04B remains executable, while CP05-CP09
+  active. CP04A and CP04B are complete, while CP05-CP09
   remain non-executable skeletons.
 - [WS-ARCH-001-PLAN4](chunks/WS-ARCH-001-PLAN4-incremental-debt-retirement.md) is planned
   and changes no runtime. It makes the existing incremental strangler
@@ -101,9 +101,9 @@
   draft behavior, public owner ports preserve COMPENSATION and PROJECTS
   boundaries, PostgreSQL operation/event custody is durable, and all five
   policy actions remain unavailable.
-- WS-ARCH-001-CP04B is planned with an executable hidden publish/retire
-  contract and is the next policy-behavior boundary after CP04A.
-- WS-ARCH-001-CP05 is proposed: exact ContributionPolicy activation.
+- WS-ARCH-001-CP04B is complete: hidden publish/retire behavior uses
+  immutable transition custody while all five actions remain unavailable.
+- WS-ARCH-001-CP05 is next: exact ContributionPolicy activation.
 - WS-ARCH-001-CP06 is proposed: CON policy-validation port.
 - WS-ARCH-001-CP07 is proposed: PROJECT guide binding.
 - WS-ARCH-001-CP08 is proposed: TASK/Assignment/Submission lineage persistence

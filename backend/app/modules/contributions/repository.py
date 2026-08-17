@@ -6,11 +6,13 @@ from uuid import UUID
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
     ContributionPolicy,
     ContributionPolicyLifecycleEvent,
+    ContributionPolicyTransitionCustody,
     ContributionPolicyVersion,
     ContributionRule,
     ProjectCompensationUnit,
@@ -164,6 +166,64 @@ class ContributionPolicyRepository:
             )
             .with_for_update()
         )
+
+    async def lock_publication_graph(
+        self, version_id: UUID
+    ) -> tuple[list[ContributionRule], list[ContributionAwardDefinition]]:
+        """Lock one draft graph in the canonical publication order."""
+        rules = list(
+            (
+                await self._session.scalars(
+                    select(ContributionRule)
+                    .where(ContributionRule.contribution_policy_version_id == version_id)
+                    .order_by(ContributionRule.contribution_type, ContributionRule.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        definitions = list(
+            (
+                await self._session.scalars(
+                    select(ContributionAwardDefinition)
+                    .where(
+                        ContributionAwardDefinition.contribution_policy_version_id
+                        == version_id
+                    )
+                    .order_by(
+                        ContributionAwardDefinition.instrument_type,
+                        ContributionAwardDefinition.unit_code,
+                        ContributionAwardDefinition.adapter_binding_id,
+                        ContributionAwardDefinition.id,
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        by_rule: dict[UUID, list[ContributionAwardDefinition]] = {
+            rule.id: [] for rule in rules
+        }
+        for definition in definitions:
+            by_rule[definition.contribution_rule_id].append(definition)
+        for rule in rules:
+            set_committed_value(rule, "award_definitions", by_rule[rule.id])
+        return rules, definitions
+
+    async def create_transition_custody(
+        self, custody: ContributionPolicyTransitionCustody
+    ) -> None:
+        """Flush custody first and load its database-owned transition time."""
+        self._session.add(custody)
+        await self._session.flush()
+        await self._session.refresh(custody)
+
+    async def flush_transition_event(
+        self, event: ContributionPolicyLifecycleEvent
+    ) -> None:
+        """Flush one protected lifecycle transition and its immutable event."""
+        await self._session.flush()
+        self._session.add(event)
+        await self._session.flush()
+        await self._session.refresh(event)
 
     async def add_policy_version_event(
         self,

@@ -48,7 +48,7 @@ def test_current_schema_preserves_guide_compilation_schema(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0006_contribution_policy_operations",
+        "0007_contribution_policy_publication_custody",
         True,
         4,
         1,

@@ -17,7 +17,9 @@ from app.modules.contributions.api import (
     ContributionPolicyCreateDraftRequest,
     ContributionPolicyMutationAuthorizationFacts,
     ContributionPolicyMutationResult,
+    ContributionPolicyPublishRequest,
     ContributionPolicyReadRequest,
+    ContributionPolicyRetireRequest,
     ContributionPolicyUpdateDraftRequest,
     PolicyDefinitionInput,
     PolicyRuleInput,
@@ -76,7 +78,10 @@ def _policy_database_env(
 
 
 async def _exercise_policy() -> tuple[
-    UUID, ContributionPolicyMutationResult, ContributionPolicyMutationResult
+    UUID,
+    ContributionPolicyMutationResult,
+    ContributionPolicyMutationResult,
+    ContributionPolicyMutationResult,
 ]:
     project, creator, _, money_binding, _ = await _seed_project()
     actor_id, project_id = UUID(creator), UUID(project)
@@ -125,6 +130,15 @@ async def _exercise_policy() -> tuple[
                     ),
                 )
             )
+            published = await service.publish(
+                ContributionPolicyPublishRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=project_id,
+                    contribution_policy_id=created.contribution_policy_id,
+                    contribution_policy_version_id=created.contribution_policy_version_id,
+                )
+            )
             view = await service.read(
                 ContributionPolicyReadRequest(
                     actor_profile_id=actor_id,
@@ -135,7 +149,7 @@ async def _exercise_policy() -> tuple[
             )
             assert updated.event_type == "draft_updated"
             assert len(view.rules) == 2
-    return project_id, created, updated
+    return project_id, created, updated, published
 
 
 async def _seed_project_only() -> str:
@@ -157,15 +171,16 @@ async def test_real_service_persists_complete_graph_and_events(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    project_id, created, updated = await _exercise_policy()
+    project_id, created, updated, published = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         count = await session.scalar(
             select(func.count()).select_from(ContributionPolicyLifecycleEvent).where(
                 ContributionPolicyLifecycleEvent.project_id == str(project_id)
             )
         )
-        assert count == 2
+        assert count == 3
         assert created.event_id != updated.event_id
+        assert published.event_type == "published"
 
 
 @pytest.mark.asyncio
@@ -203,6 +218,34 @@ async def test_real_repository_conceals_foreign_project_policy(
                         contribution_policy_id=created.contribution_policy_id,
                     )
                 )
+
+
+@pytest.mark.asyncio
+async def test_real_service_terminally_retires_current_version(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    project_id, created, _, published = await _exercise_policy()
+    authorization = AllowAuthorization(created.actor_profile_id)
+    async with db_session.get_session_factory()() as session:
+        async with session.begin():
+            service = ContributionPolicyService(
+                session,
+                read_authorization=authorization,
+                mutation_authorization=authorization,
+                projects=project_contribution_policy_eligibility_port(session),
+                bindings=policy_adapter_binding_port(session),
+            )
+            retired = await service.retire(
+                ContributionPolicyRetireRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=created.actor_profile_id,
+                    project_id=project_id,
+                    contribution_policy_id=created.contribution_policy_id,
+                    contribution_policy_version_id=published.contribution_policy_version_id,
+                )
+            )
+    assert retired.event_type == "retired"
 
 
 @pytest.mark.asyncio

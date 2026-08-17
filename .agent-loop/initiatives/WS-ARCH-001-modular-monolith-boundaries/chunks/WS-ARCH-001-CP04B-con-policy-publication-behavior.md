@@ -13,9 +13,8 @@ actions unavailable and add no route or downstream product behavior.
 
 ## Merge state
 
-- Outcome on merge: `planned`
-- The later CP04B implementation PR changes this outcome to `complete`; CP05
-  then becomes next.
+- Outcome on merge: `complete`
+- CP05 then becomes the next policy boundary.
 
 ## Allowed files
 

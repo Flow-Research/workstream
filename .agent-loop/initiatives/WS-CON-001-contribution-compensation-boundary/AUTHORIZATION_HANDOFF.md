@@ -89,9 +89,9 @@ and CP01B separately register binding and policy authority while unavailable.
 CP01C corrects binding identity and lifecycle-generation facts before CP02.
 CP02 is merged with hidden CON behavior. CP03A installs the exact target identity
 and owner eligibility without activation; CP03B is complete and
-activates only the four exact CP02 Finance Authority boundaries. CP05 later
-activates only CP04A/CP04B's merged hidden proof. CP04A is complete; CP04B is
-the remaining hidden behavior prerequisite. Before CON
+activates only the four exact CP02 Finance Authority boundaries. CP05 next
+activates only CP04A/CP04B's merged hidden proof. CP04A and CP04B are complete.
+Before CON
 `02B`, AUTH must deliver the complete dispatcher identity/admission/action
 contract. That later dispatcher work must not delay the persistence and
 transaction-participant foundations now needed by REV.

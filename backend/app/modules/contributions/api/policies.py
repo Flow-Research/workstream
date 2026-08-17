@@ -11,6 +11,8 @@ from app.modules.projects.api import ProjectContributionPolicyEligibilityPort
 PolicyAction = Literal[
     "contribution.policy.create_draft",
     "contribution.policy.update_draft",
+    "contribution.policy.publish",
+    "contribution.policy.retire",
 ]
 PolicyEventType = Literal["draft_created", "draft_updated", "published", "retired"]
 ContributionType = Literal["accepted_submission", "completed_review"]
@@ -76,8 +78,33 @@ class ContributionPolicyUpdateDraftRequest:
     rules: tuple[PolicyRuleInput, ...]
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyPublishRequest:
+    """Publish one exact complete draft version."""
+
+    operation_id: UUID
+    actor_profile_id: UUID
+    project_id: UUID
+    contribution_policy_id: UUID
+    contribution_policy_version_id: UUID
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyRetireRequest:
+    """Retire one aggregate's exact current published version."""
+
+    operation_id: UUID
+    actor_profile_id: UUID
+    project_id: UUID
+    contribution_policy_id: UUID
+    contribution_policy_version_id: UUID
+
+
 PolicyMutationRequest: TypeAlias = (
-    ContributionPolicyCreateDraftRequest | ContributionPolicyUpdateDraftRequest
+    ContributionPolicyCreateDraftRequest
+    | ContributionPolicyUpdateDraftRequest
+    | ContributionPolicyPublishRequest
+    | ContributionPolicyRetireRequest
 )
 
 
@@ -153,6 +180,45 @@ class ContributionPolicyMutationAuthorizationFacts:
     expected_version_status: str | None
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyPublishAuthorizationFacts:
+    """Server-owned complete draft graph facts for publication authority."""
+
+    action: Literal["contribution.policy.publish"]
+    actor_profile_id: UUID
+    operation_id: UUID
+    request_digest: str
+    project_id: UUID
+    contribution_policy_id: UUID
+    contribution_policy_version_id: UUID
+    rules_and_definitions_digest: str
+    adapter_binding_ids: tuple[UUID, ...]
+    expected_policy_status: str
+    expected_version_status: Literal["draft"] = "draft"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyRetireAuthorizationFacts:
+    """Exact current published lineage for retirement authority."""
+
+    action: Literal["contribution.policy.retire"]
+    actor_profile_id: UUID
+    operation_id: UUID
+    request_digest: str
+    project_id: UUID
+    contribution_policy_id: UUID
+    contribution_policy_version_id: UUID
+    expected_policy_status: Literal["active"] = "active"
+    expected_version_status: Literal["published"] = "published"
+
+
+ContributionPolicyAuthorizationFacts: TypeAlias = (
+    ContributionPolicyMutationAuthorizationFacts
+    | ContributionPolicyPublishAuthorizationFacts
+    | ContributionPolicyRetireAuthorizationFacts
+)
+
+
 class ContributionPolicyReadAuthorizationPort(Protocol):
     """Authorize one exact policy/version disclosure."""
 
@@ -166,12 +232,12 @@ class ContributionPolicyMutationAuthorizationPort(Protocol):
     """Prepare, consume, and close opaque mutation authority."""
 
     async def prepare_contribution_policy_mutation(
-        self, facts: ContributionPolicyMutationAuthorizationFacts
+        self, facts: ContributionPolicyAuthorizationFacts
     ) -> object:
         """Prepare process-local transaction-bound authority."""
 
     async def consume_contribution_policy_mutation(
-        self, prepared: object, facts: ContributionPolicyMutationAuthorizationFacts
+        self, prepared: object, facts: ContributionPolicyAuthorizationFacts
     ) -> UUID:
         """Consume exact authority and return its bound actor."""
 
@@ -190,14 +256,14 @@ class DenyContributionPolicyAuthorization:
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def prepare_contribution_policy_mutation(
-        self, facts: ContributionPolicyMutationAuthorizationFacts
+        self, facts: ContributionPolicyAuthorizationFacts
     ) -> object:
         """Deny mutation preparation until CP05 activation."""
         del facts
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def consume_contribution_policy_mutation(
-        self, prepared: object, facts: ContributionPolicyMutationAuthorizationFacts
+        self, prepared: object, facts: ContributionPolicyAuthorizationFacts
     ) -> UUID:
         """Deny mutation consumption until CP05 activation."""
         del prepared, facts

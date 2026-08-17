@@ -12,7 +12,7 @@ from app.modules.compensation.api import (
 )
 from app.modules.contributions.api import (
     ContributionPolicyCreateDraftRequest,
-    ContributionPolicyMutationAuthorizationFacts,
+    ContributionPolicyAuthorizationFacts,
     ContributionPolicyReadRequest,
     PolicyDefinitionInput,
     PolicyRuleInput,
@@ -43,8 +43,8 @@ class AllowAuthorization:
 
     def __init__(self, actor_id: UUID) -> None:
         self.actor_id = actor_id
-        self.prepared: list[ContributionPolicyMutationAuthorizationFacts] = []
-        self.consumed: list[ContributionPolicyMutationAuthorizationFacts] = []
+        self.prepared: list[ContributionPolicyAuthorizationFacts] = []
+        self.consumed: list[ContributionPolicyAuthorizationFacts] = []
         self.closed: list[object] = []
         self.reads: list[ContributionPolicyReadRequest] = []
 
@@ -54,13 +54,13 @@ class AllowAuthorization:
         self.reads.append(request)
 
     async def prepare_contribution_policy_mutation(
-        self, facts: ContributionPolicyMutationAuthorizationFacts
+        self, facts: ContributionPolicyAuthorizationFacts
     ) -> object:
         self.prepared.append(facts)
         return object()
 
     async def consume_contribution_policy_mutation(
-        self, prepared: object, facts: ContributionPolicyMutationAuthorizationFacts
+        self, prepared: object, facts: ContributionPolicyAuthorizationFacts
     ) -> UUID:
         del prepared
         self.consumed.append(facts)
@@ -118,8 +118,12 @@ def service_fixture() -> SimpleNamespace:
             return_value=SimpleNamespace(status="active")
         ),
         replace_graph=AsyncMock(),
+        lock_publication_graph=AsyncMock(),
+        create_transition_custody=AsyncMock(),
+        flush_transition_event=AsyncMock(),
     )
     service._repository = repository  # noqa: SLF001
+    service._publication._repository = repository  # noqa: SLF001
     return SimpleNamespace(
         actor_id=actor_id,
         project_id=project_id,

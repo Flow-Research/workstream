@@ -21,6 +21,8 @@ from app.modules.contributions.api import (
     ContributionPolicyProjectEligibilityPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyReadRequest,
+    ContributionPolicyPublishRequest,
+    ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
@@ -43,6 +45,7 @@ from app.modules.contributions.policy_validation import (
     validate_policy_graph,
     validate_policy_name,
 )
+from app.modules.contributions.policy_publication import ContributionPolicyPublicationService
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.projects.api import ProjectContributionPolicyUnavailable
 
@@ -67,6 +70,26 @@ class ContributionPolicyService:
         self._mutation_authorization = mutation_authorization or deny
         self._projects = projects
         self._bindings = bindings
+        self._publication = ContributionPolicyPublicationService(
+            session,
+            repository=self._repository,
+            read_authorization=self._read_authorization,
+            mutation_authorization=self._mutation_authorization,
+            projects=projects,
+            bindings=bindings,
+        )
+
+    async def publish(
+        self, request: ContributionPolicyPublishRequest
+    ) -> ContributionPolicyMutationResult:
+        """Publish one exact complete draft through the hidden boundary."""
+        return await self._publication.publish(request)
+
+    async def retire(
+        self, request: ContributionPolicyRetireRequest
+    ) -> ContributionPolicyMutationResult:
+        """Terminally retire one exact current published version."""
+        return await self._publication.retire(request)
 
     async def read(self, request: ContributionPolicyReadRequest) -> ContributionPolicyView:
         """Return one authorized immutable policy-version view."""
