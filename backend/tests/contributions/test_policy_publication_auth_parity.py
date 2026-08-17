@@ -1,5 +1,6 @@
 """Public AUTH fact parity for hidden ContributionPolicy publication."""
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -12,8 +13,10 @@ from app.modules.authorization.api import (
 )
 from app.modules.contributions.api import (
     ContributionPolicyPublishAuthorizationFacts,
+    ContributionPolicyRetireRequest,
     ContributionPolicyRetireAuthorizationFacts,
 )
+from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
 from tests.contributions.policy_test_support import service_fixture
 from tests.contributions.test_policy_publish import _install_complete_draft, _request
 
@@ -39,17 +42,43 @@ async def test_publish_facts_match_public_auth_digest() -> None:
     assert digest == contribution_policy_resource_digest(ActionId(facts.action), auth_facts)
 
 
-def test_retire_facts_match_public_auth_digest() -> None:
-    actor, operation, project, policy, version = (uuid4() for _ in range(5))
-    facts = ContributionPolicyRetireAuthorizationFacts(
-        action="contribution.policy.retire",
-        actor_profile_id=actor,
-        operation_id=operation,
-        request_digest="sha256:" + "a" * 64,
-        project_id=project,
-        contribution_policy_id=policy,
-        contribution_policy_version_id=version,
+@pytest.mark.asyncio
+async def test_retire_facts_match_public_auth_digest() -> None:
+    fixture = service_fixture()
+    policy_id, version_id = uuid4(), uuid4()
+    request = ContributionPolicyRetireRequest(
+        operation_id=uuid4(),
+        actor_profile_id=fixture.actor_id,
+        project_id=fixture.project_id,
+        contribution_policy_id=policy_id,
+        contribution_policy_version_id=version_id,
     )
+    fixture.repository.get_policy.return_value = ContributionPolicy(
+        id=policy_id,
+        project_id=str(fixture.project_id),
+        name="Policy",
+        status="active",
+        current_published_version_id=version_id,
+        created_by=str(fixture.actor_id),
+    )
+    fixture.repository.get_version.return_value = ContributionPolicyVersion(
+        id=version_id,
+        contribution_policy_id=policy_id,
+        project_id=str(fixture.project_id),
+        version_number=1,
+        status="published",
+        created_by=str(fixture.actor_id),
+        published_by=str(fixture.actor_id),
+        published_at=datetime.now(UTC),
+    )
+
+    async def stamp(custody) -> None:
+        custody.occurred_at = datetime.now(UTC)
+
+    fixture.repository.create_transition_custody.side_effect = stamp
+    await fixture.service.retire(request)
+    facts = fixture.authorization.prepared[0]
+    assert isinstance(facts, ContributionPolicyRetireAuthorizationFacts)
     auth_facts = ContributionPolicyRetireFacts(
         project_id=facts.project_id,
         contribution_policy_id=facts.contribution_policy_id,

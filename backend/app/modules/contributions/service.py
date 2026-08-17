@@ -48,6 +48,7 @@ from app.modules.contributions.policy_validation import (
 from app.modules.contributions.policy_publication import ContributionPolicyPublicationService
 from app.modules.contributions.policy_mutation_support import (
     begin_and_recover_policy_mutation,
+    consume_and_close_policy_authority,
 )
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.projects.api import ProjectContributionPolicyUnavailable
@@ -164,7 +165,7 @@ class ContributionPolicyService:
         facts = self._facts(
             action, request, digest, policy.id, version.id, from_policy_status, None
         )
-        actor = await self._consume_and_close(facts)
+        actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
         event = self._event(
             request=request,
             digest=digest,
@@ -214,7 +215,7 @@ class ContributionPolicyService:
         facts = self._facts(
             action, request, digest, policy.id, version.id, policy.status, version.status
         )
-        actor = await self._consume_and_close(facts)
+        actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
         version.last_updated_by = str(actor)
         version.last_updated_at = await self._session.scalar(select(func.clock_timestamp()))
         event = self._event(
@@ -346,19 +347,6 @@ class ContributionPolicyService:
             expected_policy_status=policy_status,
             expected_version_status=version_status,
         )
-
-    async def _consume_and_close(self, facts: ContributionPolicyMutationAuthorizationFacts) -> UUID:
-        """Prepare, consume, and always close exact mutation authority."""
-        prepared = await self._mutation_authorization.prepare_contribution_policy_mutation(facts)
-        try:
-            actor = await self._mutation_authorization.consume_contribution_policy_mutation(
-                prepared, facts
-            )
-        finally:
-            self._mutation_authorization.close_contribution_policy_mutation(prepared)
-        if type(actor) is not UUID or actor != facts.actor_profile_id:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
-        return actor
 
     async def _recover(
         self, action: PolicyAction, request: object, digest: str

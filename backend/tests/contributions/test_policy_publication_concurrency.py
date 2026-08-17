@@ -69,7 +69,7 @@ async def test_competing_publications_serialize_before_authorization(
 ) -> None:
     del policy_database_env
     project_id, _, _, _ = await _exercise_policy()
-    scope = f"contribution-policy-project:{project_id}"
+    scope = f"contribution-policy:{project_id}"
     async with (
         db_session.get_session_factory()() as winner,
         db_session.get_session_factory()() as contender,

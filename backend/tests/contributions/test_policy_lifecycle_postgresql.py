@@ -109,6 +109,23 @@ async def test_database_rejects_publication_lifecycle_skip(
 
 
 @pytest.mark.asyncio
+async def test_database_rejects_published_version_downgrade(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    _, _, _, published = await _exercise_policy()
+    with pytest.raises(DBAPIError):
+        async with db_session.get_session_factory()() as session, session.begin():
+            await session.execute(
+                text(
+                    "update contribution_policy_versions set status='draft', "
+                    "published_by=null,published_at=null where id=:version"
+                ),
+                {"version": published.contribution_policy_version_id},
+            )
+
+
+@pytest.mark.asyncio
 async def test_database_rejects_forged_publication_attribution(
     policy_database_env: str,
 ) -> None:

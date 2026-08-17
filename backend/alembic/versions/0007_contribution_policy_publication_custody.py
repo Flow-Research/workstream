@@ -403,7 +403,7 @@ def _install_row_transition_guards() -> None:
               using errcode='55000';
           end if;
           if old.status='retired'
-             or (old.status='published' and new.status='published') then
+             or (old.status='published' and new.status<>'retired') then
             raise exception 'final contribution policy version row is immutable'
               using errcode='55000';
           end if;
