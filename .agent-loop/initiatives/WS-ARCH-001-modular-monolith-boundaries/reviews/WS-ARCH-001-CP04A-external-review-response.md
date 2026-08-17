@@ -11,14 +11,17 @@
 - Coverage proof omitted changed COMPENSATION composition/schema surfaces and
   combined the focused 90-percent requirement with the repository-wide
   78-percent baseline. The contract now names all changed production packages
-  in the focused command and gives focused and global coverage separate atoms,
-  commands/custody, and CI-integrity ownership.
+  in one coverage collection, enforces 90 percent with a separate report for
+  every changed application surface, and gives the global 78-percent baseline
+  a separate atom, command/custody, and CI-integrity ownership.
 - Compound trace rows could hide independently failing behavior. The contract
   now separates acceptance versus duplicate rejection, active versus
   same-project resources, transition shape versus operation uniqueness, each
   immutable-event database guard, file size versus test behavior, focused
   versus global coverage, and the remaining compound negative-scope/resource
-  cases found during replay.
+  cases found during replay. A second test-delta replay identified remaining
+  compound public-view, owner-port, graph-replacement, close, recovery, and
+  concurrency rows; those are now split as well.
 - The canonical `CompensationInstrumentType` home was ambiguous. The contract
   now requires the dedicated public module
   `app.modules.compensation.api.instruments`, re-exported by the package while

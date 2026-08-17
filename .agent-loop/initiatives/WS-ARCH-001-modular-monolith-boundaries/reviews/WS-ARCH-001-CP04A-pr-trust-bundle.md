@@ -26,8 +26,10 @@ ContributionPolicy AUTH actions remain planned and unavailable.
 
 - Local deterministic gates own diff, Markdown, stale wording, state
   projection, atomic chunk-state, and current AUTH registration proof.
-- Future focused tests own each named CP04A behavior and the at-least-90-percent
-  changed-surface coverage requirement.
+- Future focused tests own each named CP04A behavior. One coverage collection
+  followed by separate per-surface reports owns the at-least-90-percent
+  changed-application-surface requirement; schema tests own Alembic/metadata
+  parity.
 - Hosted PostgreSQL lanes own concurrency and direct database negative proof.
 - The hosted aggregate independently owns the unchanged repository-wide
   78-percent coverage baseline.
