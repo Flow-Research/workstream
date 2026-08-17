@@ -460,6 +460,31 @@ jobs:
         working-directory: backend
         run: coverage report --include='app/modules/contributions/*' --precision=2 --fail-under=90
 
+      - name: CP04A owner and composition coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          surfaces=(
+            'app/modules/contributions/api/*'
+            'app/modules/contributions/models.py'
+            'app/modules/contributions/schemas.py'
+            'app/modules/contributions/repository.py'
+            'app/modules/contributions/service.py'
+            'app/modules/contributions/policy_validation.py'
+            'app/modules/compensation/api/__init__.py,app/modules/compensation/api/instruments.py,app/modules/compensation/api/policy_bindings.py'
+            'app/modules/compensation/schemas.py'
+            'app/modules/compensation/policy_binding_service.py'
+            'app/modules/projects/api/__init__.py,app/modules/projects/api/contribution_policy.py'
+            'app/modules/projects/contribution_policy.py'
+            'app/adapters/contributions/__init__.py'
+            'app/adapters/compensation/__init__.py'
+            'app/adapters/projects/__init__.py'
+          )
+          for surface in "${surfaces[@]}"; do
+            coverage report --include="${surface}" --precision=2 --fail-under=90
+          done
+
       - name: API router composition coverage
         working-directory: backend
         run: coverage report --include='app/api/router.py' --precision=2 --fail-under=90

@@ -1,5 +1,6 @@
 """Update-draft replacement behavior."""
 
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -114,3 +115,43 @@ async def test_update_draft_leaves_no_stale_or_orphan_child() -> None:
         "accepted_submission",
         "completed_review",
     }
+
+
+@pytest.mark.asyncio
+async def test_invalid_compensation_mode_denies_before_authorization() -> None:
+    fixture = service_fixture()
+    request = update_request(fixture)
+    request = replace(
+        request,
+        rules=(
+            replace(request.rules[0], compensation_mode="invalid"),  # type: ignore[arg-type]
+            request.rules[1],
+        ),
+    )
+    with pytest.raises(ContributionPolicyConflict):
+        await fixture.service.update_draft(request)
+    assert fixture.authorization.prepared == []
+    assert fixture.authorization.consumed == []
+    fixture.repository.replace_graph.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_noncanonical_instrument_denies_before_authorization() -> None:
+    fixture = service_fixture()
+    request = update_request(fixture)
+    definition = replace(
+        request.rules[0].definitions[0],
+        instrument_type="money",  # type: ignore[arg-type]
+    )
+    request = replace(
+        request,
+        rules=(
+            replace(request.rules[0], definitions=(definition,)),
+            request.rules[1],
+        ),
+    )
+    with pytest.raises(ContributionPolicyConflict):
+        await fixture.service.update_draft(request)
+    assert fixture.authorization.prepared == []
+    assert fixture.authorization.consumed == []
+    fixture.repository.replace_graph.assert_not_awaited()

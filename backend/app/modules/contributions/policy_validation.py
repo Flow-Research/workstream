@@ -58,6 +58,8 @@ def validate_policy_graph(rules: tuple[PolicyRuleInput, ...]) -> tuple[PolicyRul
 def _validate_rule(rule: PolicyRuleInput) -> None:
     if type(rule) is not PolicyRuleInput or type(rule.definitions) is not tuple:
         raise ContributionPolicyConflict("contribution_policy_conflict")
+    if rule.compensation_mode not in {"unpaid", "compensated"}:
+        raise ContributionPolicyConflict("contribution_policy_conflict")
     instruments = [item.instrument_type for item in rule.definitions]
     if rule.compensation_mode == "unpaid" and rule.definitions:
         raise ContributionPolicyConflict("contribution_policy_conflict")
@@ -70,7 +72,11 @@ def _validate_rule(rule: PolicyRuleInput) -> None:
 
 
 def _validate_definition(item: PolicyDefinitionInput) -> None:
-    if type(item) is not PolicyDefinitionInput or type(item.adapter_binding_id) is not UUID:
+    if (
+        type(item) is not PolicyDefinitionInput
+        or type(item.instrument_type) is not CompensationInstrumentType
+        or type(item.adapter_binding_id) is not UUID
+    ):
         raise ContributionPolicyConflict("contribution_policy_conflict")
     try:
         quantity = Decimal(item.quantity)

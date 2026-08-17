@@ -1,5 +1,6 @@
 """Fail-closed PREP ordering for ContributionPolicy mutations."""
 
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -89,9 +90,31 @@ async def test_prepared_authority_closes_once_on_success() -> None:
 @pytest.mark.asyncio
 async def test_operation_fence_precedes_owner_locks_and_authorization() -> None:
     fixture = service_fixture()
+    order: list[str] = []
+
+    async def operation_lock(operation_id: object) -> None:
+        del operation_id
+        order.append("operation")
+
+    async def owner_lock(project_id: object) -> object:
+        order.append("owner")
+        return SimpleNamespace(project_id=project_id)
+
+    async def project_scope(project_id: object) -> None:
+        del project_id
+        order.append("project_scope")
+
+    async def prepare(facts: object) -> object:
+        del facts
+        order.append("authorization")
+        return object()
+
+    fixture.repository.lock_operation.side_effect = operation_lock
+    fixture.service._projects.lock_contribution_policy_project = owner_lock  # noqa: SLF001
+    fixture.repository.lock_project_scope.side_effect = project_scope
+    fixture.authorization.prepare_contribution_policy_mutation = prepare
     await fixture.service.create_draft(create_request(fixture))
-    fixture.repository.lock_operation.assert_awaited_once()
-    assert fixture.authorization.prepared
+    assert order == ["operation", "owner", "project_scope", "authorization"]
 
 
 @pytest.mark.asyncio

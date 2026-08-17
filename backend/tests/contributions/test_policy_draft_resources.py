@@ -1,6 +1,7 @@
 """Resource isolation during complete draft replacement."""
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -8,14 +9,6 @@ from app.modules.compensation.api import PolicyAdapterBindingUnavailable
 from app.modules.contributions.api import ContributionPolicyConflict
 from tests.contributions.policy_test_support import service_fixture
 from tests.contributions.test_policy_draft_update import install_draft, update_request
-
-
-async def _assert_foreign_policy_denied() -> None:
-    fixture = service_fixture()
-    request = update_request(fixture)
-    with pytest.raises(ContributionPolicyConflict):
-        await fixture.service.update_draft(request)
-    assert fixture.authorization.prepared == []
 
 
 @pytest.mark.asyncio
@@ -77,14 +70,41 @@ async def test_update_conceals_cross_project_adapter_binding_without_effect() ->
 
 @pytest.mark.asyncio
 async def test_update_conceals_cross_project_policy_before_authorization() -> None:
-    await _assert_foreign_policy_denied()
+    fixture = service_fixture()
+    request = update_request(fixture)
+    with pytest.raises(ContributionPolicyConflict):
+        await fixture.service.update_draft(request)
+    fixture.repository.get_policy.assert_awaited_once_with(
+        request.project_id, request.contribution_policy_id, for_update=True
+    )
+    fixture.repository.get_version.assert_awaited_once()
+    assert fixture.authorization.prepared == []
 
 
 @pytest.mark.asyncio
 async def test_update_conceals_cross_project_version_before_authorization() -> None:
-    await _assert_foreign_policy_denied()
+    fixture = service_fixture()
+    request = update_request(fixture)
+    install_draft(fixture, request)
+    fixture.repository.get_version.return_value = None
+    with pytest.raises(ContributionPolicyConflict):
+        await fixture.service.update_draft(request)
+    fixture.repository.get_policy.assert_awaited_once()
+    fixture.repository.get_version.assert_awaited_once()
+    assert fixture.authorization.prepared == []
 
 
 @pytest.mark.asyncio
 async def test_update_conceals_cross_project_request_before_authorization() -> None:
-    await _assert_foreign_policy_denied()
+    fixture = service_fixture()
+    request = update_request(fixture)
+
+    async def wrong_project(project_id: object) -> object:
+        del project_id
+        return SimpleNamespace(project_id=uuid4())
+
+    fixture.service._projects.lock_contribution_policy_project = wrong_project  # noqa: SLF001
+    with pytest.raises(ContributionPolicyConflict):
+        await fixture.service.update_draft(request)
+    fixture.repository.get_policy.assert_not_awaited()
+    assert fixture.authorization.prepared == []

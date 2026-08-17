@@ -35,3 +35,19 @@ Required architecture, security, product/operations, QA, test-delta,
 CI-integrity, senior-engineering, reuse/dedup, and documentation reviewers run
 only after this evidence is committed to a clean exact head. Their private
 receipts and PR-body mirrors—not this file—own the final advisory verdicts.
+
+## First implementation-review corrections
+
+The first exact-head reviewer wave found and this implementation corrects:
+
+- closed-domain validation for compensation mode and canonical instrument type
+  before authorization preparation;
+- discriminating successful-view, cross-project policy/version/request, public
+  dataclass immutability, and operation-order tests;
+- semantic-lane ownership for every new CP04A test module;
+- hosted 90-percent gates for every changed CP04A owner/composition surface;
+- public lifecycle event vocabulary parity for the shared CP04A/CP04B event
+  foundation.
+
+All affected reviewers must replay against the corrective exact head before a
+passing verdict is claimed.

@@ -605,8 +605,27 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
     from dataclasses import is_dataclass
     import app.modules.contributions.api as policy_api
 
-    assert is_dataclass(policy_api.ContributionPolicyReadRequest)
-    assert policy_api.ContributionPolicyReadRequest.__dataclass_params__.frozen
+    public_dataclasses = {
+        name: value
+        for name in policy_api.__all__
+        if is_dataclass(value := getattr(policy_api, name))
+    }
+    assert public_dataclasses == {
+        name: getattr(policy_api, name)
+        for name in (
+            "ContributionPolicyCreateDraftRequest",
+            "ContributionPolicyMutationAuthorizationFacts",
+            "ContributionPolicyMutationResult",
+            "ContributionPolicyReadRequest",
+            "ContributionPolicyUpdateDraftRequest",
+            "ContributionPolicyView",
+            "PolicyDefinitionInput",
+            "PolicyDefinitionView",
+            "PolicyRuleInput",
+            "PolicyRuleView",
+        )
+    }
+    assert all(value.__dataclass_params__.frozen for value in public_dataclasses.values())
 
 
 def test_policy_public_api_exports_no_private_persistence_values() -> None:

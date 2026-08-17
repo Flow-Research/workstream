@@ -128,3 +128,21 @@ def test_update_rejects_fractional_project_points() -> None:
     )
     with pytest.raises(ContributionPolicyConflict):
         _validate_definition(item)
+
+
+def test_update_rejects_unknown_compensation_mode_before_authorization() -> None:
+    paid, review = complete_rules()
+    invalid = replace(paid, compensation_mode="unknown")  # type: ignore[arg-type]
+    with pytest.raises(ContributionPolicyConflict):
+        validate_policy_graph((invalid, review))
+
+
+def test_update_rejects_noncanonical_instrument_type() -> None:
+    item = PolicyDefinitionInput(
+        instrument_type="money",  # type: ignore[arg-type]
+        unit_code="USD",
+        quantity="1.00",
+        adapter_binding_id=uuid4(),
+    )
+    with pytest.raises(ContributionPolicyConflict):
+        _validate_definition(item)

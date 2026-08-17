@@ -12,7 +12,7 @@ PolicyAction = Literal[
     "contribution.policy.create_draft",
     "contribution.policy.update_draft",
 ]
-PolicyEventType = Literal["draft_created", "draft_updated"]
+PolicyEventType = Literal["draft_created", "draft_updated", "published", "retired"]
 ContributionType = Literal["accepted_submission", "completed_review"]
 CompensationMode = Literal["unpaid", "compensated"]
 
