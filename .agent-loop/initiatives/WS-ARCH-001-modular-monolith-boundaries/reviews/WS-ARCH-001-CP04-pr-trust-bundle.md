@@ -110,9 +110,12 @@ bundle does not claim current reviewer approval.
 ## External review
 
 Fresh substantive review of PR head `769e15e0c6d947d471e626a2362c8adfdf9df53f`
-found stale review evidence and missing acceptance-to-test mappings. Both
-findings are valid and are addressed by this correction. CodeRabbit substantive
-review remains unavailable unless it reviews the resulting final head.
+found stale review evidence and missing acceptance-to-test mappings. A later
+review found the missing CP04B cross-project proof mapping, and CodeRabbit found
+the publication-order summary drift. All four findings were replayed as valid
+and addressed in the contract, discovery record, and external-review response.
+CodeRabbit substantive final-head review remains unavailable unless it reviews
+the resulting final head.
 
 ## Remaining risks
 

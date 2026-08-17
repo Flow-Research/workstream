@@ -16,8 +16,10 @@
   fence/recovery-before-lock/PREP order and preserves no-second-effect recovery.
 - `EXT-CP04-003` High: CP04B required cross-project publish/retire denial but
   did not name future proof for policy, version, unit, and adapter-binding
-  mismatches. Valid. CP04B now names focused concealed-denial/no-effect tests
-  and a separate hosted-only PostgreSQL transaction/row-custody module.
+  publish mismatches or both policy and exact-current-version retire targets.
+  Valid. CP04B now names focused concealed-denial/no-effect tests for those
+  command-specific facts and a separate hosted-only PostgreSQL
+  transaction/row-custody module.
 
 ## Comments deferred
 
