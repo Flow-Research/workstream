@@ -33,7 +33,7 @@ L1 — reviewer protocol, skills, agents, evidence schema, and evaluation harnes
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/chunks/WS-CI-004-05-semantic-review-completeness.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/{CASES.json,EXPECTATIONS.json}
 .agent-loop/CURRENT_STATE.md
-scripts/{reviewer_contracts.py,test_reviewer_contracts.py}
+scripts/{reviewer_contracts.py,test_reviewer_contracts.py,test_review_target.py}
 ```
 
 ## Not allowed
