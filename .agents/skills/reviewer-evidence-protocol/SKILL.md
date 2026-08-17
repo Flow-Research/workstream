@@ -47,13 +47,19 @@ their own questions; they do not replace or duplicate this protocol.
 Use the closed proof strengths `pure`, `service`, `repository`, `transaction`,
 `concurrency`, `direct_sql`, `composition`, and `negative_structure`. Every
 traceability row declares `claimed_boundary`, `proof_strength`, and
-`proof_compatibility`. These are proof types, not an ordered hierarchy: a row
-is compatible only when its proof type matches its claimed boundary.
+`proof_compatibility`, plus structured `proof_custody.kind` and
+`proof_custody.observations`. These are proof types, not an ordered hierarchy:
+a row is compatible only when its proof type and custody satisfy the
+schema-owned rule for its claimed boundary. Tenant-isolation repository claims
+use the distinct `repository_isolation` boundary.
 
 The receipt validator owns compatibility. Reviewer-supplied compatibility
 cannot override it, and `incompatible` or `unavailable` proof cannot support a
 final passing verdict. Source inspection cannot replace executed repository,
-transaction, concurrency, or direct-SQL custody.
+transaction, concurrency, or direct-SQL custody. Repository proof records a
+stored row; isolation proof also records a stored foreign resource; transaction
+proof records staged and final state; concurrency proof records independent
+sessions; and direct-SQL proof records that ORM validation was bypassed.
 
 Every final passing receipt includes a test-of-the-test adversarial probe that
 records the defect inserted or simulated, expected observation, actual

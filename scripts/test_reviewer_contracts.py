@@ -17,8 +17,17 @@ from scripts.reviewer_contracts import (
     SEMANTIC_AGENT_REQUIREMENTS,
     SEMANTIC_SKILL_REQUIREMENTS,
 )
-from scripts.reviewer_contracts import contract_failures, fixture_failures, load_json, main
-from scripts.reviewer_contracts import output_failures, output_set_failures, receipt_failures
+from scripts.reviewer_contracts import (
+    contract_failures,
+    fixture_failures,
+    load_json,
+    main,
+)
+from scripts.reviewer_contracts import (
+    output_failures,
+    output_set_failures,
+    receipt_failures,
+)
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
 
@@ -59,6 +68,10 @@ def valid_receipt() -> dict[str, object]:
                 "execution_custody": "local unit",
                 "claimed_boundary": "service",
                 "proof_strength": "service",
+                "proof_custody": {
+                    "kind": "executed",
+                    "observations": ["service_orchestration"],
+                },
                 "proof_compatibility": "compatible",
                 "result": "verified",
             }
@@ -110,7 +123,12 @@ class ReviewerContractTests(unittest.TestCase):
         self.assert_receipt_invalid(receipt, "invalid protocol receipt")
 
     def test_receipt_requires_boundary_and_strength_per_trace_row(self) -> None:
-        for field in ("claimed_boundary", "proof_strength", "proof_compatibility"):
+        for field in (
+            "claimed_boundary",
+            "proof_strength",
+            "proof_custody",
+            "proof_compatibility",
+        ):
             with self.subTest(field=field):
                 receipt = valid_receipt()
                 receipt["traceability"][0].pop(field)
@@ -122,6 +140,10 @@ class ReviewerContractTests(unittest.TestCase):
         row.update(
             claimed_boundary="repository",
             proof_strength="service",
+            proof_custody={
+                "kind": "executed",
+                "observations": ["service_orchestration"],
+            },
             proof_compatibility="compatible",
         )
         self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
@@ -134,6 +156,10 @@ class ReviewerContractTests(unittest.TestCase):
                 row.update(
                     claimed_boundary=boundary,
                     proof_strength="service",
+                    proof_custody={
+                        "kind": "executed",
+                        "observations": ["service_orchestration"],
+                    },
                     proof_compatibility="incompatible",
                 )
                 self.assert_receipt_invalid(receipt, "invalid protocol receipt")
@@ -142,16 +168,71 @@ class ReviewerContractTests(unittest.TestCase):
         receipt = valid_receipt()
         row = receipt["traceability"][0]
         row.update(
-            claimed_boundary="repository",
-            proof_strength="service",
+            claimed_boundary="repository_isolation",
+            proof_strength="repository",
+            proof_custody={"kind": "executed", "observations": ["stored_row"]},
             proof_compatibility="compatible",
             proof_source="mock returns None instead of a stored foreign row",
         )
         self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
 
+    def test_matching_infrastructure_labels_require_observed_custody(self) -> None:
+        weak_custody = {
+            "repository": {"kind": "inspected", "observations": []},
+            "transaction": {"kind": "executed", "observations": ["staged_state"]},
+            "concurrency": {"kind": "executed", "observations": []},
+            "direct_sql": {"kind": "inspected", "observations": ["syntax_or_registry"]},
+        }
+        for boundary, custody in weak_custody.items():
+            with self.subTest(boundary=boundary):
+                receipt = valid_receipt()
+                receipt["traceability"][0].update(
+                    claimed_boundary=boundary,
+                    proof_strength=boundary,
+                    proof_custody=custody,
+                    proof_compatibility="compatible",
+                )
+                self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
+
+    def test_infrastructure_custody_observations_are_compatible(self) -> None:
+        valid_custody = {
+            "repository": {"kind": "executed", "observations": ["stored_row"]},
+            "repository_isolation": {
+                "kind": "executed",
+                "observations": ["stored_row", "stored_foreign_resource"],
+            },
+            "transaction": {
+                "kind": "executed",
+                "observations": ["staged_state", "final_state"],
+            },
+            "concurrency": {
+                "kind": "executed",
+                "observations": ["independent_sessions"],
+            },
+            "direct_sql": {"kind": "executed", "observations": ["orm_bypassed"]},
+        }
+        for boundary, custody in valid_custody.items():
+            with self.subTest(boundary=boundary):
+                receipt = valid_receipt()
+                receipt["traceability"][0].update(
+                    claimed_boundary=boundary,
+                    proof_strength=(
+                        "repository" if boundary == "repository_isolation" else boundary
+                    ),
+                    proof_custody=custody,
+                    proof_compatibility="compatible",
+                )
+                self.assertEqual(
+                    receipt_failures(receipt, "architecture", "a" * 40), []
+                )
+
     def test_unavailable_proof_blocks_pass(self) -> None:
         receipt = valid_receipt()
         receipt["traceability"][0]["proof_compatibility"] = "unavailable"
+        receipt["traceability"][0]["proof_custody"] = {
+            "kind": "unavailable",
+            "observations": [],
+        }
         self.assert_receipt_invalid(receipt, "invalid protocol receipt")
 
     def test_provisional_receipt_can_record_unavailable_proof(self) -> None:
@@ -159,6 +240,7 @@ class ReviewerContractTests(unittest.TestCase):
         receipt["verdict"] = "PROVISIONAL"
         receipt["traceability"][0].update(
             proof_compatibility="unavailable",
+            proof_custody={"kind": "unavailable", "observations": []},
             result="unavailable",
         )
         receipt["residual_escape"]["result"] = "unavailable"
@@ -171,9 +253,19 @@ class ReviewerContractTests(unittest.TestCase):
                 receipt["traceability"][0].update(
                     claimed_boundary=proof_type,
                     proof_strength=proof_type,
+                    proof_custody={
+                        "kind": "executed",
+                        "observations": [
+                            "pure_result"
+                            if proof_type == "pure"
+                            else "service_orchestration"
+                        ],
+                    },
                     proof_compatibility="compatible",
                 )
-                self.assertEqual(receipt_failures(receipt, "architecture", "a" * 40), [])
+                self.assertEqual(
+                    receipt_failures(receipt, "architecture", "a" * 40), []
+                )
 
     def test_proof_types_are_not_a_strength_hierarchy(self) -> None:
         for boundary, strength in (("pure", "direct_sql"), ("service", "repository")):
@@ -183,6 +275,12 @@ class ReviewerContractTests(unittest.TestCase):
                 row.update(
                     claimed_boundary=boundary,
                     proof_strength=strength,
+                    proof_custody={
+                        "kind": "executed",
+                        "observations": [
+                            "orm_bypassed" if strength == "direct_sql" else "stored_row"
+                        ],
+                    },
                     proof_compatibility="compatible",
                 )
                 self.assert_receipt_invalid(receipt, "proof compatibility mismatch")
@@ -242,7 +340,9 @@ class ReviewerContractTests(unittest.TestCase):
         self.assert_receipt_invalid(receipt, "invalid protocol receipt")
 
     def test_failure_pattern_registry_is_complete_and_unique(self) -> None:
-        self.assertEqual(FAILURE_PATTERN_IDS, {f"PQ-{number:03d}" for number in range(1, 14)})
+        self.assertEqual(
+            FAILURE_PATTERN_IDS, {f"PQ-{number:03d}" for number in range(1, 14)}
+        )
         self.assertEqual(contract_failures(), [])
         temporary, root = self.copied_contract_root()
         try:
@@ -307,7 +407,10 @@ class ReviewerContractTests(unittest.TestCase):
                         encoding="utf-8",
                     )
                     self.assertTrue(
-                        any(requirement_id in failure for failure in contract_failures(root))
+                        any(
+                            requirement_id in failure
+                            for failure in contract_failures(root)
+                        )
                     )
                 finally:
                     temporary.cleanup()
@@ -323,7 +426,10 @@ class ReviewerContractTests(unittest.TestCase):
                         encoding="utf-8",
                     )
                     self.assertTrue(
-                        any(requirement_id in failure for failure in contract_failures(root))
+                        any(
+                            requirement_id in failure
+                            for failure in contract_failures(root)
+                        )
                     )
                 finally:
                     temporary.cleanup()
@@ -337,7 +443,10 @@ class ReviewerContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertTrue(
-                any("agent missing 'hand off'" in item for item in contract_failures(root))
+                any(
+                    "agent missing 'hand off'" in item
+                    for item in contract_failures(root)
+                )
             )
         finally:
             temporary.cleanup()
@@ -354,7 +463,9 @@ class ReviewerContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertTrue(
-                any("canonical reviewer IDs" in item for item in contract_failures(root))
+                any(
+                    "canonical reviewer IDs" in item for item in contract_failures(root)
+                )
             )
         finally:
             temporary.cleanup()
@@ -386,13 +497,20 @@ class ReviewerContractTests(unittest.TestCase):
 
     def test_missing_reviewer_or_case_class_fails(self) -> None:
         cases = copy.deepcopy(self.cases)
-        cases["cases"] = [row for row in cases["cases"] if row["reviewer"] != "security"]
+        cases["cases"] = [
+            row for row in cases["cases"] if row["reviewer"] != "security"
+        ]
         self.assertTrue(
-            any("security: missing cases" in item for item in fixture_failures(cases, None))
+            any(
+                "security: missing cases" in item
+                for item in fixture_failures(cases, None)
+            )
         )
         cases = copy.deepcopy(self.cases)
         cases["cases"] = [row for row in cases["cases"] if row["id"] != "qa-handoff"]
-        self.assertTrue(any("qa: missing cases" in item for item in fixture_failures(cases, None)))
+        self.assertTrue(
+            any("qa: missing cases" in item for item in fixture_failures(cases, None))
+        )
 
     def test_raw_case_cannot_contain_expected_answer(self) -> None:
         cases = copy.deepcopy(self.cases)
@@ -419,14 +537,20 @@ class ReviewerContractTests(unittest.TestCase):
         )
         expectations["expectations"][0]["outcome"] = "maybe"
         self.assertTrue(
-            any("invalid outcome" in item for item in fixture_failures(self.cases, expectations))
+            any(
+                "invalid outcome" in item
+                for item in fixture_failures(self.cases, expectations)
+            )
         )
 
     def test_duplicate_expectations_and_unknown_handoffs_fail(self) -> None:
         expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
-        expectations["expectations"].append(copy.deepcopy(expectations["expectations"][0]))
+        expectations["expectations"].append(
+            copy.deepcopy(expectations["expectations"][0])
+        )
         self.assertIn(
-            "expectations: duplicate case IDs", fixture_failures(self.cases, expectations)
+            "expectations: duplicate case IDs",
+            fixture_failures(self.cases, expectations),
         )
         expectations = copy.deepcopy(load_json(EXPECTATIONS_PATH))
         expectations["expectations"][0]["handoff_specialty"] = "security_typo"
@@ -465,10 +589,14 @@ class ReviewerContractTests(unittest.TestCase):
 
     def test_direct_output_rejects_non_object_and_malformed_json_cleanly(self) -> None:
         expectation = load_json(EXPECTATIONS_PATH)["expectations"][0]
-        self.assertEqual(output_failures([], expectation), ["output: expected an object"])
+        self.assertEqual(
+            output_failures([], expectation), ["output: expected an object"]
+        )
         for payload in ("[]", '"invalid"', "{"):
             with self.subTest(payload=payload):
-                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as output_file:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8"
+                ) as output_file:
                     output_file.write(payload)
                     output_file.flush()
                     self.assertEqual(
@@ -503,14 +631,23 @@ class ReviewerContractTests(unittest.TestCase):
         receipt = {
             "schema_version": 3,
             "custody": "advisory_session",
-            "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
+            "target": {
+                "base_sha": "a" * 40,
+                "merge_base_sha": "a" * 40,
+                "head_sha": "a" * 40,
+            },
             "reviewer": {"specialty": "architecture", "run_id": "eval-1"},
-            "inspections": {"start": {"cleanliness": "dirty"}, "end": {"cleanliness": "dirty"}},
+            "inspections": {
+                "start": {"cleanliness": "dirty"},
+                "end": {"cleanliness": "dirty"},
+            },
             "evidence": [
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
             ],
-            "impact_cone": [{"source": "case owner", "relevance": "owns evaluated behavior"}],
+            "impact_cone": [
+                {"source": "case owner", "relevance": "owns evaluated behavior"}
+            ],
             "adversarial_probes": [
                 {
                     "hypothesis": "case bypass",
@@ -532,6 +669,10 @@ class ReviewerContractTests(unittest.TestCase):
                     "execution_custody": "review session",
                     "claimed_boundary": "negative_structure",
                     "proof_strength": "negative_structure",
+                    "proof_custody": {
+                        "kind": "inspected",
+                        "observations": ["syntax_or_registry"],
+                    },
                     "proof_compatibility": "compatible",
                     "result": "verified",
                 }
@@ -564,7 +705,8 @@ class ReviewerContractTests(unittest.TestCase):
         broken = copy.deepcopy(output)
         broken["finding_ids"] = []
         self.assertIn(
-            "output: required finding not replayed", output_failures(broken, expectation, receipt)
+            "output: required finding not replayed",
+            output_failures(broken, expectation, receipt),
         )
         broken = copy.deepcopy(output)
         broken["finding_ids"] = [{}]
@@ -574,7 +716,9 @@ class ReviewerContractTests(unittest.TestCase):
         )
         broken = copy.deepcopy(output)
         broken["handoff_specialty"] = "security"
-        self.assertIn("output: wrong handoff", output_failures(broken, expectation, receipt))
+        self.assertIn(
+            "output: wrong handoff", output_failures(broken, expectation, receipt)
+        )
 
         # A case classification is not a final review verdict. The canonical
         # receipt remains PROVISIONAL while its start/end inspections are dirty.
@@ -642,14 +786,23 @@ class ReviewerContractTests(unittest.TestCase):
         receipt = {
             "schema_version": 3,
             "custody": "advisory_session",
-            "target": {"base_sha": "a" * 40, "merge_base_sha": "a" * 40, "head_sha": "a" * 40},
+            "target": {
+                "base_sha": "a" * 40,
+                "merge_base_sha": "a" * 40,
+                "head_sha": "a" * 40,
+            },
             "reviewer": {"specialty": "architecture", "run_id": "eval-positive"},
-            "inspections": {"start": {"cleanliness": "dirty"}, "end": {"cleanliness": "dirty"}},
+            "inspections": {
+                "start": {"cleanliness": "dirty"},
+                "end": {"cleanliness": "dirty"},
+            },
             "evidence": [
                 {"kind": "executed", "source": "review target", "result": "pass"},
                 {"kind": "inspected", "source": "raw case", "result": "pass"},
             ],
-            "impact_cone": [{"source": "case owner", "relevance": "owns evaluated behavior"}],
+            "impact_cone": [
+                {"source": "case owner", "relevance": "owns evaluated behavior"}
+            ],
             "adversarial_probes": [
                 {
                     "hypothesis": "case bypass",
@@ -671,6 +824,10 @@ class ReviewerContractTests(unittest.TestCase):
                     "execution_custody": "review session",
                     "claimed_boundary": "negative_structure",
                     "proof_strength": "negative_structure",
+                    "proof_custody": {
+                        "kind": "inspected",
+                        "observations": ["syntax_or_registry"],
+                    },
                     "proof_compatibility": "compatible",
                     "result": "verified",
                 }

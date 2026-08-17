@@ -68,10 +68,10 @@ final-target replay. Record the matching target once; start/end inspection
 states bind to it and must both be clean for a final verdict.
 
 Each traceability row must also record `claimed_boundary`, `proof_strength`,
-and validator-owned `proof_compatibility`. Every passing review must include a
-test-of-the-test probe with the simulated defect, expected and actual
-observation, whether the proof survived incorrectly, and its result. Findings
-record applicable stable IDs from
+structured `proof_custody`, and validator-owned `proof_compatibility`. Every
+passing review must include a test-of-the-test probe with the simulated defect,
+expected and actual observation, whether the proof survived incorrectly, and
+its result. Findings record applicable stable IDs from
 `reviewer-evidence-protocol/references/proof-quality-patterns.md`.
 
 ## Commands Run

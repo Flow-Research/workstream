@@ -15,7 +15,12 @@ from unittest.mock import patch
 
 import jsonschema
 
-from scripts.git_delta import GitCommandError, resolve_commit, resolve_merge_base, run_checked
+from scripts.git_delta import (
+    GitCommandError,
+    resolve_commit,
+    resolve_merge_base,
+    run_checked,
+)
 from scripts.review_target import inspect_review_target, main
 
 
@@ -57,7 +62,9 @@ class ReviewTargetTests(unittest.TestCase):
         self.assertEqual(payload["head_sha"], self.head_sha)
         self.assertTrue(payload["worktree"]["clean"])
         self.assertTrue(payload["final_ready"])
-        self.assertEqual(payload["changed_paths"], [{"path": "tracked.txt", "status": "M"}])
+        self.assertEqual(
+            payload["changed_paths"], [{"path": "tracked.txt", "status": "M"}]
+        )
 
     def test_staged_unstaged_and_untracked_are_dirty(self) -> None:
         (self.repository / "staged.txt").write_text("staged\n", encoding="utf-8")
@@ -82,14 +89,18 @@ class ReviewTargetTests(unittest.TestCase):
     def test_rename_and_delete_are_reported(self) -> None:
         git(self.repository, "mv", "tracked.txt", "renamed.txt")
         git(self.repository, "commit", "-qm", "rename")
-        renamed = inspect_review_target(self.head_sha, "HEAD", self.repository)["changed_paths"]
+        renamed = inspect_review_target(self.head_sha, "HEAD", self.repository)[
+            "changed_paths"
+        ]
         self.assertEqual(
             renamed,
             [{"old_path": "tracked.txt", "path": "renamed.txt", "status": "R100"}],
         )
         (self.repository / "renamed.txt").unlink()
         git(self.repository, "commit", "-qam", "delete")
-        deleted = inspect_review_target("HEAD^", "HEAD", self.repository)["changed_paths"]
+        deleted = inspect_review_target("HEAD^", "HEAD", self.repository)[
+            "changed_paths"
+        ]
         self.assertEqual(deleted, [{"path": "renamed.txt", "status": "D"}])
 
     def test_base_drift_changes_target(self) -> None:
@@ -121,13 +132,18 @@ class ReviewTargetTests(unittest.TestCase):
         git(self.repository, "commit", "-qm", "other")
         other_sha = git(self.repository, "rev-parse", "HEAD")
         with self.assertRaises(GitCommandError):
-            resolve_merge_base(self.base_sha, other_sha, repository_root=self.repository)
+            resolve_merge_base(
+                self.base_sha, other_sha, repository_root=self.repository
+            )
 
     def test_command_failure_timeout_and_empty_output_fail_closed(self) -> None:
         with self.assertRaises(GitCommandError):
-            run_checked(["git", "definitely-not-a-command"], repository_root=self.repository)
+            run_checked(
+                ["git", "definitely-not-a-command"], repository_root=self.repository
+            )
         with patch(
-            "scripts.git_delta.subprocess.run", side_effect=subprocess.TimeoutExpired(["git"], 1)
+            "scripts.git_delta.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["git"], 1),
         ):
             with self.assertRaisesRegex(GitCommandError, "GIT_TIMEOUT"):
                 run_checked(["git", "status"], repository_root=self.repository)
@@ -139,7 +155,14 @@ class ReviewTargetTests(unittest.TestCase):
         stderr = StringIO()
         with redirect_stderr(stderr):
             exit_code = main(
-                ["--base", "missing", "--head", "HEAD", "--repository", str(self.repository)]
+                [
+                    "--base",
+                    "missing",
+                    "--head",
+                    "HEAD",
+                    "--repository",
+                    str(self.repository),
+                ]
             )
         self.assertEqual(exit_code, 2)
         self.assertEqual(json.loads(stderr.getvalue()), {"error": "GIT_COMMAND_FAILED"})
@@ -207,6 +230,10 @@ class ReceiptSchemaTests(unittest.TestCase):
                     "execution_custody": "unit test",
                     "claimed_boundary": "service",
                     "proof_strength": "service",
+                    "proof_custody": {
+                        "kind": "executed",
+                        "observations": ["service_orchestration"],
+                    },
                     "proof_compatibility": "compatible",
                     "result": "verified",
                 }
@@ -248,27 +275,31 @@ class ReceiptSchemaTests(unittest.TestCase):
         ):
             with self.subTest(key=key):
                 self.assert_invalid(lambda receipt, key=key: receipt.pop(key))
-        self.assert_invalid(lambda receipt: receipt["target"].__setitem__("head_sha", "bad"))
+        self.assert_invalid(
+            lambda receipt: receipt["target"].__setitem__("head_sha", "bad")
+        )
         self.assert_invalid(lambda receipt: receipt["reviewer"].pop("run_id"))
         self.assert_invalid(lambda receipt: receipt["inspections"].pop("end"))
         self.assert_invalid(lambda receipt: receipt.__setitem__("impact_cone", []))
-        self.assert_invalid(lambda receipt: receipt.__setitem__("adversarial_probes", []))
+        self.assert_invalid(
+            lambda receipt: receipt.__setitem__("adversarial_probes", [])
+        )
         self.assert_invalid(lambda receipt: receipt.__setitem__("traceability", []))
 
     def test_final_verdict_requires_verified_trace_and_closed_escape(self) -> None:
         for result in ("missing", "unavailable"):
             with self.subTest(trace_result=result):
                 self.assert_invalid(
-                    lambda receipt, result=result: receipt["traceability"][0].__setitem__(
-                        "result", result
-                    )
+                    lambda receipt, result=result: receipt["traceability"][
+                        0
+                    ].__setitem__("result", result)
                 )
         for result in ("survives", "unavailable"):
             with self.subTest(escape_result=result):
                 self.assert_invalid(
-                    lambda receipt, result=result: receipt["residual_escape"].__setitem__(
-                        "result", result
-                    )
+                    lambda receipt, result=result: receipt[
+                        "residual_escape"
+                    ].__setitem__("result", result)
                 )
 
         def append_unverified_row(receipt):
@@ -286,10 +317,18 @@ class ReceiptSchemaTests(unittest.TestCase):
 
     def test_closed_tokens_and_unknown_claims_are_rejected(self) -> None:
         self.assert_invalid(lambda receipt: receipt.__setitem__("verdict", "APPROVED"))
-        self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("kind", "claimed"))
-        self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("result", "unknown"))
-        self.assert_invalid(lambda receipt: receipt["evidence"][0].__setitem__("command", "run me"))
-        self.assert_invalid(lambda receipt: receipt.__setitem__("merge_authorized", True))
+        self.assert_invalid(
+            lambda receipt: receipt["evidence"][0].__setitem__("kind", "claimed")
+        )
+        self.assert_invalid(
+            lambda receipt: receipt["evidence"][0].__setitem__("result", "unknown")
+        )
+        self.assert_invalid(
+            lambda receipt: receipt["evidence"][0].__setitem__("command", "run me")
+        )
+        self.assert_invalid(
+            lambda receipt: receipt.__setitem__("merge_authorized", True)
+        )
 
     def test_final_verdict_requires_a_successful_adversarial_probe(self) -> None:
         for result in ("fail", "unavailable"):
@@ -332,7 +371,9 @@ class ReceiptSchemaTests(unittest.TestCase):
 
         self.assert_invalid(add_blocker)
         self.assert_invalid(
-            lambda receipt: receipt["inspections"]["end"].__setitem__("cleanliness", "dirty")
+            lambda receipt: receipt["inspections"]["end"].__setitem__(
+                "cleanliness", "dirty"
+            )
         )
 
     def test_inspections_cannot_redefine_any_target_sha(self) -> None:
@@ -340,9 +381,9 @@ class ReceiptSchemaTests(unittest.TestCase):
             for field in ("base_sha", "merge_base_sha", "head_sha"):
                 with self.subTest(inspection=inspection, field=field):
                     self.assert_invalid(
-                        lambda receipt, inspection=inspection, field=field: receipt["inspections"][
-                            inspection
-                        ].update(target={field: "b" * 40})
+                        lambda receipt, inspection=inspection, field=field: receipt[
+                            "inspections"
+                        ][inspection].update(target={field: "b" * 40})
                     )
 
 
