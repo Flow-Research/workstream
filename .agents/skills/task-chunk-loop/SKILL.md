@@ -36,8 +36,9 @@ work and optional for small changes.
 10. Fix all Critical and High findings.
 11. Re-run failed reviewers.
 12. Before a passing readiness claim, summarize each required reviewer's exact
-    head, verdict, compatible proof boundary, discriminating probe, and
-    uncertainty without copying private session receipts into Git.
+    head, verdict, compatible proof boundary, proof strength, execution custody,
+    discriminating probe, and uncertainty without copying private session
+    receipts into Git.
 13. Summarize material reviewer findings in the PR or a durable note when useful.
 14. Stop after two failed repair cycles on the same class of issue.
 15. Produce a PR trust bundle.

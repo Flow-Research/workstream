@@ -27,7 +27,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install deterministic gate dependencies
-        run: python3 -m pip install jsonschema==4.26.0
+        run: >-
+          python3 -m pip install
+          --require-hashes
+          --only-binary=:all:
+          -r .github/requirements/agent-gates.txt
 
       - name: Markdown link check
         run: python3 scripts/check_markdown_links.py

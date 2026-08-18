@@ -22,8 +22,8 @@ Run deterministic proof checks before reviewer fanout.
 - New dependencies were approved.
 - Reviewer proof-quality inputs name the claimed boundary, proof strength,
   custody, compatibility, discriminating probe, and remaining uncertainty.
-- A passing summary does not claim private session-receipt custody; it records
-  only reviewer, exact head, verdict, proof boundary, and uncertainty.
+- A passing summary does not claim private session-receipt custody. It records
+  the complete proof-quality dimensions below without copying a private receipt.
 
 ## Output
 
@@ -37,6 +37,8 @@ Required fixes before review:
 Proof-quality summary:
 - exact reviewed head:
 - claimed boundaries and compatible proof:
+- proof strength:
+- execution custody:
 - discriminating probe result:
 - unavailable proof or uncertainty:
 ```

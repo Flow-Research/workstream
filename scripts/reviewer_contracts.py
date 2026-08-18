@@ -607,6 +607,8 @@ def proof_fixture_failures(
         failures.append("proof cases: required escaped-defect coverage missing")
     if reviewers != canonical_ids:
         failures.append("proof cases: every reviewer must have a raw case")
+    # Raw cases intentionally omit outcomes. This checks the canonical contract
+    # table itself; the exact fixture-ID comparison above proves row coverage.
     for reviewer in canonical_ids:
         outcomes = {
             contract[1]
@@ -614,7 +616,9 @@ def proof_fixture_failures(
             if contract[0] == reviewer
         }
         if "clear" not in outcomes or not outcomes.intersection(OUTCOMES - {"clear"}):
-            failures.append(f"{reviewer}: missing defect/control proof pair")
+            failures.append(
+                f"{reviewer}: contract table missing defect/control proof pair"
+            )
     if not untrusted_case_found:
         failures.append("proof cases: missing untrusted-evidence instruction fixture")
     return failures
@@ -657,13 +661,25 @@ def proof_supersession_failures(
     supersession = results.get("supersession")
     if not isinstance(evaluated_head, str) or not isinstance(supersession, dict):
         return ["proof supersession: missing binding"]
+    if not re.fullmatch(r"[0-9a-f]{40}", evaluated_head):
+        return ["proof supersession: invalid evaluated head"]
     failures: list[str] = []
     if supersession.get("mode") != PROOF_SUPERSESSION_MODE:
         failures.append("proof supersession: invalid mode")
     if set(supersession.get("subject_paths", [])) != PROOF_SUBJECT_PATHS:
         failures.append("proof supersession: subject coverage mismatch")
+    reachable = subprocess.run(
+        ["git", "cat-file", "-e", f"{evaluated_head}^{{commit}}"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if reachable.returncode != 0:
+        failures.append("proof supersession: evaluated head is unreachable")
+        return failures
     ancestor = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", evaluated_head, current_head],
+        ["git", "merge-base", "--is-ancestor", evaluated_head, current_head, "--"],
         cwd=ROOT,
         check=False,
         capture_output=True,
@@ -761,14 +777,21 @@ def proof_evaluation_failures(
         if result.get("handoff_specialty") != contract_handoff:
             failures.append(f"{case_id}: wrong blind handoff")
         pattern_ids = result.get("failure_pattern_ids")
-        if not isinstance(pattern_ids, list):
+        if not isinstance(pattern_ids, list) or not all(
+            isinstance(pattern_id, str) for pattern_id in pattern_ids
+        ):
             failures.append(f"{case_id}: required proof pattern missing")
         else:
             if not set(contract_patterns).issubset(pattern_ids):
                 failures.append(f"{case_id}: required proof pattern missing")
             if not set(pattern_ids).issubset(FAILURE_PATTERN_IDS):
                 failures.append(f"{case_id}: unknown proof pattern")
-        if set(expected.get("required_pattern_ids", [])) != contract_patterns:
+        expected_patterns = expected.get("required_pattern_ids", [])
+        if not isinstance(expected_patterns, list) or not all(
+            isinstance(pattern_id, str) for pattern_id in expected_patterns
+        ):
+            failures.append(f"{case_id}: invalid expected patterns")
+        elif set(expected_patterns) != contract_patterns:
             failures.append(f"{case_id}: expected patterns differ from case contract")
         if result.get("classification") == "finding" and not result.get("finding_id"):
             failures.append(f"{case_id}: missing stable finding")

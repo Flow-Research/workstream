@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -227,18 +228,38 @@ class ReviewerContractTests(unittest.TestCase):
                     )
                 )
 
-    def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
+    def test_proof_evaluation_contract_is_hermetic(self) -> None:
         self.assertEqual(
             proof_evaluation_failures(
-                self.proof_cases, self.proof_expectations, self.proof_results
+                self.proof_cases,
+                self.proof_expectations,
+                self.proof_results,
+                check_supersession=False,
             ),
             [],
         )
+
+    def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
+        evaluated_head = self.proof_results["evaluated_head"]
+        reachable = subprocess.run(
+            ["git", "cat-file", "-e", f"{evaluated_head}^{{commit}}"],
+            cwd=CONTRACT_ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if reachable.returncode != 0:
+            self.skipTest("evaluated Git commit is unavailable")
+        self.assertEqual(proof_supersession_failures(self.proof_results), [])
         mutated = copy.deepcopy(self.proof_results)
         mutated["evaluated_head"] = "0" * 40
         self.assertIn(
-            "proof supersession: evaluated head is not an ancestor",
+            "proof supersession: evaluated head is unreachable",
             proof_supersession_failures(mutated),
+        )
+        mutated["evaluated_head"] = "HEAD"
+        self.assertEqual(
+            proof_supersession_failures(mutated),
+            ["proof supersession: invalid evaluated head"],
         )
         candidate = "These obligations remain candidates until blind\nevaluation in `WS-CI-005-03`."
         adopted = "These obligations are adopted through the blind\nevaluation recorded by `WS-CI-005-03`."
@@ -346,6 +367,35 @@ class ReviewerContractTests(unittest.TestCase):
                 self.proof_cases,
                 self.proof_expectations,
                 mutated,
+                check_supersession=False,
+            ),
+        )
+
+    def test_blind_evaluation_rejects_non_string_pattern_ids_cleanly(self) -> None:
+        result_mutation = copy.deepcopy(self.proof_results)
+        result_mutation["results"][0]["failure_pattern_ids"] = [["PQ-001"]]
+        case_id = result_mutation["results"][0]["case_id"]
+        self.assertIn(
+            f"{case_id}: required proof pattern missing",
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                result_mutation,
+                check_supersession=False,
+            ),
+        )
+
+        expectation_mutation = copy.deepcopy(self.proof_expectations)
+        expectation_mutation["expectations"][0]["required_pattern_ids"] = [
+            ["PQ-001"]
+        ]
+        expected_case_id = expectation_mutation["expectations"][0]["case_id"]
+        self.assertIn(
+            f"{expected_case_id}: invalid expected patterns",
+            proof_evaluation_failures(
+                self.proof_cases,
+                expectation_mutation,
+                self.proof_results,
                 check_supersession=False,
             ),
         )
