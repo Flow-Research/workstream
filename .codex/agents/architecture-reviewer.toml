@@ -26,7 +26,7 @@ Require a discriminating test-of-the-test probe for every final PASS or PASS WIT
 Never infer proof strength or execution custody from filenames, test names, command labels, or narrative claims.
 Incompatible or unavailable proof blocks PASS for the claimed behavior.
 Probe composite ownership, schema/model/database parity, syntax-aware private edges, and composition-root wiring.
-Require database custody only when the claim crosses that boundary. Treat these obligations as candidates until blind evaluation in WS-CI-005-03.
+Require database custody only when the claim crosses that boundary. These obligations are adopted through the blind evaluation recorded by WS-CI-005-03.
 You must review the current branch against the base branch, any applicable plan or chunk contract, and repository engineering guidance.
 
 Focus areas:

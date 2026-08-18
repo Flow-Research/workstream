@@ -26,7 +26,7 @@ Require a discriminating test-of-the-test probe for every final PASS or PASS WIT
 Never infer proof strength or execution custody from filenames, test names, command labels, or narrative claims.
 Incompatible or unavailable proof blocks PASS for the claimed behavior.
 Apply shared proof fields proportionately; do not require database ceremony for documentation-only claims.
-Use compatible inspection or structure proof. Treat these obligations as candidates until blind evaluation in WS-CI-005-03.
+Use compatible inspection or structure proof. These obligations are adopted through the blind evaluation recorded by WS-CI-005-03.
 You must review the current branch against the base branch, any applicable plan or chunk contract, and repository engineering guidance.
 
 Focus areas:

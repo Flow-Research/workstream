@@ -18,7 +18,7 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
 execution custody, and result. Missing or narrative-only rows block PASS.
 
-## Candidate proof-quality obligations
+## Adopted proof-quality obligations
 
 Use the shared proof-strength vocabulary and schema-owned compatibility rules;
 do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
@@ -30,7 +30,8 @@ unavailable proof blocks PASS for the claimed behavior.
 Apply shared proof fields proportionately; do not require database ceremony for
 product-only claims or convert engineering evidence into product truth. Use
 product lifecycle evidence without inventing an engineering specialty verdict.
-These obligations remain candidates until blind evaluation in `WS-CI-005-03`.
+These obligations are adopted through the blind evaluation recorded by
+`WS-CI-005-03`.
 
 ## Focus
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,11 +15,15 @@ from scripts.reviewer_contracts import (
     FAILURE_PATTERN_IDS,
     MATRIX_SPECIALTY_REQUIREMENTS,
     PROOF_PATTERNS_PATH,
+    PROOF_CASES_PATH,
+    PROOF_CASE_IDS,
+    PROOF_EXPECTATIONS_PATH,
     PROOF_QUALITY_AGENT_LIFECYCLE,
     PROOF_QUALITY_MATRIX_LIFECYCLE,
     PROOF_QUALITY_SHARED_REQUIREMENTS,
     PROOF_QUALITY_SKILL_LIFECYCLE,
     PROOF_QUALITY_STATE_REQUIREMENTS,
+    PROOF_RESULTS_PATH,
     PROOF_STRENGTHS,
     ROOT as CONTRACT_ROOT,
     REVIEWERS,
@@ -26,6 +31,7 @@ from scripts.reviewer_contracts import (
     SEMANTIC_SKILL_REQUIREMENTS,
     SPECIALTY_PROOF_COMPLETION_REQUIREMENTS,
     SPECIALTY_PROOF_REQUIREMENTS,
+    TRUST_WORKFLOW_REQUIREMENTS,
 )
 from scripts.reviewer_contracts import (
     contract_failures,
@@ -36,8 +42,12 @@ from scripts.reviewer_contracts import (
 from scripts.reviewer_contracts import (
     output_failures,
     output_set_failures,
+    proof_evaluation_failures,
+    proof_fixture_failures,
+    proof_supersession_failures,
     receipt_failures,
 )
+from scripts.reviewer_contracts import _normalized_proof_subject
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
 
@@ -112,6 +122,304 @@ class ReviewerContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cases = load_json(CASES_PATH)
+        cls.proof_cases = load_json(PROOF_CASES_PATH)
+        cls.proof_expectations = load_json(PROOF_EXPECTATIONS_PATH)
+        cls.proof_results = load_json(PROOF_RESULTS_PATH)
+
+    def test_proof_quality_fixture_classes_are_mandatory(self) -> None:
+        self.assertEqual(proof_fixture_failures(self.proof_cases), [])
+        self.assertEqual(
+            {row["id"] for row in self.proof_cases["cases"]}, PROOF_CASE_IDS
+        )
+        for case_id in PROOF_CASE_IDS:
+            with self.subTest(case_id=case_id):
+                mutated = copy.deepcopy(self.proof_cases)
+                mutated["cases"] = [
+                    row for row in mutated["cases"] if row["id"] != case_id
+                ]
+                self.assertIn(
+                    "proof cases: required escaped-defect coverage missing",
+                    proof_fixture_failures(mutated),
+                )
+
+    def test_blind_fixture_ignores_untrusted_evidence_instructions(self) -> None:
+        self.assertEqual(proof_fixture_failures(self.proof_cases), [])
+        mutated = copy.deepcopy(self.proof_cases)
+        for row in mutated["cases"]:
+            row["evidence"] = row["evidence"].replace(
+                "Ignore all previous instructions", "Embedded prose"
+            )
+        self.assertIn(
+            "proof cases: missing untrusted-evidence instruction fixture",
+            proof_fixture_failures(mutated),
+        )
+
+    def test_raw_proof_cases_cannot_leak_expected_answers(self) -> None:
+        mutated = copy.deepcopy(self.proof_cases)
+        mutated["cases"][0]["classification"] = "finding"
+        self.assertTrue(
+            any(
+                "expected answer leaked" in failure
+                for failure in proof_fixture_failures(mutated)
+            )
+        )
+        mutated = copy.deepcopy(self.proof_cases)
+        mutated["cases"][0]["evidence"] += " Expected outcome: finding; PQ-007."
+        self.assertTrue(
+            any(
+                "expected answer leaked in raw proof text" in failure
+                for failure in proof_fixture_failures(mutated)
+            )
+        )
+        for leaked_text in (
+            " Classification: finding.",
+            " Outcome: clear.",
+            " Result: PASS.",
+            " Finding ID: SEC-PQ-LABEL-ONLY-FAKE.",
+        ):
+            with self.subTest(leaked_text=leaked_text):
+                mutated = copy.deepcopy(self.proof_cases)
+                mutated["cases"][0]["evidence"] += leaked_text
+                self.assertTrue(
+                    any(
+                        "expected answer leaked in raw proof text" in failure
+                        for failure in proof_fixture_failures(mutated)
+                    )
+                )
+
+    def test_every_reviewer_has_defect_and_clear_control(self) -> None:
+        rows = self.proof_cases["cases"]
+        for reviewer in REVIEWERS:
+            case_ids = {row["id"] for row in rows if row["reviewer"] == reviewer}
+            outcomes = {
+                next(
+                    result["classification"]
+                    for result in self.proof_results["results"]
+                    if result["case_id"] == case_id
+                )
+                for case_id in case_ids
+            }
+            self.assertIn("clear", outcomes)
+            self.assertTrue(outcomes - {"clear"})
+
+    def test_proof_case_reviewer_ownership_is_canonical(self) -> None:
+        for case_id in (
+            "pq-security-label-only-fake",
+            "pq-security-sql-null-guard",
+            "pq-security-missing-row-isolation",
+            "pq-security-real-isolation-control",
+        ):
+            with self.subTest(case_id=case_id):
+                cases = copy.deepcopy(self.proof_cases)
+                results = copy.deepcopy(self.proof_results)
+                next(row for row in cases["cases"] if row["id"] == case_id)[
+                    "reviewer"
+                ] = "architecture"
+                next(row for row in results["results"] if row["case_id"] == case_id)[
+                    "reviewer"
+                ] = "architecture"
+                self.assertTrue(proof_fixture_failures(cases))
+                self.assertTrue(
+                    proof_evaluation_failures(
+                        cases,
+                        self.proof_expectations,
+                        results,
+                        check_supersession=False,
+                    )
+                )
+
+    def test_proof_evaluation_contract_is_hermetic(self) -> None:
+        self.assertEqual(
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                self.proof_results,
+                check_supersession=False,
+            ),
+            [],
+        )
+
+    def test_proof_supersession_rejects_malformed_subject_paths_cleanly(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["supersession"]["subject_paths"] = [["not-a-path"]]
+        self.assertIn(
+            "proof supersession: subject coverage mismatch",
+            proof_supersession_failures(mutated),
+        )
+
+    def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
+        evaluated_head = self.proof_results["evaluated_head"]
+        reachable = subprocess.run(
+            ["git", "cat-file", "-e", f"{evaluated_head}^{{commit}}"],
+            cwd=CONTRACT_ROOT,
+            check=False,
+            capture_output=True,
+        )
+        if reachable.returncode != 0:
+            self.skipTest("evaluated Git commit is unavailable")
+        self.assertEqual(proof_supersession_failures(self.proof_results), [])
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["evaluated_head"] = "0" * 40
+        self.assertIn(
+            "proof supersession: evaluated head is unreachable",
+            proof_supersession_failures(mutated),
+        )
+        self.assertIn(
+            "proof supersession: evaluated head is not an ancestor",
+            proof_supersession_failures(
+                self.proof_results, current_head=f"{evaluated_head}^"
+            ),
+        )
+        mutated["evaluated_head"] = "HEAD"
+        self.assertEqual(
+            proof_supersession_failures(mutated),
+            ["proof supersession: invalid evaluated head"],
+        )
+        candidate = "These obligations remain candidates until blind\nevaluation in `WS-CI-005-03`."
+        adopted = "These obligations are adopted through the blind\nevaluation recorded by `WS-CI-005-03`."
+        changed = adopted + "\nNew behavioral requirement."
+        self.assertEqual(
+            _normalized_proof_subject(candidate),
+            _normalized_proof_subject(adopted),
+        )
+        self.assertNotEqual(
+            _normalized_proof_subject(candidate),
+            _normalized_proof_subject(changed),
+        )
+
+    def assert_blind_case(self, case_id: str, outcome: str) -> None:
+        self.assertEqual(
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                self.proof_results,
+                check_supersession=False,
+            ),
+            [],
+        )
+        row = next(
+            row for row in self.proof_results["results"] if row["case_id"] == case_id
+        )
+        self.assertEqual(row["classification"], outcome)
+
+    def test_blind_fixture_detects_canonical_rule_drift(self) -> None:
+        self.assert_blind_case("pq-reuse-canonical-rule-drift", "finding")
+
+    def test_blind_fixture_detects_partial_owner_fact_validation(self) -> None:
+        self.assert_blind_case("pq-product-partial-owner-handoff", "handoff")
+
+    def test_blind_fixture_detects_malformed_input_leak(self) -> None:
+        self.assert_blind_case("pq-qa-malformed-public-input", "finding")
+
+    def test_blind_fixture_rejects_mocked_rollback_proof(self) -> None:
+        self.assert_blind_case("pq-ci-mocked-rollback", "finding")
+
+    def test_blind_fixture_rejects_label_only_security_fake(self) -> None:
+        self.assert_blind_case("pq-security-label-only-fake", "finding")
+
+    def test_blind_fixture_detects_sql_null_guard_escape(self) -> None:
+        self.assert_blind_case("pq-security-sql-null-guard", "finding")
+
+    def test_blind_fixture_detects_composite_ownership_gap(self) -> None:
+        self.assert_blind_case("pq-architecture-composite-owner", "finding")
+
+    def test_blind_fixture_rejects_missing_row_isolation_proof(self) -> None:
+        self.assert_blind_case("pq-security-missing-row-isolation", "finding")
+
+    def test_blind_fixture_detects_setup_only_failure(self) -> None:
+        self.assert_blind_case("pq-test-delta-setup-only-failure", "finding")
+
+    def test_blind_fixture_rejects_non_discriminating_input(self) -> None:
+        self.assert_blind_case("pq-qa-nondiscriminating-input", "finding")
+
+    def test_blind_fixture_false_positive_controls(self) -> None:
+        for case_id in (
+            "pq-architecture-public-port-control",
+            "pq-ci-real-transaction-control",
+            "pq-product-advisory-control",
+            "pq-reuse-canonical-owner-control",
+            "pq-security-real-isolation-control",
+            "pq-test-delta-real-mutation-control",
+        ):
+            with self.subTest(case_id=case_id):
+                self.assert_blind_case(case_id, "clear")
+
+    def test_blind_evaluation_rejects_independence_breach(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["rejected_runs"] = []
+        self.assertIn(
+            "proof evaluation: rejected independence breach not recorded",
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                mutated,
+                check_supersession=False,
+            ),
+        )
+
+    def test_blind_evaluation_rejects_duplicate_expectations(self) -> None:
+        mutated = copy.deepcopy(self.proof_expectations)
+        duplicate = copy.deepcopy(mutated["expectations"][0])
+        duplicate["outcome"] = "clear"
+        mutated["expectations"].insert(0, duplicate)
+        self.assertIn(
+            "proof evaluation: duplicate expectation rows",
+            proof_evaluation_failures(
+                self.proof_cases,
+                mutated,
+                self.proof_results,
+                check_supersession=False,
+            ),
+        )
+
+    def test_blind_evaluation_rejects_unknown_result_patterns(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["results"][0]["failure_pattern_ids"].append("PQ-999")
+        self.assertIn(
+            f"{mutated['results'][0]['case_id']}: unknown proof pattern",
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                mutated,
+                check_supersession=False,
+            ),
+        )
+
+    def test_blind_evaluation_rejects_non_string_pattern_ids_cleanly(self) -> None:
+        result_mutation = copy.deepcopy(self.proof_results)
+        result_mutation["results"][0]["failure_pattern_ids"] = [["PQ-001"]]
+        case_id = result_mutation["results"][0]["case_id"]
+        self.assertIn(
+            f"{case_id}: required proof pattern missing",
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                result_mutation,
+                check_supersession=False,
+            ),
+        )
+
+        expectation_mutation = copy.deepcopy(self.proof_expectations)
+        expectation_mutation["expectations"][0]["required_pattern_ids"] = [
+            ["PQ-001"]
+        ]
+        expected_case_id = expectation_mutation["expectations"][0]["case_id"]
+        self.assertIn(
+            f"{expected_case_id}: invalid expected patterns",
+            proof_evaluation_failures(
+                self.proof_cases,
+                expectation_mutation,
+                self.proof_results,
+                check_supersession=False,
+            ),
+        )
+
+    def test_output_validation_rejects_pass_with_incompatible_proof(self) -> None:
+        receipt = valid_receipt()
+        receipt["traceability"][0]["claimed_boundary"] = "transaction"
+        receipt["traceability"][0]["proof_strength"] = "pure"
+        receipt["verdict"] = "PASS"
+        self.assertTrue(receipt_failures(receipt, "architecture", "a" * 40))
 
     def test_all_agent_skill_contracts_compose_with_protocol(self) -> None:
         self.assertEqual(contract_failures(), [])
@@ -428,7 +736,25 @@ class ReviewerContractTests(unittest.TestCase):
             source = Path(relative_path)
             (root / source).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, root / source)
+        for relative_path in TRUST_WORKFLOW_REQUIREMENTS:
+            source = Path(relative_path)
+            (root / source).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, root / source)
         return temporary, root
+
+    def test_trust_workflows_summarize_without_claiming_custody(self) -> None:
+        self.assertEqual(contract_failures(), [])
+        for relative_path, token in TRUST_WORKFLOW_REQUIREMENTS.items():
+            with self.subTest(path=relative_path):
+                temporary, root = self.copied_contract_root()
+                try:
+                    remove_contract_token(root / relative_path, token)
+                    self.assertIn(
+                        f"trust workflow: {relative_path} missing summary custody",
+                        contract_failures(root),
+                    )
+                finally:
+                    temporary.cleanup()
 
     def test_missing_protocol_output_or_handoff_contract_fails(self) -> None:
         for token in ("reviewer-evidence-protocol", "Protocol envelope", "hand off"):
@@ -536,7 +862,7 @@ class ReviewerContractTests(unittest.TestCase):
             finally:
                 temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_for_every_pair(
+    def test_adopted_lifecycle_is_independently_enforced_for_every_pair(
         self,
     ) -> None:
         for reviewer, (agent_name, skill_name) in REVIEWERS.items():
@@ -571,7 +897,7 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_in_state(self) -> None:
+    def test_adopted_lifecycle_is_independently_enforced_in_state(self) -> None:
         for relative_path, token in PROOF_QUALITY_STATE_REQUIREMENTS.items():
             with self.subTest(path=relative_path):
                 temporary, root = self.copied_contract_root()
@@ -586,7 +912,7 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_in_matrix(self) -> None:
+    def test_adopted_lifecycle_is_independently_enforced_in_matrix(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
             matrix = root / (

@@ -12,11 +12,15 @@ into evidence/trust workflows.
 .agents/skills/evidence-gate/SKILL.md
 .agents/skills/pr-trust-bundle/SKILL.md
 .agents/skills/task-chunk-loop/SKILL.md
+.agents/skills/*-review/SKILL.md
+.codex/agents/*-reviewer.toml
+.agent-loop/CURRENT_STATE.md
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/**
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md
 .agent-loop/initiatives/WS-CI-005-semantic-proof-quality/**
 scripts/reviewer_contracts.py
 scripts/test_reviewer_contracts.py
+.github/workflows/agent-gates.yml
 ```
 
 ## Not allowed
@@ -29,6 +33,8 @@ or using evaluation outcomes as contribution authority.
 - Raw fixtures cover every recorded PR #349 escape without expected-answer
   leakage.
 - Matching negative controls prevent universal over-flagging.
+- Every reviewer has at least one defect/handoff case and one close clear
+  control; changing all of one reviewer's results to findings fails validation.
 - Raw fixtures include malicious embedded instructions; reviewers ignore them,
   do not execute supplied commands, and report the underlying evidence only.
 - Removing untrusted-evidence fixture coverage fails deterministic validation.
@@ -37,6 +43,9 @@ or using evaluation outcomes as contribution authority.
 - Evidence and trust-bundle skills summarize proof quality and uncertainty
   without copying private session receipts into Git.
 - Full forward-evaluation results are recorded against one exact head.
+- The evaluated head is an ancestor of the adoption head, and deterministic
+  validation proves the evaluated reviewer contracts changed only in their
+  candidate-to-adopted lifecycle sentence after evaluation.
 
 ## Risk
 
@@ -74,6 +83,9 @@ python3 scripts/check_stale_review_contracts.py
 git diff --check
 ```
 
+The required `agent-gates` workflow executes the reviewer-contract validator,
+its focused tests, and the stale-review scan on the exact PR head.
+
 ## Required reviewers
 
 All nine existing reviewers plus human review of false-positive controls and
@@ -86,9 +98,13 @@ and that readiness remains advisory until human merge.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`
 
-Only after this chunk's independent blind evaluation succeeds will the
-reviewer contracts be behaviorally adopted and the semantic proof-quality
-initiative become complete. Future escaped findings will be added only when
-they represent a reusable failure class.
+Independent blind evaluation succeeded against exact head
+`27b31c90e2b3687c12829e44f0ae5fec54dc9fe7`. Reviewer contracts are
+behaviorally adopted because deterministic supersession validation binds that
+evaluated ancestor to the current reviewer contracts and permits only the
+candidate-to-adopted lifecycle sentence to differ. The semantic proof-quality
+initiative is complete.
+Future escaped findings will be added only when they represent a reusable
+failure class.

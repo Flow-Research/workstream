@@ -30,14 +30,14 @@ custom reviewer agent.
 Use only the canonical IDs above in machine-readable reviewer and handoff
 fields. Human-readable labels may still appear in prose.
 
-## Candidate proof-quality responsibilities
+## Adopted proof-quality responsibilities
 
 All nine pairs consume the shared proof vocabulary, compatibility rules,
 failure-pattern IDs, and discriminating test-of-the-test contract. They must not
-infer custody from names or narrative evidence. Specialty additions remain
-candidate contracts until `WS-CI-005-03` completes blind evaluation:
+infer custody from names or narrative evidence. Specialty additions are adopted
+through the blind evaluation recorded by `WS-CI-005-03`:
 
-| Reviewer | Candidate specialty obligation |
+| Reviewer | Adopted specialty obligation |
 |---|---|
 | Architecture | Composite ownership, schema/model/database parity, syntax-aware private edges, and composition-root wiring |
 | CI integrity | Actual selected-test, service/PostgreSQL, session, artifact, coverage, aggregation, and required-status custody |

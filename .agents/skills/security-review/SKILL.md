@@ -18,7 +18,7 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
 execution custody, and result. Missing or narrative-only rows block PASS.
 
-## Candidate proof-quality obligations
+## Adopted proof-quality obligations
 
 Use the shared proof-strength vocabulary and schema-owned compatibility rules;
 do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
@@ -32,7 +32,8 @@ replay; concealment; and composite ownership. Require repository-isolation
 evidence for stored ownership, direct-SQL evidence for ORM-bypassed database
 enforcement, and schema-compatible service or composition evidence for
 application authorization.
-These obligations remain candidates until blind evaluation in `WS-CI-005-03`.
+These obligations are adopted through the blind evaluation recorded by
+`WS-CI-005-03`.
 
 ## Focus
 

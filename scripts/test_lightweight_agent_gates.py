@@ -103,6 +103,9 @@ class LightweightAgentGateTests(unittest.TestCase):
     def test_backend_uses_distributed_semantic_lanes_and_stable_fan_in(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         agent_gates = Path(".github/workflows/agent-gates.yml").read_text(encoding="utf-8")
+        gate_requirements = Path(".github/requirements/agent-gates.txt").read_text(
+            encoding="utf-8"
+        )
 
         self.assertNotIn("pull_request_review:", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
@@ -139,6 +142,21 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("python3 scripts/check_chunk_state_sync.py", agent_gates)
         self.assertIn('WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}', agent_gates)
         self.assertIn("scripts.test_chunk_state_sync", agent_gates)
+        self.assertIn("--require-hashes", agent_gates)
+        self.assertIn("-r .github/requirements/agent-gates.txt", agent_gates)
+        for package in (
+            "attrs",
+            "jsonschema",
+            "jsonschema-specifications",
+            "referencing",
+            "rpds-py",
+            "typing-extensions",
+        ):
+            with self.subTest(package=package):
+                self.assertRegex(
+                    gate_requirements,
+                    rf"(?m)^{package}==[^ ]+ \\\n    --hash=sha256:[0-9a-f]{{64}}$",
+                )
 
     def test_retired_behavior_mutation_gate_stays_out_of_required_ci(self) -> None:
         backend = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
