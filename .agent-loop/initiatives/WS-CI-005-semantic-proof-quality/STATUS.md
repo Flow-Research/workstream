@@ -2,25 +2,24 @@
 
 ## Current status
 
-Planning is complete for this planning change. No implementation behavior
-exists, and every implementation chunk remains inactive.
+Planning and the shared proof-strength foundation are complete. Specialty
+reviewer adoption and blind evaluation remain inactive.
 
 ## Current focus
 
-Review the first-principles proof-strength design and the three bounded delivery
-contracts. Preserve the simple engineering loop and avoid adding reviewers or
-repository authority.
+Preserve the shared schema/validator contract. Do not start specialty reviewer
+adoption without explicit human direction.
 
 ## Chunk status
 
 | Chunk | State | Outcome |
 |---|---|---|
-| `WS-CI-005-PLAN` | Planned | Planning artifacts only |
-| `WS-CI-005-01` | Planned | No implementation; requires explicit human start |
+| `WS-CI-005-PLAN` | Complete | Planning merged through PR #350 |
+| `WS-CI-005-01` | Complete | Shared proof-strength schema and validation |
 | `WS-CI-005-02` | Planned | No implementation; depends on `01` |
 | `WS-CI-005-03` | Planned | No implementation; depends on `02` |
 
 ## Next action
 
-Start `WS-CI-005-01` only through explicit human direction. Do not implement it
-automatically when this plan merges.
+Start `WS-CI-005-02` only through explicit human direction. Do not install
+candidate specialty reviewer contracts automatically when `01` merges.
