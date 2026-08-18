@@ -64,14 +64,52 @@ class _LateFailingRepository(ContributionPolicyRepository):
         await super().replace_graph(version, rules, definitions, event)
         raise RuntimeError("late_product_write_failed")
 
-
 class _LateFailingPublicationRepository(ContributionPolicyRepository):
     """Fail after publication custody and lifecycle state reach PostgreSQL."""
 
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        operation_id: UUID,
+        policy_id: UUID,
+        version_id: UUID,
+    ) -> None:
+        super().__init__(session)
+        self._operation_id = operation_id
+        self._policy_id = policy_id
+        self._version_id = version_id
+        self.observed_staged_publication = False
     async def flush_transition_event(self, event) -> None:
         await super().flush_transition_event(event)
+        policy = await self._session.get(ContributionPolicy, self._policy_id)
+        version = await self._session.get(ContributionPolicyVersion, self._version_id)
+        custody_query = select(func.count()).select_from(
+            ContributionPolicyTransitionCustody
+        ).where(ContributionPolicyTransitionCustody.operation_id == self._operation_id)
+        custody_count = await self._session.scalar(custody_query)
+        event_query = select(func.count()).select_from(
+            ContributionPolicyLifecycleEvent
+        ).where(ContributionPolicyLifecycleEvent.operation_id == self._operation_id)
+        event_count = await self._session.scalar(event_query)
+        authorization_query = text(
+            "select count(*) from cp04a_staged_authorization_effects "
+            "where operation_id=:operation_id"
+        )
+        authorization_count = await self._session.scalar(
+            authorization_query,
+            {"operation_id": str(self._operation_id)},
+        )
+        assert policy is not None and policy.status == "active"
+        assert policy.current_published_version_id == self._version_id
+        assert policy.last_transition_operation_id == self._operation_id
+        assert version is not None and version.status == "published"
+        assert version.last_transition_operation_id == self._operation_id
+        assert custody_count == 1
+        assert event_count == 1
+        assert authorization_count == 1
+        self.observed_staged_publication = True
         raise RuntimeError("late_publication_write_failed")
-
 
 @pytest.fixture(name="policy_database_env")
 def _policy_database_env(
@@ -402,7 +440,11 @@ async def test_late_publication_failure_rolls_back_custody_state_and_authorizati
                     ),
                 )
             )
-        repository = _LateFailingPublicationRepository(session)
+        repository = _LateFailingPublicationRepository(
+            session, operation_id=operation_id,
+            policy_id=created.contribution_policy_id,
+            version_id=created.contribution_policy_version_id,
+        )
         service._repository = repository  # noqa: SLF001
         service._publication._repository = repository  # noqa: SLF001
         with pytest.raises(RuntimeError, match="late_publication_write_failed"):
@@ -419,6 +461,7 @@ async def test_late_publication_failure_rolls_back_custody_state_and_authorizati
                     )
                 )
         assert authorization.closed[-1] is authorization.prepared_handles[-1]
+        assert repository.observed_staged_publication is True
         async with session.begin():
             policy = await session.get(ContributionPolicy, created.contribution_policy_id)
             version = await session.get(

@@ -60,6 +60,11 @@
   lifecycle event reach PostgreSQL, a late event-flush failure is injected, and
   rollback leaves the policy/version draft, with no custody, publication event,
   or staged authorization effect.
+- QA's discriminating probe then proved the first PostgreSQL replacement could
+  still pass if failure occurred before event flush. The late-failure repository
+  now asserts, inside the open transaction, that the policy/version transition,
+  custody, lifecycle event, and staged AUTH evidence are all visible before it
+  injects failure. A pre-flush failure therefore cannot satisfy the test.
 
 ## Remaining risks
 
