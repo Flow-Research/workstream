@@ -12,6 +12,8 @@ into evidence/trust workflows.
 .agents/skills/evidence-gate/SKILL.md
 .agents/skills/pr-trust-bundle/SKILL.md
 .agents/skills/task-chunk-loop/SKILL.md
+.agents/skills/*-review/SKILL.md
+.codex/agents/*-reviewer.toml
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/**
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md
 .agent-loop/initiatives/WS-CI-005-semantic-proof-quality/**
@@ -37,6 +39,9 @@ or using evaluation outcomes as contribution authority.
 - Evidence and trust-bundle skills summarize proof quality and uncertainty
   without copying private session receipts into Git.
 - Full forward-evaluation results are recorded against one exact head.
+- The evaluated head is an ancestor of the adoption head, and deterministic
+  validation proves the evaluated reviewer contracts changed only in their
+  candidate-to-adopted lifecycle sentence after evaluation.
 
 ## Risk
 
@@ -90,6 +95,9 @@ and that readiness remains advisory until human merge.
 
 Independent blind evaluation succeeded against exact head
 `8ab2da49e6b06f57167711d386607440a35abab5`. Reviewer contracts are
-behaviorally adopted and the semantic proof-quality initiative is complete.
+behaviorally adopted because deterministic supersession validation binds that
+evaluated ancestor to the current reviewer contracts and permits only the
+candidate-to-adopted lifecycle sentence to differ. The semantic proof-quality
+initiative is complete.
 Future escaped findings will be added only when they represent a reusable
 failure class.

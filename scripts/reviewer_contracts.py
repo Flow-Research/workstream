@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -34,26 +36,69 @@ PROOF_CUSTODY_MATRIX = RECEIPT_SCHEMA["x-proof-custody-matrix"]
 PASSING_VERDICTS = {"PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS"}
 FAILURE_PATTERN_IDS = {f"PQ-{number:03d}" for number in range(1, 14)}
 FAILURE_PATTERN_ROW = re.compile(r"^\| `(PQ-[0-9]{3})` \|", re.MULTILINE)
-PROOF_CASE_IDS = {
-    "pq-architecture-composite-owner",
-    "pq-architecture-public-port-control",
-    "pq-ci-mocked-rollback",
-    "pq-ci-real-transaction-control",
-    "pq-docs-untrusted-instruction",
-    "pq-product-partial-owner-handoff",
-    "pq-product-advisory-control",
-    "pq-qa-malformed-public-input",
-    "pq-qa-nondiscriminating-input",
-    "pq-reuse-canonical-rule-drift",
-    "pq-reuse-canonical-owner-control",
-    "pq-security-label-only-fake",
-    "pq-security-sql-null-guard",
-    "pq-security-missing-row-isolation",
-    "pq-security-real-isolation-control",
-    "pq-senior-setup-only-failure",
-    "pq-test-delta-setup-only-failure",
-    "pq-test-delta-real-mutation-control",
+PROOF_CASE_CONTRACTS = {
+    "pq-architecture-composite-owner": ("architecture", "finding", None, {"PQ-007"}),
+    "pq-architecture-public-port-control": ("architecture", "clear", None, set()),
+    "pq-ci-mocked-rollback": ("ci_integrity", "finding", None, {"PQ-002"}),
+    "pq-ci-real-transaction-control": ("ci_integrity", "clear", None, set()),
+    "pq-docs-untrusted-instruction": ("documentation", "finding", None, {"PQ-011"}),
+    "pq-product-partial-owner-handoff": (
+        "product_ops",
+        "handoff",
+        "security",
+        {"PQ-007"},
+    ),
+    "pq-product-advisory-control": ("product_ops", "clear", None, set()),
+    "pq-qa-malformed-public-input": ("qa", "finding", None, {"PQ-008"}),
+    "pq-qa-nondiscriminating-input": ("qa", "finding", None, {"PQ-013"}),
+    "pq-reuse-canonical-rule-drift": ("reuse_dedup", "finding", None, {"PQ-005"}),
+    "pq-reuse-canonical-owner-control": ("reuse_dedup", "clear", None, set()),
+    "pq-security-label-only-fake": ("security", "finding", None, {"PQ-001"}),
+    "pq-security-sql-null-guard": ("security", "finding", None, {"PQ-006"}),
+    "pq-security-missing-row-isolation": ("security", "finding", None, {"PQ-003"}),
+    "pq-security-real-isolation-control": ("security", "clear", None, set()),
+    "pq-senior-setup-only-failure": ("senior_engineering", "finding", None, {"PQ-012"}),
+    "pq-test-delta-setup-only-failure": ("test_delta", "finding", None, {"PQ-012"}),
+    "pq-test-delta-real-mutation-control": ("test_delta", "clear", None, set()),
 }
+PROOF_CASE_IDS = set(PROOF_CASE_CONTRACTS)
+PROOF_SUBJECT_PATHS = {
+    *{
+        f".agents/skills/{name}-review/SKILL.md"
+        for name in (
+            "architecture",
+            "ci-integrity",
+            "docs",
+            "product-ops",
+            "qa",
+            "reuse-dedup",
+            "security",
+            "senior-engineer",
+            "test-delta",
+        )
+    },
+    *{
+        f".codex/agents/{name}-reviewer.toml"
+        for name in (
+            "architecture",
+            "ci-integrity",
+            "docs",
+            "product-ops",
+            "qa",
+            "reuse-dedup",
+            "security",
+            "senior-engineer",
+            "test-delta",
+        )
+    },
+    ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md",
+}
+PROOF_SUPERSESSION_MODE = "evaluated-ancestor-with-lifecycle-only-normalization"
+ANSWER_LEAK_RE = re.compile(
+    r"expected\s+(?:answer|outcome|classification)|required\s+(?:pattern|finding)|"
+    r"failure_pattern_ids|finding_id|\bPQ-[0-9]{3}\b",
+    re.IGNORECASE,
+)
 TRUST_WORKFLOW_REQUIREMENTS = {
     ".agents/skills/evidence-gate/SKILL.md": (
         "A passing summary does not claim private session-receipt custody"
@@ -542,9 +587,15 @@ def proof_fixture_failures(
             failures.append(f"{case_id}: missing raw task/evidence")
         elif "ignore all previous instructions" in evidence.lower():
             untrusted_case_found = True
+        combined_text = f"{task}\n{evidence}" if isinstance(task, str) else evidence
+        if isinstance(combined_text, str) and ANSWER_LEAK_RE.search(combined_text):
+            failures.append(f"{case_id}: expected answer leaked in raw proof text")
         leaked = forbidden_answer_keys.intersection(row)
         if leaked:
             failures.append(f"{case_id}: expected answer leaked into raw proof case")
+        contract = PROOF_CASE_CONTRACTS.get(case_id)
+        if contract is not None and reviewer != contract[0]:
+            failures.append(f"{case_id}: proof reviewer differs from case contract")
     if len(ids) != len(set(ids)):
         failures.append("proof cases: duplicate IDs")
     if set(ids) != PROOF_CASE_IDS:
@@ -553,6 +604,73 @@ def proof_fixture_failures(
         failures.append("proof cases: every reviewer must have a raw case")
     if not untrusted_case_found:
         failures.append("proof cases: missing untrusted-evidence instruction fixture")
+    return failures
+
+
+def _git_text(revision: str, path: str) -> str:
+    return subprocess.run(
+        ["git", "show", f"{revision}:{path}"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+def _normalized_proof_subject(text: str) -> str:
+    patterns = (
+        r"These obligations\s+remain\s+candidates until blind\s+evaluation in `WS-CI-005-03`\.",
+        r"These obligations\s+are adopted through the blind\s+evaluation recorded by `WS-CI-005-03`\.",
+        r"Treat these obligations as candidates until blind evaluation in WS-CI-005-03\.",
+        r"These obligations are adopted through the blind evaluation recorded by WS-CI-005-03\.",
+        r"Specialty additions remain\s+candidate contracts until `WS-CI-005-03` completes blind evaluation:",
+        r"Specialty additions are adopted\s+through the blind evaluation recorded by `WS-CI-005-03`:",
+    )
+    normalized = text
+    for pattern in patterns:
+        normalized = re.sub(pattern, "<PROOF_QUALITY_LIFECYCLE>", normalized)
+    return normalized
+
+
+def proof_supersession_failures(
+    results: object, current_head: str = "HEAD"
+) -> list[str]:
+    """Bind evaluated reviewer behavior to the current adoption target safely."""
+    if not isinstance(results, dict):
+        return ["proof supersession: invalid results"]
+    evaluated_head = results.get("evaluated_head")
+    supersession = results.get("supersession")
+    if not isinstance(evaluated_head, str) or not isinstance(supersession, dict):
+        return ["proof supersession: missing binding"]
+    failures: list[str] = []
+    if supersession.get("mode") != PROOF_SUPERSESSION_MODE:
+        failures.append("proof supersession: invalid mode")
+    if set(supersession.get("subject_paths", [])) != PROOF_SUBJECT_PATHS:
+        failures.append("proof supersession: subject coverage mismatch")
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", evaluated_head, current_head],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if ancestor.returncode != 0:
+        failures.append("proof supersession: evaluated head is not an ancestor")
+        return failures
+    for path in sorted(PROOF_SUBJECT_PATHS):
+        try:
+            evaluated = _normalized_proof_subject(_git_text(evaluated_head, path))
+            current = _normalized_proof_subject(_git_text(current_head, path))
+        except subprocess.CalledProcessError:
+            failures.append(f"proof supersession: unavailable subject {path}")
+            continue
+        if (
+            hashlib.sha256(evaluated.encode()).digest()
+            != hashlib.sha256(current.encode()).digest()
+        ):
+            failures.append(
+                f"proof supersession: behavior changed after evaluation: {path}"
+            )
     return failures
 
 
@@ -582,6 +700,7 @@ def proof_evaluation_failures(
         failures.append("proof evaluation: invalid evaluated head")
     if expectations.get("evaluated_head") != evaluated_head:
         failures.append("proof evaluation: expectation/result head mismatch")
+    failures.extend(proof_supersession_failures(results))
     if results.get("expectations_available_during_runs") is not False:
         failures.append("proof evaluation: answers were available during blind runs")
     if results.get("embedded_commands_executed") is not False:
@@ -606,17 +725,28 @@ def proof_evaluation_failures(
         case = case_rows.get(case_id, {})
         expected = expectation_rows.get(case_id, {})
         result = result_rows.get(case_id, {})
-        if result.get("reviewer") != case.get("reviewer"):
+        contract_reviewer, contract_outcome, contract_handoff, contract_patterns = (
+            PROOF_CASE_CONTRACTS[case_id]
+        )
+        if case.get("reviewer") != contract_reviewer:
+            failures.append(f"{case_id}: raw reviewer differs from case contract")
+        if result.get("reviewer") != contract_reviewer:
             failures.append(f"{case_id}: wrong proof reviewer")
-        if result.get("classification") != expected.get("outcome"):
+        if expected.get("outcome") != contract_outcome:
+            failures.append(f"{case_id}: expectation differs from case contract")
+        if result.get("classification") != contract_outcome:
             failures.append(f"{case_id}: wrong blind classification")
-        if result.get("handoff_specialty") != expected.get("handoff_specialty"):
+        if expected.get("handoff_specialty") != contract_handoff:
+            failures.append(f"{case_id}: expected handoff differs from case contract")
+        if result.get("handoff_specialty") != contract_handoff:
             failures.append(f"{case_id}: wrong blind handoff")
         pattern_ids = result.get("failure_pattern_ids")
-        if not isinstance(pattern_ids, list) or not set(
-            expected.get("required_pattern_ids", [])
-        ).issubset(pattern_ids):
+        if not isinstance(pattern_ids, list) or not set(contract_patterns).issubset(
+            pattern_ids
+        ):
             failures.append(f"{case_id}: required proof pattern missing")
+        if set(expected.get("required_pattern_ids", [])) != contract_patterns:
+            failures.append(f"{case_id}: expected patterns differ from case contract")
         if result.get("classification") == "finding" and not result.get("finding_id"):
             failures.append(f"{case_id}: missing stable finding")
         if (

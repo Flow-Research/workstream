@@ -43,8 +43,10 @@ from scripts.reviewer_contracts import (
     output_set_failures,
     proof_evaluation_failures,
     proof_fixture_failures,
+    proof_supersession_failures,
     receipt_failures,
 )
+from scripts.reviewer_contracts import _normalized_proof_subject
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
 
@@ -159,6 +161,54 @@ class ReviewerContractTests(unittest.TestCase):
                 "expected answer leaked" in failure
                 for failure in proof_fixture_failures(mutated)
             )
+        )
+        mutated = copy.deepcopy(self.proof_cases)
+        mutated["cases"][0]["evidence"] += " Expected outcome: finding; PQ-007."
+        self.assertTrue(
+            any(
+                "expected answer leaked in raw proof text" in failure
+                for failure in proof_fixture_failures(mutated)
+            )
+        )
+
+    def test_proof_case_reviewer_ownership_is_canonical(self) -> None:
+        for case_id in (
+            "pq-security-label-only-fake",
+            "pq-security-sql-null-guard",
+            "pq-security-missing-row-isolation",
+            "pq-security-real-isolation-control",
+        ):
+            with self.subTest(case_id=case_id):
+                cases = copy.deepcopy(self.proof_cases)
+                results = copy.deepcopy(self.proof_results)
+                next(row for row in cases["cases"] if row["id"] == case_id)[
+                    "reviewer"
+                ] = "architecture"
+                next(row for row in results["results"] if row["case_id"] == case_id)[
+                    "reviewer"
+                ] = "architecture"
+                self.assertTrue(proof_fixture_failures(cases))
+                self.assertTrue(
+                    proof_evaluation_failures(cases, self.proof_expectations, results)
+                )
+
+    def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["evaluated_head"] = "0" * 40
+        self.assertIn(
+            "proof supersession: evaluated head is not an ancestor",
+            proof_supersession_failures(mutated),
+        )
+        candidate = "These obligations remain candidates until blind\nevaluation in `WS-CI-005-03`."
+        adopted = "These obligations are adopted through the blind\nevaluation recorded by `WS-CI-005-03`."
+        changed = adopted + "\nNew behavioral requirement."
+        self.assertEqual(
+            _normalized_proof_subject(candidate),
+            _normalized_proof_subject(adopted),
+        )
+        self.assertNotEqual(
+            _normalized_proof_subject(candidate),
+            _normalized_proof_subject(changed),
         )
 
     def assert_blind_case(self, case_id: str, outcome: str) -> None:

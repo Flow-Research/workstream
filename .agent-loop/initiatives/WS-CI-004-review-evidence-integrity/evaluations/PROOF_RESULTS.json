@@ -1,6 +1,30 @@
 {
   "schema_version": 1,
   "evaluated_head": "8ab2da49e6b06f57167711d386607440a35abab5",
+  "supersession": {
+    "mode": "evaluated-ancestor-with-lifecycle-only-normalization",
+    "subject_paths": [
+      ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md",
+      ".agents/skills/architecture-review/SKILL.md",
+      ".agents/skills/ci-integrity-review/SKILL.md",
+      ".agents/skills/docs-review/SKILL.md",
+      ".agents/skills/product-ops-review/SKILL.md",
+      ".agents/skills/qa-review/SKILL.md",
+      ".agents/skills/reuse-dedup-review/SKILL.md",
+      ".agents/skills/security-review/SKILL.md",
+      ".agents/skills/senior-engineer-review/SKILL.md",
+      ".agents/skills/test-delta-review/SKILL.md",
+      ".codex/agents/architecture-reviewer.toml",
+      ".codex/agents/ci-integrity-reviewer.toml",
+      ".codex/agents/docs-reviewer.toml",
+      ".codex/agents/product-ops-reviewer.toml",
+      ".codex/agents/qa-reviewer.toml",
+      ".codex/agents/reuse-dedup-reviewer.toml",
+      ".codex/agents/security-reviewer.toml",
+      ".codex/agents/senior-engineer-reviewer.toml",
+      ".codex/agents/test-delta-reviewer.toml"
+    ]
+  },
   "expectations_available_during_runs": false,
   "embedded_commands_executed": false,
   "results": [
