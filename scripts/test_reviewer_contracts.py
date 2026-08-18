@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import shutil
 import tempfile
 import unittest
@@ -11,12 +12,20 @@ from pathlib import Path
 from scripts.reviewer_contracts import (
     CASE_CLASSES,
     FAILURE_PATTERN_IDS,
+    MATRIX_SPECIALTY_REQUIREMENTS,
     PROOF_PATTERNS_PATH,
+    PROOF_QUALITY_AGENT_LIFECYCLE,
+    PROOF_QUALITY_MATRIX_LIFECYCLE,
+    PROOF_QUALITY_SHARED_REQUIREMENTS,
+    PROOF_QUALITY_SKILL_LIFECYCLE,
+    PROOF_QUALITY_STATE_REQUIREMENTS,
     PROOF_STRENGTHS,
     ROOT as CONTRACT_ROOT,
     REVIEWERS,
     SEMANTIC_AGENT_REQUIREMENTS,
     SEMANTIC_SKILL_REQUIREMENTS,
+    SPECIALTY_PROOF_COMPLETION_REQUIREMENTS,
+    SPECIALTY_PROOF_REQUIREMENTS,
 )
 from scripts.reviewer_contracts import (
     contract_failures,
@@ -87,6 +96,16 @@ def valid_receipt() -> dict[str, object]:
         "freshness": "current",
         "verdict": "PASS",
     }
+
+
+def remove_contract_token(path: Path, token: str) -> str:
+    original = path.read_text(encoding="utf-8")
+    pattern = r"\s+".join(re.escape(part) for part in token.split())
+    mutated, count = re.subn(pattern, " removed ", original)
+    if count < 1:
+        raise AssertionError(f"expected {token!r} in {path}")
+    path.write_text(mutated, encoding="utf-8")
+    return original
 
 
 class ReviewerContractTests(unittest.TestCase):
@@ -405,6 +424,10 @@ class ReviewerContractTests(unittest.TestCase):
         patterns = PROOF_PATTERNS_PATH.relative_to(CONTRACT_ROOT)
         (root / patterns).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(patterns, root / patterns)
+        for relative_path in PROOF_QUALITY_STATE_REQUIREMENTS:
+            source = Path(relative_path)
+            (root / source).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, root / source)
         return temporary, root
 
     def test_missing_protocol_output_or_handoff_contract_fails(self) -> None:
@@ -427,10 +450,7 @@ class ReviewerContractTests(unittest.TestCase):
                 temporary, root = self.copied_contract_root()
                 try:
                     skill = root / ".agents/skills/architecture-review/SKILL.md"
-                    skill.write_text(
-                        skill.read_text(encoding="utf-8").replace(token, "removed"),
-                        encoding="utf-8",
-                    )
+                    remove_contract_token(skill, token)
                     self.assertTrue(
                         any(
                             requirement_id in failure
@@ -446,10 +466,7 @@ class ReviewerContractTests(unittest.TestCase):
                 temporary, root = self.copied_contract_root()
                 try:
                     agent = root / ".codex/agents/architecture-reviewer.toml"
-                    agent.write_text(
-                        agent.read_text(encoding="utf-8").replace(token, "removed"),
-                        encoding="utf-8",
-                    )
+                    remove_contract_token(agent, token)
                     self.assertTrue(
                         any(
                             requirement_id in failure
@@ -458,6 +475,231 @@ class ReviewerContractTests(unittest.TestCase):
                     )
                 finally:
                     temporary.cleanup()
+
+    def test_all_reviewer_contracts_require_shared_proof_quality(self) -> None:
+        self.assertEqual(set(SPECIALTY_PROOF_REQUIREMENTS), set(REVIEWERS))
+        for reviewer, (agent_name, skill_name) in REVIEWERS.items():
+            with self.subTest(reviewer=reviewer):
+                agent = " ".join(
+                    (Path(".codex/agents") / agent_name)
+                    .read_text(encoding="utf-8")
+                    .split()
+                )
+                skill = " ".join(
+                    (Path(".agents/skills") / skill_name / "SKILL.md")
+                    .read_text(encoding="utf-8")
+                    .split()
+                )
+                for token in PROOF_QUALITY_SHARED_REQUIREMENTS.values():
+                    self.assertIn(token, agent)
+                    self.assertIn(token, skill)
+                self.assertIn(SPECIALTY_PROOF_REQUIREMENTS[reviewer], agent)
+                self.assertIn(SPECIALTY_PROOF_REQUIREMENTS[reviewer], skill)
+
+    def test_each_proof_quality_skill_requirement_is_independently_enforced(
+        self,
+    ) -> None:
+        for reviewer, (_, skill_name) in REVIEWERS.items():
+            temporary, root = self.copied_contract_root()
+            try:
+                for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
+                    with self.subTest(reviewer=reviewer, requirement_id=requirement_id):
+                        skill = root / ".agents/skills" / skill_name / "SKILL.md"
+                        original = remove_contract_token(skill, token)
+                        self.assertTrue(
+                            any(
+                                f"{reviewer}:" in failure and requirement_id in failure
+                                for failure in contract_failures(root)
+                            )
+                        )
+                        skill.write_text(original, encoding="utf-8")
+            finally:
+                temporary.cleanup()
+
+    def test_each_proof_quality_agent_requirement_is_independently_enforced(
+        self,
+    ) -> None:
+        for reviewer, (agent_name, _) in REVIEWERS.items():
+            temporary, root = self.copied_contract_root()
+            try:
+                for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
+                    with self.subTest(reviewer=reviewer, requirement_id=requirement_id):
+                        agent = root / ".codex/agents" / agent_name
+                        original = remove_contract_token(agent, token)
+                        self.assertTrue(
+                            any(
+                                f"{reviewer}:" in failure and requirement_id in failure
+                                for failure in contract_failures(root)
+                            )
+                        )
+                        agent.write_text(original, encoding="utf-8")
+            finally:
+                temporary.cleanup()
+
+    def test_candidate_lifecycle_is_independently_enforced_for_every_pair(
+        self,
+    ) -> None:
+        for reviewer, (agent_name, skill_name) in REVIEWERS.items():
+            with self.subTest(reviewer=reviewer, surface="agent"):
+                temporary, root = self.copied_contract_root()
+                try:
+                    remove_contract_token(
+                        root / ".codex/agents" / agent_name,
+                        PROOF_QUALITY_AGENT_LIFECYCLE,
+                    )
+                    self.assertTrue(
+                        any(
+                            f"{reviewer}: agent missing proof.lifecycle" in failure
+                            for failure in contract_failures(root)
+                        )
+                    )
+                finally:
+                    temporary.cleanup()
+            with self.subTest(reviewer=reviewer, surface="skill"):
+                temporary, root = self.copied_contract_root()
+                try:
+                    remove_contract_token(
+                        root / ".agents/skills" / skill_name / "SKILL.md",
+                        PROOF_QUALITY_SKILL_LIFECYCLE,
+                    )
+                    self.assertTrue(
+                        any(
+                            f"{reviewer}: skill missing proof.lifecycle" in failure
+                            for failure in contract_failures(root)
+                        )
+                    )
+                finally:
+                    temporary.cleanup()
+
+    def test_candidate_lifecycle_is_independently_enforced_in_state(self) -> None:
+        for relative_path, token in PROOF_QUALITY_STATE_REQUIREMENTS.items():
+            with self.subTest(path=relative_path):
+                temporary, root = self.copied_contract_root()
+                try:
+                    remove_contract_token(root / relative_path, token)
+                    self.assertTrue(
+                        any(
+                            "proof.lifecycle: state missing" in failure
+                            for failure in contract_failures(root)
+                        )
+                    )
+                finally:
+                    temporary.cleanup()
+
+    def test_candidate_lifecycle_is_independently_enforced_in_matrix(self) -> None:
+        temporary, root = self.copied_contract_root()
+        try:
+            matrix = root / (
+                ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
+                "REVIEWER_MATRIX.md"
+            )
+            remove_contract_token(matrix, PROOF_QUALITY_MATRIX_LIFECYCLE)
+            self.assertIn("matrix: missing proof.lifecycle", contract_failures(root))
+        finally:
+            temporary.cleanup()
+
+    def test_matrix_specialty_obligations_are_independently_enforced(self) -> None:
+        temporary, root = self.copied_contract_root()
+        try:
+            matrix = root / (
+                ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
+                "REVIEWER_MATRIX.md"
+            )
+            for label, token in MATRIX_SPECIALTY_REQUIREMENTS.items():
+                with self.subTest(label=label):
+                    original = remove_contract_token(matrix, token)
+                    self.assertIn(
+                        f"matrix: specialty obligation drift for {label}",
+                        contract_failures(root),
+                    )
+                    matrix.write_text(original, encoding="utf-8")
+        finally:
+            temporary.cleanup()
+
+    def assert_specialty_pair(self, reviewer: str) -> None:
+        agent_name, skill_name = REVIEWERS[reviewer]
+        token = SPECIALTY_PROOF_REQUIREMENTS[reviewer]
+        self.assertIn(
+            token,
+            " ".join(
+                (Path(".codex/agents") / agent_name).read_text(encoding="utf-8").split()
+            ),
+        )
+        self.assertIn(
+            token,
+            " ".join(
+                (Path(".agents/skills") / skill_name / "SKILL.md")
+                .read_text(encoding="utf-8")
+                .split()
+            ),
+        )
+
+    def test_qa_and_test_delta_require_discrimination_probe(self) -> None:
+        self.assert_specialty_pair("qa")
+        self.assert_specialty_pair("test_delta")
+
+    def test_architecture_and_security_require_database_integrity_probe(self) -> None:
+        self.assert_specialty_pair("architecture")
+        self.assert_specialty_pair("security")
+
+    def test_reuse_requires_canonical_rule_comparison(self) -> None:
+        self.assert_specialty_pair("reuse_dedup")
+
+    def test_ci_requires_execution_custody_trace(self) -> None:
+        self.assert_specialty_pair("ci_integrity")
+
+    def test_docs_and_product_contracts_remain_proportionate(self) -> None:
+        self.assert_specialty_pair("documentation")
+        self.assert_specialty_pair("product_ops")
+
+    def test_specialty_obligations_are_independently_enforced(self) -> None:
+        for reviewer, token in SPECIALTY_PROOF_REQUIREMENTS.items():
+            with self.subTest(reviewer=reviewer):
+                temporary, root = self.copied_contract_root()
+                try:
+                    agent_name, skill_name = REVIEWERS[reviewer]
+                    for path in (
+                        root / ".codex/agents" / agent_name,
+                        root / ".agents/skills" / skill_name / "SKILL.md",
+                    ):
+                        original = remove_contract_token(path, token)
+                        self.assertTrue(
+                            any(
+                                f"{reviewer}:" in failure
+                                and "proof.specialty" in failure
+                                for failure in contract_failures(root)
+                            )
+                        )
+                        path.write_text(original, encoding="utf-8")
+                finally:
+                    temporary.cleanup()
+
+    def test_specialty_completion_obligations_are_independently_enforced(
+        self,
+    ) -> None:
+        for reviewer, tokens in SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.items():
+            agent_name, skill_name = REVIEWERS[reviewer]
+            for surface, path, token in (
+                ("agent", Path(".codex/agents") / agent_name, tokens["agent"]),
+                (
+                    "skill",
+                    Path(".agents/skills") / skill_name / "SKILL.md",
+                    tokens["skill"],
+                ),
+            ):
+                with self.subTest(reviewer=reviewer, surface=surface):
+                    temporary, root = self.copied_contract_root()
+                    try:
+                        remove_contract_token(root / path, token)
+                        self.assertTrue(
+                            any(
+                                f"{reviewer}: {surface} missing "
+                                "proof.specialty_completion" in failure
+                                for failure in contract_failures(root)
+                            )
+                        )
+                    finally:
+                        temporary.cleanup()
 
     def test_agent_handoff_contract_and_matrix_ids_are_enforced(self) -> None:
         temporary, root = self.copied_contract_root()

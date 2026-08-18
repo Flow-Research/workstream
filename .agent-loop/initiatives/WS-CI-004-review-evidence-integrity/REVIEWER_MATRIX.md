@@ -30,6 +30,25 @@ custom reviewer agent.
 Use only the canonical IDs above in machine-readable reviewer and handoff
 fields. Human-readable labels may still appear in prose.
 
+## Candidate proof-quality responsibilities
+
+All nine pairs consume the shared proof vocabulary, compatibility rules,
+failure-pattern IDs, and discriminating test-of-the-test contract. They must not
+infer custody from names or narrative evidence. Specialty additions remain
+candidate contracts until `WS-CI-005-03` completes blind evaluation:
+
+| Reviewer | Candidate specialty obligation |
+|---|---|
+| Architecture | Composite ownership, schema/model/database parity, syntax-aware private edges, and composition-root wiring |
+| CI integrity | Actual selected-test, service/PostgreSQL, session, artifact, coverage, aggregation, and required-status custody |
+| Documentation | Proportionate structure/inspection proof without irrelevant database ceremony |
+| Product/operations | Proportionate product evidence without database ceremony or leakage into product decisions |
+| QA | A simulated pre-fix defect that the exact named test must detect |
+| Reuse/dedup | Canonical-rule comparison across schema, service, public API, migration, and database constraint |
+| Security | Actor/tenant/resource substitution, fail-open state, replay, concealment, and composite ownership |
+| Senior engineering | Permissive-fake and misleading-abstraction probes balanced against proof cost |
+| Test delta | Direct comparison with the pre-fix defect and a discriminating assertion |
+
 | Reviewer | Must inspect | Representative must-find evaluation | Must-not-flag control |
 |---|---|---|---|
 | Architecture | ownership, public ports, private imports, dependency direction, ADRs, ledgers, scope | private cross-owner import or asymmetric owner/debt ledger | valid dependency through the canonical public port |
