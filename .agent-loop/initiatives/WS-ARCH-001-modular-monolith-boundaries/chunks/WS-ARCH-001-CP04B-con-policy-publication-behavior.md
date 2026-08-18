@@ -26,6 +26,7 @@ backend/alembic/versions/0007_contribution_policy_publication_custody.py
 backend/alembic/env.py
 backend/tests/contributions/**
 backend/tests/test_contributions.py (existing PostgreSQL lifecycle fixtures and schema parity only)
+backend/tests/test_review_lease_persistence.py (existing review-lease fixture canonical publication only)
 backend/tests/architecture/** (exact boundary proof only)
 backend/tests/authorization/test_contribution_policy_registration.py (negative activation parity only)
 backend/tests/authorization/guide_compilation/test_migration_contract.py (head parity only)
@@ -270,8 +271,10 @@ duplicates require a fresh authorized read and return immutable event facts.
 The focused pytest command must name every non-hosted-only module above. Hosted
 CI must additionally run `test_policy_publication_concurrency.py` and
 `test_policy_publication_cross_project_postgresql.py` and
-`test_policy_lifecycle_postgresql.py` against real PostgreSQL; mock locks or an
-in-memory database do not satisfy the contract.
+`test_policy_lifecycle_postgresql.py` against real PostgreSQL. The semantic
+lane must also retain `test_review_lease_persistence.py` so its upstream policy
+fixture proves canonical publication custody; mock locks or an in-memory
+database do not satisfy the contract.
 
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions

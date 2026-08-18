@@ -33,6 +33,11 @@
   the assertion now covers the complete database operation. The exact test
   passed against a freshly migrated isolated PostgreSQL database. Hosted lanes
   are replaying on the resulting head.
+- The next hosted replay exposed the same retired direct-publication fixture in
+  the ReviewLease persistence suite. That fixture now publishes its complete
+  policy through the canonical hidden CONTRIBUTIONS service. All 8 ReviewLease
+  persistence tests passed against a freshly migrated isolated PostgreSQL
+  database; no REV behavior or production boundary changed.
 
 ## Remaining risks
 
