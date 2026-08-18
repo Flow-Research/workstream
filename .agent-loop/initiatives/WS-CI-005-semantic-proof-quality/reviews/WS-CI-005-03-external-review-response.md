@@ -9,7 +9,9 @@ Source: CodeRabbit review of pull request 354 at head `a51b2f8d0f57abf00d79080c1
   explicitly report proof strength and execution custody.
 - Replaced the resolver-controlled gate installation with a committed,
   hash-pinned binary requirements file covering `jsonschema` and its complete
-  runtime dependency closure.
+  runtime dependency closure. The first hosted run correctly failed because
+  `typing-extensions` was absent; the locked transitive dependency and a
+  workflow/closure regression assertion were then added.
 - Made malformed result and expectation pattern IDs produce closed validation
   failures instead of unhandled `TypeError` exceptions.
 - Clarified that defect/control pairing is a canonical contract-table
