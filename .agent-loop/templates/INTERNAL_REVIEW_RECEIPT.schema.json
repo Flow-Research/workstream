@@ -226,11 +226,12 @@
     "finding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "severity", "location", "blocks_pr", "disposition", "verification", "failure_pattern_ids"],
+      "required": ["id", "severity", "location", "source_target", "blocks_pr", "disposition", "verification", "failure_pattern_ids"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "severity": {"enum": ["Critical", "High", "Medium", "Low", "Informational"]},
         "location": {"type": "string", "minLength": 1},
+        "source_target": {"$ref": "#/$defs/sha"},
         "blocks_pr": {"type": "boolean"},
         "disposition": {"enum": ["unresolved", "fixed", "accepted_risk", "deferred_with_owner", "not_valid"]},
         "verification": {"type": "string"},

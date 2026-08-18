@@ -13,6 +13,7 @@ from scripts.reviewer_contracts import (
     FAILURE_PATTERN_IDS,
     PROOF_PATTERNS_PATH,
     PROOF_STRENGTHS,
+    ROOT as CONTRACT_ROOT,
     REVIEWERS,
     SEMANTIC_AGENT_REQUIREMENTS,
     SEMANTIC_SKILL_REQUIREMENTS,
@@ -243,7 +244,7 @@ class ReviewerContractTests(unittest.TestCase):
             "kind": "unavailable",
             "observations": [],
         }
-        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+        self.assert_receipt_invalid(receipt, "'compatible' was expected")
 
     def test_provisional_receipt_can_record_unavailable_proof(self) -> None:
         receipt = valid_receipt()
@@ -317,6 +318,7 @@ class ReviewerContractTests(unittest.TestCase):
                 "id": "ARCH-1",
                 "severity": "Low",
                 "location": "owner:1",
+                "source_target": "a" * 40,
                 "blocks_pr": False,
                 "disposition": "fixed",
                 "verification": "replayed",
@@ -330,6 +332,7 @@ class ReviewerContractTests(unittest.TestCase):
             "id": "ARCH-1",
             "severity": "Low",
             "location": "owner:1",
+            "source_target": "a" * 40,
             "blocks_pr": False,
             "disposition": "fixed",
             "verification": "replayed",
@@ -338,6 +341,18 @@ class ReviewerContractTests(unittest.TestCase):
         receipt = valid_receipt()
         receipt["findings"] = [finding]
         self.assertEqual(receipt_failures(receipt, "architecture", "a" * 40), [])
+        for field in ("location", "source_target"):
+            with self.subTest(field=field):
+                receipt = valid_receipt()
+                incomplete_finding = copy.deepcopy(finding)
+                incomplete_finding.pop(field)
+                receipt["findings"] = [incomplete_finding]
+                self.assert_receipt_invalid(receipt, "invalid protocol receipt")
+        receipt = valid_receipt()
+        invalid_source = copy.deepcopy(finding)
+        invalid_source["source_target"] = "narrative-head"
+        receipt["findings"] = [invalid_source]
+        self.assert_receipt_invalid(receipt, "invalid protocol receipt")
         receipt = valid_receipt()
         finding_without_ids = copy.deepcopy(finding)
         finding_without_ids.pop("failure_pattern_ids")
@@ -356,7 +371,7 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertEqual(contract_failures(), [])
         temporary, root = self.copied_contract_root()
         try:
-            patterns = root / PROOF_PATTERNS_PATH.relative_to(Path.cwd())
+            patterns = root / PROOF_PATTERNS_PATH.relative_to(CONTRACT_ROOT)
             patterns.write_text(
                 patterns.read_text(encoding="utf-8").replace("`PQ-013`", "`PQ-012`"),
                 encoding="utf-8",
@@ -387,7 +402,7 @@ class ReviewerContractTests(unittest.TestCase):
         shutil.copy2(matrix, root / matrix)
         (root / cases).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(cases, root / cases)
-        patterns = PROOF_PATTERNS_PATH.relative_to(Path.cwd())
+        patterns = PROOF_PATTERNS_PATH.relative_to(CONTRACT_ROOT)
         (root / patterns).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(patterns, root / patterns)
         return temporary, root
@@ -697,6 +712,7 @@ class ReviewerContractTests(unittest.TestCase):
                     "id": "ARCH-7",
                     "severity": "Medium",
                     "location": "case",
+                    "source_target": "a" * 40,
                     "blocks_pr": False,
                     "disposition": "fixed",
                     "verification": "replayed",

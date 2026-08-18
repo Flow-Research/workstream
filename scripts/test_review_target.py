@@ -362,6 +362,7 @@ class ReceiptSchemaTests(unittest.TestCase):
                     "id": "SEC-1",
                     "severity": "High",
                     "location": "file:1",
+                    "source_target": "a" * 40,
                     "blocks_pr": True,
                     "disposition": "unresolved",
                     "verification": "",
