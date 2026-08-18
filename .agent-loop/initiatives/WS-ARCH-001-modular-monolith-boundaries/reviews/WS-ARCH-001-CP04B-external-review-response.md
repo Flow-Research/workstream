@@ -23,8 +23,8 @@
 
 - Ruff on the three affected test surfaces.
 - CP04A structure and CP04B negative-scope tests: 17 passed.
-- Eight previously failing contribution PostgreSQL cases through the isolated,
-  migrated database runner; the runner completed cleanup successfully.
+- Five focused publication, retirement, active-policy race, and transaction-lock
+  PostgreSQL regressions through the isolated migrated runner: 5 passed.
 - Hosted exact-head lanes will be replayed after this correction is pushed.
 
 ## Remaining risks

@@ -29,7 +29,10 @@ from app.modules.contributions.models import (
     ContributionRule,
     ProjectCompensationUnit,
 )
-from app.modules.contributions.api import ContributionPolicyPublishRequest
+from app.modules.contributions.api import (
+    ContributionPolicyPublishRequest,
+    ContributionPolicyRetireRequest,
+)
 from app.modules.contributions.service import ContributionPolicyService
 from app.modules.contributions.schemas import (
     ContributionAwardDefinitionInput,
@@ -234,8 +237,15 @@ async def _add_rule(
     return rule_id
 
 
-async def _publish_version(version_id: UUID, creator_id: str) -> None:
+async def _publish_version(
+    version_id: UUID,
+    creator_id: str,
+    *,
+    lock_timeout: str | None = None,
+) -> None:
     async with db_session.get_session_factory()() as session, session.begin():
+        if lock_timeout is not None:
+            await session.execute(text("set local lock_timeout=:timeout"), {"timeout": lock_timeout})
         version = await session.get(ContributionPolicyVersion, version_id)
         assert version is not None
         actor_id = UUID(creator_id)
@@ -249,6 +259,30 @@ async def _publish_version(version_id: UUID, creator_id: str) -> None:
         )
         await service.publish(
             ContributionPolicyPublishRequest(
+                operation_id=uuid4(),
+                actor_profile_id=actor_id,
+                project_id=UUID(version.project_id),
+                contribution_policy_id=version.contribution_policy_id,
+                contribution_policy_version_id=version.id,
+            )
+        )
+
+
+async def _retire_version(version_id: UUID, creator_id: str) -> None:
+    async with db_session.get_session_factory()() as session, session.begin():
+        version = await session.get(ContributionPolicyVersion, version_id)
+        assert version is not None
+        actor_id = UUID(creator_id)
+        authorization = AllowAuthorization(actor_id)
+        service = ContributionPolicyService(
+            session,
+            read_authorization=authorization,
+            mutation_authorization=authorization,
+            projects=project_contribution_policy_eligibility_port(session),
+            bindings=policy_adapter_binding_port(session),
+        )
+        await service.retire(
+            ContributionPolicyRetireRequest(
                 operation_id=uuid4(),
                 actor_profile_id=actor_id,
                 project_id=UUID(version.project_id),
@@ -426,13 +460,6 @@ async def test_complete_policy_graph_can_publish_and_become_active(
     policy_id, version_id, _ = await _complete_published_policy(
         project_id, creator_id, money_binding_id
     )
-    async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(ContributionPolicy)
-            .where(ContributionPolicy.id == policy_id)
-            .values(status="active", current_published_version_id=version_id)
-        )
-        await session.commit()
     async with db_session.get_session_factory()() as session:
         policy = await session.get(ContributionPolicy, policy_id)
         assert policy is not None
@@ -737,17 +764,7 @@ async def test_retired_policy_version_and_children_are_immutable(
     _, version_id, unpaid_rule_id = await _complete_published_policy(
         project_id, creator_id, money_binding_id
     )
-    async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(ContributionPolicyVersion)
-            .where(ContributionPolicyVersion.id == version_id)
-            .values(
-                status="retired",
-                retired_by=creator_id,
-                retired_at=datetime.now(UTC),
-            )
-        )
-        await session.commit()
+    await _retire_version(version_id, creator_id)
 
     statements = (
         update(ContributionPolicyVersion)
@@ -844,31 +861,30 @@ async def test_published_definition_cannot_be_reparented_to_draft_version(
 @pytest.mark.asyncio
 async def test_active_policy_race_has_one_winner(contribution_database_env: str) -> None:
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
-    first_policy, first_version, _ = await _complete_published_policy(
-        project_id, creator_id, money_binding_id
-    )
-    second_policy, second_version, _ = await _complete_published_policy(
-        project_id, creator_id, money_binding_id
-    )
+    versions: list[UUID] = []
+    for _ in range(2):
+        _, version_id = await _draft_policy(project_id, creator_id)
+        await _add_rule(
+            version_id,
+            project_id,
+            "accepted_submission",
+            "compensated",
+            binding_id=money_binding_id,
+        )
+        await _add_rule(version_id, project_id, "completed_review", "unpaid")
+        versions.append(version_id)
 
-    async def activate(policy_id: UUID, version_id: UUID) -> str:
-        async with db_session.get_session_factory()() as session:
-            try:
-                await session.execute(
-                    update(ContributionPolicy)
-                    .where(ContributionPolicy.id == policy_id)
-                    .values(status="active", current_published_version_id=version_id)
-                )
-                await session.commit()
-                return "active"
-            except (DBAPIError, IntegrityError):
-                await session.rollback()
-                return "conflict"
+    async def activate(version_id: UUID) -> str:
+        try:
+            await _publish_version(version_id, creator_id)
+            return "active"
+        except (DBAPIError, IntegrityError):
+            return "conflict"
 
     assert sorted(
         await asyncio.gather(
-            activate(first_policy, first_version),
-            activate(second_policy, second_version),
+            activate(versions[0]),
+            activate(versions[1]),
         )
     ) == ["active", "conflict"]
 
@@ -903,19 +919,8 @@ async def test_publishability_race_cannot_use_uncommitted_rule(
     async def publish_without_visible_rule() -> str:
         await rule_staged.wait()
         try:
-            async with db_session.get_session_factory()() as session:
-                await session.execute(text("set local lock_timeout='500ms'"))
-                await session.execute(
-                    update(ContributionPolicyVersion)
-                    .where(ContributionPolicyVersion.id == version_id)
-                    .values(
-                        status="published",
-                        published_by=creator_id,
-                        published_at=datetime.now(UTC),
-                    )
-                )
-                await session.commit()
-                return "published"
+            await _publish_version(version_id, creator_id, lock_timeout="500ms")
+            return "published"
         except DBAPIError:
             return "rejected"
         finally:
@@ -945,19 +950,33 @@ async def test_publish_lock_rejects_concurrent_draft_child_mutation(
     child_attempted = asyncio.Event()
 
     async def publish() -> str:
-        async with db_session.get_session_factory()() as session:
-            await session.execute(
-                update(ContributionPolicyVersion)
-                .where(ContributionPolicyVersion.id == version_id)
-                .values(
-                    status="published",
-                    published_by=creator_id,
-                    published_at=datetime.now(UTC),
+        class PausingAuthorization(AllowAuthorization):
+            async def consume_contribution_policy_mutation(self, prepared, facts):
+                publish_locked.set()
+                await child_attempted.wait()
+                return await super().consume_contribution_policy_mutation(prepared, facts)
+
+        async with db_session.get_session_factory()() as session, session.begin():
+            actor_id = UUID(creator_id)
+            authorization = PausingAuthorization(actor_id)
+            service = ContributionPolicyService(
+                session,
+                read_authorization=authorization,
+                mutation_authorization=authorization,
+                projects=project_contribution_policy_eligibility_port(session),
+                bindings=policy_adapter_binding_port(session),
+            )
+            version = await session.get(ContributionPolicyVersion, version_id)
+            assert version is not None
+            await service.publish(
+                ContributionPolicyPublishRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=UUID(project_id),
+                    contribution_policy_id=version.contribution_policy_id,
+                    contribution_policy_version_id=version.id,
                 )
             )
-            publish_locked.set()
-            await child_attempted.wait()
-            await session.commit()
             return "published"
 
     async def mutate_child() -> str:
