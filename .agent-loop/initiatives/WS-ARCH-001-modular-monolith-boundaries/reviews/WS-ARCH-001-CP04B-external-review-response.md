@@ -27,7 +27,12 @@
   PostgreSQL regressions through the isolated migrated runner: 5 passed.
 - Two incomplete-graph service regressions now assert the canonical concealed
   policy conflict rather than a later database error: 2 passed.
-- Hosted exact-head lanes will be replayed after this correction is pushed.
+- The first hosted replay exposed one remaining legacy assertion that expected
+  the forbidden active-policy/draft-version transition to fail only at commit.
+  Migration `0007` correctly rejects that transition during the `UPDATE`, so
+  the assertion now covers the complete database operation. The exact test
+  passed against a freshly migrated isolated PostgreSQL database. Hosted lanes
+  are replaying on the resulting head.
 
 ## Remaining risks
 
