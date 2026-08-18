@@ -14,6 +14,8 @@ Source: CodeRabbit review of pull request 354 at head `a51b2f8d0f57abf00d79080c1
   workflow/closure regression assertion were then added.
 - Made malformed result and expectation pattern IDs produce closed validation
   failures instead of unhandled `TypeError` exceptions.
+- Made malformed supersession subject paths produce the existing closed
+  subject-coverage failure instead of an unhandled `TypeError` exception.
 - Clarified that defect/control pairing is a canonical contract-table
   self-consistency check while exact case IDs enforce fixture coverage.
 - Distinguished invalid, unreachable, and non-ancestor evaluated Git heads and

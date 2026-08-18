@@ -239,6 +239,14 @@ class ReviewerContractTests(unittest.TestCase):
             [],
         )
 
+    def test_proof_supersession_rejects_malformed_subject_paths_cleanly(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["supersession"]["subject_paths"] = [["not-a-path"]]
+        self.assertIn(
+            "proof supersession: subject coverage mismatch",
+            proof_supersession_failures(mutated),
+        )
+
     def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
         evaluated_head = self.proof_results["evaluated_head"]
         reachable = subprocess.run(

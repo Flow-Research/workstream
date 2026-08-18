@@ -666,7 +666,12 @@ def proof_supersession_failures(
     failures: list[str] = []
     if supersession.get("mode") != PROOF_SUPERSESSION_MODE:
         failures.append("proof supersession: invalid mode")
-    if set(supersession.get("subject_paths", [])) != PROOF_SUBJECT_PATHS:
+    subject_paths = supersession.get("subject_paths")
+    if (
+        not isinstance(subject_paths, list)
+        or not all(isinstance(path, str) for path in subject_paths)
+        or set(subject_paths) != PROOF_SUBJECT_PATHS
+    ):
         failures.append("proof supersession: subject coverage mismatch")
     reachable = subprocess.run(
         ["git", "cat-file", "-e", f"{evaluated_head}^{{commit}}"],
