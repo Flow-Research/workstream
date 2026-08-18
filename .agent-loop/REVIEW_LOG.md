@@ -3001,3 +3001,14 @@ the `08A` executable contract omitted `CON-03D`, and canonical dependency views
 used broad REV persistence labels. The repair adds the explicit `03D -> 08A`
 gate and names exact merged `REV-04B` runtime
 `Review`/`ReviewLease`/`FinalAcceptance` targets.
+
+## 2026-08-17 - WS-CI-005 Semantic Proof Quality Planning
+
+PR #350 plans a semantic-proof layer for the existing exact-head reviewer
+system. Initial internal review corrected proof self-attestation, incomplete
+failure replay, missing exact tests, malicious-evidence coverage, premature
+adoption language, stale terminology, and invalid chunk states. CodeRabbit
+then identified two final gaps: source inspection could appear to replace
+required database/session custody, and future outcomes used present-tense
+completion wording. Both are corrected; final-head review and hosted checks
+remain required before human merge.
