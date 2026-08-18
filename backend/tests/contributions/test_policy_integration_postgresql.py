@@ -65,8 +65,6 @@ class _LateFailingRepository(ContributionPolicyRepository):
         raise RuntimeError("late_product_write_failed")
 
 class _LateFailingPublicationRepository(ContributionPolicyRepository):
-    """Fail after publication custody and lifecycle state reach PostgreSQL."""
-
     def __init__(
         self,
         session: AsyncSession,
