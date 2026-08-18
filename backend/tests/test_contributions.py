@@ -474,12 +474,12 @@ async def test_active_policy_cannot_select_a_draft_version(
     project_id, creator_id, _, _, _ = await _seed_project()
     policy_id, version_id = await _draft_policy(project_id, creator_id)
     async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(ContributionPolicy)
-            .where(ContributionPolicy.id == policy_id)
-            .values(status="active", current_published_version_id=version_id)
-        )
         with pytest.raises(DBAPIError):
+            await session.execute(
+                update(ContributionPolicy)
+                .where(ContributionPolicy.id == policy_id)
+                .values(status="active", current_published_version_id=version_id)
+            )
             await session.commit()
 
 
