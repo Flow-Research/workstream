@@ -56,7 +56,8 @@ PROOF_QUALITY_SHARED_REQUIREMENTS = {
         "Select relevant stable failure-pattern IDs and explain why they apply"
     ),
     "proof.discrimination": (
-        "Require a discriminating test-of-the-test probe for every final PASS"
+        "Require a discriminating test-of-the-test probe for every final PASS or PASS "
+        "WITH LOW RISKS"
     ),
     "proof.no_inference": (
         "Never infer proof strength or execution custody from filenames, test names, "
@@ -161,12 +162,14 @@ SPECIALTY_PROOF_COMPLETION_REQUIREMENTS = {
     },
     "security": {
         "agent": (
-            "Use real repository or direct-SQL custody when the claim depends on database "
-            "enforcement"
+            "Require repository-isolation evidence for stored ownership, direct-SQL "
+            "evidence for ORM-bypassed database enforcement, and schema-compatible "
+            "service or composition evidence for application authorization"
         ),
         "skill": (
-            "Use real repository or direct-SQL custody when the claim depends on stored "
-            "ownership or database enforcement"
+            "Require repository-isolation evidence for stored ownership, direct-SQL "
+            "evidence for ORM-bypassed database enforcement, and schema-compatible "
+            "service or composition evidence for application authorization"
         ),
     },
     "senior_engineering": {

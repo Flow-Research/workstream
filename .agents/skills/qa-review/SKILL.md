@@ -22,7 +22,7 @@ execution custody, and result. Missing or narrative-only rows block PASS.
 Use the shared proof-strength vocabulary and schema-owned compatibility rules;
 do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
 IDs and explain why they apply. Require a discriminating test-of-the-test probe
-for every final PASS. Never infer proof strength or execution custody from
+for every final PASS or PASS WITH LOW RISKS. Never infer proof strength or execution custody from
 filenames, test names, command labels, or narrative claims. Incompatible or
 unavailable proof blocks PASS for the claimed behavior.
 
