@@ -54,6 +54,12 @@
   fingerprint after migration `0007` adopted the ORM's physical constraint
   names. The pinned fingerprint now records the resulting canonical schema;
   no schema check or threshold was weakened.
+- Adopted test-delta review rejected the fake-repository rollback assertion as
+  incompatible transaction custody. CP04B now proves the publication-specific
+  boundary with real PostgreSQL: authority evidence is staged, custody and the
+  lifecycle event reach PostgreSQL, a late event-flush failure is injected, and
+  rollback leaves the policy/version draft, with no custody, publication event,
+  or staged authorization effect.
 
 ## Remaining risks
 

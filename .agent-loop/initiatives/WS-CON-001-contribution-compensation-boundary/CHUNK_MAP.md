@@ -18,6 +18,7 @@ signed-loop records do not make behavior live.
 | `WS-ARCH-001-CP03A` | Adapter target identity and owner eligibility | Merged through PR #340; actions remain unavailable |
 | `WS-ARCH-001-CP03B` | Exact Finance Authority adapter-binding activation | Executable contract is complete; follows merged CP03A |
 | `WS-ARCH-001-CP04A` | Hidden ContributionPolicy read/create/update-draft behavior | Complete; policy actions remain unavailable |
+| `WS-ARCH-001-CP04B` | Hidden ContributionPolicy publication/retirement behavior | Complete; policy actions remain unavailable |
 | `PLAN5` | Historical complete-context human needs-revision rebase reconciliation | Merged PR #270; continuing-TaskAssignment rebase retained, independent reviewer-selection wording superseded by current PLAN2 |
 
 ## Current reconciliation
