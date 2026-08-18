@@ -20,6 +20,10 @@ Run deterministic proof checks before reviewer fanout.
 - Coverage thresholds were not lowered.
 - Tests were not skipped/deleted/weakened without explanation.
 - New dependencies were approved.
+- Reviewer proof-quality inputs name the claimed boundary, proof strength,
+  custody, compatibility, discriminating probe, and remaining uncertainty.
+- A passing summary does not claim private session-receipt custody; it records
+  only reviewer, exact head, verdict, proof boundary, and uncertainty.
 
 ## Output
 
@@ -30,6 +34,11 @@ Results:
 Scope exceptions:
 CI/test integrity concerns:
 Required fixes before review:
+Proof-quality summary:
+- exact reviewed head:
+- claimed boundaries and compatible proof:
+- discriminating probe result:
+- unavailable proof or uncertainty:
 ```
 
 Do not run expensive reviewer fanout until this passes or blockers are explicitly documented.

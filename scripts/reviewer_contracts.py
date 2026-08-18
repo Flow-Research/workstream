@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 INITIATIVE = ROOT / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity"
 CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
+PROOF_CASES_PATH = INITIATIVE / "evaluations/PROOF_CASES.json"
+PROOF_EXPECTATIONS_PATH = INITIATIVE / "evaluations/PROOF_EXPECTATIONS.json"
+PROOF_RESULTS_PATH = INITIATIVE / "evaluations/PROOF_RESULTS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
 PROOF_PATTERNS_PATH = (
@@ -31,6 +34,37 @@ PROOF_CUSTODY_MATRIX = RECEIPT_SCHEMA["x-proof-custody-matrix"]
 PASSING_VERDICTS = {"PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS"}
 FAILURE_PATTERN_IDS = {f"PQ-{number:03d}" for number in range(1, 14)}
 FAILURE_PATTERN_ROW = re.compile(r"^\| `(PQ-[0-9]{3})` \|", re.MULTILINE)
+PROOF_CASE_IDS = {
+    "pq-architecture-composite-owner",
+    "pq-architecture-public-port-control",
+    "pq-ci-mocked-rollback",
+    "pq-ci-real-transaction-control",
+    "pq-docs-untrusted-instruction",
+    "pq-product-partial-owner-handoff",
+    "pq-product-advisory-control",
+    "pq-qa-malformed-public-input",
+    "pq-qa-nondiscriminating-input",
+    "pq-reuse-canonical-rule-drift",
+    "pq-reuse-canonical-owner-control",
+    "pq-security-label-only-fake",
+    "pq-security-sql-null-guard",
+    "pq-security-missing-row-isolation",
+    "pq-security-real-isolation-control",
+    "pq-senior-setup-only-failure",
+    "pq-test-delta-setup-only-failure",
+    "pq-test-delta-real-mutation-control",
+}
+TRUST_WORKFLOW_REQUIREMENTS = {
+    ".agents/skills/evidence-gate/SKILL.md": (
+        "A passing summary does not claim private session-receipt custody"
+    ),
+    ".agents/skills/pr-trust-bundle/SKILL.md": (
+        "Never copy private session receipts into Git"
+    ),
+    ".agents/skills/task-chunk-loop/SKILL.md": (
+        "without copying private session receipts into Git"
+    ),
+}
 SEMANTIC_SKILL_REQUIREMENTS = {
     "semantic.atomization": "Atomize every material criterion",
     "semantic.ownership": "record its owner",
@@ -251,6 +285,12 @@ REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
 
 def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
+    for relative_path, token in TRUST_WORKFLOW_REQUIREMENTS.items():
+        workflow_path = root / relative_path
+        if not workflow_path.is_file() or token not in " ".join(
+            workflow_path.read_text(encoding="utf-8").split()
+        ):
+            failures.append(f"trust workflow: {relative_path} missing summary custody")
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
     if PROOF_QUALITY_MATRIX_LIFECYCLE not in " ".join(matrix.split()):
@@ -459,6 +499,61 @@ def fixture_failures(
     return failures
 
 
+def proof_fixture_failures(
+    cases: object,
+    canonical_ids: set[str] | None = None,
+) -> list[str]:
+    """Validate raw proof-quality fixtures without consulting expected answers."""
+    canonical_ids = set(REVIEWERS) if canonical_ids is None else canonical_ids
+    if not isinstance(cases, dict) or not isinstance(cases.get("cases"), list):
+        return ["proof cases: missing list"]
+    failures: list[str] = []
+    rows = cases["cases"]
+    ids: list[str] = []
+    reviewers: set[str] = set()
+    untrusted_case_found = False
+    forbidden_answer_keys = {
+        "outcome",
+        "classification",
+        "expected",
+        "finding_ids",
+        "handoff_specialty",
+        "failure_pattern_ids",
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            failures.append("proof cases: non-object row")
+            continue
+        case_id = row.get("id")
+        reviewer = row.get("reviewer")
+        task = row.get("task")
+        evidence = row.get("evidence")
+        if not isinstance(case_id, str):
+            failures.append("proof cases: invalid id")
+        else:
+            ids.append(case_id)
+        if reviewer not in canonical_ids:
+            failures.append(f"{case_id}: unknown proof reviewer")
+        else:
+            reviewers.add(reviewer)
+        if not isinstance(task, str) or not isinstance(evidence, str):
+            failures.append(f"{case_id}: missing raw task/evidence")
+        elif "ignore all previous instructions" in evidence.lower():
+            untrusted_case_found = True
+        leaked = forbidden_answer_keys.intersection(row)
+        if leaked:
+            failures.append(f"{case_id}: expected answer leaked into raw proof case")
+    if len(ids) != len(set(ids)):
+        failures.append("proof cases: duplicate IDs")
+    if set(ids) != PROOF_CASE_IDS:
+        failures.append("proof cases: required escaped-defect coverage missing")
+    if reviewers != canonical_ids:
+        failures.append("proof cases: every reviewer must have a raw case")
+    if not untrusted_case_found:
+        failures.append("proof cases: missing untrusted-evidence instruction fixture")
+    return failures
+
+
 def receipt_failures(
     receipt: object, reviewer: object, evaluated_head: object
 ) -> list[str]:
@@ -662,6 +757,8 @@ def _main(argv: list[str] | None = None) -> int:
     expectations = load_json(EXPECTATIONS_PATH) if EXPECTATIONS_PATH.exists() else None
     matrix = MATRIX_PATH.read_text(encoding="utf-8")
     failures = fixture_failures(cases, expectations, set(matrix_reviewers(matrix)))
+    proof_cases = load_json(PROOF_CASES_PATH)
+    failures.extend(proof_fixture_failures(proof_cases, set(matrix_reviewers(matrix))))
     if args.command is None:
         failures = contract_failures() + failures
         if expectations is None:

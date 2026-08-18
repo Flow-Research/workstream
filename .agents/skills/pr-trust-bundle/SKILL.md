@@ -28,6 +28,7 @@ Create the PR body or trust bundle after implementation and review.
 - Follow-up work
 - Human review focus
 - Human merge ownership
+- Proof quality and uncertainty
 
 ## Rules
 
@@ -40,3 +41,6 @@ Create the PR body or trust bundle after implementation and review.
   manual-trigger-required review is `not fresh`, never reviewer approval.
 - Internal reviewer summaries are non-authoritative mirrors of private session
   receipts and must name the exact reviewed head.
+- Summarize proof quality by behavior boundary, proof strength/custody,
+  compatibility, discriminating probe, and uncertainty. Never copy private
+  session receipts into Git or imply that a summary owns their custody.

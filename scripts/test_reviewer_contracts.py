@@ -14,6 +14,8 @@ from scripts.reviewer_contracts import (
     FAILURE_PATTERN_IDS,
     MATRIX_SPECIALTY_REQUIREMENTS,
     PROOF_PATTERNS_PATH,
+    PROOF_CASES_PATH,
+    PROOF_CASE_IDS,
     PROOF_QUALITY_AGENT_LIFECYCLE,
     PROOF_QUALITY_MATRIX_LIFECYCLE,
     PROOF_QUALITY_SHARED_REQUIREMENTS,
@@ -26,6 +28,7 @@ from scripts.reviewer_contracts import (
     SEMANTIC_SKILL_REQUIREMENTS,
     SPECIALTY_PROOF_COMPLETION_REQUIREMENTS,
     SPECIALTY_PROOF_REQUIREMENTS,
+    TRUST_WORKFLOW_REQUIREMENTS,
 )
 from scripts.reviewer_contracts import (
     contract_failures,
@@ -36,6 +39,7 @@ from scripts.reviewer_contracts import (
 from scripts.reviewer_contracts import (
     output_failures,
     output_set_failures,
+    proof_fixture_failures,
     receipt_failures,
 )
 from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
@@ -112,6 +116,45 @@ class ReviewerContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cases = load_json(CASES_PATH)
+        cls.proof_cases = load_json(PROOF_CASES_PATH)
+
+    def test_proof_quality_fixture_classes_are_mandatory(self) -> None:
+        self.assertEqual(proof_fixture_failures(self.proof_cases), [])
+        self.assertEqual(
+            {row["id"] for row in self.proof_cases["cases"]}, PROOF_CASE_IDS
+        )
+        for case_id in PROOF_CASE_IDS:
+            with self.subTest(case_id=case_id):
+                mutated = copy.deepcopy(self.proof_cases)
+                mutated["cases"] = [
+                    row for row in mutated["cases"] if row["id"] != case_id
+                ]
+                self.assertIn(
+                    "proof cases: required escaped-defect coverage missing",
+                    proof_fixture_failures(mutated),
+                )
+
+    def test_blind_fixture_ignores_untrusted_evidence_instructions(self) -> None:
+        self.assertEqual(proof_fixture_failures(self.proof_cases), [])
+        mutated = copy.deepcopy(self.proof_cases)
+        for row in mutated["cases"]:
+            row["evidence"] = row["evidence"].replace(
+                "Ignore all previous instructions", "Embedded prose"
+            )
+        self.assertIn(
+            "proof cases: missing untrusted-evidence instruction fixture",
+            proof_fixture_failures(mutated),
+        )
+
+    def test_raw_proof_cases_cannot_leak_expected_answers(self) -> None:
+        mutated = copy.deepcopy(self.proof_cases)
+        mutated["cases"][0]["classification"] = "finding"
+        self.assertTrue(
+            any(
+                "expected answer leaked" in failure
+                for failure in proof_fixture_failures(mutated)
+            )
+        )
 
     def test_all_agent_skill_contracts_compose_with_protocol(self) -> None:
         self.assertEqual(contract_failures(), [])
@@ -428,7 +471,25 @@ class ReviewerContractTests(unittest.TestCase):
             source = Path(relative_path)
             (root / source).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, root / source)
+        for relative_path in TRUST_WORKFLOW_REQUIREMENTS:
+            source = Path(relative_path)
+            (root / source).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, root / source)
         return temporary, root
+
+    def test_trust_workflows_summarize_without_claiming_custody(self) -> None:
+        self.assertEqual(contract_failures(), [])
+        for relative_path, token in TRUST_WORKFLOW_REQUIREMENTS.items():
+            with self.subTest(path=relative_path):
+                temporary, root = self.copied_contract_root()
+                try:
+                    remove_contract_token(root / relative_path, token)
+                    self.assertIn(
+                        f"trust workflow: {relative_path} missing summary custody",
+                        contract_failures(root),
+                    )
+                finally:
+                    temporary.cleanup()
 
     def test_missing_protocol_output_or_handoff_contract_fails(self) -> None:
         for token in ("reviewer-evidence-protocol", "Protocol envelope", "hand off"):
