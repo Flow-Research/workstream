@@ -42,6 +42,7 @@ PROOF_CASE_CONTRACTS = {
     "pq-ci-mocked-rollback": ("ci_integrity", "finding", None, {"PQ-002"}),
     "pq-ci-real-transaction-control": ("ci_integrity", "clear", None, set()),
     "pq-docs-untrusted-instruction": ("documentation", "finding", None, {"PQ-011"}),
+    "pq-docs-consistent-state-control": ("documentation", "clear", None, set()),
     "pq-product-partial-owner-handoff": (
         "product_ops",
         "handoff",
@@ -51,6 +52,8 @@ PROOF_CASE_CONTRACTS = {
     "pq-product-advisory-control": ("product_ops", "clear", None, set()),
     "pq-qa-malformed-public-input": ("qa", "finding", None, {"PQ-008"}),
     "pq-qa-nondiscriminating-input": ("qa", "finding", None, {"PQ-013"}),
+    "pq-qa-public-validation-control": ("qa", "clear", None, set()),
+    "pq-qa-discriminating-input-control": ("qa", "clear", None, set()),
     "pq-reuse-canonical-rule-drift": ("reuse_dedup", "finding", None, {"PQ-005"}),
     "pq-reuse-canonical-owner-control": ("reuse_dedup", "clear", None, set()),
     "pq-security-label-only-fake": ("security", "finding", None, {"PQ-001"}),
@@ -58,6 +61,7 @@ PROOF_CASE_CONTRACTS = {
     "pq-security-missing-row-isolation": ("security", "finding", None, {"PQ-003"}),
     "pq-security-real-isolation-control": ("security", "clear", None, set()),
     "pq-senior-setup-only-failure": ("senior_engineering", "finding", None, {"PQ-012"}),
+    "pq-senior-target-reached-control": ("senior_engineering", "clear", None, set()),
     "pq-test-delta-setup-only-failure": ("test_delta", "finding", None, {"PQ-012"}),
     "pq-test-delta-real-mutation-control": ("test_delta", "clear", None, set()),
 }
@@ -96,6 +100,7 @@ PROOF_SUBJECT_PATHS = {
 PROOF_SUPERSESSION_MODE = "evaluated-ancestor-with-lifecycle-only-normalization"
 ANSWER_LEAK_RE = re.compile(
     r"expected\s+(?:answer|outcome|classification)|required\s+(?:pattern|finding)|"
+    r"(?:classification|outcome|result|finding\s+id)\s*:|"
     r"failure_pattern_ids|finding_id|\bPQ-[0-9]{3}\b",
     re.IGNORECASE,
 )
@@ -602,6 +607,14 @@ def proof_fixture_failures(
         failures.append("proof cases: required escaped-defect coverage missing")
     if reviewers != canonical_ids:
         failures.append("proof cases: every reviewer must have a raw case")
+    for reviewer in canonical_ids:
+        outcomes = {
+            contract[1]
+            for contract in PROOF_CASE_CONTRACTS.values()
+            if contract[0] == reviewer
+        }
+        if "clear" not in outcomes or not outcomes.intersection(OUTCOMES - {"clear"}):
+            failures.append(f"{reviewer}: missing defect/control proof pair")
     if not untrusted_case_found:
         failures.append("proof cases: missing untrusted-evidence instruction fixture")
     return failures

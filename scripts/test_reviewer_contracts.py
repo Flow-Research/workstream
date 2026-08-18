@@ -170,6 +170,36 @@ class ReviewerContractTests(unittest.TestCase):
                 for failure in proof_fixture_failures(mutated)
             )
         )
+        for leaked_text in (
+            " Classification: finding.",
+            " Outcome: clear.",
+            " Result: PASS.",
+            " Finding ID: SEC-PQ-LABEL-ONLY-FAKE.",
+        ):
+            with self.subTest(leaked_text=leaked_text):
+                mutated = copy.deepcopy(self.proof_cases)
+                mutated["cases"][0]["evidence"] += leaked_text
+                self.assertTrue(
+                    any(
+                        "expected answer leaked in raw proof text" in failure
+                        for failure in proof_fixture_failures(mutated)
+                    )
+                )
+
+    def test_every_reviewer_has_defect_and_clear_control(self) -> None:
+        rows = self.proof_cases["cases"]
+        for reviewer in REVIEWERS:
+            case_ids = {row["id"] for row in rows if row["reviewer"] == reviewer}
+            outcomes = {
+                next(
+                    result["classification"]
+                    for result in self.proof_results["results"]
+                    if result["case_id"] == case_id
+                )
+                for case_id in case_ids
+            }
+            self.assertIn("clear", outcomes)
+            self.assertTrue(outcomes - {"clear"})
 
     def test_proof_case_reviewer_ownership_is_canonical(self) -> None:
         for case_id in (
