@@ -638,6 +638,8 @@ def _normalized_proof_subject(text: str) -> str:
         r"These obligations are adopted through the blind evaluation recorded by WS-CI-005-03\.",
         r"Specialty additions remain\s+candidate contracts until `WS-CI-005-03` completes blind evaluation:",
         r"Specialty additions are adopted\s+through the blind evaluation recorded by `WS-CI-005-03`:",
+        r"## (?:Candidate|Adopted) proof-quality (?:obligations|responsibilities)",
+        r"\| Reviewer \| (?:Candidate|Adopted) specialty obligation \|",
     )
     normalized = text
     for pattern in patterns:
@@ -727,6 +729,8 @@ def proof_evaluation_failures(
     result_rows = {
         row.get("case_id"): row for row in results["results"] if isinstance(row, dict)
     }
+    if len(expectations["expectations"]) != len(expectation_rows):
+        failures.append("proof evaluation: duplicate expectation rows")
     if set(case_rows) != PROOF_CASE_IDS or set(expectation_rows) != PROOF_CASE_IDS:
         failures.append("proof evaluation: expectation coverage mismatch")
     if set(result_rows) != PROOF_CASE_IDS or len(results["results"]) != len(

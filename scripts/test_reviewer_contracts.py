@@ -305,6 +305,16 @@ class ReviewerContractTests(unittest.TestCase):
             ),
         )
 
+    def test_blind_evaluation_rejects_duplicate_expectations(self) -> None:
+        mutated = copy.deepcopy(self.proof_expectations)
+        duplicate = copy.deepcopy(mutated["expectations"][0])
+        duplicate["outcome"] = "clear"
+        mutated["expectations"].insert(0, duplicate)
+        self.assertIn(
+            "proof evaluation: duplicate expectation rows",
+            proof_evaluation_failures(self.proof_cases, mutated, self.proof_results),
+        )
+
     def test_output_validation_rejects_pass_with_incompatible_proof(self) -> None:
         receipt = valid_receipt()
         receipt["traceability"][0]["claimed_boundary"] = "transaction"
