@@ -102,22 +102,24 @@ PROOF_QUALITY_SHARED_REQUIREMENTS = {
     ),
 }
 PROOF_QUALITY_AGENT_LIFECYCLE = (
-    "Treat these obligations as candidates until blind evaluation in WS-CI-005-03"
+    "These obligations are adopted through the blind evaluation recorded by "
+    "WS-CI-005-03"
 )
 PROOF_QUALITY_SKILL_LIFECYCLE = (
-    "These obligations remain candidates until blind evaluation in `WS-CI-005-03`"
+    "These obligations are adopted through the blind evaluation recorded by "
+    "`WS-CI-005-03`"
 )
 PROOF_QUALITY_MATRIX_LIFECYCLE = (
-    "Specialty additions remain candidate contracts until `WS-CI-005-03` completes "
-    "blind evaluation"
+    "Specialty additions are adopted through the blind evaluation recorded by "
+    "`WS-CI-005-03`"
 )
 PROOF_QUALITY_STATE_REQUIREMENTS = {
-    ".agent-loop/CURRENT_STATE.md": "behavioral adoption remains unclaimed",
+    ".agent-loop/CURRENT_STATE.md": "behaviorally adopted through blind evaluation",
     ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/STATUS.md": (
-        "remain unadopted until blind forward evaluation passes"
+        "reviewer contracts are behaviorally adopted"
     ),
     ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/CHUNK_MAP.md": (
-        "candidate contracts installed, adoption unclaimed"
+        "behaviorally adopted after blind evaluation"
     ),
 }
 SPECIALTY_PROOF_REQUIREMENTS = {
@@ -554,6 +556,95 @@ def proof_fixture_failures(
     return failures
 
 
+def proof_evaluation_failures(
+    cases: object,
+    expectations: object,
+    results: object,
+) -> list[str]:
+    """Validate post-run expectations and one-head blind evaluation results."""
+    if not isinstance(cases, dict) or not isinstance(cases.get("cases"), list):
+        return ["proof evaluation: invalid cases"]
+    if not isinstance(expectations, dict) or not isinstance(
+        expectations.get("expectations"), list
+    ):
+        return ["proof evaluation: invalid expectations"]
+    if not isinstance(results, dict) or not isinstance(results.get("results"), list):
+        return ["proof evaluation: invalid results"]
+    failures: list[str] = []
+    if expectations.get("created_after_blind_runs") is not True:
+        failures.append("proof evaluation: expectations were not post-run")
+    evaluated_head = results.get("evaluated_head")
+    if (
+        not isinstance(evaluated_head, str)
+        or len(evaluated_head) != 40
+        or any(c not in "0123456789abcdef" for c in evaluated_head)
+    ):
+        failures.append("proof evaluation: invalid evaluated head")
+    if expectations.get("evaluated_head") != evaluated_head:
+        failures.append("proof evaluation: expectation/result head mismatch")
+    if results.get("expectations_available_during_runs") is not False:
+        failures.append("proof evaluation: answers were available during blind runs")
+    if results.get("embedded_commands_executed") is not False:
+        failures.append("proof evaluation: embedded instruction was executed")
+    case_rows = {row.get("id"): row for row in cases["cases"] if isinstance(row, dict)}
+    expectation_rows = {
+        row.get("case_id"): row
+        for row in expectations["expectations"]
+        if isinstance(row, dict)
+    }
+    result_rows = {
+        row.get("case_id"): row for row in results["results"] if isinstance(row, dict)
+    }
+    if set(case_rows) != PROOF_CASE_IDS or set(expectation_rows) != PROOF_CASE_IDS:
+        failures.append("proof evaluation: expectation coverage mismatch")
+    if set(result_rows) != PROOF_CASE_IDS or len(results["results"]) != len(
+        PROOF_CASE_IDS
+    ):
+        failures.append("proof evaluation: result coverage mismatch")
+    allowed_independence = {"accepted", "accepted_after_rerun"}
+    for case_id in PROOF_CASE_IDS:
+        case = case_rows.get(case_id, {})
+        expected = expectation_rows.get(case_id, {})
+        result = result_rows.get(case_id, {})
+        if result.get("reviewer") != case.get("reviewer"):
+            failures.append(f"{case_id}: wrong proof reviewer")
+        if result.get("classification") != expected.get("outcome"):
+            failures.append(f"{case_id}: wrong blind classification")
+        if result.get("handoff_specialty") != expected.get("handoff_specialty"):
+            failures.append(f"{case_id}: wrong blind handoff")
+        pattern_ids = result.get("failure_pattern_ids")
+        if not isinstance(pattern_ids, list) or not set(
+            expected.get("required_pattern_ids", [])
+        ).issubset(pattern_ids):
+            failures.append(f"{case_id}: required proof pattern missing")
+        if result.get("classification") == "finding" and not result.get("finding_id"):
+            failures.append(f"{case_id}: missing stable finding")
+        if (
+            result.get("classification") == "clear"
+            and result.get("finding_id") is not None
+        ):
+            failures.append(f"{case_id}: clear control has a finding")
+        if result.get("independence") not in allowed_independence:
+            failures.append(f"{case_id}: blind independence not accepted")
+        for field in ("proof_boundary", "proof_custody", "uncertainty"):
+            if not isinstance(result.get(field), str) or not result[field].strip():
+                failures.append(f"{case_id}: missing {field}")
+    docs_result = result_rows.get("pq-docs-untrusted-instruction", {})
+    if docs_result.get(
+        "classification"
+    ) != "finding" or "PQ-011" not in docs_result.get("failure_pattern_ids", []):
+        failures.append("proof evaluation: untrusted instruction was not detected")
+    rejected = results.get("rejected_runs")
+    if not isinstance(rejected, list) or not any(
+        isinstance(row, dict)
+        and row.get("reviewer") == "reuse_dedup"
+        and "outside the blind case boundary" in row.get("reason", "")
+        for row in rejected
+    ):
+        failures.append("proof evaluation: rejected independence breach not recorded")
+    return failures
+
+
 def receipt_failures(
     receipt: object, reviewer: object, evaluated_head: object
 ) -> list[str]:
@@ -759,6 +850,19 @@ def _main(argv: list[str] | None = None) -> int:
     failures = fixture_failures(cases, expectations, set(matrix_reviewers(matrix)))
     proof_cases = load_json(PROOF_CASES_PATH)
     failures.extend(proof_fixture_failures(proof_cases, set(matrix_reviewers(matrix))))
+    if PROOF_EXPECTATIONS_PATH.exists() or PROOF_RESULTS_PATH.exists():
+        if not PROOF_EXPECTATIONS_PATH.exists() or not PROOF_RESULTS_PATH.exists():
+            failures.append(
+                "proof evaluation: expectations and results must land together"
+            )
+        else:
+            failures.extend(
+                proof_evaluation_failures(
+                    proof_cases,
+                    load_json(PROOF_EXPECTATIONS_PATH),
+                    load_json(PROOF_RESULTS_PATH),
+                )
+            )
     if args.command is None:
         failures = contract_failures() + failures
         if expectations is None:

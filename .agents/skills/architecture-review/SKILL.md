@@ -28,8 +28,8 @@ unavailable proof blocks PASS for the claimed behavior.
 
 Probe composite ownership, schema/model/database parity, syntax-aware private
 edges, and composition-root wiring. Require database custody only when the
-claim crosses that boundary. These obligations remain candidates until blind
-evaluation in `WS-CI-005-03`.
+claim crosses that boundary. These obligations are adopted through the blind
+evaluation recorded by `WS-CI-005-03`.
 
 ## Focus
 

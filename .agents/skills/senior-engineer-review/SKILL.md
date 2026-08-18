@@ -28,8 +28,8 @@ unavailable proof blocks PASS for the claimed behavior.
 
 Probe permissive fakes and misleading abstractions, and weigh proof cost against
 escape risk. Do not substitute cheap proof for custody required by the claimed
-boundary. These obligations remain candidates until blind evaluation in
-`WS-CI-005-03`.
+boundary. These obligations are adopted through the blind evaluation recorded
+by `WS-CI-005-03`.
 
 ## Focus
 

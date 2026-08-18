@@ -28,8 +28,8 @@ unavailable proof blocks PASS for the claimed behavior.
 
 Trace actual infrastructure custody through selected tests, services or
 PostgreSQL, sessions, artifacts, coverage, aggregation, and required status.
-Green status or a command label alone is not custody. These obligations remain
-candidates until blind evaluation in `WS-CI-005-03`.
+Green status or a command label alone is not custody. These obligations are
+adopted through the blind evaluation recorded by `WS-CI-005-03`.
 
 ## Inspect
 

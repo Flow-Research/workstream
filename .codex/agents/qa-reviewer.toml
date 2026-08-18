@@ -26,7 +26,7 @@ Require a discriminating test-of-the-test probe for every final PASS or PASS WIT
 Never infer proof strength or execution custody from filenames, test names, command labels, or narrative claims.
 Incompatible or unavailable proof blocks PASS for the claimed behavior.
 Simulate the pre-fix defect and require the named test to fail for the exact behavior atom.
-Reject setup-only failures and vacuous inputs. Treat these obligations as candidates until blind evaluation in WS-CI-005-03.
+Reject setup-only failures and vacuous inputs. These obligations are adopted through the blind evaluation recorded by WS-CI-005-03.
 You must review the current branch against the base branch, any applicable plan or chunk contract, and repository engineering guidance.
 
 Focus areas:

@@ -29,7 +29,7 @@ unavailable proof blocks PASS for the claimed behavior.
 Apply shared proof fields proportionately; do not require database ceremony for
 documentation-only claims. Use compatible inspection or structure proof and
 keep product/runtime conclusions with their owning reviewers. These obligations
-remain candidates until blind evaluation in `WS-CI-005-03`.
+are adopted through the blind evaluation recorded by `WS-CI-005-03`.
 
 ## Focus
 

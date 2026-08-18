@@ -34,8 +34,8 @@ fields. Human-readable labels may still appear in prose.
 
 All nine pairs consume the shared proof vocabulary, compatibility rules,
 failure-pattern IDs, and discriminating test-of-the-test contract. They must not
-infer custody from names or narrative evidence. Specialty additions remain
-candidate contracts until `WS-CI-005-03` completes blind evaluation:
+infer custody from names or narrative evidence. Specialty additions are adopted
+through the blind evaluation recorded by `WS-CI-005-03`:
 
 | Reviewer | Candidate specialty obligation |
 |---|---|

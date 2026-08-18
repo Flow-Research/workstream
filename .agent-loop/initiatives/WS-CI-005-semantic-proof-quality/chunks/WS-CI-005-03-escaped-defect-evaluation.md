@@ -86,9 +86,10 @@ and that readiness remains advisory until human merge.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`
 
-Only after this chunk's independent blind evaluation succeeds will the
-reviewer contracts be behaviorally adopted and the semantic proof-quality
-initiative become complete. Future escaped findings will be added only when
-they represent a reusable failure class.
+Independent blind evaluation succeeded against exact head
+`8ab2da49e6b06f57167711d386607440a35abab5`. Reviewer contracts are
+behaviorally adopted and the semantic proof-quality initiative is complete.
+Future escaped findings will be added only when they represent a reusable
+failure class.

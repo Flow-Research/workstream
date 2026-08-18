@@ -16,11 +16,13 @@ from scripts.reviewer_contracts import (
     PROOF_PATTERNS_PATH,
     PROOF_CASES_PATH,
     PROOF_CASE_IDS,
+    PROOF_EXPECTATIONS_PATH,
     PROOF_QUALITY_AGENT_LIFECYCLE,
     PROOF_QUALITY_MATRIX_LIFECYCLE,
     PROOF_QUALITY_SHARED_REQUIREMENTS,
     PROOF_QUALITY_SKILL_LIFECYCLE,
     PROOF_QUALITY_STATE_REQUIREMENTS,
+    PROOF_RESULTS_PATH,
     PROOF_STRENGTHS,
     ROOT as CONTRACT_ROOT,
     REVIEWERS,
@@ -39,6 +41,7 @@ from scripts.reviewer_contracts import (
 from scripts.reviewer_contracts import (
     output_failures,
     output_set_failures,
+    proof_evaluation_failures,
     proof_fixture_failures,
     receipt_failures,
 )
@@ -117,6 +120,8 @@ class ReviewerContractTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.cases = load_json(CASES_PATH)
         cls.proof_cases = load_json(PROOF_CASES_PATH)
+        cls.proof_expectations = load_json(PROOF_EXPECTATIONS_PATH)
+        cls.proof_results = load_json(PROOF_RESULTS_PATH)
 
     def test_proof_quality_fixture_classes_are_mandatory(self) -> None:
         self.assertEqual(proof_fixture_failures(self.proof_cases), [])
@@ -155,6 +160,77 @@ class ReviewerContractTests(unittest.TestCase):
                 for failure in proof_fixture_failures(mutated)
             )
         )
+
+    def assert_blind_case(self, case_id: str, outcome: str) -> None:
+        self.assertEqual(
+            proof_evaluation_failures(
+                self.proof_cases, self.proof_expectations, self.proof_results
+            ),
+            [],
+        )
+        row = next(
+            row for row in self.proof_results["results"] if row["case_id"] == case_id
+        )
+        self.assertEqual(row["classification"], outcome)
+
+    def test_blind_fixture_detects_canonical_rule_drift(self) -> None:
+        self.assert_blind_case("pq-reuse-canonical-rule-drift", "finding")
+
+    def test_blind_fixture_detects_partial_owner_fact_validation(self) -> None:
+        self.assert_blind_case("pq-product-partial-owner-handoff", "handoff")
+
+    def test_blind_fixture_detects_malformed_input_leak(self) -> None:
+        self.assert_blind_case("pq-qa-malformed-public-input", "finding")
+
+    def test_blind_fixture_rejects_mocked_rollback_proof(self) -> None:
+        self.assert_blind_case("pq-ci-mocked-rollback", "finding")
+
+    def test_blind_fixture_rejects_label_only_security_fake(self) -> None:
+        self.assert_blind_case("pq-security-label-only-fake", "finding")
+
+    def test_blind_fixture_detects_sql_null_guard_escape(self) -> None:
+        self.assert_blind_case("pq-security-sql-null-guard", "finding")
+
+    def test_blind_fixture_detects_composite_ownership_gap(self) -> None:
+        self.assert_blind_case("pq-architecture-composite-owner", "finding")
+
+    def test_blind_fixture_rejects_missing_row_isolation_proof(self) -> None:
+        self.assert_blind_case("pq-security-missing-row-isolation", "finding")
+
+    def test_blind_fixture_detects_setup_only_failure(self) -> None:
+        self.assert_blind_case("pq-test-delta-setup-only-failure", "finding")
+
+    def test_blind_fixture_rejects_non_discriminating_input(self) -> None:
+        self.assert_blind_case("pq-qa-nondiscriminating-input", "finding")
+
+    def test_blind_fixture_false_positive_controls(self) -> None:
+        for case_id in (
+            "pq-architecture-public-port-control",
+            "pq-ci-real-transaction-control",
+            "pq-product-advisory-control",
+            "pq-reuse-canonical-owner-control",
+            "pq-security-real-isolation-control",
+            "pq-test-delta-real-mutation-control",
+        ):
+            with self.subTest(case_id=case_id):
+                self.assert_blind_case(case_id, "clear")
+
+    def test_blind_evaluation_rejects_independence_breach(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["rejected_runs"] = []
+        self.assertIn(
+            "proof evaluation: rejected independence breach not recorded",
+            proof_evaluation_failures(
+                self.proof_cases, self.proof_expectations, mutated
+            ),
+        )
+
+    def test_output_validation_rejects_pass_with_incompatible_proof(self) -> None:
+        receipt = valid_receipt()
+        receipt["traceability"][0]["claimed_boundary"] = "transaction"
+        receipt["traceability"][0]["proof_strength"] = "pure"
+        receipt["verdict"] = "PASS"
+        self.assertTrue(receipt_failures(receipt, "architecture", "a" * 40))
 
     def test_all_agent_skill_contracts_compose_with_protocol(self) -> None:
         self.assertEqual(contract_failures(), [])
@@ -597,7 +673,7 @@ class ReviewerContractTests(unittest.TestCase):
             finally:
                 temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_for_every_pair(
+    def test_adopted_lifecycle_is_independently_enforced_for_every_pair(
         self,
     ) -> None:
         for reviewer, (agent_name, skill_name) in REVIEWERS.items():
@@ -632,7 +708,7 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_in_state(self) -> None:
+    def test_adopted_lifecycle_is_independently_enforced_in_state(self) -> None:
         for relative_path, token in PROOF_QUALITY_STATE_REQUIREMENTS.items():
             with self.subTest(path=relative_path):
                 temporary, root = self.copied_contract_root()
@@ -647,7 +723,7 @@ class ReviewerContractTests(unittest.TestCase):
                 finally:
                     temporary.cleanup()
 
-    def test_candidate_lifecycle_is_independently_enforced_in_matrix(self) -> None:
+    def test_adopted_lifecycle_is_independently_enforced_in_matrix(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
             matrix = root / (

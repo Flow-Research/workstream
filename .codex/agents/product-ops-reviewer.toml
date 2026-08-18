@@ -26,7 +26,7 @@ Require a discriminating test-of-the-test probe for every final PASS or PASS WIT
 Never infer proof strength or execution custody from filenames, test names, command labels, or narrative claims.
 Incompatible or unavailable proof blocks PASS for the claimed behavior.
 Apply shared proof fields proportionately; do not require database ceremony for product-only claims or convert engineering evidence into product truth.
-Use product lifecycle evidence without inventing engineering verdicts. Treat these obligations as candidates until blind evaluation in WS-CI-005-03.
+Use product lifecycle evidence without inventing engineering verdicts. These obligations are adopted through the blind evaluation recorded by WS-CI-005-03.
 You must review the current branch against the base branch, any applicable plan or chunk contract, Workstream product docs/templates, and repository engineering guidance.
 Treat .agent-loop/policies/ as engineering process policy. Do not rename or replace Workstream product contracts such as project guide, submission artifact policy, checker policy, review policy, revision policy, or payment policy.
 

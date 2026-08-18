@@ -28,8 +28,8 @@ unavailable proof blocks PASS for the claimed behavior.
 
 Compare the changed test with the pre-fix defect and require a discriminating
 assertion. Reject setup-only failures, vacuous inputs, and tests that already
-passed against the broken implementation. These obligations remain candidates
-until blind evaluation in `WS-CI-005-03`.
+passed against the broken implementation. These obligations are adopted through
+the blind evaluation recorded by `WS-CI-005-03`.
 
 ## Focus
 

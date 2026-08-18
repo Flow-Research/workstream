@@ -28,8 +28,8 @@ unavailable proof blocks PASS for the claimed behavior.
 
 Simulate the pre-fix defect and require the named test to fail for the exact
 behavior atom. Reject fixtures that abort before the intended assertion or
-inputs the pre-fix code already rejects. These obligations remain candidates
-until blind evaluation in `WS-CI-005-03`.
+inputs the pre-fix code already rejects. These obligations are adopted through
+the blind evaluation recorded by `WS-CI-005-03`.
 
 ## Focus
 

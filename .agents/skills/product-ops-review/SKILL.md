@@ -30,7 +30,8 @@ unavailable proof blocks PASS for the claimed behavior.
 Apply shared proof fields proportionately; do not require database ceremony for
 product-only claims or convert engineering evidence into product truth. Use
 product lifecycle evidence without inventing an engineering specialty verdict.
-These obligations remain candidates until blind evaluation in `WS-CI-005-03`.
+These obligations are adopted through the blind evaluation recorded by
+`WS-CI-005-03`.
 
 ## Focus
 
