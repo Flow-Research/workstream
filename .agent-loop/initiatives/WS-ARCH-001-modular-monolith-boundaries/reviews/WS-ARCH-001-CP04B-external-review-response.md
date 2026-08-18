@@ -50,6 +50,10 @@
 - The non-PostgreSQL focused CodeRabbit regression set passed: 36 tests.
 - The five PostgreSQL concurrency tests remain hosted-only because local
   execution requires `WORKSTREAM_TEST_DATABASE_URL`; GitHub CI owns that proof.
+- The first corrective hosted replay correctly rejected the old public-schema
+  fingerprint after migration `0007` adopted the ORM's physical constraint
+  names. The pinned fingerprint now records the resulting canonical schema;
+  no schema check or threshold was weakened.
 
 ## Remaining risks
 
