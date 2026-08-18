@@ -25,6 +25,8 @@
 - CP04A structure and CP04B negative-scope tests: 17 passed.
 - Five focused publication, retirement, active-policy race, and transaction-lock
   PostgreSQL regressions through the isolated migrated runner: 5 passed.
+- Two incomplete-graph service regressions now assert the canonical concealed
+  policy conflict rather than a later database error: 2 passed.
 - Hosted exact-head lanes will be replayed after this correction is pushed.
 
 ## Remaining risks

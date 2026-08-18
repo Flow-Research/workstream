@@ -30,6 +30,7 @@ from app.modules.contributions.models import (
     ProjectCompensationUnit,
 )
 from app.modules.contributions.api import (
+    ContributionPolicyConflict,
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
 )
@@ -495,7 +496,7 @@ async def test_incomplete_or_unpaid_definition_graph_cannot_publish(
         "unpaid",
         binding_id=money_binding_id,
     )
-    with pytest.raises(DBAPIError):
+    with pytest.raises(ContributionPolicyConflict):
         await _publish_version(version_id, creator_id)
 
 
@@ -508,7 +509,7 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
     for only_type in ("accepted_submission", "completed_review"):
         _, version_id = await _draft_policy(project_id, creator_id)
         await _add_rule(version_id, project_id, only_type, "unpaid")
-        with pytest.raises(DBAPIError):
+        with pytest.raises(ContributionPolicyConflict):
             await _publish_version(version_id, creator_id)
 
     _, unpaid_version_id = await _draft_policy(project_id, creator_id)
@@ -520,13 +521,13 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
         binding_id=money_binding_id,
     )
     await _add_rule(unpaid_version_id, project_id, "completed_review", "unpaid")
-    with pytest.raises(DBAPIError):
+    with pytest.raises(ContributionPolicyConflict):
         await _publish_version(unpaid_version_id, creator_id)
 
     _, empty_version_id = await _draft_policy(project_id, creator_id)
     await _add_rule(empty_version_id, project_id, "accepted_submission", "compensated")
     await _add_rule(empty_version_id, project_id, "completed_review", "unpaid")
-    with pytest.raises(DBAPIError):
+    with pytest.raises(ContributionPolicyConflict):
         await _publish_version(empty_version_id, creator_id)
 
     _, duplicate_version_id = await _draft_policy(project_id, creator_id)
@@ -553,6 +554,7 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
                 )
             )
             await session.flush()
+
 
 @pytest.mark.asyncio
 async def test_definition_binding_must_match_project_and_instrument(
