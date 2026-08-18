@@ -619,8 +619,8 @@ def _git_text(revision: str, path: str) -> str:
 
 def _normalized_proof_subject(text: str) -> str:
     patterns = (
-        r"These obligations\s+remain\s+candidates until blind\s+evaluation in `WS-CI-005-03`\.",
-        r"These obligations\s+are adopted through the blind\s+evaluation recorded by `WS-CI-005-03`\.",
+        r"These obligations\s+remain\s+candidates\s+until\s+blind\s+evaluation\s+in\s+`WS-CI-005-03`\.",
+        r"These obligations\s+are\s+adopted\s+through\s+the\s+blind\s+evaluation\s+recorded\s+by\s+`WS-CI-005-03`\.",
         r"Treat these obligations as candidates until blind evaluation in WS-CI-005-03\.",
         r"These obligations are adopted through the blind evaluation recorded by WS-CI-005-03\.",
         r"Specialty additions remain\s+candidate contracts until `WS-CI-005-03` completes blind evaluation:",
