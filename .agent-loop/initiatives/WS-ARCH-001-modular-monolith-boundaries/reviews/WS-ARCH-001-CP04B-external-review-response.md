@@ -10,6 +10,14 @@
 - The CP04A structure check no longer treats CP04A's intentionally superseded
   no-publish/no-retire assertions as permanent current-head behavior. CP04B's
   downstream negative-boundary tests remain active.
+- CodeRabbit's seven final-head findings were replayed and accepted. The CP04B
+  contract sentence and criterion map are now exact; migration `0007` uses the
+  physical check-constraint names produced by the ORM naming convention;
+  publish/retire validate their required owner ports before duplicate recovery;
+  AUTH digest parity is derived independently from seeded server facts; opaque
+  authority lifecycle assertions prove the prepared handle is consumed and
+  closed exactly once; PostgreSQL concurrency helpers clean up on every failure;
+  and the caller-fact structural test now has an accurate name.
 
 ## Comments deferred
 
@@ -38,8 +46,12 @@
   policy through the canonical hidden CONTRIBUTIONS service. All 8 ReviewLease
   persistence tests passed against a freshly migrated isolated PostgreSQL
   database; no REV behavior or production boundary changed.
+- Ruff passed across the complete CONTRIBUTIONS module and test package.
+- The non-PostgreSQL focused CodeRabbit regression set passed: 36 tests.
+- The five PostgreSQL concurrency tests remain hosted-only because local
+  execution requires `WORKSTREAM_TEST_DATABASE_URL`; GitHub CI owns that proof.
 
 ## Remaining risks
 
-- CodeRabbit has not produced a substantive review; its current result is a
-  manual-review notice and must not be represented as approval.
+- Hosted PostgreSQL and complete-suite evidence must be replayed on the final
+  corrective head before merge readiness is claimed.

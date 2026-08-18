@@ -59,11 +59,11 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "request_digest ~ '^sha256:[0-9a-f]{64}$'",
-            name="ck_contribution_policy_custody_digest",
+            name="ck_contribution_policy_transition_custody_request_digest",
         ),
         sa.CheckConstraint(
             "event_type in ('published','retired')",
-            name="ck_contribution_policy_custody_event_type",
+            name="ck_contribution_policy_transition_custody_event_type",
         ),
     )
     for table, constraint in (

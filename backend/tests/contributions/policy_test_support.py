@@ -44,7 +44,9 @@ class AllowAuthorization:
     def __init__(self, actor_id: UUID) -> None:
         self.actor_id = actor_id
         self.prepared: list[ContributionPolicyAuthorizationFacts] = []
+        self.prepared_handles: list[object] = []
         self.consumed: list[ContributionPolicyAuthorizationFacts] = []
+        self.consumed_handles: list[object] = []
         self.closed: list[object] = []
         self.reads: list[ContributionPolicyReadRequest] = []
 
@@ -57,12 +59,14 @@ class AllowAuthorization:
         self, facts: ContributionPolicyAuthorizationFacts
     ) -> object:
         self.prepared.append(facts)
-        return object()
+        prepared = object()
+        self.prepared_handles.append(prepared)
+        return prepared
 
     async def consume_contribution_policy_mutation(
         self, prepared: object, facts: ContributionPolicyAuthorizationFacts
     ) -> UUID:
-        del prepared
+        self.consumed_handles.append(prepared)
         self.consumed.append(facts)
         return self.actor_id
 

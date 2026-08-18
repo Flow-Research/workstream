@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.modules.authorization.api import (
     ActionId,
@@ -17,6 +18,7 @@ from app.modules.contributions.api import (
     ContributionPolicyRetireAuthorizationFacts,
 )
 from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
+from app.modules.contributions.policy_graph import publication_graph_facts
 from tests.contributions.policy_test_support import service_fixture
 from tests.contributions.test_policy_publish import _install_complete_draft, _request
 
@@ -25,7 +27,17 @@ from tests.contributions.test_policy_publish import _install_complete_draft, _re
 async def test_publish_facts_match_public_auth_digest() -> None:
     fixture = service_fixture()
     request = _request(fixture)
-    _install_complete_draft(fixture, request)
+    _, version = _install_complete_draft(fixture, request)
+    rules, _ = fixture.repository.lock_publication_graph.return_value
+    set_committed_value(version, "rules", rules)
+    graph_digest, binding_ids = publication_graph_facts(version)
+    expected_facts = ContributionPolicyPublishFacts(
+        project_id=request.project_id,
+        contribution_policy_id=request.contribution_policy_id,
+        contribution_policy_version_id=request.contribution_policy_version_id,
+        rules_and_definitions_digest=graph_digest,
+        adapter_binding_ids=binding_ids,
+    )
     await fixture.service.publish(request)
     facts = fixture.authorization.prepared[0]
     assert isinstance(facts, ContributionPolicyPublishAuthorizationFacts)
@@ -36,10 +48,11 @@ async def test_publish_facts_match_public_auth_digest() -> None:
         rules_and_definitions_digest=facts.rules_and_definitions_digest,
         adapter_binding_ids=facts.adapter_binding_ids,
     )
-    digest = contribution_policy_resource_digest(
-        ActionId("contribution.policy.publish"), auth_facts
+    expected = contribution_policy_resource_digest(
+        ActionId("contribution.policy.publish"), expected_facts
     )
-    assert digest == contribution_policy_resource_digest(ActionId(facts.action), auth_facts)
+    actual = contribution_policy_resource_digest(ActionId(facts.action), auth_facts)
+    assert actual == expected
 
 
 @pytest.mark.asyncio
@@ -84,8 +97,13 @@ async def test_retire_facts_match_public_auth_digest() -> None:
         contribution_policy_id=facts.contribution_policy_id,
         contribution_policy_version_id=facts.contribution_policy_version_id,
     )
+    expected_facts = ContributionPolicyRetireFacts(
+        project_id=request.project_id,
+        contribution_policy_id=request.contribution_policy_id,
+        contribution_policy_version_id=request.contribution_policy_version_id,
+    )
     expected = contribution_policy_resource_digest(
-        ActionId("contribution.policy.retire"), auth_facts
+        ActionId("contribution.policy.retire"), expected_facts
     )
     actual = contribution_policy_resource_digest(ActionId(facts.action), auth_facts)
     assert actual == expected

@@ -9,6 +9,7 @@ from app.modules.contributions.api import (
     ContributionPolicyConflict,
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
+    ContributionPolicyUnavailable,
 )
 from app.modules.contributions.models import ContributionPolicyLifecycleEvent
 from app.modules.contributions.policy_validation import policy_request_digest
@@ -71,6 +72,44 @@ async def test_duplicate_retire_returns_original_event_after_authorized_read() -
     fixture.repository.get_event_by_operation.return_value = event
     result = await fixture.service.retire(request)
     assert result.event_id == event.id
+
+
+@pytest.mark.asyncio
+async def test_duplicate_publish_requires_current_owner_ports_before_recovery() -> None:
+    fixture = service_fixture()
+    request = ContributionPolicyPublishRequest(
+        operation_id=uuid4(),
+        actor_profile_id=fixture.actor_id,
+        project_id=fixture.project_id,
+        contribution_policy_id=uuid4(),
+        contribution_policy_version_id=uuid4(),
+    )
+    fixture.repository.get_event_by_operation.return_value = _event(
+        request, "contribution.policy.publish", "published"
+    )
+    fixture.service._publication._bindings = None  # noqa: SLF001
+    with pytest.raises(ContributionPolicyUnavailable):
+        await fixture.service.publish(request)
+    fixture.repository.lock_operation.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_retire_requires_current_project_port_before_recovery() -> None:
+    fixture = service_fixture()
+    request = ContributionPolicyRetireRequest(
+        operation_id=uuid4(),
+        actor_profile_id=fixture.actor_id,
+        project_id=fixture.project_id,
+        contribution_policy_id=uuid4(),
+        contribution_policy_version_id=uuid4(),
+    )
+    fixture.repository.get_event_by_operation.return_value = _event(
+        request, "contribution.policy.retire", "retired"
+    )
+    fixture.service._publication._projects = None  # noqa: SLF001
+    with pytest.raises(ContributionPolicyUnavailable):
+        await fixture.service.retire(request)
+    fixture.repository.lock_operation.assert_not_awaited()
 
 
 @pytest.mark.asyncio

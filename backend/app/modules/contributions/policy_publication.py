@@ -63,6 +63,7 @@ class ContributionPolicyPublicationService:
     ) -> ContributionPolicyMutationResult:
         """Publish one locked complete draft and atomically replace its predecessor."""
         self._require_request(request, ContributionPolicyPublishRequest)
+        self._require_publication_ports()
         digest = policy_request_digest("contribution.policy.publish", request)
         recovered = await self._begin_and_recover(request, digest, "published")
         if recovered is not None:
@@ -103,6 +104,7 @@ class ContributionPolicyPublicationService:
     ) -> ContributionPolicyMutationResult:
         """Terminally retire one aggregate's exact current published version."""
         self._require_request(request, ContributionPolicyRetireRequest)
+        self._require_project_port()
         digest = policy_request_digest("contribution.policy.retire", request)
         recovered = await self._begin_and_recover(request, digest, "retired")
         if recovered is not None:
@@ -149,8 +151,8 @@ class ContributionPolicyPublicationService:
         )
 
     async def _lock_project(self, project_id: UUID) -> None:
-        if self._projects is None:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
+        self._require_project_port()
+        assert self._projects is not None
         try:
             result = await self._projects.lock_contribution_policy_project(project_id)
         except ProjectContributionPolicyUnavailable as exc:
@@ -183,13 +185,14 @@ class ContributionPolicyPublicationService:
         return prior
 
     async def _lock_owner_resources(self, project_id: UUID, definitions) -> None:
-        if self._bindings is None:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
+        self._require_publication_ports()
+        assert self._bindings is not None
         units = sorted({(item.instrument_type, item.unit_code) for item in definitions})
         for instrument, unit_code in units:
             unit = await self._repository.lock_unit(project_id, instrument, unit_code)
             if unit is None or unit.status != "active":
                 raise ContributionPolicyConflict("contribution_policy_not_found")
+
         bindings = {item.adapter_binding_id: item for item in definitions}
         if any(
             bindings[item.adapter_binding_id].instrument_type != item.instrument_type
@@ -211,6 +214,15 @@ class ContributionPolicyPublicationService:
                 or binding.instrument_type.value != item.instrument_type
             ):
                 raise ContributionPolicyConflict("contribution_policy_not_found")
+
+    def _require_project_port(self) -> None:
+        if self._projects is None:
+            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
+
+    def _require_publication_ports(self) -> None:
+        self._require_project_port()
+        if self._bindings is None:
+            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     @staticmethod
     def _require_complete_graph(rules) -> None:

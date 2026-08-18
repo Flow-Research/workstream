@@ -70,8 +70,8 @@ factory path may be introduced.
   server-owned `rules_and_definitions_digest`, sorted unique
   `adapter_binding_ids`, and exact expected draft status. Retirement mutation
   facts contain the exact current published version and expected published
-  status. The CONTRIBUTIONS adapter constructs the existing AUTH public
-  same values required by public AUTH `ContributionPolicyPublishFacts` or
+  status. The CONTRIBUTIONS adapter constructs the exact same values required
+  by public AUTH `ContributionPolicyPublishFacts` or
   `ContributionPolicyRetireFacts`, without importing AUTH models,
   repositories, services, or private helpers. CP04B implements only
   CONTRIBUTIONS-owned domain facts and public-schema parity tests. CP05 alone
@@ -231,7 +231,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 | Criterion | Required future proof | Execution custody |
 |---|---|---|
 | Publish/retire remain concealed, route-unreachable, and production deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
-| Publish consumes exact server-recomputed graph digest and binding ids | `tests/contributions/test_policy_publish.py::{test_publish_uses_locked_server_owned_graph,test_caller_supplied_graph_mismatch_denies}` | focused local command and hosted CI |
+| Publish consumes exact server-recomputed graph digest and binding ids, and the public request cannot carry caller graph facts | `tests/contributions/test_policy_publish.py::{test_publish_uses_locked_server_owned_graph,test_publish_request_cannot_carry_caller_graph_facts}` | focused local command and hosted CI |
 | PREP denial occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_prepare_denial_has_no_product_effect` | focused local command and hosted CI |
 | PREP consume exception occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_consume_exception_has_no_product_effect` | focused local command and hosted CI |
 | PREP returns the wrong actor before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_wrong_consumed_actor_has_no_product_effect` | focused local command and hosted CI |

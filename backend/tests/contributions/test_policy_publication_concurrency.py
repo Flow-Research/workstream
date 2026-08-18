@@ -69,15 +69,24 @@ async def _start_paused_publication(request: ContributionPolicyPublishRequest):
         bindings=policy_adapter_binding_port(session),
     )
     task = asyncio.create_task(service.publish(request))
-    await asyncio.wait_for(authorization.entered.wait(), timeout=5)
+    try:
+        await asyncio.wait_for(authorization.entered.wait(), timeout=5)
+    except BaseException:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await transaction.__aexit__(None, None, None)
+        await session.close()
+        raise
     return authorization, session, transaction, task
 
 
 async def _finish_publication(authorization, session, transaction, task) -> None:
     authorization.release.set()
-    await task
-    await transaction.__aexit__(None, None, None)
-    await session.close()
+    try:
+        await task
+    finally:
+        await transaction.__aexit__(None, None, None)
+        await session.close()
 
 
 async def _assert_write_waits(request, statement: str, parameters: dict) -> None:

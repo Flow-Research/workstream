@@ -182,7 +182,7 @@ async def test_replacement_preserves_prior_content_and_frozen_references() -> No
 
 
 @pytest.mark.asyncio
-async def test_caller_supplied_graph_mismatch_denies() -> None:
+async def test_publish_request_cannot_carry_caller_graph_facts() -> None:
     fixture = service_fixture()
     request = _request(fixture)
     assert not hasattr(request, "rules_and_definitions_digest")

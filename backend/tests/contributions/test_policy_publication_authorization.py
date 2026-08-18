@@ -301,5 +301,6 @@ async def test_closed_publication_authority_cannot_be_reused() -> None:
     request = _request(fixture)
     _install_complete_draft(fixture, request)
     await fixture.service.publish(request)
-    prepared = fixture.authorization.closed[0]
-    assert prepared not in fixture.authorization.closed[1:]
+    assert fixture.authorization.prepared_handles == fixture.authorization.consumed_handles
+    assert fixture.authorization.closed == fixture.authorization.prepared_handles
+    assert len({id(item) for item in fixture.authorization.closed}) == 1
