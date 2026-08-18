@@ -256,6 +256,12 @@ class ReviewerContractTests(unittest.TestCase):
             "proof supersession: evaluated head is unreachable",
             proof_supersession_failures(mutated),
         )
+        self.assertIn(
+            "proof supersession: evaluated head is not an ancestor",
+            proof_supersession_failures(
+                self.proof_results, current_head=f"{evaluated_head}^"
+            ),
+        )
         mutated["evaluated_head"] = "HEAD"
         self.assertEqual(
             proof_supersession_failures(mutated),

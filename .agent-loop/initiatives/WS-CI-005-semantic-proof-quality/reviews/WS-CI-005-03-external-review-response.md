@@ -17,7 +17,8 @@ Source: CodeRabbit review of pull request 354 at head `a51b2f8d0f57abf00d79080c1
 - Clarified that defect/control pairing is a canonical contract-table
   self-consistency check while exact case IDs enforce fixture coverage.
 - Distinguished invalid, unreachable, and non-ancestor evaluated Git heads and
-  delimited the ancestry command safely.
+  delimited the ancestry command safely. A committed reachable-non-ancestor
+  regression probe uses the evaluated commit's parent as the comparison target.
 - Kept the general evaluation test hermetic and isolated full-history
   supersession behavior in a Git-dependent test that skips when its historical
   commit is unavailable. Agent Gates already checks out full history.
