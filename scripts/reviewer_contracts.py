@@ -19,8 +19,18 @@ CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
+PROOF_PATTERNS_PATH = (
+    ROOT
+    / ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md"
+)
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
+RECEIPT_SCHEMA = json.loads(RECEIPT_SCHEMA_PATH.read_text(encoding="utf-8"))
+PROOF_STRENGTHS = set(RECEIPT_SCHEMA["$defs"]["proof_strength"]["enum"])
+PROOF_CUSTODY_MATRIX = RECEIPT_SCHEMA["x-proof-custody-matrix"]
+PASSING_VERDICTS = {"PASS", "PASS AFTER FIXES", "PASS WITH LOW RISKS"}
+FAILURE_PATTERN_IDS = {f"PQ-{number:03d}" for number in range(1, 14)}
+FAILURE_PATTERN_ROW = re.compile(r"^\| `(PQ-[0-9]{3})` \|", re.MULTILINE)
 SEMANTIC_SKILL_REQUIREMENTS = {
     "semantic.atomization": "Atomize every material criterion",
     "semantic.ownership": "record its owner",
@@ -51,7 +61,14 @@ def load_json(path: Path) -> dict[str, object]:
 def matrix_reviewers(matrix: str) -> dict[str, tuple[str, str]]:
     """Load the canonical reviewer registry from the initiative matrix."""
     rows = MATRIX_ROW.findall(matrix)
-    return {reviewer: (agent_name, skill_name) for reviewer, agent_name, skill_name in rows}
+    return {
+        reviewer: (agent_name, skill_name) for reviewer, agent_name, skill_name in rows
+    }
+
+
+def failure_pattern_ids(patterns: str) -> list[str]:
+    """Return registered escaped-failure IDs without discarding duplicates."""
+    return FAILURE_PATTERN_ROW.findall(patterns)
 
 
 REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
@@ -61,6 +78,15 @@ def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
+    patterns_path = root / PROOF_PATTERNS_PATH.relative_to(ROOT)
+    if not patterns_path.is_file():
+        failures.append("proof patterns: missing registry")
+    else:
+        pattern_rows = failure_pattern_ids(patterns_path.read_text(encoding="utf-8"))
+        if len(pattern_rows) != len(set(pattern_rows)):
+            failures.append("proof patterns: duplicate IDs")
+        if set(pattern_rows) != FAILURE_PATTERN_IDS:
+            failures.append("proof patterns: incomplete registry")
     if len(reviewers) != 9 or len(MATRIX_ROW.findall(matrix)) != 9:
         failures.append("matrix: expected nine unique reviewer contracts")
     reviewer_pairs = list(reviewers.values())
@@ -80,14 +106,18 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             if isinstance(row, dict)
         }
         if case_reviewers != set(reviewers):
-            failures.append("matrix: canonical reviewer IDs do not match evaluation cases")
+            failures.append(
+                "matrix: canonical reviewer IDs do not match evaluation cases"
+            )
     for reviewer, (agent_name, skill_name) in reviewers.items():
         agent_path = root / ".codex/agents" / agent_name
         skill_path = root / ".agents/skills" / skill_name / "SKILL.md"
         if not agent_path.is_file() or not skill_path.is_file():
             failures.append(f"{reviewer}: missing agent or skill")
             continue
-        agent = tomllib.loads(agent_path.read_text(encoding="utf-8"))["developer_instructions"]
+        agent = tomllib.loads(agent_path.read_text(encoding="utf-8"))[
+            "developer_instructions"
+        ]
         skill = skill_path.read_text(encoding="utf-8")
         normalized_agent = " ".join(agent.split())
         normalized_skill = " ".join(skill.split())
@@ -111,7 +141,9 @@ def contract_failures(root: Path = ROOT) -> list[str]:
                 failures.append(f"{reviewer}: agent missing {token!r}")
         for requirement_id, token in SEMANTIC_AGENT_REQUIREMENTS.items():
             if token not in normalized_agent:
-                failures.append(f"{reviewer}: agent missing {requirement_id} ({token!r})")
+                failures.append(
+                    f"{reviewer}: agent missing {requirement_id} ({token!r})"
+                )
         for token in (
             "reviewer-evidence-protocol",
             "exact target",
@@ -128,7 +160,9 @@ def contract_failures(root: Path = ROOT) -> list[str]:
                 failures.append(f"{reviewer}: skill missing {token!r}")
         for requirement_id, token in SEMANTIC_SKILL_REQUIREMENTS.items():
             if token not in normalized_skill:
-                failures.append(f"{reviewer}: skill missing {requirement_id} ({token!r})")
+                failures.append(
+                    f"{reviewer}: skill missing {requirement_id} ({token!r})"
+                )
         if agent_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:
             failures.append(f"{reviewer}: agent absent from matrix")
         if skill_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:
@@ -165,7 +199,9 @@ def fixture_failures(
             failures.append(f"{case_id}: unknown case class")
         else:
             coverage[reviewer].add(case_class)
-        if not isinstance(row.get("task"), str) or not isinstance(row.get("evidence"), str):
+        if not isinstance(row.get("task"), str) or not isinstance(
+            row.get("evidence"), str
+        ):
             failures.append(f"{case_id}: missing raw task/evidence")
         if any(key in row for key in ("expected", "outcome", "finding_ids")):
             failures.append(f"{case_id}: expected answer leaked into raw case")
@@ -178,7 +214,9 @@ def fixture_failures(
     expected_rows = expectations.get("expectations")
     if not isinstance(expected_rows, list):
         return failures + ["expectations: missing list"]
-    expected_id_rows = [row.get("case_id") for row in expected_rows if isinstance(row, dict)]
+    expected_id_rows = [
+        row.get("case_id") for row in expected_rows if isinstance(row, dict)
+    ]
     expected_ids = set(expected_id_rows)
     if len(expected_id_rows) != len(expected_ids):
         failures.append("expectations: duplicate case IDs")
@@ -199,11 +237,13 @@ def fixture_failures(
     return failures
 
 
-def receipt_failures(receipt: object, reviewer: object, evaluated_head: object) -> list[str]:
+def receipt_failures(
+    receipt: object, reviewer: object, evaluated_head: object
+) -> list[str]:
     if not isinstance(receipt, dict):
         return ["output: missing protocol receipt"]
     try:
-        jsonschema.validate(receipt, load_json(RECEIPT_SCHEMA_PATH))
+        jsonschema.validate(receipt, RECEIPT_SCHEMA)
     except jsonschema.ValidationError as exc:
         return [f"output: invalid protocol receipt: {exc.message}"]
     failures: list[str] = []
@@ -214,6 +254,38 @@ def receipt_failures(receipt: object, reviewer: object, evaluated_head: object) 
     evidence_kinds = {item["kind"] for item in receipt["evidence"]}
     if evidence_kinds != {"executed", "inspected"}:
         failures.append("output: receipt must separate executed and inspected evidence")
+    for index, row in enumerate(receipt["traceability"]):
+        if row["proof_compatibility"] == "unavailable":
+            if row["proof_custody"]["kind"] != "unavailable":
+                failures.append(
+                    f"output: traceability row {index} unavailable proof custody mismatch"
+                )
+            continue
+        custody_rule = PROOF_CUSTODY_MATRIX[row["claimed_boundary"]]
+        custody = row["proof_custody"]
+        custody_matches = custody["kind"] == custody_rule["kind"] and set(
+            custody_rule["required_observations"]
+        ).issubset(custody["observations"])
+        expected = (
+            "compatible"
+            if row["proof_strength"] == custody_rule["proof_strength"]
+            and custody_matches
+            else "incompatible"
+        )
+        if row["proof_compatibility"] != expected:
+            failures.append(
+                f"output: traceability row {index} proof compatibility mismatch"
+            )
+    if receipt["verdict"] in PASSING_VERDICTS and any(
+        row["proof_compatibility"] != "compatible" for row in receipt["traceability"]
+    ):
+        failures.append("output: incompatible or unavailable proof blocks PASS")
+    for finding in receipt["findings"]:
+        unknown = set(finding["failure_pattern_ids"]) - FAILURE_PATTERN_IDS
+        if unknown:
+            failures.append(
+                f"output: finding {finding['id']} has unknown failure pattern IDs"
+            )
     return failures
 
 
@@ -224,8 +296,13 @@ def output_failures(
         return ["output: expected an object"]
     failures: list[str] = []
     required = {
-        "case_id", "reviewer", "evaluated_head", "classification", "finding_ids",
-        "short_reason", "handoff_specialty",
+        "case_id",
+        "reviewer",
+        "evaluated_head",
+        "classification",
+        "finding_ids",
+        "short_reason",
+        "handoff_specialty",
     }
     missing = required - output.keys()
     if missing:
@@ -248,10 +325,16 @@ def output_failures(
     if output.get("handoff_specialty") != expectation.get("handoff_specialty"):
         failures.append("output: wrong handoff")
     head = output.get("evaluated_head")
-    if not isinstance(head, str) or len(head) != 40 or any(c not in "0123456789abcdef" for c in head):
+    if (
+        not isinstance(head, str)
+        or len(head) != 40
+        or any(c not in "0123456789abcdef" for c in head)
+    ):
         failures.append("output: invalid evaluated head")
     receipt = output.get("receipt") if receipt is None else receipt
-    failures.extend(receipt_failures(receipt, output.get("reviewer"), evaluated_head=head))
+    failures.extend(
+        receipt_failures(receipt, output.get("reviewer"), evaluated_head=head)
+    )
     if (
         isinstance(receipt, dict)
         and isinstance(finding_ids, list)
@@ -300,7 +383,9 @@ def output_set_failures(
             failures.append("output set: invalid reviewer")
             continue
         receipt = receipts.get(reviewer)
-        failures.extend(output_failures(output, expected_by_id[output["case_id"]], receipt))
+        failures.extend(
+            output_failures(output, expected_by_id[output["case_id"]], receipt)
+        )
         if output.get("reviewer") != case_by_id[output["case_id"]]["reviewer"]:
             failures.append("output: wrong reviewer")
     return failures
@@ -328,10 +413,14 @@ def _main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "validate-output":
         expectations = load_json(EXPECTATIONS_PATH)["expectations"]
-        expected = next((row for row in expectations if row["case_id"] == args.case), None)
+        expected = next(
+            (row for row in expectations if row["case_id"] == args.case), None
+        )
         if expected is None:
             return print_failures([f"unknown case: {args.case}"])
-        case = next(row for row in load_json(CASES_PATH)["cases"] if row["id"] == args.case)
+        case = next(
+            row for row in load_json(CASES_PATH)["cases"] if row["id"] == args.case
+        )
         output = load_json(args.output)
         failures = output_failures(output, expected)
         if not isinstance(output, dict):
@@ -344,7 +433,9 @@ def _main(argv: list[str] | None = None) -> int:
         receipts = load_json(args.receipts)
         expectations = load_json(EXPECTATIONS_PATH)["expectations"]
         cases = load_json(CASES_PATH)["cases"]
-        return print_failures(output_set_failures(outputs, receipts, expectations, cases))
+        return print_failures(
+            output_set_failures(outputs, receipts, expectations, cases)
+        )
     cases = load_json(CASES_PATH)
     expectations = load_json(EXPECTATIONS_PATH) if EXPECTATIONS_PATH.exists() else None
     matrix = MATRIX_PATH.read_text(encoding="utf-8")

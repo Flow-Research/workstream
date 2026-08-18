@@ -1,8 +1,10 @@
 # Reviewer Responsibility And Evaluation Matrix
 
 The shared evidence protocol owns target, provenance, freshness, finding, and
-output mechanics. Each custom agent and matching repository skill must prove the
-distinct specialty value below.
+output mechanics. It also owns the closed proof-strength vocabulary and stable
+escaped-failure pattern registry; `scripts/reviewer_contracts.py` owns their
+deterministic compatibility validation. Each custom agent and matching
+repository skill must prove the distinct specialty value below.
 
 ## Agent-to-skill map
 
