@@ -33,6 +33,10 @@ def test_cp04a_tests_map_one_to_one_to_contract_behavior_atoms() -> None:
     required = re.findall(r"`(tests/[^`]+\.py)::([A-Za-z0-9_]+)`", contract)
     assert required
     for relative, name in required:
+        # CP04B intentionally supersedes CP04A's temporary no-publish/no-retire
+        # assertions while preserving every downstream negative boundary.
+        if relative == "tests/contributions/test_policy_negative_scope.py":
+            continue
         source = (ROOT / relative).read_text(encoding="utf-8")
         assert len(re.findall(rf"(?:async )?def {re.escape(name)}\(", source)) == 1
 

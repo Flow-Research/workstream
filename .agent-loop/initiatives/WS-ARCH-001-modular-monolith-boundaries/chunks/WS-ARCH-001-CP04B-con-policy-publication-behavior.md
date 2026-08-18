@@ -25,6 +25,7 @@ backend/app/adapters/contributions/__init__.py
 backend/alembic/versions/0007_contribution_policy_publication_custody.py
 backend/alembic/env.py
 backend/tests/contributions/**
+backend/tests/test_contributions.py (existing PostgreSQL lifecycle fixtures and schema parity only)
 backend/tests/architecture/** (exact boundary proof only)
 backend/tests/authorization/test_contribution_policy_registration.py (negative activation parity only)
 backend/tests/authorization/guide_compilation/test_migration_contract.py (head parity only)

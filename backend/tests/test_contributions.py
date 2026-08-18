@@ -15,6 +15,8 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from adapter_binding_fixtures import created_binding_events
 from app.core.config import get_settings
+from app.adapters.compensation import policy_adapter_binding_port
+from app.adapters.projects import project_contribution_policy_eligibility_port
 from app.db import session as db_session
 from app.db.base import Base
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
@@ -27,12 +29,15 @@ from app.modules.contributions.models import (
     ContributionRule,
     ProjectCompensationUnit,
 )
+from app.modules.contributions.api import ContributionPolicyPublishRequest
+from app.modules.contributions.service import ContributionPolicyService
 from app.modules.contributions.schemas import (
     ContributionAwardDefinitionInput,
     ISO_4217_CURRENCY_CODES,
     ProjectCompensationUnitInput,
 )
 from project_create_fixtures import insert_historical_project
+from tests.contributions.policy_test_support import AllowAuthorization
 
 
 @pytest.fixture
@@ -230,13 +235,27 @@ async def _add_rule(
 
 
 async def _publish_version(version_id: UUID, creator_id: str) -> None:
-    async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(ContributionPolicyVersion)
-            .where(ContributionPolicyVersion.id == version_id)
-            .values(status="published", published_by=creator_id, published_at=datetime.now(UTC))
+    async with db_session.get_session_factory()() as session, session.begin():
+        version = await session.get(ContributionPolicyVersion, version_id)
+        assert version is not None
+        actor_id = UUID(creator_id)
+        authorization = AllowAuthorization(actor_id)
+        service = ContributionPolicyService(
+            session,
+            read_authorization=authorization,
+            mutation_authorization=authorization,
+            projects=project_contribution_policy_eligibility_port(session),
+            bindings=policy_adapter_binding_port(session),
         )
-        await session.commit()
+        await service.publish(
+            ContributionPolicyPublishRequest(
+                operation_id=uuid4(),
+                actor_profile_id=actor_id,
+                project_id=UUID(version.project_id),
+                contribution_policy_id=version.contribution_policy_id,
+                contribution_policy_version_id=version.id,
+            )
+        )
 
 
 async def _complete_published_policy(
@@ -266,6 +285,7 @@ def test_contribution_models_register_closed_canonical_tables() -> None:
         "name",
         "status",
         "current_published_version_id",
+        "last_transition_operation_id",
         "created_by",
         "created_at",
         "retired_by",
@@ -285,6 +305,7 @@ def test_contribution_models_register_closed_canonical_tables() -> None:
         "retired_at",
         "last_updated_by",
         "last_updated_at",
+        "last_transition_operation_id",
     }
     assert {
         "iso_4217_currency_codes",
