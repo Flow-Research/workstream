@@ -219,10 +219,21 @@ class ReviewerContractTests(unittest.TestCase):
                 ] = "architecture"
                 self.assertTrue(proof_fixture_failures(cases))
                 self.assertTrue(
-                    proof_evaluation_failures(cases, self.proof_expectations, results)
+                    proof_evaluation_failures(
+                        cases,
+                        self.proof_expectations,
+                        results,
+                        check_supersession=False,
+                    )
                 )
 
     def test_proof_supersession_rejects_arbitrary_or_changed_targets(self) -> None:
+        self.assertEqual(
+            proof_evaluation_failures(
+                self.proof_cases, self.proof_expectations, self.proof_results
+            ),
+            [],
+        )
         mutated = copy.deepcopy(self.proof_results)
         mutated["evaluated_head"] = "0" * 40
         self.assertIn(
@@ -244,7 +255,10 @@ class ReviewerContractTests(unittest.TestCase):
     def assert_blind_case(self, case_id: str, outcome: str) -> None:
         self.assertEqual(
             proof_evaluation_failures(
-                self.proof_cases, self.proof_expectations, self.proof_results
+                self.proof_cases,
+                self.proof_expectations,
+                self.proof_results,
+                check_supersession=False,
             ),
             [],
         )
@@ -301,7 +315,10 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertIn(
             "proof evaluation: rejected independence breach not recorded",
             proof_evaluation_failures(
-                self.proof_cases, self.proof_expectations, mutated
+                self.proof_cases,
+                self.proof_expectations,
+                mutated,
+                check_supersession=False,
             ),
         )
 
@@ -312,7 +329,12 @@ class ReviewerContractTests(unittest.TestCase):
         mutated["expectations"].insert(0, duplicate)
         self.assertIn(
             "proof evaluation: duplicate expectation rows",
-            proof_evaluation_failures(self.proof_cases, mutated, self.proof_results),
+            proof_evaluation_failures(
+                self.proof_cases,
+                mutated,
+                self.proof_results,
+                check_supersession=False,
+            ),
         )
 
     def test_blind_evaluation_rejects_unknown_result_patterns(self) -> None:
@@ -321,7 +343,10 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertIn(
             f"{mutated['results'][0]['case_id']}: unknown proof pattern",
             proof_evaluation_failures(
-                self.proof_cases, self.proof_expectations, mutated
+                self.proof_cases,
+                self.proof_expectations,
+                mutated,
+                check_supersession=False,
             ),
         )
 

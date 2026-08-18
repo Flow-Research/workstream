@@ -693,6 +693,8 @@ def proof_evaluation_failures(
     cases: object,
     expectations: object,
     results: object,
+    *,
+    check_supersession: bool = True,
 ) -> list[str]:
     """Validate post-run expectations and one-head blind evaluation results."""
     if not isinstance(cases, dict) or not isinstance(cases.get("cases"), list):
@@ -715,7 +717,8 @@ def proof_evaluation_failures(
         failures.append("proof evaluation: invalid evaluated head")
     if expectations.get("evaluated_head") != evaluated_head:
         failures.append("proof evaluation: expectation/result head mismatch")
-    failures.extend(proof_supersession_failures(results))
+    if check_supersession:
+        failures.extend(proof_supersession_failures(results))
     if results.get("expectations_available_during_runs") is not False:
         failures.append("proof evaluation: answers were available during blind runs")
     if results.get("embedded_commands_executed") is not False:
