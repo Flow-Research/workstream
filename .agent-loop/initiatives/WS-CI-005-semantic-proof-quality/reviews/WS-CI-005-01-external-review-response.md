@@ -45,6 +45,6 @@ python3 -m unittest -q scripts.test_reviewer_contracts scripts.test_review_targe
 
 ## Remaining risks
 
-The original exact-head internal reviews are stale after this correction. The
-affected reviewer tracks must replay these external findings on the corrected
-clean head before the pull request is merge-ready.
+The original exact-head internal reviews do not cover this correction. Any
+internal verdict used for merge readiness must bind to the corrected clean PR
+head and explicitly replay these external findings.
