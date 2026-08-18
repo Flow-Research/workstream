@@ -26,6 +26,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install deterministic gate dependencies
+        run: >-
+          python3 -m pip install
+          --require-hashes
+          --only-binary=:all:
+          -r .github/requirements/agent-gates.txt
+
       - name: Markdown link check
         run: python3 scripts/check_markdown_links.py
 
@@ -50,6 +57,18 @@ jobs:
 
       - name: Active state projection validation
         run: python3 scripts/check_active_state_projections.py
+
+      - name: Reviewer contract validation
+        run: python3 scripts/reviewer_contracts.py
+
+      - name: Stale review contract validation
+        run: python3 scripts/check_stale_review_contracts.py
+
+      - name: Reviewer contract regression tests
+        run: >-
+          python3 -m unittest -v
+          scripts.test_reviewer_contracts
+          scripts.test_review_target
 
       - name: Lightweight gate regression tests
         run: >-

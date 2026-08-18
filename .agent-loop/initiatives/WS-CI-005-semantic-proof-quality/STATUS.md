@@ -2,13 +2,14 @@
 
 ## Current status
 
-Planning and the shared proof-strength foundation are complete. Specialty
-reviewer adoption and blind evaluation remain inactive.
+Planning, the shared proof-strength foundation, reviewer contracts, and blind
+forward evaluation are complete. The reviewer contracts are behaviorally
+adopted.
 
 ## Current focus
 
-Preserve the shared schema/validator contract. Do not start specialty reviewer
-adoption without explicit human direction.
+Preserve the shared schema/validator, adopted reviewer contracts, blind cases,
+post-run expectations, and one-head results as transferable review evidence.
 
 ## Chunk status
 
@@ -16,10 +17,10 @@ adoption without explicit human direction.
 |---|---|---|
 | `WS-CI-005-PLAN` | Complete | Planning merged through PR #350 |
 | `WS-CI-005-01` | Complete | Shared proof-strength schema and validation |
-| `WS-CI-005-02` | Planned | No implementation; depends on `01` |
-| `WS-CI-005-03` | Planned | No implementation; depends on `02` |
+| `WS-CI-005-02` | Complete | Specialty contracts installed |
+| `WS-CI-005-03` | Complete | Blind evaluation passed and reviewer contracts adopted |
 
 ## Next action
 
-Start `WS-CI-005-02` only through explicit human direction. Do not install
-candidate specialty reviewer contracts automatically when `01` merges.
+Keep future escaped-defect additions reusable, blind, paired with controls, and
+separate from contribution or merge authority.

@@ -17,6 +17,20 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
 execution custody, and result. Missing or narrative-only rows block PASS.
 
+## Adopted proof-quality obligations
+
+Use the shared proof-strength vocabulary and schema-owned compatibility rules;
+do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
+IDs and explain why they apply. Require a discriminating test-of-the-test probe
+for every final PASS or PASS WITH LOW RISKS. Never infer proof strength or execution custody from
+filenames, test names, command labels, or narrative claims. Incompatible or
+unavailable proof blocks PASS for the claimed behavior.
+
+Simulate the pre-fix defect and require the named test to fail for the exact
+behavior atom. Reject fixtures that abort before the intended assertion or
+inputs the pre-fix code already rejects. These obligations are adopted through
+the blind evaluation recorded by `WS-CI-005-03`.
+
 ## Focus
 
 - Acceptance criteria coverage
