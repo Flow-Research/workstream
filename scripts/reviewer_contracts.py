@@ -758,10 +758,13 @@ def proof_evaluation_failures(
         if result.get("handoff_specialty") != contract_handoff:
             failures.append(f"{case_id}: wrong blind handoff")
         pattern_ids = result.get("failure_pattern_ids")
-        if not isinstance(pattern_ids, list) or not set(contract_patterns).issubset(
-            pattern_ids
-        ):
+        if not isinstance(pattern_ids, list):
             failures.append(f"{case_id}: required proof pattern missing")
+        else:
+            if not set(contract_patterns).issubset(pattern_ids):
+                failures.append(f"{case_id}: required proof pattern missing")
+            if not set(pattern_ids).issubset(FAILURE_PATTERN_IDS):
+                failures.append(f"{case_id}: unknown proof pattern")
         if set(expected.get("required_pattern_ids", [])) != contract_patterns:
             failures.append(f"{case_id}: expected patterns differ from case contract")
         if result.get("classification") == "finding" and not result.get("finding_id"):

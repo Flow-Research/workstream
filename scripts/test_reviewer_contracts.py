@@ -315,6 +315,16 @@ class ReviewerContractTests(unittest.TestCase):
             proof_evaluation_failures(self.proof_cases, mutated, self.proof_results),
         )
 
+    def test_blind_evaluation_rejects_unknown_result_patterns(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["results"][0]["failure_pattern_ids"].append("PQ-999")
+        self.assertIn(
+            f"{mutated['results'][0]['case_id']}: unknown proof pattern",
+            proof_evaluation_failures(
+                self.proof_cases, self.proof_expectations, mutated
+            ),
+        )
+
     def test_output_validation_rejects_pass_with_incompatible_proof(self) -> None:
         receipt = valid_receipt()
         receipt["traceability"][0]["claimed_boundary"] = "transaction"
