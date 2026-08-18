@@ -101,7 +101,7 @@ and that readiness remains advisory until human merge.
 - Outcome on merge: `complete`
 
 Independent blind evaluation succeeded against exact head
-`8ab2da49e6b06f57167711d386607440a35abab5`. Reviewer contracts are
+`27b31c90e2b3687c12829e44f0ae5fec54dc9fe7`. Reviewer contracts are
 behaviorally adopted because deterministic supersession validation binds that
 evaluated ancestor to the current reviewer contracts and permits only the
 candidate-to-adopted lifecycle sentence to differ. The semantic proof-quality

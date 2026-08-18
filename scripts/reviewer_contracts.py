@@ -780,7 +780,7 @@ def proof_evaluation_failures(
     rejected = results.get("rejected_runs")
     if not isinstance(rejected, list) or not any(
         isinstance(row, dict)
-        and row.get("reviewer") == "reuse_dedup"
+        and row.get("reviewer") == "ci_integrity"
         and "outside the blind case boundary" in row.get("reason", "")
         for row in rejected
     ):
