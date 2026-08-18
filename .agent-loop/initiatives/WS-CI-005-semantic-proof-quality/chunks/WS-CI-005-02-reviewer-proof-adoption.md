@@ -13,6 +13,7 @@ chunk proves prompt and contract presence, not behavioral adoption.
 .codex/agents/*-reviewer.toml
 .agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md
 .agent-loop/initiatives/WS-CI-005-semantic-proof-quality/**
+.agent-loop/CURRENT_STATE.md
 scripts/reviewer_contracts.py
 scripts/test_reviewer_contracts.py
 ```
@@ -73,8 +74,7 @@ Confirm the prompts remain concise, proportionate, and useful for small changes.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`
 
-After this implementation chunk merges, candidate reviewer proof-quality
-contracts will be installed. They will not be called adopted until
-`WS-CI-005-03` passes independent blind forward evaluation.
+Candidate reviewer proof-quality contracts are installed. They are not called
+adopted until `WS-CI-005-03` passes independent blind forward evaluation.

@@ -4,8 +4,8 @@
 |---|---|---:|---|
 | `WS-CI-005-PLAN` | Record failure replay, proof model, risks, decisions, and bounded implementation contracts | L1 | Complete through PR #350 |
 | `WS-CI-005-01` | Add proof-strength vocabulary, escaped-failure reference, receipt fields, compatibility validation, and focused tests | L1 | Complete |
-| `WS-CI-005-02` | Install candidate test-of-the-test and relevant failure-pattern obligations across reviewer skills/agents with mutation enforcement | L1 | Planned after `01`; not started |
+| `WS-CI-005-02` | Install candidate test-of-the-test and relevant failure-pattern obligations across reviewer skills/agents with mutation enforcement | L1 | Complete; candidate contracts installed, adoption unclaimed |
 | `WS-CI-005-03` | Prove adoption with blind PR #349 replay fixtures and integrate proof-quality summaries into evidence/trust workflows | L1 | Planned after `02`; not started |
 
-This map is sequencing guidance, not an active queue. `WS-CI-005-02` requires
+This map is sequencing guidance, not an active queue. `WS-CI-005-03` requires
 explicit human direction. One implementation chunk equals one pull request.

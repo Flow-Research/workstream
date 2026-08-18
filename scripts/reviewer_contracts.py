@@ -47,6 +47,181 @@ SEMANTIC_AGENT_REQUIREMENTS = {
     "semantic.atomization": "Atomize material criteria",
     "semantic.ownership": "to owner",
 }
+PROOF_QUALITY_SHARED_REQUIREMENTS = {
+    "proof.shared_model": (
+        "Use the shared proof-strength vocabulary and schema-owned compatibility rules; "
+        "do not invent a parallel proof taxonomy"
+    ),
+    "proof.failure_patterns": (
+        "Select relevant stable failure-pattern IDs and explain why they apply"
+    ),
+    "proof.discrimination": (
+        "Require a discriminating test-of-the-test probe for every final PASS or PASS "
+        "WITH LOW RISKS"
+    ),
+    "proof.no_inference": (
+        "Never infer proof strength or execution custody from filenames, test names, "
+        "command labels, or narrative claims"
+    ),
+    "proof.fail_closed": (
+        "Incompatible or unavailable proof blocks PASS for the claimed behavior"
+    ),
+}
+PROOF_QUALITY_AGENT_LIFECYCLE = (
+    "Treat these obligations as candidates until blind evaluation in WS-CI-005-03"
+)
+PROOF_QUALITY_SKILL_LIFECYCLE = (
+    "These obligations remain candidates until blind evaluation in `WS-CI-005-03`"
+)
+PROOF_QUALITY_MATRIX_LIFECYCLE = (
+    "Specialty additions remain candidate contracts until `WS-CI-005-03` completes "
+    "blind evaluation"
+)
+PROOF_QUALITY_STATE_REQUIREMENTS = {
+    ".agent-loop/CURRENT_STATE.md": "behavioral adoption remains unclaimed",
+    ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/STATUS.md": (
+        "remain unadopted until blind forward evaluation passes"
+    ),
+    ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/CHUNK_MAP.md": (
+        "candidate contracts installed, adoption unclaimed"
+    ),
+}
+SPECIALTY_PROOF_REQUIREMENTS = {
+    "architecture": (
+        "Probe composite ownership, schema/model/database parity, syntax-aware "
+        "private edges, and composition-root wiring"
+    ),
+    "ci_integrity": (
+        "Trace actual infrastructure custody through selected tests, services or "
+        "PostgreSQL, sessions, artifacts, coverage, aggregation, and required status"
+    ),
+    "documentation": (
+        "Apply shared proof fields proportionately; do not require database ceremony "
+        "for documentation-only claims"
+    ),
+    "product_ops": (
+        "Apply shared proof fields proportionately; do not require database ceremony "
+        "for product-only claims or convert engineering evidence into product truth"
+    ),
+    "qa": (
+        "Simulate the pre-fix defect and require the named test to fail for the exact "
+        "behavior atom"
+    ),
+    "reuse_dedup": (
+        "Compare canonical rule representations across schema, service, public API, "
+        "migration, and database constraint"
+    ),
+    "security": (
+        "Probe actor, tenant, and resource substitution; nullable or fail-open state; "
+        "replay; concealment; and composite ownership"
+    ),
+    "senior_engineering": (
+        "Probe permissive fakes and misleading abstractions, and weigh proof cost "
+        "against escape risk"
+    ),
+    "test_delta": (
+        "Compare the changed test with the pre-fix defect and require a discriminating "
+        "assertion"
+    ),
+}
+SPECIALTY_PROOF_COMPLETION_REQUIREMENTS = {
+    "architecture": {
+        "agent": "Require database custody only when the claim crosses that boundary",
+        "skill": "Require database custody only when the claim crosses that boundary",
+    },
+    "ci_integrity": {
+        "agent": "Green status or a command label alone is not custody",
+        "skill": "Green status or a command label alone is not custody",
+    },
+    "documentation": {
+        "agent": "Use compatible inspection or structure proof",
+        "skill": (
+            "Use compatible inspection or structure proof and keep product/runtime "
+            "conclusions with their owning reviewers"
+        ),
+    },
+    "product_ops": {
+        "agent": "Use product lifecycle evidence without inventing engineering verdicts",
+        "skill": (
+            "Use product lifecycle evidence without inventing an engineering specialty "
+            "verdict"
+        ),
+    },
+    "qa": {
+        "agent": "Reject setup-only failures and vacuous inputs",
+        "skill": (
+            "Reject fixtures that abort before the intended assertion or inputs the "
+            "pre-fix code already rejects"
+        ),
+    },
+    "reuse_dedup": {
+        "agent": "Prove why reuse or extension is invalid before accepting another owner",
+        "skill": (
+            "Prove whether one owner can be reused before accepting another representation"
+        ),
+    },
+    "security": {
+        "agent": (
+            "Require repository-isolation evidence for stored ownership, direct-SQL "
+            "evidence for ORM-bypassed database enforcement, and schema-compatible "
+            "service or composition evidence for application authorization"
+        ),
+        "skill": (
+            "Require repository-isolation evidence for stored ownership, direct-SQL "
+            "evidence for ORM-bypassed database enforcement, and schema-compatible "
+            "service or composition evidence for application authorization"
+        ),
+    },
+    "senior_engineering": {
+        "agent": "Do not substitute cheap proof for required custody",
+        "skill": (
+            "Do not substitute cheap proof for custody required by the claimed boundary"
+        ),
+    },
+    "test_delta": {
+        "agent": "Reject setup-only failures and vacuous inputs",
+        "skill": (
+            "Reject setup-only failures, vacuous inputs, and tests that already passed "
+            "against the broken implementation"
+        ),
+    },
+}
+MATRIX_SPECIALTY_REQUIREMENTS = {
+    "Architecture": (
+        "Composite ownership, schema/model/database parity, syntax-aware private edges, "
+        "and composition-root wiring"
+    ),
+    "CI integrity": (
+        "Actual selected-test, service/PostgreSQL, session, artifact, coverage, "
+        "aggregation, and required-status custody"
+    ),
+    "Documentation": (
+        "Proportionate structure/inspection proof without irrelevant database ceremony"
+    ),
+    "Product/operations": (
+        "Proportionate product evidence without database ceremony or leakage into "
+        "product decisions"
+    ),
+    "QA": "A simulated pre-fix defect that the exact named test must detect",
+    "Reuse/dedup": (
+        "Canonical-rule comparison across schema, service, public API, migration, and "
+        "database constraint"
+    ),
+    "Security": (
+        "Actor/tenant/resource substitution, fail-open state, replay, concealment, and "
+        "composite ownership"
+    ),
+    "Senior engineering": (
+        "Permissive-fake and misleading-abstraction probes balanced against proof cost"
+    ),
+    "Test delta": (
+        "Direct comparison with the pre-fix defect and a discriminating assertion"
+    ),
+}
+MATRIX_SPECIALTY_ROW = re.compile(
+    r"^\| ([^|]+) \| ([^|]+) \|$",
+    re.MULTILINE,
+)
 MATRIX_ROW = re.compile(
     r"^\|[^|]+\|\s*`([^`]+)`\s*\|\s*`\.codex/agents/([^`/]+\.toml)`\s*\|"
     r"\s*`\.agents/skills/([^`/]+)/SKILL\.md`\s*\|$",
@@ -78,6 +253,12 @@ def contract_failures(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
+    if PROOF_QUALITY_MATRIX_LIFECYCLE not in " ".join(matrix.split()):
+        failures.append("matrix: missing proof.lifecycle")
+    matrix_rows = dict(MATRIX_SPECIALTY_ROW.findall(matrix))
+    for label, obligation in MATRIX_SPECIALTY_REQUIREMENTS.items():
+        if " ".join(matrix_rows.get(label, "").split()) != obligation:
+            failures.append(f"matrix: specialty obligation drift for {label}")
     patterns_path = root / PROOF_PATTERNS_PATH.relative_to(ROOT)
     if not patterns_path.is_file():
         failures.append("proof patterns: missing registry")
@@ -89,6 +270,16 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             failures.append("proof patterns: incomplete registry")
     if len(reviewers) != 9 or len(MATRIX_ROW.findall(matrix)) != 9:
         failures.append("matrix: expected nine unique reviewer contracts")
+    if set(SPECIALTY_PROOF_REQUIREMENTS) != set(reviewers):
+        failures.append("matrix: specialty proof requirements do not match reviewers")
+    if set(SPECIALTY_PROOF_COMPLETION_REQUIREMENTS) != set(reviewers):
+        failures.append("matrix: specialty proof completions do not match reviewers")
+    for relative_path, token in PROOF_QUALITY_STATE_REQUIREMENTS.items():
+        state_path = root / relative_path
+        if not state_path.is_file() or token not in " ".join(
+            state_path.read_text(encoding="utf-8").split()
+        ):
+            failures.append(f"proof.lifecycle: state missing {token!r}")
     reviewer_pairs = list(reviewers.values())
     agent_names = [agent_name for agent_name, _ in reviewer_pairs]
     skill_names = [skill_name for _, skill_name in reviewer_pairs]
@@ -144,6 +335,23 @@ def contract_failures(root: Path = ROOT) -> list[str]:
                 failures.append(
                     f"{reviewer}: agent missing {requirement_id} ({token!r})"
                 )
+        for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
+            if token not in normalized_agent:
+                failures.append(
+                    f"{reviewer}: agent missing {requirement_id} ({token!r})"
+                )
+        if PROOF_QUALITY_AGENT_LIFECYCLE not in normalized_agent:
+            failures.append(f"{reviewer}: agent missing proof.lifecycle")
+        specialty_token = SPECIALTY_PROOF_REQUIREMENTS.get(reviewer)
+        if specialty_token is None:
+            failures.append(f"{reviewer}: missing proof.specialty requirement")
+        elif specialty_token not in normalized_agent:
+            failures.append(f"{reviewer}: agent missing proof.specialty")
+        completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer, {}).get(
+            "agent"
+        )
+        if completion is None or completion not in normalized_agent:
+            failures.append(f"{reviewer}: agent missing proof.specialty_completion")
         for token in (
             "reviewer-evidence-protocol",
             "exact target",
@@ -163,6 +371,20 @@ def contract_failures(root: Path = ROOT) -> list[str]:
                 failures.append(
                     f"{reviewer}: skill missing {requirement_id} ({token!r})"
                 )
+        for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
+            if token not in normalized_skill:
+                failures.append(
+                    f"{reviewer}: skill missing {requirement_id} ({token!r})"
+                )
+        if PROOF_QUALITY_SKILL_LIFECYCLE not in normalized_skill:
+            failures.append(f"{reviewer}: skill missing proof.lifecycle")
+        if specialty_token is not None and specialty_token not in normalized_skill:
+            failures.append(f"{reviewer}: skill missing proof.specialty")
+        completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer, {}).get(
+            "skill"
+        )
+        if completion is None or completion not in normalized_skill:
+            failures.append(f"{reviewer}: skill missing proof.specialty_completion")
         if agent_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:
             failures.append(f"{reviewer}: agent absent from matrix")
         if skill_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:

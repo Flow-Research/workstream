@@ -17,6 +17,20 @@ Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
 Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
 execution custody, and result. Missing or narrative-only rows block PASS.
 
+## Candidate proof-quality obligations
+
+Use the shared proof-strength vocabulary and schema-owned compatibility rules;
+do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
+IDs and explain why they apply. Require a discriminating test-of-the-test probe
+for every final PASS or PASS WITH LOW RISKS. Never infer proof strength or execution custody from
+filenames, test names, command labels, or narrative claims. Incompatible or
+unavailable proof blocks PASS for the claimed behavior.
+
+Probe composite ownership, schema/model/database parity, syntax-aware private
+edges, and composition-root wiring. Require database custody only when the
+claim crosses that boundary. These obligations remain candidates until blind
+evaluation in `WS-CI-005-03`.
+
 ## Focus
 
 - Did the change stay inside the approved chunk?
