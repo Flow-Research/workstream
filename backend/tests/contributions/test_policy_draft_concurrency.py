@@ -51,7 +51,9 @@ async def _run_distinct_create_race() -> tuple[int, int, int]:
     outcomes = await asyncio.gather(create(0), create(1))
     async with db_session.get_session_factory()() as session:
         drafts = await session.scalar(
-            select(func.count()).select_from(ContributionPolicyVersion).where(
+            select(func.count())
+            .select_from(ContributionPolicyVersion)
+            .where(
                 ContributionPolicyVersion.project_id == str(project_id),
                 ContributionPolicyVersion.status == "draft",
             )

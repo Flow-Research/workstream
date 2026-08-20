@@ -25,8 +25,6 @@ from app.db.base import Base
 
 
 class ContributionPolicy(Base):
-    """Stable project aggregate selecting one published policy version."""
-
     __tablename__ = "contribution_policies"
     __table_args__ = (
         UniqueConstraint("id", "project_id", name="uq_contribution_policy_ownership"),
@@ -72,6 +70,15 @@ class ContributionPolicy(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'draft'"))
     current_published_version_id: Mapped[UUID | None] = mapped_column(Uuid())
+    last_transition_operation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "contribution_policy_transition_custody.operation_id",
+            name="fk_contribution_policy_transition_custody",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        )
+    )
     created_by: Mapped[str] = mapped_column(
         ForeignKey("actor_profiles.id", name="fk_contribution_policy_created_by"),
         nullable=False,
@@ -91,8 +98,6 @@ class ContributionPolicy(Base):
 
 
 class ContributionPolicyVersion(Base):
-    """Versioned contribution rules; published economic content is immutable."""
-
     __tablename__ = "contribution_policy_versions"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -100,9 +105,7 @@ class ContributionPolicyVersion(Base):
             ["contribution_policies.id", "contribution_policies.project_id"],
             name="fk_contribution_policy_version_policy",
         ),
-        UniqueConstraint(
-            "id", "project_id", name="uq_contribution_policy_version_project"
-        ),
+        UniqueConstraint("id", "project_id", name="uq_contribution_policy_version_project"),
         UniqueConstraint(
             "id",
             "contribution_policy_id",
@@ -159,6 +162,15 @@ class ContributionPolicyVersion(Base):
         ForeignKey("actor_profiles.id", name="fk_contribution_policy_version_updated_by")
     )
     last_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_transition_operation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "contribution_policy_transition_custody.operation_id",
+            name="fk_contribution_policy_version_transition_custody",
+            use_alter=True,
+            deferrable=True,
+            initially="DEFERRED",
+        )
+    )
 
     policy: Mapped[ContributionPolicy] = relationship(
         back_populates="versions",
@@ -168,8 +180,6 @@ class ContributionPolicyVersion(Base):
 
 
 class ContributionRule(Base):
-    """One explicit eligibility rule for a canonical contribution type."""
-
     __tablename__ = "contribution_rules"
     __table_args__ = (
         ForeignKeyConstraint(
@@ -217,9 +227,7 @@ class Iso4217CurrencyCode(Base):
     """Migration-seeded immutable ISO 4217 List One alphabetic code."""
 
     __tablename__ = "iso_4217_currency_codes"
-    __table_args__ = (
-        CheckConstraint("code ~ '^[A-Z]{3}$'", name="code"),
-    )
+    __table_args__ = (CheckConstraint("code ~ '^[A-Z]{3}$'", name="code"),)
 
     code: Mapped[str] = mapped_column(String(3), primary_key=True)
 
@@ -234,9 +242,7 @@ class ProjectCompensationUnit(Base):
             ["iso_4217_currency_codes.code"],
             name="fk_project_compensation_unit_iso_currency",
         ),
-        CheckConstraint(
-            "instrument_type in ('money','project_points')", name="instrument_type"
-        ),
+        CheckConstraint("instrument_type in ('money','project_points')", name="instrument_type"),
         CheckConstraint("status in ('active','retired')", name="status"),
         CheckConstraint(
             "(instrument_type='money' and iso_currency_code is not null "
@@ -352,6 +358,55 @@ class ContributionAwardDefinition(Base):
     rule: Mapped[ContributionRule] = relationship(back_populates="award_definitions")
 
 
+class ContributionPolicyTransitionCustody(Base):
+    __tablename__ = "contribution_policy_transition_custody"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["contribution_policy_id", "project_id"],
+            ["contribution_policies.id", "contribution_policies.project_id"],
+            name="fk_contribution_policy_custody_policy",
+        ),
+        ForeignKeyConstraint(
+            ["contribution_policy_version_id", "contribution_policy_id", "project_id"],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.contribution_policy_id",
+                "contribution_policy_versions.project_id",
+            ],
+            name="fk_contribution_policy_custody_version",
+        ),
+        ForeignKeyConstraint(
+            ["prior_current_version_id", "contribution_policy_id", "project_id"],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.contribution_policy_id",
+                "contribution_policy_versions.project_id",
+            ],
+            name="fk_contribution_policy_custody_prior_version",
+        ),
+        CheckConstraint("request_digest ~ '^sha256:[0-9a-f]{64}$'", name="request_digest"),
+        CheckConstraint("event_type in ('published','retired')", name="event_type"),
+    )
+
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", name="fk_contribution_policy_custody_actor"),
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", name="fk_contribution_policy_custody_project"),
+        nullable=False,
+    )
+    contribution_policy_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    prior_current_version_id: Mapped[UUID | None] = mapped_column(Uuid())
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
+
+
 class ContributionPolicyLifecycleEvent(Base):
     """Immutable recoverable truth for one policy-version mutation."""
 
@@ -376,6 +431,17 @@ class ContributionPolicyLifecycleEvent(Base):
             name="fk_contribution_policy_event_version_ownership",
         ),
         UniqueConstraint("operation_id", name="uq_contribution_policy_event_operation"),
+        UniqueConstraint(
+            "publication_custody_operation_id",
+            name="uq_contribution_policy_event_publication_custody",
+        ),
+        ForeignKeyConstraint(
+            ["publication_custody_operation_id"],
+            ["contribution_policy_transition_custody.operation_id"],
+            name="fk_contribution_policy_event_publication_custody",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         CheckConstraint(
             "request_digest ~ '^sha256:[0-9a-f]{64}$'",
             name="ck_contribution_policy_event_digest",
@@ -395,10 +461,18 @@ class ContributionPolicyLifecycleEvent(Base):
             "and to_version_status='retired')",
             name="ck_contribution_policy_event_transition",
         ),
+        CheckConstraint(
+            "(event_type in ('draft_created','draft_updated') "
+            "and publication_custody_operation_id is null) or "
+            "(event_type in ('published','retired') "
+            "and publication_custody_operation_id=operation_id)",
+            name="ck_contribution_policy_event_custody_shape",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
     operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    publication_custody_operation_id: Mapped[UUID | None] = mapped_column(Uuid())
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
     actor_profile_id: Mapped[str] = mapped_column(

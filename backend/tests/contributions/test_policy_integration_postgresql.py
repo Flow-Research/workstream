@@ -17,7 +17,9 @@ from app.modules.contributions.api import (
     ContributionPolicyCreateDraftRequest,
     ContributionPolicyMutationAuthorizationFacts,
     ContributionPolicyMutationResult,
+    ContributionPolicyPublishRequest,
     ContributionPolicyReadRequest,
+    ContributionPolicyRetireRequest,
     ContributionPolicyUpdateDraftRequest,
     PolicyDefinitionInput,
     PolicyRuleInput,
@@ -26,6 +28,7 @@ from app.modules.contributions.models import (
     ContributionAwardDefinition,
     ContributionPolicy,
     ContributionPolicyLifecycleEvent,
+    ContributionPolicyTransitionCustody,
     ContributionPolicyVersion,
     ContributionRule,
 )
@@ -61,6 +64,50 @@ class _LateFailingRepository(ContributionPolicyRepository):
         await super().replace_graph(version, rules, definitions, event)
         raise RuntimeError("late_product_write_failed")
 
+class _LateFailingPublicationRepository(ContributionPolicyRepository):
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        operation_id: UUID,
+        policy_id: UUID,
+        version_id: UUID,
+    ) -> None:
+        super().__init__(session)
+        self._operation_id = operation_id
+        self._policy_id = policy_id
+        self._version_id = version_id
+        self.observed_staged_publication = False
+    async def flush_transition_event(self, event) -> None:
+        await super().flush_transition_event(event)
+        policy = await self._session.get(ContributionPolicy, self._policy_id)
+        version = await self._session.get(ContributionPolicyVersion, self._version_id)
+        custody_query = select(func.count()).select_from(
+            ContributionPolicyTransitionCustody
+        ).where(ContributionPolicyTransitionCustody.operation_id == self._operation_id)
+        custody_count = await self._session.scalar(custody_query)
+        event_query = select(func.count()).select_from(
+            ContributionPolicyLifecycleEvent
+        ).where(ContributionPolicyLifecycleEvent.operation_id == self._operation_id)
+        event_count = await self._session.scalar(event_query)
+        authorization_query = text(
+            "select count(*) from cp04a_staged_authorization_effects "
+            "where operation_id=:operation_id"
+        )
+        authorization_count = await self._session.scalar(
+            authorization_query,
+            {"operation_id": str(self._operation_id)},
+        )
+        assert policy is not None and policy.status == "active"
+        assert policy.current_published_version_id == self._version_id
+        assert policy.last_transition_operation_id == self._operation_id
+        assert version is not None and version.status == "published"
+        assert version.last_transition_operation_id == self._operation_id
+        assert custody_count == 1
+        assert event_count == 1
+        assert authorization_count == 1
+        self.observed_staged_publication = True
+        raise RuntimeError("late_publication_write_failed")
 
 @pytest.fixture(name="policy_database_env")
 def _policy_database_env(
@@ -76,7 +123,10 @@ def _policy_database_env(
 
 
 async def _exercise_policy() -> tuple[
-    UUID, ContributionPolicyMutationResult, ContributionPolicyMutationResult
+    UUID,
+    ContributionPolicyMutationResult,
+    ContributionPolicyMutationResult,
+    ContributionPolicyMutationResult,
 ]:
     project, creator, _, money_binding, _ = await _seed_project()
     actor_id, project_id = UUID(creator), UUID(project)
@@ -125,6 +175,15 @@ async def _exercise_policy() -> tuple[
                     ),
                 )
             )
+            published = await service.publish(
+                ContributionPolicyPublishRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=project_id,
+                    contribution_policy_id=created.contribution_policy_id,
+                    contribution_policy_version_id=created.contribution_policy_version_id,
+                )
+            )
             view = await service.read(
                 ContributionPolicyReadRequest(
                     actor_profile_id=actor_id,
@@ -135,7 +194,7 @@ async def _exercise_policy() -> tuple[
             )
             assert updated.event_type == "draft_updated"
             assert len(view.rules) == 2
-    return project_id, created, updated
+    return project_id, created, updated, published
 
 
 async def _seed_project_only() -> str:
@@ -157,15 +216,16 @@ async def test_real_service_persists_complete_graph_and_events(
     policy_database_env: str,
 ) -> None:
     del policy_database_env
-    project_id, created, updated = await _exercise_policy()
+    project_id, created, updated, published = await _exercise_policy()
     async with db_session.get_session_factory()() as session:
         count = await session.scalar(
-            select(func.count()).select_from(ContributionPolicyLifecycleEvent).where(
-                ContributionPolicyLifecycleEvent.project_id == str(project_id)
-            )
+            select(func.count())
+            .select_from(ContributionPolicyLifecycleEvent)
+            .where(ContributionPolicyLifecycleEvent.project_id == str(project_id))
         )
-        assert count == 2
+        assert count == 3
         assert created.event_id != updated.event_id
+        assert published.event_type == "published"
 
 
 @pytest.mark.asyncio
@@ -203,6 +263,34 @@ async def test_real_repository_conceals_foreign_project_policy(
                         contribution_policy_id=created.contribution_policy_id,
                     )
                 )
+
+
+@pytest.mark.asyncio
+async def test_real_service_terminally_retires_current_version(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    project_id, created, _, published = await _exercise_policy()
+    authorization = AllowAuthorization(created.actor_profile_id)
+    async with db_session.get_session_factory()() as session:
+        async with session.begin():
+            service = ContributionPolicyService(
+                session,
+                read_authorization=authorization,
+                mutation_authorization=authorization,
+                projects=project_contribution_policy_eligibility_port(session),
+                bindings=policy_adapter_binding_port(session),
+            )
+            retired = await service.retire(
+                ContributionPolicyRetireRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=created.actor_profile_id,
+                    project_id=project_id,
+                    contribution_policy_id=created.contribution_policy_id,
+                    contribution_policy_version_id=published.contribution_policy_version_id,
+                )
+            )
+    assert retired.event_type == "retired"
 
 
 @pytest.mark.asyncio
@@ -248,9 +336,7 @@ async def test_late_database_failure_rolls_back_product_and_authorization_effect
                         actor_profile_id=actor_id,
                         project_id=project_id,
                         contribution_policy_id=created.contribution_policy_id,
-                        contribution_policy_version_id=(
-                            created.contribution_policy_version_id
-                        ),
+                        contribution_policy_version_id=(created.contribution_policy_version_id),
                         rules=(
                             PolicyRuleInput(
                                 contribution_type="accepted_submission",
@@ -281,6 +367,132 @@ async def test_late_database_failure_rolls_back_product_and_authorization_effect
                 ContributionPolicy,
             ):
                 assert await session.scalar(select(func.count()).select_from(model)) == 0
-            assert await session.scalar(
-                text("select count(*) from cp04a_staged_authorization_effects")
-            ) == 0
+            assert (
+                await session.scalar(
+                    text("select count(*) from cp04a_staged_authorization_effects")
+                )
+                == 0
+            )
+
+
+@pytest.mark.asyncio
+async def test_late_publication_failure_rolls_back_custody_state_and_authorization(
+    policy_database_env: str,
+) -> None:
+    del policy_database_env
+    project, creator, _, money_binding, _ = await _seed_project()
+    actor_id, project_id = UUID(creator), UUID(project)
+    operation_id = uuid4()
+    async with (
+        db_session.get_engine().connect() as connection,
+        AsyncSession(bind=connection, expire_on_commit=False) as session,
+    ):
+        async with session.begin():
+            await session.execute(
+                text(
+                    "create temporary table cp04a_staged_authorization_effects "
+                    "(operation_id uuid primary key) on commit preserve rows"
+                )
+            )
+        authorization = _ParticipantAuthorization(actor_id, session)
+        service = ContributionPolicyService(
+            session,
+            read_authorization=authorization,
+            mutation_authorization=authorization,
+            projects=project_contribution_policy_eligibility_port(session),
+            bindings=policy_adapter_binding_port(session),
+        )
+        async with session.begin():
+            created = await service.create_draft(
+                ContributionPolicyCreateDraftRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=project_id,
+                    name="Publication rollback policy",
+                )
+            )
+            await service.update_draft(
+                ContributionPolicyUpdateDraftRequest(
+                    operation_id=uuid4(),
+                    actor_profile_id=actor_id,
+                    project_id=project_id,
+                    contribution_policy_id=created.contribution_policy_id,
+                    contribution_policy_version_id=created.contribution_policy_version_id,
+                    rules=(
+                        PolicyRuleInput(
+                            contribution_type="accepted_submission",
+                            compensation_mode="compensated",
+                            definitions=(
+                                PolicyDefinitionInput(
+                                    instrument_type=CompensationInstrumentType.MONEY,
+                                    unit_code="USD",
+                                    quantity="25.50",
+                                    adapter_binding_id=money_binding,
+                                ),
+                            ),
+                        ),
+                        PolicyRuleInput(
+                            contribution_type="completed_review",
+                            compensation_mode="unpaid",
+                        ),
+                    ),
+                )
+            )
+        repository = _LateFailingPublicationRepository(
+            session, operation_id=operation_id,
+            policy_id=created.contribution_policy_id,
+            version_id=created.contribution_policy_version_id,
+        )
+        service._repository = repository  # noqa: SLF001
+        service._publication._repository = repository  # noqa: SLF001
+        with pytest.raises(RuntimeError, match="late_publication_write_failed"):
+            async with session.begin():
+                await service.publish(
+                    ContributionPolicyPublishRequest(
+                        operation_id=operation_id,
+                        actor_profile_id=actor_id,
+                        project_id=project_id,
+                        contribution_policy_id=created.contribution_policy_id,
+                        contribution_policy_version_id=(
+                            created.contribution_policy_version_id
+                        ),
+                    )
+                )
+        assert authorization.closed[-1] is authorization.prepared_handles[-1]
+        assert repository.observed_staged_publication is True
+        async with session.begin():
+            policy = await session.get(ContributionPolicy, created.contribution_policy_id)
+            version = await session.get(
+                ContributionPolicyVersion, created.contribution_policy_version_id
+            )
+            assert policy is not None and policy.status == "draft"
+            assert policy.current_published_version_id is None
+            assert policy.last_transition_operation_id is None
+            assert version is not None and version.status == "draft"
+            assert version.last_transition_operation_id is None
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ContributionPolicyTransitionCustody)
+                    .where(ContributionPolicyTransitionCustody.operation_id == operation_id)
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ContributionPolicyLifecycleEvent)
+                    .where(ContributionPolicyLifecycleEvent.operation_id == operation_id)
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    text(
+                        "select count(*) from cp04a_staged_authorization_effects "
+                        "where operation_id=:operation_id"
+                    ),
+                    {"operation_id": str(operation_id)},
+                )
+                == 0
+            )

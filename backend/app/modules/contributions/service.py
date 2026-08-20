@@ -21,6 +21,8 @@ from app.modules.contributions.api import (
     ContributionPolicyProjectEligibilityPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyReadRequest,
+    ContributionPolicyPublishRequest,
+    ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
@@ -42,6 +44,11 @@ from app.modules.contributions.policy_validation import (
     policy_request_digest,
     validate_policy_graph,
     validate_policy_name,
+)
+from app.modules.contributions.policy_publication import ContributionPolicyPublicationService
+from app.modules.contributions.policy_mutation_support import (
+    begin_and_recover_policy_mutation,
+    consume_and_close_policy_authority,
 )
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.projects.api import ProjectContributionPolicyUnavailable
@@ -67,6 +74,26 @@ class ContributionPolicyService:
         self._mutation_authorization = mutation_authorization or deny
         self._projects = projects
         self._bindings = bindings
+        self._publication = ContributionPolicyPublicationService(
+            session,
+            repository=self._repository,
+            read_authorization=self._read_authorization,
+            mutation_authorization=self._mutation_authorization,
+            projects=projects,
+            bindings=bindings,
+        )
+
+    async def publish(
+        self, request: ContributionPolicyPublishRequest
+    ) -> ContributionPolicyMutationResult:
+        """Publish one exact complete draft through the hidden boundary."""
+        return await self._publication.publish(request)
+
+    async def retire(
+        self, request: ContributionPolicyRetireRequest
+    ) -> ContributionPolicyMutationResult:
+        """Terminally retire one exact current published version."""
+        return await self._publication.retire(request)
 
     async def read(self, request: ContributionPolicyReadRequest) -> ContributionPolicyView:
         """Return one authorized immutable policy-version view."""
@@ -95,7 +122,6 @@ class ContributionPolicyService:
         validate_policy_name(request.name)
         action: PolicyAction = "contribution.policy.create_draft"
         digest = policy_request_digest(action, request)
-        await self._repository.lock_operation(request.operation_id)
         recovered = await self._recover(action, request, digest)
         if recovered is not None:
             return recovered
@@ -139,7 +165,7 @@ class ContributionPolicyService:
         facts = self._facts(
             action, request, digest, policy.id, version.id, from_policy_status, None
         )
-        actor = await self._consume_and_close(facts)
+        actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
         event = self._event(
             request=request,
             digest=digest,
@@ -163,7 +189,6 @@ class ContributionPolicyService:
         rules = validate_policy_graph(request.rules)
         action: PolicyAction = "contribution.policy.update_draft"
         digest = policy_request_digest(action, request)
-        await self._repository.lock_operation(request.operation_id)
         recovered = await self._recover(action, request, digest)
         if recovered is not None:
             return recovered
@@ -190,7 +215,7 @@ class ContributionPolicyService:
         facts = self._facts(
             action, request, digest, policy.id, version.id, policy.status, version.status
         )
-        actor = await self._consume_and_close(facts)
+        actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
         version.last_updated_by = str(actor)
         version.last_updated_at = await self._session.scalar(select(func.clock_timestamp()))
         event = self._event(
@@ -225,9 +250,10 @@ class ContributionPolicyService:
             selectors += ("contribution_policy_id",)
         if type(request) is ContributionPolicyUpdateDraftRequest:
             selectors += ("contribution_policy_version_id",)
-        elif type(request) is ContributionPolicyReadRequest and getattr(
-            request, "contribution_policy_version_id", None
-        ) is not None:
+        elif (
+            type(request) is ContributionPolicyReadRequest
+            and getattr(request, "contribution_policy_version_id", None) is not None
+        ):
             selectors += ("contribution_policy_version_id",)
         for name in selectors:
             if not isinstance(getattr(request, name), UUID):
@@ -322,50 +348,19 @@ class ContributionPolicyService:
             expected_version_status=version_status,
         )
 
-    async def _consume_and_close(
-        self, facts: ContributionPolicyMutationAuthorizationFacts
-    ) -> UUID:
-        """Prepare, consume, and always close exact mutation authority."""
-        prepared = await self._mutation_authorization.prepare_contribution_policy_mutation(facts)
-        try:
-            actor = await self._mutation_authorization.consume_contribution_policy_mutation(
-                prepared, facts
-            )
-        finally:
-            self._mutation_authorization.close_contribution_policy_mutation(prepared)
-        if type(actor) is not UUID or actor != facts.actor_profile_id:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable")
-        return actor
-
     async def _recover(
         self, action: PolicyAction, request: object, digest: str
     ) -> ContributionPolicyMutationResult | None:
         """Recover an exact prior result only after current read authorization."""
-        event = await self._repository.get_event_by_operation(
-            cast(UUID, getattr(request, "operation_id"))
-        )
-        if event is None:
-            return None
         expected = "draft_created" if action.endswith("create_draft") else "draft_updated"
-        if (
-            event.event_type != expected
-            or event.request_digest != digest
-            or event.actor_profile_id != str(getattr(request, "actor_profile_id"))
-            or event.project_id != str(getattr(request, "project_id"))
-        ):
-            raise ContributionPolicyConflict("contribution_policy_conflict")
-        try:
-            await self._read_authorization.authorize_contribution_policy_read(
-                ContributionPolicyReadRequest(
-                    actor_profile_id=UUID(event.actor_profile_id),
-                    project_id=UUID(event.project_id),
-                    contribution_policy_id=event.contribution_policy_id,
-                    contribution_policy_version_id=event.contribution_policy_version_id,
-                )
-            )
-        except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
-            raise ContributionPolicyConflict("contribution_policy_conflict") from exc
-        return self._result(event)
+        return await begin_and_recover_policy_mutation(
+            repository=self._repository,
+            read_authorization=self._read_authorization,
+            request=request,
+            request_digest=digest,
+            expected_event_type=expected,
+            result_factory=self._result,
+        )
 
     async def _prior_version_number(
         self, policy: ContributionPolicy, version_id: UUID | None
@@ -373,9 +368,7 @@ class ContributionPolicyService:
         """Resolve the prior published version number for event lineage."""
         if version_id is None:
             return None
-        version = await self._repository.get_version(
-            UUID(policy.project_id), policy.id, version_id
-        )
+        version = await self._repository.get_version(UUID(policy.project_id), policy.id, version_id)
         return version.version_number if version else None
 
     @staticmethod
@@ -451,7 +444,9 @@ class ContributionPolicyService:
                         quantity=format(item.quantity, "f"),
                         adapter_binding_id=item.adapter_binding_id,
                     )
-                    for item in sorted(rule.award_definitions, key=lambda value: value.instrument_type)
+                    for item in sorted(
+                        rule.award_definitions, key=lambda value: value.instrument_type
+                    )
                 ),
             )
             for rule in sorted(version.rules, key=lambda value: value.contribution_type)

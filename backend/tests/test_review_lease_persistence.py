@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from app.adapters.contributions import contribution_policy_service
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.db.base import Base
@@ -23,10 +24,12 @@ from app.modules.contributions.models import (
     ContributionPolicyVersion,
     ContributionRule,
 )
+from app.modules.contributions.api import ContributionPolicyPublishRequest
 from app.modules.reviews.models import ReviewLease, ReviewQueueEntry
 from app.modules.reviews.repository import ReviewQueueRepository
 from app.modules.reviews.schemas import ReviewLeaseInput
 from project_create_fixtures import grant_system_project_manager
+from tests.contributions.policy_test_support import AllowAuthorization
 from tests.test_review_queue_persistence import (
     _additional_reviewable_submission,
     _queue_input,
@@ -164,16 +167,21 @@ async def _published_reviewer_policy(session, project_id: str, actor_id: str) ->
         ]
     )
     await session.flush()
-    await session.execute(
-        update(ContributionPolicyVersion)
-        .where(ContributionPolicyVersion.id == version_id)
-        .values(
-            status="published",
-            published_by=actor_id,
-            published_at=datetime.now(UTC),
+    actor_uuid = UUID(actor_id)
+    authorization = AllowAuthorization(actor_uuid)
+    await contribution_policy_service(
+        session,
+        read_authorization=authorization,
+        mutation_authorization=authorization,
+    ).publish(
+        ContributionPolicyPublishRequest(
+            operation_id=uuid4(),
+            actor_profile_id=actor_uuid,
+            project_id=UUID(project_id),
+            contribution_policy_id=policy_id,
+            contribution_policy_version_id=version_id,
         )
     )
-    await session.flush()
     return version_id
 
 

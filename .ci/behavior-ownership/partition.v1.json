@@ -610,6 +610,18 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/contributions/policy_graph.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/contributions/policy_mutation_support.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/contributions/policy_publication.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/contributions/policy_validation.py"
     },
     {
@@ -937,7 +949,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "392b05ff8dec5f67c2b0de49ecc6d24af8b5c89b5acacd0038a02ff44413bb45",
+  "authority_digest": "495ba32b1f2baa63622cd0bd48bc4ac3fa8e70c3208d05231673a451aa72f34c",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

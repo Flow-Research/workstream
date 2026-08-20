@@ -141,8 +141,9 @@ review. Their presence does not change the implemented-on-`main` list above.
    CP03B is complete with exact hidden Finance Authority read/PREP
    activation for those four actions. CP04 is a non-executable split parent.
    CP04A is complete with hidden read/create/update-draft behavior and immutable
-   operation/event custody. The remaining order is CP04B hidden publish/retire
-   behavior, then CP05 ContributionPolicy activation;
+   operation/event custody. CP04B adds hidden publish/retire behavior with
+   immutable transition custody. The remaining order begins with CP05
+   ContributionPolicy activation;
    expose CON validation; then bind one exact published,
    complete, binding-valid ContributionPolicyVersion at guide activation, and
    lock it on each task before that task becomes claimable. TaskAssignment

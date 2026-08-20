@@ -151,6 +151,13 @@ ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS = frozenset(
         "backend/app/modules/projects/contribution_policy.py",
     }
 )
+ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS = frozenset(
+    {
+        "backend/app/modules/contributions/policy_graph.py",
+        "backend/app/modules/contributions/policy_mutation_support.py",
+        "backend/app/modules/contributions/policy_publication.py",
+    }
+)
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
@@ -345,7 +352,8 @@ def _validate_additive_partition_transition(
         | ARCH_CP02_ADAPTER_BINDING_TARGETS
         | ARCH_CP03A_OWNER_ELIGIBILITY_TARGETS
         | ARCH_CP03B_ADAPTER_BINDING_AUTH_TARGETS
-        | ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS
+            | ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS
+            | ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)

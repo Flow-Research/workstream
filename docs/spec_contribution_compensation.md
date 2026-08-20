@@ -812,6 +812,15 @@ opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Production authorization remains
 deny-default and all five policy actions remain unavailable until CP05.
 
+CP04B adds hidden publication and terminal retirement. Publication locks and
+revalidates the complete server-owned graph, project units, and adapter
+bindings, computes canonical digest/binding facts, consumes and closes opaque
+authority before product effects, and atomically replaces any prior published
+version. Database-owned transition custody binds every affected row and event
+to one actor, operation, and timestamp. The behavior remains route-unreachable
+and deny-default; CP05 alone installs the real AUTH adapter and activates the
+five policy actions.
+
 | ActionId | PermissionId | Principal / target | Protocol | Feature owner |
 |---|---|---|---:|---|
 | `outbox.dispatch` | proposed `outbox.dispatch` | fixed dispatcher / claimed event | T | CON-02B |
@@ -823,8 +832,8 @@ deny-default and all five policy actions remain unavailable until CP05.
 | `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
 | `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
 | `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP04A (hidden behavior; CP01B registration custody; unavailable) |
-| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP01B (registered, unavailable) |
-| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP01B (registered, unavailable) |
+| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP04B (hidden behavior; CP01B registration custody; unavailable) |
+| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP04B (hidden behavior; CP01B registration custody; unavailable) |
 | `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
 | `contribution.read_self` | `contribution.read_self` | contributor / own record | Q | CON-10A |
 | `contribution.read_project` | `contribution.read_project` | eligible AdminRole / project records | Q | CON-10A |
