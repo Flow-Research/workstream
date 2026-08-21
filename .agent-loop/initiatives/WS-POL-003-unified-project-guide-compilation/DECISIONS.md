@@ -2,9 +2,12 @@
 
 1. One logical structured model attempt is used per immutable source snapshot,
    catalogue snapshot, and setup generation. A durable attempt row and provider
-   idempotency key serialize dispatch. Retry/recovery uses that exact key and
-   retrieves or reuses its accepted result; it never creates another call.
-   Invalid or unsafe output consumes the attempt and blocks that generation.
+   idempotency key serialize dispatch. The current provider boundary cannot
+   prove retrieval or same-key replay after an unknown outcome, so recovery
+   remains `provider_outcome_unresolved` and never redispatches. A future
+   provider capability may retrieve or reuse the accepted result only after it
+   proves exact same-key observation. Invalid or unsafe output consumes the
+   attempt and blocks that generation.
 2. `ProjectGuideCompilation` is immutable provenance/proposal evidence, not a
    canonical policy replacement.
 3. Existing policy objects and Project Manager approval gates remain separate.
@@ -29,7 +32,7 @@
 10. Representative task context is optional and bounded; its absence cannot
     block project guide compilation.
 11. Setup failures, capability gaps, timeouts, and retries create no
-    ContributionRecord, payment, award, or negative reputation evidence.
+    ContributionRecord, settlement, award, or negative reputation evidence.
 12. No backward-compatibility aliases or dual model-inference paths survive
     final cleanup.
 13. Pre-submit has no standalone feedback/execution API. One canonical

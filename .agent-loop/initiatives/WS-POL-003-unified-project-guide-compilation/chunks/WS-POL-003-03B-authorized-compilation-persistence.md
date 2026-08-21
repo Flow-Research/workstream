@@ -70,6 +70,12 @@ or private resource context. This chunk changes no AUTH public method or fact
 shape and no AUTH catalogue, evaluator, policy, runtime, service matrix, or
 schema vocabulary.
 
+The POL-03A `DenyProjectGuideCompilationAuthorization` was an intentionally
+temporary seam while AUTH-12I was unavailable. AUTH-12I is now merged, so 03B
+deletes that class/module and replaces its old behavior test with a
+syntax-aware assertion that no production or test consumer imports the retired
+seam. It is not retained as an alias, fallback, or second adapter.
+
 ### Composition boundary
 
 The coordinator constructor accepts the frozen AUTH public Protocol and a
@@ -98,6 +104,7 @@ Each immutable row contains only:
 - requesting human `actor_profile_id` and `identity_link_id`;
 - exact `project_id`, `guide_id`, `source_snapshot_id`, `setup_run_id`, and
   positive `setup_generation` selectors;
+- optional exact `expected_predecessor_compilation_id`;
 - `request_facts_digest` from the merged public AUTH helper;
 - the unique bound `attempt_id`;
 - the exact allowed request `authorization_decision_event_id`; and
@@ -112,6 +119,22 @@ that the referenced audit event is allowed, uses action and permission
 same project/actor/link, and a resource-context digest containing the exact
 request-facts digest. The row is insert-only; update, delete, and truncate fail
 closed.
+
+Migration 0008 installs two PROJECTS-owned, domain-specific SQL digest
+functions: one reconstructs the exact no-whitespace, sorted-key UTF-8 preimage
+used by `project_guide_compilation_facts_digest` from the operation and bound
+attempt columns; the second reconstructs the exact preimage used by
+`project_guide_compilation_request_authority_digest` from that facts digest,
+the operation actor/link/project/operation values, and the audit event's
+matched Project Manager grant. Both use PostgreSQL's built-in
+`sha256(bytea)` plus `encode(..., 'hex')`; no extension or general digest
+framework is added. The custody trigger first requires the stored facts digest
+to equal the first function, then requires the event's
+`after_facts.resource_context_digest` to equal the second. Golden parity tests
+compare both SQL functions with the merged Python public helpers for null and
+non-null predecessors and independently mutate every input. Thus PostgreSQL,
+not an ORM or narrative assertion, proves the digest preimage and exact
+identity-link/request-facts binding.
 
 This is not a generic operation framework. It has no JSON request body, status
 machine, response cache, arbitrary action, arbitrary resource, delivery state,
@@ -281,6 +304,7 @@ drift denies with no allowed event or product write.
 
 ```text
 backend/app/modules/projects/guide_compilation/__init__.py
+backend/app/modules/projects/guide_compilation/authorization.py  # delete merged deny-only seam
 backend/app/modules/projects/guide_compilation/contracts.py
 backend/app/modules/projects/guide_compilation/models.py
 backend/app/modules/projects/guide_compilation/repository.py
@@ -352,6 +376,7 @@ documentation file, stop and amend/re-review this contract first.
 | Atomic PM request custody | Event commits without operation/attempt, or reverse | Real-PostgreSQL injected failure before each flush/commit boundary | Either all three exact rows exist and cross-reference, or none exist; audit count is exact |
 | Concurrent request idempotency | Two prepared handles commit two events or attempts | Two independent sessions race identical operation/request/key; repeat with changed facts | One attempt, one provider key, one operation receipt, one allowed event; changed replay has zero new rows |
 | Audit binding | Borrowed/cross-tenant allowed event satisfies custody | Direct SQL attempts every actor/link/project/resource/action/digest substitution | Postgres rejects each substitution at the owning constraint/trigger; original rows remain unchanged |
+| SQL/Python digest parity | SQL trigger hashes a different preimage and accepts or rejects the wrong receipt | Golden values plus per-field mutation for both exact SQL functions, including null/non-null predecessor | SQL and public Python helper digests are byte-for-byte equal; every mutation changes both identically |
 | Exact replay | Retried request mutates state or leaks raw result | Replay every recovery state and mutate one fact at a time | Exact bounded receipt/classification only; zero new audit/outbox/product rows; mutations conflict |
 | Execute authority before dispatch | Human/wrong service or stale lineage obtains a dispatch fence | Production AUTH adapter with real DB actors/grants/services; all-pairs substitutions | Only fixed service commits reserved -> uncertain; denials leave reserved and create no event/outbox |
 | Committed pre-I/O fence | Provider could start while tx/lock/handle is live | Instrument session state and forbidden provider sentinel; subprocess exits immediately after receipt | Uncertain row is visible to a second process before any provider call; no active tx/handle/callback crosses boundary |
@@ -462,6 +487,12 @@ uv run python -m scripts.test_structure_boundary validate \
   --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md \
   --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
 uv run python -m scripts.behavior_ownership validate
+
+lane_run_dir="$(mktemp -d)"
+uv run python -m scripts.run_test_lanes \
+  --metadata-dir "$lane_run_dir/metadata" \
+  --summary-json "$lane_run_dir/summary.json" \
+  --lane project_lifecycle
 cd ..
 ```
 
@@ -483,7 +514,8 @@ Stop implementation and amend/re-review this contract if:
 - the current provider must be retried/reconciled from uncertain without a
   proven same-key observation contract;
 - exact request audit binding cannot be enforced by PostgreSQL without an AUTH
-  schema or public-contract change;
+  schema or public-contract change, or the exact SQL/Python digest parity proof
+  fails on any bound field;
 - any transaction/lock/handle must cross external I/O, any handle/context must
   be serialized, or rollback cannot remove the matching allowed event;
 - a test can pass without its canonical effect/forbidden-effect assertion, a
