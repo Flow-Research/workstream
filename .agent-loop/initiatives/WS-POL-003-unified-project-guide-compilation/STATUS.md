@@ -51,8 +51,10 @@ hidden internal coordinator, migration 0008 request custody, SQL digest and
 authorization trigger, explicit dispatch-versus-recovery receipts,
 current-setup lineage checks, real-PostgreSQL concurrency and crash proof, and
 semantic-lane registration. POL-04A is the next eligible dependency and has
-not started. The open pull request remains transient until a human merges it;
-protected main does not gain this behavior before that merge.
+not started. `WS-POL-003-04A` is planned as an execution-only hidden command
+over an already authorized attempt. The open pull request remains transient
+until a human merges it; protected main does not gain this behavior before
+that merge.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

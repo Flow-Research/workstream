@@ -3,6 +3,10 @@
 Status: Preimplementation contract review. Runtime implementation has not
 started. Risk: L1.
 
+## Merge state
+
+- Outcome on merge: `planned`
+
 ## Outcome
 
 Build one hidden PROJECTS-owned execution command that starts from an already
@@ -108,7 +112,10 @@ ledger, provider client, or authorization protocol.
   complete.
 - The expected agent identity, agent version, instruction version, and schema
   version are server-owned constants (or one equally small frozen manifest),
-  never model-selected values. Returned identity/version must match the attempt.
+  never model-selected values. The pre-fence context manifest must match the
+  attempt exactly. Returned `agent_version` must match the context/attempt;
+  returned `agent_name` and `schema_version` satisfy their existing closed
+  literals rather than fields that do not exist on the attempt.
 - `ProjectGuideCompilationContext` carries the expected agent version before
   dispatch, so the provider input and attempt identity cannot disagree. The
   fixed v1 manifest is `project-guide-compilation-agent-v1` / `v1` / `v1` /
@@ -139,6 +146,20 @@ provider_idempotency_key
 classification
 compilation_id?
 ```
+
+The port also defines one closed `ProjectGuideCompilationExecutionError` with
+only an allowlisted safe code:
+
+```text
+attempt_unavailable
+context_unavailable
+service_authority_denied
+storage_unavailable
+```
+
+The error contains no guide/provider content, credential, exception string,
+path, stack, or AUTH detail. Its code does not replace or advance the durable
+attempt classification.
 
 The port has one method. Manual invocation and future queue delivery call the
 same method with the same attempt ID. The authenticated boundary that creates
@@ -235,9 +256,11 @@ persisted.
 
 ### 4. Persist accepted compilation
 
-Using another fresh root session, call `persist_accepted` with freshly rebuilt
-context. Return only its bounded persisted receipt. No policy or setup-run
-projection occurs.
+On the first pass, use another fresh root session to call `persist_accepted`
+with the exact frozen context sent to the provider. On
+accepted-not-persisted recovery only, first reconstruct and verify the exact
+original context as described above. Return only the bounded persisted receipt.
+No policy or setup-run projection occurs.
 
 ## Closed invariants
 
@@ -303,7 +326,7 @@ backend/app/modules/projects/guide_compilation/__init__.py
 backend/app/modules/projects/guide_compilation/context.py
 backend/app/modules/projects/guide_compilation/orchestrator.py
 backend/app/modules/projects/guide_compilation/contracts.py   # pure identity/facts helpers only
-backend/app/modules/projects/guide_compilation/service.py     # bounded public recovery helper only if proven necessary
+backend/app/modules/projects/guide_compilation/service.py     # private execution-state loader only
 backend/tests/projects/guide_compilation/helpers.py           # shared fixture only
 backend/tests/projects/guide_compilation/test_context_builder.py
 backend/tests/projects/guide_compilation/test_hidden_orchestrator.py
@@ -317,6 +340,7 @@ backend/scripts/behavior_ownership.py                       # exact new callable
 backend/tests/test_behavior_ownership.py                    # exact ownership assertion only
 backend/scripts/test_structure_boundary.py                  # exact new-file scope only if required
 backend/tests/architecture/test_test_structure_boundary.py  # exact scope assertion only if required
+.github/workflows/backend.yml                                # exact 04A per-file coverage gate only
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/lifecycle/project-guide-compilation-context.json
 .ci/behavior-ownership/lifecycle/project-guide-compilation-orchestrator.json
@@ -338,8 +362,10 @@ needed, stop and amend/re-review this contract before editing it.
 - Live fixed-service routing, setup-ledger activation, setup status/output
   mutation, approval, canonical component projection, checker execution, or
   guide activation.
-- Raw/serialized guide material, model result, provider key, AUTH handle,
-  session, path, workspace, or ORM object in the public command.
+- Raw/serialized guide material, model result, caller-supplied provider key,
+  provider credentials, AUTH handle, session, path, workspace, or ORM object
+  in the public command. The bounded server-owned provider-key UUID remains
+  permitted only in the result receipt.
 - Human AUTH context reconstruction or any hidden call to `authorize_request`,
   `prepare_request`, or `consume_request`.
 - Provider redispatch, automatic retry, claimed same-key provider replay,
@@ -430,7 +456,23 @@ uv run pytest -q tests/projects/guide_compilation \
   tests/test_agent_runtime.py tests/test_project_guide_compilation_contracts.py \
   tests/architecture/test_authorization_boundary.py
 uv run pytest -q tests/projects/guide_compilation \
-  --cov=app.modules.projects.guide_compilation --cov-branch --cov-fail-under=90
+  tests/test_agent_runtime.py tests/test_project_guide_compilation_contracts.py \
+  --cov=app --cov-branch --cov-report=
+for source in \
+  app/interfaces/project_agents.py \
+  app/adapters/project_agents/openai_agent_sdk.py \
+  app/modules/projects/api/__init__.py \
+  app/modules/projects/api/guide_compilation.py \
+  app/adapters/projects/__init__.py \
+  app/adapters/projects/guide_compilation.py \
+  app/modules/projects/guide_compilation/__init__.py \
+  app/modules/projects/guide_compilation/context.py \
+  app/modules/projects/guide_compilation/orchestrator.py \
+  app/modules/projects/guide_compilation/contracts.py \
+  app/modules/projects/guide_compilation/service.py
+do
+  uv run coverage report --include="${source}" --precision=2 --fail-under=90
+done
 uv run pytest -q tests/test_behavior_ownership.py \
   tests/architecture/test_test_structure_boundary.py tests/test_ci_test_lanes.py
 uv run python -m scripts.authorization_boundary validate \
@@ -442,12 +484,15 @@ uv run python -m scripts.behavior_ownership validate
 cd ..
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
-python3 scripts/check_chunk_state_sync.py
+python3 scripts/check_chunk_state_sync.py \
+  --base-ref a1e2aaa3ba7e781d30ca7da09d3775af6659ec48
 git diff --check a1e2aaa3ba7e781d30ca7da09d3775af6659ec48
 ```
 
 The final implementation also runs all seven canonical semantic lanes against
 real pinned services and reconciles exact node custody before review.
+Hosted CI runs the same per-file 90 percent gate for every materially changed
+production file; aggregate package coverage cannot hide a weak file.
 
 ## Required reviews
 
@@ -484,8 +529,9 @@ Stop and amend/re-review before implementation if:
    exactly-once guarantee;
 6. invalid output cannot be distinguished from transport uncertainty without
    exposing provider details;
-7. setup-ledger mutation, a live worker/route, AUTH action, schema, migration,
-   dependency, or component policy projection is required;
+7. setup-ledger mutation, a live worker/route, new AUTH action or public-contract
+   change, schema, migration, dependency, or component policy projection is
+   required;
 8. the candidate path can reach a legacy inference method or a second provider
    call;
 9. real PostgreSQL/production AUTH/ART lifecycle proof, concurrency proof,
