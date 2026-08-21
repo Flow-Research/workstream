@@ -45,10 +45,14 @@ before any is started, its contract must be expanded on then-current main with
 explicit allowed/not-allowed paths, runnable verification commands, and named
 reviewer tracks. They cannot authorize implementation in their current form.
 
-`WS-POL-003-03A` merged through PR #307 at `5e459a8f`. It installs hidden
-compilation custody and the first public AUTH-capability consumer proof.
-AUTH-12I merged through PR #312 at `98eae13e`; POL-03B is now the next eligible
-POL implementation boundary.
+`WS-POL-003-03A` merged through PR #307 at `5e459a8f`, and AUTH-12I merged
+through PR #312 at `98eae13e`. `WS-POL-003-03B` is complete. It installs the
+hidden internal coordinator, migration 0008 request custody, SQL digest and
+authorization trigger, explicit dispatch-versus-recovery receipts,
+current-setup lineage checks, real-PostgreSQL concurrency and crash proof, and
+semantic-lane registration. POL-04A is the next eligible dependency and has
+not started. The open pull request remains transient until a human merges it;
+protected main does not gain this behavior before that merge.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

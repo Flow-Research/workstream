@@ -1,0 +1,48 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.service",
+  "boundaries": ["postgresql", "lock", "trigger", "concurrency"],
+  "callables": [
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.__init__",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService._recover_request",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService._require_fresh_session",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.authorize_request",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.fence_dispatch",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.persist_accepted",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.record_accepted_result",
+    "app.modules.projects.guide_compilation.service.GuideCompilationService.record_invalid_result",
+    "app.modules.projects.guide_compilation.service._dispatch_receipt",
+    "app.modules.projects.guide_compilation.service._locked_exact",
+    "app.modules.projects.guide_compilation.service._outcome_receipt",
+    "app.modules.projects.guide_compilation.service._persist_facts",
+    "app.modules.projects.guide_compilation.service._persisted_receipt",
+    "app.modules.projects.guide_compilation.service._preflight_facts",
+    "app.modules.projects.guide_compilation.service._request_facts",
+    "app.modules.projects.guide_compilation.service._request_receipt",
+    "app.modules.projects.guide_compilation.service._require_identity_matches"
+  ],
+  "group": "lifecycle",
+  "outcomes": [
+    "return",
+    "persisted_state",
+    "emitted_fact",
+    "denial",
+    "mapped_error",
+    "idempotent_replay",
+    "recovery_outcome"
+  ],
+  "reviewed_by": ["WS-POL-003-03B required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/service.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_authorized_request_service.py::test_authorized_request_commits_one_bound_receipt_and_exact_replay",
+    "backend/tests/projects/guide_compilation/test_authorized_execution_service.py::test_authorized_execution_fences_accepts_and_persists_atomically",
+    "backend/tests/projects/guide_compilation/test_authorized_recovery_postgresql.py::test_uncertain_restart_returns_unresolved_without_redispatch",
+    "backend/tests/projects/guide_compilation/test_authorized_recovery_postgresql.py::test_changed_request_replay_fails_without_new_authority_event",
+    "backend/tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py::test_concurrent_identical_requests_commit_one_attempt_event_and_receipt",
+    "backend/tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py::test_concurrent_finalization_commits_one_compilation_and_event",
+    "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_fence_is_visible_to_a_fresh_process_before_any_provider_call",
+    "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_cancellation_before_fence_commit_leaves_attempt_reserved",
+    "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_coordinator_cannot_import_or_call_a_provider"
+  ]
+}
