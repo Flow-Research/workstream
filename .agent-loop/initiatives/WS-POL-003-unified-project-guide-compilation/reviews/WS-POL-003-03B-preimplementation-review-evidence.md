@@ -99,6 +99,39 @@ discriminating probe.
 No runtime, migration, test, CI, dependency, or Alembic environment file was
 changed by this planning repair.
 
+## Repair 2: Complete hard-coded-head scan
+
+Phase 3 Retry 1 stopped cleanly before edits when the two existing domain
+migration-contract tests were found to assert 0007 as the current schema head
+while remaining outside the allowed list. Repair 2 permits only replacement of
+those two current-head expectations with exact 0008. It does not authorize test
+refactoring, broader migration cleanup, or any other change in those files.
+
+The complete tracked-repository scan used exact-literal and generic
+head-variable searches across executable checks, fixtures, scripts, workflows,
+and documentation. Every exact 0007 match is classified below.
+
+| Classification | Exact surfaces | Disposition |
+|---|---|---|
+| Needs current-head parity update; already admitted | `backend/alembic/env.py`; `backend/tests/test_alembic.py` | Replace only the current-head value with exact 0008 and retain existing policy/topology behavior |
+| Needs current-head parity update; admitted by Repair 2 | `backend/tests/projects/guide_compilation/test_migration_contract.py`; `backend/tests/authorization/guide_compilation/test_migration_contract.py` | Replace only each current-schema expected revision with exact 0008 |
+| Intentionally historical migration identity | `backend/alembic/versions/0007_contribution_policy_publication_custody.py` | Keep the immutable revision identifier unchanged; migration 0008 points back to it |
+| Intentionally historical planning and handoff record | `WS-ARCH-001-CP04B-con-policy-publication-behavior.md` (two matches); `WS-CON-001/AUTHORIZATION_HANDOFF.md` | Keep as the reviewed CP04B delivery record and pre-0008 handoff snapshot |
+| Intentional POL-03B starting-point and repair history | This chunk contract (current starting head plus 0007-to-0008 bounds); this review evidence | Keep as provenance explaining the required transition |
+
+Generic searches found no additional executable sole-head literal. The
+isolated-test runner discovers the sole Alembic head from the migration graph;
+coverage/evidence validators compare caller-supplied or runner-observed values;
+workflow and script calls to `alembic upgrade head` follow the graph; and older
+initiative documents name their then-current revisions as historical evidence.
+None requires a parity edit. No additional production, test, fixture, script,
+workflow, or documentation surface is admitted.
+
+The amended proof now fails if any of these four current-head authorities
+disagrees: `backend/alembic/env.py`, the sole Alembic graph asserted through
+`backend/tests/test_alembic.py`, the PROJECTS migration contract, or the AUTH
+migration contract. Exact-final-head reviewer verdicts are pending.
+
 ## Phase 3 gate
 
 Phase 3 is authorized only if all exact-final-head reviewer receipts remain

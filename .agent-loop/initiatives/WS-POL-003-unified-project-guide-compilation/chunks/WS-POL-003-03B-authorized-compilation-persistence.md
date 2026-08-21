@@ -323,7 +323,9 @@ backend/tests/projects/guide_compilation/test_authorized_recovery_postgresql.py
 backend/tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py
 backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py
 backend/tests/projects/guide_compilation/test_migration_authorized_persistence.py
+backend/tests/projects/guide_compilation/test_migration_contract.py  # exact current-head expectation only
 backend/tests/projects/guide_compilation/test_public_authorization.py   # exact boundary assertions only
+backend/tests/authorization/guide_compilation/test_migration_contract.py  # exact current-head expectation only
 backend/tests/test_alembic.py                         # exact 0008 topology/fingerprint only
 backend/tests/conftest.py                             # generic DB fixture plumbing only, if required
 backend/scripts/run_test_lanes.py                     # exact new-test lane registration only
@@ -398,7 +400,7 @@ documentation file, stop and amend/re-review this contract first.
 | Crash recovery | Restart repeats provider work or loses accepted result | Separate-process real-Postgres cases for reserved, uncertain, accepted, persisted, invalid | Closed classification and exact row counts; accepted recovery performs persistence only |
 | Outbox/side-effect absence | Hidden request accidentally dispatches or projects | Snapshot outbox and all named later-product tables before/after success, denial, replay, crash | Zero outbox/broker/provider/policy/approval/setup/checker/contribution deltas |
 | Database immutability | ORM bypass changes or deletes governed evidence | Direct SQL update/delete/truncate and non-empty downgrade probes | Postgres rejection with unchanged rows; downgrade refuses governed custody |
-| Alembic current-head parity | A database migrated to 0008 is rejected on the next Alembic run, or unsupported history is admitted | Upgrade from baseline/current to 0008, run Alembic again at 0008, and seed an unsupported revision | Baseline and 0008 are recognized, the second 0008 run is a no-op, unsupported revision retains the existing recreation failure, and only the current-head constant changed in env.py |
+| Alembic current-head parity | Alembic environment, topology, PROJECTS custody, or AUTH custody retains 0007 as current after migration 0008 | Upgrade from baseline/current to 0008, run Alembic again at 0008, seed an unsupported revision, and run exact head assertions in the topology, PROJECTS, and AUTH migration contracts | `env.py`, the sole Alembic graph head, PROJECTS current-schema proof, and AUTH current-schema proof all report exact 0008; the second 0008 run is a no-op, unsupported revision retains the existing recreation failure, and only the current-head constant changed in env.py |
 | Module boundary | POL reaches AUTH private code or delivery reaches POL private code | Syntax-aware AUTH boundary and module reachability checks | Zero new private edges; no worker/route/composition consumer |
 | Test trust | Happy-path tests pass without exercising failure | Test-of-test mutations for dropped lock, skipped AUTH consume, removed rollback, redispatch from uncertain, weakened trigger | Each named test fails for its seeded defect and passes only after restoration |
 
@@ -430,6 +432,11 @@ acceptance evidence.
   head, a second run at 0008 is a no-op, and every unsupported revision still
   raises the existing recreation guidance. A source assertion proves the
   current-head constant is the only changed `env.py` line.
+- The Alembic topology test and both existing domain migration-contract tests
+  must independently assert the exact
+  `0008_guide_compilation_authorized_persistence` head. The suite fails if the
+  environment preflight, graph topology, PROJECTS schema contract, or AUTH
+  schema contract disagrees with any other surface.
 - Use the repository's digest-pinned PostgreSQL harness and independent
   sessions. Do not add a second container abstraction or replace database
   behavior with SQLite/mocks.

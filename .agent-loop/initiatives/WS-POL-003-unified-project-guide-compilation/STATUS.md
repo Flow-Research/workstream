@@ -59,7 +59,13 @@ migration 0008 but omitted the existing Alembic current-head constant from its
 allowed files. Repair 1 is a planning-only amendment limited to that exact
 0007-to-0008 parity update. Its preimplementation reviewer tracks passed with
 no findings; runtime implementation remains unstarted and Phase 3 is
-reauthorized only under the amended contract's unchanged drift gates.
+reauthorized only under the amended contract's unchanged drift gates. Phase 3
+Retry 1 then stopped before edits because two existing domain migration-contract
+tests also encode 0007 as the current head but remained outside the allowed
+list. Repair 2 admits only those two exact current-head expectation changes.
+A complete tracked-repository scan found no other executable hard-coded 0007
+parity surface. Runtime implementation remains unstarted while the amended
+contract undergoes exact-head review.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.
