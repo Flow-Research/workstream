@@ -10,6 +10,8 @@ Date: 2026-08-21. Risk: L1. Outcome: PASS.
 - Final planning head: `400d55f004cc906bec6ae1c8e1cad5f3adfd031c`.
 - Atomic completion-projection and Docker-test head:
   `5062b64d02a0898fb38fd55fbdf08f147f143593`.
+- Phase 5 external-review remediation code head:
+  `c9709e976e45d1b0ab588731c3b470440969d733`.
 - Scope remains the hidden POL-03B persistence boundary. It adds no provider
   call, worker dispatch, outbox message, route, public Projects API, setup
   cutover, approval, policy projection, review, contribution, or economic
@@ -29,6 +31,9 @@ Evidence below is labelled as **executed**, **inspected**, **hosted-only**, or
 | Request rollback did not directly assert the consumed AUTH event disappeared | An injected request-operation insert failure now proves attempt, request receipt, and matching allowed audit-event counts remain `(0, 0, 0)` | Executed in `test_request_failure_rolls_back_attempt_and_authority_event` |
 | Exact-file coverage could be hidden by package averaging | Added meaningful missing-row, replay, immutable-custody, recovery, and error-path tests until each named changed surface exceeded 90 percent | Executed branch coverage: repository 94.31% at Phase 3 and 96.24% in the final semantic aggregate |
 | Completion projections were not atomic | Contract, CHUNK_MAP, STATUS, and CURRENT_STATE were changed in one commit and distinguish the on-merge outcome from protected-main truth | Executed chunk-state gate plus 18 regression tests |
+| An uncertain replay returned the original permit with no stateless dispatch distinction | `CompilationDispatchReceipt` now carries an explicit one-shot `dispatch_permitted` signal: the first committed fence returns `true`, while every uncertain replay returns `false` without touching AUTH or a provider | Executed real-PostgreSQL restart test plus a killed permit-replay mutant |
+| Execution trusted setup lineage captured only at request time | Every dispatch, result-recording, and persistence transaction now locks and revalidates the exact draft guide, setup run, source snapshot, setup generation, and latest generation | Executed real-PostgreSQL failed, blocked, and superseded-lineage tests plus a killed guard-removal mutant |
+| Completion wording still described a pending review outcome | The chunk contract and initiative status now describe POL-03B as complete while keeping merge and protected-main truth explicitly human-controlled | Executed stale-wording and atomic chunk-state checks |
 
 ## Requirement, risk, test, and evidence
 
@@ -60,6 +65,8 @@ same test was required to pass. No mutant was committed.
 | Rollback atomicity | Allow a request event to survive operation failure | Exact `(attempt, operation, event)` count assertion fails | Killed, restored, PASS |
 | Status mapping | Map an uncertain/recovery state to the wrong public classification | Closed recovery matrix test fails | Killed, restored, PASS |
 | No redispatch | Permit uncertain recovery to touch authority/provider | Zero-call sentinel raises immediately | Killed, restored, PASS |
+| Dispatch permit replay | Return `dispatch_permitted=true` after the attempt is already uncertain | Restart test fails on the explicit one-shot permit assertion | Killed, restored, PASS |
+| Current setup lineage | Remove the locked current-lineage recheck from execution | Failed, blocked, and newer-generation PostgreSQL tests all fail | Killed, restored, PASS |
 
 ## Focused and structural verification
 
@@ -89,7 +96,26 @@ python3 -m unittest -v scripts.test_chunk_state_sync
 
 The first command passed and all 18 regression tests passed.
 
-## Canonical Docker and semantic-lane proof
+### Phase 5 remediation verification
+
+At exact remediation code head
+`c9709e976e45d1b0ab588731c3b470440969d733`:
+
+- Focused guide-compilation/AUTH suite: 118 passed against real PostgreSQL.
+- Package branch coverage: 96.27 percent.
+- Named changed surfaces all remained above the 90 percent floor.
+- The real-PostgreSQL remediation subset passed 13 tests before the full
+  focused run.
+- The migration, authorization-boundary, lane-inventory, behavior-ownership,
+  and test-structure suite passed all 184 tests.
+- Both new mutants were killed, restored, and followed by passing clean-code
+  reruns: the replay-permit test passed once, and all four setup-lineage cases
+  passed.
+- Docker build, Ruff, Markdown links, stale Workstream wording, stale
+  authorization wording, stale artifact contracts, stale review contracts,
+  and atomic chunk-state synchronization passed.
+
+## Phase 4 canonical Docker and semantic-lane proof
 
 The canonical run used native Linux, Python 3.12.13, and backend image manifest
 `sha256:6abac3af7fdb493c334738a4adc183c2c81489637df9da5634f79661ab71133f`.
@@ -135,9 +161,47 @@ Combined semantic coverage passed every enforced local floor:
 - Final guide-compilation package: contracts 98.90 percent, models 100 percent,
   repository 96.24 percent, service 98.46 percent, validation 95.24 percent.
 
+## Phase 5 canonical Docker and semantic-lane proof
+
+The remediation code head
+`c9709e976e45d1b0ab588731c3b470440969d733` ran in a fresh, read-only Linux
+source mount with Python 3.12.13 and tester image
+`sha256:35878a30fdb8c0e0270dc857e6e06b95e8e7223bea0cca0785734398f44f8581`.
+The same real PostgreSQL, Redis, and MinIO services were used. Lanes ran once,
+sequentially, because concurrent local lane processes share infrastructure and
+are not a supported local isolation mode.
+
+The independent merger and validator accepted one common manifest and exact
+custody of all 4,111 nodes.
+
+| Lane | Collected | Completed | Skipped | Deselected | Exit | Seconds |
+|---|---:|---:|---:|---:|---:|---:|
+| shared_foundations_a | 1,539 | 1,539 | 0 | 0 | 0 | 184.172 |
+| shared_foundations_b | 1,504 | 1,504 | 0 | 0 | 0 | 189.246 |
+| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 28.645 |
+| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 9.691 |
+| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 14.984 |
+| project_lifecycle | 530 | 530 | 0 | 0 | 0 | 279.915 |
+| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 231.770 |
+
+There were no duplicate completions, skips, deselections, interruptions,
+timeouts, cancellations, or retries. Aggregate runner time was 938.423
+seconds, and each isolation receipt reported database and MinIO cleanup
+complete.
+
+The independently combined Phase 5 coverage passed every required floor:
+
+- Repository: 91.18 percent, floor 78 percent.
+- Guide-compilation package: 97.78 percent, floor 90 percent.
+- `contracts.py`: 98.91 percent.
+- `models.py`: 100 percent.
+- `repository.py`: 95.98 percent.
+- `service.py`: 98.47 percent.
+- `validation.py`: 95.24 percent.
+
 ### Invalid exploratory attempts
 
-Three earlier attempts are recorded only as failed operational evidence and
+Four earlier attempts are recorded only as failed operational evidence and
 are not counted as product passes:
 
 1. An operator launched local lane runners in parallel against one shared
@@ -160,7 +224,7 @@ None of these attempts was retried into or merged with the canonical green
 bundle. Exact residual databases, roles, and buckets were ownership-checked
 and removed before the fresh Linux run.
 
-## Final reviewer verdicts
+## Phase 4 final reviewer verdicts
 
 All nine tracks reviewed clean draft evidence head
 `2002dfcd4e2576de40632bc70f32d6ec7c70d85d`. Both reviewer groups ran
@@ -182,11 +246,30 @@ verdicts without inventing a self-referential Git receipt.
 | Product/operations | PASS | Operator-visible unresolved state and no false provider/setup/approval/economic truth |
 | Documentation | PASS | Accurate protected-main timing, terminology, links, commands, and deferred POL-04A ownership |
 
+## Phase 5 external-review remediation
+
+GitHub review identified three valid P1 gaps at published head
+`6034e337acc15eaf46347c552c12fb9848854d01`: the dispatch receipt did not
+distinguish a first permit from uncertain replay, execution did not revalidate
+current setup lineage, and status wording retained a transient review state.
+All three were corrected at code head
+`c9709e976e45d1b0ab588731c3b470440969d733` and received the regression,
+fault-sensitivity, full-lane, and coverage proof recorded above.
+
+The first exact-code-head re-review passed architecture, reuse/dedup, senior
+engineering, documentation, and security/authorization. QA, test-delta, CI,
+and product/operations correctly withheld final PASS because this durable file
+still contained only the Phase 4 proof. This update closes that evidence gap.
+After it is committed, all nine tracks must rerun read-only against the new
+clean evidence head. Their immutable start/end receipts provide finality
+without requiring this file to claim its own not-yet-created commit hash.
+
 ## Residual and deferred proof
 
 - **Hosted-only:** GitHub Actions, branch protection, required checks, and the
-  exact pushed SHA cannot run before Phase 5 publication. Local Docker proof
-  uses the same lane and evidence validators but does not claim hosted status.
+  exact remote SHA are recorded by the PR rather than predicted by this local
+  file. Local Docker proof uses the same lane and evidence validators but does
+  not claim hosted status.
 - **Deferred to POL-04A:** actual provider execution, Celery delivery/redelivery,
   reconcile-by-key observation, and private setup-service consumption.
 - **Deferred to POL-04B and later:** public/live setup cutover, approvals,
