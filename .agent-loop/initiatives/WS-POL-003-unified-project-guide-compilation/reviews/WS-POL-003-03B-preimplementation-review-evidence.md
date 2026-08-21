@@ -185,6 +185,27 @@ application, or other current-state change was made by this planning repair.
 Phase 4 remains paused until all nine reviewer tracks pass at the exact amended
 contract head.
 
+Repair 3 first exact-head review verdicts on planning head
+`9af056c4ed83581ca5a55fa97f15ed352cc4eb9b`:
+
+| Track | Verdict | Repair-specific conclusion |
+|---|---|---|
+| Architecture | PASS | One canonical gate owns the four-projection atomic rule; the root projection scope is exact and bounded |
+| Reuse/dedup | PASS | The existing chunk-state gate is reused; no second checklist, script, or projection mechanism is introduced |
+| Security/authorization | PASS | The amendment changes no authority or runtime behavior and permits no unrelated current-state capability claim |
+| QA | PASS | Missing, contradictory, temporal, or partial completion projections are rejected by the canonical gate |
+| Test delta | PASS | Existing chunk-state regressions discriminate missing, duplicate, temporal, review-only, and mismatched outcomes |
+| Senior engineering | PASS | The rule is narrow, implementable in one publication commit, and stops unrelated state cleanup |
+| CI integrity | PASS | The exact canonical command and fixed base are recorded without changing or weakening CI |
+| Product/operations | PASS | Pre-merge intent is distinct from protected-main truth; no setup, approval, policy, or economic state is invented |
+| Documentation | PASS | Contract and evidence state the same four projections, completion semantics, and deferred application step |
+
+Both reviewer groups ran `scripts/review_target.py` at the start and end. The
+exact base, head, and merge-base matched, the worktree remained clean, and no
+finding remained. Each track supplied atomized traceability and a residual
+probe covering partial projection, temporal wording, changed base, unrelated
+CURRENT_STATE edits, or false downstream product truth.
+
 ## Phase 3 gate
 
 Phase 3 is authorized only if all exact-final-head reviewer receipts remain
