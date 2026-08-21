@@ -9,6 +9,7 @@
     "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.authorize_execute_preflight",
     "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.consume_execute_persist",
     "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.consume_request",
+    "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.from_prepared",
     "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.prepare_execute_persist",
     "app.modules.authorization.guide_compilation.ProjectGuideCompilationAuthorizationAdapter.prepare_request",
     "app.modules.authorization.guide_compilation._execute_context",
@@ -29,6 +30,7 @@
     "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_exact_project_manager_request_succeeds_and_replay_denies",
     "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_actor_matrix_denies_without_evidence",
     "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_preflight_is_non_evidencing_and_final_is_single_use",
-    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_revoked_service_preflight_denies_without_evidence"
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_real_kernel_revoked_service_preflight_denies_without_evidence",
+    "backend/tests/authorization/guide_compilation/test_adapter_contract.py::test_from_prepared_preserves_the_existing_authorization_composition"
   ]
 }

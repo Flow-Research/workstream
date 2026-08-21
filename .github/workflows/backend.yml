@@ -505,6 +505,26 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: POL-04A hidden compilation per-file coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in \
+            app/interfaces/project_agents.py \
+            app/adapters/project_agents/openai_agent_sdk.py \
+            app/modules/authorization/guide_compilation.py \
+            app/modules/projects/api/__init__.py \
+            app/modules/projects/api/guide_compilation.py \
+            app/modules/projects/guide_compilation/__init__.py \
+            app/modules/projects/guide_compilation/context.py \
+            app/modules/projects/guide_compilation/orchestrator.py \
+            app/modules/projects/guide_compilation/contracts.py \
+            app/modules/projects/guide_compilation/service.py
+          do
+            coverage report --include="${source}" --precision=2 --fail-under=90
+          done
+
       - name: Project creation cutover per-file coverage
         working-directory: backend
         shell: bash

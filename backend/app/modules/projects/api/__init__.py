@@ -10,6 +10,14 @@ from app.modules.projects.api.contribution_policy import (
     ProjectContributionPolicyEligibilityPort,
     ProjectContributionPolicyUnavailable,
 )
+from app.modules.projects.api.guide_compilation import (
+    ProjectGuideCompilationExecutionClassification,
+    ProjectGuideCompilationExecutionCommand,
+    ProjectGuideCompilationExecutionError,
+    ProjectGuideCompilationExecutionErrorCode,
+    ProjectGuideCompilationExecutionPort,
+    ProjectGuideCompilationExecutionResult,
+)
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
@@ -30,6 +38,12 @@ __all__ = (
     "ProjectContributionPolicyEligibilityFacts",
     "ProjectContributionPolicyEligibilityPort",
     "ProjectContributionPolicyUnavailable",
+    "ProjectGuideCompilationExecutionClassification",
+    "ProjectGuideCompilationExecutionCommand",
+    "ProjectGuideCompilationExecutionError",
+    "ProjectGuideCompilationExecutionErrorCode",
+    "ProjectGuideCompilationExecutionPort",
+    "ProjectGuideCompilationExecutionResult",
     "ProjectLockedPolicyContextFacts",
     "ProjectLockedPolicyContextPort",
     "ProjectLockedPolicyContextRequest",

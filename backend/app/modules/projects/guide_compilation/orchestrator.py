@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Protocol
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.interfaces.artifact_operations import (
+    GuideSufficiencyMaterialPort,
+    GuideSufficiencyMaterialUnavailable,
+)
 from app.interfaces.project_agents import (
+    PostSubmissionCapabilityProjection,
+    PreSubmissionCapabilityProjection,
     ProjectAgentRuntimeError,
     ProjectGuideAgentRuntime,
     ProjectGuideCompilationContext,
@@ -14,13 +25,21 @@ from app.interfaces.project_agents import (
     require_complete_project_guide_compilation_result,
     validate_project_guide_compilation_result,
 )
+from app.modules.authorization.api import (
+    ActorIdentityFacts,
+    AuthorizationDenied,
+    PreparedAuthorizationInvalid,
+    ProjectGuideCompilationAuthorizationPort,
+)
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionClassification,
     ProjectGuideCompilationExecutionCommand,
+    ProjectGuideCompilationExecutionError,
     ProjectGuideCompilationExecutionPort,
     ProjectGuideCompilationExecutionResult,
 )
 
+from .context import build_project_guide_compilation_context
 from .contracts import (
     CompilationDispatchReceipt,
     CompilationExecutionState,
@@ -28,6 +47,153 @@ from .contracts import (
     CompilationPersistenceReceipt,
     CompilationRecoveryClassification,
 )
+from .repository import GuideCompilationIntegrityError, GuideCompilationStorageError
+from .service import (
+    CompilationExecutionStateUnavailable,
+    GuideCompilationService,
+    load_compilation_execution_state,
+)
+
+
+class GuideCompilationAuthorizationContext(Protocol):
+    """One caller-owned fixed-service AUTH composition."""
+
+    def __call__(
+        self,
+        session: AsyncSession,
+        state: CompilationExecutionState,
+    ) -> AbstractAsyncContextManager[
+        tuple[ProjectGuideCompilationAuthorizationPort, ActorIdentityFacts]
+    ]: ...
+
+
+class SqlAlchemyGuideCompilationExecutionBackend:
+    """Bind the state machine to its existing typed owner ports."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        material_factory: Callable[[AsyncSession], GuideSufficiencyMaterialPort],
+        pre_submission_capabilities: PreSubmissionCapabilityProjection,
+        post_submission_capabilities: PostSubmissionCapabilityProjection,
+        authorization_context: GuideCompilationAuthorizationContext,
+    ) -> None:
+        self._session_factory = session_factory
+        self._material_factory = material_factory
+        self._pre_submission_capabilities = pre_submission_capabilities
+        self._post_submission_capabilities = post_submission_capabilities
+        self._authorization_context = authorization_context
+
+    async def load(self, attempt_id: UUID) -> CompilationExecutionState:
+        try:
+            async with self._session_factory() as session:
+                return await load_compilation_execution_state(session, attempt_id)
+        except CompilationExecutionStateUnavailable as exc:
+            raise ProjectGuideCompilationExecutionError(exc.code) from None
+        except SQLAlchemyError:
+            raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
+
+    async def context(
+        self, state: CompilationExecutionState
+    ) -> ProjectGuideCompilationContext:
+        try:
+            async with self._session_factory() as session:
+                return await build_project_guide_compilation_context(
+                    session,
+                    state=state,
+                    material=self._material_factory(session),
+                    pre_submission_capabilities=self._pre_submission_capabilities,
+                    post_submission_capabilities=self._post_submission_capabilities,
+                )
+        except GuideSufficiencyMaterialUnavailable:
+            raise ProjectGuideCompilationExecutionError("context_unavailable") from None
+        except GuideCompilationStorageError:
+            raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
+        except (GuideCompilationIntegrityError, TypeError, ValueError):
+            raise ProjectGuideCompilationExecutionError("context_unavailable") from None
+        except SQLAlchemyError:
+            raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
+
+    async def fence(
+        self, state: CompilationExecutionState
+    ) -> CompilationDispatchReceipt:
+        async with self._authorized_service(state) as (service, actor):
+            return await service.fence_dispatch(actor=actor, facts=state.preflight_facts)
+
+    async def record_accepted(
+        self,
+        state: CompilationExecutionState,
+        context: ProjectGuideCompilationContext,
+        result: ProjectGuideCompilationResult,
+    ) -> CompilationOutcomeReceipt:
+        async with self._authorized_service(state) as (service, actor):
+            return await service.record_accepted_result(
+                actor=actor,
+                facts=state.preflight_facts,
+                context=context,
+                result=result,
+            )
+
+    async def record_invalid(
+        self, state: CompilationExecutionState, failure_code: str
+    ) -> CompilationOutcomeReceipt:
+        async with self._authorized_service(state) as (service, actor):
+            return await service.record_invalid_result(
+                actor=actor,
+                facts=state.preflight_facts,
+                failure_code=failure_code,
+            )
+
+    async def persist(
+        self, state: CompilationExecutionState, context: ProjectGuideCompilationContext
+    ) -> CompilationPersistenceReceipt:
+        async with self._authorized_service(state) as (service, actor):
+            return await service.persist_accepted(
+                actor=actor,
+                facts=state.preflight_facts,
+                context=context,
+            )
+
+    @asynccontextmanager
+    async def _authorized_service(self, state: CompilationExecutionState):
+        try:
+            async with self._session_factory() as session:
+                async with self._authorization_context(session, state) as (
+                    authorization,
+                    actor,
+                ):
+                    yield GuideCompilationService(session, authorization), actor
+        except (AuthorizationDenied, PreparedAuthorizationInvalid):
+            raise ProjectGuideCompilationExecutionError(
+                "service_authority_denied"
+            ) from None
+        except GuideCompilationStorageError:
+            raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
+        except GuideCompilationIntegrityError:
+            raise ProjectGuideCompilationExecutionError("context_unavailable") from None
+        except SQLAlchemyError:
+            raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
+
+
+def project_guide_compilation_execution_port(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    material_factory: Callable[[AsyncSession], GuideSufficiencyMaterialPort],
+    pre_submission_capabilities: PreSubmissionCapabilityProjection,
+    post_submission_capabilities: PostSubmissionCapabilityProjection,
+    authorization_context: GuideCompilationAuthorizationContext,
+    runtime: ProjectGuideAgentRuntime,
+) -> ProjectGuideCompilationExecutionPort:
+    """Compose the hidden port from existing owner-supplied dependencies."""
+    backend = SqlAlchemyGuideCompilationExecutionBackend(
+        session_factory,
+        material_factory=material_factory,
+        pre_submission_capabilities=pre_submission_capabilities,
+        post_submission_capabilities=post_submission_capabilities,
+        authorization_context=authorization_context,
+    )
+    return HiddenGuideCompilationOrchestrator(backend, runtime)
 
 
 class GuideCompilationExecutionBackend(Protocol):

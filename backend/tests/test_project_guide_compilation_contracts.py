@@ -64,6 +64,7 @@ def _context() -> ProjectGuideCompilationContext:
         setup_generation=1,
         instruction_version="v1",
         agent_identity="project-guide-compilation-agent-v1",
+        agent_version="v1",
         pre_submission_capabilities=project_guide_pre_submission_capabilities(
             build_pre_submission_checker_catalogue()
         ),

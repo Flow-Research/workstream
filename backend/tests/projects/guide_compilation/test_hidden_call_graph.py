@@ -11,7 +11,6 @@ from app.modules.projects.api import ProjectGuideCompilationExecutionCommand
 BACKEND = Path(__file__).resolve().parents[3]
 CANDIDATE_FILES = (
     BACKEND / "app/modules/projects/guide_compilation/orchestrator.py",
-    BACKEND / "app/adapters/projects/guide_compilation.py",
     BACKEND / "app/modules/projects/guide_compilation/context.py",
 )
 LEGACY_RUNTIME_METHODS = {

@@ -490,6 +490,14 @@ def test_pol03a_targets_are_narrow_and_keep_declarative_model_unresolved() -> No
     assert ownership.POL_03A_DECLARATIVE_MODEL_TARGET not in (
         ownership.POL_03A_CALLABLE_TARGETS
     )
+    assert ownership.POL_04A_CALLABLE_TARGETS == {
+        "backend/app/modules/projects/guide_compilation/context.py",
+        "backend/app/modules/projects/guide_compilation/orchestrator.py",
+    }
+    assert ownership.POL_04A_PARTITION_TARGETS == {
+        "backend/app/modules/projects/api/guide_compilation.py",
+        *ownership.POL_04A_CALLABLE_TARGETS,
+    }
 
 
 def test_pol03a_partition_transition_accepts_only_declared_additions(

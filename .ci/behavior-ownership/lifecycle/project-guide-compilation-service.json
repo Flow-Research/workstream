@@ -2,6 +2,7 @@
   "behavior_id": "lifecycle.project_guide_compilation.service",
   "boundaries": ["postgresql", "lock", "trigger", "concurrency"],
   "callables": [
+    "app.modules.projects.guide_compilation.service.CompilationExecutionStateUnavailable.__init__",
     "app.modules.projects.guide_compilation.service.GuideCompilationService.__init__",
     "app.modules.projects.guide_compilation.service.GuideCompilationService._recover_request",
     "app.modules.projects.guide_compilation.service.GuideCompilationService._require_fresh_session",
@@ -18,7 +19,8 @@
     "app.modules.projects.guide_compilation.service._preflight_facts",
     "app.modules.projects.guide_compilation.service._request_facts",
     "app.modules.projects.guide_compilation.service._request_receipt",
-    "app.modules.projects.guide_compilation.service._require_identity_matches"
+    "app.modules.projects.guide_compilation.service._require_identity_matches",
+    "app.modules.projects.guide_compilation.service.load_compilation_execution_state"
   ],
   "group": "lifecycle",
   "outcomes": [
@@ -43,6 +45,7 @@
     "backend/tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py::test_concurrent_finalization_commits_one_compilation_and_event",
     "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_fence_is_visible_to_a_fresh_process_before_any_provider_call",
     "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_cancellation_before_fence_commit_leaves_attempt_reserved",
-    "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_coordinator_cannot_import_or_call_a_provider"
+    "backend/tests/projects/guide_compilation/test_durable_dispatch_handoff.py::test_coordinator_cannot_import_or_call_a_provider",
+    "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_rebuilds_the_exact_authorized_art_backed_identity"
   ]
 }

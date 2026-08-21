@@ -1,6 +1,6 @@
 {
   "behavior_id": "lifecycle.project_guide_compilation.context",
-  "boundaries": ["postgresql", "artifact_material"],
+  "boundaries": ["postgresql"],
   "callables": [
     "app.modules.projects.guide_compilation.context.build_project_guide_compilation_context"
   ],
@@ -12,6 +12,8 @@
   "target": "backend/app/modules/projects/guide_compilation/context.py",
   "tests": [
     "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_rebuilds_the_exact_authorized_art_backed_identity",
-    "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_drift_fails_before_dispatch"
+    "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_drift_fails_before_dispatch",
+    "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_requires_fresh_session_and_current_lineage",
+    "backend/tests/projects/guide_compilation/test_context_builder.py::test_context_enforces_the_canonical_prompt_limit"
   ]
 }

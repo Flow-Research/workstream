@@ -1,6 +1,6 @@
 {
   "behavior_id": "lifecycle.project_guide_compilation.orchestrator",
-  "boundaries": ["postgresql", "provider", "authorization", "concurrency"],
+  "boundaries": ["postgresql", "concurrency"],
   "callables": [
     "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.context",
     "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.fence",
@@ -10,9 +10,18 @@
     "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.record_invalid",
     "app.modules.projects.guide_compilation.orchestrator.HiddenGuideCompilationOrchestrator.__init__",
     "app.modules.projects.guide_compilation.orchestrator.HiddenGuideCompilationOrchestrator.execute",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.__init__",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend._authorized_service",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.context",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.fence",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.load",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.persist",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.record_accepted",
+    "app.modules.projects.guide_compilation.orchestrator.SqlAlchemyGuideCompilationExecutionBackend.record_invalid",
     "app.modules.projects.guide_compilation.orchestrator._receipt_result",
     "app.modules.projects.guide_compilation.orchestrator._require_valid_result",
-    "app.modules.projects.guide_compilation.orchestrator._state_result"
+    "app.modules.projects.guide_compilation.orchestrator._state_result",
+    "app.modules.projects.guide_compilation.orchestrator.project_guide_compilation_execution_port"
   ],
   "group": "lifecycle",
   "outcomes": [
@@ -32,6 +41,8 @@
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_transport_failure_remains_unresolved_and_never_persists",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_hidden_command_persists_one_complete_result_and_no_projections",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_concurrent_commands_commit_one_dispatch_and_one_provider_call",
-    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_accepted_result_recovers_without_a_second_provider_call"
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_accepted_result_recovers_without_a_second_provider_call",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_known_invalid_output_terminalizes_without_compilation",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_uncertain_provider_failure_never_redispatches"
   ]
 }

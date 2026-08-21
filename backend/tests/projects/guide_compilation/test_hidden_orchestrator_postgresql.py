@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.adapters.projects.guide_compilation import (
-    SqlAlchemyGuideCompilationExecutionBackend,
-    project_guide_compilation_execution_port,
+from app.modules.artifacts.guide_sufficiency_material import (
+    SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
-from app.core.config import Settings
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeError,
     ProjectGuideCompilationInvalidOutputError,
 )
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.authorization.guide_compilation import (
+    ProjectGuideCompilationAuthorizationAdapter,
+)
+from app.modules.authorization.prepared import fixed_service_prepared_authorization
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionClassification,
     ProjectGuideCompilationExecutionCommand,
@@ -25,6 +29,15 @@ from app.modules.projects.api import (
 )
 from app.modules.projects.guide_compilation.orchestrator import (
     HiddenGuideCompilationOrchestrator,
+    SqlAlchemyGuideCompilationExecutionBackend,
+    project_guide_compilation_execution_port,
+)
+from app.modules.checkers.catalogue import (
+    build_pre_submission_checker_catalogue,
+    project_guide_pre_submission_capabilities,
+)
+from app.modules.projects.post_submit_policy import (
+    project_guide_post_submission_capabilities,
 )
 
 from .helpers import context, identity, result, seed_database
@@ -61,8 +74,29 @@ class _FailFirstPersist:
         return await self.inner.persist(state, compilation_context)
 
 
-def _settings() -> Settings:
-    return Settings(_env_file=None, environment="test")
+def _backend(factory):
+    return SqlAlchemyGuideCompilationExecutionBackend(
+        factory,
+        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+        pre_submission_capabilities=project_guide_pre_submission_capabilities(
+            build_pre_submission_checker_catalogue()
+        ),
+        post_submission_capabilities=project_guide_post_submission_capabilities(),
+        authorization_context=_fixed_service_authorization,
+    )
+
+
+def _port(factory, runtime):
+    return project_guide_compilation_execution_port(
+        factory,
+        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+        pre_submission_capabilities=project_guide_pre_submission_capabilities(
+            build_pre_submission_checker_catalogue()
+        ),
+        post_submission_capabilities=project_guide_post_submission_capabilities(),
+        authorization_context=_fixed_service_authorization,
+        runtime=runtime,
+    )
 
 
 async def _authorized_attempt(database_url: str, values):
@@ -81,6 +115,29 @@ async def _authorized_attempt(database_url: str, values):
         await engine.dispose()
 
 
+@asynccontextmanager
+async def _fixed_service_authorization(session, state):
+    facts = state.preflight_facts
+    async with fixed_service_prepared_authorization(
+        session,
+        service_identity=ServiceIdentity.PROJECT_SETUP,
+        request_id=facts.operation_id,
+        correlation_id=facts.attempt_id,
+    ) as authority:
+        await session.rollback()
+        yield (
+            ProjectGuideCompilationAuthorizationAdapter.from_prepared(
+                authority.service
+            ),
+            ActorIdentityFacts(
+                authority.actor_profile_id,
+                authority.identity_link_id,
+                ActorKind.SERVICE,
+                ServiceIdentity.PROJECT_SETUP.value,
+            ),
+        )
+
+
 @pytest.mark.asyncio
 async def test_hidden_command_persists_one_complete_result_and_no_projections(
     clean_postgres_database: str,
@@ -91,9 +148,7 @@ async def test_hidden_command_persists_one_complete_result_and_no_projections(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     runtime = _Runtime()
     try:
-        port = project_guide_compilation_execution_port(
-            factory, _settings(), runtime=runtime  # type: ignore[arg-type]
-        )
+        port = _port(factory, runtime)
         receipt = await port.execute(
             ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
         )
@@ -146,9 +201,7 @@ async def test_concurrent_commands_commit_one_dispatch_and_one_provider_call(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     runtime = _Runtime(delay=0.05)
     try:
-        port = project_guide_compilation_execution_port(
-            factory, _settings(), runtime=runtime  # type: ignore[arg-type]
-        )
+        port = _port(factory, runtime)
         command = ProjectGuideCompilationExecutionCommand(
             attempt_id=requested.attempt_id
         )
@@ -183,7 +236,7 @@ async def test_accepted_result_recovers_without_a_second_provider_call(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     first_runtime = _Runtime()
-    backend = SqlAlchemyGuideCompilationExecutionBackend(factory, _settings())
+    backend = _backend(factory)
     failing = _FailFirstPersist(backend)
     command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
     try:
@@ -224,9 +277,7 @@ async def test_known_invalid_output_terminalizes_without_compilation(
     runtime = _Runtime(outcome)
     command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
     try:
-        port = project_guide_compilation_execution_port(
-            factory, _settings(), runtime=runtime  # type: ignore[arg-type]
-        )
+        port = _port(factory, runtime)
         receipt = await port.execute(command)
         replay = await port.execute(command)
         assert receipt.classification is ProjectGuideCompilationExecutionClassification.INVALID_TERMINAL
@@ -264,9 +315,7 @@ async def test_uncertain_provider_failure_never_redispatches(
     runtime = _Runtime(ProjectAgentRuntimeError("transport failed"))
     command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
     try:
-        port = project_guide_compilation_execution_port(
-            factory, _settings(), runtime=runtime  # type: ignore[arg-type]
-        )
+        port = _port(factory, runtime)
         first = await port.execute(command)
         second = await port.execute(command)
         assert first == second

@@ -173,6 +173,18 @@ POL_03B_REMOVED_TARGETS = frozenset(
 POL_03A_DECLARATIVE_MODEL_TARGET = (
     "backend/app/modules/projects/guide_compilation/models.py"
 )
+POL_04A_CALLABLE_TARGETS = frozenset(
+    {
+        "backend/app/modules/projects/guide_compilation/context.py",
+        "backend/app/modules/projects/guide_compilation/orchestrator.py",
+    }
+)
+POL_04A_PARTITION_TARGETS = frozenset(
+    {
+        "backend/app/modules/projects/api/guide_compilation.py",
+        *POL_04A_CALLABLE_TARGETS,
+    }
+)
 AUTH_12I_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/domain/audit.py",
@@ -348,6 +360,7 @@ def _validate_additive_partition_transition(
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
+        | POL_04A_PARTITION_TARGETS
         | AUTH_12I_TARGETS
         | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | ARCH_02G_AUTH_PREPARATION_TARGETS
@@ -647,7 +660,11 @@ def validate_catalogue(
     covered = {item["target"] for item in records}
     expected = {target for target, assigned in partition.items() if group in (None, assigned)}
     unresolved = expected - covered
-    if unresolved.intersection(AUTH_BOUNDARY_FOUNDATION_TARGETS | POL_03A_CALLABLE_TARGETS):
+    if unresolved.intersection(
+        AUTH_BOUNDARY_FOUNDATION_TARGETS
+        | POL_03A_CALLABLE_TARGETS
+        | POL_04A_CALLABLE_TARGETS
+    ):
         raise BehaviorOwnershipError("unresolved_auth_boundary_foundation")
     return {
         "schema": CATALOGUE_SCHEMA,
