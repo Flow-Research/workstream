@@ -1,6 +1,6 @@
 # Chunk Contract: WS-POL-003-04A - Hidden Unified Setup
 
-Status: Complete on the stacked branch; human merge remains required. Risk: L1.
+Status: Complete. Risk: L1.
 
 ## Merge state
 

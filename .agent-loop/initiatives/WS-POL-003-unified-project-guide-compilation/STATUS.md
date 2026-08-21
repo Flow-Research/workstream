@@ -31,7 +31,7 @@ determine transient implementation ownership.
 | POL-02 adapter | POL-03A | Merged PR #301 |
 | Hidden POL-03A compilation custody | AUTH-12I compilation request/execute activation | POL-03A merged PR #307; AUTH-12I merged PR #312 |
 | AUTH-12I | POL-03B authorized persistence | Merged PR #312; dependency satisfied |
-| Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | `WS-POL-003-04A` complete on its stacked branch; human merge required |
+| Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | `WS-POL-003-04A` complete |
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
 | Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |
@@ -50,12 +50,11 @@ through PR #312 at `98eae13e`. `WS-POL-003-03B` is complete. It installs the
 hidden internal coordinator, migration 0008 request custody, SQL digest and
 authorization trigger, explicit dispatch-versus-recovery receipts,
 current-setup lineage checks, real-PostgreSQL concurrency and crash proof, and
-semantic-lane registration. `WS-POL-003-04A` is complete on its stacked
-branch. It adds one execution-only hidden command over an already authorized
-attempt, preserves unresolved provider outcomes without redispatch, and leaves
-all live routing and setup projections untouched. AUTH-12B2 and POL-04B are
-the next boundaries. The stacked work remains transient until a human merges
-its parent and this branch; protected main does not yet have this behavior.
+semantic-lane registration. `WS-POL-003-04A` is complete. It adds one
+execution-only hidden command over an already authorized attempt, preserves
+unresolved provider outcomes without redispatch, and leaves all live routing
+and setup projections untouched. AUTH-12B2 and POL-04B are the next
+boundaries.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.
