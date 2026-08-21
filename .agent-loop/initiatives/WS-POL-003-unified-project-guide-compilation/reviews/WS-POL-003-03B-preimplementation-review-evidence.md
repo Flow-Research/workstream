@@ -62,6 +62,24 @@ No application runtime, migration, test, CI workflow, dependency, worker,
 provider, route, generated artifact, push, pull request, or merge was created
 during this planning review.
 
+## Repair 1: Alembic head-parity scope
+
+The first Phase 3 drift check stopped cleanly before edits. The implementation
+contract allocated migration 0008, while `backend/alembic/env.py` recognized
+only 0007 and was absent from the allowed files. Leaving it unchanged would
+make a later Alembic run reject a database already migrated to 0008.
+
+The contract amendment permits only replacement of the existing
+`_CURRENT_HEAD_REVISION` value from 0007 to the exact 0008 revision. It also
+requires proof that baseline and exact current-head recognition still work, a
+second 0008 run is a no-op, unsupported revisions retain the existing
+recreation failure, and every other `env.py` line remains unchanged. Dynamic
+head discovery and any migration-policy change remain prohibited.
+
+Repair 1 exact-head reviewer verdicts are pending. No runtime, migration, test,
+CI, dependency, or Alembic environment file was changed by this planning
+repair.
+
 ## Phase 3 gate
 
 Phase 3 is authorized only if all exact-final-head reviewer receipts remain

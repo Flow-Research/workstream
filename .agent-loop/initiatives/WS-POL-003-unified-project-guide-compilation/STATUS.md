@@ -54,5 +54,10 @@ schema migration, tests, CI registration, and live behavior have not started.
 Phase 3 may use only the reviewed 03B contract and must stop if its recorded
 base, prerequisites, migration head, frozen AUTH port, or scope has changed.
 
+The first Phase 3 drift check stopped before edits because the contract admitted
+migration 0008 but omitted the existing Alembic current-head constant from its
+allowed files. Repair 1 is a planning-only amendment limited to that exact
+0007-to-0008 parity update; runtime implementation remains unstarted.
+
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

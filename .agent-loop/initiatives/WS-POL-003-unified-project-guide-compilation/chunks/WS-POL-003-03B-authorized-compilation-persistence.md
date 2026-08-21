@@ -32,8 +32,10 @@ add a route, project policy, approve a guide, or make setup live.
 - Current schema head: `0007_contribution_policy_publication_custody`.
 - If schema custody described below is required, this chunk alone allocates
   `0008_guide_compilation_authorized_persistence` with `down_revision` equal to
-  the current sole head. Implementation must stop and re-plan if main changes
-  the sole head before work starts.
+  the current sole head. The same bounded change updates Alembic's existing
+  `_CURRENT_HEAD_REVISION` constant from 0007 to this exact 0008 identifier so
+  later runs recognize an already-migrated database. Implementation must stop
+  and re-plan if main changes the sole head before work starts.
 - GitHub had no open pull request at contract refresh. Open pull requests, not
   this document, remain authoritative for transient ownership.
 
@@ -313,6 +315,7 @@ backend/app/modules/projects/guide_compilation/service.py
 backend/app/modules/projects/guide_compilation/validation.py
 backend/app/db/models.py                              # metadata discovery only, if required
 backend/alembic/versions/0008_guide_compilation_authorized_persistence.py
+backend/alembic/env.py                                # only exact 0007 -> 0008 current-head constant
 backend/tests/projects/guide_compilation/test_authorized_request_service.py
 backend/tests/projects/guide_compilation/test_authorized_execution_service.py
 backend/tests/projects/guide_compilation/test_request_operation_postgresql.py
@@ -369,6 +372,12 @@ documentation file, stop and amend/re-review this contract first.
 - Dependency additions, generated spreadsheet changes, threshold weakening,
   skip/xfail/pass-with-no-tests paths, mocks as sole lifecycle evidence, or
   changes to the current seven semantic-lane topology.
+- Any `backend/alembic/env.py` change except replacing the single existing
+  `_CURRENT_HEAD_REVISION` value with
+  `0008_guide_compilation_authorized_persistence`. Baseline recognition,
+  unsupported-revision rejection, recreation guidance, transaction handling,
+  online/offline behavior, and all other migration policy remain byte-for-byte
+  unchanged.
 
 ## Requirement -> risk -> test -> evidence matrix
 
@@ -389,6 +398,7 @@ documentation file, stop and amend/re-review this contract first.
 | Crash recovery | Restart repeats provider work or loses accepted result | Separate-process real-Postgres cases for reserved, uncertain, accepted, persisted, invalid | Closed classification and exact row counts; accepted recovery performs persistence only |
 | Outbox/side-effect absence | Hidden request accidentally dispatches or projects | Snapshot outbox and all named later-product tables before/after success, denial, replay, crash | Zero outbox/broker/provider/policy/approval/setup/checker/contribution deltas |
 | Database immutability | ORM bypass changes or deletes governed evidence | Direct SQL update/delete/truncate and non-empty downgrade probes | Postgres rejection with unchanged rows; downgrade refuses governed custody |
+| Alembic current-head parity | A database migrated to 0008 is rejected on the next Alembic run, or unsupported history is admitted | Upgrade from baseline/current to 0008, run Alembic again at 0008, and seed an unsupported revision | Baseline and 0008 are recognized, the second 0008 run is a no-op, unsupported revision retains the existing recreation failure, and only the current-head constant changed in env.py |
 | Module boundary | POL reaches AUTH private code or delivery reaches POL private code | Syntax-aware AUTH boundary and module reachability checks | Zero new private edges; no worker/route/composition consumer |
 | Test trust | Happy-path tests pass without exercising failure | Test-of-test mutations for dropped lock, skipped AUTH consume, removed rollback, redispatch from uncertain, weakened trigger | Each named test fails for its seeded defect and passes only after restoration |
 
@@ -416,6 +426,10 @@ acceptance evidence.
   parity, exact constraints/triggers, direct SQL attack, insert-only custody,
   transaction rollback, concurrent request, concurrent final persistence,
   stale predecessor, and accepted-not-persisted recovery.
+- Alembic preflight recognizes the unchanged baseline and exact 0008 current
+  head, a second run at 0008 is a no-op, and every unsupported revision still
+  raises the existing recreation guidance. A source assertion proves the
+  current-head constant is the only changed `env.py` line.
 - Use the repository's digest-pinned PostgreSQL harness and independent
   sessions. Do not add a second container abstraction or replace database
   behavior with SQLite/mocks.
@@ -509,6 +523,9 @@ Stop implementation and amend/re-review this contract if:
 
 - the base, prerequisite behavior, sole migration head, frozen AUTH Protocol,
   provider port, or semantic-lane topology changes;
+- the 0008 implementation requires any Alembic environment change beyond the
+  exact current-head constant/parity update or weakens unsupported-revision
+  rejection and recreation policy;
 - safe implementation requires a provider call, worker, route, public Projects
   API, application composition root, outbox, policy projection, live setup
   behavior, generic operation abstraction, dependency, or file outside scope;
