@@ -203,6 +203,26 @@ async def test_accepted_recovery_rebuilds_context_but_never_calls_provider() -> 
 
 
 @pytest.mark.asyncio
+async def test_existing_dispatch_fence_never_calls_provider() -> None:
+    state = _state(ids(), CompilationRecoveryClassification.RESERVED)
+    backend, runtime = _Backend(state), _Runtime()
+    backend.dispatch_permitted = False
+
+    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+        ProjectGuideCompilationExecutionCommand(
+            attempt_id=state.preflight_facts.attempt_id
+        )
+    )
+
+    assert (
+        receipt.classification
+        is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+    )
+    assert runtime.calls == 0
+    assert backend.calls == ["load", "context", "fence"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("provider_failure", "expected_call"),
     [
