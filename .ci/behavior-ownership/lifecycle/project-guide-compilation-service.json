@@ -32,7 +32,10 @@
     "idempotent_replay",
     "recovery_outcome"
   ],
-  "reviewed_by": ["WS-POL-003-03B required reviewers"],
+  "reviewed_by": [
+    "WS-POL-003-03B required reviewers",
+    "WS-POL-003-04A required reviewers"
+  ],
   "schema": "workstream.behavior-ownership.v1",
   "status": "reviewed",
   "target": "backend/app/modules/projects/guide_compilation/service.py",

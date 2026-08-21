@@ -16,12 +16,18 @@ from app.interfaces.project_agents import (
     ProjectAgentRuntimeError,
     ProjectGuideCompilationInvalidOutputError,
 )
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+from app.modules.authorization.api import (
+    ActorIdentityFacts,
+    ActorKind,
+    AuthorizationDenied,
+    AuthorizationUnavailable,
+)
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.guide_compilation import (
     ProjectGuideCompilationAuthorizationAdapter,
 )
 from app.modules.authorization.prepared import fixed_service_prepared_authorization
+from app.modules.authorization.runtime import PreparedAuthorizationUnsupported
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionClassification,
     ProjectGuideCompilationExecutionCommand,
@@ -118,24 +124,31 @@ async def _authorized_attempt(database_url: str, values):
 @asynccontextmanager
 async def _fixed_service_authorization(session, state):
     facts = state.preflight_facts
-    async with fixed_service_prepared_authorization(
-        session,
-        service_identity=ServiceIdentity.PROJECT_SETUP,
-        request_id=facts.operation_id,
-        correlation_id=facts.attempt_id,
-    ) as authority:
-        await session.rollback()
-        yield (
-            ProjectGuideCompilationAuthorizationAdapter.from_prepared(
-                authority.service
-            ),
-            ActorIdentityFacts(
-                authority.actor_profile_id,
-                authority.identity_link_id,
-                ActorKind.SERVICE,
-                ServiceIdentity.PROJECT_SETUP.value,
-            ),
-        )
+    try:
+        async with fixed_service_prepared_authorization(
+            session,
+            service_identity=ServiceIdentity.PROJECT_SETUP,
+            request_id=facts.operation_id,
+            correlation_id=facts.attempt_id,
+        ) as authority:
+            await session.rollback()
+            yield (
+                ProjectGuideCompilationAuthorizationAdapter.from_prepared(authority.service),
+                ActorIdentityFacts(
+                    authority.actor_profile_id,
+                    authority.identity_link_id,
+                    ActorKind.SERVICE,
+                    ServiceIdentity.PROJECT_SETUP.value,
+                ),
+            )
+    except PreparedAuthorizationUnsupported as exc:
+        raise AuthorizationDenied("compilation service authority denied") from exc
+
+
+@asynccontextmanager
+async def _unavailable_service_authorization(_session, _state):
+    raise AuthorizationUnavailable("private database detail")
+    yield  # pragma: no cover - required only to define an async context manager
 
 
 @pytest.mark.asyncio
@@ -202,9 +215,7 @@ async def test_concurrent_commands_commit_one_dispatch_and_one_provider_call(
     runtime = _Runtime(delay=0.05)
     try:
         port = _port(factory, runtime)
-        command = ProjectGuideCompilationExecutionCommand(
-            attempt_id=requested.attempt_id
-        )
+        command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
         receipts = await asyncio.gather(port.execute(command), port.execute(command))
         assert runtime.calls == 1
         assert {receipt.classification for receipt in receipts} == {
@@ -242,14 +253,16 @@ async def test_accepted_result_recovers_without_a_second_provider_call(
     try:
         with pytest.raises(ProjectGuideCompilationExecutionError) as failure:
             await HiddenGuideCompilationOrchestrator(
-                failing, first_runtime  # type: ignore[arg-type]
+                failing,
+                first_runtime,  # type: ignore[arg-type]
             ).execute(command)
         assert failure.value.code == "storage_unavailable"
         assert first_runtime.calls == 1
 
         recovery_runtime = _Runtime(ProjectAgentRuntimeError("must not run"))
         receipt = await HiddenGuideCompilationOrchestrator(
-            backend, recovery_runtime  # type: ignore[arg-type]
+            backend,
+            recovery_runtime,  # type: ignore[arg-type]
         ).execute(command)
         assert receipt.classification is ProjectGuideCompilationExecutionClassification.PERSISTED
         assert recovery_runtime.calls == 0
@@ -280,7 +293,10 @@ async def test_known_invalid_output_terminalizes_without_compilation(
         port = _port(factory, runtime)
         receipt = await port.execute(command)
         replay = await port.execute(command)
-        assert receipt.classification is ProjectGuideCompilationExecutionClassification.INVALID_TERMINAL
+        assert (
+            receipt.classification
+            is ProjectGuideCompilationExecutionClassification.INVALID_TERMINAL
+        )
         assert replay == receipt
         assert runtime.calls == 1
         async with factory() as session:
@@ -319,7 +335,89 @@ async def test_uncertain_provider_failure_never_redispatches(
         first = await port.execute(command)
         second = await port.execute(command)
         assert first == second
-        assert first.classification is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+        assert (
+            first.classification
+            is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+        )
         assert runtime.calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_revoked_service_authority_is_bounded_before_provider_call(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    requested = await _authorized_attempt(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    runtime = _Runtime()
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("alter table actor_identity_links disable trigger user"))
+            await connection.execute(
+                text(
+                    "update actor_identity_links set status='revoked',revoked_by='test',"
+                    "revoked_at=clock_timestamp(),revoked_reason='test revocation' "
+                    "where id=:id"
+                ),
+                {"id": str(values["link"])},
+            )
+            await connection.execute(text("alter table actor_identity_links enable trigger user"))
+
+        port = _port(factory, runtime)
+        with pytest.raises(ProjectGuideCompilationExecutionError) as failure:
+            await port.execute(
+                ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
+            )
+        assert failure.value.code == "service_authority_denied"
+        assert runtime.calls == 0
+        async with factory() as session:
+            row = (
+                await session.execute(
+                    text(
+                        "select status,(select count(*) from audit_events where "
+                        "action_id='project.guide_compilation.execute') "
+                        "from project_guide_compilation_attempts where id=:id"
+                    ),
+                    {"id": requested.attempt_id},
+                )
+            ).one()
+        assert row == ("compilation_reserved", 0)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_unavailable_authority_returns_only_the_safe_public_code(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    requested = await _authorized_attempt(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    runtime = _Runtime()
+    try:
+        port = project_guide_compilation_execution_port(
+            factory,
+            material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+            pre_submission_capabilities=project_guide_pre_submission_capabilities(
+                build_pre_submission_checker_catalogue()
+            ),
+            post_submission_capabilities=project_guide_post_submission_capabilities(),
+            authorization_context=_unavailable_service_authorization,
+            runtime=runtime,
+        )
+        with pytest.raises(ProjectGuideCompilationExecutionError) as failure:
+            await port.execute(
+                ProjectGuideCompilationExecutionCommand(
+                    attempt_id=requested.attempt_id
+                )
+            )
+        assert failure.value.code == "service_authority_denied"
+        assert str(failure.value) == "service_authority_denied"
+        assert "private database detail" not in str(failure.value)
+        assert runtime.calls == 0
     finally:
         await engine.dispose()

@@ -38,11 +38,13 @@
   "target": "backend/app/modules/projects/guide_compilation/orchestrator.py",
   "tests": [
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_reserved_attempt_calls_the_unified_runtime_once_and_persists",
-    "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_transport_failure_remains_unresolved_and_never_persists",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_provider_failure_remains_unresolved_and_never_persists",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_hidden_command_persists_one_complete_result_and_no_projections",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_concurrent_commands_commit_one_dispatch_and_one_provider_call",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_accepted_result_recovers_without_a_second_provider_call",
     "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_known_invalid_output_terminalizes_without_compilation",
-    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_uncertain_provider_failure_never_redispatches"
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_uncertain_provider_failure_never_redispatches",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_revoked_service_authority_is_bounded_before_provider_call",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_unavailable_authority_returns_only_the_safe_public_code"
   ]
 }

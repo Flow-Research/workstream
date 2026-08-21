@@ -345,6 +345,8 @@ backend/tests/test_behavior_ownership.py                    # exact ownership as
 backend/scripts/test_structure_boundary.py                  # exact new-file scope only if required
 backend/tests/architecture/test_test_structure_boundary.py  # exact scope assertion only if required
 .github/workflows/backend.yml                                # exact 04A per-file coverage gate only
+.ci/behavior-ownership/auth/project-guide-compilation-adapter.json
+.ci/behavior-ownership/lifecycle/project-guide-compilation-service.json
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/lifecycle/project-guide-compilation-context.json
 .ci/behavior-ownership/lifecycle/project-guide-compilation-orchestrator.json

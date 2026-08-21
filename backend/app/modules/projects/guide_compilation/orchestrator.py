@@ -17,7 +17,6 @@ from app.interfaces.artifact_operations import (
 from app.interfaces.project_agents import (
     PostSubmissionCapabilityProjection,
     PreSubmissionCapabilityProjection,
-    ProjectAgentRuntimeError,
     ProjectGuideAgentRuntime,
     ProjectGuideCompilationContext,
     ProjectGuideCompilationInvalidOutputError,
@@ -28,6 +27,7 @@ from app.interfaces.project_agents import (
 from app.modules.authorization.api import (
     ActorIdentityFacts,
     AuthorizationDenied,
+    AuthorizationUnavailable,
     PreparedAuthorizationInvalid,
     ProjectGuideCompilationAuthorizationPort,
 )
@@ -56,7 +56,11 @@ from .service import (
 
 
 class GuideCompilationAuthorizationContext(Protocol):
-    """One caller-owned fixed-service AUTH composition."""
+    """One caller-owned fixed-service AUTH composition.
+
+    Implementations translate private AUTH composition failures into the public
+    authorization errors declared by ``app.modules.authorization.api``.
+    """
 
     def __call__(
         self,
@@ -94,9 +98,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         except SQLAlchemyError:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
 
-    async def context(
-        self, state: CompilationExecutionState
-    ) -> ProjectGuideCompilationContext:
+    async def context(self, state: CompilationExecutionState) -> ProjectGuideCompilationContext:
         try:
             async with self._session_factory() as session:
                 return await build_project_guide_compilation_context(
@@ -115,9 +117,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         except SQLAlchemyError:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
 
-    async def fence(
-        self, state: CompilationExecutionState
-    ) -> CompilationDispatchReceipt:
+    async def fence(self, state: CompilationExecutionState) -> CompilationDispatchReceipt:
         async with self._authorized_service(state) as (service, actor):
             return await service.fence_dispatch(actor=actor, facts=state.preflight_facts)
 
@@ -164,10 +164,12 @@ class SqlAlchemyGuideCompilationExecutionBackend:
                     actor,
                 ):
                     yield GuideCompilationService(session, authorization), actor
-        except (AuthorizationDenied, PreparedAuthorizationInvalid):
-            raise ProjectGuideCompilationExecutionError(
-                "service_authority_denied"
-            ) from None
+        except (
+            AuthorizationDenied,
+            AuthorizationUnavailable,
+            PreparedAuthorizationInvalid,
+        ):
+            raise ProjectGuideCompilationExecutionError("service_authority_denied") from None
         except GuideCompilationStorageError:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
         except GuideCompilationIntegrityError:
@@ -201,13 +203,9 @@ class GuideCompilationExecutionBackend(Protocol):
 
     async def load(self, attempt_id: UUID) -> CompilationExecutionState: ...
 
-    async def context(
-        self, state: CompilationExecutionState
-    ) -> ProjectGuideCompilationContext: ...
+    async def context(self, state: CompilationExecutionState) -> ProjectGuideCompilationContext: ...
 
-    async def fence(
-        self, state: CompilationExecutionState
-    ) -> CompilationDispatchReceipt: ...
+    async def fence(self, state: CompilationExecutionState) -> CompilationDispatchReceipt: ...
 
     async def record_accepted(
         self,
@@ -248,10 +246,7 @@ class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
             return _state_result(state)
 
         context = await self._backend.context(state)
-        if (
-            state.classification
-            is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED
-        ):
+        if state.classification is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED:
             return _receipt_result(await self._backend.persist(state, context))
 
         dispatch = await self._backend.fence(state)
@@ -259,17 +254,15 @@ class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
             return _receipt_result(dispatch)
         try:
             result = await self._runtime.compile_project_guide(context)
-            _require_valid_result(context, result)
         except ProjectGuideCompilationInvalidOutputError as exc:
-            return _receipt_result(
-                await self._backend.record_invalid(state, exc.failure_code)
-            )
-        except ValueError:
-            return _receipt_result(
-                await self._backend.record_invalid(state, "schema_invalid")
-            )
-        except ProjectAgentRuntimeError:
+            return _receipt_result(await self._backend.record_invalid(state, exc.failure_code))
+        except Exception:  # noqa: BLE001 - unknown provider outcome stays unresolved
             return _receipt_result(dispatch)
+
+        try:
+            _require_valid_result(context, result)
+        except (TypeError, ValueError):
+            return _receipt_result(await self._backend.record_invalid(state, "schema_invalid"))
 
         await self._backend.record_accepted(state, context, result)
         return _receipt_result(await self._backend.persist(state, context))
@@ -293,28 +286,20 @@ def _state_result(
         operation_id=facts.operation_id,
         attempt_id=facts.attempt_id,
         provider_idempotency_key=facts.provider_idempotency_key,
-        classification=ProjectGuideCompilationExecutionClassification(
-            state.classification.value
-        ),
+        classification=ProjectGuideCompilationExecutionClassification(state.classification.value),
         compilation_id=state.compilation_id,
     )
 
 
 def _receipt_result(
-    receipt: CompilationDispatchReceipt
-    | CompilationOutcomeReceipt
-    | CompilationPersistenceReceipt,
+    receipt: CompilationDispatchReceipt | CompilationOutcomeReceipt | CompilationPersistenceReceipt,
 ) -> ProjectGuideCompilationExecutionResult:
     return ProjectGuideCompilationExecutionResult(
         operation_id=receipt.operation_id,
         attempt_id=receipt.attempt_id,
         provider_idempotency_key=receipt.provider_idempotency_key,
-        classification=ProjectGuideCompilationExecutionClassification(
-            receipt.classification.value
-        ),
+        classification=ProjectGuideCompilationExecutionClassification(receipt.classification.value),
         compilation_id=(
-            receipt.compilation_id
-            if isinstance(receipt, CompilationPersistenceReceipt)
-            else None
+            receipt.compilation_id if isinstance(receipt, CompilationPersistenceReceipt) else None
         ),
     )

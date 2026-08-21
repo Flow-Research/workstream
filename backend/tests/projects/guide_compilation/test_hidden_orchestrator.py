@@ -170,7 +170,13 @@ async def test_reserved_attempt_calls_the_unified_runtime_once_and_persists() ->
 async def test_terminal_or_uncertain_state_never_rebuilds_or_redispatches(
     classification,
 ) -> None:
-    state = _state(ids(), classification, compilation_id=uuid4() if classification is CompilationRecoveryClassification.PERSISTED else None)
+    state = _state(
+        ids(),
+        classification,
+        compilation_id=uuid4()
+        if classification is CompilationRecoveryClassification.PERSISTED
+        else None,
+    )
     backend, runtime = _Backend(state), _Runtime()
 
     receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
@@ -204,7 +210,10 @@ async def test_accepted_recovery_rebuilds_context_but_never_calls_provider() -> 
             ProjectGuideCompilationInvalidOutputError("unsafe_text"),
             "record_invalid:unsafe_text",
         ),
-        (ProjectGuideCompilationInvalidOutputError("schema_invalid"), "record_invalid:schema_invalid"),
+        (
+            ProjectGuideCompilationInvalidOutputError("schema_invalid"),
+            "record_invalid:schema_invalid",
+        ),
     ],
 )
 async def test_known_invalid_output_terminalizes_without_persistence(
@@ -224,15 +233,27 @@ async def test_known_invalid_output_terminalizes_without_persistence(
 
 
 @pytest.mark.asyncio
-async def test_transport_failure_remains_unresolved_and_never_persists() -> None:
+@pytest.mark.parametrize(
+    "provider_failure",
+    [
+        ProjectAgentRuntimeError("unavailable"),
+        ValueError("unexpected provider value error"),
+        RuntimeError("unexpected provider runtime error"),
+    ],
+)
+async def test_provider_failure_remains_unresolved_and_never_persists(
+    provider_failure: Exception,
+) -> None:
     state = _state(ids(), CompilationRecoveryClassification.RESERVED)
-    backend, runtime = _Backend(state), _Runtime(ProjectAgentRuntimeError("unavailable"))
+    backend, runtime = _Backend(state), _Runtime(provider_failure)
 
     receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
-    assert receipt.classification is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+    assert (
+        receipt.classification is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+    )
     assert backend.calls == ["load", "context", "fence"]
 
 
@@ -260,9 +281,7 @@ async def test_caller_cancellation_propagates_after_the_durable_fence() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
-            ProjectGuideCompilationExecutionCommand(
-                attempt_id=state.preflight_facts.attempt_id
-            )
+            ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
         )
     assert backend.calls == ["load", "context", "fence"]
 

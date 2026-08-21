@@ -18,7 +18,10 @@
   ],
   "group": "auth",
   "outcomes": ["return", "mapped_error"],
-  "reviewed_by": ["WS-AUTH-001-12I required reviewers"],
+  "reviewed_by": [
+    "WS-AUTH-001-12I required reviewers",
+    "WS-POL-003-04A required reviewers"
+  ],
   "schema": "workstream.behavior-ownership.v1",
   "status": "reviewed",
   "target": "backend/app/modules/authorization/guide_compilation.py",
