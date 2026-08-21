@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -99,6 +100,86 @@ async def test_accepted_crash_recovery_persists_exactly_once(
             )
         assert replay.id == first.id
         assert replay.attempt_id == attempt.id
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_accepted_result_replay_requires_exact_canonical_result(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        attempt, _attempt_identity, compilation_context = await _accepted_attempt(
+            factory, values
+        )
+        async with factory() as session, session.begin():
+            replay = await GuideCompilationRepository(session).accept_result(
+                attempt_id=attempt.id,
+                context=compilation_context,
+                result=result(),
+            )
+            assert replay.status == "provider_result_accepted"
+        changed_finding = result().findings[0].model_copy(
+            update={"message": "A different valid finding."}
+        )
+        changed = result().model_copy(update={"findings": (changed_finding,)})
+        async with factory() as session, session.begin():
+            with pytest.raises(GuideCompilationIntegrityError, match="result mismatch"):
+                await GuideCompilationRepository(session).accept_result(
+                    attempt_id=attempt.id,
+                    context=compilation_context,
+                    result=changed,
+                )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_accepted_result_rejects_context_from_another_generation(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database, generations=2)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session, session.begin():
+            repository = GuideCompilationRepository(session)
+            _outcome, attempt = await repository.reserve_attempt(identity(context(values)))
+            with pytest.raises(GuideCompilationIntegrityError, match="result is invalid"):
+                await repository.accept_result(
+                    attempt_id=attempt.id,
+                    context=context(values, generation=2),
+                    result=result(),
+                )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reserved_attempt_cannot_persist_without_accepted_custody(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    compilation_context = context(values)
+    attempt_identity = identity(compilation_context)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session, session.begin():
+            repository = GuideCompilationRepository(session)
+            _outcome, attempt = await repository.reserve_attempt(attempt_identity)
+            with pytest.raises(GuideCompilationIntegrityError, match="not ready"):
+                await repository.persist_accepted(
+                    attempt_id=attempt.id,
+                    context=compilation_context,
+                    expected_predecessor_id=None,
+                    actor=service_actor(values),
+                    facts=persistence_facts(values, attempt.id, attempt_identity),
+                    authorization_decision_event_id=uuid4(),
+                )
     finally:
         await engine.dispose()
 

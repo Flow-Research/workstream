@@ -161,11 +161,14 @@ ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS = frozenset(
 POL_03A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
-        "backend/app/modules/projects/guide_compilation/authorization.py",
         "backend/app/modules/projects/guide_compilation/contracts.py",
         "backend/app/modules/projects/guide_compilation/repository.py",
+        "backend/app/modules/projects/guide_compilation/service.py",
         "backend/app/modules/projects/guide_compilation/validation.py",
     }
+)
+POL_03B_REMOVED_TARGETS = frozenset(
+    {"backend/app/modules/projects/guide_compilation/authorization.py"}
 )
 POL_03A_DECLARATIVE_MODEL_TARGET = (
     "backend/app/modules/projects/guide_compilation/models.py"
@@ -334,7 +337,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - V01_BASELINE_REMOVED_TARGETS
+        or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):

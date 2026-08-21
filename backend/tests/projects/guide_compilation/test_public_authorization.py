@@ -1,21 +1,17 @@
-"""Public fact integrity and inactive authorization behavior."""
+"""Public fact integrity and retired-seam boundary behavior."""
 
 from __future__ import annotations
 
+import ast
 from dataclasses import replace
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from app.modules.authorization.api import (
-    AuthorizationUnavailable,
-    ProjectGuideCompilationRequestFacts,
-)
-from app.modules.projects.guide_compilation.authorization import (
-    DenyProjectGuideCompilationAuthorization,
-)
+from app.modules.authorization.api import ProjectGuideCompilationRequestFacts
 
-from .helpers import SHA256, context, identity, ids, persistence_facts, service_actor
+from .helpers import SHA256, context, identity, ids, persistence_facts
 
 
 def _request_facts() -> ProjectGuideCompilationRequestFacts:
@@ -60,24 +56,18 @@ def test_public_facts_reject_wrong_uuid_and_unbounded_token() -> None:
         replace(facts, source_snapshot_hash=SHA256.upper())
 
 
-@pytest.mark.asyncio
-async def test_hidden_authorization_denies_before_touching_product_state() -> None:
-    """Every request and execute operation remains unavailable in 03A."""
-    values = ids()
-    compilation_context = context(values)
-    attempt_identity = identity(compilation_context)
-    facts = persistence_facts(values, uuid4(), attempt_identity)
-    actor = service_actor(values)
-    denial = DenyProjectGuideCompilationAuthorization()
-    request_facts = _request_facts()
-
-    with pytest.raises(AuthorizationUnavailable):
-        await denial.prepare_request(actor=actor, facts=request_facts)
-    with pytest.raises(AuthorizationUnavailable):
-        await denial.consume_request(handle=object(), actor=actor, facts=request_facts)
-    with pytest.raises(AuthorizationUnavailable):
-        await denial.authorize_execute_preflight(actor=actor, facts=facts)
-    with pytest.raises(AuthorizationUnavailable):
-        await denial.prepare_execute_persist(actor=actor, facts=facts)
-    with pytest.raises(AuthorizationUnavailable):
-        await denial.consume_execute_persist(handle=object(), actor=actor, facts=facts)
+def test_retired_deny_seam_has_no_consumer_or_compatibility_module() -> None:
+    """The merged AUTH Protocol is the only compilation authority seam."""
+    backend = Path(__file__).resolve().parents[3]
+    retired = "app.modules.projects.guide_compilation.authorization"
+    assert not (backend / "app/modules/projects/guide_compilation/authorization.py").exists()
+    for root in (backend / "app", backend / "tests"):
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    assert all(alias.name != retired for alias in node.names), path
+                if isinstance(node, ast.ImportFrom):
+                    assert node.module != retired, path

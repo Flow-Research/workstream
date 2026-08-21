@@ -1,6 +1,7 @@
 # Chunk Contract: WS-POL-003-03B - Authorized Compilation Persistence
 
-Status: Preimplementation review findings resolved; runtime not implemented.
+Status: Phase 3 implementation complete locally; awaiting postimplementation
+review and hosted proof.
 Risk: L1.
 
 ## Outcome
@@ -523,6 +524,27 @@ registration. Full seven-lane semantic tests, combined coverage with
 `coverage report --precision=2 --fail-under=78`, every accumulated subsystem
 gate, Agent Gates, and review-evidence gates run on the exact pushed Phase 3
 head in GitHub Actions. A local focused pass does not replace hosted proof.
+
+## Phase 3 implementation evidence
+
+- The hidden coordinator now owns authorized request custody, the committed
+  dispatch fence, known-result custody, and accepted-result persistence without
+  a provider, worker, route, outbox, or public Projects API.
+- Migration 0008 installs the immutable request-operation receipt, exact SQL
+  digest reconstruction, authorization-event custody trigger, and guarded
+  downgrade while preserving one Alembic head.
+- Fifty-five guide-compilation tests pass against an isolated real PostgreSQL
+  database. They cover exact replay, concurrency, process restart, cancellation,
+  digest parity, immutable custody, guarded migration, and authorization-bound
+  request and persistence paths.
+- Branch-aware coverage is 96.47 percent for the package. The materially changed
+  files are independently above the required floor: repository 94.31 percent,
+  service 97 percent, model 100 percent, contracts 98 percent, and validation
+  93 percent.
+- Authorization-boundary, test-structure, behavior-ownership, Alembic topology,
+  lane-inventory, and the exact 4,103-node `project_lifecycle` semantic lane pass
+  locally. Hosted seven-lane and combined-coverage gates remain verification
+  work, not claimed proof.
 
 ## Stop and rollback conditions
 

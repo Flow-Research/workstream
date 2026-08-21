@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,8 @@ from app.interfaces.project_agents import (
 from app.modules.authorization.api import (
     ActorIdentityFacts,
     ProjectGuideCompilationExecutePersistFacts,
+    ProjectGuideCompilationRequestFacts,
+    project_guide_compilation_facts_digest,
 )
 
 from .contracts import (
@@ -27,7 +29,11 @@ from .contracts import (
     accepted_compilation_result,
     validate_accepted_compilation_result,
 )
-from .models import ProjectGuideCompilation, ProjectGuideCompilationAttempt
+from .models import (
+    ProjectGuideCompilation,
+    ProjectGuideCompilationAttempt,
+    ProjectGuideCompilationRequestOperation,
+)
 from .validation import (
     accepted_from_attempt,
     identity_from_attempt,
@@ -54,6 +60,15 @@ _LINEAGE_CONSTRAINTS = frozenset(
         "uq_project_guide_compilation_root",
     }
 )
+_REQUEST_CONSTRAINTS = frozenset(
+    {
+        "pk_project_guide_compilation_request_operations",
+        "uq_compilation_request_actor_request",
+        "uq_compilation_request_actor_key",
+        "uq_compilation_request_attempt",
+        "uq_compilation_request_authorization_event",
+    }
+)
 
 
 def _persistence_error(exc: DBAPIError) -> GuideCompilationIntegrityError:
@@ -73,6 +88,118 @@ class GuideCompilationRepository:
     def __init__(self, session: AsyncSession) -> None:
         """Bind repository operations to the caller-owned transaction."""
         self._session = session
+
+    async def matching_request_operation(
+        self,
+        *,
+        actor: ActorIdentityFacts,
+        facts: ProjectGuideCompilationRequestFacts,
+        lock: bool = False,
+    ) -> ProjectGuideCompilationRequestOperation | None:
+        """Load one operation touching any replay identity and require exactness."""
+        statement = select(ProjectGuideCompilationRequestOperation).where(
+            or_(
+                ProjectGuideCompilationRequestOperation.operation_id == facts.operation_id,
+                (
+                    ProjectGuideCompilationRequestOperation.actor_profile_id
+                    == str(actor.actor_profile_id)
+                )
+                & (ProjectGuideCompilationRequestOperation.request_id == facts.request_id),
+                (
+                    ProjectGuideCompilationRequestOperation.actor_profile_id
+                    == str(actor.actor_profile_id)
+                )
+                & (
+                    ProjectGuideCompilationRequestOperation.idempotency_key
+                    == facts.idempotency_key
+                ),
+            )
+        )
+        if lock:
+            statement = statement.with_for_update()
+        rows = list((await self._session.scalars(statement)).all())
+        if not rows:
+            return None
+        if len(rows) != 1 or not _request_matches(rows[0], actor, facts):
+            raise GuideCompilationIntegrityError("compilation request replay mismatch")
+        return rows[0]
+
+    async def request_operation_for_attempt(
+        self, attempt_id: UUID, *, lock: bool
+    ) -> ProjectGuideCompilationRequestOperation:
+        """Load the exact immutable request custody for an attempt."""
+        statement = select(ProjectGuideCompilationRequestOperation).where(
+            ProjectGuideCompilationRequestOperation.attempt_id == attempt_id
+        )
+        if lock:
+            statement = statement.with_for_update()
+        operation = await self._session.scalar(statement)
+        if operation is None:
+            raise GuideCompilationIntegrityError("compilation request custody is missing")
+        return operation
+
+    async def insert_request_operation(
+        self,
+        *,
+        actor: ActorIdentityFacts,
+        facts: ProjectGuideCompilationRequestFacts,
+        attempt: ProjectGuideCompilationAttempt,
+        authorization_decision_event_id: UUID,
+    ) -> ProjectGuideCompilationRequestOperation:
+        """Insert one authorized operation receipt bound to exact custody."""
+        operation = ProjectGuideCompilationRequestOperation(
+            operation_id=facts.operation_id,
+            request_id=facts.request_id,
+            idempotency_key=facts.idempotency_key,
+            actor_profile_id=str(actor.actor_profile_id),
+            identity_link_id=str(actor.identity_link_id),
+            project_id=str(facts.project_id),
+            guide_id=str(facts.guide_id),
+            source_snapshot_id=str(facts.source_snapshot_id),
+            setup_run_id=str(facts.setup_run_id),
+            setup_generation=facts.setup_generation,
+            expected_predecessor_compilation_id=facts.expected_predecessor_compilation_id,
+            request_facts_digest=project_guide_compilation_facts_digest(facts),
+            attempt_id=attempt.id,
+            authorization_decision_event_id=str(authorization_decision_event_id),
+        )
+        self._session.add(operation)
+        try:
+            await self._session.flush()
+        except DBAPIError as exc:
+            if integrity_constraint_name(exc) in _REQUEST_CONSTRAINTS:  # type: ignore[arg-type]
+                raise GuideCompilationConcurrencyError(
+                    "concurrent compilation request won; reload its exact receipt"
+                ) from exc
+            raise GuideCompilationStorageError(
+                "compilation request custody failed before commit"
+            ) from exc
+        return operation
+
+    async def attempt(
+        self, attempt_id: UUID, *, lock: bool
+    ) -> ProjectGuideCompilationAttempt:
+        """Load an attempt, optionally holding its row for a root transaction."""
+        return (
+            await self._lock_attempt(attempt_id)
+            if lock
+            else await self._required_attempt(attempt_id)
+        )
+
+    async def current_compilation(
+        self, project_id: UUID, guide_id: UUID, *, lock: bool
+    ) -> ProjectGuideCompilation | None:
+        """Return the exact current lineage tip."""
+        return await self._current(project_id, guide_id, lock=lock)
+
+    async def persisted_compilation(
+        self, attempt_id: UUID
+    ) -> ProjectGuideCompilation:
+        """Return an attempt's required immutable compilation."""
+        compilation = await self._compilation_for_attempt(attempt_id)
+        if compilation is None:
+            raise GuideCompilationIntegrityError("persisted compilation is missing")
+        return compilation
 
     async def reserve_attempt(
         self, identity: CompilationAttemptIdentity
@@ -194,6 +321,8 @@ class GuideCompilationRepository:
         attempt = await self._required_attempt(attempt_id)
         if attempt.status == "provider_result_accepted":
             return CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED
+        if attempt.status == "compilation_provider_uncertain":
+            return CompilationRecoveryClassification.PROVIDER_UNCERTAIN
         return CompilationRecoveryClassification(attempt.status)
 
     async def persist_accepted(
@@ -361,6 +490,30 @@ def _matches(
     """Return whether a row retains the exact identity and provider key."""
     return identity_from_attempt(attempt) == identity and (
         attempt.provider_idempotency_key == identity.provider_idempotency_key()
+    )
+
+
+def _request_matches(
+    operation: ProjectGuideCompilationRequestOperation,
+    actor: ActorIdentityFacts,
+    facts: ProjectGuideCompilationRequestFacts,
+) -> bool:
+    """Require every immutable replay selector and the complete facts digest."""
+    return (
+        operation.operation_id == facts.operation_id
+        and operation.request_id == facts.request_id
+        and operation.idempotency_key == facts.idempotency_key
+        and operation.actor_profile_id == str(actor.actor_profile_id)
+        and operation.identity_link_id == str(actor.identity_link_id)
+        and operation.project_id == str(facts.project_id)
+        and operation.guide_id == str(facts.guide_id)
+        and operation.source_snapshot_id == str(facts.source_snapshot_id)
+        and operation.setup_run_id == str(facts.setup_run_id)
+        and operation.setup_generation == facts.setup_generation
+        and operation.expected_predecessor_compilation_id
+        == facts.expected_predecessor_compilation_id
+        and operation.request_facts_digest
+        == project_guide_compilation_facts_digest(facts)
     )
 
 

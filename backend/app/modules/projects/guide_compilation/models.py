@@ -89,6 +89,15 @@ class ProjectGuideCompilationAttempt(Base):
         UniqueConstraint(
             "provider_idempotency_key", name="uq_compilation_attempt_provider_key"
         ),
+        UniqueConstraint(
+            "id",
+            "project_id",
+            "guide_id",
+            "source_snapshot_id",
+            "setup_run_id",
+            "setup_generation",
+            name="uq_compilation_attempt_exact_request",
+        ),
         CheckConstraint(
             "status in ('compilation_reserved','compilation_provider_uncertain',"
             "'provider_result_accepted','compilation_invalid_terminal',"
@@ -182,6 +191,115 @@ class ProjectGuideCompilationAttempt(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     persisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectGuideCompilationRequestOperation(Base):
+    """Immutable authorized request receipt bound to one exact attempt."""
+
+    __tablename__ = "project_guide_compilation_request_operations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_compilation_request_actor_link",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "project_id", "guide_id"],
+            [
+                "guide_source_snapshots.id",
+                "guide_source_snapshots.project_id",
+                "guide_source_snapshots.guide_id",
+            ],
+            name="fk_compilation_request_snapshot",
+        ),
+        ForeignKeyConstraint(
+            [
+                "setup_run_id",
+                "project_id",
+                "guide_id",
+                "source_snapshot_id",
+                "setup_generation",
+            ],
+            [
+                "project_setup_runs.id",
+                "project_setup_runs.project_id",
+                "project_setup_runs.guide_id",
+                "project_setup_runs.source_snapshot_id",
+                "project_setup_runs.setup_generation",
+            ],
+            name="fk_compilation_request_setup",
+        ),
+        ForeignKeyConstraint(
+            [
+                "attempt_id",
+                "project_id",
+                "guide_id",
+                "source_snapshot_id",
+                "setup_run_id",
+                "setup_generation",
+            ],
+            [
+                "project_guide_compilation_attempts.id",
+                "project_guide_compilation_attempts.project_id",
+                "project_guide_compilation_attempts.guide_id",
+                "project_guide_compilation_attempts.source_snapshot_id",
+                "project_guide_compilation_attempts.setup_run_id",
+                "project_guide_compilation_attempts.setup_generation",
+            ],
+            name="fk_compilation_request_exact_attempt",
+        ),
+        ForeignKeyConstraint(
+            ["expected_predecessor_compilation_id", "project_id", "guide_id"],
+            [
+                "project_guide_compilations.id",
+                "project_guide_compilations.project_id",
+                "project_guide_compilations.guide_id",
+            ],
+            name="fk_compilation_request_predecessor",
+        ),
+        UniqueConstraint(
+            "actor_profile_id",
+            "request_id",
+            name="uq_compilation_request_actor_request",
+        ),
+        UniqueConstraint(
+            "actor_profile_id",
+            "idempotency_key",
+            name="uq_compilation_request_actor_key",
+        ),
+        UniqueConstraint("attempt_id", name="uq_compilation_request_attempt"),
+        UniqueConstraint(
+            "authorization_decision_event_id",
+            name="uq_compilation_request_authorization_event",
+        ),
+        CheckConstraint(
+            "setup_generation > 0", name="ck_compilation_request_generation"
+        ),
+        CheckConstraint(
+            "request_facts_digest " + _HASH_CHECK,
+            name="ck_compilation_request_facts_digest",
+        ),
+    )
+
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    request_id: Mapped[UUID] = mapped_column(Uuid())
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid())
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(String(36))
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"))
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"))
+    source_snapshot_id: Mapped[str] = mapped_column(String(36))
+    setup_run_id: Mapped[str] = mapped_column(String(36))
+    setup_generation: Mapped[int] = mapped_column(BigInteger)
+    expected_predecessor_compilation_id: Mapped[UUID | None] = mapped_column(Uuid())
+    request_facts_digest: Mapped[str] = mapped_column(String(71))
+    attempt_id: Mapped[UUID] = mapped_column(Uuid())
+    authorization_decision_event_id: Mapped[str] = mapped_column(
+        ForeignKey("audit_events.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class ProjectGuideCompilation(Base):

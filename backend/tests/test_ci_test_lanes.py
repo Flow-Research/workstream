@@ -48,10 +48,17 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     modules_by_lane = {lane.name: set(lane.modules) for lane in LANES}
 
     assert modules_by_lane["project_lifecycle"] == {
+        "tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py",
+        "tests/projects/guide_compilation/test_authorized_execution_service.py",
+        "tests/projects/guide_compilation/test_authorized_recovery_postgresql.py",
+        "tests/projects/guide_compilation/test_authorized_request_service.py",
         "tests/projects/guide_compilation/test_contracts.py",
         "tests/projects/guide_compilation/test_database_guards.py",
+        "tests/projects/guide_compilation/test_durable_dispatch_handoff.py",
+        "tests/projects/guide_compilation/test_migration_authorized_persistence.py",
         "tests/projects/guide_compilation/test_migration_contract.py",
         "tests/projects/guide_compilation/test_public_authorization.py",
+        "tests/projects/guide_compilation/test_request_operation_postgresql.py",
         "tests/projects/guide_compilation/test_repository_attempts.py",
         "tests/projects/guide_compilation/test_repository_persistence.py",
         "tests/projects/test_locked_policy_context.py",

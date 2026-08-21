@@ -9,18 +9,26 @@
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository._required_attempt",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository._transition",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.accept_result",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.attempt",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.current_compilation",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.insert_request_operation",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.mark_invalid_terminal",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.mark_provider_uncertain",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.matching_request_operation",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.persist_accepted",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.persisted_compilation",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.recovery_classification",
+    "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.request_operation_for_attempt",
     "app.modules.projects.guide_compilation.repository.GuideCompilationRepository.reserve_attempt",
     "app.modules.projects.guide_compilation.repository._compilation_identity_values",
     "app.modules.projects.guide_compilation.repository._identity_values",
-    "app.modules.projects.guide_compilation.repository._matches"
+    "app.modules.projects.guide_compilation.repository._matches",
+    "app.modules.projects.guide_compilation.repository._persistence_error",
+    "app.modules.projects.guide_compilation.repository._request_matches"
   ],
   "group": "lifecycle",
   "outcomes": ["persisted_state", "idempotent_replay", "recovery_outcome", "mapped_error"],
-  "reviewed_by": ["WS-POL-003-03A required reviewers"],
+  "reviewed_by": ["WS-POL-003-03B required reviewers"],
   "schema": "workstream.behavior-ownership.v1",
   "status": "reviewed",
   "target": "backend/app/modules/projects/guide_compilation/repository.py",
@@ -30,6 +38,8 @@
     "backend/tests/projects/guide_compilation/test_repository_attempts.py::test_uncertain_to_invalid_terminal_preserves_one_attempt",
     "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_accepted_crash_recovery_persists_exactly_once",
     "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_stale_predecessor_fails_closed",
-    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_compilation_update_is_rejected"
+    "backend/tests/projects/guide_compilation/test_repository_persistence.py::test_compilation_update_is_rejected",
+    "backend/tests/projects/guide_compilation/test_request_operation_postgresql.py::test_request_operation_rejects_every_change",
+    "backend/tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py::test_concurrent_identical_requests_commit_one_attempt_event_and_receipt"
   ]
 }

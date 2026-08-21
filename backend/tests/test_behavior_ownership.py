@@ -479,10 +479,13 @@ def test_pol03a_targets_are_narrow_and_keep_declarative_model_unresolved() -> No
     """POL-03A admits only callable ownership while model metadata stays unresolved."""
     assert ownership.POL_03A_CALLABLE_TARGETS == {
         "backend/app/modules/authorization/api/project_guide_compilation.py",
-        "backend/app/modules/projects/guide_compilation/authorization.py",
         "backend/app/modules/projects/guide_compilation/contracts.py",
         "backend/app/modules/projects/guide_compilation/repository.py",
+        "backend/app/modules/projects/guide_compilation/service.py",
         "backend/app/modules/projects/guide_compilation/validation.py",
+    }
+    assert ownership.POL_03B_REMOVED_TARGETS == {
+        "backend/app/modules/projects/guide_compilation/authorization.py"
     }
     assert ownership.POL_03A_DECLARATIVE_MODEL_TARGET not in (
         ownership.POL_03A_CALLABLE_TARGETS

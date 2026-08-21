@@ -32,10 +32,35 @@ class CompilationRecoveryClassification(StrEnum):
     """Bounded hidden recovery outcomes safe for operator inspection."""
 
     RESERVED = "compilation_reserved"
-    PROVIDER_UNCERTAIN = "compilation_provider_uncertain"
+    PROVIDER_UNCERTAIN = "provider_outcome_unresolved"
     ACCEPTED_NOT_PERSISTED = "provider_result_accepted_not_persisted"
     PERSISTED = "compilation_persisted"
     INVALID_TERMINAL = "compilation_invalid_terminal"
+
+
+class CompilationRequestReceipt(BaseModel):
+    """Bounded durable request result safe to return across transactions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    operation_id: UUID
+    attempt_id: UUID
+    provider_idempotency_key: UUID
+    classification: CompilationRecoveryClassification
+
+
+class CompilationDispatchReceipt(CompilationRequestReceipt):
+    """Committed permission boundary preceding possible provider I/O."""
+
+
+class CompilationOutcomeReceipt(CompilationRequestReceipt):
+    """Bounded receipt for a known provider outcome."""
+
+
+class CompilationPersistenceReceipt(CompilationRequestReceipt):
+    """Bounded receipt for an immutable persisted compilation."""
+
+    compilation_id: UUID
 
 
 class CompilationAttemptIdentity(BaseModel):
