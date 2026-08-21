@@ -1,6 +1,6 @@
 # WS-POL-003-04A Preimplementation Review Evidence
 
-Date: 2026-08-21. Risk: L1. Runtime implementation: paused for Repair 2 review.
+Date: 2026-08-21. Risk: L1. Preimplementation review: complete.
 
 ## Review target
 
@@ -104,6 +104,8 @@ POL-04B will own the future live worker composition. The unused application
 adapter and export are removed, and the exact per-file coverage list follows
 the files that materially changed.
 
-Runtime implementation remains paused until this exact bounded simplification
-is ratified. It changes no action, authority, durable state, route, queue,
-provider promise, or acceptance outcome.
+Repair 2 was ratified at clean exact head
+`45bcebed46e96add5080e7599257903c75988539`. Architecture, simplicity,
+security, QA, test-delta, CI, product, and documentation review found no
+remaining blocker. The implementation evidence is recorded separately in
+`WS-POL-003-04A-implementation-review-evidence.md`.

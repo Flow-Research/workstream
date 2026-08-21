@@ -1,10 +1,10 @@
 # Chunk Contract: WS-POL-003-04A - Hidden Unified Setup
 
-Status: Implementation paused for Repair 2 contract review. Risk: L1.
+Status: Complete on the stacked branch; human merge remains required. Risk: L1.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`
 
 ## Outcome
 
