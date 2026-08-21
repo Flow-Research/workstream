@@ -156,6 +156,35 @@ discriminating test-of-the-test probe. No finding remained.
 No runtime, migration, test, fixture, script, workflow, CI, dependency, or
 application file was changed by Repair 2.
 
+## Repair 3: Atomic chunk-state publication scope
+
+Phase 4 stopped cleanly after the canonical chunk-state gate found that a
+completed implementation branch must update four state projections atomically.
+The contract, initiative `CHUNK_MAP.md`, and initiative `STATUS.md` already fall
+under the initiative wildcard. Root `.agent-loop/CURRENT_STATE.md` did not.
+
+Repair 3 admits only the root current-state edit needed to state the exact
+`WS-POL-003-03B` on-merge completion outcome and the next dependency made
+eligible by that outcome. It also requires the future publication commit to
+synchronize exactly four projections:
+
+- one unique contract merge-state declaration with outcome `complete`;
+- the sole `WS-POL-003-03B` CHUNK_MAP row with a complete or merged outcome;
+- STATUS with the exact chunk identifier and the same outcome; and
+- CURRENT_STATE with the exact chunk identifier, the same outcome, and only
+  the next eligible dependency.
+
+This wording describes the intended state if the branch merges. It does not
+claim that protected main already contains the unmerged implementation. No
+unrelated initiative, capability, calendar, priority, or status edit is
+allowed. The canonical `scripts/check_chunk_state_sync.py` command must pass
+after all four projections are applied together.
+
+No completion projection, runtime, migration, test, CI, dependency,
+application, or other current-state change was made by this planning repair.
+Phase 4 remains paused until all nine reviewer tracks pass at the exact amended
+contract head.
+
 ## Phase 3 gate
 
 Phase 3 is authorized only if all exact-final-head reviewer receipts remain

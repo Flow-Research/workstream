@@ -340,6 +340,7 @@ backend/tests/architecture/test_test_structure_boundary.py
 .ci/behavior-ownership/lifecycle/**                   # exact lifecycle behavior atoms only, if required
 .github/workflows/backend.yml                         # exact materially-changed coverage gate only
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/**
+.agent-loop/CURRENT_STATE.md                          # exact 03B on-merge completion and next eligible dependency only
 docs/operations_backend_testing.md                    # lane command only, if registration changes it
 ```
 
@@ -347,6 +348,30 @@ No file is implicitly allowed by a directory wildcard other than the initiative
 documents and the two already-governed behavior-ownership assertion directories.
 If implementation needs another production, test, schema, CI, generated, or
 documentation file, stop and amend/re-review this contract first.
+
+### Atomic on-merge state synchronization
+
+The branch completion wording describes the state that will become true only
+if this branch is merged. It must not say or imply that protected main already
+contains the unmerged implementation.
+
+Before publication, exactly four projections must be synchronized in one
+commit:
+
+1. this contract gains one `## Merge state` section containing exactly one
+   ``- Outcome on merge: `complete` `` declaration;
+2. the sole `WS-POL-003-03B` row in `CHUNK_MAP.md` states `complete` or
+   `merged` without review-only or temporal wording;
+3. `STATUS.md` contains the exact `WS-POL-003-03B` identifier and states the
+   same complete or merged outcome; and
+4. `.agent-loop/CURRENT_STATE.md` contains the exact `WS-POL-003-03B`
+   identifier, states the same complete or merged outcome, and identifies only
+   the next dependency that becomes eligible from that outcome.
+
+The `CURRENT_STATE.md` edit may change only those exact POL-03B completion and
+next-eligible-dependency facts. No unrelated initiative, capability, calendar,
+priority, or status wording is admitted. The four projections must pass the
+repository's atomic chunk-state gate together; none may land alone.
 
 ## Prohibited changes
 
@@ -402,6 +427,7 @@ documentation file, stop and amend/re-review this contract first.
 | Outbox/side-effect absence | Hidden request accidentally dispatches or projects | Snapshot outbox and all named later-product tables before/after success, denial, replay, crash | Zero outbox/broker/provider/policy/approval/setup/checker/contribution deltas |
 | Database immutability | ORM bypass changes or deletes governed evidence | Direct SQL update/delete/truncate and non-empty downgrade probes | Postgres rejection with unchanged rows; downgrade refuses governed custody |
 | Alembic current-head parity | Alembic environment, topology, PROJECTS custody, or AUTH custody retains 0007 as current after migration 0008 | Upgrade from baseline/current to 0008, run Alembic again at 0008, seed an unsupported revision, and run exact head assertions in the topology, PROJECTS, and AUTH migration contracts | `env.py`, the sole Alembic graph head, PROJECTS current-schema proof, and AUTH current-schema proof all report exact 0008; the second 0008 run is a no-op, unsupported revision retains the existing recreation failure, and only the current-head constant changed in env.py |
+| Atomic on-merge state synchronization | One projection lands alone, contradicts another, or falsely claims protected main already contains the branch | Apply the four bounded completion projections in one commit, then run the canonical chunk-state gate from the fixed base | Contract, CHUNK_MAP, STATUS, and CURRENT_STATE agree on exact `WS-POL-003-03B` completion; only CURRENT_STATE's exact next eligible dependency is additionally changed |
 | Module boundary | POL reaches AUTH private code or delivery reaches POL private code | Syntax-aware AUTH boundary and module reachability checks | Zero new private edges; no task/route/composition consumer |
 | Test trust | Happy-path tests pass without exercising failure | Test-of-test mutations for dropped lock, skipped AUTH consume, removed rollback, redispatch from uncertain, weakened trigger | Each named test fails for its seeded defect and passes only after restoration |
 
@@ -491,6 +517,8 @@ directory explicitly:
 git diff --check origin/main
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_chunk_state_sync.py \
+  --base-ref c716fa424c1a86bda9e0f85c77c307fa07172bca
 
 cd backend
 uv run ruff check app/modules/projects/guide_compilation app/db/models.py \
