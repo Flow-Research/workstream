@@ -1,6 +1,7 @@
 # Chunk Contract: WS-POL-003-03B - Authorized Compilation Persistence
 
-Status: Executable contract pending final preimplementation review. Risk: L1.
+Status: Preimplementation review findings resolved; runtime not implemented.
+Risk: L1.
 
 ## Outcome
 

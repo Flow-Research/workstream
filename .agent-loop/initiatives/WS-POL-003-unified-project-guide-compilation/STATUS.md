@@ -48,7 +48,11 @@ reviewer tracks. They cannot authorize implementation in their current form.
 `WS-POL-003-03A` merged through PR #307 at `5e459a8f`. It installs hidden
 compilation custody and the first public AUTH-capability consumer proof.
 AUTH-12I merged through PR #312 at `98eae13e`; POL-03B is now the next eligible
-POL implementation boundary.
+POL implementation boundary. Its current-main executable contract has completed
+preimplementation review and all findings are resolved. Runtime implementation,
+schema migration, tests, CI registration, and live behavior have not started.
+Phase 3 may use only the reviewed 03B contract and must stop if its recorded
+base, prerequisites, migration head, frozen AUTH port, or scope has changed.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.
