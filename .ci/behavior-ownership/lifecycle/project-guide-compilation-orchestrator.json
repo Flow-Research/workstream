@@ -1,0 +1,37 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.orchestrator",
+  "boundaries": ["postgresql", "provider", "authorization", "concurrency"],
+  "callables": [
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.context",
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.fence",
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.load",
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.persist",
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.record_accepted",
+    "app.modules.projects.guide_compilation.orchestrator.GuideCompilationExecutionBackend.record_invalid",
+    "app.modules.projects.guide_compilation.orchestrator.HiddenGuideCompilationOrchestrator.__init__",
+    "app.modules.projects.guide_compilation.orchestrator.HiddenGuideCompilationOrchestrator.execute",
+    "app.modules.projects.guide_compilation.orchestrator._receipt_result",
+    "app.modules.projects.guide_compilation.orchestrator._require_valid_result",
+    "app.modules.projects.guide_compilation.orchestrator._state_result"
+  ],
+  "group": "lifecycle",
+  "outcomes": [
+    "return",
+    "persisted_state",
+    "denial",
+    "mapped_error",
+    "idempotent_replay",
+    "recovery_outcome"
+  ],
+  "reviewed_by": ["WS-POL-003-04A required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/orchestrator.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_reserved_attempt_calls_the_unified_runtime_once_and_persists",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator.py::test_transport_failure_remains_unresolved_and_never_persists",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_hidden_command_persists_one_complete_result_and_no_projections",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_concurrent_commands_commit_one_dispatch_and_one_provider_call",
+    "backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py::test_accepted_result_recovers_without_a_second_provider_call"
+  ]
+}

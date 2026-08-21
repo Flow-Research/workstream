@@ -1,7 +1,6 @@
 # Chunk Contract: WS-POL-003-04A - Hidden Unified Setup
 
-Status: Preimplementation contract review. Runtime implementation has not
-started. Risk: L1.
+Status: Implementation paused for Repair 2 contract review. Risk: L1.
 
 ## Merge state
 
@@ -89,11 +88,12 @@ ledger, provider client, or authorization protocol.
   authenticated Project Manager boundary. It never reconstructs, impersonates,
   or replays the requesting human and never calls `authorize_request`,
   `prepare_request`, or `consume_request`.
-- The application composition layer binds only the existing fixed-service AUTH
-  adapter. PROJECTS domain code must not import AUTH models, repositories,
-  kernel, prepared handles, or private resource contexts.
+- The hidden PROJECTS state machine accepts one caller-supplied typed
+  fixed-service AUTH context. It imports no AUTH private implementation. The
+  future live composition root belongs to POL-04B; this chunk's real-service
+  tests compose the existing production AUTH adapter directly.
 - AUTH's production compilation adapter may add one bounded `from_prepared`
-  factory so application composition can bind the matching authorization and
+  factory so an authorized caller can bind the matching authorization and
   prepared services without reading a private attribute. It adds no action,
   fact, handle, authority, fallback, or second adapter.
 - Provider execution and persistence use only the active fixed
@@ -325,8 +325,6 @@ backend/app/adapters/project_agents/openai_agent_sdk.py  # exact invalid-output 
 backend/app/modules/authorization/guide_compilation.py    # matching prepared-service factory only
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/guide_compilation.py
-backend/app/adapters/projects/__init__.py
-backend/app/adapters/projects/guide_compilation.py
 backend/app/modules/projects/guide_compilation/__init__.py
 backend/app/modules/projects/guide_compilation/context.py
 backend/app/modules/projects/guide_compilation/orchestrator.py
@@ -374,9 +372,10 @@ needed, stop and amend/re-review this contract before editing it.
   permitted only in the result receipt.
 - Human AUTH context reconstruction or any hidden call to `authorize_request`,
   `prepare_request`, or `consume_request`.
-- Application-layer access to `PreparedAuthorizationService._authorization` or
-  any other AUTH private attribute; only the AUTH-owned bounded factory may
-  perform that internal binding.
+- PROJECTS or application-adapter access to
+  `PreparedAuthorizationService._authorization` or any other AUTH private
+  attribute; only the AUTH-owned bounded factory may perform that internal
+  binding.
 - Provider redispatch, automatic retry, claimed same-key provider replay,
   compatibility alias, legacy inference fallback, or second runtime adapter.
 - Catch-all exception handling that converts unknown/transport failure into a
@@ -419,8 +418,9 @@ needed, stop and amend/re-review this contract before editing it.
 - Candidate reachability proves the hidden path cannot call the human request
   methods or construct a human authorization context.
 - The production AUTH adapter factory accepts only one existing prepared
-  service, returns the same adapter composition as the explicit constructor,
-  and rejects no/foreign authorization composition through existing checks.
+  service and returns the same adapter composition as the explicit
+  constructor. The hidden backend accepts that adapter only through its typed
+  caller-supplied context and adds no private cross-module import.
 - The OpenAI adapter raises the typed known-invalid exception only after a
   provider returned malformed/invalid structured output; timeout,
   cancellation, configuration, and transport failures retain their existing
@@ -461,7 +461,7 @@ cd backend
 uv run ruff check app/interfaces/project_agents.py \
   app/adapters/project_agents/openai_agent_sdk.py \
   app/modules/authorization/guide_compilation.py \
-  app/adapters/projects app/modules/projects/api \
+  app/modules/projects/api \
   app/modules/projects/guide_compilation \
   tests/authorization/guide_compilation/test_adapter_contract.py \
   tests/projects/guide_compilation tests/test_agent_runtime.py \
@@ -480,8 +480,6 @@ for source in \
   app/modules/authorization/guide_compilation.py \
   app/modules/projects/api/__init__.py \
   app/modules/projects/api/guide_compilation.py \
-  app/adapters/projects/__init__.py \
-  app/adapters/projects/guide_compilation.py \
   app/modules/projects/guide_compilation/__init__.py \
   app/modules/projects/guide_compilation/context.py \
   app/modules/projects/guide_compilation/orchestrator.py \

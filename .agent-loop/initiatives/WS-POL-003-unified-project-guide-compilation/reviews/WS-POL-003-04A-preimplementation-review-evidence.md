@@ -1,6 +1,6 @@
 # WS-POL-003-04A Preimplementation Review Evidence
 
-Date: 2026-08-21. Risk: L1. Runtime implementation: not started.
+Date: 2026-08-21. Risk: L1. Runtime implementation: paused for Repair 2 review.
 
 ## Review target
 
@@ -86,3 +86,24 @@ confirmed that the AUTH adapter test is included in Ruff and coverage
 collection, and that the changed AUTH file has its own 90 percent coverage
 gate. Planning checks passed with no remaining finding. Implementation may
 resume within the amended scope.
+
+## Repair 2: Dependency-safe hidden composition
+
+Implementation discovery showed that placing the SQLAlchemy backend under
+`app/adapters/projects` required new private imports from PROJECTS, ART,
+CHECKER, and AUTH. The repository's exact module-boundary guards correctly
+rejected those edges. Recording new debt would contradict both the boundary
+recovery programme and this chunk's simplicity goal.
+
+The smaller design keeps the backend beside the PROJECTS-owned orchestrator
+and injects only existing typed dependencies: ART material, canonical pre/post
+capability projections, and a caller-supplied fixed-service AUTH context. The
+hidden path imports no AUTH private implementation and adds no cross-module
+debt. Its real PostgreSQL test composes the existing production AUTH adapter;
+POL-04B will own the future live worker composition. The unused application
+adapter and export are removed, and the exact per-file coverage list follows
+the files that materially changed.
+
+Runtime implementation remains paused until this exact bounded simplification
+is ratified. It changes no action, authority, durable state, route, queue,
+provider promise, or acceptance outcome.
