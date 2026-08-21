@@ -463,6 +463,7 @@ uv run ruff check app/interfaces/project_agents.py \
   app/modules/authorization/guide_compilation.py \
   app/adapters/projects app/modules/projects/api \
   app/modules/projects/guide_compilation \
+  tests/authorization/guide_compilation/test_adapter_contract.py \
   tests/projects/guide_compilation tests/test_agent_runtime.py \
   tests/test_project_guide_compilation_contracts.py
 uv run pytest -q tests/projects/guide_compilation \
@@ -471,10 +472,12 @@ uv run pytest -q tests/projects/guide_compilation \
   tests/architecture/test_authorization_boundary.py
 uv run pytest -q tests/projects/guide_compilation \
   tests/test_agent_runtime.py tests/test_project_guide_compilation_contracts.py \
+  tests/authorization/guide_compilation/test_adapter_contract.py \
   --cov=app --cov-branch --cov-report=
 for source in \
   app/interfaces/project_agents.py \
   app/adapters/project_agents/openai_agent_sdk.py \
+  app/modules/authorization/guide_compilation.py \
   app/modules/projects/api/__init__.py \
   app/modules/projects/api/guide_compilation.py \
   app/adapters/projects/__init__.py \
