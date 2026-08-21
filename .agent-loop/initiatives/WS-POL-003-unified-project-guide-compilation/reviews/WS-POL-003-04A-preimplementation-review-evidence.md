@@ -59,3 +59,20 @@ python3 scripts/check_chunk_state_sync.py --base-ref a1e2aaa3ba7e781d30ca7da09d3
 
 No runtime, test, workflow, dependency, route, worker, provider, schema,
 migration, push, pull request, or merge was created during this review.
+
+## Repair 1: Fixed-service compilation adapter composition
+
+Implementation discovery found that AUTH's fixed-service context manager
+exposes one prepared authorization service, while the existing production
+compilation adapter constructor also requires its exact matching authorization
+service. Reading `PreparedAuthorizationService._authorization` from PROJECTS
+composition would violate the reviewed private boundary.
+
+The contract therefore admits only an AUTH-owned `from_prepared` factory on the
+existing `ProjectGuideCompilationAuthorizationAdapter` plus its exact adapter
+contract test. The factory may bind the prepared service to its own matching
+authorization service inside AUTH. It cannot add an action, public fact,
+authority, handle, service identity, fallback, adapter, or caller-controlled
+context. Application composition must use the factory and remains forbidden
+from reading the private attribute directly. Runtime implementation remains
+paused until the amended clean contract head is ratified.

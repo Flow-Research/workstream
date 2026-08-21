@@ -92,6 +92,10 @@ ledger, provider client, or authorization protocol.
 - The application composition layer binds only the existing fixed-service AUTH
   adapter. PROJECTS domain code must not import AUTH models, repositories,
   kernel, prepared handles, or private resource contexts.
+- AUTH's production compilation adapter may add one bounded `from_prepared`
+  factory so application composition can bind the matching authorization and
+  prepared services without reading a private attribute. It adds no action,
+  fact, handle, authority, fallback, or second adapter.
 - Provider execution and persistence use only the active fixed
   `workstream.project.setup` service.
 
@@ -318,6 +322,7 @@ No policy or setup-run projection occurs.
 ```text
 backend/app/interfaces/project_agents.py                 # fixed manifest, required envelope, typed invalid result
 backend/app/adapters/project_agents/openai_agent_sdk.py  # exact invalid-output mapping only
+backend/app/modules/authorization/guide_compilation.py    # matching prepared-service factory only
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/guide_compilation.py
 backend/app/adapters/projects/__init__.py
@@ -334,6 +339,7 @@ backend/tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py
 backend/tests/projects/guide_compilation/test_hidden_call_graph.py
 backend/tests/test_agent_runtime.py                         # typed invalid-output behavior only
 backend/tests/test_project_guide_compilation_contracts.py   # required result envelope only
+backend/tests/authorization/guide_compilation/test_adapter_contract.py  # exact factory parity only
 backend/tests/test_ci_test_lanes.py                         # exact new-test inventory only
 backend/scripts/run_test_lanes.py                           # exact new-test registration only
 backend/scripts/behavior_ownership.py                       # exact new callable ownership only
@@ -368,6 +374,9 @@ needed, stop and amend/re-review this contract before editing it.
   permitted only in the result receipt.
 - Human AUTH context reconstruction or any hidden call to `authorize_request`,
   `prepare_request`, or `consume_request`.
+- Application-layer access to `PreparedAuthorizationService._authorization` or
+  any other AUTH private attribute; only the AUTH-owned bounded factory may
+  perform that internal binding.
 - Provider redispatch, automatic retry, claimed same-key provider replay,
   compatibility alias, legacy inference fallback, or second runtime adapter.
 - Catch-all exception handling that converts unknown/transport failure into a
@@ -409,6 +418,9 @@ needed, stop and amend/re-review this contract before editing it.
   provider, handle, path, and ORM-shaped input.
 - Candidate reachability proves the hidden path cannot call the human request
   methods or construct a human authorization context.
+- The production AUTH adapter factory accepts only one existing prepared
+  service, returns the same adapter composition as the explicit constructor,
+  and rejects no/foreign authorization composition through existing checks.
 - The OpenAI adapter raises the typed known-invalid exception only after a
   provider returned malformed/invalid structured output; timeout,
   cancellation, configuration, and transport failures retain their existing
@@ -448,12 +460,14 @@ must register every new test in the canonical semantic lanes.
 cd backend
 uv run ruff check app/interfaces/project_agents.py \
   app/adapters/project_agents/openai_agent_sdk.py \
+  app/modules/authorization/guide_compilation.py \
   app/adapters/projects app/modules/projects/api \
   app/modules/projects/guide_compilation \
   tests/projects/guide_compilation tests/test_agent_runtime.py \
   tests/test_project_guide_compilation_contracts.py
 uv run pytest -q tests/projects/guide_compilation \
   tests/test_agent_runtime.py tests/test_project_guide_compilation_contracts.py \
+  tests/authorization/guide_compilation/test_adapter_contract.py \
   tests/architecture/test_authorization_boundary.py
 uv run pytest -q tests/projects/guide_compilation \
   tests/test_agent_runtime.py tests/test_project_guide_compilation_contracts.py \
@@ -529,9 +543,9 @@ Stop and amend/re-review before implementation if:
    exactly-once guarantee;
 6. invalid output cannot be distinguished from transport uncertainty without
    exposing provider details;
-7. setup-ledger mutation, a live worker/route, new AUTH action or public-contract
-   change, schema, migration, dependency, or component policy projection is
-   required;
+7. setup-ledger mutation, a live worker/route, AUTH private-attribute access
+   outside its owner, new AUTH action or public-contract change, schema,
+   migration, dependency, or component policy projection is required;
 8. the candidate path can reach a legacy inference method or a second provider
    call;
 9. real PostgreSQL/production AUTH/ART lifecycle proof, concurrency proof,
