@@ -11,9 +11,12 @@ from app.modules.projects.guide_compilation.contracts import (
     CompilationRecoveryClassification,
 )
 from app.modules.projects.guide_compilation.service import GuideCompilationService
-from app.modules.projects.guide_compilation.repository import GuideCompilationIntegrityError
+from app.modules.projects.guide_compilation.repository import (
+    GuideCompilationIntegrityError,
+    GuideCompilationRepository,
+)
 
-from .helpers import context, identity, seed_database, service_actor
+from .helpers import context, identity, result, seed_database, service_actor
 from .test_authorized_execution_service import _execution_service, _preflight
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
 
@@ -86,6 +89,43 @@ async def test_changed_request_replay_fails_without_new_authority_event(
                     identity=identity(context(values)).model_copy(
                         update={"instruction_version": "v2"}
                     ),
+                )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_repeated_terminal_transitions_preserve_one_attempt(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session, session.begin():
+            repository = GuideCompilationRepository(session)
+            _outcome, attempt = await repository.reserve_attempt(identity(context(values)))
+            uncertain = await repository.mark_provider_uncertain(attempt.id)
+            assert await repository.mark_provider_uncertain(attempt.id) == uncertain
+            assert await repository.recovery_classification(attempt.id) == (
+                "provider_outcome_unresolved"
+            )
+        async with factory() as session, session.begin():
+            repository = GuideCompilationRepository(session)
+            terminal = await repository.mark_invalid_terminal(
+                attempt_id=attempt.id, failure_code="schema_invalid"
+            )
+            assert (
+                await repository.mark_invalid_terminal(
+                    attempt_id=attempt.id, failure_code="schema_invalid"
+                )
+                == terminal
+            )
+            with pytest.raises(GuideCompilationIntegrityError, match="accepted transition"):
+                await repository.accept_result(
+                    attempt_id=attempt.id,
+                    context=context(values),
+                    result=result(),
                 )
     finally:
         await engine.dispose()

@@ -55,7 +55,7 @@ add a route, project policy, approve a guide, or make setup live.
 The coordinator is internal to
 `app.modules.projects.guide_compilation`. POL-03B adds **no public Projects
 port** because it has no cross-module or delivery consumer. POL-04A, not this
-chunk, owns the later worker-facing Projects API and owner composition-root
+chunk, owns the later asynchronous-execution Projects API and owner composition-root
 wiring. Tests may construct the internal coordinator with the production AUTH
 adapter; application delivery code may not import it yet.
 
@@ -90,7 +90,7 @@ guide, provider result, or model client is returned or serialized.
 
 There is no application composition-root change in this chunk. POL-04A must
 compose the internal capability behind a typed Projects public API from
-`app/adapters/projects/__init__.py`; workers must consume that future API rather
+`app/adapters/projects/__init__.py`; asynchronous execution must consume that future API rather
 than these private files.
 
 ## Exact durable request-operation receipt
@@ -352,7 +352,7 @@ documentation file, stop and amend/re-review this contract first.
 
 - Provider/model calls, prompts, agent-adapter changes, new provider
   idempotency claims, retries, polling, or fake reconciliation.
-- `backend/app/workers/**`, Celery configuration, broker dispatch, outbox
+- Existing Celery task modules, Celery configuration, broker dispatch, outbox
   creation/publication, route, API router, or live composition changes.
 - A public Projects port, application composition root, public endpoint, live
   setup cutover, or another execution path; these belong to POL-04A/04B.
@@ -402,7 +402,7 @@ documentation file, stop and amend/re-review this contract first.
 | Outbox/side-effect absence | Hidden request accidentally dispatches or projects | Snapshot outbox and all named later-product tables before/after success, denial, replay, crash | Zero outbox/broker/provider/policy/approval/setup/checker/contribution deltas |
 | Database immutability | ORM bypass changes or deletes governed evidence | Direct SQL update/delete/truncate and non-empty downgrade probes | Postgres rejection with unchanged rows; downgrade refuses governed custody |
 | Alembic current-head parity | Alembic environment, topology, PROJECTS custody, or AUTH custody retains 0007 as current after migration 0008 | Upgrade from baseline/current to 0008, run Alembic again at 0008, seed an unsupported revision, and run exact head assertions in the topology, PROJECTS, and AUTH migration contracts | `env.py`, the sole Alembic graph head, PROJECTS current-schema proof, and AUTH current-schema proof all report exact 0008; the second 0008 run is a no-op, unsupported revision retains the existing recreation failure, and only the current-head constant changed in env.py |
-| Module boundary | POL reaches AUTH private code or delivery reaches POL private code | Syntax-aware AUTH boundary and module reachability checks | Zero new private edges; no worker/route/composition consumer |
+| Module boundary | POL reaches AUTH private code or delivery reaches POL private code | Syntax-aware AUTH boundary and module reachability checks | Zero new private edges; no task/route/composition consumer |
 | Test trust | Happy-path tests pass without exercising failure | Test-of-test mutations for dropped lock, skipped AUTH consume, removed rollback, redispatch from uncertain, weakened trigger | Each named test fails for its seeded defect and passes only after restoration |
 
 Every material assertion must name its exact SQL row/count, state transition,
@@ -529,7 +529,7 @@ head in GitHub Actions. A local focused pass does not replace hosted proof.
 
 - The hidden coordinator now owns authorized request custody, the committed
   dispatch fence, known-result custody, and accepted-result persistence without
-  a provider, worker, route, outbox, or public Projects API.
+  a provider, background task, route, outbox, or public Projects API.
 - Migration 0008 installs the immutable request-operation receipt, exact SQL
   digest reconstruction, authorization-event custody trigger, and guarded
   downgrade while preserving one Alembic head.
@@ -555,7 +555,7 @@ Stop implementation and amend/re-review this contract if:
 - the 0008 implementation requires any Alembic environment change beyond the
   exact current-head constant/parity update or weakens unsupported-revision
   rejection and recreation policy;
-- safe implementation requires a provider call, worker, route, public Projects
+- safe implementation requires a provider call, background task, route, public Projects
   API, application composition root, outbox, policy projection, live setup
   behavior, generic operation abstraction, dependency, or file outside scope;
 - the current provider must be retried/reconciled from uncertain without a
@@ -613,7 +613,7 @@ head.
   that never started?
 - Does one concurrent request/finalization commit exactly one matching allowed
   event and product mutation while every loser rolls back?
-- Is 03B still a hidden persistence boundary with zero provider, worker,
+- Is 03B still a hidden persistence boundary with zero provider, background task,
   outbox, policy, approval, live setup, or economic behavior?
 - Are all external-I/O and public delivery concerns left explicitly to POL-04A
   rather than implied by this contract?

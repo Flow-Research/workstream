@@ -12,7 +12,7 @@ from app.modules.projects.guide_compilation.repository import (
     GuideCompilationRepository,
 )
 
-from .helpers import context, identity, result, seed_database
+from .helpers import context, identity, seed_database
 
 
 @pytest.mark.asyncio
@@ -82,31 +82,15 @@ async def test_uncertain_to_invalid_terminal_preserves_one_attempt(
             )
             key = attempt.provider_idempotency_key
         async with factory() as session, session.begin():
-            repository = GuideCompilationRepository(session)
-            uncertain = await repository.mark_provider_uncertain(attempt.id)
-            assert uncertain.provider_idempotency_key == key
-            assert await repository.mark_provider_uncertain(attempt.id) == uncertain
-            assert await repository.recovery_classification(attempt.id) == (
-                "provider_outcome_unresolved"
+            uncertain = await GuideCompilationRepository(session).mark_provider_uncertain(
+                attempt.id
             )
+            assert uncertain.provider_idempotency_key == key
         async with factory() as session, session.begin():
-            repository = GuideCompilationRepository(session)
-            terminal = await repository.mark_invalid_terminal(
+            terminal = await GuideCompilationRepository(session).mark_invalid_terminal(
                 attempt_id=attempt.id, failure_code="schema_invalid"
             )
             assert terminal.status == "compilation_invalid_terminal"
-            assert (
-                await repository.mark_invalid_terminal(
-                    attempt_id=attempt.id, failure_code="schema_invalid"
-                )
-                == terminal
-            )
-            with pytest.raises(GuideCompilationIntegrityError, match="accepted transition"):
-                await repository.accept_result(
-                    attempt_id=attempt.id,
-                    context=context(values),
-                    result=result(),
-                )
         async with factory() as session, session.begin():
             with pytest.raises(GuideCompilationIntegrityError):
                 await GuideCompilationRepository(session).mark_provider_uncertain(attempt.id)
