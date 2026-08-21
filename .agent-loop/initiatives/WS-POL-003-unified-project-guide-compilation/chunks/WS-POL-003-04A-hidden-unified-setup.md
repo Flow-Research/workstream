@@ -33,11 +33,12 @@ setup service in this chunk.
 
 ## Authoritative starting point
 
-- This is a stacked chunk over PR #355 only. Its exact required parent is
-  `a1e2aaa3ba7e781d30ca7da09d3775af6659ec48`.
-- PR #355 remains open, non-draft, green, mergeable, and human-review gated at
-  contract refresh. Its protected-main base is
-  `c716fa424c1a86bda9e0f85c77c307fa07172bca`.
+- PR #355 merged unchanged at
+  `116b36626d33c97e22a38bdbcb139ed56be084f2`. Its exact reviewed feature
+  head is `a1e2aaa3ba7e781d30ca7da09d3775af6659ec48`.
+- This chunk has been rebased onto that protected-main merge. The reviewed
+  POL-03B behavior is therefore part of its current base rather than a
+  parallel or locally merged substitute.
 - The parent provides the authorized request receipt, durable attempt and
   provider key, committed dispatch fence, accepted/invalid result custody,
   immutable compilation persistence, current-lineage validation, and bounded
@@ -48,10 +49,8 @@ setup service in this chunk.
   idempotency key and exposes no retrieval or reconciliation method. This
   chunk therefore proves **at most one local provider invocation**, not
   exactly-once provider execution after an uncertain outcome.
-- If PR #355 changes head, closes without merging, or is superseded, stop,
-  restack on the authoritative replacement, and repeat contract review. If it
-  merges unchanged, rebase this chunk onto the resulting protected main and
-  repeat exact-head verification before implementation continues.
+- If protected main gains an overlapping change before delivery, stop, rebase
+  on the authoritative replacement, and repeat exact-head verification.
 
 ## Scope and ownership
 
