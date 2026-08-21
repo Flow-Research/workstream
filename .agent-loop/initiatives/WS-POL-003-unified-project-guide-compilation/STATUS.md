@@ -64,14 +64,12 @@ Retry 1 then stopped before edits because two existing domain migration-contract
 tests also encode 0007 as the current head but remained outside the allowed
 list. Repair 2 admits only those two exact current-head expectation changes.
 A complete tracked-repository scan found no other executable hard-coded 0007
-parity surface. All nine bounded reviewer tracks passed the amended contract
-with no findings. Phase 3 is now implemented locally under that final contract.
-The internal coordinator, migration 0008 request custody, SQL digest and
-authorization trigger, bounded recovery receipts, real-PostgreSQL concurrency
-and crash proof, and semantic-lane registration are present. Focused tests pass
-with 96.47 percent package coverage and at least 90 percent on every materially
-changed guide-compilation file. Postimplementation review, exact-head hosted CI,
-push, and merge remain outstanding; POL-04A has not started.
+parity surface. `WS-POL-003-03B` is complete as the durable outcome this branch
+will establish if merged. It installs the internal coordinator, migration 0008
+request custody, SQL digest and authorization trigger, bounded recovery
+receipts, real-PostgreSQL concurrency and crash proof, and semantic-lane
+registration. POL-04A is the next eligible dependency and has not started.
+Protected main contains this outcome only after the branch is merged.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

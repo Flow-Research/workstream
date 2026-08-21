@@ -4,6 +4,10 @@ Status: Phase 3 implementation complete locally; awaiting postimplementation
 review and hosted proof.
 Risk: L1.
 
+## Merge state
+
+- Outcome on merge: `complete`
+
 ## Outcome
 
 Make the merged hidden POL-03A compilation custody usable under the exact
