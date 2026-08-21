@@ -501,8 +501,8 @@ cd ..
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_chunk_state_sync.py \
-  --base-ref a1e2aaa3ba7e781d30ca7da09d3775af6659ec48
-git diff --check a1e2aaa3ba7e781d30ca7da09d3775af6659ec48
+  --base-ref 116b36626d33c97e22a38bdbcb139ed56be084f2
+git diff --check 116b36626d33c97e22a38bdbcb139ed56be084f2
 ```
 
 The final implementation also runs all seven canonical semantic lanes against
@@ -534,7 +534,7 @@ and no live caller changes.
 
 Stop and amend/re-review before implementation if:
 
-1. the exact PR #355 parent changes or an overlapping owner PR appears;
+1. the merged PR #355 base is superseded by an overlapping owner change;
 2. context cannot be reconstructed from existing ART and catalogue owners
    without serializing material or adding a second registry;
 3. execution cannot start from one exact previously authorized attempt without

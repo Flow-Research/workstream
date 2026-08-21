@@ -4,10 +4,13 @@ Date: 2026-08-22. Risk: L1. Outcome: PASS locally; human merge required.
 
 ## Review target and boundary
 
-- Stacked parent: `a1e2aaa3ba7e781d30ca7da09d3775af6659ec48`.
-- Implementation head: `1042be52`.
-- Failure-containment remediation head: `45bcebed46e96add5080e7599257903c75988539`.
-- Test-sensitivity head: `4b16f3fc5a6532c05362edcdf0f3b717d0361d6b`.
+- Protected-main base: `116b36626d33c97e22a38bdbcb139ed56be084f2`,
+  the unchanged merge of PR #355.
+- Rebased implementation head: `a77776fb`.
+- Rebased failure-containment remediation head: `b48cf518`.
+- Rebased test-sensitivity head: `a730b396`.
+- Exact rebased semantic-test head:
+  `63ad6a6bb609e669e7a138326665e070a600e0dc`.
 - The chunk adds one hidden PROJECTS-owned execution command that accepts only
   an existing authorized compilation `attempt_id`.
 - It adds no route, queue, Celery task, setup-ledger mutation, policy
@@ -56,22 +59,22 @@ semantic lanes executed once against one common 4,147-node manifest.
 
 | Lane | Collected | Completed | Skipped | Deselected | Exit | Seconds |
 |---|---:|---:|---:|---:|---:|---:|
-| shared_foundations_a | 1,544 | 1,544 | 0 | 0 | 0 | 191.288 |
-| shared_foundations_b | 1,505 | 1,505 | 0 | 0 | 0 | 247.785 |
-| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 34.539 |
-| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 10.418 |
-| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 21.999 |
-| project_lifecycle | 560 | 560 | 0 | 0 | 0 | 441.064 |
-| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 247.386 |
+| shared_foundations_a | 1,543 | 1,543 | 0 | 0 | 0 | 175.200 |
+| shared_foundations_b | 1,506 | 1,506 | 0 | 0 | 0 | 187.393 |
+| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 26.811 |
+| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 8.902 |
+| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 15.117 |
+| project_lifecycle | 560 | 560 | 0 | 0 | 0 | 287.280 |
+| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 224.207 |
 
 The independent merger and validator accepted exact custody of 4,147 of
 4,147 nodes with no duplicates, skips, deselections, interruptions, or test
-retries. Aggregate runner time was 1,194.479 seconds. Every lane reported its
+retries. Aggregate runner time was 924.910 seconds. Every lane reported its
 owned database and MinIO cleanup complete.
 
 Combined branch coverage passed all required floors:
 
-- Repository: 91.21 percent; floor 78 percent.
+- Repository: 91.20 percent; floor 78 percent.
 - `app/interfaces/project_agents.py`: 96.88 percent.
 - OpenAI project-agent adapter: 96.88 percent.
 - AUTH guide-compilation adapter: 100 percent.
@@ -97,14 +100,16 @@ The following attempts are excluded from product evidence:
 4. The independent validator was first launched with a system Python that did
    not contain pytest. That invocation produced no validity claim; the same
    merged evidence passed with the tester image's pinned Python environment.
+5. The first post-rebase lane launch pre-created the runner-owned metadata
+   directory and was rejected before collection. It was excluded, and the
+   canonical post-rebase run used a new evidence root.
 
 ## Review and delivery state
 
 The first exact-code review closed architecture, simplicity, authorization,
 provider-failure, lifecycle, test-integrity, CI, product, and documentation
-findings at `45bcebed46e96add5080e7599257903c75988539`. Final exact-head review
-must ratify this evidence and the atomic completion projections before the
-branch is eligible to publish. Protected main does not contain this work, and
-no merge is authorized by this record.
+findings at the rebased equivalent `b48cf518`. Final exact-head review must
+ratify this evidence and the atomic completion projections before the branch
+is eligible to publish. This record does not authorize a push or merge.
 
 The next boundary is AUTH-12B2 activation, followed by POL-04B live cutover.
