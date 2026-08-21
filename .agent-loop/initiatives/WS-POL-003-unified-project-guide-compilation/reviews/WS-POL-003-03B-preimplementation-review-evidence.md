@@ -130,7 +130,31 @@ workflow, or documentation surface is admitted.
 The amended proof now fails if any of these four current-head authorities
 disagrees: `backend/alembic/env.py`, the sole Alembic graph asserted through
 `backend/tests/test_alembic.py`, the PROJECTS migration contract, or the AUTH
-migration contract. Exact-final-head reviewer verdicts are pending.
+migration contract.
+
+Repair 2 exact-head reviewer verdicts on planning head
+`58a788dbe5aa83f4d7961705919db50cfc0fcc98`:
+
+| Track | Verdict | Repair-specific conclusion |
+|---|---|---|
+| Architecture | PASS | The four current-head authorities must agree on exact 0008; immutable historical revision identities remain unchanged |
+| Reuse/dedup | PASS | Existing preflight, topology, and domain migration-contract owners are reused; no second head mechanism or abstraction is added |
+| Security/authorization | PASS | AUTH behavior and its public Protocol remain frozen; only its existing current-schema test expectation is admitted |
+| QA | PASS | Exact and generic scans classify every executable 0007 parity surface; disagreement among any of the four authorities must fail |
+| Test delta | PASS | Only the two named existing domain tests are newly admitted, solely for exact current-head expectations, with no self-derived oracle |
+| Senior engineering | PASS | The bounded changes are implementable and preserve sole-head topology, unsupported-revision rejection, and source-only env.py custody |
+| CI integrity | PASS | Existing lane ownership, inventory, seven-lane fan-in, and coverage gates remain unchanged and authoritative |
+| Product/operations | PASS | The repair creates no live behavior, dispatch, setup, approval, policy, contribution, or economic truth |
+| Documentation | PASS | Status, scan classification, implementation state, and stop/re-review boundary are accurate |
+
+Both reviewer groups ran the repository target-integrity command at start and
+end; exact base, head, and merge-base matched and the worktree remained clean.
+Each track replayed prior valid closures and supplied atomized
+requirement/owner/proof traceability plus a residual escape hypothesis with a
+discriminating test-of-the-test probe. No finding remained.
+
+No runtime, migration, test, fixture, script, workflow, CI, dependency, or
+application file was changed by Repair 2.
 
 ## Phase 3 gate
 
