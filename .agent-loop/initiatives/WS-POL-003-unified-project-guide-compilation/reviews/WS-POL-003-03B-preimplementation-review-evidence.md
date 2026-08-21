@@ -76,9 +76,28 @@ second 0008 run is a no-op, unsupported revisions retain the existing
 recreation failure, and every other `env.py` line remains unchanged. Dynamic
 head discovery and any migration-policy change remain prohibited.
 
-Repair 1 exact-head reviewer verdicts are pending. No runtime, migration, test,
-CI, dependency, or Alembic environment file was changed by this planning
-repair.
+Repair 1 exact-head reviewer verdicts:
+
+| Track | Verdict | Repair-specific conclusion |
+|---|---|---|
+| Architecture | PASS | One existing static head constant remains the sole mechanism; no dynamic discovery or second head path |
+| Reuse/dedup | PASS | Reuses the current Alembic preflight and existing migration test owner |
+| Security/authorization | PASS | No AUTH, transaction, provider, route, worker, or product authority boundary changes |
+| QA | PASS | Baseline, 0008 current head, second-run no-op, unsupported revision, and source-only-change proofs are discriminating |
+| Test delta | PASS | Exact test scope adds no skip, weakening, mock-only proof, or lane-topology change |
+| Senior engineering | PASS | One-line runtime parity change is implementable and preserves recreation policy |
+| CI integrity | PASS | Existing Alembic/lane/coverage gates remain authoritative and unchanged |
+| Product/operations | PASS | Planning-only repair creates no live, provider, approval, setup, or economic truth |
+| Documentation | PASS | Status and evidence accurately describe the stopped attempt and bounded amendment |
+
+Both reviewer groups ran the repository target-integrity command at start and
+end against planning head `2937c566c711a9395f483fc8f70b2ce9bfb5da24`;
+base/head/merge-base matched and the worktree remained clean. Each track
+reported no findings and supplied a residual escape hypothesis with a
+discriminating probe.
+
+No runtime, migration, test, CI, dependency, or Alembic environment file was
+changed by this planning repair.
 
 ## Phase 3 gate
 
