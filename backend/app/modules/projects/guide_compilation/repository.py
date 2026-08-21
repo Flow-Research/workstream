@@ -22,6 +22,7 @@ from app.modules.authorization.api import (
     ProjectGuideCompilationRequestFacts,
     project_guide_compilation_facts_digest,
 )
+from app.modules.projects.models import GuideSourceSnapshot, ProjectGuide, ProjectSetupRun
 
 from .contracts import (
     CompilationAttemptIdentity,
@@ -67,6 +68,16 @@ _REQUEST_CONSTRAINTS = frozenset(
         "uq_compilation_request_actor_key",
         "uq_compilation_request_attempt",
         "uq_compilation_request_authorization_event",
+    }
+)
+_BLOCKED_SETUP_STATUSES = frozenset(
+    {
+        "enqueue_failed",
+        "enqueue_identity_mismatch",
+        "sufficiency_blocked",
+        "post_submit_setup_blocked",
+        "setup_blocked",
+        "failed",
     }
 )
 
@@ -185,6 +196,60 @@ class GuideCompilationRepository:
             if lock
             else await self._required_attempt(attempt_id)
         )
+
+    async def require_current_setup_lineage(
+        self, attempt: ProjectGuideCompilationAttempt
+    ) -> None:
+        """Lock and require the attempt's exact active, latest setup lineage."""
+        guide = await self._session.scalar(
+            select(ProjectGuide)
+            .where(
+                ProjectGuide.id == attempt.guide_id,
+                ProjectGuide.project_id == attempt.project_id,
+            )
+            .with_for_update()
+        )
+        if guide is None or guide.version != attempt.guide_version or guide.status != "draft":
+            raise GuideCompilationIntegrityError("compilation guide lineage is stale")
+
+        setup = await self._session.scalar(
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.id == attempt.setup_run_id)
+            .with_for_update()
+        )
+        snapshot = await self._session.scalar(
+            select(GuideSourceSnapshot).where(
+                GuideSourceSnapshot.id == attempt.source_snapshot_id
+            )
+        )
+        if (
+            setup is None
+            or snapshot is None
+            or setup.project_id != attempt.project_id
+            or setup.guide_id != attempt.guide_id
+            or setup.guide_version != attempt.guide_version
+            or setup.source_snapshot_id != attempt.source_snapshot_id
+            or setup.source_snapshot_hash != attempt.source_snapshot_hash
+            or setup.setup_generation != attempt.setup_generation
+            or snapshot.project_id != attempt.project_id
+            or snapshot.guide_id != attempt.guide_id
+            or snapshot.guide_version != attempt.guide_version
+            or snapshot.bundle_hash != attempt.source_snapshot_hash
+            or setup.status in _BLOCKED_SETUP_STATUSES
+        ):
+            raise GuideCompilationIntegrityError("compilation setup lineage is stale")
+
+        latest_generation = await self._session.scalar(
+            select(ProjectSetupRun.setup_generation)
+            .where(
+                ProjectSetupRun.project_id == attempt.project_id,
+                ProjectSetupRun.guide_id == attempt.guide_id,
+            )
+            .order_by(ProjectSetupRun.setup_generation.desc())
+            .limit(1)
+        )
+        if latest_generation != attempt.setup_generation:
+            raise GuideCompilationIntegrityError("compilation setup generation is stale")
 
     async def current_compilation(
         self, project_id: UUID, guide_id: UUID, *, lock: bool

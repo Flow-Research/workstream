@@ -45,31 +45,14 @@ before any is started, its contract must be expanded on then-current main with
 explicit allowed/not-allowed paths, runnable verification commands, and named
 reviewer tracks. They cannot authorize implementation in their current form.
 
-`WS-POL-003-03A` merged through PR #307 at `5e459a8f`. It installs hidden
-compilation custody and the first public AUTH-capability consumer proof.
-AUTH-12I merged through PR #312 at `98eae13e`; POL-03B is now the next eligible
-POL implementation boundary. Its current-main executable contract has completed
-preimplementation review and all findings are resolved. Runtime implementation,
-schema migration, tests, CI registration, and live behavior have not started.
-Phase 3 may use only the reviewed 03B contract and must stop if its recorded
-base, prerequisites, migration head, frozen AUTH port, or scope has changed.
-
-The first Phase 3 drift check stopped before edits because the contract admitted
-migration 0008 but omitted the existing Alembic current-head constant from its
-allowed files. Repair 1 is a planning-only amendment limited to that exact
-0007-to-0008 parity update. Its preimplementation reviewer tracks passed with
-no findings; runtime implementation remains unstarted and Phase 3 is
-reauthorized only under the amended contract's unchanged drift gates. Phase 3
-Retry 1 then stopped before edits because two existing domain migration-contract
-tests also encode 0007 as the current head but remained outside the allowed
-list. Repair 2 admits only those two exact current-head expectation changes.
-A complete tracked-repository scan found no other executable hard-coded 0007
-parity surface. `WS-POL-003-03B` is complete as the durable outcome this branch
-will establish if merged. It installs the internal coordinator, migration 0008
-request custody, SQL digest and authorization trigger, bounded recovery
-receipts, real-PostgreSQL concurrency and crash proof, and semantic-lane
-registration. POL-04A is the next eligible dependency and has not started.
-Protected main contains this outcome only after the branch is merged.
+`WS-POL-003-03A` merged through PR #307 at `5e459a8f`, and AUTH-12I merged
+through PR #312 at `98eae13e`. `WS-POL-003-03B` is complete. It installs the
+hidden internal coordinator, migration 0008 request custody, SQL digest and
+authorization trigger, explicit dispatch-versus-recovery receipts,
+current-setup lineage checks, real-PostgreSQL concurrency and crash proof, and
+semantic-lane registration. POL-04A is the next eligible dependency and has
+not started. The open pull request remains transient until a human merges it;
+protected main does not gain this behavior before that merge.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

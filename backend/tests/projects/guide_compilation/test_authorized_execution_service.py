@@ -99,6 +99,7 @@ async def test_authorized_execution_fences_accepts_and_persists_atomically(
                 actor=service, facts=facts
             )
         assert fenced.classification is CompilationRecoveryClassification.PROVIDER_UNCERTAIN
+        assert fenced.dispatch_permitted is True
         async with factory() as session:
             accepted = await _execution_service(session, service).record_accepted_result(
                 actor=service, facts=facts, context=context(values), result=result()
@@ -233,6 +234,166 @@ async def test_execution_rejects_nonfresh_session_and_durable_fact_drift(
                 await _execution_service(session, service).persist_accepted(
                     actor=service, facts=facts, context=context(values)
                 )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stale_change, expected_message",
+    [
+        ("failed", "setup lineage is stale"),
+        ("setup_blocked", "setup lineage is stale"),
+        ("new_generation", "setup generation is stale"),
+    ],
+)
+async def test_execution_rejects_stale_setup_lineage_before_authority_or_transition(
+    clean_postgres_database: str,
+    stale_change: str,
+    expected_message: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    human, human_link, _grant = await _seed_human(clean_postgres_database, values)
+    human_actor = ActorIdentityFacts(human, human_link, PublicActorKind.HUMAN)
+    service = service_actor(values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            requested = await _authorized_service(session, human_actor).authorize_request(
+                actor=human_actor,
+                facts=_request(values),
+                identity=identity(context(values)),
+            )
+        async with factory() as session, session.begin():
+            if stale_change == "new_generation":
+                await session.execute(
+                    text(
+                        "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
+                        "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
+                        "current_step,created_by) values(:setup,:project,:guide,'v1',:snapshot,"
+                        ":hash,2,'queued','guide_material_verified','test')"
+                    ),
+                    {
+                        "setup": str(values["setup_2"]),
+                        "project": str(values["project"]),
+                        "guide": str(values["guide"]),
+                        "snapshot": str(values["snapshot"]),
+                        "hash": identity(context(values)).source_snapshot_hash,
+                    },
+                )
+            else:
+                await session.execute(
+                    text("update project_setup_runs set status=:status where id=:setup"),
+                    {"status": stale_change, "setup": str(values["setup_1"])},
+                )
+        facts = _preflight(values, requested.attempt_id)
+        async with factory() as session:
+            with pytest.raises(GuideCompilationIntegrityError, match=expected_message):
+                await _execution_service(session, service).fence_dispatch(
+                    actor=service, facts=facts
+                )
+        async with factory() as session:
+            row = (
+                await session.execute(
+                    text(
+                        "select status,(select count(*) from audit_events where action_id="
+                        "'project.guide_compilation.execute') from "
+                        "project_guide_compilation_attempts where id=:id"
+                    ),
+                    {"id": requested.attempt_id},
+                )
+            ).one()
+            await session.rollback()
+        assert row == ("compilation_reserved", 0)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_execution_rechecks_setup_lineage_for_outcome_and_persistence(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    human, human_link, _grant = await _seed_human(clean_postgres_database, values)
+    human_actor = ActorIdentityFacts(human, human_link, PublicActorKind.HUMAN)
+    service = service_actor(values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            requested = await _authorized_service(session, human_actor).authorize_request(
+                actor=human_actor,
+                facts=_request(values),
+                identity=identity(context(values)),
+            )
+        facts = _preflight(values, requested.attempt_id)
+        async with factory() as session:
+            await _execution_service(session, service).fence_dispatch(
+                actor=service, facts=facts
+            )
+        async with factory() as session, session.begin():
+            await session.execute(
+                text("update project_setup_runs set status='failed' where id=:setup"),
+                {"setup": str(values["setup_1"])},
+            )
+        async with factory() as session:
+            with pytest.raises(GuideCompilationIntegrityError, match="setup lineage"):
+                await _execution_service(session, service).record_accepted_result(
+                    actor=service,
+                    facts=facts,
+                    context=context(values),
+                    result=result(),
+                )
+        async with factory() as session, session.begin():
+            await session.execute(
+                text("update project_setup_runs set status='queued' where id=:setup"),
+                {"setup": str(values["setup_1"])},
+            )
+        async with factory() as session:
+            await _execution_service(session, service).record_accepted_result(
+                actor=service,
+                facts=facts,
+                context=context(values),
+                result=result(),
+            )
+        async with factory() as session, session.begin():
+            await session.execute(
+                text(
+                    "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
+                    "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
+                    "current_step,created_by) values(:setup,:project,:guide,'v1',:snapshot,"
+                    ":hash,2,'queued','guide_material_verified','test')"
+                ),
+                {
+                    "setup": str(values["setup_2"]),
+                    "project": str(values["project"]),
+                    "guide": str(values["guide"]),
+                    "snapshot": str(values["snapshot"]),
+                    "hash": identity(context(values)).source_snapshot_hash,
+                },
+            )
+        async with factory() as session:
+            with pytest.raises(GuideCompilationIntegrityError, match="generation is stale"):
+                await _execution_service(session, service).persist_accepted(
+                    actor=service,
+                    facts=facts,
+                    context=context(values),
+                )
+        async with factory() as session:
+            row = (
+                await session.execute(
+                    text(
+                        "select status,(select count(*) from "
+                        "project_guide_compilations),(select count(*) from audit_events "
+                        "where action_id='project.guide_compilation.execute') from "
+                        "project_guide_compilation_attempts where id=:id"
+                    ),
+                    {"id": requested.attempt_id},
+                )
+            ).one()
+            await session.rollback()
+        assert row == ("provider_result_accepted", 0, 0)
     finally:
         await engine.dispose()
 

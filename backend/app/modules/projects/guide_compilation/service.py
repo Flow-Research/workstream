@@ -106,14 +106,16 @@ class GuideCompilationService:
             repository = GuideCompilationRepository(self._session)
             operation, attempt = await _locked_exact(repository, facts)
             if attempt.status == "compilation_provider_uncertain":
-                return _dispatch_receipt(operation, attempt)
+                return _dispatch_receipt(
+                    operation, attempt, dispatch_permitted=False
+                )
             if attempt.status != "compilation_reserved":
                 raise GuideCompilationIntegrityError("attempt cannot be dispatched")
             await self._authorization.authorize_execute_preflight(
                 actor=actor, facts=facts
             )
             attempt = await repository.mark_provider_uncertain(attempt.id)
-            receipt = _dispatch_receipt(operation, attempt)
+            receipt = _dispatch_receipt(operation, attempt, dispatch_permitted=True)
         return receipt
 
     async def record_accepted_result(
@@ -236,6 +238,7 @@ async def _locked_exact(
     operation = await repository.request_operation_for_attempt(attempt.id, lock=True)
     if _preflight_facts(operation, attempt) != facts:
         raise GuideCompilationIntegrityError("compilation execute facts mismatch")
+    await repository.require_current_setup_lineage(attempt)
     return operation, attempt
 
 
@@ -319,12 +322,15 @@ async def _request_receipt(
 def _dispatch_receipt(
     operation: ProjectGuideCompilationRequestOperation,
     attempt: ProjectGuideCompilationAttempt,
+    *,
+    dispatch_permitted: bool,
 ) -> CompilationDispatchReceipt:
     return CompilationDispatchReceipt(
         operation_id=operation.operation_id,
         attempt_id=attempt.id,
         provider_idempotency_key=attempt.provider_idempotency_key,
         classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+        dispatch_permitted=dispatch_permitted,
     )
 
 

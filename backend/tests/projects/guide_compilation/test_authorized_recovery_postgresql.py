@@ -58,7 +58,11 @@ async def test_uncertain_restart_returns_unresolved_without_redispatch(
             recovered = await GuideCompilationService(
                 restarted_session, _NoAuthorityOrProvider()  # type: ignore[arg-type]
             ).fence_dispatch(actor=service, facts=facts)
-        assert recovered == first
+        assert first.dispatch_permitted is True
+        assert recovered.dispatch_permitted is False
+        assert recovered.model_dump(exclude={"dispatch_permitted"}) == first.model_dump(
+            exclude={"dispatch_permitted"}
+        )
         assert recovered.classification is CompilationRecoveryClassification.PROVIDER_UNCERTAIN
         assert _NoAuthorityOrProvider.calls == 0
     finally:

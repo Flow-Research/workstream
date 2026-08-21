@@ -52,6 +52,8 @@ class CompilationRequestReceipt(BaseModel):
 class CompilationDispatchReceipt(CompilationRequestReceipt):
     """Committed permission boundary preceding possible provider I/O."""
 
+    dispatch_permitted: bool
+
 
 class CompilationOutcomeReceipt(CompilationRequestReceipt):
     """Bounded receipt for a known provider outcome."""

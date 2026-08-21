@@ -1,7 +1,6 @@
 # Chunk Contract: WS-POL-003-03B - Authorized Compilation Persistence
 
-Status: Phase 3 implementation complete locally; awaiting postimplementation
-review and hosted proof.
+Status: Complete.
 Risk: L1.
 
 ## Merge state
@@ -200,7 +199,13 @@ Input is the fixed service actor plus complete
 4. Transition `compilation_reserved` to
    `compilation_provider_uncertain` and commit.
 5. Return only a bounded dispatch receipt containing operation, attempt, and
-   provider-idempotency UUIDs plus the recovery classification.
+   provider-idempotency UUIDs, the recovery classification, and an explicit
+   `dispatch_permitted=true` signal.
+
+An already-uncertain replay returns the same bounded identifiers with
+`dispatch_permitted=false`. It performs no authorization or state change. A
+caller may invoke the provider only when the committed receipt explicitly
+permits dispatch.
 
 `compilation_provider_uncertain` is deliberately conservative: after the
 commit, provider dispatch **may** have begun. A future caller may attempt the
