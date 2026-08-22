@@ -288,8 +288,14 @@ async def test_request_operation_rejects_every_change(
     engine = create_async_engine(clean_postgres_database)
     try:
         async with engine.begin() as connection:
-            with pytest.raises(DBAPIError, match=expected_error):
+            with pytest.raises(DBAPIError) as error:
                 await connection.execute(text(statement))
+            message = str(error.value)
+            assert expected_error in message
+            if statement.startswith("truncate"):
+                assert getattr(error.value.orig, "sqlstate", None) == "0A000"
+                assert "project_guide_component_projection_operations" in message
+                assert "project_guide_compilation_request_operations" in message
         async with engine.connect() as connection:
             count = await connection.scalar(
                 text("select count(*) from project_guide_compilation_request_operations")

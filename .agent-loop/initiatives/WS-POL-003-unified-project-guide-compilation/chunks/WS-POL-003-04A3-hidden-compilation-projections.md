@@ -438,8 +438,10 @@ contract before editing it.
   SQL UPDATE/DELETE/TRUNCATE rejection for the operation and protected
   canonical report/policy/source-usage content. The existing request-operation
   immutability test is updated only for the 0009 TRUNCATE case: it must observe
-  PostgreSQL's exact foreign-key refusal from the new projection-custody child,
-  while UPDATE and DELETE retain the existing request-custody trigger denial.
+  PostgreSQL SQLSTATE `0A000` and name both the new
+  `project_guide_component_projection_operations` child and the
+  `project_guide_compilation_request_operations` parent. UPDATE and DELETE
+  retain the existing request-custody trigger denial.
 - Negative-effect assertions prove zero model calls, setup writes, approval,
   post-submit output, or wrong component rows.
 - A counting ART material-port test proves prepare/current-service denial,
