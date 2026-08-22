@@ -541,6 +541,13 @@ def _install_guards() -> None:
             select 1 from project_guide_component_projection_operations where report_id=old.report_id
           ) then raise exception 'projected source usage is immutable' using errcode='55000';
           end if;
+          if tg_table_name='guide_sufficiency_report_source_usages'
+             and tg_op='UPDATE' and exists(
+               select 1 from project_guide_component_projection_operations
+                 where report_id=new.report_id
+             ) then raise exception 'projected source usage is immutable'
+               using errcode='55000';
+          end if;
           if tg_op='UPDATE' then return new; end if;
           return old;
         end; $$

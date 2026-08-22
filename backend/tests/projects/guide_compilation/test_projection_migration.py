@@ -248,6 +248,16 @@ async def test_source_usage_guard_blocks_late_insert_but_preserves_legacy_update
             "where report_id=$1",
             legacy_report_id,
         ) == 7
+        with pytest.raises(
+            asyncpg.PostgresError,
+            match="projected source usage is immutable",
+        ):
+            await connection.execute(
+                "update guide_sufficiency_report_source_usages set report_id=$1 "
+                "where report_id=$2",
+                projected_report_id,
+                legacy_report_id,
+            )
     finally:
         await connection.close()
 
