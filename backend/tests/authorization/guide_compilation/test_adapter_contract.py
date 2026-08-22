@@ -159,6 +159,26 @@ def _runtime_context_for(actor_kind: ActorKind, service_identity: ServiceIdentit
     return HumanAuthorizationContext(actor_kind=actor_kind, **common)
 
 
+def test_from_prepared_preserves_the_existing_authorization_composition() -> None:
+    context = _runtime_context_for(ActorKind.SERVICE, ServiceIdentity.PROJECT_SETUP)
+    session, repository = _Session(), _Repository()
+    authorization = AuthorizationService(
+        session, context, admin_repository=repository  # type: ignore[arg-type]
+    )
+    prepared = PreparedAuthorizationService(
+        session, context, authorization, repository  # type: ignore[arg-type]
+    )
+
+    adapter = ProjectGuideCompilationAuthorizationAdapter.from_prepared(prepared)
+
+    assert adapter._authorization is authorization
+    assert adapter._prepared is prepared
+    with pytest.raises(TypeError, match="one authorization composition"):
+        ProjectGuideCompilationAuthorizationAdapter(
+            SimpleNamespace(_context=context), prepared  # type: ignore[arg-type]
+        )
+
+
 @pytest.mark.asyncio
 async def test_request_prepare_and_consume_bind_the_exact_project_context() -> None:
     actor, facts = _actor(), _request()

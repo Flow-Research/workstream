@@ -30,6 +30,11 @@ MAXIMUM_COMPILATION_BINDINGS = 100
 MAXIMUM_COMPILATION_SUGGESTIONS = 50
 MAXIMUM_COMPILATION_NOTES = 20
 MAXIMUM_EVIDENCE_REFS = 20
+PROJECT_GUIDE_COMPILATION_AGENT_IDENTITY = "project-guide-compilation-agent-v1"
+PROJECT_GUIDE_COMPILATION_AGENT_NAME = "ProjectGuideCompilationAgent"
+PROJECT_GUIDE_COMPILATION_AGENT_VERSION = "v1"
+PROJECT_GUIDE_COMPILATION_INSTRUCTION_VERSION = "v1"
+PROJECT_GUIDE_COMPILATION_SCHEMA_VERSION = "project_guide_compilation_result.v1"
 
 _SAFE_IDENTIFIER = re.compile(r"^[a-z][a-z0-9_.-]{0,99}$")
 _UNSAFE_MODEL_TEXT = re.compile(
@@ -440,6 +445,7 @@ class ProjectGuideCompilationContext(BaseModel):
     setup_generation: StrictInt = Field(ge=1)
     instruction_version: str = Field(max_length=100)
     agent_identity: str = Field(max_length=100)
+    agent_version: str = Field(max_length=100)
     pre_submission_capabilities: PreSubmissionCapabilityProjection
     post_submission_capabilities: PostSubmissionCapabilityProjection
     representative_task: RepresentativeTaskPolicyContext | None = None
@@ -496,6 +502,17 @@ class ProjectGuideCompilationResult(BaseModel):
         return tuple(_validated_safe_model_text(value) for value in values)
 
     _agent_version = field_validator("agent_version")(_validated_identifier)
+
+
+_COMPLETE_COMPILATION_RESULT_FIELDS = frozenset(ProjectGuideCompilationResult.model_fields)
+
+
+def require_complete_project_guide_compilation_result(
+    result: ProjectGuideCompilationResult,
+) -> None:
+    """Reject provider output that omitted any member of the strict envelope."""
+    if _COMPLETE_COMPILATION_RESULT_FIELDS - result.model_fields_set:
+        raise ValueError("compilation result envelope is incomplete")
 
 
 def validate_project_guide_compilation_result(
@@ -683,6 +700,14 @@ class ProjectAgentRuntimeError(Exception):
 
 class ProjectAgentRuntimeConfigurationError(ProjectAgentRuntimeError):
     """Raised when a configured project-agent runtime is unavailable or incomplete."""
+
+
+class ProjectGuideCompilationInvalidOutputError(ProjectAgentRuntimeError):
+    """A returned compilation output was known to be invalid and safe to terminalize."""
+
+    def __init__(self, failure_code: Literal["schema_invalid", "unsafe_text"]) -> None:
+        self.failure_code = failure_code
+        super().__init__("Project guide compilation returned invalid structured output")
 
 
 class GuideSourceItemMaterial(BaseModel):

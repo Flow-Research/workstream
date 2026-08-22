@@ -100,6 +100,13 @@ class ProjectGuideCompilationAuthorizationAdapter:
         self._authorization = authorization
         self._prepared = prepared
 
+    @classmethod
+    def from_prepared(
+        cls, prepared: PreparedAuthorizationService
+    ) -> ProjectGuideCompilationAuthorizationAdapter:
+        """Compose the adapter without exposing AUTH's private pairing."""
+        return cls(prepared._authorization, prepared)
+
     def _assert_actor(self, actor: ActorIdentityFacts) -> None:
         context = self._authorization._context
         if (

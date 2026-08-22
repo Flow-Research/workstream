@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 import json
 from typing import Any
@@ -16,6 +17,7 @@ from app.interfaces.project_agents import (
     canonical_project_guide_compilation_context_bytes,
     validate_project_guide_compilation_result,
 )
+from app.modules.authorization.api import ProjectGuideCompilationExecutePreflightFacts
 
 
 class CompilationAttemptStatus(StrEnum):
@@ -92,9 +94,7 @@ class CompilationAttemptIdentity(BaseModel):
     instruction_version: str = Field(min_length=1, max_length=100)
 
     @classmethod
-    def from_context(
-        cls, context: ProjectGuideCompilationContext, *, agent_version: str
-    ) -> CompilationAttemptIdentity:
+    def from_context(cls, context: ProjectGuideCompilationContext) -> CompilationAttemptIdentity:
         """Derive server-owned identity from one strict provider context."""
         material = context.material
         return cls(
@@ -118,7 +118,7 @@ class CompilationAttemptIdentity(BaseModel):
             post_catalogue_schema_version=context.post_submission_capabilities.schema_version,
             post_catalogue_manifest_hash=context.post_submission_capabilities.manifest_sha256,
             agent_identity=context.agent_identity,
-            agent_version=agent_version,
+            agent_version=context.agent_version,
             instruction_version=context.instruction_version,
         )
 
@@ -129,6 +129,16 @@ class CompilationAttemptIdentity(BaseModel):
             "workstream.project-guide-compilation-attempt.v1:"
             + canonical_json_hash(self.model_dump(mode="json")),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CompilationExecutionState:
+    """Detached canonical custody required by the hidden executor."""
+
+    identity: CompilationAttemptIdentity
+    preflight_facts: ProjectGuideCompilationExecutePreflightFacts
+    classification: CompilationRecoveryClassification
+    compilation_id: UUID | None = None
 
 
 class CompilationComponentHashes(BaseModel):
@@ -205,9 +215,7 @@ def validate_accepted_compilation_result(
     accepted: AcceptedCompilationResult,
 ) -> ProjectGuideCompilationResult:
     """Revalidate stored untrusted output against freshly loaded context."""
-    current = CompilationAttemptIdentity.from_context(
-        context, agent_version=identity.agent_version
-    )
+    current = CompilationAttemptIdentity.from_context(context)
     if identity != current:
         raise ValueError("compilation context no longer matches the attempt")
     result = ProjectGuideCompilationResult.model_validate(accepted.canonical_result)

@@ -11,7 +11,7 @@ transient work, and no chunk starts automatically.
 | `WS-POL-003-03A` | Hidden immutable attempt/compilation schema, validator, repository, crash fence, and deny-by-default authorization seams. | 02 |
 | `WS-AUTH-001-12I` | Register and activate exact PM compilation request/recovery plus fixed-service compilation execute authority. | 03A exact resource/action manifest |
 | `WS-POL-003-03B` | Complete authorized immutable compilation persistence; no policy projection or setup-service cutover. POL-04A is the next boundary. | 03A + AUTH-12I satisfied |
-| `WS-POL-003-04A` | Hidden one-attempt setup orchestrator over the complete result, with all three legacy inference methods denied/unreachable in the candidate call graph. | 03B |
+| `WS-POL-003-04A` | Complete hidden one-attempt setup orchestrator over the complete result; the three legacy inference methods are denied and unreachable in the candidate call graph. | 03B |
 | `WS-AUTH-001-12B2` | Activate only setup-ledger mutation and its fixed-service adapter for the reviewed unified setup-service manifest. | 04A |
 | `WS-POL-003-04B` | Live one-call setup cutover; persist complete result, sufficiency, and artifact-policy projections; remove every legacy inference call from live reachability. | 04A + AUTH-12B2 |
 | `WS-POL-003-05A` | Hidden approval/effective/pre-submit projection behavior over the complete immutable result. | 04B |

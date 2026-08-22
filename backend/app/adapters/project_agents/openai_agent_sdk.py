@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TypeVar
+from typing import Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.interfaces.project_agents import (
@@ -18,11 +18,13 @@ from app.interfaces.project_agents import (
     PostSubmitCheckerPolicyDerivationContext,
     PostSubmitCheckerPolicyDerivationResult,
     ProjectGuideCompilationContext,
+    ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,
     SubmissionArtifactPolicyDerivationResult,
     canonical_project_guide_compilation_context_bytes,
+    require_complete_project_guide_compilation_result,
     validate_project_guide_compilation_result,
 )
 
@@ -195,8 +197,8 @@ Evidence references may use only the supplied source lineage identifiers,
 canonical output hashes, and bounded ordinals. Never include raw excerpts,
 paths, URLs, signed references, caller text, reasoning traces, or credentials.
 Return only the exact ProjectGuideCompilationResult structured output with
-agent_name ProjectGuideCompilationAgent, the required schema version, and a
-short canonical agent_version.
+agent_name ProjectGuideCompilationAgent, the required schema version, and the
+exact agent_version supplied in the canonical context.
 """
 
 
@@ -226,12 +228,16 @@ class OpenAIAgentSdkProjectGuideRuntime:
             strict_json_schema=True,
             maximum_prompt_bytes=MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES,
             disable_provider_tracing=True,
+            compilation_output=True,
         )
         try:
+            require_complete_project_guide_compilation_result(result)
             validate_project_guide_compilation_result(context, result)
-        except ValueError:
-            raise ProjectAgentRuntimeError(
-                "OpenAI Agents SDK returned invalid structured output"
+            if result.agent_version != context.agent_version:
+                raise ValueError("compilation result agent version is invalid")
+        except ValueError as exc:
+            raise ProjectGuideCompilationInvalidOutputError(
+                _invalid_compilation_failure_code(exc)
             ) from None
         return result
 
@@ -291,6 +297,7 @@ class OpenAIAgentSdkProjectGuideRuntime:
         strict_json_schema: bool = False,
         maximum_prompt_bytes: int | None = None,
         disable_provider_tracing: bool = False,
+        compilation_output: bool = False,
     ) -> TStructuredOutput:
         """Run one structured OpenAI agent without leaking SDK types upstream."""
         try:
@@ -355,13 +362,6 @@ class OpenAIAgentSdkProjectGuideRuntime:
             result = await asyncio.wait_for(
                 Runner.run(agent, prompt, **run_options), timeout=self._timeout_seconds
             )
-            final_output = getattr(result, "final_output", None)
-            if isinstance(final_output, output_type):
-                return final_output
-            if isinstance(final_output, dict):
-                return output_type.model_validate(final_output)
-            if isinstance(final_output, str):
-                return output_type.model_validate_json(final_output)
         except ProjectAgentRuntimeError:
             raise
         except TimeoutError:
@@ -373,4 +373,40 @@ class OpenAIAgentSdkProjectGuideRuntime:
             raise ProjectAgentRuntimeError("OpenAI Agents SDK run was cancelled") from None
         except Exception:
             raise ProjectAgentRuntimeError("OpenAI Agents SDK run failed") from None
-        raise ProjectAgentRuntimeError("OpenAI Agents SDK returned invalid structured output")
+        final_output = getattr(result, "final_output", None)
+        try:
+            if isinstance(final_output, output_type):
+                structured = final_output
+            elif isinstance(final_output, dict):
+                structured = output_type.model_validate(final_output)
+            elif isinstance(final_output, str):
+                structured = output_type.model_validate_json(final_output)
+            else:
+                raise ValueError("structured output is missing")
+            if compilation_output:
+                assert isinstance(structured, ProjectGuideCompilationResult)
+                require_complete_project_guide_compilation_result(structured)
+            return structured
+        except (TypeError, ValueError) as exc:
+            if compilation_output:
+                raise ProjectGuideCompilationInvalidOutputError(
+                    _invalid_compilation_failure_code(exc)
+                ) from None
+            raise ProjectAgentRuntimeError(
+                "OpenAI Agents SDK returned invalid structured output"
+            ) from None
+
+
+def _invalid_compilation_failure_code(
+    error: TypeError | ValueError,
+) -> Literal["schema_invalid", "unsafe_text"]:
+    """Classify only a proven unsafe-text validation without exposing output."""
+    if isinstance(error, ValidationError):
+        for item in error.errors(include_url=False, include_input=False):
+            context = item.get("ctx") or {}
+            cause = context.get("error")
+            if isinstance(cause, ValueError) and str(cause) == "model-produced text is unsafe":
+                return "unsafe_text"
+    if str(error) == "model-produced text is unsafe":
+        return "unsafe_text"
+    return "schema_invalid"

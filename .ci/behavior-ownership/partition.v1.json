@@ -662,6 +662,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_compilation.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/locked_policy.py"
     },
     {
@@ -690,11 +694,19 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/context.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/contracts.py"
     },
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/models.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/orchestrator.py"
     },
     {
       "group": "lifecycle",
@@ -949,7 +961,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "3feaa14f51b9d5fc1820104ea1463cd33949bed3d2da1e96fd8a9a96a73316b1",
+  "authority_digest": "7895dc9b8d7f41b381c0fc1d3c81054b0892e69ee6d6b1bf060ab14ab87f0f6b",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
-from typing import Any
+from typing import Any, Literal
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.interfaces.project_agents import (
@@ -22,6 +23,7 @@ from app.modules.authorization.api import (
 from .contracts import (
     CompilationAttemptIdentity,
     CompilationDispatchReceipt,
+    CompilationExecutionState,
     CompilationOutcomeReceipt,
     CompilationPersistenceReceipt,
     CompilationRecoveryClassification,
@@ -35,6 +37,7 @@ from .repository import (
     GuideCompilationConcurrencyError,
     GuideCompilationIntegrityError,
     GuideCompilationRepository,
+    GuideCompilationStorageError,
 )
 from .validation import accepted_from_attempt, identity_from_attempt
 
@@ -110,7 +113,14 @@ class GuideCompilationService:
                     operation, attempt, dispatch_permitted=False
                 )
             if attempt.status != "compilation_reserved":
-                raise GuideCompilationIntegrityError("attempt cannot be dispatched")
+                return _dispatch_receipt(
+                    operation,
+                    attempt,
+                    classification=await repository.recovery_classification(
+                        attempt.id
+                    ),
+                    dispatch_permitted=False,
+                )
             await self._authorization.authorize_execute_preflight(
                 actor=actor, facts=facts
             )
@@ -230,6 +240,51 @@ class GuideCompilationService:
             )
 
 
+class CompilationExecutionStateUnavailable(RuntimeError):
+    """Bounded internal classification for hidden state loading."""
+
+    def __init__(
+        self, code: Literal["attempt_unavailable", "context_unavailable", "storage_unavailable"]
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+async def load_compilation_execution_state(
+    session: AsyncSession, attempt_id: UUID
+) -> CompilationExecutionState:
+    """Load exact current custody without exposing ORM or accepted output."""
+    if session.in_transaction():
+        raise GuideCompilationIntegrityError(
+            "guide compilation requires a fresh root transaction"
+        )
+    async with session.begin():
+        repository = GuideCompilationRepository(session)
+        try:
+            attempt = await repository.attempt(attempt_id, lock=True)
+            operation = await repository.request_operation_for_attempt(attempt.id, lock=True)
+        except GuideCompilationStorageError as exc:
+            raise CompilationExecutionStateUnavailable("storage_unavailable") from exc
+        except GuideCompilationIntegrityError as exc:
+            raise CompilationExecutionStateUnavailable("attempt_unavailable") from exc
+        try:
+            await repository.require_current_setup_lineage(attempt)
+            classification = await repository.recovery_classification(attempt.id)
+            compilation_id = None
+            if classification is CompilationRecoveryClassification.PERSISTED:
+                compilation_id = (await repository.persisted_compilation(attempt.id)).id
+            return CompilationExecutionState(
+                identity=identity_from_attempt(attempt),
+                preflight_facts=_preflight_facts(operation, attempt),
+                classification=classification,
+                compilation_id=compilation_id,
+            )
+        except GuideCompilationStorageError as exc:
+            raise CompilationExecutionStateUnavailable("storage_unavailable") from exc
+        except (GuideCompilationIntegrityError, TypeError, ValueError) as exc:
+            raise CompilationExecutionStateUnavailable("context_unavailable") from exc
+
+
 async def _locked_exact(
     repository: GuideCompilationRepository,
     facts: ProjectGuideCompilationExecutePreflightFacts,
@@ -323,13 +378,16 @@ def _dispatch_receipt(
     operation: ProjectGuideCompilationRequestOperation,
     attempt: ProjectGuideCompilationAttempt,
     *,
+    classification: CompilationRecoveryClassification = (
+        CompilationRecoveryClassification.PROVIDER_UNCERTAIN
+    ),
     dispatch_permitted: bool,
 ) -> CompilationDispatchReceipt:
     return CompilationDispatchReceipt(
         operation_id=operation.operation_id,
         attempt_id=attempt.id,
         provider_idempotency_key=attempt.provider_idempotency_key,
-        classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+        classification=classification,
         dispatch_permitted=dispatch_permitted,
     )
 
