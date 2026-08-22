@@ -29,6 +29,7 @@ from app.modules.projects.api import (
 from app.modules.projects.guide_compilation.projections import (
     GuideCompilationProjectionService,
 )
+from app.modules.projects.repository import ProjectRepository
 
 from .helpers import seed_database
 from .test_hidden_orchestrator_postgresql import (
@@ -290,5 +291,70 @@ async def test_projects_both_components_once_and_replays_without_new_effects(
             sufficiency.output_digest,
             policy.output_digest,
         }
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_repository_lists_projection_lineage(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    (
+        _attempt_id,
+        _compilation_id,
+        sufficiency,
+        _sufficiency_replay,
+        policy,
+        _policy_replay,
+    ) = await _project_both(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory.begin() as session:
+            repository = ProjectRepository(session)
+
+            snapshots = await repository.list_guide_source_snapshots(
+                str(values["project"]),
+                str(values["guide"]),
+                "v1",
+            )
+            items = await repository.lock_guide_source_snapshot_items(
+                str(values["snapshot"])
+            )
+            diagnostic_report = (
+                await repository.get_diagnostic_sufficiency_report_for_snapshot(
+                    str(values["snapshot"])
+                )
+            )
+            reports = await repository.list_guide_sufficiency_reports(
+                str(values["project"]),
+                str(values["guide"]),
+            )
+            policies = await repository.list_submission_artifact_policies(
+                str(values["project"]),
+                str(values["guide"]),
+            )
+            locked_policy = await repository.lock_submission_artifact_policy_diagnostic(
+                str(policy.output_id),
+                str(values["project"]),
+                str(values["guide"]),
+                "v1",
+            )
+            approved_policy = await repository.get_approved_submission_artifact_policy(
+                str(values["project"]),
+                "v1",
+                str(values["snapshot"]),
+            )
+
+        assert [snapshot.id for snapshot in snapshots] == [str(values["snapshot"])]
+        assert len(items) == 1
+        assert items[0].source_snapshot_id == str(values["snapshot"])
+        assert diagnostic_report is None
+        assert [report.id for report in reports] == [str(sufficiency.output_id)]
+        assert [stored_policy.id for stored_policy in policies] == [str(policy.output_id)]
+        assert locked_policy is not None
+        assert locked_policy.id == str(policy.output_id)
+        assert approved_policy is None
     finally:
         await engine.dispose()

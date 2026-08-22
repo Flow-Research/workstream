@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,9 @@ from alembic import command
 from alembic.config import Config
 import asyncpg
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.modules.projects.repository import ProjectRepository
 
 from .helpers import seed_database
 from .test_projection_postgresql import _project_both
@@ -164,24 +168,28 @@ async def test_projection_custody_rejects_direct_sql_changes(
 async def test_verified_reports_allow_same_snapshot_across_setup_generations(
     clean_postgres_database: str,
 ) -> None:
-    """Prove the migrated canonical identity is snapshot plus generation."""
+    """Prove generation identity and latest-generation compatibility reads."""
     values = await seed_database(clean_postgres_database, generations=2)
     connection = await asyncpg.connect(_url(clean_postgres_database))
+    report_ids: dict[int, str] = {}
     try:
         for generation in (1, 2):
+            report_ids[generation] = str(uuid4())
             await connection.execute(
                 "insert into guide_sufficiency_reports(id,project_id,guide_id,"
                 "guide_version,source_snapshot_id,source_snapshot_hash,status,findings,"
                 "project_setup_run_id,setup_generation,agent_material_sha256,"
-                "agent_material_byte_count,created_by) values($1,$2,$3,'v1',$4,$5,"
-                "'passed','[]'::json,$6,$7,$5,1,'migration-test')",
-                str(uuid4()),
+                "agent_material_byte_count,created_by,created_at) "
+                "values($1,$2,$3,'v1',$4,$5,'passed','[]'::json,$6,$7,$5,1,"
+                "'migration-test',$8)",
+                report_ids[generation],
                 str(values["project"]),
                 str(values["guide"]),
                 str(values["snapshot"]),
                 "sha256:" + "a" * 64,
                 str(values[f"setup_{generation}"]),
                 generation,
+                datetime(2099 if generation == 1 else 2000, 1, 1, tzinfo=UTC),
             )
         assert await connection.fetchval(
             "select count(*) from guide_sufficiency_reports where source_snapshot_id=$1",
@@ -189,6 +197,18 @@ async def test_verified_reports_allow_same_snapshot_across_setup_generations(
         ) == 2
     finally:
         await connection.close()
+
+    engine = create_async_engine(clean_postgres_database)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            selected = await ProjectRepository(
+                session
+            ).get_sufficiency_report_for_snapshot(str(values["snapshot"]))
+        assert selected is not None
+        assert selected.id == report_ids[2]
+        assert selected.setup_generation == 2
+    finally:
+        await engine.dispose()
 
 
 def test_empty_projection_migration_downgrades_and_reupgrades(

@@ -508,25 +508,9 @@ class ProjectRepository:
                 GuideSufficiencyReport.project_setup_run_id.is_not(None),
             ).order_by(
                 GuideSufficiencyReport.setup_generation.desc(),
-                GuideSufficiencyReport.created_at.desc(),
-                GuideSufficiencyReport.id.desc(),
             ).limit(1)
         )
         return result.scalar_one_or_none()
-
-    async def get_sufficiency_report_for_generation(
-        self,
-        snapshot_id: str,
-        setup_generation: int,
-    ) -> GuideSufficiencyReport | None:
-        """Load the one verified report for an exact setup generation."""
-        return await self._session.scalar(
-            select(GuideSufficiencyReport).where(
-                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
-                GuideSufficiencyReport.setup_generation == setup_generation,
-                GuideSufficiencyReport.project_setup_run_id.is_not(None),
-            )
-        )
 
     async def get_diagnostic_sufficiency_report_for_snapshot(
         self,
