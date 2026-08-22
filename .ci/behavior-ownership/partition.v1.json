@@ -386,6 +386,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/project_guide_projections.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/artifact_project_authority.py"
     },
     {
@@ -666,6 +670,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_compilation_projections.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/locked_policy.py"
     },
     {
@@ -707,6 +715,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/orchestrator.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/projections.py"
     },
     {
       "group": "lifecycle",
@@ -961,7 +973,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "7895dc9b8d7f41b381c0fc1d3c81054b0892e69ee6d6b1bf060ab14ab87f0f6b",
+  "authority_digest": "21c9b25620515dcd57c1098f2c13897f23724e0eab3f75ea5c8e3f4548d0ccbe",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

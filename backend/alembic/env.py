@@ -21,7 +21,8 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_v01_baseline"
-_CURRENT_HEAD_REVISION = "0008_guide_compilation_authorized_persistence"
+_PREVIOUS_HEAD_REVISION = "0008_guide_compilation_authorized_persistence"
+_CURRENT_HEAD_REVISION = "0009_guide_compilation_projections"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_v01_baseline migration"
@@ -55,6 +56,7 @@ def do_run_migrations(connection: Connection) -> None:
         if revisions not in (
             (),
             (_BASELINE_REVISION,),
+            (_PREVIOUS_HEAD_REVISION,),
             (_CURRENT_HEAD_REVISION,),
         ):
             raise RuntimeError(_RECREATE_GUIDANCE)

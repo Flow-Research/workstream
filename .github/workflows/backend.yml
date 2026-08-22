@@ -525,6 +525,26 @@ jobs:
             coverage report --include="${source}" --precision=2 --fail-under=90
           done
 
+      - name: POL-04A3 hidden projection per-file coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in \
+            app/modules/audit/schemas.py \
+            app/modules/authorization/api/__init__.py \
+            app/modules/authorization/api/project_guide_projections.py \
+            app/modules/projects/api/__init__.py \
+            app/modules/projects/api/guide_compilation_projections.py \
+            app/modules/projects/guide_compilation/models.py \
+            app/modules/projects/guide_compilation/repository.py \
+            app/modules/projects/guide_compilation/projections.py \
+            app/modules/projects/models.py \
+            app/modules/projects/repository.py
+          do
+            coverage report --include="${source}" --precision=2 --fail-under=90
+          done
+
       - name: Project creation cutover per-file coverage
         working-directory: backend
         shell: bash

@@ -124,6 +124,14 @@ The fixed `workstream.project.setup` service may use only the run action through
 internal command resolution with fresh setup custody; it cannot call the HTTP
 route or create manual reports or acknowledgements.
 
+Unified compilation projections are currently hidden and route-unreachable.
+They can materialize an exact persisted compilation into one canonical
+sufficiency report and, when permitted by that result, one draft submission
+artifact policy. They do not call a model, change setup status or output
+pointers, approve policy, or enqueue work. Operators should continue to rely on
+the existing setup APIs; no manual repair or direct database invocation of the
+hidden projector is supported before the authorization and worker cutover.
+
 AUTH-11C2 separately exposes current active-guide configuration through the
 following endpoints:
 

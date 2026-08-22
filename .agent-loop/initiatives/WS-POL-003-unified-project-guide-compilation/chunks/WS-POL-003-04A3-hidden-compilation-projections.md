@@ -377,6 +377,7 @@ backend/tests/projects/guide_compilation/test_migration_authorized_persistence.p
 backend/tests/authorization/guide_compilation/test_migration_contract.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 backend/scripts/run_test_lanes.py
 backend/tests/test_ci_test_lanes.py
 backend/scripts/behavior_ownership.py

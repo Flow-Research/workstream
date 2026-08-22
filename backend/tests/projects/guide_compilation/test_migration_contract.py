@@ -48,7 +48,7 @@ def test_current_schema_preserves_guide_compilation_schema(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0008_guide_compilation_authorized_persistence",
+        "0009_guide_compilation_projections",
         True,
         4,
         1,

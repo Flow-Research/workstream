@@ -18,6 +18,15 @@ from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationExecutionPort,
     ProjectGuideCompilationExecutionResult,
 )
+from app.modules.projects.api.guide_compilation_projections import (
+    ArtifactPolicyProjectionPort,
+    GuideSufficiencyProjectionPort,
+    ProjectGuideProjectionCommand,
+    ProjectGuideProjectionComponent,
+    ProjectGuideProjectionError,
+    ProjectGuideProjectionErrorCode,
+    ProjectGuideProjectionReceipt,
+)
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
@@ -44,6 +53,13 @@ __all__ = (
     "ProjectGuideCompilationExecutionErrorCode",
     "ProjectGuideCompilationExecutionPort",
     "ProjectGuideCompilationExecutionResult",
+    "ArtifactPolicyProjectionPort",
+    "GuideSufficiencyProjectionPort",
+    "ProjectGuideProjectionCommand",
+    "ProjectGuideProjectionComponent",
+    "ProjectGuideProjectionError",
+    "ProjectGuideProjectionErrorCode",
+    "ProjectGuideProjectionReceipt",
     "ProjectLockedPolicyContextFacts",
     "ProjectLockedPolicyContextPort",
     "ProjectLockedPolicyContextRequest",
