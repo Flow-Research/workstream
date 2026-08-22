@@ -180,10 +180,11 @@ async def test_invalid_provider_result_becomes_one_bounded_terminal_outcome(
                     actor=service, facts=facts, failure_code="schema_invalid"
                 )
         async with factory() as session:
-            with pytest.raises(GuideCompilationIntegrityError, match="cannot be dispatched"):
-                await _execution_service(session, service).fence_dispatch(
-                    actor=service, facts=facts
-                )
+            replay = await _execution_service(session, service).fence_dispatch(
+                actor=service, facts=facts
+            )
+        assert replay.classification is CompilationRecoveryClassification.INVALID_TERMINAL
+        assert replay.dispatch_permitted is False
         async with factory() as session:
             row = (
                 await session.execute(

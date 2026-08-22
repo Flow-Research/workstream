@@ -83,6 +83,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         post_submission_capabilities: PostSubmissionCapabilityProjection,
         authorization_context: GuideCompilationAuthorizationContext,
     ) -> None:
+        """Store the owner-supplied ports used by each short transaction."""
         self._session_factory = session_factory
         self._material_factory = material_factory
         self._pre_submission_capabilities = pre_submission_capabilities
@@ -90,6 +91,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         self._authorization_context = authorization_context
 
     async def load(self, attempt_id: UUID) -> CompilationExecutionState:
+        """Load one exact attempt and translate storage failures safely."""
         try:
             async with self._session_factory() as session:
                 return await load_compilation_execution_state(session, attempt_id)
@@ -99,6 +101,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
 
     async def context(self, state: CompilationExecutionState) -> ProjectGuideCompilationContext:
+        """Rebuild the immutable provider context for the selected attempt."""
         try:
             async with self._session_factory() as session:
                 return await build_project_guide_compilation_context(
@@ -118,6 +121,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
 
     async def fence(self, state: CompilationExecutionState) -> CompilationDispatchReceipt:
+        """Commit the one-shot provider-dispatch fence under service authority."""
         async with self._authorized_service(state) as (service, actor):
             return await service.fence_dispatch(actor=actor, facts=state.preflight_facts)
 
@@ -127,6 +131,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         context: ProjectGuideCompilationContext,
         result: ProjectGuideCompilationResult,
     ) -> CompilationOutcomeReceipt:
+        """Record one validated provider result without persisting projections."""
         async with self._authorized_service(state) as (service, actor):
             return await service.record_accepted_result(
                 actor=actor,
@@ -138,6 +143,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
     async def record_invalid(
         self, state: CompilationExecutionState, failure_code: str
     ) -> CompilationOutcomeReceipt:
+        """Record one known invalid result as a terminal attempt outcome."""
         async with self._authorized_service(state) as (service, actor):
             return await service.record_invalid_result(
                 actor=actor,
@@ -148,6 +154,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
     async def persist(
         self, state: CompilationExecutionState, context: ProjectGuideCompilationContext
     ) -> CompilationPersistenceReceipt:
+        """Persist the already-accepted compilation under fresh authority."""
         async with self._authorized_service(state) as (service, actor):
             return await service.persist_accepted(
                 actor=actor,
@@ -157,6 +164,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
 
     @asynccontextmanager
     async def _authorized_service(self, state: CompilationExecutionState):
+        """Yield the fixed-service coordinator and hide internal AUTH failures."""
         try:
             async with self._session_factory() as session:
                 async with self._authorization_context(session, state) as (
@@ -231,27 +239,27 @@ class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
         backend: GuideCompilationExecutionBackend,
         runtime: ProjectGuideAgentRuntime,
     ) -> None:
+        """Bind the durable backend to the single provider runtime."""
         self._backend = backend
         self._runtime = runtime
 
     async def execute(
         self, command: ProjectGuideCompilationExecutionCommand
     ) -> ProjectGuideCompilationExecutionResult:
+        """Execute or safely recover one previously authorized attempt."""
         state = await self._backend.load(command.attempt_id)
-        if state.classification in {
-            CompilationRecoveryClassification.PERSISTED,
-            CompilationRecoveryClassification.INVALID_TERMINAL,
-            CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
-        }:
-            return _state_result(state)
+        recovered = await self._recover(state)
+        if recovered is not None:
+            return recovered
 
         context = await self._backend.context(state)
-        if state.classification is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED:
-            return _receipt_result(await self._backend.persist(state, context))
-
         dispatch = await self._backend.fence(state)
         if not dispatch.dispatch_permitted:
-            return _receipt_result(dispatch)
+            raced_state = await self._backend.load(command.attempt_id)
+            recovered = await self._recover(raced_state)
+            if recovered is None:
+                raise ProjectGuideCompilationExecutionError("context_unavailable")
+            return recovered
         try:
             result = await self._runtime.compile_project_guide(context)
         except ProjectGuideCompilationInvalidOutputError as exc:
@@ -267,11 +275,27 @@ class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
         await self._backend.record_accepted(state, context, result)
         return _receipt_result(await self._backend.persist(state, context))
 
+    async def _recover(
+        self, state: CompilationExecutionState
+    ) -> ProjectGuideCompilationExecutionResult | None:
+        """Return a durable result without provider I/O, or select dispatch."""
+        if state.classification in {
+            CompilationRecoveryClassification.PERSISTED,
+            CompilationRecoveryClassification.INVALID_TERMINAL,
+            CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+        }:
+            return _state_result(state)
+        if state.classification is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED:
+            context = await self._backend.context(state)
+            return _receipt_result(await self._backend.persist(state, context))
+        return None
+
 
 def _require_valid_result(
     context: ProjectGuideCompilationContext,
     result: ProjectGuideCompilationResult,
 ) -> None:
+    """Reject incomplete, inconsistent, or wrong-version provider output."""
     require_complete_project_guide_compilation_result(result)
     validate_project_guide_compilation_result(context, result)
     if result.agent_version != context.agent_version:
@@ -281,6 +305,7 @@ def _require_valid_result(
 def _state_result(
     state: CompilationExecutionState,
 ) -> ProjectGuideCompilationExecutionResult:
+    """Project a durable execution state into the bounded public receipt."""
     facts = state.preflight_facts
     return ProjectGuideCompilationExecutionResult(
         operation_id=facts.operation_id,
@@ -294,6 +319,7 @@ def _state_result(
 def _receipt_result(
     receipt: CompilationDispatchReceipt | CompilationOutcomeReceipt | CompilationPersistenceReceipt,
 ) -> ProjectGuideCompilationExecutionResult:
+    """Project an internal receipt into the bounded public result."""
     return ProjectGuideCompilationExecutionResult(
         operation_id=receipt.operation_id,
         attempt_id=receipt.attempt_id,

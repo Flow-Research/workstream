@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from uuid import UUID, uuid4
 
 import pytest
@@ -67,6 +67,7 @@ class _Backend:
         )
         self.calls: list[str] = []
         self.dispatch_permitted = True
+        self.state_after_fence: CompilationExecutionState | None = None
 
     async def load(self, attempt_id):
         self.calls.append("load")
@@ -81,11 +82,15 @@ class _Backend:
     async def fence(self, state):
         self.calls.append("fence")
         facts = state.preflight_facts
+        classification = CompilationRecoveryClassification.PROVIDER_UNCERTAIN
+        if self.state_after_fence is not None:
+            self.state = self.state_after_fence
+            classification = self.state_after_fence.classification
         return CompilationDispatchReceipt(
             operation_id=facts.operation_id,
             attempt_id=facts.attempt_id,
             provider_idempotency_key=facts.provider_idempotency_key,
-            classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+            classification=classification,
             dispatch_permitted=self.dispatch_permitted,
         )
 
@@ -207,6 +212,10 @@ async def test_existing_dispatch_fence_never_calls_provider() -> None:
     state = _state(ids(), CompilationRecoveryClassification.RESERVED)
     backend, runtime = _Backend(state), _Runtime()
     backend.dispatch_permitted = False
+    backend.state_after_fence = replace(
+        state,
+        classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+    )
 
     receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
         ProjectGuideCompilationExecutionCommand(
@@ -219,7 +228,31 @@ async def test_existing_dispatch_fence_never_calls_provider() -> None:
         is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
     )
     assert runtime.calls == 0
-    assert backend.calls == ["load", "context", "fence"]
+    assert backend.calls == ["load", "context", "fence", "load"]
+
+
+@pytest.mark.asyncio
+async def test_lost_dispatch_race_recovers_the_persisted_winner() -> None:
+    state = _state(ids(), CompilationRecoveryClassification.RESERVED)
+    compilation_id = uuid4()
+    backend, runtime = _Backend(state), _Runtime()
+    backend.dispatch_permitted = False
+    backend.state_after_fence = replace(
+        state,
+        classification=CompilationRecoveryClassification.PERSISTED,
+        compilation_id=compilation_id,
+    )
+
+    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+        ProjectGuideCompilationExecutionCommand(
+            attempt_id=state.preflight_facts.attempt_id
+        )
+    )
+
+    assert receipt.classification is ProjectGuideCompilationExecutionClassification.PERSISTED
+    assert receipt.compilation_id == compilation_id
+    assert runtime.calls == 0
+    assert backend.calls == ["load", "context", "fence", "load"]
 
 
 @pytest.mark.asyncio

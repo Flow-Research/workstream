@@ -113,7 +113,14 @@ class GuideCompilationService:
                     operation, attempt, dispatch_permitted=False
                 )
             if attempt.status != "compilation_reserved":
-                raise GuideCompilationIntegrityError("attempt cannot be dispatched")
+                return _dispatch_receipt(
+                    operation,
+                    attempt,
+                    classification=await repository.recovery_classification(
+                        attempt.id
+                    ),
+                    dispatch_permitted=False,
+                )
             await self._authorization.authorize_execute_preflight(
                 actor=actor, facts=facts
             )
@@ -371,13 +378,16 @@ def _dispatch_receipt(
     operation: ProjectGuideCompilationRequestOperation,
     attempt: ProjectGuideCompilationAttempt,
     *,
+    classification: CompilationRecoveryClassification = (
+        CompilationRecoveryClassification.PROVIDER_UNCERTAIN
+    ),
     dispatch_permitted: bool,
 ) -> CompilationDispatchReceipt:
     return CompilationDispatchReceipt(
         operation_id=operation.operation_id,
         attempt_id=attempt.id,
         provider_idempotency_key=attempt.provider_idempotency_key,
-        classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+        classification=classification,
         dispatch_permitted=dispatch_permitted,
     )
 

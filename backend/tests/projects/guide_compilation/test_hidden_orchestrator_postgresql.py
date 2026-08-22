@@ -80,6 +80,21 @@ class _FailFirstPersist:
         return await self.inner.persist(state, compilation_context)
 
 
+class _DelayedFence:
+    def __init__(self, inner) -> None:
+        self.inner = inner
+        self.waiting = asyncio.Event()
+        self.release = asyncio.Event()
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    async def fence(self, state):
+        self.waiting.set()
+        await self.release.wait()
+        return await self.inner.fence(state)
+
+
 def _backend(factory):
     return SqlAlchemyGuideCompilationExecutionBackend(
         factory,
@@ -235,6 +250,125 @@ async def test_concurrent_commands_commit_one_dispatch_and_one_provider_call(
             await session.rollback()
         assert row == (1, 1)
     finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("winner_outcome", "expected_classification", "expected_compilations"),
+    [
+        (
+            result(),
+            ProjectGuideCompilationExecutionClassification.PERSISTED,
+            1,
+        ),
+        (
+            ProjectGuideCompilationInvalidOutputError("schema_invalid"),
+            ProjectGuideCompilationExecutionClassification.INVALID_TERMINAL,
+            0,
+        ),
+    ],
+)
+async def test_loser_fencing_after_winner_converges_without_second_provider_call(
+    clean_postgres_database: str,
+    winner_outcome,
+    expected_classification: ProjectGuideCompilationExecutionClassification,
+    expected_compilations: int,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    requested = await _authorized_attempt(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    backend = _backend(factory)
+    delayed = _DelayedFence(backend)
+    winner_runtime = _Runtime(winner_outcome)
+    loser_runtime = _Runtime(ProjectAgentRuntimeError("must not run"))
+    command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
+    try:
+        loser = asyncio.create_task(
+            HiddenGuideCompilationOrchestrator(
+                delayed,
+                loser_runtime,  # type: ignore[arg-type]
+            ).execute(command)
+        )
+        await delayed.waiting.wait()
+        winner = await HiddenGuideCompilationOrchestrator(
+            backend,
+            winner_runtime,  # type: ignore[arg-type]
+        ).execute(command)
+        delayed.release.set()
+        recovered = await loser
+
+        assert winner.classification is expected_classification
+        assert recovered == winner
+        assert winner_runtime.calls == 1
+        assert loser_runtime.calls == 0
+        async with factory() as session:
+            counts = (
+                await session.execute(
+                    text(
+                        "select (select count(*) from project_guide_compilations),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.guide_compilation.execute')"
+                    )
+                )
+            ).one()
+            await session.rollback()
+        assert counts == (expected_compilations, expected_compilations)
+    finally:
+        delayed.release.set()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_loser_persists_an_accepted_winner_without_second_provider_call(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    requested = await _authorized_attempt(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    backend = _backend(factory)
+    delayed = _DelayedFence(backend)
+    winner_runtime = _Runtime()
+    loser_runtime = _Runtime(ProjectAgentRuntimeError("must not run"))
+    command = ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
+    try:
+        loser = asyncio.create_task(
+            HiddenGuideCompilationOrchestrator(
+                delayed,
+                loser_runtime,  # type: ignore[arg-type]
+            ).execute(command)
+        )
+        await delayed.waiting.wait()
+        with pytest.raises(ProjectGuideCompilationExecutionError) as failure:
+            await HiddenGuideCompilationOrchestrator(
+                _FailFirstPersist(backend),
+                winner_runtime,  # type: ignore[arg-type]
+            ).execute(command)
+        assert failure.value.code == "storage_unavailable"
+
+        delayed.release.set()
+        recovered = await loser
+
+        assert recovered.classification is ProjectGuideCompilationExecutionClassification.PERSISTED
+        assert recovered.compilation_id is not None
+        assert winner_runtime.calls == 1
+        assert loser_runtime.calls == 0
+        async with factory() as session:
+            counts = (
+                await session.execute(
+                    text(
+                        "select (select count(*) from project_guide_compilations),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.guide_compilation.execute')"
+                    )
+                )
+            ).one()
+            await session.rollback()
+        assert counts == (1, 1)
+    finally:
+        delayed.release.set()
         await engine.dispose()
 
 
