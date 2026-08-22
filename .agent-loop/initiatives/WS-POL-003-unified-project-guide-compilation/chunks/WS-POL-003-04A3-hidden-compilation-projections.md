@@ -210,24 +210,53 @@ domain/service/operation/correlation constants and current service actor/link
 facts. Python and PostgreSQL canonical JSON digest vectors must match for every
 field and reject every one-field mutation.
 
-All hashes use canonical JSON (UTF-8, sorted keys, compact separators, no
-non-finite values) with these closed envelopes:
+All hashes are `sha256:<64 lowercase hex>` over canonical JSON (UTF-8, sorted
+keys, compact separators, no non-finite values); no key is omitted.
+Sufficiency final facts contain exactly:
 
 ```text
-{"domain":"workstream.project_guide_projection.source_state.v1","facts":{
-  guide_id,guide_version,guide_status,source_snapshot_id,source_snapshot_hash,
-  setup_run_id,setup_generation,status,current_step,celery_task_id,
-  continuation_verification_job_id,continuation_started_at,
-  error_code,error_artifact_incident_id,error_summary,
-  post_submit_derivation_summary,started_at,finished_at,
-  output_sufficiency_report_id,output_submission_artifact_policy_id,
-  output_post_submit_checker_policy_id}}
-{"domain":"<component facts domain>","facts":<complete final facts except facts_digest>}
-{"domain":"workstream.<component resource type>.output.v1","output":<exact canonical business content>}
-{"domain":"<component authority domain>","authority":{
-  action_id,permission_id,resource_type,resource_id,scope_project_id,
-  actor_profile_id,identity_link_id,service_identity,facts_digest}}
+project_id, attempt_id, request_operation_id, provider_idempotency_key,
+compilation_id, guide_id, guide_version, source_snapshot_id,
+source_snapshot_hash, setup_run_id, setup_generation, celery_task_id,
+source_state_digest, result_hash, component_hash, result_schema_version,
+compilation_agent_name, compilation_agent_version, material_sha256,
+material_byte_count, report_id, report_content_digest
 ```
+
+Policy final facts contain the same common lineage through
+`compilation_agent_version`, then exactly `prior_operation_id`,
+`sufficiency_report_id`, `sufficiency_report_digest`, `policy_id`, and
+`policy_content_digest`.
+
+The source-state envelope is exactly
+`{"domain":"workstream.project_guide_projection.source_state.v1","facts":...}`
+with facts keys `celery_task_id`, `continuation_started_at`,
+`continuation_verification_job_id`, `current_step`,
+`error_artifact_incident_id`, `error_code`, `error_summary`, `finished_at`,
+`guide_id`, `guide_status`, `guide_version`,
+`output_post_submit_checker_policy_id`,
+`output_submission_artifact_policy_id`, `output_sufficiency_report_id`,
+`post_submit_derivation_summary`, `setup_generation`, `setup_run_id`,
+`source_snapshot_hash`, `source_snapshot_id`, `started_at`, and `status`.
+Sufficiency/policy facts envelopes use the exact facts domains in the table and
+the exact corresponding field lists above.
+
+The sufficiency output envelope uses domain
+`workstream.project_guide_sufficiency_projection.output.v1` and exact business
+keys `id`, `project_id`, `guide_id`, `guide_version`, `source_snapshot_id`,
+`source_snapshot_hash`, `status`, `findings`, `summary`, `agent_name`,
+`agent_version`, `project_setup_run_id`, `setup_generation`,
+`agent_material_sha256`, and `agent_material_byte_count`. The policy output
+envelope uses domain
+`workstream.project_submission_artifact_policy_projection.output.v1` and exact
+keys `id`, `project_id`, `guide_id`, `guide_version`, `source_snapshot_id`,
+`source_snapshot_hash`, `policy_version`, `lifecycle_status`, `policy_body`,
+`policy_hash`, `derivation_source`, `source_material_refs`,
+`derivation_agent_name`, `derivation_agent_version`, `created_by`, and
+`change_summary`. Authority envelopes use the exact authority domain in the
+table and keys `action_id`, `permission_id`, `resource_type`, `resource_id`,
+`scope_project_id`, `actor_profile_id`, `identity_link_id`, `service_identity`,
+and `facts_digest`.
 
 Null is retained, UUID/date values are canonical strings, arrays retain their
 declared order, and no optional field is omitted. The material digest is the
@@ -238,7 +267,9 @@ PROJECTS rebuilds `VerifiedGuideMaterialSnapshot` with the existing
 that attempt digest, and records `len(canonical_payload)` as material byte
 count. Both values enter sufficiency facts, output digest, custody, and replay.
 Policy source-material references are derived from the same locked ART usage
-rows. Output ID UUIDv5 input is
+rows in item order using exact format
+`artifact-content:{content_id}#extraction-usage:{extraction_usage_id}`. Output
+ID UUIDv5 input is
 `workstream.project-guide-projection:output:<attempt-id>:<component>`.
 
 The persisted `project_guide_compilation_result.v1` schema is unchanged. The
@@ -286,15 +317,23 @@ no new event or product row.
   proven reusable by tests.
 
 The exact transaction order is: non-locking attempt-to-project lookup; prepare
-the component-specific AUTH capability; lock attempt, request custody, guide,
-setup, then the exact snapshot/items/ART extraction rows through one call to
-the unchanged `GuideSufficiencyMaterialPort.load`; lock the prior 04A3
+the component-specific AUTH capability; lock attempt then request custody; call
+the unchanged `GuideSufficiencyMaterialPort.load`, which takes its existing
+grouped header lock on guide, snapshot, and setup and then locks snapshot items
+and ART extraction rows in adapter order; lock the prior 04A3
 operation/report for the policy component; lock own operation/output replay
 candidate; recompose exact facts; consume new or validate replay; flush the
 business row, source-usage rows, operation, and AUTH evidence; commit once; close
 the capability in `finally`. ART loading here is transaction-local database
 material validation, not provider/object-store I/O. No network/provider I/O or
 serialized material/capability may cross the transaction.
+
+The existing `WS-POL-003-04B` file remains an inactive, non-executable planning
+skeleton and is superseded for sequencing/ownership by this executable
+contract, PLAN, CHUNK_MAP, STATUS, and CURRENT_STATE. The atomic chunk-state
+rule forbids rewriting a second chunk contract in this PR. 04B must receive its
+own exact current-main contract after 04A3, 04A2, AUTH-12J, and AUTH-12B2 merge;
+it may only cut over to those already-owned hidden operations.
 
 ## Allowed files
 
@@ -449,7 +488,7 @@ the final implementation executes this exact semantic proof from `backend/`:
 set -euo pipefail
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 rm -rf -- .ci/test-lanes/04a3
-mkdir -p .ci/test-lanes/04a3/collect .ci/test-lanes/04a3/lanes
+mkdir -p .ci/test-lanes/04a3/lanes .ci/test-lanes/04a3/combined
 uv run python scripts/run_test_lanes.py --collect-only \
   --metadata-dir .ci/test-lanes/04a3/collect \
   --summary-json .ci/test-lanes/04a3/collect-summary.json
@@ -459,6 +498,7 @@ uv run python scripts/validate_test_lane_evidence.py \
 for lane in shared_foundations_a shared_foundations_b schema_contracts_a \
   schema_contracts_b schema_contracts_c project_lifecycle task_lifecycle
 do
+  mkdir -p ".ci/test-lanes/04a3/lanes/${lane}"
   uv run python scripts/run_test_lanes.py --lane "${lane}" \
     --metadata-dir ".ci/test-lanes/04a3/lanes/${lane}/metadata" \
     --summary-json ".ci/test-lanes/04a3/lanes/${lane}/summary.json" \
@@ -471,22 +511,17 @@ uv run python -m scripts.merge_test_lane_evidence \
 uv run python scripts/validate_test_lane_evidence.py \
   --metadata-dir .ci/test-lanes/04a3/run \
   --summary-json .ci/test-lanes/04a3/run-summary.json
-mkdir .ci/test-lanes/04a3/combined
 shopt -s nullglob
 coverage_files=(.ci/test-lanes/04a3/run/.coverage.*)
 test "${#coverage_files[@]}" -eq 7
 for source in "${coverage_files[@]}"
 do
-  destination=".ci/test-lanes/04a3/combined/$(basename "${source}")"
   test -f "${source}"
   test ! -L "${source}"
-  test ! -e "${destination}"
-  cp -- "${source}" "${destination}"
-  test "$(shasum -a 256 "${source}" | cut -d' ' -f1)" = \
-    "$(shasum -a 256 "${destination}" | cut -d' ' -f1)"
 done
 export COVERAGE_FILE=.ci/test-lanes/04a3/combined/.coverage
-uv run coverage combine .ci/test-lanes/04a3/combined
+test ! -e "${COVERAGE_FILE}"
+uv run coverage combine .ci/test-lanes/04a3/run
 uv run coverage report --precision=2 --fail-under=78
 for source in \
   app/modules/audit/schemas.py \
