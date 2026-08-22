@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 from typing import Literal, cast
+import unicodedata
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +107,9 @@ def policy_body(
     """Map a bounded proposal to the canonical platform policy body."""
     if proposal is None:
         raise ValueError("artifact policy proposal is absent")
+    for value in proposal.required_artifacts:
+        if value != value.strip() or value != unicodedata.normalize("NFC", value):
+            raise ValueError("artifact policy path is not canonical")
     for value in (*proposal.required_evidence, *proposal.attestation_terms):
         if not _SAFE_IDENTIFIER.fullmatch(value):
             raise ValueError("artifact policy identifier is not canonical")

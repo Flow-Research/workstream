@@ -206,6 +206,98 @@ def _extend_audit_resource_constraint(resources: tuple[str, ...]) -> None:
 def _install_digest_functions() -> None:
     op.execute(
         r"""
+        create function project_guide_projection_canonical_json(value jsonb)
+        returns text immutable strict language plpgsql as $$
+        declare encoded text;
+        begin
+          case jsonb_typeof(value)
+            when 'object' then
+              select '{' || coalesce(string_agg(
+                to_json(item_key)::text || ':' ||
+                  project_guide_projection_canonical_json(item_value),
+                ',' order by item_key collate "C"
+              ), '') || '}' into encoded
+                from jsonb_each(value) as items(item_key, item_value);
+              return encoded;
+            when 'array' then
+              select '[' || coalesce(string_agg(
+                project_guide_projection_canonical_json(item_value),
+                ',' order by item_order
+              ), '') || ']' into encoded
+                from jsonb_array_elements(value) with ordinality
+                  as items(item_value, item_order);
+              return encoded;
+            else
+              return value::text;
+          end case;
+        end; $$
+        """
+    )
+    op.execute(
+        r"""
+        create function project_guide_projection_business_digest(
+          item project_guide_component_projection_operations
+        ) returns text stable strict language plpgsql as $$
+        declare payload jsonb;
+        declare output_domain text;
+        begin
+          if item.component='guide_sufficiency' then
+            output_domain := 'workstream.project_guide_sufficiency_projection.output.v1';
+            select jsonb_build_object(
+              'id', report.id,
+              'project_id', report.project_id,
+              'guide_id', report.guide_id,
+              'guide_version', report.guide_version,
+              'source_snapshot_id', report.source_snapshot_id,
+              'source_snapshot_hash', report.source_snapshot_hash,
+              'status', report.status,
+              'findings', report.findings::jsonb,
+              'summary', report.summary,
+              'agent_name', report.agent_name,
+              'agent_version', report.agent_version,
+              'project_setup_run_id', report.project_setup_run_id,
+              'setup_generation', report.setup_generation,
+              'agent_material_sha256', report.agent_material_sha256,
+              'agent_material_byte_count', report.agent_material_byte_count,
+              'created_by', report.created_by
+            ) into payload from guide_sufficiency_reports report
+              where report.id=item.report_id;
+          elsif item.component='submission_artifact_policy' then
+            output_domain :=
+              'workstream.project_submission_artifact_policy_projection.output.v1';
+            select jsonb_build_object(
+              'id', policy.id,
+              'project_id', policy.project_id,
+              'guide_id', policy.guide_id,
+              'guide_version', policy.guide_version,
+              'source_snapshot_id', policy.source_snapshot_id,
+              'source_snapshot_hash', policy.source_snapshot_hash,
+              'policy_version', policy.policy_version,
+              'lifecycle_status', policy.lifecycle_status,
+              'policy_body', policy.policy_body::jsonb,
+              'policy_hash', policy.policy_hash,
+              'derivation_source', policy.derivation_source,
+              'source_material_refs', policy.source_material_refs::jsonb,
+              'derivation_agent_name', policy.derivation_agent_name,
+              'derivation_agent_version', policy.derivation_agent_version,
+              'created_by', policy.created_by,
+              'change_summary', policy.change_summary
+            ) into payload from submission_artifact_policies policy
+              where policy.id=item.policy_id;
+          end if;
+          if payload is null then
+            return null;
+          end if;
+          return 'sha256:' || encode(sha256(convert_to(
+            project_guide_projection_canonical_json(jsonb_build_object(
+              'domain', output_domain,
+              'facts', payload
+            )), 'UTF8')), 'hex');
+        end; $$
+        """
+    )
+    op.execute(
+        r"""
         create function project_guide_projection_facts_digest(
           item project_guide_component_projection_operations
         ) returns text immutable strict language sql as $$
@@ -307,6 +399,11 @@ def _install_guards() -> None:
         begin
           select * into evidence from audit_events
             where id=new.authorization_decision_event_id;
+          if new.output_digest is distinct from
+                project_guide_projection_business_digest(new) then
+            raise exception 'projection business custody is invalid'
+              using errcode='23514';
+          end if;
           if new.facts_digest is distinct from
                 project_guide_projection_facts_digest(new)
              or new.authority_resource_digest is distinct from
@@ -444,7 +541,22 @@ def _install_guards() -> None:
             select 1 from project_guide_component_projection_operations where report_id=old.report_id
           ) then raise exception 'projected source usage is immutable' using errcode='55000';
           end if;
+          if tg_op='UPDATE' then return new; end if;
           return old;
+        end; $$
+        """
+    )
+    op.execute(
+        """
+        create function guard_compilation_projection_source_usage_insert()
+        returns trigger language plpgsql as $$ begin
+          if exists(
+            select 1 from project_guide_component_projection_operations
+              where report_id=new.report_id
+          ) then raise exception 'projected source usage is immutable'
+            using errcode='55000';
+          end if;
+          return new;
         end; $$
         """
     )
@@ -456,6 +568,7 @@ def _install_guards() -> None:
         "create trigger projected_policy_update_guard before update on submission_artifact_policies for each row execute function guard_compilation_projection_business_change()",
         "create trigger projected_report_delete_guard before delete on guide_sufficiency_reports for each row execute function reject_compilation_projection_business_delete()",
         "create trigger projected_policy_delete_guard before delete on submission_artifact_policies for each row execute function reject_compilation_projection_business_delete()",
+        "create trigger projected_usage_insert_guard before insert on guide_sufficiency_report_source_usages for each row execute function guard_compilation_projection_source_usage_insert()",
         "create trigger projected_usage_delete_guard before update or delete on guide_sufficiency_report_source_usages for each row execute function reject_compilation_projection_business_delete()",
         "create trigger projected_report_truncate_guard before truncate on guide_sufficiency_reports execute function reject_compilation_projection_business_truncate()",
         "create trigger projected_policy_truncate_guard before truncate on submission_artifact_policies execute function reject_compilation_projection_business_truncate()",
@@ -615,6 +728,7 @@ def downgrade() -> None:
         raise RuntimeError("guide projection custody is non-empty; downgrade refused")
     for trigger, table in (
         ("projected_usage_truncate_guard", "guide_sufficiency_report_source_usages"),
+        ("projected_usage_insert_guard", "guide_sufficiency_report_source_usages"),
         ("projected_policy_truncate_guard", "submission_artifact_policies"),
         ("projected_report_truncate_guard", "guide_sufficiency_reports"),
         ("projected_usage_delete_guard", "guide_sufficiency_report_source_usages"),
@@ -627,6 +741,7 @@ def downgrade() -> None:
         ("projection_operation_insert_guard", "project_guide_component_projection_operations"),
     ):
         op.execute(f"drop trigger {trigger} on {table}")
+    op.execute("drop function guard_compilation_projection_source_usage_insert")
     op.execute("drop function reject_compilation_projection_business_delete")
     op.execute("drop function reject_compilation_projection_business_truncate")
     op.execute("drop function guard_compilation_projection_business_change")
@@ -634,6 +749,8 @@ def downgrade() -> None:
     op.execute("drop function guard_project_guide_component_projection_operation")
     op.execute("drop function project_guide_projection_authority_digest")
     op.execute("drop function project_guide_projection_facts_digest")
+    op.execute("drop function project_guide_projection_business_digest")
+    op.execute("drop function project_guide_projection_canonical_json")
     _install_submission_policy_product_trigger(allow_projection=False)
     _install_submission_policy_creation_guard(allow_projection=False)
     _remove_audit_resources(_NEW_RESOURCES)

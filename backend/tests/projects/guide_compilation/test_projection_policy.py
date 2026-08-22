@@ -131,6 +131,16 @@ def test_artifact_policy_transform_requires_a_persisted_proposal() -> None:
         SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=1,
             maximum_package_size_bytes=2,
+            required_artifacts=(" README.md ",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
+            required_artifacts=("cafe\u0301.txt",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
             required_evidence=("invalid evidence",),
         ),
     ],

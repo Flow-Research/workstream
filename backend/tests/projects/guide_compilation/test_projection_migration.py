@@ -46,13 +46,26 @@ async def test_sql_digest_vectors_match_python_and_each_field_is_sensitive(
     try:
         rows = await connection.fetch(
             "select o.*,project_guide_projection_facts_digest(o) as sql_facts,"
-            "project_guide_projection_authority_digest(o) as sql_authority "
+            "project_guide_projection_authority_digest(o) as sql_authority,"
+            "project_guide_projection_business_digest(o) as sql_output "
             "from project_guide_component_projection_operations o order by component"
         )
         assert len(rows) == 2
         for row in rows:
             assert row["sql_facts"] == row["facts_digest"]
             assert row["sql_authority"] == row["authority_resource_digest"]
+            assert row["sql_output"] == row["output_digest"]
+
+        canonical_value = {"z": ["é", {"b": 2, "a": 1}], "a": None}
+        assert await connection.fetchval(
+            "select project_guide_projection_canonical_json($1::jsonb)",
+            json.dumps(canonical_value, ensure_ascii=False),
+        ) == json.dumps(
+            canonical_value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
 
         common_mutations = {
             "attempt_id": str(uuid4()),
@@ -127,6 +140,114 @@ async def test_sql_digest_vectors_match_python_and_each_field_is_sensitive(
                     json.dumps(replacement),
                 )
                 assert mutated != row["authority_resource_digest"], field
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_operation_insert_recomputes_referenced_business_content(
+    clean_postgres_database: str,
+) -> None:
+    """Reject self-consistent custody whose referenced output was altered first."""
+    values = await seed_database(clean_postgres_database)
+    await _project_both(clean_postgres_database, values)
+    connection = await asyncpg.connect(_url(clean_postgres_database))
+    try:
+        with pytest.raises(
+            asyncpg.CheckViolationError,
+            match="projection business custody is invalid",
+        ):
+            async with connection.transaction():
+                await connection.execute(
+                    "create temporary table saved_projection_operation "
+                    "on commit drop as select * from "
+                    "project_guide_component_projection_operations"
+                )
+                await connection.execute(
+                    "alter table project_guide_component_projection_operations "
+                    "disable trigger projection_operation_change_guard"
+                )
+                await connection.execute(
+                    "delete from project_guide_component_projection_operations "
+                    "where component='submission_artifact_policy'"
+                )
+                await connection.execute(
+                    "delete from project_guide_component_projection_operations "
+                    "where component='guide_sufficiency'"
+                )
+                await connection.execute(
+                    "alter table guide_sufficiency_reports "
+                    "disable trigger projected_report_update_guard"
+                )
+                await connection.execute(
+                    "update guide_sufficiency_reports set summary='tampered first'"
+                )
+                await connection.execute(
+                    "insert into project_guide_component_projection_operations "
+                    "select * from saved_projection_operation "
+                    "where component='guide_sufficiency'"
+                )
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_source_usage_guard_blocks_late_insert_but_preserves_legacy_update(
+    clean_postgres_database: str,
+) -> None:
+    """Seal projected provenance without swallowing unrelated row updates."""
+    values = await seed_database(clean_postgres_database)
+    await _project_both(clean_postgres_database, values)
+    connection = await asyncpg.connect(_url(clean_postgres_database))
+    legacy_report_id = str(uuid4())
+    try:
+        projected_report_id = await connection.fetchval(
+            "select report_id from project_guide_component_projection_operations "
+            "where component='guide_sufficiency'"
+        )
+        with pytest.raises(
+            asyncpg.PostgresError,
+            match="projected source usage is immutable",
+        ):
+            await connection.execute(
+                "insert into guide_sufficiency_report_source_usages "
+                "select $1,report_id,99,source_item_id,binding_id,content_id,"
+                "extraction_usage_id,extraction_attempt_id,extracted_content_id,"
+                "project_setup_run_id,setup_generation,canonical_output_sha256 "
+                "from guide_sufficiency_report_source_usages where report_id=$2",
+                str(uuid4()),
+                projected_report_id,
+            )
+
+        await connection.execute(
+            "insert into guide_sufficiency_reports(id,project_id,guide_id,guide_version,"
+            "source_snapshot_id,source_snapshot_hash,status,findings,created_by) "
+            "select $1,project_id,guide_id,guide_version,source_snapshot_id,"
+            "source_snapshot_hash,status,findings,'legacy-test' "
+            "from guide_sufficiency_reports where id=$2",
+            legacy_report_id,
+            projected_report_id,
+        )
+        await connection.execute(
+            "insert into guide_sufficiency_report_source_usages "
+            "select $1,$2,item_order,source_item_id,binding_id,content_id,"
+            "extraction_usage_id,extraction_attempt_id,extracted_content_id,"
+            "project_setup_run_id,setup_generation,canonical_output_sha256 "
+            "from guide_sufficiency_report_source_usages where report_id=$3",
+            str(uuid4()),
+            legacy_report_id,
+            projected_report_id,
+        )
+        await connection.execute(
+            "update guide_sufficiency_report_source_usages set item_order=7 "
+            "where report_id=$1",
+            legacy_report_id,
+        )
+        assert await connection.fetchval(
+            "select item_order from guide_sufficiency_report_source_usages "
+            "where report_id=$1",
+            legacy_report_id,
+        ) == 7
     finally:
         await connection.close()
 
