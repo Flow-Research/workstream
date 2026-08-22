@@ -5,7 +5,7 @@ Date: 2026-08-22. Risk: L1. Outcome: PASS locally; human merge required.
 ## Review target and boundary
 
 - Protected-main base: `a95a0b02d7c546b2440f6b8dd8215a4be07671ff`.
-- Exact semantic-test head: `2726d4afbc0dfc6aef66851446f49730af76df7a`.
+- Exact semantic-test head: `8c719ec0ca25c14bcedd70450753cfa7807e8a45`.
 - The chunk adds two hidden, route-unreachable PROJECTS operations that project
   one persisted unified compilation into the canonical sufficiency report and
   draft submission-artifact policy.
@@ -37,6 +37,8 @@ framework, generic component API, or duplicate lifecycle.
 | Snapshot-only reads could become ambiguous after generation reuse | The existing read orders by the unique setup generation; an unused exact-generation helper was removed | Real-PostgreSQL test with two rows and inverted timestamps proves generation 2 wins |
 | A broad legacy repository missed the feature-file 90% floor | Dedicated 04A3 files retain at least 90%; the legacy file has a 78% non-regression floor and its changed method is fully executed | Canonical combined coverage and focused changed-method coverage |
 | Unrelated repository tests were briefly added to inflate coverage | The padding test was removed before final verification | Final diff and exact 4,261-node manifest contain only the meaningful selection proof |
+| A stale phrase still described the future cutover as a worker cutover | The documentation now describes the boundary as background-execution cutover | Stale-authorization documentation gate PASS |
+| The projected policy admitted Cloudflare R2 before its storage boundary exists | R2 was removed from the v1 transform and contract; only local and S3 remain allowed | Focused payload tests, stale-artifact contract gate, and all seven semantic lanes PASS |
 
 ## Focused verification
 
@@ -56,29 +58,32 @@ All seven lanes used one common 4,261-node manifest and ran sequentially.
 
 | Lane | Collected | Completed | Skipped | Deselected | Exit | Seconds |
 |---|---:|---:|---:|---:|---:|---:|
-| shared_foundations_a | 1,541 | 1,541 | 0 | 0 | 0 | 211.493 |
-| shared_foundations_b | 1,508 | 1,508 | 0 | 0 | 0 | 225.366 |
-| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 39.064 |
-| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 12.119 |
-| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 21.062 |
-| project_lifecycle | 674 | 674 | 0 | 0 | 0 | 432.209 |
-| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 283.405 |
+| shared_foundations_a | 1,541 | 1,541 | 0 | 0 | 0 | 225.134 |
+| shared_foundations_b | 1,508 | 1,508 | 0 | 0 | 0 | 229.071 |
+| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 36.814 |
+| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 11.185 |
+| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 20.452 |
+| project_lifecycle | 674 | 674 | 0 | 0 | 0 | 490.618 |
+| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 303.089 |
 
 The independent merger and validator accepted 4,261 of 4,261 nodes with zero
 duplicates, skips, deselections, interruptions, or retries. Aggregate runner
-time was 1,224.718 seconds. Every lane reported successful database and MinIO
-cleanup. The retained run summary digest is
-`a947a774cfa0abd3c66094f86cc2edb1105a3e892670ee8c79e83ee356406b0f`.
+time was 1,316.234 seconds. Every lane reported successful database and MinIO
+cleanup. The retained collect-summary, run-summary, and combined-coverage
+digests are, respectively,
+`f2748afa216a0707a707f20d0cdfcd05925b2d2c7ecbab5c3cd58d95f701220e`,
+`b731f682ac00a20904b6792c8f4262130cfac8e52a7ba77ed4f52aa1602b4bc4`,
+and `42dd3654b976425e51830f5564634f49dc1100ba6d47492c1db0a2e9863b2cf6`.
 
 Combined branch coverage passed every required floor:
 
-- Repository aggregate: 91.34%; floor 78%.
+- Repository aggregate: 91.32%; floor 78%.
 - Audit projection vocabulary: 95.69%.
 - AUTH projection API: 100%.
 - PROJECTS projection API: 100%.
 - Projection models: 100%.
 - Pure projection payloads: 100%.
-- Projection repository: 97.99%.
+- Projection repository: 96.98%.
 - Projection orchestration: 95.59%.
 - PROJECTS models: 100%.
 - Broad legacy PROJECTS repository: 78.47%; non-regression floor 78%.
@@ -100,12 +105,17 @@ The following attempts are not product evidence:
 5. A reviewer mistakenly cleaned an untracked evidence directory during a
    later collection. No test lane completed in that attempt; reviewers were
    stopped before the exclusive canonical run.
+6. The first hosted Agent Gates run exposed stale cutover terminology and then
+   the deferred R2 storage scheme. Both findings were corrected and the full
+   exact-head semantic proof was rerun; the failed hosted run is not product
+   evidence.
 
 ## Review and delivery state
 
-Architecture, simplicity/reuse, and test-integrity reviews passed the exact
-semantic-test head. Final exact-head review must ratify this evidence-only
-delta before publication. This record does not authorize merge.
+Architecture, simplicity/reuse, and test-integrity reviews passed the hidden
+projection design. The exact semantic-test head contains the complete runtime,
+test, and CI delta described here; publication still requires final exact-head
+CI and human review. This record does not authorize merge.
 
 The next delivery boundaries are POL-04A2 hidden setup finalization and
 AUTH-12J projection authority; both depend on merged 04A3.
