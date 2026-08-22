@@ -718,6 +718,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/projection_payloads.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/projections.py"
     },
     {
@@ -973,7 +977,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "21c9b25620515dcd57c1098f2c13897f23724e0eab3f75ea5c8e3f4548d0ccbe",
+  "authority_digest": "dc537b99313a5fa4bffb43dfcb04eeef6626272ca8138195b6f978d674636be6",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

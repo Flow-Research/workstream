@@ -537,6 +537,7 @@ jobs:
             app/modules/projects/api/__init__.py \
             app/modules/projects/api/guide_compilation_projections.py \
             app/modules/projects/guide_compilation/models.py \
+            app/modules/projects/guide_compilation/projection_payloads.py \
             app/modules/projects/guide_compilation/repository.py \
             app/modules/projects/guide_compilation/projections.py \
             app/modules/projects/models.py \

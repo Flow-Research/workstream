@@ -188,6 +188,7 @@ POL_04A_PARTITION_TARGETS = frozenset(
 POL_04A3_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/project_guide_projections.py",
+        "backend/app/modules/projects/guide_compilation/projection_payloads.py",
         "backend/app/modules/projects/guide_compilation/projections.py",
     }
 )

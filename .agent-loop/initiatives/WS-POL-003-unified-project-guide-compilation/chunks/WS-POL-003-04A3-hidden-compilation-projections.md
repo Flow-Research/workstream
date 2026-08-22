@@ -355,6 +355,7 @@ The complete implementation surface is:
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/guide_compilation_projections.py
 backend/app/modules/projects/guide_compilation/projections.py
+backend/app/modules/projects/guide_compilation/projection_payloads.py
 backend/app/modules/projects/guide_compilation/models.py
 backend/app/modules/projects/guide_compilation/repository.py
 backend/app/modules/projects/models.py
@@ -546,6 +547,7 @@ for source in \
   app/modules/projects/api/__init__.py \
   app/modules/projects/api/guide_compilation_projections.py \
   app/modules/projects/guide_compilation/models.py \
+  app/modules/projects/guide_compilation/projection_payloads.py \
   app/modules/projects/guide_compilation/repository.py \
   app/modules/projects/guide_compilation/projections.py \
   app/modules/projects/models.py \

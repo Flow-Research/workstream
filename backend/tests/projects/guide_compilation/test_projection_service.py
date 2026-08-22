@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -25,6 +26,10 @@ from app.modules.projects.api import (
 from app.modules.projects.guide_compilation.projections import (
     GuideCompilationProjectionService,
     _is_exact_projection_source_state,
+)
+from app.modules.projects.guide_compilation.repository import (
+    GuideCompilationIntegrityError,
+    GuideCompilationRepository,
 )
 
 from .helpers import result, seed_database
@@ -165,6 +170,152 @@ async def test_reserved_attempt_stops_before_auth_and_material(
         assert failure.value.code == "attempt_unavailable"
         assert authorization_calls == 0
         assert material.calls == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (GuideCompilationIntegrityError("stale custody"), "attempt_unavailable"),
+        (SQLAlchemyError("database unavailable"), "storage_unavailable"),
+    ],
+)
+async def test_preflight_failures_map_to_closed_public_errors(
+    clean_postgres_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    expected: str,
+) -> None:
+    """Repository failures never expose internal details or reach material loading."""
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    material = _CountingMaterial()
+
+    async def failed_attempt(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(GuideCompilationRepository, "attempt", failed_attempt)
+    service = GuideCompilationProjectionService(
+        factory,
+        material_factory=lambda _session: material,
+    )
+    try:
+        with pytest.raises(ProjectGuideProjectionError) as caught:
+            await service.project_guide_sufficiency(
+                ProjectGuideProjectionCommand(attempt_id=uuid4())
+            )
+        assert caught.value.code == expected
+        assert str(failure) not in str(caught.value)
+        assert material.calls == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("component", "failure", "expected"),
+    [
+        (
+            "guide_sufficiency",
+            GuideCompilationIntegrityError("stale custody"),
+            "source_state_unavailable",
+        ),
+        (
+            "guide_sufficiency",
+            SQLAlchemyError("database unavailable"),
+            "storage_unavailable",
+        ),
+        (
+            "submission_artifact_policy",
+            GuideCompilationIntegrityError("stale custody"),
+            "source_state_unavailable",
+        ),
+        (
+            "submission_artifact_policy",
+            SQLAlchemyError("database unavailable"),
+            "storage_unavailable",
+        ),
+    ],
+)
+async def test_transaction_failures_map_to_closed_public_errors(
+    clean_postgres_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    component: str,
+    failure: Exception,
+    expected: str,
+) -> None:
+    """Locked-transaction failures retain one bounded public error vocabulary."""
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    service = _service(factory, values)
+    seed = await service._preflight(attempt_id, component)
+
+    async def failed_write(*_args, **_kwargs):
+        raise failure
+
+    method_name = (
+        "_write_sufficiency"
+        if component == "guide_sufficiency"
+        else "_write_policy"
+    )
+    runner = (
+        service._run_sufficiency
+        if component == "guide_sufficiency"
+        else service._run_policy
+    )
+    monkeypatch.setattr(service, method_name, failed_write)
+    try:
+        with pytest.raises(ProjectGuideProjectionError) as caught:
+            await runner(seed, retry_conflict=True)
+        assert caught.value.code == expected
+        assert str(failure) not in str(caught.value)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "component", ["guide_sufficiency", "submission_artifact_policy"]
+)
+async def test_persistent_insert_conflicts_fail_closed_after_one_retry(
+    clean_postgres_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    component: str,
+) -> None:
+    """A repeated uniqueness conflict never loops or escapes raw database detail."""
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    service = _service(factory, values)
+    seed = await service._preflight(attempt_id, component)
+    calls = 0
+
+    async def conflicting_write(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise IntegrityError("insert", {}, RuntimeError("duplicate"))
+
+    method_name = (
+        "_write_sufficiency"
+        if component == "guide_sufficiency"
+        else "_write_policy"
+    )
+    runner = (
+        service._run_sufficiency
+        if component == "guide_sufficiency"
+        else service._run_policy
+    )
+    monkeypatch.setattr(service, method_name, conflicting_write)
+    try:
+        with pytest.raises(ProjectGuideProjectionError) as caught:
+            await runner(seed, retry_conflict=True)
+        assert caught.value.code == "source_state_unavailable"
+        assert calls == 2
     finally:
         await engine.dispose()
 
