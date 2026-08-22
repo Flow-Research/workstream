@@ -30,10 +30,10 @@ authority; these records do not grant or withhold it.
 |---|---|---|
 | [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish adapter-binding behavior/activation; CP04A-CP04B complete hidden policy behavior with durable custody | Prepare CP05 to activate only the proven policy actions; PLAN2 still targets durable `allow_review` |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
-| [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | POL-03B consumes 12I next; remaining AUTH activation chunks wait for their exact hidden owner behavior |
+| [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; project-policy authority and unified compilation authorization are merged through `12I` | Prepare AUTH-12J/12B2 only after their hidden projection/finalization behavior is proven |
 | [WS-CON-001](initiatives/WS-CON-001-contribution-compensation-boundary/STATUS.md) | Active delivery initiative; CP03B completes adapter-binding activation and CP04A-CP04B complete hidden ContributionPolicy behavior; shared lifecycle audit foundations are merged | Prepare CP05 policy activation, then complete guide-activation validation/persistence before task readiness |
 | [WS-AUTH-003](initiatives/WS-AUTH-003-module-boundary-recovery/STATUS.md) | AUTH boundary foundation and first public-capability proof through POL-03A are merged | Repair each touched AUTH capability through `authorization.api` and shrink the canonical AUTH ledger |
-| [WS-POL-003](initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md) | Active delivery initiative; `WS-POL-003-03B` authorized persistence and `WS-POL-003-04A` hidden unified execution are complete | Prepare AUTH-12B2, then POL-04B live cutover |
+| [WS-POL-003](initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md) | Active delivery initiative; `WS-POL-003-04A` hidden unified execution is merged and `WS-POL-003-04A3` hidden deterministic projections are complete | Build 04A2 finalization and the exact AUTH gates before 04B live cutover |
 | [WS-REV-001](initiatives/WS-REV-001-review-revision-lifecycle/STATUS.md) | Independent foundations through queue admission and reviewer-lease persistence are merged through `03A2`; schema/packet foundations may continue behind their own gates | Live admission/claim requires canonical 04E `allow_review`; ReviewLease copies the admitted Submission's immutable attempt policy version, and the first Review commit requires CON-03C/07 atomic contribution/award behavior |
 | [WS-QUAL-002](initiatives/WS-QUAL-002-behavior-ownership-catalogue/STATUS.md) | Catalogue foundation `01` and local context evidence `02` are merged through PRs #297 and #303 | Populate subsystem ownership through `03A`-`03D` before completeness or changed-line-aware mutation work |
 | [WS-XINT-002](initiatives/WS-XINT-002-art-auth-end-to-end/STATUS.md) | Guide and pre-submit materialization activation is merged | Continue only remaining ART and AUTH activation edges required by the artifact delivery path |
@@ -71,6 +71,13 @@ authority; these records do not grant or withhold it.
 Distinct initiatives may proceed concurrently. A merge in another initiative
 requires integration review only where it changes the current branch's base,
 contracts, paths, or evidence—not ceremonial repetition of unaffected work.
+
+## Unified guide compilation sequence
+
+WS-POL-003-04A3 is complete after merged WS-POL-003-04A.
+WS-POL-003-04A2 and WS-AUTH-001-12J are planned after merged
+WS-POL-003-04A3. WS-AUTH-001-12B2 is planned after both, and
+WS-POL-003-04B remains the later live cutover.
 
 ## Planned WS-ARCH-001 PLAN2 children
 

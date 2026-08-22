@@ -31,7 +31,9 @@ determine transient implementation ownership.
 | POL-02 adapter | POL-03A | Merged PR #301 |
 | Hidden POL-03A compilation custody | AUTH-12I compilation request/execute activation | POL-03A merged PR #307; AUTH-12I merged PR #312 |
 | AUTH-12I | POL-03B authorized persistence | Merged PR #312; dependency satisfied |
-| Hidden POL-04A unified setup-service manifest | AUTH-12B2 setup-ledger activation | `WS-POL-003-04A` complete |
+| Hidden POL-04A compilation execution | Hidden POL-04A3 component projections | `WS-POL-003-04A` merged through PR #356 |
+| Hidden POL-04A3 component projections | Hidden POL-04A2 finalization and AUTH-12J projection authority | `WS-POL-003-04A3` complete |
+| Hidden POL-04A2 setup finalization | AUTH-12B2 finalization authority | Planned after merged 04A3 |
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
 | Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |
@@ -53,8 +55,10 @@ current-setup lineage checks, real-PostgreSQL concurrency and crash proof, and
 semantic-lane registration. `WS-POL-003-04A` is complete. It adds one
 execution-only hidden command over an already authorized attempt, preserves
 unresolved provider outcomes without redispatch, and leaves all live routing
-and setup projections untouched. AUTH-12B2 and POL-04B are the next
-boundaries.
+and setup projections untouched. `WS-POL-003-04A3` is complete. It adds the
+hidden deterministic sufficiency and artifact-policy projections without a
+model call or setup-row mutation. POL-04A2 and AUTH-12J are the next delivery
+boundaries before AUTH-12B2 and POL-04B.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.

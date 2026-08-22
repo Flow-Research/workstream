@@ -12,8 +12,11 @@ transient work, and no chunk starts automatically.
 | `WS-AUTH-001-12I` | Register and activate exact PM compilation request/recovery plus fixed-service compilation execute authority. | 03A exact resource/action manifest |
 | `WS-POL-003-03B` | Complete authorized immutable compilation persistence; no policy projection or setup-service cutover. POL-04A is the next boundary. | 03A + AUTH-12I satisfied |
 | `WS-POL-003-04A` | Complete hidden one-attempt setup orchestrator over the complete result; the three legacy inference methods are denied and unreachable in the candidate call graph. | 03B |
-| `WS-AUTH-001-12B2` | Activate only setup-ledger mutation and its fixed-service adapter for the reviewed unified setup-service manifest. | 04A |
-| `WS-POL-003-04B` | Live one-call setup cutover; persist complete result, sufficiency, and artifact-policy projections; remove every legacy inference call from live reachability. | 04A + AUTH-12B2 |
+| `WS-POL-003-04A3` | Complete hidden compilation-derived sufficiency/artifact-policy projections with immutable provenance and no model call. | Merged 04A |
+| `WS-POL-003-04A2` | Planned hidden purpose-specific setup-ledger finalization with closed outcomes and no live route. | Merged 04A3 |
+| `WS-AUTH-001-12J` | Planned exact fixed-service authority for the two compilation-derived projection ports. | Merged 04A3 |
+| `WS-AUTH-001-12B2` | Planned exact setup-finalization authority for the merged 04A2 manifest. | Merged 04A2 + AUTH-12J |
+| `WS-POL-003-04B` | Planned explicit-PM-request live cutover through the hidden projection/finalization chain; remove every legacy inference call from live reachability. | Merged 04A3 + 04A2 + AUTH-12J + AUTH-12B2 |
 | `WS-POL-003-05A` | Hidden approval/effective/pre-submit projection behavior over the complete immutable result. | 04B |
 | `WS-AUTH-001-12F4` | Activate exact PM approval authority and PREP composition for the hidden 05A manifest. | 05A |
 | `WS-POL-003-05B` | Live PM approval and trusted effective/pre-submit projection cutover. | 05A + AUTH-12F4 |
