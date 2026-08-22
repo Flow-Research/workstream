@@ -51,9 +51,9 @@ The hidden delivery sequence after merged POL-04A is deliberately split:
 ```text
 POL-04A hidden compilation
 -> POL-04A3 hidden deterministic component projections
--> POL-04A2 hidden finalization and AUTH-12J projection authority
+-> {POL-04A2 hidden finalization, AUTH-12J projection authority}
    (logical siblings; migration-bearing delivery is serialized and rebased)
--> AUTH-12B2 finalization authority after both siblings
+-> AUTH-12B2 finalization authority after {POL-04A2, AUTH-12J}
 -> POL-04B explicit-PM-request live cutover
 ```
 

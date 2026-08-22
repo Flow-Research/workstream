@@ -1,16 +1,20 @@
 # Chunk Contract: WS-POL-003-04B - Live Unified Setup Cutover
 
-Status: Proposed after 04A and AUTH-12B2; inactive. Risk: L1.
+Status: Proposed after merged 04A3, 04A2, AUTH-12J, and AUTH-12B2; inactive.
+Risk: L1.
 
 ## Goal
 
-Make the unified setup service the sole live inference path and persist the
-complete compilation plus canonical sufficiency/artifact-policy projections.
+Make the unified setup service the sole live inference path by invoking the
+already-hidden compilation, component-projection, and setup-finalization
+operations in order. 04B does not persist a second projection or authorize a
+second projection path.
 
 ## Allowed files
 
-Project setup-service/queue/composition, projection repositories, exact
-12E/12F action adapters, focused tests, specifications, and WS-POL-003 docs.
+Project setup-service/queue/composition, authenticated PM request surface,
+legacy reachability guards/removal, focused tests, specifications, and
+WS-POL-003 docs. Exact files remain to be frozen on then-current main.
 
 ## Not allowed
 
@@ -20,10 +24,9 @@ compatibility routing, or a second provider attempt/key.
 ## Acceptance
 
 - Live orchestration invokes only `compile_project_guide`.
-- Sufficiency and artifact-policy projections each consume fresh action-bound
-  PREP in their own atomic transaction. Each PREP binds the immutable
-  compilation and accepted-result hashes plus its exact sufficiency or
-  artifact-policy component hash.
+- Live orchestration calls the merged hidden sufficiency projection, artifact
+  policy projection, and finalization operations; 04A3/12J and 04A2/12B2 remain
+  the sole owners of their authorization and atomic persistence.
 - All three old model methods/prompts are unreachable for unified generations;
   no deferred legacy post call or fallback exists.
 - Complete replay returns canonical outputs with zero provider calls.

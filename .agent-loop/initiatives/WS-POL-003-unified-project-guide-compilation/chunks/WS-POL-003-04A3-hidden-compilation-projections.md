@@ -48,31 +48,37 @@ The trusted transforms are closed:
 
 - `guide_blocked` maps to a `blocked` report, `draft_ready` to `passed`, and
   `draft_ready_with_warnings` to `passed_with_warnings`. Finding severity,
-  code, and message are preserved; the immutable compilation remains the
-  source for evidence references and the rest of the complete result.
+  code, and message are preserved with `location=null`; report summary is null.
+  Business-row producer identity is fixed to
+  `ProjectGuideCompilationProjection` version `v1`; the operation custody
+  retains the exact compilation agent/name/version. The immutable compilation
+  remains the source for evidence references and the complete result.
 - The artifact proposal maps to the existing submission-policy body through
-  one pure shared canonicalizer. Proposal strings are already unique and are
+  one closed pure transform. Proposal strings are already unique and are
   tightened at the compilation boundary as follows: required artifacts are
   canonical relative paths of at most 500 characters; required evidence and
   attestation terms are canonical identifiers of at most 100 characters; and
   forbidden patterns are bounded safe text of at most 500 characters.
-  Required-artifact keys are `artifact_` plus the complete lowercase SHA-256
-  hex digest of the UTF-8 path; any key collision fails closed. Evidence keys
-  and labels are the exact identifier. Forbidden rules preserve the exact
-  pattern, use reason `Forbidden by unified project guide compilation.`, and
-  have no worker-facing fix. All descriptions are null, `required` and
-  `hash_required` are true, and each rule collection is sorted by its canonical
-  key or pattern. Attestation terms are sorted lexically. File/package limits
+  Input tuple order is authoritative. Required artifact item `i` becomes
+  `{key: "required-artifact-%03d", path: raw, hash_required: true, required:
+  true, description: null}` and evidence item `i` becomes
+  `{key: "required-evidence-%03d", label: raw, hash_required: true, required:
+  true, description: null}`, with one-based indexes. Forbidden items become
+  `{pattern: raw, reason: raw, worker_facing_fix: null}`. No transform can
+  collide because ordered ordinal keys are server-owned. Rule collections are
+  canonicalized by the existing policy-body canonicalizer; attestation terms
+  are copied and canonicalized there. File/package limits
   are copied; packaging is required with sole format `zip`; manifest and
   SHA-256 checks are required; and allowed storage is the canonical sorted
-  `local`, `r2`, `s3` set. The pure helper validates `SubmissionArtifactPolicyInput`,
-  canonicalizes the body, proves it does not weaken Workstream defaults, and
-  passes the existing effective-policy/pre-submit compiler before any write.
-  No truncation, slugging, best-effort repair, or order-dependent collision
-  suffix is permitted.
+  `local`, `r2`, `s3` set. The transform validates
+  `SubmissionArtifactPolicyInput`, then reuses unchanged
+  `ProjectService.canonical_agent_submission_policy_body` to canonicalize and
+  prove the default floor before write. Effective-policy and checker
+  compilation remain deferred to their existing approval-stage owner. No
+  truncation, slugging, best-effort repair, or collision suffix is permitted.
 - The policy row uses server-owned version
   `unified-<first 16 snapshot-hash hex>-g<setup generation>`, derivation source
-  `unified_compilation`, exact compilation `agent_name` and `agent_version`,
+  `unified_compilation`, fixed projector name/version above,
   source references from the exact verified report usages in item order, and
   change summary `Projected from unified project guide compilation.`. Its body
   and hash are the canonical pure-helper outputs. A generation therefore has
@@ -182,7 +188,8 @@ Both use audit domain `authority`, event type
 scope type `service`, and the exact project scope. For component `C`, operation
 ID is UUIDv5 URL namespace over
 `workstream.project-guide-projection:operation:<attempt-id>:<C>`; correlation ID
-uses the same input with `correlation`; resource ID is the operation UUID.
+uses the same input with `correlation`; output ID uses the same input with
+`output`; resource ID is the operation UUID.
 Final facts include the exact action/permission/resource/domain constants,
 operation/correlation/component, project/guide/version, snapshot ID/hash,
 setup run/generation/task ID and complete source-state digest, attempt/request
@@ -190,6 +197,51 @@ operation/provider key, compilation/result/component/schema hashes, prior
 component operation/output/digest when required, derived output ID/digest, and
 current service actor/profile/link facts. Python and PostgreSQL canonical JSON
 digest vectors must match for every field and reject every one-field mutation.
+
+All hashes use canonical JSON (UTF-8, sorted keys, compact separators, no
+non-finite values) with these closed envelopes:
+
+```text
+{"domain":"workstream.project_guide_projection.source_state.v1","facts":{
+  guide_id,guide_version,guide_status,source_snapshot_id,source_snapshot_hash,
+  setup_run_id,setup_generation,status,current_step,celery_task_id,
+  error_code,error_artifact_incident_id,error_summary,
+  post_submit_derivation_summary,started_at,finished_at,
+  output_sufficiency_report_id,output_submission_artifact_policy_id,
+  output_post_submit_checker_policy_id}}
+{"domain":"<component facts domain>","facts":<complete final facts except facts_digest>}
+{"domain":"workstream.<component resource type>.output.v1","output":<exact canonical business content>}
+{"domain":"<component authority domain>","authority":{
+  action_id,permission_id,resource_type,resource_id,scope_project_id,
+  actor_profile_id,identity_link_id,service_identity,facts_digest}}
+```
+
+Null is retained, UUID/date values are canonical strings, arrays retain their
+declared order, and no optional field is omitted. The material digest is the
+attempt's existing `guide_material_hash`; policy source-material references are
+derived from the same locked ART usage rows. Output ID UUIDv5 input is
+`workstream.project-guide-projection:output:<attempt-id>:<component>`.
+
+AUTH public API defines nominal frozen `ProjectionLocator`, component-specific
+`FinalFacts`, `AuthorityReceipt`, and prepared capability protocols. Locator is
+only project ID, attempt ID, component, operation ID, and correlation ID.
+Receipt is only decision-event ID, actor-profile ID, identity-link ID, fixed
+service identity, and resource-context digest. The two final-facts types expose
+the complete fields listed above and cannot accept ORM, session, action/service
+selectors, or arbitrary mappings.
+
+The custody row stores exactly: operation/correlation/component; exact project,
+guide/version, snapshot ID/hash, setup run/generation/task ID; attempt, request
+operation, provider key, compilation, result hash, component hash, result
+schema and compilation agent name/version; nullable prior projection operation,
+output ID/digest for the policy component; mutually exclusive report/policy
+output IDs and output digest; facts digest; authority-resource digest; actor
+profile, identity link, fixed service, action, permission, decision event; and
+creation time. Composite foreign keys bind the attempt/compilation/setup
+lineage. Unique constraints cover `(setup_run_id, setup_generation, component)`,
+`(compilation_id, component)`, each non-null output ID, and decision event.
+Replay compares this complete tuple and calls only `validate_replay`; it creates
+no new event or product row.
 
 ## Boundary and reuse
 
@@ -202,10 +254,17 @@ digest vectors must match for every field and reject every one-field mutation.
 - Do not reuse the broad mutation services if they require caller-selected
   state or legacy step truth. Extract only pure canonical construction helpers
   proven reusable by tests.
-- `projects/service.py` may change only to delegate its existing policy
-  canonicalization/default-floor behavior to the new pure
-  `submission_policy_compiler.py`; no route, transaction, lifecycle, or policy
-  semantics may change. Existing policy tests must prove byte-identical output.
+
+The exact transaction order is: non-locking attempt-to-project lookup; prepare
+the component-specific AUTH capability; lock attempt, request custody, guide,
+setup, then the exact snapshot/items/ART extraction rows through one call to
+the unchanged `GuideSufficiencyMaterialPort.load`; lock the prior 04A3
+operation/report for the policy component; lock own operation/output replay
+candidate; recompose exact facts; consume new or validate replay; flush the
+business row, source-usage rows, operation, and AUTH evidence; commit once; close
+the capability in `finally`. ART loading here is transaction-local database
+material validation, not provider/object-store I/O. No network/provider I/O or
+serialized material/capability may cross the transaction.
 
 ## Allowed files
 
@@ -220,8 +279,6 @@ backend/app/modules/projects/guide_compilation/models.py
 backend/app/modules/projects/guide_compilation/repository.py
 backend/app/modules/projects/models.py
 backend/app/modules/projects/repository.py
-backend/app/modules/projects/submission_policy_compiler.py
-backend/app/modules/projects/service.py
 backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/project_guide_projections.py
 backend/app/modules/audit/schemas.py
@@ -239,7 +296,6 @@ backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/projects/guide_compilation/test_migration_authorized_persistence.py
 backend/tests/authorization/guide_compilation/test_migration_contract.py
 backend/tests/test_project_guide_compilation_contracts.py
-backend/tests/projects/test_submission_policy_compiler.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/test_alembic.py
 backend/scripts/run_test_lanes.py
@@ -276,9 +332,9 @@ contract before editing it.
   output ID, content, hash, or policy truth. The public command contains only
   the immutable compilation attempt ID.
 - Any transaction, row lock, ORM object, or authorization capability crossing
-  external I/O. ART material is loaded as an immutable DTO before the
-  AUTH-first product transaction and is revalidated against locked canonical
-  rows before authority consumption.
+  external I/O. The unchanged ART material port performs transaction-local
+  PostgreSQL reads in the exact lock order above; it performs no object-store
+  or provider call while locks or the AUTH capability are held.
 
 ## Acceptance and trustworthy tests
 
@@ -323,11 +379,9 @@ uv run ruff check \
   app/modules/audit/schemas.py app/modules/authorization/api \
   app/modules/projects/api app/modules/projects/guide_compilation \
   app/modules/projects/models.py app/modules/projects/repository.py \
-  app/modules/projects/service.py app/modules/projects/submission_policy_compiler.py \
   scripts/behavior_ownership.py scripts/run_test_lanes.py \
   tests/projects/guide_compilation/test_projection_*.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
-  tests/projects/test_submission_policy_compiler.py \
   tests/test_project_guide_compilation_contracts.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
@@ -342,7 +396,6 @@ uv run pytest -q \
   tests/projects/guide_compilation/test_migration_contract.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
-  tests/projects/test_submission_policy_compiler.py \
   tests/test_project_guide_compilation_contracts.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py \
@@ -358,9 +411,7 @@ for source in \
   app/modules/projects/guide_compilation/repository.py \
   app/modules/projects/guide_compilation/projections.py \
   app/modules/projects/models.py \
-  app/modules/projects/repository.py \
-  app/modules/projects/submission_policy_compiler.py \
-  app/modules/projects/service.py
+  app/modules/projects/repository.py
 do
   uv run coverage report --include="${source}" --precision=2 --fail-under=90
 done
