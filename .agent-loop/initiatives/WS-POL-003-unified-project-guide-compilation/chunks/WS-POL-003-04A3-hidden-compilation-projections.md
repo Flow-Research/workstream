@@ -50,13 +50,33 @@ The trusted transforms are closed:
   `draft_ready_with_warnings` to `passed_with_warnings`. Finding severity,
   code, and message are preserved; the immutable compilation remains the
   source for evidence references and the rest of the complete result.
-- The artifact proposal maps to the existing submission-policy body without
-  invention: file/package limits are copied; `zip` becomes the sole package
-  format; named required artifacts/evidence and forbidden artifacts become
-  bounded deterministic rules; attestation terms are copied; manifest and
-  SHA-256 checks remain required; and the platform-owned storage backends
-  remain the existing `local`, `s3`, and `r2` values. The canonical body is
-  validated by the existing policy schema and default compiler before write.
+- The artifact proposal maps to the existing submission-policy body through
+  one pure shared canonicalizer. Proposal strings are already unique and are
+  tightened at the compilation boundary as follows: required artifacts are
+  canonical relative paths of at most 500 characters; required evidence and
+  attestation terms are canonical identifiers of at most 100 characters; and
+  forbidden patterns are bounded safe text of at most 500 characters.
+  Required-artifact keys are `artifact_` plus the complete lowercase SHA-256
+  hex digest of the UTF-8 path; any key collision fails closed. Evidence keys
+  and labels are the exact identifier. Forbidden rules preserve the exact
+  pattern, use reason `Forbidden by unified project guide compilation.`, and
+  have no worker-facing fix. All descriptions are null, `required` and
+  `hash_required` are true, and each rule collection is sorted by its canonical
+  key or pattern. Attestation terms are sorted lexically. File/package limits
+  are copied; packaging is required with sole format `zip`; manifest and
+  SHA-256 checks are required; and allowed storage is the canonical sorted
+  `local`, `r2`, `s3` set. The pure helper validates `SubmissionArtifactPolicyInput`,
+  canonicalizes the body, proves it does not weaken Workstream defaults, and
+  passes the existing effective-policy/pre-submit compiler before any write.
+  No truncation, slugging, best-effort repair, or order-dependent collision
+  suffix is permitted.
+- The policy row uses server-owned version
+  `unified-<first 16 snapshot-hash hex>-g<setup generation>`, derivation source
+  `unified_compilation`, exact compilation `agent_name` and `agent_version`,
+  source references from the exact verified report usages in item order, and
+  change summary `Projected from unified project guide compilation.`. Its body
+  and hash are the canonical pure-helper outputs. A generation therefore has
+  one stable policy identity even when it reuses an immutable source snapshot.
 - A blocked compilation has no artifact proposal and the policy method denies
   before authorization or product writes.
 
@@ -66,6 +86,24 @@ Add one closed custody table,
 per setup generation and component. Update/delete/truncate and changed replay
 fail closed. The existing business rows remain canonical; the operation row is
 their provenance and replay receipt.
+
+Verified sufficiency identity becomes generation-aware: the verified unique
+index is `(source_snapshot_id, setup_generation)` while the diagnostic
+snapshot-only index remains unchanged. The current-report repository read
+orders verified reports by descending setup generation and then creation/ID;
+callers that require an exact generation use an exact generation lookup.
+Submission-policy identity remains its existing project/guide/version unique
+key, with the server-owned version above incorporating setup generation.
+Migration downgrade refuses when any projection operation, generation-reused
+report, or unified policy exists; an empty database downgrades and re-upgrades.
+
+For a report or policy referenced by an 04A3 operation, database triggers make
+the canonical content and creation provenance immutable. A report may later
+change only warning-acknowledgement fields. A policy may later change only its
+closed approval/supersession lifecycle fields. Exact source-usage rows for a
+referenced report are immutable. Direct SQL update/delete/truncate of protected
+content or provenance fails; immutable receipt hashes can never drift from the
+canonical object.
 
 ## Exact setup precondition
 
@@ -77,16 +115,23 @@ status = queued
 current_step = queued
 celery_task_id = deterministic task ID for the attempt/setup generation
 error_code = null
+error_artifact_incident_id = null
 error_summary = null
+post_submit_derivation_summary = null
+started_at = null
+finished_at = null
 every setup-row output ID = null
 ```
 
-Legacy `running_*`, `dispatch_pending`, enqueue failure/mismatch, terminal,
-error-bearing, wrong-task, stale-generation, or setup-output-bearing rows deny
-before authorization consumption or projection creation. 04A3 never writes
-setup-row output IDs. When the artifact-policy projection follows sufficiency,
-it may observe only the exact first 04A3 custody row and its canonical report;
-all setup-row output fields must remain null. Any foreign, changed, partial, or
+The guide must be the exact locked draft guide/version from the attempt. The
+setup-bound snapshot ID/hash must be exact and no newer snapshot may exist for
+that guide/version. Legacy `running_*`, `dispatch_pending`, enqueue
+failure/mismatch, terminal, error-bearing, started/finished, wrong-task,
+stale-generation, stale-snapshot, or setup-output-bearing rows deny before
+authorization consumption or projection creation. 04A3 never writes setup-row
+output IDs. When the artifact-policy projection follows sufficiency, it may
+observe only the exact first 04A3 custody row and its canonical report; all
+setup-row output fields must remain null. Any foreign, changed, partial, or
 unreceipted first component denies. POL-04A2 later binds the canonical output
 IDs into the terminal setup transition.
 
@@ -125,6 +170,27 @@ Vocabulary does not activate an action, evaluator, or service membership.
 Test adapters may stage vocabulary-valid decisions to prove atomic PostgreSQL
 custody and may not borrow another resource type.
 
+The two exact vocabularies are:
+
+| Component | Action | Permission | Resource type | Facts domain | Authority domain |
+|---|---|---|---|---|---|
+| sufficiency | `project.guide_sufficiency.run` | `project.guide.manage` | `project_guide_sufficiency_projection` | `workstream.project_guide_sufficiency_projection.facts.v1` | `workstream.project_guide_sufficiency_projection.authority.v1` |
+| artifact policy | `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `project_submission_artifact_policy_projection` | `workstream.project_submission_artifact_policy_projection.facts.v1` | `workstream.project_submission_artifact_policy_projection.authority.v1` |
+
+Both use audit domain `authority`, event type
+`SensitiveAuthorizationAllowed`, service identity `workstream.project.setup`,
+scope type `service`, and the exact project scope. For component `C`, operation
+ID is UUIDv5 URL namespace over
+`workstream.project-guide-projection:operation:<attempt-id>:<C>`; correlation ID
+uses the same input with `correlation`; resource ID is the operation UUID.
+Final facts include the exact action/permission/resource/domain constants,
+operation/correlation/component, project/guide/version, snapshot ID/hash,
+setup run/generation/task ID and complete source-state digest, attempt/request
+operation/provider key, compilation/result/component/schema hashes, prior
+component operation/output/digest when required, derived output ID/digest, and
+current service actor/profile/link facts. Python and PostgreSQL canonical JSON
+digest vectors must match for every field and reject every one-field mutation.
+
 ## Boundary and reuse
 
 - Reuse the validated `ProjectGuideCompilationResult`, existing canonical
@@ -136,6 +202,10 @@ custody and may not borrow another resource type.
 - Do not reuse the broad mutation services if they require caller-selected
   state or legacy step truth. Extract only pure canonical construction helpers
   proven reusable by tests.
+- `projects/service.py` may change only to delegate its existing policy
+  canonicalization/default-floor behavior to the new pure
+  `submission_policy_compiler.py`; no route, transaction, lifecycle, or policy
+  semantics may change. Existing policy tests must prove byte-identical output.
 
 ## Allowed files
 
@@ -144,9 +214,14 @@ The complete implementation surface is:
 ```text
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/guide_compilation_projections.py
+backend/app/interfaces/project_agents.py
 backend/app/modules/projects/guide_compilation/projections.py
 backend/app/modules/projects/guide_compilation/models.py
 backend/app/modules/projects/guide_compilation/repository.py
+backend/app/modules/projects/models.py
+backend/app/modules/projects/repository.py
+backend/app/modules/projects/submission_policy_compiler.py
+backend/app/modules/projects/service.py
 backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/project_guide_projections.py
 backend/app/modules/audit/schemas.py
@@ -159,8 +234,12 @@ backend/tests/projects/guide_compilation/test_projection_service.py
 backend/tests/projects/guide_compilation/test_projection_postgresql.py
 backend/tests/projects/guide_compilation/test_projection_migration.py
 backend/tests/projects/guide_compilation/test_projection_call_graph.py
+backend/tests/projects/guide_compilation/test_projection_policy.py
 backend/tests/projects/guide_compilation/test_migration_contract.py
+backend/tests/projects/guide_compilation/test_migration_authorized_persistence.py
 backend/tests/authorization/guide_compilation/test_migration_contract.py
+backend/tests/test_project_guide_compilation_contracts.py
+backend/tests/projects/test_submission_policy_compiler.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/test_alembic.py
 backend/scripts/run_test_lanes.py
@@ -207,13 +286,19 @@ contract before editing it.
   sanitization, digest vectors, extra-field denial, and mutually exclusive
   component methods.
 - Real PostgreSQL tests prove exact creation, immutable provenance, exact
-  replay with zero new event, changed replay denial, two-request concurrency,
-  cross-lineage denial, rollback after authorization/product flush, and
-  migration upgrade/downgrade guards.
-- Every disallowed setup status/step/error/output/task/generation shape denies
-  with zero product/event rows. Cross-component tests prove only the exact
-  first 04A3 receipt can precede the second projection and rollback removes
-  partial effects.
+  replay with zero new event, changed replay denial, two independent-session
+  same-component and cross-component races, cross-lineage denial, rollback
+  after authorization/product flush, and migration upgrade/downgrade guards.
+- Every disallowed setup status, step, error code, error summary, incident ID,
+  post-submit summary, start/finish timestamp, output ID, task ID, guide state,
+  source snapshot, and generation shape denies with zero product/event rows.
+  Cross-component tests prove only the exact first 04A3 receipt can precede
+  the second projection and rollback removes partial effects.
+- Migration tests cover a populated-database downgrade refusal, empty
+  downgrade/re-upgrade, exact 0008 round-trip preservation while restoring
+  0009 as current head, generation reuse of one source snapshot, and direct
+  SQL UPDATE/DELETE/TRUNCATE rejection for the operation and protected
+  canonical report/policy/source-usage content.
 - Negative-effect assertions prove zero model calls, setup writes, approval,
   post-submit output, or wrong component rows.
 - Architecture tests prove route-unreachability, deny-default production,
@@ -233,9 +318,17 @@ contract before editing it.
 ```bash
 cd backend
 uv run ruff check \
+  alembic/env.py alembic/versions/0009_guide_compilation_projections.py \
+  app/db/models.py app/interfaces/project_agents.py \
   app/modules/audit/schemas.py app/modules/authorization/api \
   app/modules/projects/api app/modules/projects/guide_compilation \
+  app/modules/projects/models.py app/modules/projects/repository.py \
+  app/modules/projects/service.py app/modules/projects/submission_policy_compiler.py \
+  scripts/behavior_ownership.py scripts/run_test_lanes.py \
   tests/projects/guide_compilation/test_projection_*.py \
+  tests/projects/guide_compilation/test_migration_authorized_persistence.py \
+  tests/projects/test_submission_policy_compiler.py \
+  tests/test_project_guide_compilation_contracts.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py
@@ -245,20 +338,29 @@ uv run pytest -q \
   tests/projects/guide_compilation/test_projection_postgresql.py \
   tests/projects/guide_compilation/test_projection_migration.py \
   tests/projects/guide_compilation/test_projection_call_graph.py \
+  tests/projects/guide_compilation/test_projection_policy.py \
   tests/projects/guide_compilation/test_migration_contract.py \
+  tests/projects/guide_compilation/test_migration_authorized_persistence.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
+  tests/projects/test_submission_policy_compiler.py \
+  tests/test_project_guide_compilation_contracts.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py \
   --cov=app --cov-branch --cov-report=
 for source in \
   app/modules/audit/schemas.py \
+  app/interfaces/project_agents.py \
   app/modules/authorization/api/__init__.py \
   app/modules/authorization/api/project_guide_projections.py \
   app/modules/projects/api/__init__.py \
   app/modules/projects/api/guide_compilation_projections.py \
   app/modules/projects/guide_compilation/models.py \
   app/modules/projects/guide_compilation/repository.py \
-  app/modules/projects/guide_compilation/projections.py
+  app/modules/projects/guide_compilation/projections.py \
+  app/modules/projects/models.py \
+  app/modules/projects/repository.py \
+  app/modules/projects/submission_policy_compiler.py \
+  app/modules/projects/service.py
 do
   uv run coverage report --include="${source}" --precision=2 --fail-under=90
 done
@@ -273,10 +375,44 @@ python3 scripts/check_chunk_state_sync.py \
 git diff --check a95a0b02d7c546b2440f6b8dd8215a4be07671ff
 ```
 
-The final implementation runs all seven canonical semantic lanes against the
-repository's pinned PostgreSQL, Redis, and MinIO services and independently
-reconciles exact node custody. Hosted CI must enforce the same exact per-file
-90 percent floors; aggregate coverage cannot hide a weak changed file.
+With the repository-pinned PostgreSQL and MinIO services healthy and
+`WORKSTREAM_TEST_ADMIN_DATABASE_URL` and `WORKSTREAM_TEST_MINIO_ENDPOINT` set,
+the final implementation executes this exact semantic proof from `backend/`:
+
+```bash
+rm -rf .ci/test-lanes/04a3
+mkdir -p .ci/test-lanes/04a3/collect .ci/test-lanes/04a3/lanes
+uv run python scripts/run_test_lanes.py --collect-only \
+  --metadata-dir .ci/test-lanes/04a3/collect \
+  --summary-json .ci/test-lanes/04a3/collect-summary.json
+uv run python scripts/validate_test_lane_evidence.py \
+  --metadata-dir .ci/test-lanes/04a3/collect \
+  --summary-json .ci/test-lanes/04a3/collect-summary.json
+for lane in shared_foundations_a shared_foundations_b schema_contracts_a \
+  schema_contracts_b schema_contracts_c project_lifecycle task_lifecycle
+do
+  uv run python scripts/run_test_lanes.py --lane "${lane}" \
+    --metadata-dir ".ci/test-lanes/04a3/lanes/${lane}/metadata" \
+    --summary-json ".ci/test-lanes/04a3/lanes/${lane}/summary.json" \
+    --timeout-seconds 1200
+done
+uv run python -m scripts.merge_test_lane_evidence \
+  --input-root .ci/test-lanes/04a3/lanes \
+  --metadata-dir .ci/test-lanes/04a3/run \
+  --summary-json .ci/test-lanes/04a3/run-summary.json
+uv run python scripts/validate_test_lane_evidence.py \
+  --metadata-dir .ci/test-lanes/04a3/run \
+  --summary-json .ci/test-lanes/04a3/run-summary.json
+for source in .ci/test-lanes/04a3/run/.coverage.*; do cp "${source}" .; done
+uv run coverage combine
+uv run coverage report --precision=2 --fail-under=78
+```
+
+The merger input layout must match the canonical hosted bundle layout; if the
+local runner emits a different safe directory shape, use the repository's
+documented merge-tree preparation rather than modifying evidence. Hosted CI
+enforces the same exact per-file 90 percent floors; aggregate coverage cannot
+hide a weak changed file.
 
 ## Required reviews
 
