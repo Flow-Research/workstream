@@ -340,8 +340,9 @@ material validation, not provider/object-store I/O. No network/provider I/O or
 serialized material/capability may cross the transaction.
 
 The existing `WS-POL-003-04B` file remains an inactive, non-executable planning
-skeleton and is superseded for sequencing/ownership by this executable
-contract, PLAN, CHUNK_MAP, STATUS, and CURRENT_STATE. The atomic chunk-state
+skeleton and is non-authoritative for current sequencing/ownership until its
+own exact planning PR; PLAN, CHUNK_MAP, STATUS, and CURRENT_STATE govern the
+current order. The atomic chunk-state
 rule forbids rewriting a second chunk contract in this PR. 04B must receive its
 own exact current-main contract after 04A3, 04A2, AUTH-12J, and AUTH-12B2 merge;
 it may only cut over to those already-owned hidden operations.
@@ -498,6 +499,7 @@ With the repository-pinned PostgreSQL and MinIO services healthy and
 the final implementation executes this exact semantic proof from `backend/`:
 
 ```bash
+bash -s <<'BASH'
 set -euo pipefail
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 rm -rf -- .ci/test-lanes/04a3
@@ -550,6 +552,7 @@ for source in \
 do
   uv run coverage report --include="${source}" --precision=2 --fail-under=90
 done
+BASH
 ```
 
 Hosted CI enforces the same exact per-file 90 percent floors; aggregate
