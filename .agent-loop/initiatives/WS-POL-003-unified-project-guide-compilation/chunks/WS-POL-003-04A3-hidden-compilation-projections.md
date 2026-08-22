@@ -127,8 +127,8 @@ exact unified source state:
 status = queued
 current_step = queued
 celery_task_id = deterministic task ID for the attempt/setup generation
-continuation_verification_job_id = null
-continuation_started_at = null
+continuation_verification_job_id / continuation_started_at = both null or the
+  exact stored ART continuation pair for this snapshot/setup generation
 error_code = null
 error_artifact_incident_id = null
 error_summary = null
@@ -141,7 +141,7 @@ every setup-row output ID = null
 The guide must be the exact locked draft guide/version from the attempt. The
 setup-bound snapshot ID/hash must be exact and no newer snapshot may exist for
 that guide/version. Legacy `running_*`, `dispatch_pending`, enqueue
-failure/mismatch, terminal, continuation-bearing, error-bearing,
+failure/mismatch, terminal, mismatched/partial continuation, error-bearing,
 started/finished, wrong-task,
 stale-generation, stale-snapshot, or setup-output-bearing rows deny before
 authorization consumption or projection creation. 04A3 never writes setup-row
@@ -246,8 +246,9 @@ The sufficiency output envelope uses domain
 keys `id`, `project_id`, `guide_id`, `guide_version`, `source_snapshot_id`,
 `source_snapshot_hash`, `status`, `findings`, `summary`, `agent_name`,
 `agent_version`, `project_setup_run_id`, `setup_generation`,
-`agent_material_sha256`, and `agent_material_byte_count`. The policy output
-envelope uses domain
+`agent_material_sha256`, `agent_material_byte_count`, and `created_by`; report
+`created_by` is the exact authority actor-profile ID. The policy output envelope
+uses domain
 `workstream.project_submission_artifact_policy_projection.output.v1` and exact
 keys `id`, `project_id`, `guide_id`, `guide_version`, `source_snapshot_id`,
 `source_snapshot_hash`, `policy_version`, `lifecycle_status`, `policy_body`,
@@ -286,10 +287,13 @@ Receipt is only decision-event ID, actor-profile ID, identity-link ID, fixed
 service identity, and resource-context digest. The two final-facts types expose
 only the locked lineage/output data listed above and cannot accept ORM,
 session, component, action, permission, resource/domain, service, operation,
-correlation, output-ID selectors, or arbitrary mappings. Each purpose-specific
-AUTH port inserts and checks its own component/action/permission/resource/
-domain/service constants and derives operation/correlation/output IDs. Port
-swapping is therefore structurally invalid, not a caller-selectable branch.
+correlation, output-ID selectors, or arbitrary mappings. The AUTH public module
+owns pure component-specific operation/correlation/output-ID derivation
+functions. PROJECTS uses those functions after resolving the attempt, and each
+purpose-specific AUTH port independently re-derives and checks the IDs plus its
+component/action/permission/resource/domain/service constants. None originates
+in the public command. Port swapping is therefore structurally invalid, not a
+caller-selectable branch.
 
 The custody row stores exactly: operation/correlation/component; exact project,
 guide/version, snapshot ID/hash, setup run/generation/task ID; attempt, request
@@ -316,8 +320,10 @@ no new event or product row.
   state or legacy step truth. Extract only pure canonical construction helpers
   proven reusable by tests.
 
-The exact transaction order is: non-locking attempt-to-project lookup; prepare
-the component-specific AUTH capability; lock attempt then request custody; call
+The exact transaction order is: non-locking attempt/project/compilation lookup
+and pure component transform; forbidden or unprojectable components stop here
+with no AUTH or ART effect. Then prepare the component-specific AUTH capability;
+lock attempt then request custody; call
 the unchanged `GuideSufficiencyMaterialPort.load`, which takes its existing
 grouped header lock on guide, snapshot, and setup and then locks snapshot items
 and ART extraction rows in adapter order; lock the prior 04A3
@@ -424,10 +430,12 @@ contract before editing it.
   canonical report/policy/source-usage content.
 - Negative-effect assertions prove zero model calls, setup writes, approval,
   post-submit output, or wrong component rows.
-- A counting ART material-port test proves prepare denial, revoked-service
-  denial, replay-revalidation denial, forbidden component, and unprojectable
-  legacy-v1 output each perform zero material loads. A seeded order mutant that
-  loads ART material before AUTH preparation must be killed.
+- A counting ART material-port test proves prepare/current-service denial,
+  forbidden component, and unprojectable legacy-v1 output each perform zero
+  material loads. Changed replay or stored-decision mismatch performs exactly
+  one bounded material load but zero AUTH consumption, new evidence, product,
+  or custody effect. A seeded order mutant that loads ART material before AUTH
+  preparation must be killed.
 - Architecture tests prove route-unreachability, deny-default production,
   public-boundary direction, and no call to the three legacy inference methods.
 - Seeded faults remove one source/generation/result/component/task/correlation
