@@ -5,7 +5,7 @@ Date: 2026-08-22. Risk: L1. Outcome: PASS locally; human merge required.
 ## Review target and boundary
 
 - Protected-main base: `a95a0b02d7c546b2440f6b8dd8215a4be07671ff`.
-- Exact semantic-test head: `8c719ec0ca25c14bcedd70450753cfa7807e8a45`.
+- Exact semantic-test head: `24d75f9d667a6dba8de98ad098d1afe467462dc0`.
 - The chunk adds two hidden, route-unreachable PROJECTS operations that project
   one persisted unified compilation into the canonical sufficiency report and
   draft submission-artifact policy.
@@ -39,6 +39,9 @@ framework, generic component API, or duplicate lifecycle.
 | Unrelated repository tests were briefly added to inflate coverage | The padding test was removed before final verification | Final diff and exact 4,261-node manifest contain only the meaningful selection proof |
 | A stale phrase still described the future cutover as a worker cutover | The documentation now describes the boundary as background-execution cutover | Stale-authorization documentation gate PASS |
 | The projected policy admitted Cloudflare R2 before its storage boundary exists | R2 was removed from the v1 transform and contract; only local and S3 remain allowed | Focused payload tests, stale-artifact contract gate, and all seven semantic lanes PASS |
+| Projection custody trusted a caller-supplied output digest | The insert guard now reconstructs the exact referenced report or policy envelope and recomputes its canonical SHA-256 in PostgreSQL | SQL/Python parity tests plus a tamper-before-custody rejection test against migrated PostgreSQL |
+| Projected source provenance was open to late insert or reassignment | Database guards now reject post-custody inserts and any update from or into a protected report while preserving ordinary legacy-row updates | Real-PostgreSQL protected insert, protected reassignment, and unprotected control-row tests |
+| Artifact paths with surrounding whitespace or non-normalized Unicode were accepted | The pure transform now requires the supplied path to be stripped and NFC-normalized before canonical policy validation | Focused whitespace and decomposed-Unicode rejection tests |
 
 ## Focused verification
 
@@ -54,36 +57,36 @@ framework, generic component API, or duplicate lifecycle.
 ## Canonical semantic-lane proof
 
 The exact semantic-test head ran in Linux against real PostgreSQL 16 and MinIO.
-All seven lanes used one common 4,261-node manifest and ran sequentially.
+All seven lanes used one common 4,265-node manifest and ran sequentially.
 
 | Lane | Collected | Completed | Skipped | Deselected | Exit | Seconds |
 |---|---:|---:|---:|---:|---:|---:|
-| shared_foundations_a | 1,541 | 1,541 | 0 | 0 | 0 | 225.134 |
-| shared_foundations_b | 1,508 | 1,508 | 0 | 0 | 0 | 229.071 |
-| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 36.814 |
-| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 11.185 |
-| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 20.452 |
-| project_lifecycle | 674 | 674 | 0 | 0 | 0 | 490.618 |
-| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 303.089 |
+| shared_foundations_a | 1,542 | 1,542 | 0 | 0 | 0 | 226.082 |
+| shared_foundations_b | 1,507 | 1,507 | 0 | 0 | 0 | 228.342 |
+| schema_contracts_a | 73 | 73 | 0 | 0 | 0 | 37.759 |
+| schema_contracts_b | 3 | 3 | 0 | 0 | 0 | 12.921 |
+| schema_contracts_c | 7 | 7 | 0 | 0 | 0 | 27.823 |
+| project_lifecycle | 678 | 678 | 0 | 0 | 0 | 493.210 |
+| task_lifecycle | 455 | 455 | 0 | 0 | 0 | 290.746 |
 
-The independent merger and validator accepted 4,261 of 4,261 nodes with zero
+The independent merger and validator accepted 4,265 of 4,265 nodes with zero
 duplicates, skips, deselections, interruptions, or retries. Aggregate runner
-time was 1,316.234 seconds. Every lane reported successful database and MinIO
+time was 1,316.883 seconds. Every lane reported successful database and MinIO
 cleanup. The retained collect-summary, run-summary, and combined-coverage
 digests are, respectively,
-`f2748afa216a0707a707f20d0cdfcd05925b2d2c7ecbab5c3cd58d95f701220e`,
-`b731f682ac00a20904b6792c8f4262130cfac8e52a7ba77ed4f52aa1602b4bc4`,
-and `42dd3654b976425e51830f5564634f49dc1100ba6d47492c1db0a2e9863b2cf6`.
+`d537da7fea563bf42f998313af9fe438b0c328e7b56d6030937b88b70996c3c1`,
+`b7bef91af203761890aec0dc08fbce507e41202c1ade8ee41c817e63c4d5c7dd`,
+and `ec9f3454c9dd9bcd819d51a16adb44785090653b226e63a930d3efdd5953004a`.
 
 Combined branch coverage passed every required floor:
 
-- Repository aggregate: 91.32%; floor 78%.
+- Repository aggregate: 91.34%; floor 78%.
 - Audit projection vocabulary: 95.69%.
 - AUTH projection API: 100%.
 - PROJECTS projection API: 100%.
 - Projection models: 100%.
 - Pure projection payloads: 100%.
-- Projection repository: 96.98%.
+- Projection repository: 97.49%.
 - Projection orchestration: 95.59%.
 - PROJECTS models: 100%.
 - Broad legacy PROJECTS repository: 78.47%; non-regression floor 78%.
@@ -109,6 +112,12 @@ The following attempts are not product evidence:
    the deferred R2 storage scheme. Both findings were corrected and the full
    exact-head semantic proof was rerun; the failed hosted run is not product
    evidence.
+7. One hardening proof was stopped after an additional adversarial review found
+   that an unprotected provenance row could be reassigned into a protected
+   report. The guard and regression were added before the final exact-head run.
+8. One relaunch stopped after collection because the restarted tester lacked
+   its explicit database environment. No lane executed; the final command pins
+   both PostgreSQL and MinIO endpoints and uses a fresh evidence root.
 
 ## Review and delivery state
 
