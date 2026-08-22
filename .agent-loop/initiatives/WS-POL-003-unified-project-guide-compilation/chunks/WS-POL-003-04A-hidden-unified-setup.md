@@ -307,7 +307,7 @@ No policy or setup-run projection occurs.
 
 ### Hidden and simple
 
-- No existing worker, queue, router, continuation, API schema, setup-run
+- No existing task executor, queue, router, continuation, API schema, setup-run
   status, or live call graph changes.
 - The candidate orchestrator calls `compile_project_guide` only. It cannot
   call `analyze_guide_sufficiency`, `derive_submission_artifact_policy`, or
@@ -545,7 +545,7 @@ Stop and amend/re-review before implementation if:
    exactly-once guarantee;
 6. invalid output cannot be distinguished from transport uncertainty without
    exposing provider details;
-7. setup-ledger mutation, a live worker/route, AUTH private-attribute access
+7. setup-ledger mutation, a live task-executor/route, AUTH private-attribute access
    outside its owner, new AUTH action or public-contract change, schema,
    migration, dependency, or component policy projection is required;
 8. the candidate path can reach a legacy inference method or a second provider
