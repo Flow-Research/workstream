@@ -77,7 +77,7 @@ The trusted transforms are closed:
   are copied and canonicalized there. File/package limits
   are copied; packaging is required with sole format `zip`; manifest and
   SHA-256 checks are required; and allowed storage is the canonical sorted
-  `local`, `r2`, `s3` set. The transform validates
+  `local`, `s3` set. Cloudflare R2 remains deferred. The transform validates
   `SubmissionArtifactPolicyInput`, then reuses unchanged
   `ProjectService.canonical_agent_submission_policy_body` to canonicalize and
   prove the default floor before write. Effective-policy and checker

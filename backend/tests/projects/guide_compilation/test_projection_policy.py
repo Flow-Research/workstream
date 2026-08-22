@@ -99,7 +99,7 @@ def test_artifact_policy_transform_preserves_values_and_server_owned_order() -> 
         "manifest_required": True,
         "artifact_hash_required": True,
         "artifact_hash_algorithm": "sha256",
-        "allowed_storage_schemes": ["local", "r2", "s3"],
+        "allowed_storage_schemes": ["local", "s3"],
         "maximum_file_size_bytes": 123,
         "maximum_package_size_bytes": 456,
         "packaging": {

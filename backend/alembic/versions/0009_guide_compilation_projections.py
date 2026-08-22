@@ -605,8 +605,10 @@ def downgrade() -> None:
             "where derivation_source='unified_compilation') "
             "or exists(select 1 from guide_sufficiency_reports r where "
             "project_setup_run_id is not null and exists(select 1 from "
-            "guide_sufficiency_reports r2 where r2.source_snapshot_id=r.source_snapshot_id "
-            "and r2.project_setup_run_id is not null and r2.id<>r.id))"
+            "guide_sufficiency_reports other_report where "
+            "other_report.source_snapshot_id=r.source_snapshot_id "
+            "and other_report.project_setup_run_id is not null "
+            "and other_report.id<>r.id))"
         )
     ).scalar_one()
     if protected:

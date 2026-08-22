@@ -242,7 +242,7 @@ def test_report_and_policy_transforms_are_exact() -> None:
         "package_required": True,
         "allowed_package_formats": ["zip"],
     }
-    assert policy["allowed_storage_schemes"] == ["local", "r2", "s3"]
+    assert policy["allowed_storage_schemes"] == ["local", "s3"]
 
 
 @pytest.mark.parametrize(

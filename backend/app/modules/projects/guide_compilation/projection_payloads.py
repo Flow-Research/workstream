@@ -138,7 +138,7 @@ def policy_body(
         manifest_required=True,
         artifact_hash_required=True,
         artifact_hash_algorithm="sha256",
-        allowed_storage_schemes=["local", "r2", "s3"],
+        allowed_storage_schemes=["local", "s3"],
         maximum_file_size_bytes=proposal.maximum_file_size_bytes,
         maximum_package_size_bytes=proposal.maximum_package_size_bytes,
         packaging={"package_required": True, "allowed_package_formats": ["zip"]},
