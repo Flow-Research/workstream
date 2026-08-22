@@ -281,16 +281,21 @@ row, or custody row; it is never rewritten. Operators correct it through a new
 guide/setup generation.
 
 AUTH public API defines nominal frozen component-specific locator,
-`FinalFacts`, `AuthorityReceipt`, and prepared capability protocols. Each
-locator contains only project ID and attempt ID.
+`ProjectionIdentity`, `FinalFacts`, `AuthorityReceipt`, and prepared capability
+protocols. Each locator contains only project ID and attempt ID. Successful
+prepare exposes a frozen capability-issued identity containing operation ID,
+correlation ID, output ID, actor-profile ID, identity-link ID, and fixed service
+identity before product facts are constructed.
 Receipt is only decision-event ID, actor-profile ID, identity-link ID, fixed
 service identity, and resource-context digest. The two final-facts types expose
 only the locked lineage/output data listed above and cannot accept ORM,
 session, component, action, permission, resource/domain, service, operation,
 correlation, output-ID selectors, or arbitrary mappings. The AUTH public module
 owns pure component-specific operation/correlation/output-ID derivation
-functions. PROJECTS uses those functions after resolving the attempt, and each
-purpose-specific AUTH port independently re-derives and checks the IDs plus its
+functions. PROJECTS uses only the identity issued by the prepared capability to
+construct business content, output digest, and final facts; these fields are
+capability-issued, never caller-selected. Each purpose-specific AUTH port
+independently re-derives and checks the identity plus its
 component/action/permission/resource/domain/service constants. None originates
 in the public command. Port swapping is therefore structurally invalid, not a
 caller-selectable branch.
@@ -529,7 +534,7 @@ do
 done
 export COVERAGE_FILE=.ci/test-lanes/04a3/combined/.coverage
 test ! -e "${COVERAGE_FILE}"
-uv run coverage combine .ci/test-lanes/04a3/run
+uv run coverage combine --keep .ci/test-lanes/04a3/run
 uv run coverage report --precision=2 --fail-under=78
 for source in \
   app/modules/audit/schemas.py \
