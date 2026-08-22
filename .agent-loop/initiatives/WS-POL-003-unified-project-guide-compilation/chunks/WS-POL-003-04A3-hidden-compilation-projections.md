@@ -27,6 +27,13 @@ The methods are separate purpose-specific operations. There is no generic
 component selector and no caller-supplied status, hash, output, action, actor,
 or service identity.
 
+Both return an immutable receipt containing operation ID, attempt ID,
+component, output ID, output digest, and `projected` or `replayed`. A bounded
+`ProjectionError` exposes only `attempt_unavailable`, `component_forbidden`,
+`component_unprojectable`, `source_state_unavailable`,
+`service_authority_denied`, or `storage_unavailable`; it carries no raw result,
+material, database, provider, or authorization detail.
+
 ## Closed behavior
 
 | Compilation result | Sufficiency projection | Artifact-policy projection |
@@ -120,6 +127,8 @@ exact unified source state:
 status = queued
 current_step = queued
 celery_task_id = deterministic task ID for the attempt/setup generation
+continuation_verification_job_id = null
+continuation_started_at = null
 error_code = null
 error_artifact_incident_id = null
 error_summary = null
@@ -132,7 +141,8 @@ every setup-row output ID = null
 The guide must be the exact locked draft guide/version from the attempt. The
 setup-bound snapshot ID/hash must be exact and no newer snapshot may exist for
 that guide/version. Legacy `running_*`, `dispatch_pending`, enqueue
-failure/mismatch, terminal, error-bearing, started/finished, wrong-task,
+failure/mismatch, terminal, continuation-bearing, error-bearing,
+started/finished, wrong-task,
 stale-generation, stale-snapshot, or setup-output-bearing rows deny before
 authorization consumption or projection creation. 04A3 never writes setup-row
 output IDs. When the artifact-policy projection follows sufficiency, it may
@@ -190,13 +200,15 @@ ID is UUIDv5 URL namespace over
 `workstream.project-guide-projection:operation:<attempt-id>:<C>`; correlation ID
 uses the same input with `correlation`; output ID uses the same input with
 `output`; resource ID is the operation UUID.
-Final facts include the exact action/permission/resource/domain constants,
-operation/correlation/component, project/guide/version, snapshot ID/hash,
+Component-specific final facts include project/guide/version, snapshot ID/hash,
 setup run/generation/task ID and complete source-state digest, attempt/request
 operation/provider key, compilation/result/component/schema hashes, prior
 component operation/output/digest when required, derived output ID/digest, and
-current service actor/profile/link facts. Python and PostgreSQL canonical JSON
-digest vectors must match for every field and reject every one-field mutation.
+locked material digest and byte count for sufficiency. The component-specific
+AUTH port injects and validates the exact component/action/permission/resource/
+domain/service/operation/correlation constants and current service actor/link
+facts. Python and PostgreSQL canonical JSON digest vectors must match for every
+field and reject every one-field mutation.
 
 All hashes use canonical JSON (UTF-8, sorted keys, compact separators, no
 non-finite values) with these closed envelopes:
@@ -205,6 +217,7 @@ non-finite values) with these closed envelopes:
 {"domain":"workstream.project_guide_projection.source_state.v1","facts":{
   guide_id,guide_version,guide_status,source_snapshot_id,source_snapshot_hash,
   setup_run_id,setup_generation,status,current_step,celery_task_id,
+  continuation_verification_job_id,continuation_started_at,
   error_code,error_artifact_incident_id,error_summary,
   post_submit_derivation_summary,started_at,finished_at,
   output_sufficiency_report_id,output_submission_artifact_policy_id,
@@ -218,17 +231,34 @@ non-finite values) with these closed envelopes:
 
 Null is retained, UUID/date values are canonical strings, arrays retain their
 declared order, and no optional field is omitted. The material digest is the
-attempt's existing `guide_material_hash`; policy source-material references are
-derived from the same locked ART usage rows. Output ID UUIDv5 input is
+attempt's existing `guide_material_hash`. After the single locked ART load,
+PROJECTS rebuilds `VerifiedGuideMaterialSnapshot` with the existing
+`build_verified_guide_sufficiency_material` and
+`VerifiedGuideMaterialSnapshot.from_material`, requires its SHA-256 to equal
+that attempt digest, and records `len(canonical_payload)` as material byte
+count. Both values enter sufficiency facts, output digest, custody, and replay.
+Policy source-material references are derived from the same locked ART usage
+rows. Output ID UUIDv5 input is
 `workstream.project-guide-projection:output:<attempt-id>:<component>`.
 
-AUTH public API defines nominal frozen `ProjectionLocator`, component-specific
-`FinalFacts`, `AuthorityReceipt`, and prepared capability protocols. Locator is
-only project ID, attempt ID, component, operation ID, and correlation ID.
+The persisted `project_guide_compilation_result.v1` schema is unchanged. The
+pure projection transform applies the width/path/identifier checks above. A
+parseable accepted v1 component that cannot project returns stable
+`component_unprojectable` with zero AUTH consumption, material load, business
+row, or custody row; it is never rewritten. Operators correct it through a new
+guide/setup generation.
+
+AUTH public API defines nominal frozen component-specific locator,
+`FinalFacts`, `AuthorityReceipt`, and prepared capability protocols. Each
+locator contains only project ID and attempt ID.
 Receipt is only decision-event ID, actor-profile ID, identity-link ID, fixed
 service identity, and resource-context digest. The two final-facts types expose
-the complete fields listed above and cannot accept ORM, session, action/service
-selectors, or arbitrary mappings.
+only the locked lineage/output data listed above and cannot accept ORM,
+session, component, action, permission, resource/domain, service, operation,
+correlation, output-ID selectors, or arbitrary mappings. Each purpose-specific
+AUTH port inserts and checks its own component/action/permission/resource/
+domain/service constants and derives operation/correlation/output IDs. Port
+swapping is therefore structurally invalid, not a caller-selectable branch.
 
 The custody row stores exactly: operation/correlation/component; exact project,
 guide/version, snapshot ID/hash, setup run/generation/task ID; attempt, request
@@ -273,7 +303,6 @@ The complete implementation surface is:
 ```text
 backend/app/modules/projects/api/__init__.py
 backend/app/modules/projects/api/guide_compilation_projections.py
-backend/app/interfaces/project_agents.py
 backend/app/modules/projects/guide_compilation/projections.py
 backend/app/modules/projects/guide_compilation/models.py
 backend/app/modules/projects/guide_compilation/repository.py
@@ -295,7 +324,6 @@ backend/tests/projects/guide_compilation/test_projection_policy.py
 backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/projects/guide_compilation/test_migration_authorized_persistence.py
 backend/tests/authorization/guide_compilation/test_migration_contract.py
-backend/tests/test_project_guide_compilation_contracts.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/test_alembic.py
 backend/scripts/run_test_lanes.py
@@ -357,6 +385,10 @@ contract before editing it.
   canonical report/policy/source-usage content.
 - Negative-effect assertions prove zero model calls, setup writes, approval,
   post-submit output, or wrong component rows.
+- A counting ART material-port test proves prepare denial, revoked-service
+  denial, replay-revalidation denial, forbidden component, and unprojectable
+  legacy-v1 output each perform zero material loads. A seeded order mutant that
+  loads ART material before AUTH preparation must be killed.
 - Architecture tests prove route-unreachability, deny-default production,
   public-boundary direction, and no call to the three legacy inference methods.
 - Seeded faults remove one source/generation/result/component/task/correlation
@@ -375,14 +407,13 @@ contract before editing it.
 cd backend
 uv run ruff check \
   alembic/env.py alembic/versions/0009_guide_compilation_projections.py \
-  app/db/models.py app/interfaces/project_agents.py \
+  app/db/models.py \
   app/modules/audit/schemas.py app/modules/authorization/api \
   app/modules/projects/api app/modules/projects/guide_compilation \
   app/modules/projects/models.py app/modules/projects/repository.py \
   scripts/behavior_ownership.py scripts/run_test_lanes.py \
   tests/projects/guide_compilation/test_projection_*.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
-  tests/test_project_guide_compilation_contracts.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py
@@ -396,25 +427,9 @@ uv run pytest -q \
   tests/projects/guide_compilation/test_migration_contract.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
-  tests/test_project_guide_compilation_contracts.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
-  tests/test_behavior_ownership.py tests/test_ci_test_lanes.py \
-  --cov=app --cov-branch --cov-report=
-for source in \
-  app/modules/audit/schemas.py \
-  app/interfaces/project_agents.py \
-  app/modules/authorization/api/__init__.py \
-  app/modules/authorization/api/project_guide_projections.py \
-  app/modules/projects/api/__init__.py \
-  app/modules/projects/api/guide_compilation_projections.py \
-  app/modules/projects/guide_compilation/models.py \
-  app/modules/projects/guide_compilation/repository.py \
-  app/modules/projects/guide_compilation/projections.py \
-  app/modules/projects/models.py \
-  app/modules/projects/repository.py
-do
-  uv run coverage report --include="${source}" --precision=2 --fail-under=90
-done
+  tests/test_behavior_ownership.py tests/test_ci_test_lanes.py
+uv run docstr-coverage --config .docstr.yaml
 uv run python -m scripts.authorization_boundary validate \
   --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
 uv run python -m scripts.behavior_ownership validate
@@ -431,7 +446,9 @@ With the repository-pinned PostgreSQL and MinIO services healthy and
 the final implementation executes this exact semantic proof from `backend/`:
 
 ```bash
-rm -rf .ci/test-lanes/04a3
+set -euo pipefail
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+rm -rf -- .ci/test-lanes/04a3
 mkdir -p .ci/test-lanes/04a3/collect .ci/test-lanes/04a3/lanes
 uv run python scripts/run_test_lanes.py --collect-only \
   --metadata-dir .ci/test-lanes/04a3/collect \
@@ -454,16 +471,41 @@ uv run python -m scripts.merge_test_lane_evidence \
 uv run python scripts/validate_test_lane_evidence.py \
   --metadata-dir .ci/test-lanes/04a3/run \
   --summary-json .ci/test-lanes/04a3/run-summary.json
-for source in .ci/test-lanes/04a3/run/.coverage.*; do cp "${source}" .; done
-uv run coverage combine
+mkdir .ci/test-lanes/04a3/combined
+shopt -s nullglob
+coverage_files=(.ci/test-lanes/04a3/run/.coverage.*)
+test "${#coverage_files[@]}" -eq 7
+for source in "${coverage_files[@]}"
+do
+  destination=".ci/test-lanes/04a3/combined/$(basename "${source}")"
+  test -f "${source}"
+  test ! -L "${source}"
+  test ! -e "${destination}"
+  cp -- "${source}" "${destination}"
+  test "$(shasum -a 256 "${source}" | cut -d' ' -f1)" = \
+    "$(shasum -a 256 "${destination}" | cut -d' ' -f1)"
+done
+export COVERAGE_FILE=.ci/test-lanes/04a3/combined/.coverage
+uv run coverage combine .ci/test-lanes/04a3/combined
 uv run coverage report --precision=2 --fail-under=78
+for source in \
+  app/modules/audit/schemas.py \
+  app/modules/authorization/api/__init__.py \
+  app/modules/authorization/api/project_guide_projections.py \
+  app/modules/projects/api/__init__.py \
+  app/modules/projects/api/guide_compilation_projections.py \
+  app/modules/projects/guide_compilation/models.py \
+  app/modules/projects/guide_compilation/repository.py \
+  app/modules/projects/guide_compilation/projections.py \
+  app/modules/projects/models.py \
+  app/modules/projects/repository.py
+do
+  uv run coverage report --include="${source}" --precision=2 --fail-under=90
+done
 ```
 
-The merger input layout must match the canonical hosted bundle layout; if the
-local runner emits a different safe directory shape, use the repository's
-documented merge-tree preparation rather than modifying evidence. Hosted CI
-enforces the same exact per-file 90 percent floors; aggregate coverage cannot
-hide a weak changed file.
+Hosted CI enforces the same exact per-file 90 percent floors; aggregate
+coverage cannot hide a weak changed file.
 
 ## Required reviews
 
