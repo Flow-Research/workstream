@@ -375,6 +375,7 @@ backend/tests/projects/guide_compilation/test_projection_call_graph.py
 backend/tests/projects/guide_compilation/test_projection_policy.py
 backend/tests/projects/guide_compilation/test_migration_contract.py
 backend/tests/projects/guide_compilation/test_migration_authorized_persistence.py
+backend/tests/projects/guide_compilation/test_request_operation_postgresql.py
 backend/tests/authorization/guide_compilation/test_migration_contract.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/test_alembic.py
@@ -435,7 +436,10 @@ contract before editing it.
   downgrade/re-upgrade, exact 0008 round-trip preservation while restoring
   0009 as current head, generation reuse of one source snapshot, and direct
   SQL UPDATE/DELETE/TRUNCATE rejection for the operation and protected
-  canonical report/policy/source-usage content.
+  canonical report/policy/source-usage content. The existing request-operation
+  immutability test is updated only for the 0009 TRUNCATE case: it must observe
+  PostgreSQL's exact foreign-key refusal from the new projection-custody child,
+  while UPDATE and DELETE retain the existing request-custody trigger denial.
 - Negative-effect assertions prove zero model calls, setup writes, approval,
   post-submit output, or wrong component rows.
 - A counting ART material-port test proves prepare/current-service denial,
@@ -469,6 +473,7 @@ uv run ruff check \
   scripts/behavior_ownership.py scripts/run_test_lanes.py \
   tests/projects/guide_compilation/test_projection_*.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
+  tests/projects/guide_compilation/test_request_operation_postgresql.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py
@@ -481,6 +486,7 @@ uv run pytest -q \
   tests/projects/guide_compilation/test_projection_policy.py \
   tests/projects/guide_compilation/test_migration_contract.py \
   tests/projects/guide_compilation/test_migration_authorized_persistence.py \
+  tests/projects/guide_compilation/test_request_operation_postgresql.py \
   tests/authorization/guide_compilation/test_migration_contract.py \
   tests/architecture/test_authorization_boundary.py tests/test_alembic.py \
   tests/test_behavior_ownership.py tests/test_ci_test_lanes.py
