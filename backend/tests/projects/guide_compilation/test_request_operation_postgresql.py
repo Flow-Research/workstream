@@ -263,23 +263,38 @@ async def test_request_insert_guard_rejects_stale_digest_evidence(
 
 
 @pytest.mark.parametrize(
-    "statement",
+    ("statement", "expected_error"),
     (
-        "update project_guide_compilation_request_operations set setup_generation=2",
-        "delete from project_guide_compilation_request_operations",
-        "truncate table project_guide_compilation_request_operations",
+        (
+            "update project_guide_compilation_request_operations set setup_generation=2",
+            "request custody is immutable",
+        ),
+        (
+            "delete from project_guide_compilation_request_operations",
+            "request custody is immutable",
+        ),
+        (
+            "truncate table project_guide_compilation_request_operations",
+            "referenced in a foreign key constraint",
+        ),
     ),
 )
 @pytest.mark.asyncio
 async def test_request_operation_rejects_every_change(
-    clean_postgres_database: str, statement: str
+    clean_postgres_database: str, statement: str, expected_error: str
 ) -> None:
+    """Every mutation is rejected and leaves the request receipt intact."""
     await _create_request(clean_postgres_database)
     engine = create_async_engine(clean_postgres_database)
     try:
         async with engine.begin() as connection:
-            with pytest.raises(DBAPIError, match="request custody is immutable"):
+            with pytest.raises(DBAPIError, match=expected_error):
                 await connection.execute(text(statement))
+        async with engine.connect() as connection:
+            count = await connection.scalar(
+                text("select count(*) from project_guide_compilation_request_operations")
+            )
+        assert count == 1
     finally:
         await engine.dispose()
 
