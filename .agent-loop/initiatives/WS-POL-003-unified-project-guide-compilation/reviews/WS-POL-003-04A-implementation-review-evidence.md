@@ -88,7 +88,7 @@ Combined branch coverage passed all required floors:
 - AUTH guide-compilation adapter: 100 percent.
 - PROJECTS guide-compilation public API files: 100 percent.
 - Context builder: 100 percent.
-- Orchestrator: 93.33 percent.
+- Orchestrator: 93.28 percent.
 - Contracts: 99.00 percent.
 - Service: 93.08 percent.
 
