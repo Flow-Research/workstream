@@ -386,6 +386,7 @@ backend/scripts/behavior_ownership.py
 backend/tests/test_behavior_ownership.py
 .ci/behavior-ownership/partition.v1.json
 .ci/behavior-ownership/auth/project-guide-compilation-projection-ports.json
+.ci/behavior-ownership/lifecycle/project-guide-compilation-projection-payloads.json
 .ci/behavior-ownership/lifecycle/project-guide-compilation-projections.json
 .github/workflows/backend.yml
 docs/architecture_data_model.md
