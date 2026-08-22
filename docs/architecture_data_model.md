@@ -517,7 +517,7 @@ canonical report from a persisted `ProjectGuideCompilation`. Its immutable
 attempt, compilation, setup generation, component and result hashes, verified
 material digest and byte count, and authorization decision. It leaves the
 `ProjectSetupRun` unchanged and remains unreachable until its fixed-service
-authorization and worker cutover are activated.
+authorization and background-execution cutover are activated.
 
 ## GuideSufficiencyReportSourceUsage
 

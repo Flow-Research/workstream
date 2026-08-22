@@ -130,7 +130,8 @@ sufficiency report and, when permitted by that result, one draft submission
 artifact policy. They do not call a model, change setup status or output
 pointers, approve policy, or enqueue work. Operators should continue to rely on
 the existing setup APIs; no manual repair or direct database invocation of the
-hidden projector is supported before the authorization and worker cutover.
+hidden projector is supported before the authorization and background-execution
+cutover.
 
 AUTH-11C2 separately exposes current active-guide configuration through the
 following endpoints:
