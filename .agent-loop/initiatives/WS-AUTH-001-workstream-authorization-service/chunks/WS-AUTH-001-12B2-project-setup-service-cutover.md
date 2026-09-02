@@ -41,3 +41,7 @@ contribution behavior, or compatibility paths.
 All-pairs service denial, PREP/transition binding, command manifest, POL-04A
 hidden integration, hosted coverage, and all L1 tracks. Human
 focus: ledger authority only; POL owns the cutover.
+
+## Merge state
+
+- Outcome on merge: `planned`

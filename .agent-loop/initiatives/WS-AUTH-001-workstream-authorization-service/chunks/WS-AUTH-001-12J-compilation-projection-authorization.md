@@ -250,10 +250,14 @@ when normative docs change and CI-integrity review only if lane, workflow,
 coverage, ownership, or test-infrastructure files change. Evaluate external
 review comments against this contract; do not apply them blindly.
 
-## Outcome on merge
+## Implementation outcome
 
 `WS-AUTH-001-12J` is `Complete`: AUTH supplies the two exact concrete
 projection adapters, but the unified setup flow remains hidden. After both
 12J and `WS-POL-003-04A2` are complete, `WS-AUTH-001-12B2` may activate only
 the exact setup-finalization boundary. `WS-POL-003-04B` remains the sole owner
 of the later live cutover and legacy inference-path removal.
+
+## Merge state
+
+- Outcome on merge: `planned`

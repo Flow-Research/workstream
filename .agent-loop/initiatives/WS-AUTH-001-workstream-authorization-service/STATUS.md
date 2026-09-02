@@ -31,8 +31,8 @@ not current start requirements.
 
 - AUTH-12J and POL-04A2 may proceed after complete POL-04A3. AUTH-12J installs
   only the two exact projection adapters; POL-04A2 owns hidden finalization.
-- AUTH-12B2 follows both AUTH-12J and POL-04A2 and activates only the exact
-  setup-finalization authority.
+- `WS-AUTH-001-12B2` is Planned after both AUTH-12J and POL-04A2 and activates
+  only the exact setup-finalization authority.
 - AUTH-12F4 follows hidden POL-05A and activates approval of stored unified
   pre-submit policy; it performs no inference.
 - AUTH-12G follows hidden POL-06A and activates deterministic stored
