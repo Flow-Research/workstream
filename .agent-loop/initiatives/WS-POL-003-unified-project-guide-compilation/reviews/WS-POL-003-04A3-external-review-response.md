@@ -13,6 +13,10 @@
   validator. Focused projection tests now prove rejection of whitespace and
   non-NFC values, traversal, absolute paths, empty segments, local separators,
   and storage references without adding another path-validation implementation.
+  Paths already rejected by the current proposal schema have separate
+  persisted-v1 coverage using model construction only to reach and prove the
+  projection-owned legacy-input boundary; invalid objects are not created at
+  test collection time.
 
 ## Comments deferred
 

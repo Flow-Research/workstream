@@ -141,21 +141,6 @@ def test_artifact_policy_transform_requires_a_persisted_proposal() -> None:
         SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=1,
             maximum_package_size_bytes=2,
-            required_artifacts=("../private.txt",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("/absolute.txt",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("nested//result.json",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
             required_artifacts=("nested\\result.json",),
         ),
         SubmissionArtifactPolicyProposal(
@@ -175,6 +160,24 @@ def test_unprojectable_v1_policy_fails_without_best_effort_repair(
 ) -> None:
     """Reject incompatible persisted-v1 text instead of rewriting it."""
     with pytest.raises((PolicySetupBlocked, ValueError)):
+        _policy_body(cast(AsyncSession, None), proposal)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["../private.txt", "/absolute.txt", "nested//result.json"],
+)
+def test_persisted_v1_noncanonical_path_fails_at_projection(path: str) -> None:
+    """Reject a persisted legacy path at the projection-owned boundary."""
+    proposal = SubmissionArtifactPolicyProposal.model_construct(
+        maximum_file_size_bytes=1,
+        maximum_package_size_bytes=2,
+        required_artifacts=(path,),
+        forbidden_artifacts=(),
+        required_evidence=(),
+        attestation_terms=(),
+    )
+    with pytest.raises(PolicySetupBlocked, match="artifact path"):
         _policy_body(cast(AsyncSession, None), proposal)
 
 
