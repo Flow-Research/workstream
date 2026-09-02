@@ -51,6 +51,7 @@ from app.modules.projects.guide_compilation.contracts import (
 from app.modules.projects.post_submit_policy import (
     project_guide_post_submission_capabilities,
 )
+from app.modules.projects.setup_queue import pre_submit_setup_task_id
 
 SHA256 = "sha256:" + "a" * 64
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -290,14 +291,18 @@ async def _seed_project_rows(
                 text(
                     "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
                     "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
-                    "current_step,created_by) values(:setup,:project,:guide,'v1',:snapshot,"
-                    ":hash,:generation,'queued','guide_material_verified','test')"
+                    "current_step,celery_task_id,created_by) values("
+                    ":setup,:project,:guide,'v1',:snapshot,:hash,:generation,"
+                    "'queued','queued',:task_id,'test')"
                 ),
                 {
                     **sql_values,
                     "setup": str(values[f"setup_{generation}"]),
                     "hash": SHA256,
                     "generation": generation,
+                    "task_id": pre_submit_setup_task_id(
+                        str(values[f"setup_{generation}"]), generation
+                    ),
                 },
             )
         for table in reversed(

@@ -46,6 +46,21 @@ AUTH-12F4, 12G, 12B2, and 12H are narrow authorization/activation gates placed
 after the corresponding hidden POL behavior and before its live cutover. They
 are not blanket prerequisites for POL-01.
 
+The hidden delivery sequence after merged POL-04A is deliberately split:
+
+```text
+POL-04A hidden compilation
+-> POL-04A3 hidden deterministic component projections
+-> {POL-04A2 hidden finalization, AUTH-12J projection authority}
+   (logical siblings; migration-bearing delivery is serialized and rebased)
+-> AUTH-12B2 finalization authority after {POL-04A2, AUTH-12J}
+-> POL-04B explicit-PM-request live cutover
+```
+
+POL-04A3 creates canonical sufficiency and artifact-policy drafts from the one
+persisted compilation without another model call. It does not mutate setup
+state or expose a live caller.
+
 ART-04B1 supplies the complete typed pre-submit catalogue and effective-plan
 compiler: mandatory/non-selectable platform coverage plus its closed selectable
 project-rule namespace. ART-04B2/04B3 retain ART scratch/default execution.

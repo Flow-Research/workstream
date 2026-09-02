@@ -397,3 +397,142 @@ class ProjectGuideCompilation(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class ProjectGuideComponentProjectionOperation(Base):
+    """Immutable authority and lineage custody for one projected component."""
+
+    __tablename__ = "project_guide_component_projection_operations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["attempt_id", "project_id", "guide_id", "source_snapshot_id", "setup_run_id", "setup_generation"],
+            [
+                "project_guide_compilation_attempts.id",
+                "project_guide_compilation_attempts.project_id",
+                "project_guide_compilation_attempts.guide_id",
+                "project_guide_compilation_attempts.source_snapshot_id",
+                "project_guide_compilation_attempts.setup_run_id",
+                "project_guide_compilation_attempts.setup_generation",
+            ],
+            name="fk_projection_operation_exact_attempt",
+        ),
+        ForeignKeyConstraint(
+            ["compilation_id", "attempt_id"],
+            ["project_guide_compilations.id", "project_guide_compilations.attempt_id"],
+            name="fk_projection_operation_exact_compilation",
+        ),
+        ForeignKeyConstraint(
+            ["setup_run_id", "project_id", "guide_id", "source_snapshot_id", "setup_generation"],
+            [
+                "project_setup_runs.id",
+                "project_setup_runs.project_id",
+                "project_setup_runs.guide_id",
+                "project_setup_runs.source_snapshot_id",
+                "project_setup_runs.setup_generation",
+            ],
+            name="fk_projection_operation_exact_setup",
+        ),
+        ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_projection_operation_actor_link",
+        ),
+        UniqueConstraint(
+            "setup_run_id",
+            "setup_generation",
+            "component",
+            name="uq_projection_operation_setup_component",
+        ),
+        UniqueConstraint(
+            "compilation_id", "component", name="uq_projection_operation_compilation_component"
+        ),
+        UniqueConstraint("output_id", name="uq_projection_operation_output"),
+        UniqueConstraint(
+            "authorization_decision_event_id",
+            name="uq_projection_operation_decision_event",
+        ),
+        CheckConstraint(
+            "component in ('guide_sufficiency','submission_artifact_policy')",
+            name="ck_projection_operation_component",
+        ),
+        CheckConstraint(
+            "setup_generation > 0 and material_byte_count >= 0",
+            name="ck_projection_operation_positive_values",
+        ),
+        CheckConstraint(
+            "source_snapshot_hash " + _HASH_CHECK
+            + " and source_state_digest " + _HASH_CHECK
+            + " and result_hash " + _HASH_CHECK
+            + " and component_hash " + _HASH_CHECK
+            + " and output_digest " + _HASH_CHECK
+            + " and facts_digest " + _HASH_CHECK
+            + " and authority_resource_digest " + _HASH_CHECK
+            + " and (material_sha256 is null or material_sha256 " + _HASH_CHECK + ")",
+            name="ck_projection_operation_hashes",
+        ),
+        CheckConstraint(
+            "(component='guide_sufficiency' and prior_operation_id is null "
+            "and prior_output_id is null and prior_output_digest is null "
+            "and report_id is not null and policy_id is null "
+            "and material_sha256 is not null) or "
+            "(component='submission_artifact_policy' and prior_operation_id is not null "
+            "and prior_output_id is not null and prior_output_digest is not null "
+            "and report_id is null and policy_id is not null "
+            "and material_sha256 is null)",
+            name="ck_projection_operation_component_shape",
+        ),
+    )
+
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    correlation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    component: Mapped[str] = mapped_column(String(40), nullable=False)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    setup_run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    celery_task_id: Mapped[str] = mapped_column(String(155), nullable=False)
+    source_state_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    attempt_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_operation_id: Mapped[UUID] = mapped_column(
+        Uuid(), ForeignKey("project_guide_compilation_request_operations.operation_id")
+    )
+    provider_idempotency_key: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    compilation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    result_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    component_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    result_schema_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    compilation_agent_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    compilation_agent_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    material_sha256: Mapped[str | None] = mapped_column(String(71))
+    material_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    prior_operation_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("project_guide_component_projection_operations.operation_id")
+    )
+    prior_output_id: Mapped[UUID | None] = mapped_column(Uuid())
+    prior_output_digest: Mapped[str | None] = mapped_column(String(71))
+    output_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    report_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_sufficiency_reports.id")
+    )
+    policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_artifact_policies.id")
+    )
+    output_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    facts_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    authority_resource_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id"), nullable=False
+    )
+    identity_link_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    service_identity: Mapped[str] = mapped_column(String(160), nullable=False)
+    action_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    permission_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    authorization_decision_event_id: Mapped[str] = mapped_column(
+        ForeignKey("audit_events.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

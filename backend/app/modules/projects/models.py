@@ -1070,6 +1070,7 @@ class GuideSufficiencyReport(Base):
         Index(
             "uq_guide_sufficiency_reports_verified_snapshot",
             "source_snapshot_id",
+            "setup_generation",
             unique=True,
             postgresql_where=text("project_setup_run_id is not null"),
         ),

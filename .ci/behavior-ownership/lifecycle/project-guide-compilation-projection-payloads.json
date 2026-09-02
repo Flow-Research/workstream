@@ -1,0 +1,26 @@
+{
+  "behavior_id": "lifecycle.project_guide_compilation.projection_payloads",
+  "boundaries": [],
+  "callables": [
+    "app.modules.projects.guide_compilation.projection_payloads.policy_body",
+    "app.modules.projects.guide_compilation.projection_payloads.policy_digest",
+    "app.modules.projects.guide_compilation.projection_payloads.policy_facts",
+    "app.modules.projects.guide_compilation.projection_payloads.policy_output",
+    "app.modules.projects.guide_compilation.projection_payloads.report_digest",
+    "app.modules.projects.guide_compilation.projection_payloads.report_output",
+    "app.modules.projects.guide_compilation.projection_payloads.report_payload",
+    "app.modules.projects.guide_compilation.projection_payloads.source_state",
+    "app.modules.projects.guide_compilation.projection_payloads.sufficiency_facts"
+  ],
+  "group": "lifecycle",
+  "outcomes": ["return", "mapped_error"],
+  "reviewed_by": ["WS-POL-003-04A3 required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/projects/guide_compilation/projection_payloads.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_projection_contracts.py::test_report_and_policy_transforms_are_exact",
+    "backend/tests/projects/guide_compilation/test_projection_policy.py::test_artifact_policy_transform_preserves_values_and_server_owned_order",
+    "backend/tests/projects/guide_compilation/test_projection_policy.py::test_unprojectable_v1_policy_fails_without_best_effort_repair"
+  ]
+}

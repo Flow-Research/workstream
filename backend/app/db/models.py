@@ -62,6 +62,7 @@ from app.modules.projects.models import (  # noqa: F401
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.guide_compilation.models import (  # noqa: F401
+    ProjectGuideComponentProjectionOperation,
     ProjectGuideCompilation,
     ProjectGuideCompilationAttempt,
 )

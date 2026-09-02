@@ -21,7 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "c1b9f2aacff92805665f75afc41852452b402bd7c9d92ba81324cb06f7986753"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "4b31005ee4e03fa5e67ce262ff67b2be2cfaeb09540441ef4798deae8bfd0ce1"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -87,6 +87,7 @@ RESETTABLE_TEST_TABLES = (
     "project_create_idempotency_records",
     "project_guides",
     "project_guide_compilation_attempts",
+    "project_guide_component_projection_operations",
     "project_guide_compilations",
     "project_guide_compilation_request_operations",
     "project_role_grants",
@@ -115,6 +116,8 @@ TRUNCATE_GUARDED_TABLES = (
     "contribution_policy_lifecycle_events",
     "contribution_policy_transition_custody",
     "guide_mutation_idempotency_records",
+    "guide_sufficiency_reports",
+    "guide_sufficiency_report_source_usages",
     "guide_sufficiency_mutation_idempotency_records",
     "guide_source_snapshot_items",
     "outbox_events",
@@ -128,6 +131,7 @@ TRUNCATE_GUARDED_TABLES = (
     "project_compensation_units",
     "project_create_idempotency_records",
     "project_guide_compilation_attempts",
+    "project_guide_component_projection_operations",
     "project_guide_compilations",
     "project_guide_compilation_request_operations",
     "project_role_grants",
@@ -138,6 +142,7 @@ TRUNCATE_GUARDED_TABLES = (
     "review_policies",
     "revision_policies",
     "submission_bundle_admissions",
+    "submission_artifact_policies",
     "submission_bundle_durable_intents",
     "submission_policy_mutation_idempotency_records",
 )

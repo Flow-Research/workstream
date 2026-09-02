@@ -501,12 +501,14 @@ class ProjectRepository:
         self,
         snapshot_id: str,
     ) -> GuideSufficiencyReport | None:
-        """Load the sufficiency report bound to a guide-source snapshot."""
+        """Load the newest verified report bound to a guide-source snapshot."""
         result = await self._session.execute(
             select(GuideSufficiencyReport).where(
                 GuideSufficiencyReport.source_snapshot_id == snapshot_id,
                 GuideSufficiencyReport.project_setup_run_id.is_not(None),
-            )
+            ).order_by(
+                GuideSufficiencyReport.setup_generation.desc(),
+            ).limit(1)
         )
         return result.scalar_one_or_none()
 

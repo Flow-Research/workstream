@@ -511,6 +511,14 @@ source snapshot may have one diagnostic report and one verified agent report.
 Only the verified report, with a complete exact source-usage set, may support
 agent policy derivation or guide activation.
 
+The hidden unified-compilation projector can deterministically create the same
+canonical report from a persisted `ProjectGuideCompilation`. Its immutable
+`ProjectGuideComponentProjectionOperation` binds the report to the exact
+attempt, compilation, setup generation, component and result hashes, verified
+material digest and byte count, and authorization decision. It leaves the
+`ProjectSetupRun` unchanged and remains unreachable until its fixed-service
+authorization and background-execution cutover are activated.
+
 ## GuideSufficiencyReportSourceUsage
 
 Fields:
@@ -631,6 +639,23 @@ create agent-derivation provenance.
 Agent-derived policy provenance is revalidated before approval and guide
 activation, so seeded or stale rows with spoofed agent identity cannot become
 the active policy context.
+
+The hidden unified-compilation projector may also create the draft policy from
+the persisted artifact-policy component, but only after the exact sufficiency
+projection exists. The same projection-operation ledger binds its input,
+output digest, prior report, setup generation, and authorization evidence.
+Projection is idempotent and does not approve the policy, derive an effective
+policy, or update setup-run output pointers.
+
+## ProjectGuideComponentProjectionOperation
+
+This immutable internal receipt records one `guide_sufficiency` or
+`submission_artifact_policy` projection per setup generation. It is the replay
+and provenance boundary between a persisted unified compilation and the
+canonical product row; it is not another report or policy source of truth.
+Changed lineage, output content, authority evidence, or replay facts fail
+closed. Database guards prevent updates, deletes, or truncation of projection
+custody and of the protected agent-derived business content.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 `artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project

@@ -1,0 +1,39 @@
+{
+  "behavior_id": "auth.project_guide_compilation.projection_ports",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.api.project_guide_projections.ArtifactPolicyProjectionAuthorizationPort.prepare_artifact_policy_projection",
+    "app.modules.authorization.api.project_guide_projections.ArtifactPolicyProjectionFacts.__post_init__",
+    "app.modules.authorization.api.project_guide_projections.GuideSufficiencyProjectionAuthorizationPort.prepare_sufficiency_projection",
+    "app.modules.authorization.api.project_guide_projections.GuideSufficiencyProjectionFacts.__post_init__",
+    "app.modules.authorization.api.project_guide_projections.PreparedArtifactPolicyProjection.consume_new",
+    "app.modules.authorization.api.project_guide_projections.PreparedArtifactPolicyProjection.identity",
+    "app.modules.authorization.api.project_guide_projections.PreparedArtifactPolicyProjection.validate_replay",
+    "app.modules.authorization.api.project_guide_projections.PreparedGuideSufficiencyProjection.consume_new",
+    "app.modules.authorization.api.project_guide_projections.PreparedGuideSufficiencyProjection.identity",
+    "app.modules.authorization.api.project_guide_projections.PreparedGuideSufficiencyProjection.validate_replay",
+    "app.modules.authorization.api.project_guide_projections.ProjectGuideProjectionAuthorityReceipt.__post_init__",
+    "app.modules.authorization.api.project_guide_projections.ProjectGuideProjectionIdentity.__post_init__",
+    "app.modules.authorization.api.project_guide_projections.ProjectGuideProjectionLocator.__post_init__",
+    "app.modules.authorization.api.project_guide_projections._canonical_hash",
+    "app.modules.authorization.api.project_guide_projections._projection_identity",
+    "app.modules.authorization.api.project_guide_projections._uuid",
+    "app.modules.authorization.api.project_guide_projections._validate_facts",
+    "app.modules.authorization.api.project_guide_projections.artifact_policy_projection_facts_digest",
+    "app.modules.authorization.api.project_guide_projections.artifact_policy_projection_identity",
+    "app.modules.authorization.api.project_guide_projections.guide_sufficiency_projection_facts_digest",
+    "app.modules.authorization.api.project_guide_projections.guide_sufficiency_projection_identity",
+    "app.modules.authorization.api.project_guide_projections.projection_authority_digest"
+  ],
+  "group": "auth",
+  "outcomes": ["return", "denial", "mapped_error", "idempotent_replay"],
+  "reviewed_by": ["WS-POL-003-04A3 required reviewers"],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/api/project_guide_projections.py",
+  "tests": [
+    "backend/tests/projects/guide_compilation/test_projection_contracts.py::test_public_projection_contracts_are_closed_and_hash_bound",
+    "backend/tests/projects/guide_compilation/test_projection_contracts.py::test_projection_identities_and_digests_are_component_specific",
+    "backend/tests/projects/guide_compilation/test_projection_migration.py::test_sql_digest_vectors_match_python_and_each_field_is_sensitive"
+  ]
+}
