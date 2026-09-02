@@ -141,6 +141,31 @@ def test_artifact_policy_transform_requires_a_persisted_proposal() -> None:
         SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=1,
             maximum_package_size_bytes=2,
+            required_artifacts=("../private.txt",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
+            required_artifacts=("/absolute.txt",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
+            required_artifacts=("nested//result.json",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
+            required_artifacts=("nested\\result.json",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
+            required_artifacts=("s3://bucket/result.json",),
+        ),
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1,
+            maximum_package_size_bytes=2,
             required_evidence=("invalid evidence",),
         ),
     ],
