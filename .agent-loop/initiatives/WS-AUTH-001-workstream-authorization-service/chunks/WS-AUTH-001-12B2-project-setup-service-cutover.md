@@ -1,6 +1,7 @@
 # Chunk Contract: WS-AUTH-001-12B2 - Unified Setup Ledger Activation
 
-Status: Proposed after hidden WS-POL-003-04A; inactive. Risk: L1.
+Status: Proposed after complete WS-POL-003-04A2 and WS-AUTH-001-12J; inactive.
+Risk: L1.
 
 ## Goal
 
@@ -28,9 +29,10 @@ contribution behavior, or compatibility paths.
   expected step/transition, operation, request, session, and transaction.
 - Product projections retain their separate 12E/12F/12G actions. Setup-ledger
   authority never authorizes a projection row or provider call.
-- The hidden POL-04A manifest proves this authority is sufficient for its exact
-  ledger transition. POL-04B alone proves live setup-service reachability and removal
-  of the three legacy inference calls.
+- The complete POL-04A2 manifest proves the exact finalization transition, and
+  complete AUTH-12J proves both preceding component projections have their
+  purpose-specific fixed-service authority. POL-04B alone proves live
+  setup-service reachability and removal of the legacy inference calls.
 - No handle crosses Celery, commit, rollback, provider I/O, session, or
   transaction; stale/replay/cross-resource/cross-step uses deny.
 

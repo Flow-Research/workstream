@@ -72,6 +72,7 @@ merge and activate their exact actions.
 | A34 | AUTH activates before hidden feature behavior exists | Deny-only or alternate live path | Hidden POL/ART manifest, then narrow AUTH activation, then live owner cutover | Dependency and availability-delta proof |
 | A35 | Prepared authority or a database transaction spans model/provider I/O | Lock exhaustion, stale authority, or replay ambiguity | Pre-I/O authorization plus committed attempt reservation; fresh result-bound PREP after I/O | Timeout/cancellation/revocation/cross-transaction tests |
 | A36 | Separate approval restarts inference or accepts an incomplete result | Policy components drift across one guide generation | Persist all four components before approval; approvals only project stored components | One-attempt and zero-approval-call proof |
+| A37 | Reusing the active sufficiency and artifact-policy action IDs makes legacy mutation authority interchangeable with the new deterministic projection ports | A handle crosses purpose, resource, or product boundary and creates an unauthorized projection | Keep a closed purpose-specific resource union, distinct public digest domains, exact fixed-service adapters, and no compatibility fallback; remove legacy live paths only in POL-04B | Cross-context/action/component swaps deny, all fact mutations deny, and action/count/availability parity remains unchanged |
 
 ## Required reviewers
 
