@@ -558,6 +558,7 @@ class PreparedAuthorizationService:
         issuance = self._issued.get(handle)
         if not isinstance(issuance, _Issuance):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        self._issued[handle] = _CONSUMED
         await validate_projection_replay(
             self,
             issuance,
