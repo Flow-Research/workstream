@@ -75,7 +75,7 @@ sequence.
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
 | `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
 | `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Merged through PR #227; identity/matrix registration only, zero activation |
-| `WS-AUTH-001-12B2` | Unified Setup Ledger Activation | L1 | Proposed after hidden POL-04A and AUTH-12I; before POL-04B live cutover |
+| `WS-AUTH-001-12B2` | Unified Setup Ledger Activation | L1 | Proposed after complete POL-04A2 and AUTH-12J; before POL-04B live cutover |
 | `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Merged through PR #229 |
 | `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Merged through PR #232 |
 | `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |
@@ -85,6 +85,7 @@ sequence.
 | `WS-AUTH-001-12F2` | Manual Submission Policy Drafts | L1 | Merged through PR #292 as `81f281bd` |
 | `WS-AUTH-001-12F3` | Transitional Fixed-Service Policy Derivation | L1 | Merged through PR #295 as `99c0aaf0`; superseded at POL-04B live cutover |
 | `WS-AUTH-001-12I` | Unified Compilation Request/Execute Activation | L1 | Merged through PR #312 as `98eae13e`; POL-03B is the next consumer |
+| `WS-AUTH-001-12J` | Compilation Projection Authorization | L1 | Planned; executable contract follows merged POL-04A3 and precedes AUTH-12B2 |
 | `WS-AUTH-001-12F4` | Unified Pre-Submit Approval Activation | L1 | Proposed after hidden POL-05A; before POL-05B |
 | `WS-AUTH-001-12G` | Unified Post-Submit Projection Activation | L1 | Proposed after hidden POL-06A; zero model calls |
 | `WS-AUTH-001-12H` | Unified Guide Activation Cutover | L1 | Proposed after POL-06B/07, corrected AUTH-12B2, CP05 active behavior, CP06 validation, and CP07 ProjectGuide binding; CP08, ARCH-03A/03B/03C, and CP09 are downstream |
@@ -169,8 +170,9 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-12F2
 -> WS-AUTH-001-12F3
 -> WS-POL-003-01 -> 02 -> 03A
--> WS-AUTH-001-12I -> WS-POL-003-03B -> 04A
--> WS-AUTH-001-12B2 -> WS-POL-003-04B -> 05A
+-> WS-AUTH-001-12I -> WS-POL-003-03B -> 04A -> WS-POL-003-04A3
+-> WS-POL-003-04A2 + WS-AUTH-001-12J -> WS-AUTH-001-12B2
+-> WS-POL-003-04B -> 05A
 -> WS-AUTH-001-12F4 -> WS-POL-003-05B -> 06A
 -> WS-AUTH-001-12G -> WS-POL-003-06B -> 07
 -> WS-AUTH-001-12H
@@ -255,6 +257,7 @@ WS-AUTH-001-PLAN
 
 ## Current boundary
 
-AUTH-12I is merged. POL-03B is its next product consumer. Later AUTH activation
-chunks wait for the exact hidden owner behavior named above; no static row in
-this map starts work automatically.
+AUTH-12I and its POL-03B/04A/04A3 consumers are merged. AUTH-12J now has an
+executable contract for the two hidden projection ports. POL-04A2 may proceed
+independently; both are prerequisites of AUTH-12B2. No static row in this map
+starts work automatically.
