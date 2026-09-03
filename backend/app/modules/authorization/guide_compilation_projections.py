@@ -90,7 +90,10 @@ class _PreparedProjection:
         raise TypeError("prepared projection authority cannot be serialized")
 
     def _resource(self, facts):
-        resource = projection_resource_context(self._component, self._identity, facts)
+        try:
+            resource = projection_resource_context(self._component, self._identity, facts)
+        except (TypeError, ValueError) as exc:
+            raise PreparedAuthorizationInvalid("prepared projection authority is invalid") from exc
         if (
             resource.scope_project_id != self._locator.project_id
             or UUID(str(resource.projection_facts["attempt_id"])) != self._locator.attempt_id

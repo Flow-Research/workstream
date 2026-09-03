@@ -26,7 +26,7 @@ from app.modules.authorization.guide_compilation_projections import (
 )
 from app.modules.authorization import guide_compilation_projections as adapters
 
-from .support import custody, sufficiency_facts
+from .support import custody, policy_facts, sufficiency_facts
 
 
 def _install_custody(monkeypatch: pytest.MonkeyPatch):
@@ -162,3 +162,22 @@ async def test_projection_consume_conceals_internal_failures(
         owned.service.consume = fail  # type: ignore[method-assign]
         with pytest.raises(public_error):
             await prepared.consume_new(facts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ("consume", "replay"))
+async def test_cross_component_facts_are_concealed_without_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    _owned, session, evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    wrong_facts = policy_facts(locator.project_id, locator.attempt_id)
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+        with pytest.raises(PreparedAuthorizationInvalid):
+            if operation == "consume":
+                await prepared.consume_new(wrong_facts)  # type: ignore[arg-type]
+            else:
+                await prepared.validate_replay(wrong_facts, uuid4())  # type: ignore[arg-type]
+    assert evidence.events == []
