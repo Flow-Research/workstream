@@ -28,6 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
+| [WS-ENG-009](initiatives/WS-ENG-009-commitrail-cutover/STATUS.md) | Commitrail cutover is planned; no implementation has started | Human approval of the atomic cutover, followed by one real Workstream blind stress test |
 | [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish adapter-binding behavior/activation; CP04A-CP04B complete hidden policy behavior with durable custody | Prepare CP05 to activate only the proven policy actions; PLAN2 still targets durable `allow_review` |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; AUTH-12J has an executable contract after complete hidden POL-04A3 projections | Implement AUTH-12J; AUTH-12B2 waits for both 12J and hidden POL-04A2 finalization |
