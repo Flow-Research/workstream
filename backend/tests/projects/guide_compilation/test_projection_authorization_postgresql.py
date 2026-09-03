@@ -58,6 +58,14 @@ async def _effect_counts(factory, *, include_usage: bool = False):
     return counts
 
 
+async def _policy_ready(factory, attempt_id):
+    service = _service(factory)
+    command = ProjectGuideProjectionCommand(attempt_id=attempt_id)
+    result = await service.project_guide_sufficiency(command)
+    assert result.disposition == "projected"
+    return service, command
+
+
 @pytest.mark.asyncio
 async def test_projection_same_operation_concurrency_is_single_effect(
     clean_postgres_database: str,
@@ -75,6 +83,40 @@ async def test_projection_same_operation_concurrency_is_single_effect(
         assert {first.disposition, second.disposition} == {"projected", "replayed"}
         assert first.output_id == second.output_id
         assert await _effect_counts(factory) == (1, 1, 1)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_policy_projection_same_operation_concurrency_is_single_effect(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        service, command = await _policy_ready(factory, attempt_id)
+        first, second = await asyncio.gather(
+            service.project_submission_artifact_policy(command),
+            _service(factory).project_submission_artifact_policy(command),
+        )
+        assert {first.disposition, second.disposition} == {"projected", "replayed"}
+        assert first.output_id == second.output_id
+        async with factory() as session:
+            counts = (
+                await session.execute(
+                    text(
+                        "select (select count(*) from submission_artifact_policies),"
+                        "(select count(*) from project_guide_component_projection_operations "
+                        "where component='submission_artifact_policy'),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.submission_artifact_policy.derive')"
+                    )
+                )
+            ).one()
+            await session.rollback()
+        assert counts == (1, 1, 1)
     finally:
         await engine.dispose()
 
@@ -142,6 +184,48 @@ async def test_projection_consume_callback_observes_no_product_rows(
             ProjectGuideProjectionCommand(attempt_id=attempt_id)
         )
         assert receipt.disposition == "projected"
+        assert observed is True
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_policy_projection_consumes_before_product_staging(
+    clean_postgres_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    service, command = await _policy_ready(factory, attempt_id)
+    original_consume = prepared_module.PreparedAuthorizationService.consume
+    observed = False
+
+    async def observe_before_consume(prepared, action_id, *args, **kwargs):
+        nonlocal observed
+        if action_id.value == "project.submission_artifact_policy.derive":
+            counts = (
+                await prepared._session.execute(
+                    text(
+                        "select (select count(*) from submission_artifact_policies),"
+                        "(select count(*) from project_guide_component_projection_operations "
+                        "where component='submission_artifact_policy'),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.submission_artifact_policy.derive')"
+                    )
+                )
+            ).one()
+            assert counts == (0, 0, 0)
+            observed = True
+        return await original_consume(prepared, action_id, *args, **kwargs)
+
+    monkeypatch.setattr(
+        prepared_module.PreparedAuthorizationService, "consume", observe_before_consume
+    )
+    try:
+        result = await service.project_submission_artifact_policy(command)
+        assert result.disposition == "projected"
         assert observed is True
     finally:
         await engine.dispose()

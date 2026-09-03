@@ -410,6 +410,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/guide_compilation_projections.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/prepared_adapter_bindings.py"
     },
     {
@@ -427,6 +431,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/guide_compilation.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/guide_compilation_projections.py"
     },
     {
       "group": "auth",
@@ -459,6 +467,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_projection_replay.py"
     },
     {
       "group": "auth",
@@ -977,7 +989,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "dc537b99313a5fa4bffb43dfcb04eeef6626272ca8138195b6f978d674636be6",
-  "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
+  "authority_digest": "0e1ec182cc7fa014861ca946d0750edabe2cb1351dcfabe8c59fa5249191cd89",
+  "protected_base_commit": "dfb50b3089a7d10a9fba7cedfd5200020de62cb7",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

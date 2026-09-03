@@ -242,6 +242,15 @@ async def test_projection_replay_rejects_mismatched_decision_without_new_evidenc
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owned, session, evidence = custody()
+    close_calls = 0
+    original_close = owned.service.close
+
+    def close() -> None:
+        nonlocal close_calls
+        close_calls += 1
+        original_close()
+
+    owned.service.close = close  # type: ignore[method-assign]
 
     @asynccontextmanager
     async def fixed(*_args, **_kwargs):
@@ -258,6 +267,7 @@ async def test_projection_replay_rejects_mismatched_decision_without_new_evidenc
         with pytest.raises(AuthorizationDenied):
             await prepared.validate_replay(facts, uuid4())
     assert evidence.events == []
+    assert close_calls == 1
 
 
 @pytest.mark.asyncio
