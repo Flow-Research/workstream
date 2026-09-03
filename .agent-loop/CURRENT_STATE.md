@@ -56,6 +56,9 @@ authority; these records do not grant or withhold it.
 | [FN-ART-002](initiatives/FN-ART-002-deferred-flow-node-artifact-store/STATUS.md) | Deferred and outside the Workstream v0.1 delivery path | Reconsider only through a new explicit initiative |
 | [WS-ENG-001 through WS-ENG-008](initiatives/README.md#historical-eng-initiatives) | Historical and closed or superseded | Do not use signed-start, loop-memory, recovery, or archive proposals as current instructions |
 
+`WS-ENG-009-01` is Planned as the atomic Commitrail cutover.
+`WS-ENG-009-02` is Planned as the subsequent blind Workstream stress test.
+
 ## How To Start Contributing
 
 1. Pull current `main` and read `CONTRIBUTING.md`, the capability ledger, and
