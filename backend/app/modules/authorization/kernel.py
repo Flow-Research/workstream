@@ -25,6 +25,9 @@ from app.modules.authorization.catalogue import (
 )
 from app.modules.authorization.domain import adapter_bindings, guide_compilation as compilation
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
+from app.modules.authorization.domain.guide_compilation_projections import (
+    ProjectGuideProjectionResourceContext,
+)
 from app.modules.authorization.domain.prepared_service import (
     is_project_setup_scope,
     project_setup_resource_matches,
@@ -1506,6 +1509,7 @@ class AuthorizationService:
                 PreSubmitCheckerInputResourceContext,
                 compilation.ProjectGuideCompilationRequestResourceContext, compilation.ProjectGuideCompilationExecuteResourceContext,
                 adapter_bindings.AdapterBindingReadResourceContext, adapter_bindings.AdapterBindingMutationResourceContext,
+                ProjectGuideProjectionResourceContext,
             ),
         ):
             project_id = getattr(resource_context, "project_id", None) or getattr(resource_context, "scope_project_id")
@@ -1523,7 +1527,7 @@ class AuthorizationService:
                     target_ref_kind = "project"
                     target_ref_id = str(project_id)
         after_facts: dict[str, object] = {"allowed": decision.allowed}
-        if decision.resource_type in CONTEXT_DIGEST_RESOURCE_TYPES or decision.action_id in {
+        if isinstance(resource_context, ProjectGuideProjectionResourceContext) or decision.resource_type in CONTEXT_DIGEST_RESOURCE_TYPES or decision.action_id in {
             ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
             ActionId.PROJECT_CREATE,
             *_GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS,

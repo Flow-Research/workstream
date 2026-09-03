@@ -8,6 +8,9 @@ from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationExecuteResourceContext,
 )
+from app.modules.authorization.domain.guide_compilation_projections import (
+    ProjectGuideProjectionResourceContext,
+)
 from app.modules.authorization.runtime import (
     AuthorizationResourceContext,
     PreparedAuthorityScope,
@@ -41,12 +44,22 @@ def project_setup_resource_matches(
 ) -> bool | None:
     """Validate setup-service facts, or return None for non-setup actions."""
     if action_id is ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN:
+        if isinstance(resource, ProjectGuideProjectionResourceContext):
+            return (
+                resource.component == "guide_sufficiency"
+                and resource.scope_project_id == project_id
+            )
         return (
             isinstance(resource, ProjectGuideSufficiencyMutationResourceContext)
             and resource.execution_kind == "setup_service"
             and resource.scope_project_id == project_id
         )
     if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+        if isinstance(resource, ProjectGuideProjectionResourceContext):
+            return (
+                resource.component == "submission_artifact_policy"
+                and resource.scope_project_id == project_id
+            )
         return (
             isinstance(resource, ProjectSubmissionArtifactPolicyMutationResourceContext)
             and resource.execution_kind == "setup_service"

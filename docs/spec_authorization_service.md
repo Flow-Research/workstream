@@ -612,6 +612,14 @@ no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
 itself; the v0.1 baseline only expands the closed database
 identity constraint.
 
+AUTH-12J reuses the active sufficiency-run and artifact-policy-derive rows for
+two purpose-specific deterministic projection contexts. Only
+`workstream.project.setup` may prepare them. Their authority evidence uses the
+exact projection resource type, deterministic operation ID, project, actor,
+action, permission, and the public projection authority digest. The legacy
+AUTH-12E/12F3 mutation contexts remain separate and cannot exchange prepared
+handles with these projection contexts. AUTH-12J adds no action or live route.
+
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer
 subject with no leading or trailing whitespace to one of these fixed identities
 through `POST /api/v1/service-actors`. Accepted subject bytes are preserved

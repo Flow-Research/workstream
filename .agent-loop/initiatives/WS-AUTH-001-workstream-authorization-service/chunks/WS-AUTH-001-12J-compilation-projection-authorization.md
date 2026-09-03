@@ -1,7 +1,7 @@
 # Chunk Contract: WS-AUTH-001-12J - Compilation Projection Authorization
 
-Status: Planned. Risk: L1. This is the executable contract for one future
-implementation pull request.
+Status: Complete. Risk: L1. The bounded implementation and its exact evidence
+merge atomically with this final state.
 
 ## Goal
 
@@ -161,10 +161,10 @@ backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/adapters/auth/__init__.py
+backend/app/modules/audit/service.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/authorization/guide_compilation_projections/**
-backend/tests/authorization/test_service_actor_runtime.py
-backend/tests/authorization/test_service_prepared_runtime.py
+backend/tests/authorization/test_fixed_service_action_context.py
 backend/tests/test_authorization.py
 backend/tests/test_behavior_ownership.py
 backend/tests/test_ci_test_lanes.py
@@ -181,6 +181,8 @@ docs/operations_authorization_service.md
 docs/roadmap_status.md
 ```
 
+The shared AUDIT service may expose only the existing authority-event lookup
+needed for replay validation; AUTH must not reach into its private repository.
 The public projection API is frozen except for a dependency-free correction
 that an exact-head review proves necessary for AUTH/POL digest parity. Broad
 test, ownership, lane, or structural-debt files may change only for the exact
@@ -236,7 +238,7 @@ python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py
 cd backend && .venv/bin/ruff check app/modules/authorization tests/authorization/guide_compilation_projections tests/architecture/test_authorization_boundary.py
-cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_service_actor_runtime.py tests/authorization/test_service_prepared_runtime.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py
+cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py
 cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections --cov=app.modules.authorization.guide_compilation_projections --cov=app.modules.authorization.domain.guide_compilation_projections --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
 
@@ -263,4 +265,4 @@ of the later live cutover and legacy inference-path removal.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`

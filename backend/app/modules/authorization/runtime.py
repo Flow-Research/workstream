@@ -15,6 +15,10 @@ from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationRequestResourceContext,
     persisted_result_digest,
 )
+from app.modules.authorization.domain.guide_compilation_projections import (
+    ProjectGuideProjectionResourceContext,
+    projection_resource_digest,
+)
 from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.actors.service_identities import ServiceIdentity
@@ -1490,6 +1494,7 @@ AuthorizationResourceContext = (
     | ProjectGuideActivationResourceContext
     | ProjectGuideCompilationRequestResourceContext
     | ProjectGuideCompilationExecuteResourceContext
+    | ProjectGuideProjectionResourceContext
     | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
@@ -1523,6 +1528,8 @@ AuthorizationResourceContext = (
 
 
 def authorization_resource_digest(resource: AuthorizationResourceContext) -> str:
+    if isinstance(resource, ProjectGuideProjectionResourceContext):
+        return projection_resource_digest(resource)
     if exact_digest := persisted_result_digest(resource):
         return exact_digest
     return canonical_json_hash(
@@ -1589,6 +1596,8 @@ class AuthorizationDecision(BaseModel):
         "project_submission_artifact_policy_mutation",
         "project_guide_compilation_request",
         "project_guide_compilation_attempt",
+        "project_guide_sufficiency_projection",
+        "project_submission_artifact_policy_projection",
         "actor_identity_link",
         "system",
         "permission_catalogue",

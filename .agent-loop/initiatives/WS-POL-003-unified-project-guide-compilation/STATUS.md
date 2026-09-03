@@ -57,8 +57,9 @@ execution-only hidden command over an already authorized attempt, preserves
 unresolved provider outcomes without redispatch, and leaves all live routing
 and setup projections untouched. `WS-POL-003-04A3` is complete. It adds the
 hidden deterministic sufficiency and artifact-policy projections without a
-model call or setup-row mutation. POL-04A2 and AUTH-12J are the next delivery
-boundaries before AUTH-12B2 and POL-04B.
+model call or setup-row mutation. AUTH-12J is complete with the exact hidden
+projection adapters. POL-04A2 is the remaining delivery boundary before
+AUTH-12B2 and POL-04B.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.
