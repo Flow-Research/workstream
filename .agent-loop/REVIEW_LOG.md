@@ -3012,3 +3012,13 @@ then identified two final gaps: source inspection could appear to replace
 required database/session custody, and future outcomes used present-tense
 completion wording. Both are corrected; final-head review and hosted checks
 remain required before human merge.
+
+## 2026-09-03 - WS-ENG-009 Commitrail Cutover Planning
+
+PR #359 records the proposed atomic replacement of `.agent-loop` with
+Commitrail. CodeRabbit identified eight valid planning gaps covering complete
+current-ledger and internal-record custody, exact Agent Gates preservation,
+permanent legacy-path rejection, scope wording, public-release prerequisites,
+and positive/negative validator coverage. All eight were incorporated into the
+plan and cutover contract. No implementation or product behavior changes in
+this planning PR; fresh exact-head checks and human approval remain required.

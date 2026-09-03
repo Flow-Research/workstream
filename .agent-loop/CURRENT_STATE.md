@@ -28,6 +28,7 @@ authority; these records do not grant or withhold it.
 
 | Initiative | Durable state on `main` | Remaining boundary |
 |---|---|---|
+| [WS-ENG-009](initiatives/WS-ENG-009-commitrail-cutover/STATUS.md) | Commitrail cutover is planned; no implementation has started | Human approval of the atomic cutover, followed by one real Workstream blind stress test |
 | [WS-ARCH-001](initiatives/WS-ARCH-001-modular-monolith-boundaries/STATUS.md) | Complete through `WS-ARCH-001-02H`; CP01A-CP03B establish adapter-binding behavior/activation; CP04A-CP04B complete hidden policy behavior with durable custody | Prepare CP05 to activate only the proven policy actions; PLAN2 still targets durable `allow_review` |
 | [WS-ART-001](initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md) | Active delivery initiative; verified ready-admission publication, hidden preparation, consumption and binding are merged through ARCH-02H | Implement exact post-submit materialization only after the unified guide/checker and PLAN2 public contracts are executable; live cutover remains later |
 | [WS-AUTH-001](initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md) | Active delivery initiative; AUTH-12J completes exact request-local authority for hidden POL-04A3 projections | AUTH-12B2 waits only for hidden POL-04A2 finalization because AUTH-12J is complete |
@@ -54,6 +55,9 @@ authority; these records do not grant or withhold it.
 | [WS-AUTH-002](initiatives/WS-AUTH-002-authorization-docstring-lint-correction/STATUS.md) | Bounded correction complete | Future lint work is a new bounded change |
 | [FN-ART-002](initiatives/FN-ART-002-deferred-flow-node-artifact-store/STATUS.md) | Deferred and outside the Workstream v0.1 delivery path | Reconsider only through a new explicit initiative |
 | [WS-ENG-001 through WS-ENG-008](initiatives/README.md#historical-eng-initiatives) | Historical and closed or superseded | Do not use signed-start, loop-memory, recovery, or archive proposals as current instructions |
+
+`WS-ENG-009-01` is Planned as the atomic Commitrail cutover.
+`WS-ENG-009-02` is Planned as the subsequent blind Workstream stress test.
 
 ## How To Start Contributing
 
