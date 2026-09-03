@@ -173,6 +173,7 @@ backend/tests/test_authorization.py
 backend/tests/test_behavior_ownership.py
 backend/tests/test_ci_test_lanes.py
 backend/scripts/authorization_boundary.py
+backend/scripts/behavior_ownership.py
 backend/scripts/run_test_lanes.py
 .ci/behavior-ownership/auth/**
 .ci/behavior-ownership/partition.v1.json
