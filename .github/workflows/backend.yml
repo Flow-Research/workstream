@@ -645,6 +645,14 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: AUTH composition root coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/adapters/auth/__init__.py'
+          --precision=2
+          --fail-under=90
+
       - name: Record hosted timing and fail-closed coverage evidence
         working-directory: backend
         env:
