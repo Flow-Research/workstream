@@ -14,4 +14,6 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
     "project_active_guide_read",
     "project_guide_compilation_request",
     "project_guide_compilation_attempt",
+    "project_guide_sufficiency_projection",
+    "project_submission_artifact_policy_projection",
 )

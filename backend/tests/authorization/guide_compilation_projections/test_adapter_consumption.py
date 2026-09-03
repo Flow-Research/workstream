@@ -24,6 +24,7 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.guide_compilation_projections import (
     GuideSufficiencyProjectionAuthorization,
 )
@@ -105,7 +106,7 @@ async def test_projection_consumption_is_single_use(
 
 
 @pytest.mark.asyncio
-async def test_projection_prepared_is_nominal_and_closed_on_exit(
+async def test_projection_closed_copied_and_reconstructed_handles_deny(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _owned, session, _evidence = _install_custody(monkeypatch)
@@ -119,8 +120,23 @@ async def test_projection_prepared_is_nominal_and_closed_on_exit(
             deepcopy(prepared)
         with pytest.raises(TypeError, match="cannot be serialized"):
             pickle.dumps(prepared)
+        with pytest.raises(TypeError, match="handles are internal"):
+            PreparedAuthorizationHandle()
     with pytest.raises(PreparedAuthorizationInvalid):
         await prepared.consume_new(facts)
+
+
+@pytest.mark.asyncio
+async def test_projection_and_legacy_contexts_are_not_interchangeable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owned, session, evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+        with pytest.raises(PreparedAuthorizationInvalid):
+            await prepared.consume_new({"resource_type": "project_guide_sufficiency_mutation"})  # type: ignore[arg-type]
+    assert evidence.events == []
 
 
 @pytest.mark.asyncio
@@ -165,6 +181,71 @@ async def test_projection_consume_conceals_internal_failures(
         owned.service.consume = fail  # type: ignore[method-assign]
         with pytest.raises(public_error):
             await prepared.consume_new(facts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "public_error"),
+    (
+        (PreparedAuthorizationHandleInvalid("bad"), PreparedAuthorizationInvalid),
+        (
+            PreparedAuthorizationUnsupported(AuthorizationDenialCode.RESOURCE_GUARD_DENIED),
+            AuthorizationDenied,
+        ),
+        (AuthorizationEvidenceUnavailable("down"), AuthorizationUnavailable),
+    ),
+)
+async def test_projection_replay_conceals_internal_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    public_error: type[Exception],
+) -> None:
+    owned, session, _evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    facts = sufficiency_facts(locator.project_id, locator.attempt_id)
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+
+        async def fail(*_args, **_kwargs):
+            raise failure
+
+        owned.service.validate_replay = fail  # type: ignore[method-assign]
+        with pytest.raises(public_error):
+            await prepared.validate_replay(facts, uuid4())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "public_error"),
+    (
+        (PreparedAuthorizationHandleInvalid("bad"), PreparedAuthorizationInvalid),
+        (
+            PreparedAuthorizationUnsupported(AuthorizationDenialCode.RESOURCE_GUARD_DENIED),
+            AuthorizationDenied,
+        ),
+        (AuthorizationEvidenceUnavailable("down"), AuthorizationUnavailable),
+    ),
+)
+async def test_projection_prepare_conceals_internal_entry_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    public_error: type[Exception],
+) -> None:
+    class FailingManager:
+        async def __aenter__(self):
+            raise failure
+
+        async def __aexit__(self, *_args):
+            return None
+
+    monkeypatch.setattr(
+        adapters, "fixed_service_prepared_authorization", lambda *_a, **_k: FailingManager()
+    )
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    adapter = GuideSufficiencyProjectionAuthorization(SimpleNamespace())  # type: ignore[arg-type]
+    with pytest.raises(public_error):
+        async with adapter.prepare_sufficiency_projection(locator):
+            pass
 
 
 @pytest.mark.asyncio
@@ -264,3 +345,39 @@ async def test_projection_handle_cannot_cross_root_transaction(
         with pytest.raises(PreparedAuthorizationInvalid):
             await prepared.consume_new(facts)
     assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_projection_consume_denial_still_closes_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owned, session, _evidence = custody()
+    close_calls = 0
+    original_close = owned.service.close
+
+    def close() -> None:
+        nonlocal close_calls
+        close_calls += 1
+        original_close()
+
+    async def deny(*_args, **_kwargs):
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.RESOURCE_GUARD_DENIED)
+
+    owned.service.close = close  # type: ignore[method-assign]
+
+    @asynccontextmanager
+    async def fixed(*_args, **_kwargs):
+        try:
+            yield owned
+        finally:
+            owned.service.close()
+
+    monkeypatch.setattr(adapters, "fixed_service_prepared_authorization", fixed)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    facts = sufficiency_facts(locator.project_id, locator.attempt_id)
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+        owned.service.consume = deny  # type: ignore[method-assign]
+        with pytest.raises(AuthorizationDenied):
+            await prepared.consume_new(facts)
+    assert close_calls == 1

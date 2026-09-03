@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, fields
 import json
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -214,6 +214,35 @@ def projection_prepare_matches(
         identity_link_id=resource.identity_link_id,
         service_identity=resource.service_identity,
     ).model_dump(mode="json")
+
+
+def projection_replay_event_matches(
+    event: Any,
+    *,
+    actor_profile_id: UUID,
+    action_id: ActionId,
+    permission_id: str,
+    request_id: UUID,
+    correlation_id: UUID,
+    resource: ProjectGuideProjectionResourceContext,
+) -> bool:
+    """Match every immutable fact of a stored projection allow decision."""
+    after_facts = getattr(event, "after_facts", None) or {}
+    return event is not None and all(
+        (
+            event.event_type == "SensitiveAuthorizationAllowed",
+            event.actor_id == str(actor_profile_id),
+            event.action_id == action_id.value,
+            event.permission_id == permission_id,
+            event.project_id == str(resource.scope_project_id),
+            event.resource_type == resource.resource_type,
+            event.resource_id == str(resource.resource_id),
+            event.request_id == str(request_id),
+            event.correlation_id == str(correlation_id),
+            after_facts.get("allowed") is True,
+            after_facts.get("resource_context_digest") == projection_resource_digest(resource),
+        )
+    )
 
 
 def parse_projection_prepare(

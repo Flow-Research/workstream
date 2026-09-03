@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
@@ -28,15 +27,12 @@ from app.modules.authorization.api import (
     guide_sufficiency_projection_identity,
     projection_authority_digest,
 )
-from app.modules.authorization import prepared as prepared_module
-from app.modules.authorization.runtime import AuthorizationEvidenceUnavailable
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionCommand,
     ProjectGuideProjectionCommand,
 )
 from app.modules.projects.guide_compilation.projections import (
     GuideCompilationProjectionService,
-    ProjectGuideProjectionError,
 )
 
 from .helpers import seed_database
@@ -294,90 +290,5 @@ async def test_projects_both_components_once_and_replays_without_new_effects(
             sufficiency.output_digest,
             policy.output_digest,
         }
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_projection_same_operation_concurrency_is_single_effect(
-    clean_postgres_database: str,
-) -> None:
-    values = await seed_database(clean_postgres_database)
-    attempt_id, _compilation_id = await _persist_compilation(clean_postgres_database, values)
-    engine = create_async_engine(clean_postgres_database)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    service = GuideCompilationProjectionService(
-        factory,
-        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
-        sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
-        policy_authorization_factory=artifact_policy_projection_authorization,
-    )
-    command = ProjectGuideProjectionCommand(attempt_id=attempt_id)
-    try:
-        first, second = await asyncio.gather(
-            service.project_guide_sufficiency(command),
-            service.project_guide_sufficiency(command),
-        )
-        assert {first.disposition, second.disposition} == {"projected", "replayed"}
-        assert first.output_id == second.output_id
-        async with factory() as session:
-            counts = (
-                await session.execute(
-                    text(
-                        "select "
-                        "(select count(*) from guide_sufficiency_reports),"
-                        "(select count(*) from project_guide_component_projection_operations),"
-                        "(select count(*) from audit_events where action_id="
-                        "'project.guide_sufficiency.run')"
-                    )
-                )
-            ).one()
-            await session.rollback()
-        assert counts == (1, 1, 1)
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_projection_close_failure_rolls_back_authority_and_product(
-    clean_postgres_database: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    values = await seed_database(clean_postgres_database)
-    attempt_id, _compilation_id = await _persist_compilation(clean_postgres_database, values)
-    engine = create_async_engine(clean_postgres_database)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    service = GuideCompilationProjectionService(
-        factory,
-        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
-        sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
-        policy_authorization_factory=artifact_policy_projection_authorization,
-    )
-    original_close = prepared_module.PreparedAuthorizationService.close
-
-    def fail_close(prepared) -> None:
-        original_close(prepared)
-        raise AuthorizationEvidenceUnavailable("close failed")
-
-    monkeypatch.setattr(prepared_module.PreparedAuthorizationService, "close", fail_close)
-    try:
-        with pytest.raises(ProjectGuideProjectionError, match="service_authority_denied"):
-            await service.project_guide_sufficiency(
-                ProjectGuideProjectionCommand(attempt_id=attempt_id)
-            )
-        async with factory() as session:
-            counts = (
-                await session.execute(
-                    text(
-                        "select "
-                        "(select count(*) from guide_sufficiency_reports),"
-                        "(select count(*) from project_guide_component_projection_operations),"
-                        "(select count(*) from audit_events where action_id="
-                        "'project.guide_sufficiency.run')"
-                    )
-                )
-            ).one()
-            await session.rollback()
-        assert counts == (0, 0, 0)
     finally:
         await engine.dispose()

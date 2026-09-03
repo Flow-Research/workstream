@@ -113,9 +113,21 @@ async def test_projection_requires_exact_project_setup_authority(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("component", "action_id"),
+    (
+        ("guide_sufficiency", ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN),
+        (
+            "submission_artifact_policy",
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+        ),
+    ),
+)
 @pytest.mark.parametrize("missing", ("matrix", "availability"))
-async def test_sufficiency_projection_requires_active_action_matrix(
+async def test_projection_requires_active_action_matrix(
     monkeypatch: pytest.MonkeyPatch,
+    component: str,
+    action_id: ActionId,
     missing: str,
 ) -> None:
     owned, session, evidence = custody()
@@ -127,8 +139,8 @@ async def test_sufficiency_projection_requires_active_action_matrix(
         )
     else:
         rows = dict(kernel_module.ACTION_BY_ID)
-        rows[ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN] = replace(
-            rows[ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN],
+        rows[action_id] = replace(
+            rows[action_id],
             availability=ActionAvailability.PLANNED,
         )
         monkeypatch.setattr(kernel_module, "ACTION_BY_ID", rows)
@@ -142,9 +154,17 @@ async def test_sufficiency_projection_requires_active_action_matrix(
 
     monkeypatch.setattr(adapters, "fixed_service_prepared_authorization", fixed)
     locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
-    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    adapter = (
+        GuideSufficiencyProjectionAuthorization(session)
+        if component == "guide_sufficiency"
+        else ArtifactPolicyProjectionAuthorization(session)
+    )
     with pytest.raises(AuthorizationDenied):
-        async with adapter.prepare_sufficiency_projection(locator):
+        async with (
+            adapter.prepare_sufficiency_projection(locator)
+            if component == "guide_sufficiency"
+            else adapter.prepare_artifact_policy_projection(locator)
+        ):
             pass
     assert evidence.events == []
 
@@ -165,6 +185,15 @@ async def test_projection_exact_replay_uses_original_decision(
         identity_link_id=first.identity_link_id,
         service=second_service,
     )
+    replay_close_calls = 0
+    original_replay_close = second.service.close
+
+    def close_replay() -> None:
+        nonlocal replay_close_calls
+        replay_close_calls += 1
+        original_replay_close()
+
+    second.service.close = close_replay  # type: ignore[method-assign]
     queue = [first, second]
 
     @asynccontextmanager
@@ -205,6 +234,7 @@ async def test_projection_exact_replay_uses_original_decision(
     async with adapter.prepare_sufficiency_projection(locator) as replay:
         await replay.validate_replay(facts, receipt.decision_event_id)
     assert len(evidence.events) == 1
+    assert replay_close_calls == 1
 
 
 @pytest.mark.asyncio
