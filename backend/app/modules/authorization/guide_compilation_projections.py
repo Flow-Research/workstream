@@ -69,6 +69,7 @@ class _PreparedProjection:
         identity: ProjectGuideProjectionIdentity,
         locator: ProjectGuideProjectionLocator,
     ) -> None:
+        """Bind one public projection view to its opaque PREP custody."""
         self._component = component
         self._custody = custody
         self._handle = handle
@@ -78,18 +79,23 @@ class _PreparedProjection:
 
     @property
     def identity(self) -> ProjectGuideProjectionIdentity:
+        """Return the immutable operation identity exposed to the consumer."""
         return self._identity
 
     def __copy__(self) -> NoReturn:
+        """Reject copying of process-local projection authority."""
         raise CopyError("prepared projection authority cannot be copied")
 
     def __deepcopy__(self, _memo: object) -> NoReturn:
+        """Reject deep copying of process-local projection authority."""
         raise CopyError("prepared projection authority cannot be copied")
 
     def __reduce__(self) -> NoReturn:
+        """Reject serialization of process-local projection authority."""
         raise TypeError("prepared projection authority cannot be serialized")
 
     def _resource(self, facts):
+        """Build and validate the exact final projection resource."""
         try:
             resource = projection_resource_context(self._component, self._identity, facts)
         except (TypeError, ValueError) as exc:
@@ -104,6 +110,7 @@ class _PreparedProjection:
     async def consume_new(
         self, facts: GuideSufficiencyProjectionFacts | ArtifactPolicyProjectionFacts
     ) -> ProjectGuideProjectionAuthorityReceipt:
+        """Consume new projection authority once and return exact evidence custody."""
         resource = self._resource(facts)
         try:
             decision = await self._custody.service.consume(
@@ -131,6 +138,7 @@ class _PreparedProjection:
         facts: GuideSufficiencyProjectionFacts | ArtifactPolicyProjectionFacts,
         stored_decision_id: UUID,
     ) -> None:
+        """Freshly validate the original stored decision for replay."""
         resource = self._resource(facts)
         try:
             await self._custody.service.validate_replay(
@@ -149,11 +157,15 @@ class _PreparedProjection:
 
 
 class _ProjectionAuthorization:
+    """Shared request-local preparation for the two closed projection ports."""
+
     def __init__(self, session: AsyncSession, component: ProjectionComponent) -> None:
+        """Bind the adapter to its caller-owned session and component."""
         self._session = session
         self._component = component
 
     def _identity(self, attempt_id: UUID, actor: UUID, link: UUID):
+        """Derive the deterministic component identity."""
         helper = (
             guide_sufficiency_projection_identity
             if self._component == "guide_sufficiency"
@@ -167,6 +179,7 @@ class _ProjectionAuthorization:
 
     @asynccontextmanager
     async def _prepare(self, locator: ProjectGuideProjectionLocator):
+        """Prepare and close one exact fixed-service capability."""
         seed = self._identity(locator.attempt_id, _ZERO, _ZERO)
         manager = fixed_service_prepared_authorization(
             self._session,
@@ -235,11 +248,13 @@ class GuideSufficiencyProjectionAuthorization(_ProjectionAuthorization):
     """Prepare only fixed-service guide-sufficiency projection authority."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Create the guide-sufficiency projection adapter."""
         super().__init__(session, "guide_sufficiency")
 
     def prepare_sufficiency_projection(
         self, locator: ProjectGuideProjectionLocator
     ) -> AbstractAsyncContextManager[PreparedGuideSufficiencyProjection]:
+        """Prepare guide-sufficiency projection authority."""
         return self._prepare(locator)
 
 
@@ -247,9 +262,11 @@ class ArtifactPolicyProjectionAuthorization(_ProjectionAuthorization):
     """Prepare only fixed-service artifact-policy projection authority."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Create the artifact-policy projection adapter."""
         super().__init__(session, "submission_artifact_policy")
 
     def prepare_artifact_policy_projection(
         self, locator: ProjectGuideProjectionLocator
     ) -> AbstractAsyncContextManager[PreparedArtifactPolicyProjection]:
+        """Prepare submission-artifact-policy projection authority."""
         return self._prepare(locator)
