@@ -15,6 +15,7 @@ from app.modules.authorization.api import (
 from app.modules.authorization.domain.guide_compilation_projections import (
     ProjectGuideProjectionResourceContext,
     parse_projection_prepare,
+    projection_context_matches,
     projection_prepare_context,
     projection_prepare_matches,
     projection_resource_context,
@@ -22,6 +23,7 @@ from app.modules.authorization.domain.guide_compilation_projections import (
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.api import ProjectGuideProjectionLocator
+from app.modules.authorization.runtime import ProjectGuideSufficiencyMutationResourceContext
 
 from .support import policy_facts, sufficiency_facts
 
@@ -71,6 +73,29 @@ def test_projection_prepare_binds_complete_authority() -> None:
         sufficiency_facts(locator.project_id, locator.attempt_id),
     )
     assert projection_prepare_matches(prepared.model_dump(mode="json"), resource)
+
+
+def test_projection_prepare_cannot_consume_a_legacy_resource_kind() -> None:
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    identity = guide_sufficiency_projection_identity(
+        attempt_id=locator.attempt_id,
+        actor_profile_id=uuid4(),
+        identity_link_id=uuid4(),
+    )
+    prepared = projection_prepare_context("guide_sufficiency", locator, identity)
+    legacy = ProjectGuideSufficiencyMutationResourceContext.model_construct(
+        resource_type="project_guide_sufficiency_mutation",
+        resource_id=uuid4(),
+        scope_project_id=locator.project_id,
+        execution_kind="setup_service",
+    )
+    assert not projection_context_matches(prepared.model_dump(mode="json"), legacy)
+    projection = projection_resource_context(
+        "guide_sufficiency",
+        identity,
+        sufficiency_facts(locator.project_id, locator.attempt_id),
+    )
+    assert not projection_context_matches(None, projection)
 
 
 def test_projection_facts_digest_cannot_be_forged() -> None:

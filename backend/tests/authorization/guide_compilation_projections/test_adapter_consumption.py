@@ -22,17 +22,24 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     AuthorizationEvidenceUnavailable,
     PreparedAuthorizationHandleInvalid,
+    PreparedAuthorizationInput,
     PreparedAuthorizationUnsupported,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
     ProjectGuideSufficiencyMutationResourceContext,
+    ProjectSetupServiceCustodyContext,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.guide_compilation_projections import (
     GuideSufficiencyProjectionAuthorization,
 )
+from app.modules.authorization.domain.guide_compilation_projections import (
+    projection_resource_context,
+)
 from app.modules.authorization import guide_compilation_projections as adapters
 
-from .support import custody, policy_facts, sufficiency_facts
+from .support import DIGEST, custody, policy_facts, sufficiency_facts
 
 
 def _install_custody(monkeypatch: pytest.MonkeyPatch):
@@ -129,19 +136,81 @@ async def test_projection_closed_copied_and_reconstructed_handles_deny(
 
 
 @pytest.mark.asyncio
-async def test_projection_and_legacy_contexts_are_not_interchangeable(
+async def test_legacy_preparation_cannot_consume_projection_resource(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _owned, session, evidence = _install_custody(monkeypatch)
     locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    guide_id, snapshot_id, setup_run_id = (uuid4() for _ in range(3))
+    setup_custody = ProjectSetupServiceCustodyContext(
+        setup_run_id=setup_run_id,
+        expected_step="guide_sufficiency",
+        task_id=uuid4(),
+        correlation_id=uuid4(),
+        scope_project_id=locator.project_id,
+        guide_id=guide_id,
+        source_snapshot_id=snapshot_id,
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+    )
+    legacy = ProjectGuideSufficiencyMutationResourceContext(
+        resource_type="project_guide_sufficiency_mutation",
+        resource_id=snapshot_id,
+        operation_id=uuid4(),
+        request_digest=DIGEST,
+        scope_project_id=locator.project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=DIGEST,
+        target_kind="run",
+        execution_kind="setup_service",
+        setup_generation=1,
+        stale_output_digest=DIGEST,
+        setup_service_custody=setup_custody,
+    )
+    request_value = legacy.model_dump(mode="json")
+    request_value.update({"project_id": str(locator.project_id), "report_id": None})
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=request_value)
+    legacy_handle = await _owned.service.prepare(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        caller,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=locator.project_id,
+        ),
+    )
+    projection_adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with projection_adapter.prepare_sufficiency_projection(locator) as projection:
+        projection_resource = projection_resource_context(
+            "guide_sufficiency",
+            projection.identity,
+            sufficiency_facts(locator.project_id, locator.attempt_id),
+        )
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await _owned.service.consume(
+                legacy_handle,
+                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+                caller,
+                projection_resource,
+            )
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_projection_preparation_cannot_consume_legacy_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owned, session, evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    legacy = ProjectGuideSufficiencyMutationResourceContext.model_construct(
+        resource_type="project_guide_sufficiency_mutation",
+        resource_id=uuid4(),
+        scope_project_id=locator.project_id,
+        execution_kind="setup_service",
+    )
     adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
     async with adapter.prepare_sufficiency_projection(locator) as prepared:
-        legacy = ProjectGuideSufficiencyMutationResourceContext.model_construct(
-            resource_type="project_guide_sufficiency_mutation",
-            resource_id=uuid4(),
-            scope_project_id=locator.project_id,
-            execution_kind="setup_service",
-        )
         with pytest.raises(PreparedAuthorizationHandleInvalid):
             await prepared._custody.service.consume(  # type: ignore[attr-defined]
                 prepared._handle,  # type: ignore[attr-defined]

@@ -156,15 +156,15 @@ async def test_policy_projection_close_failure_rolls_back_authority_and_product(
     attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    service, command = await _policy_ready(factory, attempt_id)
-    original_close = prepared_module.PreparedAuthorizationService.close
-
-    def fail_close(prepared) -> None:
-        original_close(prepared)
-        raise AuthorizationEvidenceUnavailable("close failed")
-
-    monkeypatch.setattr(prepared_module.PreparedAuthorizationService, "close", fail_close)
     try:
+        service, command = await _policy_ready(factory, attempt_id)
+        original_close = prepared_module.PreparedAuthorizationService.close
+
+        def fail_close(prepared) -> None:
+            original_close(prepared)
+            raise AuthorizationEvidenceUnavailable("close failed")
+
+        monkeypatch.setattr(prepared_module.PreparedAuthorizationService, "close", fail_close)
         with pytest.raises(ProjectGuideProjectionError, match="service_authority_denied"):
             await service.project_submission_artifact_policy(command)
         async with factory() as session:
@@ -236,32 +236,32 @@ async def test_policy_projection_consumes_before_product_staging(
     attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    service, command = await _policy_ready(factory, attempt_id)
-    original_consume = prepared_module.PreparedAuthorizationService.consume
-    observed = False
-
-    async def observe_before_consume(prepared, handle, action_id, *args, **kwargs):
-        nonlocal observed
-        if action_id.value == "project.submission_artifact_policy.derive":
-            counts = (
-                await prepared._session.execute(
-                    text(
-                        "select (select count(*) from submission_artifact_policies),"
-                        "(select count(*) from project_guide_component_projection_operations "
-                        "where component='submission_artifact_policy'),"
-                        "(select count(*) from audit_events where action_id="
-                        "'project.submission_artifact_policy.derive')"
-                    )
-                )
-            ).one()
-            assert counts == (0, 0, 0)
-            observed = True
-        return await original_consume(prepared, handle, action_id, *args, **kwargs)
-
-    monkeypatch.setattr(
-        prepared_module.PreparedAuthorizationService, "consume", observe_before_consume
-    )
     try:
+        service, command = await _policy_ready(factory, attempt_id)
+        original_consume = prepared_module.PreparedAuthorizationService.consume
+        observed = False
+
+        async def observe_before_consume(prepared, handle, action_id, *args, **kwargs):
+            nonlocal observed
+            if action_id.value == "project.submission_artifact_policy.derive":
+                counts = (
+                    await prepared._session.execute(
+                        text(
+                            "select (select count(*) from submission_artifact_policies),"
+                            "(select count(*) from project_guide_component_projection_operations "
+                            "where component='submission_artifact_policy'),"
+                            "(select count(*) from audit_events where action_id="
+                            "'project.submission_artifact_policy.derive')"
+                        )
+                    )
+                ).one()
+                assert counts == (0, 0, 0)
+                observed = True
+            return await original_consume(prepared, handle, action_id, *args, **kwargs)
+
+        monkeypatch.setattr(
+            prepared_module.PreparedAuthorizationService, "consume", observe_before_consume
+        )
         result = await service.project_submission_artifact_policy(command)
         assert result.disposition == "projected"
         assert observed is True
@@ -305,16 +305,16 @@ async def test_policy_projection_late_failure_rolls_back_authority_and_product(
     attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    service, command = await _policy_ready(factory, attempt_id)
-    original_operation = projection_module._new_operation
-
-    def invalid_operation(*args, **kwargs):
-        operation = original_operation(*args, **kwargs)
-        operation.authorization_decision_event_id = str(uuid4())
-        return operation
-
-    monkeypatch.setattr(projection_module, "_new_operation", invalid_operation)
     try:
+        service, command = await _policy_ready(factory, attempt_id)
+        original_operation = projection_module._new_operation
+
+        def invalid_operation(*args, **kwargs):
+            operation = original_operation(*args, **kwargs)
+            operation.authorization_decision_event_id = str(uuid4())
+            return operation
+
+        monkeypatch.setattr(projection_module, "_new_operation", invalid_operation)
         with pytest.raises(ProjectGuideProjectionError):
             await service.project_submission_artifact_policy(command)
         async with factory() as session:
@@ -369,16 +369,16 @@ async def test_policy_projection_denial_has_no_product_or_allowed_evidence(
     attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    service, command = await _policy_ready(factory, attempt_id)
-    async with engine.begin() as connection:
-        await connection.execute(
-            text(
-                "update actor_identity_links set status='revoked',revoked_by=:actor,"
-                "revoked_at=now(),revoked_reason='test' where id=:link"
-            ),
-            {"actor": str(values["actor"]), "link": str(values["link"])},
-        )
     try:
+        service, command = await _policy_ready(factory, attempt_id)
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "update actor_identity_links set status='revoked',revoked_by=:actor,"
+                    "revoked_at=now(),revoked_reason='test' where id=:link"
+                ),
+                {"actor": str(values["actor"]), "link": str(values["link"])},
+            )
         with pytest.raises(ProjectGuideProjectionError, match="service_authority_denied"):
             await service.project_submission_artifact_policy(command)
         async with factory() as session:

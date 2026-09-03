@@ -641,7 +641,7 @@ jobs:
         working-directory: backend
         run: >-
           coverage report
-          --include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/dev.py,app/adapters/auth/flow.py'
+          --include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/__init__.py,app/adapters/auth/dev.py,app/adapters/auth/flow.py'
           --precision=2
           --fail-under=90
 

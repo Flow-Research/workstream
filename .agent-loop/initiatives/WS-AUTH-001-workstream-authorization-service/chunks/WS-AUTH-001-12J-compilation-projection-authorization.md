@@ -175,6 +175,7 @@ backend/tests/test_ci_test_lanes.py
 backend/scripts/authorization_boundary.py
 backend/scripts/behavior_ownership.py
 backend/scripts/run_test_lanes.py
+.github/workflows/backend.yml
 .ci/behavior-ownership/auth/**
 .ci/behavior-ownership/partition.v1.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
@@ -227,7 +228,7 @@ proves a schema change necessary, stop and amend this contract before coding it.
 | Exact replay validates the stored decision freshly without new evidence or mutation authority | `test_projection_exact_replay_uses_original_decision`; inactive/revoked/action-unavailable/mismatched-decision replay tests |
 | Denial and late product failure leave no allowed evidence or product effect | `test_projection_denial_has_no_product_or_allowed_evidence`; PostgreSQL `test_projection_late_failure_rolls_back_authority_and_product` |
 | Concurrent same-operation calls produce one product effect and one allowed decision; the loser performs authorized exact replay | hosted PostgreSQL `test_projection_same_operation_concurrency_is_single_effect` for both components |
-| Existing legacy contexts remain exact and cannot consume projection handles; no action/count/availability delta occurs | `test_projection_and_legacy_contexts_are_not_interchangeable`; catalogue/matrix/runtime parity tests |
+| Existing legacy and projection contexts are non-interchangeable in both directions; no action/count/availability delta occurs | `test_legacy_preparation_cannot_consume_projection_resource`; `test_projection_preparation_cannot_consume_legacy_resource`; catalogue/matrix/runtime parity tests |
 | The approved AUTH composition root exports only request-local public-port factories; no consumer imports private AUTH | `test_projection_factories_are_exposed_only_by_auth_composition_root`; import-aware authorization-boundary proof |
 | No private cross-module imports, live route, serialized handle, model/provider call, or changed Celery payload exists | import-aware architecture test, route scan, serialization rejection test, and behavior-ownership proof |
 

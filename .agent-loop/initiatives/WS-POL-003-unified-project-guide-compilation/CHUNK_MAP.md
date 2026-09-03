@@ -15,7 +15,7 @@ transient work, and no chunk starts automatically.
 | `WS-POL-003-04A3` | Complete hidden compilation-derived sufficiency/artifact-policy projections with immutable provenance and no model call. | Merged 04A |
 | `WS-POL-003-04A2` | Planned hidden purpose-specific setup-ledger finalization with closed outcomes and no live route. | Merged 04A3 |
 | `WS-AUTH-001-12J` | Complete exact fixed-service authority for the two compilation-derived projection ports. | Merged 04A3 |
-| `WS-AUTH-001-12B2` | Planned exact setup-finalization authority for the merged 04A2 manifest. | Merged 04A2 + completed AUTH-12J |
+| `WS-AUTH-001-12B2` | Planned exact setup-finalization authority for the future 04A2 manifest. | Planned POL-04A2 prerequisite + completed AUTH-12J |
 | `WS-POL-003-04B` | Planned explicit-PM-request live cutover through the hidden projection/finalization chain; remove every legacy inference call from live reachability. | Merged 04A3 + 04A2 + AUTH-12J + AUTH-12B2 |
 | `WS-POL-003-05A` | Hidden approval/effective/pre-submit projection behavior over the complete immutable result. | 04B |
 | `WS-AUTH-001-12F4` | Activate exact PM approval authority and PREP composition for the hidden 05A manifest. | 05A |
