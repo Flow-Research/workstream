@@ -165,6 +165,7 @@ backend/app/modules/audit/service.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/authorization/guide_compilation_projections/**
 backend/tests/authorization/test_fixed_service_action_context.py
+backend/tests/projects/guide_compilation/test_projection_postgresql.py
 backend/tests/test_authorization.py
 backend/tests/test_behavior_ownership.py
 backend/tests/test_ci_test_lanes.py
@@ -238,7 +239,7 @@ python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py
 cd backend && .venv/bin/ruff check app/modules/authorization tests/authorization/guide_compilation_projections tests/architecture/test_authorization_boundary.py
-cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py
+cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py
 cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections --cov=app.modules.authorization.guide_compilation_projections --cov=app.modules.authorization.domain.guide_compilation_projections --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
 
@@ -246,6 +247,12 @@ Hosted GitHub Actions owns the complete PostgreSQL concurrency/rollback matrix,
 the repository-wide suite and preserved global coverage floor, behavior-lane
 integrity, and aggregate exact-head evidence. Local development must not run
 the multi-hour full suite.
+
+The hosted project-lifecycle lane must also execute
+`tests/projects/guide_compilation/test_projection_postgresql.py`, whose primary
+success/replay flow uses the concrete AUTH-12J factories. `tests/test_authorization.py`
+remains part of hosted full-suite custody because its PostgreSQL cases require
+`WORKSTREAM_TEST_DATABASE_URL`; it is not a clean database-free local command.
 
 ## Required review
 

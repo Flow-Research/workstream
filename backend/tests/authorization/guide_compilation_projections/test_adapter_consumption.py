@@ -2,8 +2,11 @@
 
 from contextlib import asynccontextmanager
 from copy import copy, deepcopy
+import asyncio
 import pickle
+from dataclasses import replace
 from uuid import uuid4
+from types import SimpleNamespace
 
 import pytest
 
@@ -180,4 +183,84 @@ async def test_cross_component_facts_are_concealed_without_evidence(
                 await prepared.consume_new(wrong_facts)  # type: ignore[arg-type]
             else:
                 await prepared.validate_replay(wrong_facts, uuid4())  # type: ignore[arg-type]
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", (None, RuntimeError("late"), asyncio.CancelledError()))
+async def test_projection_prepared_close_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException | None,
+) -> None:
+    owned, session, _evidence = custody()
+    close_calls = 0
+    original_close = owned.service.close
+
+    def close() -> None:
+        nonlocal close_calls
+        close_calls += 1
+        original_close()
+
+    owned.service.close = close  # type: ignore[method-assign]
+
+    @asynccontextmanager
+    async def fixed(*_args, **_kwargs):
+        try:
+            yield owned
+        finally:
+            owned.service.close()
+
+    monkeypatch.setattr(adapters, "fixed_service_prepared_authorization", fixed)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    if failure is None:
+        async with adapter.prepare_sufficiency_projection(locator):
+            pass
+    else:
+        with pytest.raises(type(failure)):
+            async with adapter.prepare_sufficiency_projection(locator):
+                raise failure
+    assert close_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_wrong_deterministic_output_denies_before_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owned, session, evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    facts = replace(sufficiency_facts(locator.project_id, locator.attempt_id), report_id=uuid4())
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+        with pytest.raises(PreparedAuthorizationInvalid):
+            await prepared.consume_new(facts)
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_caller_body_exception_is_not_remapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owned, session, _evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    failure = AuthorizationEvidenceUnavailable("caller-owned failure")
+    with pytest.raises(AuthorizationEvidenceUnavailable) as caught:
+        async with adapter.prepare_sufficiency_projection(locator):
+            raise failure
+    assert caught.value is failure
+
+
+@pytest.mark.asyncio
+async def test_projection_handle_cannot_cross_root_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _owned, session, evidence = _install_custody(monkeypatch)
+    locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
+    facts = sufficiency_facts(locator.project_id, locator.attempt_id)
+    adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
+    async with adapter.prepare_sufficiency_projection(locator) as prepared:
+        session.root = SimpleNamespace(is_active=True)
+        with pytest.raises(PreparedAuthorizationInvalid):
+            await prepared.consume_new(facts)
     assert evidence.events == []

@@ -98,6 +98,9 @@ class ProjectGuideProjectionResourceContext(BaseModel):
         )
         if self.facts_digest != expected_digest:
             raise ValueError("projection facts digest is inconsistent")
+        output_field = "report_id" if self.component == "guide_sufficiency" else "policy_id"
+        if self.projection_facts[output_field] != str(self.output_id):
+            raise ValueError("projection output identity is inconsistent")
         if self.projection_facts.get("project_id") != str(self.scope_project_id):
             raise ValueError("projection project identity is inconsistent")
         return self

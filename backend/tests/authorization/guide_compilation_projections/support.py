@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 from app.modules.authorization.api import (
     ArtifactPolicyProjectionFacts,
     GuideSufficiencyProjectionFacts,
+    artifact_policy_projection_identity,
+    guide_sufficiency_projection_identity,
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
@@ -21,7 +23,7 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     ServiceAuthorizationContext,
 )
-from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.actors.api import ServiceIdentity
 
 DIGEST = "sha256:" + "a" * 64
 
@@ -39,18 +41,29 @@ class Session:
 
 
 class Repository:
+    def __init__(
+        self,
+        *,
+        identity: ServiceIdentity = ServiceIdentity.PROJECT_SETUP,
+        actor_status: ActorStatus = ActorStatus.ACTIVE,
+        link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
+    ) -> None:
+        self.identity = identity
+        self.actor_status = actor_status
+        self.link_status = link_status
+
     async def lock_request_actor(self, identity_link_id, actor_profile_id):
         return (
             SimpleNamespace(
                 id=str(identity_link_id),
                 actor_profile_id=str(actor_profile_id),
-                status="active",
+                status=self.link_status.value,
             ),
             SimpleNamespace(
                 id=str(actor_profile_id),
                 actor_kind="service",
-                status="active",
-                service_identity=ServiceIdentity.PROJECT_SETUP.value,
+                status=self.actor_status.value,
+                service_identity=self.identity.value,
             ),
         )
 
@@ -81,15 +94,21 @@ class Evidence:
         )
 
 
-def custody() -> tuple[FixedServicePreparedAuthorization, Session, Evidence]:
-    session, repository = Session(), Repository()
+def custody(
+    *,
+    identity: ServiceIdentity = ServiceIdentity.PROJECT_SETUP,
+    actor_status: ActorStatus = ActorStatus.ACTIVE,
+    link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
+) -> tuple[FixedServicePreparedAuthorization, Session, Evidence]:
+    session = Session()
+    repository = Repository(identity=identity, actor_status=actor_status, link_status=link_status)
     context = ServiceAuthorizationContext(
         actor_profile_id=uuid4(),
         actor_kind=ActorKind.SERVICE,
-        actor_status=ActorStatus.ACTIVE,
+        actor_status=actor_status,
         identity_link_id=uuid4(),
-        identity_link_status=IdentityLinkStatus.ACTIVE,
-        service_identity=ServiceIdentity.PROJECT_SETUP,
+        identity_link_status=link_status,
+        service_identity=identity,
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
@@ -118,6 +137,9 @@ def custody() -> tuple[FixedServicePreparedAuthorization, Session, Evidence]:
 
 
 def sufficiency_facts(project_id: UUID, attempt_id: UUID):
+    output_id = guide_sufficiency_projection_identity(
+        attempt_id=attempt_id, actor_profile_id=uuid4(), identity_link_id=uuid4()
+    ).output_id
     return GuideSufficiencyProjectionFacts(
         project_id=project_id,
         attempt_id=attempt_id,
@@ -139,12 +161,15 @@ def sufficiency_facts(project_id: UUID, attempt_id: UUID):
         compilation_agent_version="v1",
         material_sha256=DIGEST,
         material_byte_count=7,
-        report_id=uuid4(),
+        report_id=output_id,
         report_content_digest=DIGEST,
     )
 
 
 def policy_facts(project_id: UUID, attempt_id: UUID):
+    output_id = artifact_policy_projection_identity(
+        attempt_id=attempt_id, actor_profile_id=uuid4(), identity_link_id=uuid4()
+    ).output_id
     return ArtifactPolicyProjectionFacts(
         project_id=project_id,
         attempt_id=attempt_id,
@@ -167,7 +192,7 @@ def policy_facts(project_id: UUID, attempt_id: UUID):
         prior_operation_id=uuid4(),
         sufficiency_report_id=uuid4(),
         sufficiency_report_digest=DIGEST,
-        policy_id=uuid4(),
+        policy_id=output_id,
         policy_content_digest=DIGEST,
     )
 

@@ -168,13 +168,22 @@ class _ProjectionAuthorization:
     @asynccontextmanager
     async def _prepare(self, locator: ProjectGuideProjectionLocator):
         seed = self._identity(locator.attempt_id, _ZERO, _ZERO)
+        manager = fixed_service_prepared_authorization(
+            self._session,
+            service_identity=ServiceIdentity.PROJECT_SETUP,
+            request_id=seed.operation_id,
+            correlation_id=seed.correlation_id,
+        )
         try:
-            async with fixed_service_prepared_authorization(
-                self._session,
-                service_identity=ServiceIdentity.PROJECT_SETUP,
-                request_id=seed.operation_id,
-                correlation_id=seed.correlation_id,
-            ) as custody:
+            custody = await manager.__aenter__()
+        except PreparedAuthorizationHandleInvalid as exc:
+            raise PreparedAuthorizationInvalid("prepared projection authority is invalid") from exc
+        except PreparedAuthorizationUnsupported as exc:
+            raise AuthorizationDenied("projection authority denied") from exc
+        except AuthorizationEvidenceUnavailable as exc:
+            raise AuthorizationUnavailable("projection authority unavailable") from exc
+        try:
+            try:
                 identity = self._identity(
                     locator.attempt_id,
                     custody.actor_profile_id,
@@ -193,20 +202,33 @@ class _ProjectionAuthorization:
                         project_id=locator.project_id,
                     ),
                 )
-                yield _PreparedProjection(
-                    self._component,
-                    custody,
-                    handle,
-                    caller_input,
-                    identity,
-                    locator,
-                )
-        except PreparedAuthorizationHandleInvalid as exc:
-            raise PreparedAuthorizationInvalid("prepared projection authority is invalid") from exc
-        except PreparedAuthorizationUnsupported as exc:
-            raise AuthorizationDenied("projection authority denied") from exc
-        except AuthorizationEvidenceUnavailable as exc:
-            raise AuthorizationUnavailable("projection authority unavailable") from exc
+            except PreparedAuthorizationHandleInvalid as exc:
+                raise PreparedAuthorizationInvalid(
+                    "prepared projection authority is invalid"
+                ) from exc
+            except PreparedAuthorizationUnsupported as exc:
+                raise AuthorizationDenied("projection authority denied") from exc
+            except AuthorizationEvidenceUnavailable as exc:
+                raise AuthorizationUnavailable("projection authority unavailable") from exc
+            yield _PreparedProjection(
+                self._component,
+                custody,
+                handle,
+                caller_input,
+                identity,
+                locator,
+            )
+        finally:
+            try:
+                await manager.__aexit__(None, None, None)
+            except PreparedAuthorizationHandleInvalid as exc:
+                raise PreparedAuthorizationInvalid(
+                    "prepared projection authority is invalid"
+                ) from exc
+            except PreparedAuthorizationUnsupported as exc:
+                raise AuthorizationDenied("projection authority denied") from exc
+            except AuthorizationEvidenceUnavailable as exc:
+                raise AuthorizationUnavailable("projection authority unavailable") from exc
 
 
 class GuideSufficiencyProjectionAuthorization(_ProjectionAuthorization):
