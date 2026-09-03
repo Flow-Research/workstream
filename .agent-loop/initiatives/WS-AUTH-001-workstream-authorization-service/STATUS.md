@@ -19,8 +19,8 @@ authority merged through `WS-AUTH-001-12I` in PR #312. That activation exposes
 authority for the hidden POL compilation path; it does not make the remaining
 POL, ART, REV, CON, TASK, or checker lifecycle behavior live.
 
-POL-04A3 exposes two hidden, deny-default projection ports. `WS-AUTH-001-12J`
-is complete and supplies their exact request-local fixed-service adapters
+POL-04A3 exposes two hidden, deny-default projection ports.
+`WS-AUTH-001-12J` is Complete and supplies their exact request-local fixed-service adapters
 without adding actions or making the flow live.
 
 All completed and superseded AUTH chunks remain enumerated in `CHUNK_MAP.md`.
