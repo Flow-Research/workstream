@@ -157,6 +157,7 @@ backend/app/modules/authorization/api/project_guide_projections.py
 backend/app/modules/authorization/guide_compilation_projections.py
 backend/app/modules/authorization/domain/guide_compilation_projections.py
 backend/app/modules/authorization/domain/prepared_service.py
+backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/authorization/runtime.py
 backend/app/adapters/auth/__init__.py
@@ -209,6 +210,7 @@ proves a schema change necessary, stop and amend this contract before coding it.
 |---|---|
 | Exact fixed service, action, permission, active profile/link, and matrix row are required independently for each port | `test_sufficiency_projection_requires_exact_project_setup_authority`; `test_artifact_policy_projection_requires_exact_project_setup_authority`; parametrized inactive/revoked/wrong-service/action/matrix tests |
 | Deterministic identities and both public digest helpers match AUTH's resource contexts byte-for-byte | `test_projection_identity_matches_public_contract`; `test_projection_resource_digests_match_public_contract` |
+| Kernel evidence uses the exact projection resource type, operation ID, project, actor, action, permission, and public authority digest rather than the legacy mutation or generic project shape | `test_projection_allowed_evidence_has_exact_resource_custody` for both components |
 | Preparation is bound to the current session, root transaction, actor/link, locator, action, component, and generation | `test_projection_prepare_binds_complete_authority`; parametrized wrong-session/transaction/actor/link/locator/action/component/generation tests |
 | New consumption occurs once, before product staging, and returns the exact receipt | `test_projection_consume_returns_exact_receipt`; `test_projection_consume_callback_observes_no_product_rows` |
 | Context exit closes exactly once for success, denial, replay, exception, cancellation, and rollback; closed/copies/reconstructed handles deny | `test_projection_prepared_close_matrix`; `test_projection_closed_copied_and_reconstructed_handles_deny` |
