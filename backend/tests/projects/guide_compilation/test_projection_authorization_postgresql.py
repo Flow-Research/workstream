@@ -202,7 +202,7 @@ async def test_policy_projection_consumes_before_product_staging(
     original_consume = prepared_module.PreparedAuthorizationService.consume
     observed = False
 
-    async def observe_before_consume(prepared, action_id, *args, **kwargs):
+    async def observe_before_consume(prepared, handle, action_id, *args, **kwargs):
         nonlocal observed
         if action_id.value == "project.submission_artifact_policy.derive":
             counts = (
@@ -218,7 +218,7 @@ async def test_policy_projection_consumes_before_product_staging(
             ).one()
             assert counts == (0, 0, 0)
             observed = True
-        return await original_consume(prepared, action_id, *args, **kwargs)
+        return await original_consume(prepared, handle, action_id, *args, **kwargs)
 
     monkeypatch.setattr(
         prepared_module.PreparedAuthorizationService, "consume", observe_before_consume
