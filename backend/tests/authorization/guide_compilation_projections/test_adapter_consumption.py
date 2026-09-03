@@ -23,8 +23,10 @@ from app.modules.authorization.runtime import (
     AuthorizationEvidenceUnavailable,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
+    ProjectGuideSufficiencyMutationResourceContext,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
+from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.guide_compilation_projections import (
     GuideSufficiencyProjectionAuthorization,
 )
@@ -134,8 +136,19 @@ async def test_projection_and_legacy_contexts_are_not_interchangeable(
     locator = ProjectGuideProjectionLocator(project_id=uuid4(), attempt_id=uuid4())
     adapter = GuideSufficiencyProjectionAuthorization(session)  # type: ignore[arg-type]
     async with adapter.prepare_sufficiency_projection(locator) as prepared:
-        with pytest.raises(PreparedAuthorizationInvalid):
-            await prepared.consume_new({"resource_type": "project_guide_sufficiency_mutation"})  # type: ignore[arg-type]
+        legacy = ProjectGuideSufficiencyMutationResourceContext.model_construct(
+            resource_type="project_guide_sufficiency_mutation",
+            resource_id=uuid4(),
+            scope_project_id=locator.project_id,
+            execution_kind="setup_service",
+        )
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared._custody.service.consume(  # type: ignore[attr-defined]
+                prepared._handle,  # type: ignore[attr-defined]
+                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+                prepared._input,  # type: ignore[attr-defined]
+                legacy,
+            )
     assert evidence.events == []
 
 

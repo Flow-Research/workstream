@@ -44,7 +44,7 @@ from app.modules.authorization.domain.prepared_adapter_bindings import (
 from app.modules.authorization.domain.prepared_service import project_setup_resource_matches
 from app.modules.authorization.domain.guide_compilation_projections import (
     ProjectGuideProjectionResourceContext,
-    projection_prepare_matches,
+    projection_context_matches,
 )
 from app.modules.authorization.prepared_projection_replay import (
     parse_projection_bindings,
@@ -530,8 +530,8 @@ class PreparedAuthorizationService:
             final_resource_context,
         ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        if isinstance(final_resource_context, ProjectGuideProjectionResourceContext) and not (
-            projection_prepare_matches(
+        if not (
+            projection_context_matches(
                 issuance.binding.guide_projection_prepare_context,
                 final_resource_context,
             )

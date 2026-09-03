@@ -216,6 +216,17 @@ def projection_prepare_matches(
     ).model_dump(mode="json")
 
 
+def projection_context_matches(
+    prepared: dict | None,
+    resource: object,
+) -> bool:
+    """Require projection preparation and final-resource kinds to match exactly."""
+    is_projection = isinstance(resource, ProjectGuideProjectionResourceContext)
+    if is_projection != (prepared is not None):
+        return False
+    return not is_projection or projection_prepare_matches(prepared, resource)
+
+
 def projection_replay_event_matches(
     event: Any,
     *,
