@@ -65,8 +65,12 @@ does not run two active methods in parallel.
 
 ## What must not change
 
-No backend, frontend, database, API, authorization, artifact, review,
-contribution, compensation, or product behavior may change during cutover.
+No Workstream product, runtime, database, API, authorization, artifact,
+product-review, contribution, or compensation behavior may change during
+cutover. Engineering-process implementation—including contributor guidance,
+reviewer configuration, validation scripts, tests, and CI enforcement—may
+change only as defined by this plan. Existing quality protections, GitHub
+authority, and human merge authority must remain effective throughout.
 
 ## How this will be proven
 

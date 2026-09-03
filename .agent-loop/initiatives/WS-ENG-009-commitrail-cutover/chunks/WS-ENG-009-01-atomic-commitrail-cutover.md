@@ -41,13 +41,25 @@ facts.
 - A relocation inventory classifies every pre-cutover reference originating
   outside `.agent-loop` and identifies its destination or historical-only
   disposition.
+- The inventory gives every non-historical `CURRENT_STATE.md` row and every
+  internal normative/durable record an explicit destination or historical-only
+  disposition; no entry remains unclassified.
 - `.agent-loop` is absent from the final candidate.
 - No active tracked file instructs a contributor to use retired signed-loop,
   merge-intent, queue, recovery-certificate, or projection machinery.
+- A repository-owned negative regression check runs in Agent Gates and rejects
+  any later restoration of `.agent-loop` paths or retired engineering-method
+  machinery.
 - Commitrail validation preserves bounded scope, evidence adequacy,
   exact-target review, proportional routing, durable dispositions, and human
   merge authority without creating contribution permission.
 - Other worktrees receive explicit rebase/translation guidance.
+- Every protection in the plan's Agent Gates preservation map has an
+  executable post-cutover check, and the lightweight workflow regression test
+  asserts the complete command set.
+- Commitrail validator tests cover valid single-record and multi-PR examples,
+  all four durable dispositions, missing fields, invalid dispositions,
+  transient state, inconsistent index/overview state, and legacy restoration.
 
 ## Risk class
 
@@ -61,6 +73,12 @@ test ! -e .agent-loop
 git grep -n -E '\.agent-loop|signed loop|loop memory|merge-intent|recovery certificate'
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_artifact_contracts.py
+python3 backend/scripts/check_guide_extractor_dependencies.py
+python3 scripts/check_commitrail_records.py --base-ref origin/main
+python3 scripts/reviewer_contracts.py
+python3 scripts/check_stale_review_contracts.py
 python3 -m unittest -v scripts.test_commitrail_contracts scripts.test_reviewer_contracts scripts.test_review_target scripts.test_lightweight_agent_gates
 ```
 
