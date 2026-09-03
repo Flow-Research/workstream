@@ -87,14 +87,14 @@
     {
       "capability": "unassigned_legacy_auth",
       "content_sha256": "a58d1f55451402734de1dcfcab667e3ffddde7c8d1c029325a1e1e1867f8ad3f",
-      "end_line": 920,
+      "end_line": 921,
       "hard_limit": 100,
       "kind": "production_function",
       "observed_lines": 276,
       "path": "backend/app/modules/authorization/prepared.py",
       "qualified_symbol": "PreparedAuthorizationService._binding",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 645
+      "start_line": 646
     },
     {
       "capability": "unassigned_legacy_auth",
