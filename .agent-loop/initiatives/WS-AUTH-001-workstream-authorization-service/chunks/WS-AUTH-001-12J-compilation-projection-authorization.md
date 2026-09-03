@@ -181,6 +181,7 @@ docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md
+.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/CHUNK_MAP.md
 .agent-loop/CURRENT_STATE.md
 docs/roadmap_status.md
 ```
