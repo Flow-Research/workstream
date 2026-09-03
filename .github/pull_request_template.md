@@ -1,15 +1,11 @@
 # Workstream PR Trust Bundle
 
-This PR template mirrors `.agent-loop/templates/PR_TRUST_BUNDLE.md`; keep both
-in sync when the trust-bundle structure changes.
+Use this summary with the smallest applicable Commitrail record. Do not copy
+transient check or approval state into durable repository files.
 
-## Chunk
+## Change
 
-`<chunk-id or small-change>` - `<title>`
-
-For a chunk PR, confirm its contract contains `## Merge state` with one
-`Outcome on merge`, and that the chunk map, initiative status, and current
-engineering state already describe the result that will land on `main`.
+`<change-id or small-change>` - `<title>`
 
 ## Goal
 
@@ -19,7 +15,7 @@ For larger or higher-risk work, link the applicable records. For a small
 change, state the intent directly here.
 
 - Intent:
-- Chunk contract:
+- Commitrail record or PR-only reason:
 
 ## What Changed
 
@@ -78,11 +74,10 @@ change, state the intent directly here.
 
 - None
 
-## Internal Reviewer Results
+## Impact-Routed Reviewer Results
 
-Allowed result values: `PASS`, `PASS AFTER FIXES`, `PASS WITH LOW RISKS`, or
-`N/A - with approved reason`. Any `N/A - with approved reason` row must include
-the reason in `Notes`.
+List only reviewers required by the affected risks. Do not add fixed ceremonial
+rows. Allowed results are `PASS`, `PASS AFTER FIXES`, or `PASS WITH LOW RISKS`.
 
 Reviewed code SHA:
 
@@ -90,24 +85,14 @@ Reviewed at:
 
 Reviewer run IDs:
 
-| Reviewer | Result | Blocking Findings | Notes |
+| Reviewer | Result | Blocking findings | Proof boundary and uncertainty |
 |---|---:|---|---|
-| Senior engineering | Pending | | |
-| QA/test | Pending | | |
-| Security/auth | Pending | | |
-| Product/ops | Pending | | |
-| Architecture | Pending / N/A - with approved reason | | |
-| CI integrity | Pending / N/A - with approved reason | | |
-| Docs | Pending / N/A - with approved reason | | |
-| Reuse/dedup | Pending / N/A - with approved reason | | |
-| Test delta | Pending / N/A - with approved reason | | |
+| `<affected specialty>` | `<result>` | `<none or IDs>` | `<summary>` |
 
 ## External Review
 
-| Source | Status | Notes |
-|---|---:|---|
-| CodeRabbit | Pending | |
-| GitHub checks | Pending | |
+Summarize material external findings and their disposition. Read GitHub for
+current check, conversation, approval, and merge state.
 
 ## CI And Gate Integrity
 

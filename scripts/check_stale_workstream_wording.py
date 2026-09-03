@@ -198,8 +198,6 @@ ACTIVE_SHARED_CONTRACT_EXCLUDED_PREFIXES = (
 # authorization and artifact contract scanners; unknown future files remain
 # active by default.
 HISTORICAL_PATHS = {
-    ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md",
-    ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/WS-POL-001-11-actor-identity-profile-registry.md",
     "docs/checker_trial_failure_catalog.md",
     "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md",
     "docs/internal_reviews/2026-06-11_revision_context_rebase.md",
@@ -229,12 +227,7 @@ HISTORICAL_PATHS = {
 CURRENT_RUNTIME_CONTRACT_PATHS = {
     "docs/current_system_data_flow.html",
 }
-ACTIVE_COMPENSATION_LINE_EXEMPTIONS = {
-    ".agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/chunks/"
-    "WS-XINT-001-PLAN-boundary-reconciliation.md": (
-        "`PaymentPolicy` and `PaymentRecord` are retired and removed names",
-    ),
-}
+ACTIVE_COMPENSATION_LINE_EXEMPTIONS: dict[str, tuple[str, ...]] = {}
 UNIMPLEMENTED_CURRENT_RUNTIME_COMPENSATION_PATTERNS = (
     re.compile(r"\bContributionPolicy\b"),
     re.compile(r"\bContributionPolicyVersion\b"),
@@ -265,22 +258,6 @@ ALLOWLISTED_LINES = {
 }
 ALLOWLISTED_PATTERN_LINES = {
     "auto_checking": {
-        ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/"
-        "WS-POL-001-05-revision-resubmission-real-api-drill.md": (
-            "`auto_checking` to `evaluation_pending`",
-            "and audit-event `from_status`/`to_status` values from `auto_checking` to",
-            "scripts, active docs, or real API drill output still depend on `auto_checking`.",
-            "can contain `auto_checking`.",
-            "The status rename is part of this proof. `auto_checking` is vague",
-            "Those docs may only be changed to replace `auto_checking` with the canonical",
-            "`auto_checking` with the canonical `evaluation_pending` lifecycle wording",
-            "- [ ] `auto_checking` is replaced in current runtime code, tests, scripts, and",
-            "already contain `auto_checking`. If the PR does not add a migration",
-            "`auto_checking`.",
-            "`audit_events.to_status` contains `auto_checking` after upgrade/drill.",
-            "scripts, docs, or real API drill output still depend on `auto_checking`.",
-            "replaces `auto_checking`.",
-        ),
         "backend/alembic/versions/0009_evaluation_pending_status.py": (
             'OLD_STATUS = "auto_checking"',
         ),
@@ -337,12 +314,6 @@ def is_active_shared_contract_path(path: Path) -> bool:
         return False
     if raw_path in {"AGENTS.md", "README.md"}:
         return True
-    if raw_path in {".agent-loop/LOOP_STATE.md", ".agent-loop/WORK_QUEUE.md"}:
-        return True
-    if raw_path.startswith(".agent-loop/initiatives/"):
-        return "/reviews/" not in raw_path and path.suffix in {".json", ".md"}
-    if raw_path.startswith(".agent-loop/policies/"):
-        return path.suffix == ".md"
     if not raw_path.startswith("docs/") or path.suffix not in {".html", ".md", ".puml"}:
         return False
     if raw_path.startswith(ACTIVE_SHARED_CONTRACT_EXCLUDED_PREFIXES):

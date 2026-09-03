@@ -19,7 +19,7 @@ DEFAULT_REGISTRY = REPOSITORY_ROOT / ".ci/module-boundaries/registry.v1.json"
 DEFAULT_LEDGER = REPOSITORY_ROOT / ".ci/module-boundaries/private-edge-debt.v1.json"
 DEFAULT_AUTH_LEDGER = (
     REPOSITORY_ROOT
-    / ".agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md"
+    / ".ci/auth-boundaries/IMPORT_LEDGER.md"
 )
 MODULE_PREFIX = "app.modules."
 BUSINESS_MODULES = 9

@@ -7,8 +7,8 @@ It is not Workstream product runtime code, not a required CI test, not formal
 internal review evidence, and not a canonical checker implementation.
 
 Do not cite files in this directory as proof that a Workstream implementation
-chunk passed the zero-trust loop. Formal chunk evidence must live under the
-approved `.agent-loop` or `docs/internal_reviews` paths for that chunk.
+change passed current review. Current proof belongs in the applicable
+Commitrail change record, executed checks, and exact-target review.
 
 ## Contents
 

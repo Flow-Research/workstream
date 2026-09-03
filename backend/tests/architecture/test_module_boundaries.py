@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[3]
 REGISTRY = ROOT / ".ci/module-boundaries/registry.v1.json"
 LEDGER = ROOT / ".ci/module-boundaries/private-edge-debt.v1.json"
 AUTH_LEDGER = (
-    ROOT / ".agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md"
+    ROOT / ".ci/auth-boundaries/IMPORT_LEDGER.md"
 )
 
 

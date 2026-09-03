@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-XINT-002-03",
-  "chunk_title": "Internal Service Activation",
-  "initiative_id": "WS-XINT-002",
-  "next_chunk_id": "WS-XINT-002-04",
-  "next_chunk_title": "Guide Activation",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

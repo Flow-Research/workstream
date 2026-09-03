@@ -125,6 +125,20 @@ def changed_files(
     return sorted(paths)
 
 
+def committed_changed_files(
+    base: str,
+    head: str,
+    *,
+    repository_root: Path | None = None,
+) -> list[str]:
+    """Return a committed three-dot delta and fail closed on Git errors."""
+    output = run_checked(
+        ["git", "diff", "--name-only", f"{base}...{head}"],
+        repository_root=repository_root,
+    )
+    return sorted(path for path in output.splitlines() if path)
+
+
 def count_text_lines(path: str, *, repository_root: Path | None = None) -> int:
     """Return a text-file line count and zero for binary or unreadable data."""
     candidate = (repository_root / path) if repository_root else Path(path)

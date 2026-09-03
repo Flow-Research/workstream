@@ -19,7 +19,7 @@ authentication adapter, not the product boundary.
 
 The backend is a modular monolith governed by the canonical module map and
 public-API dependency rules in
-[`../.agent-loop/policies/architecture-boundaries.md`](../.agent-loop/policies/architecture-boundaries.md).
+[`engineering/repository_architecture_boundaries.md`](engineering/repository_architecture_boundaries.md).
 Cross-module runtime imports use only the target module's typed `api` package.
 Concrete implementations are wired only by the application composition root or
 the exact same-owner adapter root `backend/app/adapters/<owner>/__init__.py`.

@@ -6,7 +6,10 @@ Use internal reviewer agents for high-risk or broad implementation and specifica
 
 CodeRabbit, GitHub checks, human review, and internal reviewers provide complementary evidence. Material external findings may be summarized in the PR or a durable review note.
 
-The Codex-native reviewer definitions live under `.codex/agents/`. Reusable reviewer workflows live under `.agents/skills/`. Durable initiative plans, chunk contracts, policies, and review logs live under `.agent-loop/`.
+The Codex-native reviewer definitions live under `.codex/agents/`. Reusable
+reviewer workflows live under `.agents/skills/`. Material findings belong in
+the current Commitrail change record or PR; create additional durable review
+records only when their independent value earns the maintenance cost.
 
 The engineering review protocol is separate from Workstream product review. Product review decisions stored by Workstream remain only `accept`, `needs_revision`, and `reject`.
 

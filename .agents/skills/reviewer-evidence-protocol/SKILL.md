@@ -83,7 +83,7 @@ escaped-failure IDs relevant to findings.
 ## Verdict
 
 Use only the closed results defined by
-`.agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json`. Critical/High
+`.ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json`. Critical/High
 findings remain blocking. Medium findings require an explicit human disposition.
 The receipt is advisory session evidence; it cannot authorize contribution,
 implementation, merge, or Workstream product lifecycle decisions.

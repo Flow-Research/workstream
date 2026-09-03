@@ -13,7 +13,7 @@ from app.modules.authorization import api
 from scripts import authorization_boundary as boundary
 
 ROOT = Path(__file__).resolve().parents[3]
-LEDGER = ROOT / ".agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md"
+LEDGER = ROOT / ".ci/auth-boundaries/IMPORT_LEDGER.md"
 
 
 def _write_module(root: Path, relative: str, source: str) -> Path:

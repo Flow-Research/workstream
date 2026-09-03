@@ -1,9 +1,0 @@
-{
-  "schema_version": 2,
-  "chunk_id": "WS-CON-001-PLAN4",
-  "chunk_title": "Current-Main Reconciliation",
-  "initiative_id": "WS-CON-001",
-  "next_chunk_id": "WS-CON-001-03A",
-  "next_chunk_title": "Project Compensation Adapter-Binding Persistence",
-  "next_requires_explicit_start": true
-}

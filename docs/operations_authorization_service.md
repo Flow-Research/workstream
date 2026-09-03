@@ -207,8 +207,8 @@ the database and install `0001_v01_baseline`. Operators must never infer a
 service identity from subject syntax, email, display name, token role, or
 adapter provenance.
 
-The [approved AUTH-06 chunk contract](../.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md)
-records the exact deprecated compatibility identifier. That temporary,
+Git history for the completed AUTH-06 change records the exact deprecated
+compatibility identifier. That temporary,
 enumerated intake route writes only `LegacyWorkflowEligibility` and cannot
 create a grant or change a canonical profile. Its direct compatibility
 consumers are assigned-submitter claim, assigned-submitter start, and submission

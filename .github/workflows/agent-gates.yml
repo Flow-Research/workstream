@@ -48,15 +48,12 @@ jobs:
       - name: Guide extractor dependency validation
         run: python3 backend/scripts/check_guide_extractor_dependencies.py
 
-      - name: Atomic chunk state validation
+      - name: Commitrail record validation
         env:
           WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
-          python3 scripts/check_chunk_state_sync.py
+          python3 scripts/check_commitrail_records.py
           --base-ref "${WORKSTREAM_BASE_SHA}"
-
-      - name: Active state projection validation
-        run: python3 scripts/check_active_state_projections.py
 
       - name: Reviewer contract validation
         run: python3 scripts/reviewer_contracts.py
@@ -73,6 +70,5 @@ jobs:
       - name: Lightweight gate regression tests
         run: >-
           python3 -m unittest -v
-          scripts.test_chunk_state_sync
-          scripts.test_active_state_projections
+          scripts.test_commitrail_contracts
           scripts.test_lightweight_agent_gates

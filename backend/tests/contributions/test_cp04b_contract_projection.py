@@ -8,7 +8,7 @@ import re
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = (
     ROOT
-    / ".agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks/WS-ARCH-001-CP04B-con-policy-publication-behavior.md"
+    / ".ci/behavior-contracts/contribution-policy-publication-behavior.md"
 )
 
 
