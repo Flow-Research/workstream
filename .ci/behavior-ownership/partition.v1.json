@@ -989,7 +989,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "0e1ec182cc7fa014861ca946d0750edabe2cb1351dcfabe8c59fa5249191cd89",
-  "protected_base_commit": "dfb50b3089a7d10a9fba7cedfd5200020de62cb7",
+  "authority_digest": "d9c594e1b7dc6c5ed1cd1215481eb70304da1f94d77a6123ee6c3dc569d8925a",
+  "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -73,9 +73,7 @@ AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
         "backend/scripts/test_structure_boundary.py",
     }
 )
-MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
-    {"backend/scripts/module_boundaries.py"}
-)
+MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset({"backend/scripts/module_boundaries.py"})
 MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
     {
         "backend/app/api/routes/artifact_submissions.py",
@@ -170,9 +168,7 @@ POL_03A_CALLABLE_TARGETS = frozenset(
 POL_03B_REMOVED_TARGETS = frozenset(
     {"backend/app/modules/projects/guide_compilation/authorization.py"}
 )
-POL_03A_DECLARATIVE_MODEL_TARGET = (
-    "backend/app/modules/projects/guide_compilation/models.py"
-)
+POL_03A_DECLARATIVE_MODEL_TARGET = "backend/app/modules/projects/guide_compilation/models.py"
 POL_04A_CALLABLE_TARGETS = frozenset(
     {
         "backend/app/modules/projects/guide_compilation/context.py",
@@ -206,6 +202,13 @@ AUTH_12I_TARGETS = frozenset(
         "backend/app/modules/authorization/domain/prepared_service.py",
         "backend/app/modules/authorization/domain/project_create.py",
         "backend/app/modules/authorization/guide_compilation.py",
+    }
+)
+AUTH_12J_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/domain/guide_compilation_projections.py",
+        "backend/app/modules/authorization/guide_compilation_projections.py",
+        "backend/app/modules/authorization/prepared_projection_replay.py",
     }
 )
 V01_BASELINE_REMOVED_TARGETS = frozenset(
@@ -306,8 +309,7 @@ def build_partition(root: Path = ROOT, *, base_commit: str | None = None) -> dic
     """Build the canonical deterministic path partition."""
     resolved_base = base_commit or _git(root, "rev-parse", "HEAD")
     assignments = [
-        {"group": group_for_target(target), "target": target}
-        for target in eligible_targets(root)
+        {"group": group_for_target(target), "target": target} for target in eligible_targets(root)
     ]
     authority = {
         "schema": PARTITION_SCHEMA,
@@ -357,14 +359,11 @@ def _validate_additive_partition_transition(
     current_assignments = current["assignments"]
     current_by_target = {item["target"]: item for item in current_assignments}
     removed = set(trusted_targets) - set(current_by_target)
-    retained_trusted = [
-        item for item in trusted_assignments if item["target"] not in removed
-    ]
+    retained_trusted = [item for item in trusted_assignments if item["target"] not in removed]
     if (
         trusted_targets != sorted(trusted_targets)
         or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS)
-        or [current_by_target[item["target"]] for item in retained_trusted]
-        != retained_trusted
+        or [current_by_target[item["target"]] for item in retained_trusted] != retained_trusted
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
@@ -376,14 +375,15 @@ def _validate_additive_partition_transition(
         | POL_04A_PARTITION_TARGETS
         | POL_04A3_PARTITION_TARGETS
         | AUTH_12I_TARGETS
+        | AUTH_12J_TARGETS
         | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | ARCH_02G_AUTH_PREPARATION_TARGETS
         | ARCH_02H_AUTH_CONSUMPTION_TARGETS
         | ARCH_CP02_ADAPTER_BINDING_TARGETS
         | ARCH_CP03A_OWNER_ELIGIBILITY_TARGETS
         | ARCH_CP03B_ADAPTER_BINDING_AUTH_TARGETS
-            | ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS
-            | ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS
+        | ARCH_CP04A_CONTRIBUTION_POLICY_TARGETS
+        | ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS
         | V01_BASELINE_ADDED_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
@@ -391,10 +391,7 @@ def _validate_additive_partition_transition(
         expected_additions = expected_additions | {POL_03A_DECLARATIVE_MODEL_TARGET}
     if additions != expected_additions:
         raise BehaviorOwnershipError("untrusted_partition_change")
-    if any(
-        current_by_target[target]["group"] != group_for_target(target)
-        for target in additions
-    ):
+    if any(current_by_target[target]["group"] != group_for_target(target) for target in additions):
         raise BehaviorOwnershipError("untrusted_partition_change")
 
 
@@ -428,8 +425,10 @@ def validate_partition(
     if value["authority_digest"] != _digest(authority):
         raise BehaviorOwnershipError("partition_digest_mismatch")
     protected_base = value["protected_base_commit"]
-    if not isinstance(protected_base, str) or len(protected_base) != 40 or any(
-        character not in "0123456789abcdef" for character in protected_base
+    if (
+        not isinstance(protected_base, str)
+        or len(protected_base) != 40
+        or any(character not in "0123456789abcdef" for character in protected_base)
     ):
         raise BehaviorOwnershipError("invalid_partition_base_commit")
     if _git(root, "rev-parse", "--verify", f"{protected_base}^{{commit}}") != protected_base:
@@ -487,9 +486,7 @@ def load_schema(root: Path = ROOT) -> dict[str, Any]:
 def _catalogue_files(root: Path) -> list[Path]:
     base = root / ".ci/behavior-ownership"
     return sorted(
-        path
-        for path in base.glob("*/*.json")
-        if path.is_file() and "examples" not in path.parts
+        path for path in base.glob("*/*.json") if path.is_file() and "examples" not in path.parts
     )
 
 
@@ -642,9 +639,7 @@ def validate_catalogue(
     if len(identities) != len(set(identities)):
         raise BehaviorOwnershipError("duplicate_behavior_id")
     superseded = [
-        item["supersedes_behavior_id"]
-        for item in all_records
-        if "supersedes_behavior_id" in item
+        item["supersedes_behavior_id"] for item in all_records if "supersedes_behavior_id" in item
     ]
     if len(superseded) != len(set(superseded)):
         raise BehaviorOwnershipError("duplicate_supersession")
@@ -711,7 +706,8 @@ def generate_candidates(root: Path = ROOT, *, group: str | None = None) -> dict[
         candidates.append(
             {
                 "schema": CATALOGUE_SCHEMA,
-                "behavior_id": "candidate:" + target.removeprefix("backend/").removesuffix(".py").replace("/", "."),
+                "behavior_id": "candidate:"
+                + target.removeprefix("backend/").removesuffix(".py").replace("/", "."),
                 "status": "candidate",
                 "group": assigned,
                 "target": target,
@@ -926,21 +922,15 @@ def build_context_evidence(
             raise BehaviorOwnershipError("context_test_failure")
         collected = test_lanes._read_nodes(metadata / "context.collected.jsonl")
         completed = test_lanes._read_nodes(metadata / "context.completed.jsonl")
-        skipped = test_lanes._read_nodes(
-            metadata / "context.skipped.jsonl", allow_empty=True
-        )
-        deselected = test_lanes._read_nodes(
-            metadata / "context.deselected.jsonl", allow_empty=True
-        )
+        skipped = test_lanes._read_nodes(metadata / "context.skipped.jsonl", allow_empty=True)
+        deselected = test_lanes._read_nodes(metadata / "context.deselected.jsonl", allow_empty=True)
         if collected != nodes or completed != nodes:
             raise BehaviorOwnershipError("incomplete_context_execution")
         if skipped or deselected:
             raise BehaviorOwnershipError("weakened_context_execution")
         if not coverage_path.is_file() or coverage_path.is_symlink():
             raise BehaviorOwnershipError("missing_context_coverage")
-        lines_by_node = _coverage_lines_by_context(
-            coverage_path, root / target, set(completed)
-        )
+        lines_by_node = _coverage_lines_by_context(coverage_path, root / target, set(completed))
 
     elapsed = time.monotonic() - started
     if elapsed > runtime_limit_seconds:
@@ -1062,9 +1052,7 @@ def validate_context_evidence(
         raise BehaviorOwnershipError("invalid_context_identity")
     actual_spans = {
         name: (start_line, end_line)
-        for start_line, end_line, name in _callable_spans(
-            source, module_name(target)
-        )[0]
+        for start_line, end_line, name in _callable_spans(source, module_name(target))[0]
     }
     actual_callables = set(actual_spans)
     seen_callables: set[str] = set()
@@ -1081,8 +1069,7 @@ def validate_context_evidence(
             or not isinstance(item["end_line"], int)
             or isinstance(item["end_line"], bool)
             or item["start_line"] > item["end_line"]
-            or (item["start_line"], item["end_line"])
-            != actual_spans[item["callable"]]
+            or (item["start_line"], item["end_line"]) != actual_spans[item["callable"]]
             or not isinstance(item["contexts"], list)
         ):
             raise BehaviorOwnershipError("invalid_context_callables")
@@ -1117,9 +1104,7 @@ def validate_context_evidence(
     }
 
 
-def _run_test_nodes(
-    root: Path, records: Iterable[dict[str, Any]], *, collect_only: bool
-) -> int:
+def _run_test_nodes(root: Path, records: Iterable[dict[str, Any]], *, collect_only: bool) -> int:
     nodes = sorted(
         {node for item in records if item.get("status") == "reviewed" for node in item["tests"]}
     )
@@ -1177,9 +1162,7 @@ def _main() -> int:
                 output=args.output,
             )
         elif args.command == "validate-context-evidence":
-            result = validate_context_evidence(
-                ROOT, args.input, head_revision=args.head_revision
-            )
+            result = validate_context_evidence(ROOT, args.input, head_revision=args.head_revision)
         else:
             result = validate_catalogue(
                 group=args.group,

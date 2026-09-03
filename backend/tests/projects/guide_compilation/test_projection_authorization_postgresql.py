@@ -259,6 +259,45 @@ async def test_projection_late_failure_rolls_back_authority_and_product(
 
 
 @pytest.mark.asyncio
+async def test_policy_projection_late_failure_rolls_back_authority_and_product(
+    clean_postgres_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    service, command = await _policy_ready(factory, attempt_id)
+    original_operation = projection_module._new_operation
+
+    def invalid_operation(*args, **kwargs):
+        operation = original_operation(*args, **kwargs)
+        operation.authorization_decision_event_id = str(uuid4())
+        return operation
+
+    monkeypatch.setattr(projection_module, "_new_operation", invalid_operation)
+    try:
+        with pytest.raises(ProjectGuideProjectionError):
+            await service.project_submission_artifact_policy(command)
+        async with factory() as session:
+            counts = (
+                await session.execute(
+                    text(
+                        "select (select count(*) from submission_artifact_policies),"
+                        "(select count(*) from project_guide_component_projection_operations "
+                        "where component='submission_artifact_policy'),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.submission_artifact_policy.derive')"
+                    )
+                )
+            ).one()
+            await session.rollback()
+        assert counts == (0, 0, 0)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_projection_denial_has_no_product_or_allowed_evidence(
     clean_postgres_database: str,
 ) -> None:
@@ -280,5 +319,43 @@ async def test_projection_denial_has_no_product_or_allowed_evidence(
                 ProjectGuideProjectionCommand(attempt_id=attempt_id)
             )
         assert await _effect_counts(factory) == (0, 0, 0)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_policy_projection_denial_has_no_product_or_allowed_evidence(
+    clean_postgres_database: str,
+) -> None:
+    values = await seed_database(clean_postgres_database)
+    attempt_id, _ = await _persist_compilation(clean_postgres_database, values)
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    service, command = await _policy_ready(factory, attempt_id)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "update actor_identity_links set status='revoked',revoked_by=:actor,"
+                "revoked_at=now(),revoked_reason='test' where id=:link"
+            ),
+            {"actor": str(values["actor"]), "link": str(values["link"])},
+        )
+    try:
+        with pytest.raises(ProjectGuideProjectionError, match="service_authority_denied"):
+            await service.project_submission_artifact_policy(command)
+        async with factory() as session:
+            counts = (
+                await session.execute(
+                    text(
+                        "select (select count(*) from submission_artifact_policies),"
+                        "(select count(*) from project_guide_component_projection_operations "
+                        "where component='submission_artifact_policy'),"
+                        "(select count(*) from audit_events where action_id="
+                        "'project.submission_artifact_policy.derive')"
+                    )
+                )
+            ).one()
+            await session.rollback()
+        assert counts == (0, 0, 0)
     finally:
         await engine.dispose()
