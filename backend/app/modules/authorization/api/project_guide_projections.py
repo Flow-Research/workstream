@@ -61,8 +61,8 @@ def _validate_facts(value: object) -> None:
         }:
             if not isinstance(item, UUID):
                 raise ValueError(f"{field.name} must be a UUID")
-        elif item is not None and not isinstance(item, str):
-            raise ValueError(f"{field.name} must be a string or null")
+        elif not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{field.name} must be a non-empty string")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

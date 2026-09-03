@@ -214,3 +214,25 @@ def test_every_projection_fact_field_changes_the_bound_digest(component: str) ->
         else:
             changed = value + "-changed"
         assert digest(replace(facts, **{field.name: changed})) != original
+
+
+@pytest.mark.parametrize("component", ("guide_sufficiency", "submission_artifact_policy"))
+@pytest.mark.parametrize("invalid", (None, "", "   "))
+def test_every_required_projection_string_rejects_invalid_values(
+    component: str, invalid: object
+) -> None:
+    project_id, attempt_id = uuid4(), uuid4()
+    facts = (
+        sufficiency_facts(project_id, attempt_id)
+        if component == "guide_sufficiency"
+        else policy_facts(project_id, attempt_id)
+    )
+
+    string_fields = [
+        field.name
+        for field in fields(facts)
+        if isinstance(getattr(facts, field.name), str)
+    ]
+    for field_name in string_fields:
+        with pytest.raises(ValueError, match=field_name):
+            replace(facts, **{field_name: invalid})
