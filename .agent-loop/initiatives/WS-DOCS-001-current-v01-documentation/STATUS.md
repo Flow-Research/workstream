@@ -13,3 +13,9 @@ Ongoing documentation maintenance follows the ordinary bounded-change loop.
 initiative dispositions. Its durable outcome is the repository-wide
 `.agent-loop/CURRENT_STATE.md`; GitHub remains authoritative for the chunk's
 transient review and merge state.
+
+`WS-DOCS-001-04` makes `docs/roadmap_status.md` the complete public lifecycle
+scoreboard. It explains merged foundations, hidden integrations, the immediate
+dependency order, and every remaining v0.1 release gate without requiring a
+reader to inspect `.agent-loop`. Open pull requests remain the only transient
+work view.

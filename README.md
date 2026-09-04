@@ -139,8 +139,9 @@ reputation projection. Frontend product work follows stable and tested backend
 contracts for the surface it consumes.
 
 The release bar is a verified end-to-end v0.1 lifecycle, not the completion of
-an old timeboxed plan. See [Current v0.1 Status](docs/roadmap_status.md) for the
-capability ledger and explicit remaining work.
+an old timeboxed plan. See the [v0.1 Roadmap And Capability Status](docs/roadmap_status.md)
+for the lifecycle scoreboard, current critical path, and complete release gates;
+reading internal agent-loop records is not required to understand product progress.
 
 ## Start Here
 
