@@ -13,7 +13,7 @@ transient work, and no chunk starts automatically.
 | `WS-POL-003-03B` | Complete authorized immutable compilation persistence; no policy projection or setup-service cutover. POL-04A is the next boundary. | 03A + AUTH-12I satisfied |
 | `WS-POL-003-04A` | Complete hidden one-attempt setup orchestrator over the complete result; the three legacy inference methods are denied and unreachable in the candidate call graph. | 03B |
 | `WS-POL-003-04A3` | Complete hidden compilation-derived sufficiency/artifact-policy projections with immutable provenance and no model call. | Merged 04A |
-| `WS-POL-003-04A2` | Planned hidden purpose-specific setup-ledger finalization with closed outcomes and no live route. | Merged 04A3 |
+| `WS-POL-003-04A2` | Planned executable hidden setup-finalization contract: immutable compilation/projection custody, closed setup outcomes, and no live route. | Merged 04A3 |
 | `WS-AUTH-001-12J` | Complete exact fixed-service authority for the two compilation-derived projection ports. | Merged 04A3 |
 | `WS-AUTH-001-12B2` | Planned exact setup-finalization authority for the future 04A2 manifest. | Planned POL-04A2 prerequisite + completed AUTH-12J |
 | `WS-POL-003-04B` | Planned explicit-PM-request live cutover through the hidden projection/finalization chain; remove every legacy inference call from live reachability. | Merged 04A3 + 04A2 + AUTH-12J + AUTH-12B2 |
