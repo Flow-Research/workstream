@@ -559,14 +559,17 @@ class PreparedAuthorizationService:
         if not isinstance(issuance, _Issuance):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
-        await validate_projection_replay(
-            self,
-            issuance,
-            expected_action_id,
-            caller_input,
-            final_resource_context,
-            stored_decision_id,
-        )
+        try:
+            await validate_projection_replay(
+                self,
+                issuance,
+                expected_action_id,
+                caller_input,
+                final_resource_context,
+                stored_decision_id,
+            )
+        finally:
+            self._authorization._discard_prelocked(issuance.authority)
 
     async def deny_unsupported(
         self,

@@ -57,6 +57,23 @@ def _install_custody(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
+async def test_projection_preparation_conceals_non_mapping_request_value() -> None:
+    owned, _session, evidence = custody()
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=[])
+
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await owned.service.prepare(
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            caller,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()),
+        )
+
+    assert evidence.events == []
+    assert owned.service._authorization._sealed_prelocked == set()
+    owned.service.close()
+
+
+@pytest.mark.asyncio
 async def test_projection_consume_returns_exact_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

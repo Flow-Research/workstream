@@ -273,6 +273,7 @@ async def test_projection_replay_retires_mutation_authority(
         receipt = await prepared.consume_new(facts)
     async with adapter.prepare_sufficiency_projection(locator) as replay:
         await replay.validate_replay(facts, receipt.decision_event_id)
+        assert replay_service._authorization._sealed_prelocked == set()
         next_facts = replace(facts, guide_version="v2") if mutate_facts else facts
         with pytest.raises(PreparedAuthorizationInvalid):
             await replay.consume_new(next_facts)

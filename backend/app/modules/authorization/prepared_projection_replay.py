@@ -23,8 +23,10 @@ from app.modules.authorization.runtime import (
 )
 
 
-def parse_projection_bindings(action_id: ActionId, request_value: dict) -> tuple[dict, dict]:
+def parse_projection_bindings(action_id: ActionId, request_value: object) -> tuple[dict, dict]:
     """Return mutually exclusive projection and legacy compilation bindings."""
+    if not isinstance(request_value, dict):
+        raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
     try:
         projection = parse_projection_prepare(action_id, request_value)
     except ValueError as exc:
