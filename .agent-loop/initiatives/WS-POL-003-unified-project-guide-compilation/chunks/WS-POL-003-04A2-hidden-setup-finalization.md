@@ -87,9 +87,18 @@ selection, or ownership weakening is allowed.
 
 ## Product-owned immutable custody
 
-Add one `ProjectGuideSetupFinalization` row for one exact setup generation. Its
-stable ID and operation ID are separate UUIDv5 values derived from
-`setup_run_id`, `setup_generation`, and `compilation_id`. The row contains:
+Add one `ProjectGuideSetupFinalization` row for one exact setup generation.
+Using the URL namespace and canonical seed
+`<setup-run-id>:<setup-generation>:<compilation-id>`, derive separate UUIDv5
+values with these exact names:
+
+```text
+finalization_id = workstream.project-guide-setup-finalization:receipt:<seed>
+operation_id    = workstream.project-guide-setup-finalization:operation:<seed>
+correlation_id  = workstream.project-guide-setup-finalization:correlation:<seed>
+```
+
+The row contains:
 
 - `id`, `operation_id`, and `correlation_id`;
 - project, guide/version, source snapshot ID/hash, setup run/generation, and
@@ -322,6 +331,7 @@ external comments against this contract; do not apply them blindly.
 
 ## Merge state
 
-- Planning-contract PR outcome: `planned`.
-- Later implementation PR outcome: `complete`.
+- Outcome on merge: `planned`
+
+The later implementation PR changes this projection to `complete`.
 - Completion permits AUTH-12B2 planning; it does not start AUTH-12B2 or POL-04B.

@@ -80,8 +80,8 @@ contracts, paths, or evidence—not ceremonial repetition of unaffected work.
 ## Unified guide compilation sequence
 
 WS-POL-003-04A3 is complete after merged WS-POL-003-04A.
-WS-AUTH-001-12J is complete after merged WS-POL-003-04A3. WS-POL-003-04A2
-remains planned. WS-AUTH-001-12B2 is planned after POL-04A2, and
+WS-AUTH-001-12J is complete after merged WS-POL-003-04A3.
+`WS-POL-003-04A2` is Planned. WS-AUTH-001-12B2 is planned after POL-04A2, and
 WS-POL-003-04B remains the later live cutover.
 
 ## Planned WS-ARCH-001 PLAN2 children

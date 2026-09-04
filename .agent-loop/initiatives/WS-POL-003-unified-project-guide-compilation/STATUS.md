@@ -58,7 +58,7 @@ unresolved provider outcomes without redispatch, and leaves all live routing
 and setup projections untouched. `WS-POL-003-04A3` is complete. It adds the
 hidden deterministic sufficiency and artifact-policy projections without a
 model call or setup-row mutation. AUTH-12J is complete with the exact hidden
-projection adapters. POL-04A2 now has a current-main executable contract for
+projection adapters. `WS-POL-003-04A2` is Planned with a current-main executable contract for
 immutable finalization custody and one closed setup-ledger transition. Its
 implementation is the remaining delivery boundary before AUTH-12B2 and
 POL-04B.
