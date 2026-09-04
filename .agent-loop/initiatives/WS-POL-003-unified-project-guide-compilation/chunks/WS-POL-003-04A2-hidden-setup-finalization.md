@@ -258,11 +258,16 @@ prepared object, raw result, provider response, credential, or ORM row.
 | Consume exception | `test_consume_exception_has_no_product_effect` | Service; local + hosted |
 | Wrong receipt | `test_wrong_authority_receipt_denies` | Service; local + hosted |
 | Close once | `test_prepared_authority_closes_once_on_success` | Service; local + hosted |
-| Close on failure | `test_prepared_authority_closes_once_on_consume_failure` | Service; local + hosted |
+| Close on denial | `test_prepared_authority_closes_once_on_consume_denial` | Service; local + hosted |
+| Close on consume exception | `test_prepared_authority_closes_once_on_consume_exception` | Service; local + hosted |
 | Close failure ordering | `test_close_failure_precedes_product_mutation` | Service; local + hosted |
+| Close on unexpected pre-mutation failure | `test_prepared_authority_closes_once_on_unexpected_premutation_exception` | Service; local + hosted |
+| Closed after rollback | `test_closed_authority_is_unusable_after_late_rollback` | Real PostgreSQL; hosted |
 | Atomic rollback | `test_late_database_failure_rolls_back_finalization_setup_and_authorization` | Real PostgreSQL; hosted |
 | Stable replay | `test_exact_replay_returns_stored_receipt_without_new_evidence` | Real PostgreSQL; hosted |
 | Replay source facts | `test_replay_uses_stored_prefinalization_digest_and_validates_final_state` | Real PostgreSQL; hosted |
+| Replay closes once | `test_replay_preflight_closes_once_after_validation` | Service + real PostgreSQL; hosted |
+| Replay denial closes once | `test_replay_denial_closes_once_without_effect` | Service + real PostgreSQL; hosted |
 | Replay authorization | `test_replay_denies_when_current_service_authority_is_revoked` | Concrete AUTH adapter; hosted after AUTH-12B2 |
 | Identical concurrency | `test_concurrent_identical_finalization_has_one_effect` | Independent PostgreSQL sessions; hosted |
 | Fork prevention | `test_distinct_operations_cannot_finalize_one_setup_generation` | Independent PostgreSQL sessions; hosted |
@@ -270,6 +275,11 @@ prepared object, raw result, provider response, credential, or ORM row.
 | Stale snapshot | `test_stale_snapshot_denies_without_consumption` | Service; local + hosted |
 | Stale setup generation | `test_stale_setup_generation_denies_without_consumption` | Service; local + hosted |
 | Replaced compilation | `test_replaced_compilation_denies_without_consumption` | Service; local + hosted |
+| Invalid/unsafe attempt | `test_invalid_terminal_attempt_denies_finalization_without_consumption` | Service; local + hosted |
+| Provider-uncertain attempt | `test_provider_uncertain_attempt_denies_finalization_without_consumption` | Service; local + hosted |
+| Unprojectable result | `test_unprojectable_result_denies_finalization_without_consumption` | Service; local + hosted |
+| Partial projection set | `test_partial_projection_set_denies_finalization_without_consumption` | Service; local + hosted |
+| Mixed-generation projections | `test_mixed_generation_projection_set_denies_finalization_without_consumption` | Service + real rows; hosted |
 | Wrong projection order | `test_policy_projection_without_exact_sufficiency_predecessor_denies` | Service; local + hosted |
 | Wrong output | `test_projection_output_identity_mismatch_denies` | Service; local + hosted |
 | Wrong digest | `test_projection_output_digest_mismatch_denies` | Service; local + hosted |
@@ -277,6 +287,8 @@ prepared object, raw result, provider response, credential, or ORM row.
 | Cross-guide | `test_cross_guide_finalization_is_concealed` | Real rows/PostgreSQL; hosted |
 | Missing receipt | `test_direct_setup_finalization_without_receipt_is_rejected` | Direct SQL/PostgreSQL; hosted |
 | Partial transition | `test_direct_partial_setup_finalization_is_rejected` | Direct SQL/PostgreSQL; hosted |
+| Service mutation width | `test_finalization_changes_only_allowed_setup_columns` | Before/after service proof; local + hosted |
+| SQL mutation width | `test_direct_finalization_with_extra_setup_field_mutation_is_rejected` | Direct SQL/PostgreSQL; hosted |
 | Null bypass | `test_nullable_finalization_custody_cannot_bypass_guards` | Direct SQL/PostgreSQL; hosted |
 | Receipt without transition | `test_direct_finalization_receipt_without_setup_transition_is_rejected` | Deferred constraint/direct SQL/PostgreSQL; hosted |
 | Compilation ownership | `test_receipt_compilation_attempt_setup_tuple_must_match` | Composite FK/direct SQL/PostgreSQL; hosted |
@@ -302,6 +314,13 @@ prepared object, raw result, provider response, credential, or ORM row.
 Each test has one primary behavior. New test modules remain below 500 lines;
 shared fixtures may carry setup but may not hide assertions.
 
+The local focused coverage command covers every new executable service,
+payload, and public-contract module. Hosted PostgreSQL coverage separately
+includes `guide_compilation.repository`. Declarative ORM definitions in
+`guide_compilation/models.py` and `projects/models.py` are schema-only; Alembic
+parity plus the named direct-SQL constraint tests own their proof rather than a
+misleading line-coverage claim.
+
 ## Verification commands
 
 ```bash
@@ -313,7 +332,7 @@ python3 scripts/check_stale_authorization_docs.py
 cd backend && .venv/bin/python -m scripts.behavior_ownership validate
 cd backend && .venv/bin/ruff check app/modules/projects/guide_compilation app/modules/authorization/api tests/projects/guide_compilation tests/architecture/test_authorization_boundary.py
 cd backend && .venv/bin/pytest tests/projects/guide_compilation/test_finalization_service.py tests/architecture/test_authorization_boundary.py
-cd backend && .venv/bin/pytest tests/projects/guide_compilation/test_finalization_service.py --cov=app.modules.projects.guide_compilation.finalization --cov=app.modules.projects.guide_compilation.finalization_payloads --cov-branch --cov-report=term-missing --cov-fail-under=90
+cd backend && .venv/bin/pytest tests/projects/guide_compilation/test_finalization_service.py --cov=app.modules.authorization.api.project_setup_finalization --cov=app.modules.projects.api.guide_compilation --cov=app.modules.projects.guide_compilation.finalization --cov=app.modules.projects.guide_compilation.finalization_payloads --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
 
 Hosted Actions owns PostgreSQL finalization tests, Alembic/schema parity,
