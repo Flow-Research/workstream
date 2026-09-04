@@ -177,6 +177,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/guide_compilation_projections/test_adapter_consumption.py",
     "tests/authorization/guide_compilation_projections/test_composition.py",
     "tests/authorization/guide_compilation_projections/test_policy_and_replay.py",
+    "tests/authorization/guide_compilation_projections/test_replay_guards.py",
     "tests/authorization/guide_compilation_projections/test_resource_context.py",
     "tests/authorization/test_fixed_service_action_context.py",
     "tests/authorization/test_adapter_binding_authorization.py",

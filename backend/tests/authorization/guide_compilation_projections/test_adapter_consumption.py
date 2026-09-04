@@ -57,9 +57,15 @@ def _install_custody(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_projection_preparation_conceals_non_mapping_request_value() -> None:
+@pytest.mark.parametrize(
+    "request_value",
+    ([], {"binding_kind": "project_guide_projection"}),
+)
+async def test_projection_preparation_conceals_malformed_request_value(
+    request_value: object,
+) -> None:
     owned, _session, evidence = custody()
-    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=[])
+    caller = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=request_value)
 
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await owned.service.prepare(
