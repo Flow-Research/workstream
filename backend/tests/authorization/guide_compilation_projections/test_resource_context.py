@@ -28,6 +28,36 @@ from app.modules.authorization.runtime import ProjectGuideSufficiencyMutationRes
 from .support import policy_facts, sufficiency_facts
 
 
+def test_projection_identity_matches_public_contract() -> None:
+    attempt_id, actor_id, link_id = uuid4(), uuid4(), uuid4()
+
+    sufficiency = guide_sufficiency_projection_identity(
+        attempt_id=attempt_id,
+        actor_profile_id=actor_id,
+        identity_link_id=link_id,
+    )
+    policy = artifact_policy_projection_identity(
+        attempt_id=attempt_id,
+        actor_profile_id=actor_id,
+        identity_link_id=link_id,
+    )
+
+    assert sufficiency == guide_sufficiency_projection_identity(
+        attempt_id=attempt_id,
+        actor_profile_id=actor_id,
+        identity_link_id=link_id,
+    )
+    assert policy == artifact_policy_projection_identity(
+        attempt_id=attempt_id,
+        actor_profile_id=actor_id,
+        identity_link_id=link_id,
+    )
+    assert sufficiency.operation_id != policy.operation_id
+    assert sufficiency.output_id != policy.output_id
+    assert sufficiency.actor_profile_id == policy.actor_profile_id == actor_id
+    assert sufficiency.identity_link_id == policy.identity_link_id == link_id
+
+
 @pytest.mark.parametrize("component", ("guide_sufficiency", "submission_artifact_policy"))
 def test_projection_resource_digests_match_public_contract(component: str) -> None:
     project_id, attempt_id, actor_id, link_id = (uuid4() for _ in range(4))
