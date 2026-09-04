@@ -32,10 +32,7 @@ from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationExecuteResourceContext,
     ProjectGuideCompilationRequestResourceContext,
 )
-from app.modules.authorization.domain.prepared_compilation import (
-    parse_prepared_compilation,
-    prepared_compilation_matches,
-)
+from app.modules.authorization.domain.prepared_compilation import prepared_compilation_matches
 from app.modules.authorization.domain.adapter_bindings import (
     ADAPTER_BINDING_MUTATION_ACTIONS,
     AdapterBindingMutationResourceContext,
@@ -45,6 +42,14 @@ from app.modules.authorization.domain.prepared_adapter_bindings import (
     prepared_adapter_binding_matches,
 )
 from app.modules.authorization.domain.prepared_service import project_setup_resource_matches
+from app.modules.authorization.domain.guide_compilation_projections import (
+    ProjectGuideProjectionResourceContext,
+    projection_context_matches,
+)
+from app.modules.authorization.prepared_projection_replay import (
+    parse_projection_bindings,
+    validate_projection_replay,
+)
 from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
     ActorKind,
@@ -205,6 +210,7 @@ class _PreparedAuthorizationBinding:
     guide_compilation_resource_digest: str | None = None
     adapter_binding_context: dict | None = None
     adapter_binding_resource_digest: str | None = None
+    guide_projection_prepare_context: dict | None = None
 
 
 @dataclass(slots=True)
@@ -524,6 +530,13 @@ class PreparedAuthorizationService:
             final_resource_context,
         ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if not (
+            projection_context_matches(
+                issuance.binding.guide_projection_prepare_context,
+                final_resource_context,
+            )
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
             self._consumer_token,
@@ -531,6 +544,32 @@ class PreparedAuthorizationService:
             final_resource_context,
             issuance.authority,
         )
+
+    async def validate_replay(
+        self,
+        handle: PreparedAuthorizationHandle,
+        expected_action_id: ActionId,
+        caller_input: PreparedAuthorizationInput,
+        final_resource_context: AuthorizationResourceContext,
+        stored_decision_id: UUID,
+    ) -> None:
+        if self._closed or type(handle) is not PreparedAuthorizationHandle:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        issuance = self._issued.get(handle)
+        if not isinstance(issuance, _Issuance):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        self._issued[handle] = _CONSUMED
+        try:
+            await validate_projection_replay(
+                self,
+                issuance,
+                expected_action_id,
+                caller_input,
+                final_resource_context,
+                stored_decision_id,
+            )
+        finally:
+            self._authorization._discard_prelocked(issuance.authority)
 
     async def deny_unsupported(
         self,
@@ -614,18 +653,16 @@ class PreparedAuthorizationService:
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
         operation_id = project_id = operation_generation = None
-        guide_mutation_project_id = guide_mutation_guide_id = guide_mutation_target_resource_id = guide_mutation_operation_id = None
-        policy_mutation_project_id = policy_mutation_guide_id = None
-        policy_mutation_policy_id = policy_mutation_operation_id = None
-        policy_mutation_request_digest = None
-        policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
-        policy_mutation_generation = policy_mutation_predecessor_generation = None
-        policy_mutation_predecessor_id = None
-        policy_mutation_guide_status = None
+        guide_mutation_project_id = guide_mutation_guide_id = guide_mutation_target_resource_id = (
+            guide_mutation_operation_id
+        ) = None
+        policy_mutation_project_id = policy_mutation_guide_id = policy_mutation_policy_id = policy_mutation_operation_id = None
+        policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
+        policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
         submission_policy_context = submission_policy_resource_digest = None
         exact_artifact_context, exact_artifact_resource_digest, submission_preparation_context, submission_preparation_resource_digest, submission_preparation_final_context, submission_preparation_final_digest = initialize_artifact_bindings()
-        compilation_binding = parse_prepared_compilation(action_id, caller_input.request_value)
+        projection_binding, compilation_binding = parse_projection_bindings(action_id, caller_input.request_value)
         if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
             exact_artifact_context, exact_artifact_resource_digest = parse_materialization_binding(
                 dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
@@ -683,7 +720,7 @@ class PreparedAuthorizationService:
                 )
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        if action_id in {
+        if not projection_binding and action_id in {
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
@@ -729,7 +766,7 @@ class PreparedAuthorizationService:
                 raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
             submission_policy_context = resource.model_dump(mode="json")
             submission_policy_resource_digest = authorization_resource_digest(resource)
-        if action_id in {
+        if not projection_binding and action_id in {
             ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
             ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
             ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
@@ -883,6 +920,7 @@ class PreparedAuthorizationService:
             ),
             **compilation_binding,
             **parse_prepared_adapter_binding(action_id, caller_input.request_value),
+            **projection_binding,
         )
 
     @staticmethod
@@ -896,6 +934,11 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
                 artifact_resource_type=artifact_resource[0],
                 artifact_resource_id=resource.resource_id,
+            )
+        if isinstance(resource, ProjectGuideProjectionResourceContext):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=resource.scope_project_id,
             )
         if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF and isinstance(
             resource, ActorSelfResourceContext

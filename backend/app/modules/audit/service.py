@@ -1,5 +1,7 @@
 """Application service for typed authority audit evidence."""
 
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit.repository import AuditRepository, LIFECYCLE_AUTH_SOURCE
@@ -47,6 +49,10 @@ class AuditService:
             event_version=1,
         )
         return await self._repository._add_validated_authority_event(event)
+
+    async def get_authority_event(self, event_id: UUID) -> AuditEvent | None:
+        """Return one exact authority event visible in the caller transaction."""
+        return await self._repository.get_authority_event(str(event_id))
 
 
 class LifecycleAuditParticipant:

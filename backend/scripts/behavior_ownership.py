@@ -208,6 +208,13 @@ AUTH_12I_TARGETS = frozenset(
         "backend/app/modules/authorization/guide_compilation.py",
     }
 )
+AUTH_12J_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/domain/guide_compilation_projections.py",
+        "backend/app/modules/authorization/guide_compilation_projections.py",
+        "backend/app/modules/authorization/prepared_projection_replay.py",
+    }
+)
 V01_BASELINE_REMOVED_TARGETS = frozenset(
     {
         "backend/app/modules/actors/service_identity_migration.py",
@@ -376,6 +383,7 @@ def _validate_additive_partition_transition(
         | POL_04A_PARTITION_TARGETS
         | POL_04A3_PARTITION_TARGETS
         | AUTH_12I_TARGETS
+        | AUTH_12J_TARGETS
         | ARCH_02F_SUBMISSION_COMPOSITION_TARGETS
         | ARCH_02G_AUTH_PREPARATION_TARGETS
         | ARCH_02H_AUTH_CONSUMPTION_TARGETS

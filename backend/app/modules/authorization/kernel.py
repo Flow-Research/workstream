@@ -10,11 +10,7 @@ from uuid import UUID, uuid4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.audit.schemas import (
-    ActorReferenceKind,
-    AuthorityAuditEventInput,
-    AuthorityEventType,
-)
+from app.modules.audit.schemas import ActorReferenceKind, AuthorityAuditEventInput, AuthorityEventType
 from app.modules.audit.service import AuditService
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
@@ -25,6 +21,7 @@ from app.modules.authorization.catalogue import (
 )
 from app.modules.authorization.domain import adapter_bindings, guide_compilation as compilation
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
+from app.modules.authorization.domain.guide_compilation_projections import ProjectGuideProjectionResourceContext
 from app.modules.authorization.domain.prepared_service import (
     is_project_setup_scope,
     project_setup_resource_matches,
@@ -1505,14 +1502,13 @@ class AuthorizationService:
             (
                 PreSubmitCheckerInputResourceContext,
                 compilation.ProjectGuideCompilationRequestResourceContext, compilation.ProjectGuideCompilationExecuteResourceContext,
-                adapter_bindings.AdapterBindingReadResourceContext, adapter_bindings.AdapterBindingMutationResourceContext,
+                adapter_bindings.AdapterBindingReadResourceContext, adapter_bindings.AdapterBindingMutationResourceContext, ProjectGuideProjectionResourceContext,
             ),
         ):
             project_id = getattr(resource_context, "project_id", None) or getattr(resource_context, "scope_project_id")
             audit_project_id = str(project_id)
             audit_resource_type = resource_context.resource_type
-            audit_resource_id = str(resource_context.resource_id)
-            target_ref_kind, target_ref_id = "project", str(project_id)
+            audit_resource_id, target_ref_kind, target_ref_id = str(resource_context.resource_id), "project", str(project_id)
         elif decision.action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
             if resource_context is not None:
                 project_id = self._resource_project_id(resource_context)

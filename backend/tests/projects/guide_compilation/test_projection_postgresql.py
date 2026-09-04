@@ -9,6 +9,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.adapters.auth import (
+    artifact_policy_projection_authorization,
+    guide_sufficiency_projection_authorization,
+)
+
 from app.modules.artifacts.guide_sufficiency_material import (
     SqlAlchemyGuideSufficiencyMaterialAdapter,
 )
@@ -166,9 +171,7 @@ class _ProjectionAuthorization:
         )
 
 
-async def _persist_compilation(
-    database_url: str, values: dict[str, UUID], *, outcome=None
-):
+async def _persist_compilation(database_url: str, values: dict[str, UUID], *, outcome=None):
     requested = await _authorized_attempt(database_url, values)
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -182,19 +185,17 @@ async def _persist_compilation(
     finally:
         await engine.dispose()
 
+
 async def _project_both(database_url: str, values: dict[str, UUID]):
     attempt_id, compilation_id = await _persist_compilation(database_url, values)
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
-    def authorization(session: AsyncSession) -> _ProjectionAuthorization:
-        return _ProjectionAuthorization(session, values)
-
     service = GuideCompilationProjectionService(
         factory,
         material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
-        sufficiency_authorization_factory=authorization,
-        policy_authorization_factory=authorization,
+        sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
+        policy_authorization_factory=artifact_policy_projection_authorization,
     )
     command = ProjectGuideProjectionCommand(attempt_id=attempt_id)
     try:

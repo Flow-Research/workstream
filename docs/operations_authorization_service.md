@@ -679,6 +679,15 @@ service-actor provisioning route only when the deployment supplies the exact
 issuer and opaque subject; that actor still has no executable setup action
 until each owning activation chunk merges.
 
+AUTH-12J adds request-local adapters for the two deterministic projections
+created from an already persisted unified compilation result. Each adapter
+uses a distinct closed resource context, binds the exact project, compilation
+attempt, service actor/link, output identity, and complete server-owned fact
+digest, and consumes the existing opaque PREP capability in the caller's root
+transaction. Exact replay freshly validates the stored allowed decision but
+does not consume authority or create another event. These adapters are not
+wired into the live setup flow by AUTH-12J.
+
 Fixed-service admission is request-local. Resolve only the verified issuer and
 opaque subject through the exact stored link and active service profile; never
 accept a service identity, action, permission, or matrix row from request or

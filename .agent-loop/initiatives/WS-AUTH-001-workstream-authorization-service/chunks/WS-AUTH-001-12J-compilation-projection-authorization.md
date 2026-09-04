@@ -1,7 +1,7 @@
 # Chunk Contract: WS-AUTH-001-12J - Compilation Projection Authorization
 
-Status: Planned. Risk: L1. This is the executable contract for one future
-implementation pull request.
+Status: Complete. Risk: L1. The bounded implementation and its exact evidence
+merge atomically with this final state.
 
 ## Goal
 
@@ -156,19 +156,26 @@ backend/app/modules/authorization/api/__init__.py
 backend/app/modules/authorization/api/project_guide_projections.py
 backend/app/modules/authorization/guide_compilation_projections.py
 backend/app/modules/authorization/domain/guide_compilation_projections.py
+backend/app/modules/authorization/domain/audit.py
 backend/app/modules/authorization/domain/prepared_service.py
+backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
+backend/app/modules/authorization/prepared_projection_replay.py
 backend/app/modules/authorization/runtime.py
 backend/app/adapters/auth/__init__.py
+backend/app/modules/audit/service.py
 backend/tests/architecture/test_authorization_boundary.py
 backend/tests/authorization/guide_compilation_projections/**
-backend/tests/authorization/test_service_actor_runtime.py
-backend/tests/authorization/test_service_prepared_runtime.py
+backend/tests/authorization/test_fixed_service_action_context.py
+backend/tests/projects/guide_compilation/test_projection_postgresql.py
+backend/tests/projects/guide_compilation/test_projection_authorization_postgresql.py
 backend/tests/test_authorization.py
 backend/tests/test_behavior_ownership.py
 backend/tests/test_ci_test_lanes.py
 backend/scripts/authorization_boundary.py
+backend/scripts/behavior_ownership.py
 backend/scripts/run_test_lanes.py
+.github/workflows/backend.yml
 .ci/behavior-ownership/auth/**
 .ci/behavior-ownership/partition.v1.json
 .agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
@@ -176,10 +183,13 @@ docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/STATUS.md
+.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/CHUNK_MAP.md
 .agent-loop/CURRENT_STATE.md
 docs/roadmap_status.md
 ```
 
+The shared AUDIT service may expose only the existing authority-event lookup
+needed for replay validation; AUTH must not reach into its private repository.
 The public projection API is frozen except for a dependency-free correction
 that an exact-head review proves necessary for AUTH/POL digest parity. Broad
 test, ownership, lane, or structural-debt files may change only for the exact
@@ -207,17 +217,18 @@ proves a schema change necessary, stop and amend this contract before coding it.
 
 | Criterion | Required focused proof |
 |---|---|
-| Exact fixed service, action, permission, active profile/link, and matrix row are required independently for each port | `test_sufficiency_projection_requires_exact_project_setup_authority`; `test_artifact_policy_projection_requires_exact_project_setup_authority`; parametrized inactive/revoked/wrong-service/action/matrix tests |
+| Exact fixed service, action, permission, active profile/link, and matrix row are required independently for each port | parametrized `test_projection_requires_exact_project_setup_authority`; `test_projection_requires_active_action_matrix` |
 | Deterministic identities and both public digest helpers match AUTH's resource contexts byte-for-byte | `test_projection_identity_matches_public_contract`; `test_projection_resource_digests_match_public_contract` |
-| Preparation is bound to the current session, root transaction, actor/link, locator, action, component, and generation | `test_projection_prepare_binds_complete_authority`; parametrized wrong-session/transaction/actor/link/locator/action/component/generation tests |
+| Kernel evidence uses the exact projection resource type, operation ID, project, actor, action, permission, and public authority digest rather than the legacy mutation or generic project shape | `test_projection_allowed_evidence_has_exact_resource_custody` for both components |
+| Preparation and replay are bound to the current session, root transaction, actor/link, locator, action, component, and generation | `test_projection_prepare_binds_complete_authority`; `test_projection_handle_cannot_cross_root_transaction`; parametrized `test_projection_replay_rejects_every_prepared_custody_mismatch` |
 | New consumption occurs once, before product staging, and returns the exact receipt | `test_projection_consume_returns_exact_receipt`; `test_projection_consume_callback_observes_no_product_rows` |
 | Context exit closes exactly once for success, denial, replay, exception, cancellation, and rollback; closed/copies/reconstructed handles deny | `test_projection_prepared_close_matrix`; `test_projection_closed_copied_and_reconstructed_handles_deny` |
 | A close failure after successful consumption aborts the caller transaction and cannot leave reusable authority | `test_projection_close_failure_rolls_back_authority_and_product` proves no report, source usage, policy, projection operation, or allowed evidence survives and the underlying handle cannot be reused |
-| Every fact field is bound and cross-component/action/resource swaps deny | generated one-field mutation tests for both fact dataclasses plus `test_projection_components_cannot_swap_authority` |
-| Exact replay validates the stored decision freshly without new evidence or mutation authority | `test_projection_exact_replay_uses_original_decision`; inactive/revoked/action-unavailable/mismatched-decision replay tests |
+| Every fact field is bound, malformed preparation is concealed, and cross-component/action/resource swaps deny | `test_every_projection_fact_field_changes_the_bound_digest`; `test_every_required_projection_string_rejects_invalid_values`; `test_projection_preparation_conceals_malformed_request_value`; `test_projection_components_cannot_swap_authority` |
+| Exact replay validates the stored decision freshly without new evidence or mutation authority | `test_projection_exact_replay_uses_original_decision`; `test_projection_replay_retires_mutation_authority`; `test_projection_replay_rejects_mismatched_decision_without_new_evidence`; `test_projection_replay_rejects_project_setup_resource_guard` |
 | Denial and late product failure leave no allowed evidence or product effect | `test_projection_denial_has_no_product_or_allowed_evidence`; PostgreSQL `test_projection_late_failure_rolls_back_authority_and_product` |
 | Concurrent same-operation calls produce one product effect and one allowed decision; the loser performs authorized exact replay | hosted PostgreSQL `test_projection_same_operation_concurrency_is_single_effect` for both components |
-| Existing legacy contexts remain exact and cannot consume projection handles; no action/count/availability delta occurs | `test_projection_and_legacy_contexts_are_not_interchangeable`; catalogue/matrix/runtime parity tests |
+| Existing legacy and projection contexts are non-interchangeable in both directions; no action/count/availability delta occurs | `test_legacy_preparation_cannot_consume_projection_resource`; `test_projection_preparation_cannot_consume_legacy_resource`; catalogue/matrix/runtime parity tests |
 | The approved AUTH composition root exports only request-local public-port factories; no consumer imports private AUTH | `test_projection_factories_are_exposed_only_by_auth_composition_root`; import-aware authorization-boundary proof |
 | No private cross-module imports, live route, serialized handle, model/provider call, or changed Celery payload exists | import-aware architecture test, route scan, serialization rejection test, and behavior-ownership proof |
 
@@ -234,14 +245,22 @@ python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_stale_authorization_docs.py
 cd backend && .venv/bin/ruff check app/modules/authorization tests/authorization/guide_compilation_projections tests/architecture/test_authorization_boundary.py
-cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_service_actor_runtime.py tests/authorization/test_service_prepared_runtime.py tests/architecture/test_authorization_boundary.py tests/test_authorization.py
-cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections --cov=app.modules.authorization.guide_compilation_projections --cov=app.modules.authorization.domain.guide_compilation_projections --cov-branch --cov-report=term-missing --cov-fail-under=90
+cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections tests/authorization/test_fixed_service_action_context.py tests/architecture/test_authorization_boundary.py
+cd backend && .venv/bin/pytest tests/authorization/guide_compilation_projections --cov=app.modules.authorization.guide_compilation_projections --cov=app.modules.authorization.domain.guide_compilation_projections --cov=app.modules.authorization.prepared_projection_replay --cov-branch --cov-report=term-missing --cov-fail-under=90
 ```
 
 Hosted GitHub Actions owns the complete PostgreSQL concurrency/rollback matrix,
 the repository-wide suite and preserved global coverage floor, behavior-lane
 integrity, and aggregate exact-head evidence. Local development must not run
 the multi-hour full suite.
+
+The hosted project-lifecycle lane must also execute
+`tests/projects/guide_compilation/test_projection_postgresql.py` and
+`tests/projects/guide_compilation/test_projection_authorization_postgresql.py`;
+their success, concurrency, ordering, denial, and rollback proofs use the concrete
+AUTH-12J factories. `tests/test_authorization.py`
+remains part of hosted full-suite custody because its PostgreSQL cases require
+`WORKSTREAM_TEST_DATABASE_URL`; it is not a clean database-free local command.
 
 ## Required review
 
@@ -261,4 +280,4 @@ of the later live cutover and legacy inference-path removal.
 
 ## Merge state
 
-- Outcome on merge: `planned`
+- Outcome on merge: `complete`

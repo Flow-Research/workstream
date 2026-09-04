@@ -19,9 +19,9 @@ authority merged through `WS-AUTH-001-12I` in PR #312. That activation exposes
 authority for the hidden POL compilation path; it does not make the remaining
 POL, ART, REV, CON, TASK, or checker lifecycle behavior live.
 
-POL-04A3 is complete and exposes two hidden, deny-default projection ports.
-`WS-AUTH-001-12J` is the planned executable AUTH contract that installs their
-exact fixed-service adapters without adding actions or making the flow live.
+POL-04A3 exposes two hidden, deny-default projection ports.
+`WS-AUTH-001-12J` is Complete and supplies their exact request-local fixed-service adapters
+without adding actions or making the flow live.
 
 All completed and superseded AUTH chunks remain enumerated in `CHUNK_MAP.md`.
 Their contracts, reviews, and Git history are historical exact-change evidence,
@@ -29,9 +29,8 @@ not current start requirements.
 
 ## Remaining boundaries
 
-- AUTH-12J and POL-04A2 may proceed after complete POL-04A3. AUTH-12J installs
-  only the two exact projection adapters; POL-04A2 owns hidden finalization.
-- `WS-AUTH-001-12B2` is Planned after both AUTH-12J and POL-04A2 and activates
+- POL-04A2 owns hidden finalization and may proceed after complete POL-04A3.
+- `WS-AUTH-001-12B2` is Planned after complete AUTH-12J and POL-04A2 and activates
   only the exact setup-finalization authority.
 - AUTH-12F4 follows hidden POL-05A and activates approval of stored unified
   pre-submit policy; it performs no inference.

@@ -36,7 +36,7 @@ determine transient implementation ownership.
 | Hidden POL-04A2 setup finalization | AUTH-12B2 finalization authority | Planned after merged 04A3 |
 | Hidden POL-05A approval manifest | AUTH-12F4 approval activation | Not yet implemented |
 | Hidden POL-06A deterministic post manifest | AUTH-12G projection/approval activation | Not yet implemented |
-| Complete POL-07 single checker port + corrected 12B2 + CON clean cut | AUTH-12H | Not yet implemented |
+| Complete POL-07 single checker port + corrected AUTH-12B2 + CP05 active ContributionPolicy behavior + CP06 validation + CP07 ProjectGuide binding | AUTH-12H | Not yet implemented; CP08, WS-ARCH-001-03A/03B/03C, and CP09 remain downstream |
 | Canonical WS-ARCH-001-04E manifest + POL-07 | POL-08 cleanup and later AUTH/REV admission | Not yet implemented; historical ART-05A/05B are non-executable |
 
 ## Chunk state
@@ -57,8 +57,9 @@ execution-only hidden command over an already authorized attempt, preserves
 unresolved provider outcomes without redispatch, and leaves all live routing
 and setup projections untouched. `WS-POL-003-04A3` is complete. It adds the
 hidden deterministic sufficiency and artifact-policy projections without a
-model call or setup-row mutation. POL-04A2 and AUTH-12J are the next delivery
-boundaries before AUTH-12B2 and POL-04B.
+model call or setup-row mutation. AUTH-12J is complete with the exact hidden
+projection adapters. POL-04A2 is the remaining delivery boundary before
+AUTH-12B2 and POL-04B.
 
 WS-POL-003-08 is planned only after the canonical WS-ARCH-001-04E manifest and
 is not a prerequisite for WS-ARCH-001-03A.
