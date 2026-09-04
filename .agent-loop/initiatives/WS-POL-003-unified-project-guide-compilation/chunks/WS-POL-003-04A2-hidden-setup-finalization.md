@@ -46,6 +46,8 @@ readiness.
 - `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/chunks/WS-POL-003-04A2-hidden-setup-finalization.md`
 - `.agent-loop/initiatives/WS-POL-003-unified-project-guide-compilation/reviews/WS-POL-003-04A2-*.md`
 - `.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-12B2-project-setup-service-cutover.md`
+- `.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/CHUNK_MAP.md`
+- `.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md`
 - `docs/architecture_data_model.md`
 - `docs/roadmap_status.md`
 - `docs/spec_authorization_service.md`

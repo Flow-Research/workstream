@@ -75,7 +75,7 @@ sequence.
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
 | `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
 | `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Merged through PR #227; identity/matrix registration only, zero activation |
-| `WS-AUTH-001-12B2` | Unified Setup Ledger Activation | L1 | Proposed after complete POL-04A2 and AUTH-12J; before POL-04B live cutover |
+| `WS-AUTH-001-12B2` | Unified Setup Ledger Activation | L1 | Planned after complete POL-04A2 and AUTH-12J; owns concrete adapter revocation and receipt-integrity proof before POL-04B |
 | `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Merged through PR #229 |
 | `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Merged through PR #232 |
 | `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Superseded by merged XINT-003-02A/02B; economic policy remains CON-owned |

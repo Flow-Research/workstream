@@ -31,7 +31,9 @@ not current start requirements.
 
 - POL-04A2 owns hidden finalization and may proceed after complete POL-04A3.
 - `WS-AUTH-001-12B2` is Planned after complete AUTH-12J and POL-04A2 and activates
-  only the exact setup-finalization authority.
+  only the exact setup-finalization authority. Its concrete adapter owns
+  current-service revocation and production receipt-integrity proof; hidden
+  POL-04A2 does not depend on that later implementation evidence.
 - AUTH-12F4 follows hidden POL-05A and activates approval of stored unified
   pre-submit policy; it performs no inference.
 - AUTH-12G follows hidden POL-06A and activates deterministic stored
