@@ -266,9 +266,9 @@ prepared object, raw result, provider response, credential, or ORM row.
 | Atomic rollback | `test_late_database_failure_rolls_back_finalization_setup_and_authorization` | Real PostgreSQL; hosted |
 | Stable replay | `test_exact_replay_returns_stored_receipt_without_new_evidence` | Real PostgreSQL; hosted |
 | Replay source facts | `test_replay_uses_stored_prefinalization_digest_and_validates_final_state` | Real PostgreSQL; hosted |
+| Replay short-circuit | `test_finalized_setup_replay_short_circuits_before_projection_methods` proves no projection call, projection AUTH consumption/evidence, or mutation | Strict projection fakes + real PostgreSQL; hosted |
 | Replay closes once | `test_replay_preflight_closes_once_after_validation` | Service + real PostgreSQL; hosted |
 | Replay denial closes once | `test_replay_denial_closes_once_without_effect` | Service + real PostgreSQL; hosted |
-| Replay authorization | `test_replay_denies_when_current_service_authority_is_revoked` | Concrete AUTH adapter; hosted after AUTH-12B2 |
 | Identical concurrency | `test_concurrent_identical_finalization_has_one_effect` | Independent PostgreSQL sessions; hosted |
 | Fork prevention | `test_distinct_operations_cannot_finalize_one_setup_generation` | Independent PostgreSQL sessions; hosted |
 | Canonical fact isolation | `test_each_finalization_fact_mutation_denies` | Parameterized one field per case; local + hosted |
@@ -297,7 +297,7 @@ prepared object, raw result, provider response, credential, or ORM row.
 | Blocked policy shape | `test_blocked_receipt_requires_all_null_policy_tuple` | Check constraint/direct SQL/PostgreSQL; hosted |
 | Ready policy shape | `test_ready_receipt_requires_complete_policy_tuple` | Check constraint/direct SQL/PostgreSQL; hosted |
 | Actor-link ownership | `test_receipt_actor_identity_link_must_belong_to_actor` | Composite FK/direct SQL/PostgreSQL; hosted |
-| AUTH receipt integrity | `test_authority_receipt_fields_and_digest_must_match_finalization` | Concrete receipt/service plus database digest guard; hosted after AUTH-12B2 |
+| Test receipt integrity | `test_authority_receipt_fields_and_digest_must_match_finalization_facts` | Strict finalization authorization fake + database digest guard; hosted |
 | Finalized rewrite | `test_finalized_setup_cannot_be_rewritten` | Direct SQL/PostgreSQL; hosted |
 | Receipt update | `test_finalization_receipt_update_is_rejected` | Direct SQL/PostgreSQL; hosted |
 | Receipt delete | `test_finalization_receipt_delete_is_rejected` | Direct SQL/PostgreSQL; hosted |
@@ -313,6 +313,12 @@ prepared object, raw result, provider response, credential, or ORM row.
 
 Each test has one primary behavior. New test modules remain below 500 lines;
 shared fixtures may carry setup but may not hide assertions.
+
+Concrete AUTH-adapter revocation, prepared-handle binding, and production
+receipt integration are downstream AUTH-12B2 acceptance obligations, not 04A2
+acceptance criteria. This chunk proves only the unavailable production default
+and the product port with a strict test implementation; it cannot depend on the
+later AUTH adapter whose manifest it exists to define.
 
 The local focused coverage command covers every new executable service,
 payload, and public-contract module. Hosted PostgreSQL coverage separately

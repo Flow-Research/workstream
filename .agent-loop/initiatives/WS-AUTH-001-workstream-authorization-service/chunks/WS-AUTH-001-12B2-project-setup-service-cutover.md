@@ -35,6 +35,11 @@ contribution behavior, or compatibility paths.
   setup-service reachability and removal of the legacy inference calls.
 - No handle crosses Celery, commit, rollback, provider I/O, session, or
   transaction; stale/replay/cross-resource/cross-step uses deny.
+- Concrete integration proves revoked current service authority denies replay
+  and the production authority receipt's actor, link, action, resource, facts
+  digest, session, and root transaction exactly match the POL-04A2
+  finalization receipt. These are AUTH-12B2 obligations, not prerequisites for
+  completing hidden POL-04A2 behavior.
 
 ## Verification and review
 
