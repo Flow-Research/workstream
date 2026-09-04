@@ -9,7 +9,8 @@ plans and reviews cannot be mistaken for work that is still active.
 Use these sources in order:
 
 1. [`docs/roadmap_status.md`](../docs/roadmap_status.md) states the capabilities
-   implemented on `main` and the remaining v0.1 milestones.
+   implemented on `main`, hidden integrations, the current critical path, and
+   the complete remaining v0.1 release gates in human-readable form.
 2. [Open pull requests](https://github.com/Flow-Research/workstream/pulls)
    show work currently under review. An open PR is not implemented behavior.
 3. The initiative table below records durable disposition and the next usable
@@ -49,7 +50,7 @@ authority; these records do not grant or withhold it.
 | [WS-CI-005](initiatives/WS-CI-005-semantic-proof-quality/STATUS.md) | Complete through `WS-CI-005-03`; shared proof foundations and reviewer contracts are behaviorally adopted through blind evaluation | Preserve the proof corpus and add only reusable escaped-failure classes |
 | [WS-DB-001](initiatives/WS-DB-001-v01-schema-baseline/STATUS.md) | v0.1 schema baseline complete through PRs #316 and #317 | Extend `0001_v01_baseline` only through future bounded migrations |
 | [WS-SEC-001](initiatives/WS-SEC-001-dependency-alert-remediation/STATUS.md) | `WS-SEC-001-01` is complete with patched runtime and tooling dependencies | Handle future security alerts through fresh bounded dependency changes |
-| [WS-DOCS-001](initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md) | Current v0.1 entry documentation complete | Keep current pages synchronized with merged capability changes |
+| [WS-DOCS-001](initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md) | Public v0.1 lifecycle scoreboard and engineering-state navigation complete through `WS-DOCS-001-04` | Keep the public roadmap synchronized with merged capability changes |
 | [WS-DOCS-002](initiatives/WS-DOCS-002-workstream-definition/STATUS.md) | Canonical Workstream definition complete | Preserve terminology across current documentation and generated artifacts |
 | [WS-XINT-001](initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/STATUS.md) | Planning reconciliation complete and closed | Owner initiatives implement the resulting boundaries |
 | [WS-AUTH-002](initiatives/WS-AUTH-002-authorization-docstring-lint-correction/STATUS.md) | Bounded correction complete | Future lint work is a new bounded change |
