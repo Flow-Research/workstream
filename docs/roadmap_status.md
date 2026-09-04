@@ -95,8 +95,11 @@ remain outside v0.1.
   custody, lineage, rate-control, and stale-generation enforcement.
 - Hidden unified Project Guide compilation custody with immutable attempt and
   result lineage, crash-safe reservation/recovery states, append-only
-  supersession, and a deny-only public AUTH capability. Request/execute
-  authority and live compilation remain unavailable.
+  supersession, merged AUTH-12I request/execute authority, and complete
+  AUTH-12J request-local authority for both deterministic POL-04A3 component
+  projections. The flow remains hidden and not live until POL-04A2
+  finalization, AUTH-12B2 finalization authority, and POL-04B live cutover are
+  implemented.
 ## Integration In Progress
 
 The following areas have merged planning, contracts, or partial foundations,
