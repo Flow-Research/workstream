@@ -1,6 +1,6 @@
 # Chunk Contract: WS-AUTH-001-12B2 - Unified Setup Ledger Activation
 
-Status: Proposed after complete WS-POL-003-04A2 and WS-AUTH-001-12J; inactive.
+Status: Planned after complete WS-POL-003-04A2 and WS-AUTH-001-12J; inactive.
 Risk: L1.
 
 ## Goal
