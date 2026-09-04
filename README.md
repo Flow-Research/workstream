@@ -141,7 +141,8 @@ contracts for the surface it consumes.
 The release bar is a verified end-to-end v0.1 lifecycle, not the completion of
 an old timeboxed plan. See the [v0.1 Roadmap And Capability Status](docs/roadmap_status.md)
 for the lifecycle scoreboard, current critical path, and complete release gates;
-reading internal agent-loop records is not required to understand product progress.
+reading internal engineering records is not required to understand product
+progress.
 
 ## Start Here
 
@@ -263,8 +264,8 @@ Intent
 ```
 
 Codex-discoverable skills live in `.agents/skills/`. Codex custom reviewer
-agents live in `.codex/agents/`. Durable engineering plans, decisions, and
-optional review notes live in `.agent-loop/`.
+agents live in `.codex/agents/`. The smallest useful durable engineering
+records live in `.commitrail/`; start with its `README.md` and `INDEX.md`.
 
 This engineering loop is separate from Workstream product state. It governs how
 the repository is changed; it does not define runtime task or review records.

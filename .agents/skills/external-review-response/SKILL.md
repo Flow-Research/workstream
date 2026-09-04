@@ -7,16 +7,10 @@ description: Triage and respond to external reviewer comments such as CodeRabbit
 
 Use after external reviewer comments arrive.
 
-External review is separate from internal sub-agent review evidence. Write
-external review responses to:
-
-```text
-.agent-loop/initiatives/<initiative>/reviews/<chunk-id>-external-review-response.md
-```
-
-Do not put CodeRabbit, GitHub checks, or human PR review findings inside
-`*-internal-review-evidence.md`. Internal evidence proves the Codex sub-agent
-review loop; external response files prove how PR review feedback was handled.
+External review is separate from private internal-review receipts. Record
+material external findings and dispositions in the current Commitrail change
+record or PR conversation. Create a separate response record only when the
+volume or risk makes it independently useful; never do so ceremonially.
 
 ## Process
 
@@ -26,8 +20,9 @@ review loop; external response files prove how PR review feedback was handled.
 4. Defer out-of-scope issues to follow-up only with explanation.
 5. Escalate architecture/product/security judgments to human.
 6. Rerun relevant checks.
-7. Update the external review response artifact.
-8. Update PR trust bundle and review log.
+7. Update the current change record when the finding materially changes its
+   design, risk, evidence, or remaining uncertainty.
+8. Update the PR trust summary without duplicating transient GitHub state.
 
 ## Output
 

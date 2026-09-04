@@ -1,9 +1,0 @@
-{
-  "schema_version": 2,
-  "initiative_id": "WS-ENG-006",
-  "chunk_id": "WS-ENG-006-00",
-  "chunk_title": "First-New-Initiative Planning Intake",
-  "next_chunk_id": "WS-ENG-006-01",
-  "next_chunk_title": "Canonical Human And Agent Contribution Entry",
-  "next_requires_explicit_start": true
-}

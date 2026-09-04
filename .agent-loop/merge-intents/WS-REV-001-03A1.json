@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-REV-001-03A1",
-  "chunk_title": "Queue And Admission Persistence",
-  "initiative_id": "WS-REV-001",
-  "next_chunk_id": "WS-REV-001-03A2",
-  "next_chunk_title": "Lease And Preference Persistence",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

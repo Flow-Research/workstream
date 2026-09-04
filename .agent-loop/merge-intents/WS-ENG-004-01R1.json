@@ -1,9 +1,0 @@
-{
-  "schema_version": 2,
-  "initiative_id": "WS-ENG-004",
-  "chunk_id": "WS-ENG-004-01R1",
-  "chunk_title": "Renderer-Safe Recovery Bootstrap",
-  "next_chunk_id": null,
-  "next_chunk_title": null,
-  "next_requires_explicit_start": true
-}

@@ -374,7 +374,11 @@ def test_delta_accepts_memory_and_restores_cwd(monkeypatch, tmp_path: Path) -> N
     test = tmp_path / "backend/tests/test_ok.py"
     test.parent.mkdir(parents=True)
     test.write_text("assert value", encoding="utf-8")
-    files = ["backend/tests/test_ok.py", ".agent-loop/LOOP_STATE.md", f"{policy.QUAL_MEMORY}STATUS.md"]
+    files = [
+        "backend/tests/test_ok.py",
+        ".commitrail/INDEX.md",
+        f"{policy.QUAL_MEMORY}OVERVIEW.md",
+    ]
     monkeypatch.setattr(policy, "REPO", tmp_path)
     monkeypatch.setattr(policy, "changed_files", lambda *_: files)
     monkeypatch.setattr(policy, "numstat", lambda *_: (0, 0, [(files[0], 1, 0), (files[1], 100, 0), (files[2], 100, 0)]))

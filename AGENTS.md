@@ -22,11 +22,10 @@ definition or ownership boundary of Workstream.
 - Keep the engineering loop separate from the Workstream product lifecycle. Workstream product review decisions remain `accept`, `needs_revision`, and `reject`; internal engineering reviewer findings are process evidence, not product decisions.
 - Codex-discoverable repository skills live under `.agents/skills/`.
 - Codex custom reviewer agents live under `.codex/agents/`.
-- Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
-- `.agent-loop/CURRENT_STATE.md` is the current initiative entry point. GitHub
-  open pull requests are the transient-work view. Review logs and review
-  bundles are historical exact-change evidence, never an active-work queue or
-  authorization source.
+- Durable engineering context uses the smallest applicable Commitrail record
+  under `.commitrail/`. `.commitrail/INDEX.md` is durable navigation; GitHub
+  open pull requests are the transient-work view. Review evidence is never an
+  active-work queue or authorization source.
 - `CONTRIBUTING.md` is the canonical human and agent entry path. GitHub
   permissions and branch protection govern contribution authority. Planning
   artifacts explain work; they do not authorize or block it.
@@ -76,15 +75,17 @@ definition or ownership boundary of Workstream.
   discovery, generic service locators, concrete-adapter imports in product
   services, compatibility aliases, fallback constructors, or dual factory
   paths.
-- Every non-trivial task starts with the smallest applicable loop artifact: an initiative plan for large work, or a chunk contract for bounded work.
-- Do not implement a chunk until its allowed files, not-allowed changes, acceptance criteria, risk class, verification commands, and required reviewers are explicit.
-- One implementation chunk equals one pull request. The chunk contract must
-  declare its outcome on merge, and the same pull request must update the
-  initiative chunk map, initiative status, and `.agent-loop/CURRENT_STATE.md`
-  to that final state. Projection lines must say `Complete`, `Planned`,
-  `Cancelled`, or `Superseded` as applicable; do not land temporal wording such
-  as `complete on merge`, `in review`, `pending review`, or `ready for review`
-  on `main`.
+- Every non-trivial task starts with the smallest useful Commitrail record: one
+  combined change record for meaningful bounded work, plus one concise
+  initiative overview only for multi-PR work.
+- Do not implement a bounded change until its allowed files, prohibited
+  changes, acceptance criteria, risk class, verification, reviewers, and human
+  review focus are explicit.
+- One bounded implementation change equals one pull request. The same PR
+  records its intended durable outcome. Update an initiative overview or index
+  row only when its durable disposition or next usable boundary changes. Use
+  only `Planned`, `Complete`, `Stopped`, or `Superseded`; never commit transient
+  review, CI, approval, or merge state.
 - Do not begin the next chunk automatically after finishing the current chunk.
 - Use internal sub-agent review proportionate to risk. Security, authorization,
   payment, architecture, workflow, and broad product changes require focused

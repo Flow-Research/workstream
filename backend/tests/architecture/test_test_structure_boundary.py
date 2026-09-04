@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from scripts import test_structure_boundary as structure
 
 ROOT = Path(__file__).resolve().parents[3]
-INITIATIVE = ROOT / ".agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery"
+INITIATIVE = ROOT / ".ci/auth-boundaries"
 POLICY = INITIATIVE / "TEST_STRUCTURE_POLICY.md"
 LEDGER = INITIATIVE / "TEST_STRUCTURE_DEBT.json"
 
@@ -119,6 +120,103 @@ def test_trusted_ledger_rejects_new_grown_or_unshrunk_debt(change: str) -> None:
         match="new_structural_debt|structural_debt_growth|structural_debt_changed_without_shrink",
     ):
         structure._validate_trusted_transition(current, trusted)
+
+
+def test_trusted_transition_reconciles_only_unchanged_base_paths() -> None:
+    """A stale measurement is tolerated only when its source path did not change."""
+    trusted = structure.load_ledger(LEDGER)
+    current = json.loads(json.dumps(trusted))
+    target = current["entries"][0]
+    target["end_line"] += 1
+    target["observed_lines"] += 1
+    target["content_sha256"] = "0" * 64
+
+    structure._validate_trusted_transition(current, trusted, changed_paths=set())
+    with pytest.raises(structure.TestStructureError, match="structural_debt_growth"):
+        structure._validate_trusted_transition(
+            current,
+            trusted,
+            changed_paths={target["path"]},
+        )
+
+
+def test_trusted_ledger_follows_an_exact_git_rename(tmp_path: Path) -> None:
+    """Cutover relocation keeps comparing against the protected-base ledger."""
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    old_path = tmp_path / "legacy/debt.json"
+    trusted = structure.load_ledger(LEDGER)
+    _canonical(old_path, trusted)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "branch", "origin/main"], cwd=tmp_path, check=True)
+    new_path = tmp_path / ".ci/auth-boundaries/debt.json"
+    new_path.parent.mkdir(parents=True)
+    old_path.rename(new_path)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "relocate"], cwd=tmp_path, check=True)
+
+    assert structure._trusted_ledger(tmp_path, new_path) == trusted
+
+    grown = json.loads(json.dumps(trusted))
+    item = dict(grown["entries"][0])
+    item["path"] = "backend/tests/test_auth_new.py"
+    grown["entries"].append(item)
+    grown["entries"].sort(
+        key=lambda value: (
+            value["kind"],
+            value["path"],
+            value["qualified_symbol"] or "",
+            value["start_line"],
+        )
+    )
+    with pytest.raises(structure.TestStructureError, match="new_structural_debt"):
+        structure._validate_trusted_transition(
+            grown,
+            structure._trusted_ledger(tmp_path, new_path),
+        )
+
+
+def test_trusted_ledger_follows_declared_cutover_relocation(tmp_path: Path) -> None:
+    """An archived old ledger still protects its new active CI successor."""
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    old_relative = structure.TRUSTED_LEDGER_RELOCATIONS[
+        ".ci/auth-boundaries/TEST_STRUCTURE_DEBT.json"
+    ]
+    old_path = tmp_path / old_relative
+    trusted = structure.load_ledger(LEDGER)
+    _canonical(old_path, trusted)
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "base"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "branch", "origin/main"], cwd=tmp_path, check=True)
+
+    archive = tmp_path / ".commitrail/initiatives/WS-AUTH-003/pre-cutover/debt.json"
+    _canonical(archive, trusted)
+    active = tmp_path / ".ci/auth-boundaries/TEST_STRUCTURE_DEBT.json"
+    _canonical(active, trusted)
+    old_path.unlink()
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "cutover"], cwd=tmp_path, check=True)
+
+    loaded = structure._trusted_ledger(tmp_path, active)
+    assert loaded == trusted
+    grown = json.loads(json.dumps(trusted))
+    item = dict(grown["entries"][0])
+    item["path"] = "backend/tests/test_auth_new.py"
+    grown["entries"].append(item)
+    grown["entries"].sort(
+        key=lambda value: (
+            value["kind"],
+            value["path"],
+            value["qualified_symbol"] or "",
+            value["start_line"],
+        )
+    )
+    with pytest.raises(structure.TestStructureError, match="new_structural_debt"):
+        structure._validate_trusted_transition(grown, loaded)
 
 
 @pytest.mark.parametrize(

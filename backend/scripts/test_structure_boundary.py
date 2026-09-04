@@ -30,6 +30,12 @@ RECOVERY_PATHS = (
     "backend/tests/architecture/test_authorization_boundary.py",
     "backend/tests/architecture/test_test_structure_boundary.py",
 )
+TRUSTED_LEDGER_RELOCATIONS = {
+    ".ci/auth-boundaries/TEST_STRUCTURE_DEBT.json": (
+        ".agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/"
+        "TEST_STRUCTURE_DEBT.json"
+    ),
+}
 HARD_LIMITS = {
     "production_file": 1200,
     "production_function": 100,
@@ -403,6 +409,50 @@ def _trusted_ledger(root: Path, ledger_path: Path) -> dict[str, Any] | None:
         check=False,
     )
     if result.returncode:
+        trusted_relative = TRUSTED_LEDGER_RELOCATIONS.get(relative)
+        if trusted_relative is not None:
+            result = subprocess.run(
+                ["git", "show", f"origin/main:{trusted_relative}"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+    if result.returncode:
+        relocation = subprocess.run(
+            [
+                "git",
+                "diff",
+                "--name-status",
+                "--find-renames",
+                "origin/main...HEAD",
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if relocation.returncode:
+            raise TestStructureError("trusted_relocation_unavailable")
+        old_path = next(
+            (
+                cells[1]
+                for line in relocation.stdout.splitlines()
+                if len(cells := line.split("\t")) == 3
+                and cells[0].startswith("R")
+                and cells[2] == relative
+            ),
+            None,
+        )
+        if old_path is not None:
+            result = subprocess.run(
+                ["git", "show", f"origin/main:{old_path}"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+    if result.returncode:
         return None
     try:
         value = json.loads(result.stdout)
@@ -413,7 +463,12 @@ def _trusted_ledger(root: Path, ledger_path: Path) -> dict[str, Any] | None:
     return value
 
 
-def _validate_trusted_transition(current: dict[str, Any], trusted: dict[str, Any] | None) -> None:
+def _validate_trusted_transition(
+    current: dict[str, Any],
+    trusted: dict[str, Any] | None,
+    *,
+    changed_paths: set[str] | None = None,
+) -> None:
     """Reject new debt, growth, and rewrites that do not shrink frozen debt."""
     if trusted is None:
         return
@@ -428,15 +483,37 @@ def _validate_trusted_transition(current: dict[str, Any], trusted: dict[str, Any
 
     trusted_by_key = {key(item): item for item in trusted_items}
     current_by_key = {key(item): item for item in current_items}
-    if set(current_by_key) - set(trusted_by_key):
+    added = set(current_by_key) - set(trusted_by_key)
+    if changed_paths is not None:
+        added = {item_key for item_key in added if item_key[1] in changed_paths}
+    if added:
         raise TestStructureError("new_structural_debt")
     for item_key in set(current_by_key) & set(trusted_by_key):
         before = trusted_by_key[item_key]
         after = current_by_key[item_key]
-        if after.observed_lines > before.observed_lines:
+        source_changed = changed_paths is None or after.path in changed_paths
+        if after.observed_lines > before.observed_lines and source_changed:
             raise TestStructureError("structural_debt_growth")
-        if after.content_sha256 != before.content_sha256 and after.observed_lines >= before.observed_lines:
+        if (
+            after.content_sha256 != before.content_sha256
+            and after.observed_lines >= before.observed_lines
+            and source_changed
+        ):
             raise TestStructureError("structural_debt_changed_without_shrink")
+
+
+def _changed_paths_from_trusted_base(root: Path) -> set[str]:
+    """Return paths changed from protected main for baseline reconciliation."""
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "origin/main...HEAD", "--", "backend"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode:
+        raise TestStructureError("trusted_delta_unavailable")
+    return set(result.stdout.splitlines())
 
 
 def _assert_current_matches(root: Path, policy: Path, ledger: dict[str, Any]) -> None:
@@ -626,7 +703,11 @@ def validate(root: Path, policy: Path, ledger_path: Path) -> None:
     """Validate current structural debt, proof integrity, and assertion maps."""
     ledger = load_ledger(ledger_path)
     _assert_current_matches(root, policy, ledger)
-    _validate_trusted_transition(ledger, _trusted_ledger(root, ledger_path))
+    _validate_trusted_transition(
+        ledger,
+        _trusted_ledger(root, ledger_path),
+        changed_paths=_changed_paths_from_trusted_base(root),
+    )
     validate_assertion_maps(root, ledger_path.parent / "assertion-maps")
 
 

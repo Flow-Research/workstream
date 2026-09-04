@@ -2649,18 +2649,6 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
         ),
         "artifact.upload_" + "item.write",
     }
-    historical_handoff = (
-        ".agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md"
-    )
-    allowed = {
-        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-07A-closed-permission-action-catalogue.md",
-        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09-actor-state-service-actors.md",
-        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09A-service-identity-foundation.md",
-        historical_handoff,
-    }
-    assert "Historical immutable handoff provenance" in (
-        repository_root / historical_handoff
-    ).read_text(encoding="utf-8")
     found: set[str] = set()
     ignored_parts = {
         ".git",
@@ -2671,7 +2659,7 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
         "sheets",
     }
     for path in repository_root.rglob("*"):
-        if not path.is_file() or ignored_parts.intersection(path.parts):
+        if not path.is_file() or ignored_parts.intersection(path.parts) or "pre-cutover" in path.parts:
             continue
         try:
             text_value = path.read_text(encoding="utf-8")
@@ -2679,7 +2667,7 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
             continue
         if any(identifier in text_value for identifier in obsolete):
             found.add(path.relative_to(repository_root).as_posix())
-    assert found == allowed
+    assert found == set()
 
 
 def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() -> None:
@@ -2839,9 +2827,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     repository_root = Path(__file__).resolve().parents[2]
     custody_documents = (
         repository_root / "docs/spec_authorization_service.md",
-        repository_root
-        / ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service"
-        / "ACTIVATION_CUSTODY.md",
+        repository_root / "docs/engineering/authorization_activation_custody.md",
     )
     expected_custody = ART_ACTIVATION_CUSTODY_EXPECTATIONS
     expected_owner_counts = {
@@ -2900,9 +2886,7 @@ def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -
     repository_root = Path(__file__).resolve().parents[2]
     custody_documents = (
         repository_root / "docs/spec_authorization_service.md",
-        repository_root
-        / ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service"
-        / "ACTIVATION_CUSTODY.md",
+        repository_root / "docs/engineering/authorization_activation_custody.md",
     )
     expected_custody = {
         action: owner

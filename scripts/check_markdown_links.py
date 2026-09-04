@@ -60,12 +60,21 @@ def local_target(raw_target: str) -> str | None:
     return target
 
 
+def should_check_links(path: Path) -> bool:
+    """Return whether a Markdown file owns current link integrity."""
+    return "pre-cutover" not in path.parts
+
+
 def main() -> int:
     """Run the Markdown link check."""
     missing: list[str] = []
     paths = changed_markdown_files()
     for path in paths:
         if not path.exists():
+            continue
+        if not should_check_links(path):
+            # These are immutable source snapshots. Rewriting their historical
+            # relative links would destroy the exact-record guarantee.
             continue
         try:
             text = path.read_text(encoding="utf-8")

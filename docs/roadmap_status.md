@@ -244,7 +244,8 @@ v0.1 is not ready until all of the following are true:
 ## Trace References
 
 Internal chunk identifiers are useful for implementation traceability, but a
-reader does not need `.agent-loop` to understand the roadmap above. The main
+reader does not need internal engineering records to understand the roadmap
+above. The main
 remaining trace sequence is:
 
 - Unified guide: `POL-04A2 -> AUTH-12B2 -> POL-04B -> POL-05A -> AUTH-12F4
@@ -258,5 +259,5 @@ remaining trace sequence is:
   requires CON contribution/award persistence and its atomic decision participant.
 
 For implementation ownership and exact contracts, contributors can follow
-[Current Engineering State](../.agent-loop/CURRENT_STATE.md). For historical
+[Commitrail Engineering Index](../.commitrail/INDEX.md). For historical
 decisions, use the [Historical Planning Index](historical_planning.md).

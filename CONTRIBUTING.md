@@ -25,11 +25,11 @@ host setup is supported only on the Linux/glibc/Python matrix documented there.
 Do not replace the approved Pillow artifacts to make an unsupported host install
 pass.
 
-For a documentation-only small change, record the intent and scope in the pull
-request. Every implementation change uses one bounded chunk contract under
-`.agent-loop/initiatives/`; larger or higher-risk work also adds a short
-initiative plan. Existing planning artifacts are useful context, not runtime
-locks.
+For an obvious low-risk correction, record intent and scope in the pull
+request. A meaningful implementation change uses one record based on
+`.commitrail/CHANGE_TEMPLATE.md`. Multi-PR work also uses one concise initiative
+overview. Commitrail records are useful context, not runtime locks or
+permission to contribute.
 
 ## Find The Current Contract
 
@@ -38,7 +38,7 @@ Before implementation, update from current `main` and read:
 1. [README.md](README.md) for the product boundary and current v0.1 summary.
 2. [v0.1 Roadmap And Capability Status](docs/roadmap_status.md) for implemented,
    hidden, in-progress, and remaining capabilities.
-3. [Current Engineering State](.agent-loop/CURRENT_STATE.md) for durable
+3. [Commitrail Engineering Index](.commitrail/INDEX.md) for durable
    initiative dispositions, remaining boundaries, and the live pull-request
    view of transient work.
 4. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
@@ -78,18 +78,16 @@ active queue or approval gate.
 - Preserve security defaults and existing coverage floors.
 - Record important reviewer findings and how they were resolved.
 - Reconcile with current `main` and rerun affected checks.
-- For a chunk PR, declare `Outcome on merge` in the chunk contract and update
-  its initiative `CHUNK_MAP.md`, initiative `STATUS.md`, and
-  `.agent-loop/CURRENT_STATE.md` to the state that will exist after human
-  merge. Write that projection as the final durable value (`Complete`,
-  `Planned`, `Cancelled`, or `Superseded`), never as temporal `on merge`
-  wording. Code and durable state land together; there is no second pre-merge
-  or post-merge memory PR.
+- In the change record, declare the intended merge outcome and durable
+  disposition (`Planned`, `Complete`, `Stopped`, or `Superseded`). Update an
+  initiative overview or index row only when its durable meaning changes.
+  Never commit transient review or CI state, and never create a second
+  post-merge memory PR.
 
 Run the same atomic check locally before pushing:
 
 ```bash
-python3 scripts/check_chunk_state_sync.py --base-ref origin/main
+python3 scripts/check_commitrail_records.py --base-ref origin/main
 ```
 
 Security, authorization, payments, workflow, architecture, and other high-risk
@@ -142,6 +140,7 @@ declaration-only change.
 
 ## Durable Records
 
-Keep useful plans, contracts, review notes, and historical `.agent-loop/`
-artifacts. They explain decisions and preserve evidence. Git and GitHub are the
-source of truth for commits, reviews, checks, and merges.
+Keep only Commitrail records that materially explain intent, boundaries,
+decisions, evidence, or remaining risks. Git history preserves retired detail.
+Git and GitHub are authoritative for commits, reviews, checks, approvals, and
+merges.

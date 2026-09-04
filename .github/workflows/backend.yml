@@ -69,10 +69,10 @@ jobs:
             tests/architecture/test_module_boundaries.py \
             tests/architecture/test_authorization_boundary.py
           python -m scripts.authorization_boundary validate \
-            --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/IMPORT_LEDGER.md
+            --ledger ../.ci/auth-boundaries/IMPORT_LEDGER.md
           python -m scripts.test_structure_boundary validate \
-            --policy ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_POLICY.md \
-            --ledger ../.agent-loop/initiatives/WS-AUTH-003-module-boundary-recovery/TEST_STRUCTURE_DEBT.json
+            --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md \
+            --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
 
   lanes:

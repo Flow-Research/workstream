@@ -45,7 +45,7 @@ Administrative grants do not imply contributor capability. Holding one does
 not permit claiming tasks, submitting work, or recording review decisions.
 
 Review/revision authority follows the closed action custody in
-`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+`engineering/review_authorization_action_custody.md`.
 Project Managers may configure policy or perform only covered-project recovery;
 Operators receive reason-bound operational recovery only. Neither receives a
 review decision or generic artifact capability without the independent exact

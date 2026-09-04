@@ -720,10 +720,10 @@ class ReviewerContractTests(unittest.TestCase):
             shutil.copy2(agent, root / agent)
             shutil.copy2(skill, root / skill)
         matrix = Path(
-            ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+            ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
         )
         cases = Path(
-            ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/evaluations/CASES.json"
+            ".ci/reviewer-evidence/evaluations/CASES.json"
         )
         (root / matrix).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(matrix, root / matrix)
@@ -916,8 +916,7 @@ class ReviewerContractTests(unittest.TestCase):
         temporary, root = self.copied_contract_root()
         try:
             matrix = root / (
-                ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
-                "REVIEWER_MATRIX.md"
+                ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             )
             remove_contract_token(matrix, PROOF_QUALITY_MATRIX_LIFECYCLE)
             self.assertIn("matrix: missing proof.lifecycle", contract_failures(root))
@@ -928,8 +927,7 @@ class ReviewerContractTests(unittest.TestCase):
         temporary, root = self.copied_contract_root()
         try:
             matrix = root / (
-                ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
-                "REVIEWER_MATRIX.md"
+                ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             )
             for label, token in MATRIX_SPECIALTY_REQUIREMENTS.items():
                 with self.subTest(label=label):
@@ -1047,7 +1045,7 @@ class ReviewerContractTests(unittest.TestCase):
         try:
             matrix = (
                 root
-                / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+                / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             )
             matrix.write_text(
                 matrix.read_text(encoding="utf-8").replace(
@@ -1068,7 +1066,7 @@ class ReviewerContractTests(unittest.TestCase):
         try:
             matrix = (
                 root
-                / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
+                / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             )
             matrix.write_text(
                 matrix.read_text(encoding="utf-8")

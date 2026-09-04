@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from scripts.git_delta import changed_files
+from scripts.git_delta import committed_changed_files
 from scripts.git_delta import diff_text
 from scripts.git_delta import numstat
 
@@ -34,6 +35,10 @@ class GitDeltaTests(unittest.TestCase):
 
             self.assertEqual(
                 changed_files(base, head, repository_root=root, include_local=False),
+                ["a.txt", "b.txt"],
+            )
+            self.assertEqual(
+                committed_changed_files(base, head, repository_root=root),
                 ["a.txt", "b.txt"],
             )
             self.assertEqual(

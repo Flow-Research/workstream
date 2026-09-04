@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-AUTH-001-10B2",
-  "chunk_title": "Privacy-Safe Project Role Grant Reads",
-  "initiative_id": "WS-AUTH-001",
-  "next_chunk_id": "WS-AUTH-001-10C",
-  "next_chunk_title": "Project Role Grant Mutations",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

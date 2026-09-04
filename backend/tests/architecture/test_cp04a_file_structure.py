@@ -27,8 +27,7 @@ def test_cp04a_changed_behavior_files_remain_below_500_lines() -> None:
 def test_cp04a_tests_map_one_to_one_to_contract_behavior_atoms() -> None:
     contract = (
         ROOT.parent
-        / ".agent-loop/initiatives/WS-ARCH-001-modular-monolith-boundaries/chunks"
-        / "WS-ARCH-001-CP04A-con-policy-draft-behavior.md"
+        / ".ci/behavior-contracts/contribution-policy-draft-behavior.md"
     ).read_text(encoding="utf-8")
     required = re.findall(r"`(tests/[^`]+\.py)::([A-Za-z0-9_]+)`", contract)
     assert required
