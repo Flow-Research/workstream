@@ -1,6 +1,6 @@
 # Chunk Contract: WS-DOCS-001-04 Public v0.1 Roadmap
 
-Status: Complete. Risk: L2. Outcome on merge: complete.
+Status: Complete. Risk: L2.
 
 ## Intent
 
@@ -51,3 +51,7 @@ python3 scripts/check_active_state_projections.py --base-ref origin/main --head-
 Documentation and product/operations review are required. Architecture review
 is required only to verify that the roadmap preserves subsystem ownership and
 dependency order. No runtime or security claim changes.
+
+## Merge state
+
+- Outcome on merge: `complete`
