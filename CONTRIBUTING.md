@@ -36,8 +36,8 @@ locks.
 Before implementation, update from current `main` and read:
 
 1. [README.md](README.md) for the product boundary and current v0.1 summary.
-2. [Current v0.1 Status](docs/roadmap_status.md) for implemented, in-progress, and
-   remaining capabilities.
+2. [v0.1 Roadmap And Capability Status](docs/roadmap_status.md) for implemented,
+   hidden, in-progress, and remaining capabilities.
 3. [Current Engineering State](.agent-loop/CURRENT_STATE.md) for durable
    initiative dispositions, remaining boundaries, and the live pull-request
    view of transient work.

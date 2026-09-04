@@ -12,9 +12,11 @@ remaining v0.1 release gates without reading `.agent-loop`.
 
 - `docs/roadmap_status.md`
 - `README.md`
+- `CONTRIBUTING.md`
 - `.agent-loop/CURRENT_STATE.md`
 - `.agent-loop/initiatives/WS-DOCS-001-current-v01-documentation/CHUNK_MAP.md`
 - `.agent-loop/initiatives/WS-DOCS-001-current-v01-documentation/STATUS.md`
+- `.agent-loop/initiatives/WS-DOCS-001-current-v01-documentation/reviews/WS-DOCS-001-04-external-review-response.md`
 - this contract
 
 ## Not allowed

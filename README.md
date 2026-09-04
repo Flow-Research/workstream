@@ -147,7 +147,7 @@ reading internal agent-loop records is not required to understand product progre
 
 - [Developer Quickstart](#developer-quickstart)
 - [Contribution Guide](CONTRIBUTING.md)
-- [Current v0.1 Status](docs/roadmap_status.md)
+- [v0.1 Roadmap And Capability Status](docs/roadmap_status.md)
 - [Product Principles](docs/product_principles.md)
 - [Product Brief](docs/product_brief.md)
 - [Architecture Lockdown](docs/architecture_lockdown.md)
