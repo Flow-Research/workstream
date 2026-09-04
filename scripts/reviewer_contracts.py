@@ -16,14 +16,14 @@ import jsonschema
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INITIATIVE = ROOT / ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity"
+INITIATIVE = ROOT / ".ci/reviewer-evidence"
 CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 PROOF_CASES_PATH = INITIATIVE / "evaluations/PROOF_CASES.json"
 PROOF_EXPECTATIONS_PATH = INITIATIVE / "evaluations/PROOF_EXPECTATIONS.json"
 PROOF_RESULTS_PATH = INITIATIVE / "evaluations/PROOF_RESULTS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
-RECEIPT_SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
+RECEIPT_SCHEMA_PATH = ROOT / ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json"
 PROOF_PATTERNS_PATH = (
     ROOT
     / ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md"
@@ -95,7 +95,13 @@ PROOF_SUBJECT_PATHS = {
             "test-delta",
         )
     },
-    ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md",
+    ".ci/reviewer-evidence/REVIEWER_MATRIX.md",
+}
+PROOF_SUBJECT_EVALUATED_PATH = {
+    ".ci/reviewer-evidence/REVIEWER_MATRIX.md": (
+        ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
+        "REVIEWER_MATRIX.md"
+    ),
 }
 PROOF_SUPERSESSION_MODE = "evaluated-ancestor-with-lifecycle-only-normalization"
 ANSWER_LEAK_RE = re.compile(
@@ -164,12 +170,11 @@ PROOF_QUALITY_MATRIX_LIFECYCLE = (
     "`WS-CI-005-03`"
 )
 PROOF_QUALITY_STATE_REQUIREMENTS = {
-    ".agent-loop/CURRENT_STATE.md": "behaviorally adopted through blind evaluation",
-    ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/STATUS.md": (
-        "reviewer contracts are behaviorally adopted"
+    "docs/engineering/commitrail.md": (
+        "Review is routed by impact, not by a fixed reviewer count"
     ),
-    ".agent-loop/initiatives/WS-CI-005-semantic-proof-quality/CHUNK_MAP.md": (
-        "behaviorally adopted after blind evaluation"
+    ".commitrail/INDEX.md": (
+        "WS-CI-005 | Complete | Reviewer contracts incorporate its evidence"
     ),
 }
 SPECIALTY_PROOF_REQUIREMENTS = {
@@ -644,6 +649,7 @@ def _normalized_proof_subject(text: str) -> str:
         r"Specialty additions are adopted\s+through the blind evaluation recorded by `WS-CI-005-03`:",
         r"## (?:Candidate|Adopted) proof-quality (?:obligations|responsibilities)",
         r"\| Reviewer \| (?:Candidate|Adopted) specialty obligation \|",
+        r"Treat (?:\.agent-loop/policies/|Commitrail and repository instructions) as engineering process (?:policy|guidance)\.",
     )
     normalized = text
     for pattern in patterns:
@@ -670,7 +676,8 @@ def proof_supersession_failures(
     if (
         not isinstance(subject_paths, list)
         or not all(isinstance(path, str) for path in subject_paths)
-        or set(subject_paths) != PROOF_SUBJECT_PATHS
+        or set(subject_paths)
+        != {PROOF_SUBJECT_EVALUATED_PATH.get(path, path) for path in PROOF_SUBJECT_PATHS}
     ):
         failures.append("proof supersession: subject coverage mismatch")
     reachable = subprocess.run(
@@ -695,7 +702,10 @@ def proof_supersession_failures(
         return failures
     for path in sorted(PROOF_SUBJECT_PATHS):
         try:
-            evaluated = _normalized_proof_subject(_git_text(evaluated_head, path))
+            evaluated_path = PROOF_SUBJECT_EVALUATED_PATH.get(path, path)
+            evaluated = _normalized_proof_subject(
+                _git_text(evaluated_head, evaluated_path)
+            )
             current = _normalized_proof_subject(_git_text(current_head, path))
         except subprocess.CalledProcessError:
             failures.append(f"proof supersession: unavailable subject {path}")

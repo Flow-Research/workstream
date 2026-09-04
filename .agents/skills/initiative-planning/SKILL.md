@@ -1,6 +1,6 @@
 ---
 name: initiative-planning
-description: Plan a large or ambiguous engineering initiative before implementation. Produces intent, discovery, plan, chunk map, and chunk contracts. Use before writing code for non-trivial work.
+description: Plan large, ambiguous, or multi-PR work before implementation using one concise Commitrail initiative overview and PR-sized change records.
 ---
 
 # Initiative Planning
@@ -13,42 +13,33 @@ Start read-only. Do not edit application code.
 
 ## Inputs
 
-- Initiative folder path, or create one under `.agent-loop/initiatives/`.
 - Human goal and constraints.
-- Project policies under `.agent-loop/policies/`.
+- Current code, tests, ADRs, specifications, `.commitrail/INDEX.md`, and open PRs.
 
-## Required output artifacts
+## Record
 
-Create or update:
-
-```text
-INTENT.md
-DISCOVERY.md
-PLAN.md
-CHUNK_MAP.md
-STATUS.md
-RISKS.md
-DECISIONS.md
-chunks/<ID>-01.md ... chunks/<ID>-N.md
-```
+Create one `.commitrail/initiatives/<ID>/OVERVIEW.md`. Keep intent, relevant
+discovery, design, dependencies, risks, durable disposition, and proposed
+PR-sized boundaries in that file. Do not create separate intent, discovery,
+plan, status, risk, decision, and chunk-map files by default.
 
 ## Process
 
 1. Restate the human goal.
 2. Identify what is known, unknown, and risky.
 3. Explore the repo read-only.
-4. Write `DISCOVERY.md` with concrete files, modules, tests, and risks.
-5. Write `INTENT.md` with the why, success state, non-goals, and human decisions needed.
-6. Write `PLAN.md` with proposed approach, alternatives rejected, boundaries preserved, and verification strategy.
-7. Split the plan into reviewable PR-sized chunks in `CHUNK_MAP.md`.
-8. Create one chunk contract per chunk.
-9. Mark the first chunk as proposed, not active, until human approval.
-10. Stop. Do not implement.
+4. Write one concise overview with concrete observations, intent, non-goals,
+   chosen design, rejected alternatives, risks, verification strategy, and
+   proposed PR boundaries.
+5. Add or update its one row in `.commitrail/INDEX.md`.
+6. Mark its durable disposition `Planned` and stop for human approval.
 
 ## Chunking rules
 
-- Each chunk should map to one PR.
-- Each chunk must have allowed files, not-allowed changes, acceptance criteria, risk class, reviewer set, and human review focus.
+- Each boundary maps to one PR and one record based on
+  `.commitrail/CHANGE_TEMPLATE.md` when implementation starts.
+- Each record states allowed files, prohibited changes, acceptance criteria,
+  risk, impact-routed reviewers, evidence, and human review focus.
 - L1 chunks must be small enough for careful human review.
 - If a chunk is too large, split it.
 
@@ -57,8 +48,8 @@ chunks/<ID>-01.md ... chunks/<ID>-N.md
 End with:
 
 1. Initiative summary
-2. Proposed chunk list
+2. Proposed PR-sized boundary list
 3. Main risks
 4. Human decisions needed
-5. Recommended first chunk
+5. Recommended first bounded change
 6. Explicit stop: "Planning complete. Awaiting human approval before implementation."

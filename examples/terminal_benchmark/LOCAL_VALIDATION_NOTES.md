@@ -98,7 +98,8 @@ Date: 2026-07-05
 Purpose:
 
 Record that a real Terminal Benchmark reference fixture was used in formal
-`.agent-loop` evidence to prove the current Workstream policy-bundle path:
+historical engineering evidence to prove the then-current Workstream
+policy-bundle path:
 
 - project guide creation
 - immutable guide-source snapshot from real Terminal Benchmark guide, review program, task, and
@@ -144,8 +145,8 @@ Results:
 - checker-caused v1 reached `needs_revision`
 - fixed v2 superseded v1 and reached `review_pending`
 
-This section is only a local pointer to the formal proof. Formal zero-trust
-chunk evidence lives under `.agent-loop/`.
+This section is only a historical local pointer. Current implementation proof
+belongs in the applicable Commitrail change record and GitHub checks.
 
 ## Manual Live API Drill Update
 

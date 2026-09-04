@@ -1,0 +1,69 @@
+# Status: WS-AUTH-001 Workstream Authorization Service
+
+WS-AUTH-001-14 is a planned retirement as a superseded/non-executable broad
+cutover; WS-ARCH-001-03C/04D/04E/04F and later REV/public cutover own its split
+replacement.
+
+## Durable state on `main`
+
+AUTH provides the central deny-by-default authorization boundary for Workstream.
+Merged behavior includes external Flow-token verification, canonical actors and
+identity links, request context and rate controls, authority audit and
+idempotency, closed permission/action catalogues, project-scoped grants,
+bootstrap administration, fixed-service identities and runtime admission,
+controlled provisioning, actor/identity administration, and the implemented
+project read and mutation cutovers.
+
+Project Guide compilation request/recovery and fixed project-setup execution
+authority merged through `WS-AUTH-001-12I` in PR #312. That activation exposes
+authority for the hidden POL compilation path; it does not make the remaining
+POL, ART, REV, CON, TASK, or checker lifecycle behavior live.
+
+POL-04A3 exposes two hidden, deny-default projection ports.
+`WS-AUTH-001-12J` is Complete and supplies their exact request-local fixed-service adapters
+without adding actions or making the flow live.
+
+All completed and superseded AUTH chunks remain enumerated in `CHUNK_MAP.md`.
+Their contracts, reviews, and Git history are historical exact-change evidence,
+not current start requirements.
+
+## Remaining boundaries
+
+- POL-04A2 owns hidden finalization and may proceed after complete POL-04A3.
+- `WS-AUTH-001-12B2` is Planned after complete AUTH-12J and POL-04A2 and activates
+  only the exact setup-finalization authority.
+- AUTH-12F4 follows hidden POL-05A and activates approval of stored unified
+  pre-submit policy; it performs no inference.
+- AUTH-12G follows hidden POL-06A and activates deterministic stored
+  post-submit projection authority.
+- WS-AUTH-001-12H is planned after complete POL-06B/07, corrected AUTH-12B2, CP05 active
+  ContributionPolicy behavior, CP06 validation, and CP07 ProjectGuide binding.
+  It does not depend on CP08, WS-ARCH-001-03A/03B/03C, or CP09 final legacy
+  removal.
+- AUTH-13 through AUTH-16 remain future task, submission/checker, cleanup, and
+  conformance boundaries. Each must be split against then-current product
+  behavior before implementation.
+- ART, REV, and CON feature actions remain unavailable until their exact hidden
+  owner behavior and typed manifests are merged. Their activation order lives
+  in the matching XINT and feature-owner records.
+- PLAN3 defines the missing contribution-policy sequence: WS-ARCH-001-CP01A is
+  merged with exact adapter-binding actions still unavailable; CP01B is
+  merged and separately registers
+  policy actions while unavailable; CP01C is merged with corrected
+  unavailable binding identity and lifecycle-generation facts; CP03 is split.
+  CP03A is merged through PR #340 with only the target identity and owner
+  eligibility while actions remain unavailable; CP03B is complete and
+  activates only CP02's four exact Finance Authority boundaries. CP05 later activates
+  only CP04A/CP04B's merged hidden policy behavior. Fulfillment callback authority
+  remains separate and cannot be bundled into adapter-binding registration.
+
+Open pull requests are the transient-work view. This status page does not name
+an active branch or authorize implementation. GitHub permissions, a bounded
+contract or PR-stated scope, tests, review, and human merge govern each change.
+
+## Historical evidence
+
+The former signed-start, single-active-chunk, and post-merge-memory process is
+retired. References to it in old contracts and review evidence describe how
+those exact historical changes were produced and must not be executed as
+current workflow instructions.

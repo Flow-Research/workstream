@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-ART-001-02D",
-  "chunk_title": "Operator Artifact Operations",
-  "initiative_id": "WS-ART-001",
-  "next_chunk_id": "WS-ART-001-03",
-  "next_chunk_title": "Guide Source Artifact Cutover",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

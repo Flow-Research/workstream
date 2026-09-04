@@ -33,8 +33,8 @@ EVIDENCE_KEYS = set(
     "measured_percent configured_floor minimum_milestone python_version coverage_version "
     "pytest_cov_version database_name alembic_head".split()
 )
-GLOBAL_MEMORY = {".agent-loop/LOOP_STATE.md", ".agent-loop/REVIEW_LOG.md", ".agent-loop/WORK_QUEUE.md"}
-QUAL_MEMORY = ".agent-loop/initiatives/WS-QUAL-001-backend-coverage-floor/"
+GLOBAL_MEMORY = {".commitrail/INDEX.md"}
+QUAL_MEMORY = ".commitrail/initiatives/WS-QUAL-002/"
 BLOCKED = {"skip", "skipif", "skipIf", "skipUnless", "xfail", "expectedFailure", "importorskip", "SkipTest"}
 
 

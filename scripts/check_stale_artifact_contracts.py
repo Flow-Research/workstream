@@ -32,8 +32,6 @@ HISTORICAL_PREFIXES = (
 # Prefixes above remain useful for review/reference trees, while this set covers
 # standalone closed records and implemented plans outside those trees.
 HISTORICAL_PATHS = {
-    ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md",
-    ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/WS-POL-001-11-actor-identity-profile-registry.md",
     "docs/checker_trial_failure_catalog.md",
     "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md",
     "docs/internal_reviews/2026-06-11_revision_context_rebase.md",
@@ -59,14 +57,6 @@ HISTORICAL_PATHS = {
     "docs/spec_chunk_9_pre_review_gate.md",
     "docs/spec_chunk_10_checker_trial.md",
     "docs/spec_week2_checker_framework.md",
-}
-AGENT_LOOP_INITIATIVE_PREFIX = ".agent-loop/initiatives/"
-ACTIVE_POLICY_PREFIX = ".agent-loop/policies/"
-ACTIVE_LOOP_PATHS = {
-    ".agent-loop/LOOP_STATE.md",
-    ".agent-loop/MEMORY.md",
-    ".agent-loop/REVIEW_LOG.md",
-    ".agent-loop/WORK_QUEUE.md",
 }
 TEXT_SUFFIXES = {
     ".html",
@@ -277,35 +267,8 @@ LIVE_RULE_PATHS = {
 
 
 def active_initiative_prefixes(root: Path = ROOT) -> tuple[str, ...]:
-    """Derive live initiative directories from in-progress and planned rows."""
-    queue_path = root / ".agent-loop/WORK_QUEUE.md"
-    if not queue_path.is_file():
-        return ()
-    queue = queue_path.read_text(encoding="utf-8")
-    try:
-        in_progress = queue.split("## In Progress", maxsplit=1)[1].split(
-            "## Planned Next",
-            maxsplit=1,
-        )[0]
-        planned_next = queue.split("## Planned Next", maxsplit=1)[1].split(
-            "## Completed",
-            maxsplit=1,
-        )[0]
-    except IndexError as exc:
-        raise ValueError("malformed Work Queue headings") from exc
-    initiative_ids = {
-        match.group(1)
-        for chunk in re.findall(r"\| `([^`]+)` \|", in_progress + planned_next)
-        if (match := re.match(r"([A-Z]+-[A-Z]+-\d+)", chunk))
-    }
-    initiative_root = root / AGENT_LOOP_INITIATIVE_PREFIX
-    if not initiative_root.is_dir():
-        return ()
-    return tuple(
-        f"{AGENT_LOOP_INITIATIVE_PREFIX}{path.name}/"
-        for path in sorted(initiative_root.iterdir())
-        if path.is_dir() and any(path.name.startswith(item) for item in initiative_ids)
-    )
+    """Return no process paths; current product contracts live in docs/code."""
+    return ()
 
 
 @dataclass(frozen=True)
@@ -423,11 +386,8 @@ def rules_for_phase(phase: str) -> tuple[Rule, ...]:
 
 def path_is_scannable(relative_path: str, root: Path = ROOT) -> bool:
     """Return whether a live source or document path should be scanned."""
-    active_prefixes = active_initiative_prefixes(root)
     path = Path(relative_path)
-    is_review_history = (
-        relative_path.startswith(AGENT_LOOP_INITIATIVE_PREFIX) and "/reviews/" in relative_path
-    )
+    is_review_history = False
     is_text_path = (
         path.suffix.lower() in TEXT_SUFFIXES
         or path.name.startswith(R2_RUNTIME_FILENAMES)
@@ -439,32 +399,21 @@ def path_is_scannable(relative_path: str, root: Path = ROOT) -> bool:
         and not relative_path.startswith(HISTORICAL_PREFIXES)
         and relative_path not in HISTORICAL_PATHS
         and not is_review_history
-        and (
-            not relative_path.startswith(".agent-loop/")
-            or relative_path in ACTIVE_LOOP_PATHS
-            or relative_path.startswith(ACTIVE_POLICY_PREFIX)
-            or relative_path.startswith(active_prefixes)
-        )
+        and not relative_path.startswith(".commitrail/")
         and relative_path != "scripts/check_stale_artifact_contracts.py"
     )
 
 
 def path_is_active_contract(relative_path: str, root: Path = ROOT) -> bool:
     """Return whether a path carries current artifact architecture wording."""
-    if relative_path == ".agent-loop/REVIEW_LOG.md":
-        return False
-    if relative_path in {"AGENTS.md", "README.md", *ACTIVE_LOOP_PATHS}:
-        return True
-    if relative_path.startswith(ACTIVE_POLICY_PREFIX):
+    if relative_path in {"AGENTS.md", "README.md"}:
         return True
     if relative_path.startswith("docs/"):
         return (
             not relative_path.startswith(HISTORICAL_PREFIXES)
             and relative_path not in HISTORICAL_PATHS
         )
-    return relative_path.startswith(active_initiative_prefixes(root)) and "/reviews/" not in (
-        relative_path
-    )
+    return False
 
 
 def active_work_queue_text(text: str) -> str:
@@ -583,8 +532,6 @@ def clause_around(text: str, offset: int) -> str:
 def scan_text(relative_path: str, text: str, phase: str, root: Path = ROOT) -> list[str]:
     """Return deterministic stale-contract failures for one text file."""
     failures: list[str] = []
-    if relative_path == ".agent-loop/WORK_QUEUE.md":
-        text = active_work_queue_text(text)
     normalized_text = text.replace(r"\n", "  ")
     for rule in rules_for_phase(phase):
         if not rule_applies_to_path(rule, relative_path, root):

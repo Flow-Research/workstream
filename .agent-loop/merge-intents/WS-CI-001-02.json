@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-CI-001-02",
-  "chunk_title": "Safe Routing, Cache, and Timing Refinement",
-  "initiative_id": "WS-CI-001",
-  "next_chunk_id": "WS-CI-001-02A",
-  "next_chunk_title": "Safe Migrate-Once Database Reset",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

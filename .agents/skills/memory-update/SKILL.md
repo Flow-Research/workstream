@@ -10,11 +10,10 @@ contributors. Do not create process records merely to authorize work.
 
 ## Update As Applicable
 
-- `.agent-loop/REVIEW_LOG.md`
-- initiative `STATUS.md`
-- initiative `DECISIONS.md`
-- initiative `RISKS.md`
-- chunk contract status notes
+- `.commitrail/INDEX.md` for durable initiative disposition or next boundary
+- initiative `OVERVIEW.md` for durable multi-PR context
+- the current change record for material evidence, findings, risks, or decisions
+- an owning specification or ADR when the fact is product or architecture truth
 
 ## Capture
 
@@ -33,5 +32,6 @@ contributors. Do not create process records merely to authorize work.
 - If a repeated issue appears, suggest policy/skill update.
 - Memory is context, not an authorization mechanism and not a prerequisite for
   branching, implementation, or opening a pull request.
-- Update records in the same pull request as the decision or change they
-  explain. Ordinary Git history remains the source of truth for merged code.
+- Update the smallest applicable record in the same pull request as the change.
+  Do not create a second post-merge memory PR. Git and GitHub remain the source
+  of truth for commits, checks, reviews, approvals, and merges.

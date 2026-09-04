@@ -25,7 +25,7 @@ from scripts.review_target import inspect_review_target, main
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = ROOT / ".agent-loop/templates/INTERNAL_REVIEW_RECEIPT.schema.json"
+SCHEMA_PATH = ROOT / ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json"
 
 
 def git(repository: Path, *args: str) -> str:

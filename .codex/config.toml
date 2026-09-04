@@ -1,4 +1,4 @@
-# Project-local Codex configuration for Workstream zero-trust loop engineering.
+# Project-local Codex configuration for Workstream's Commitrail method.
 #
 # This file is intentionally small. Codex only loads project-local `.codex/`
 # config after the repository is trusted. Custom reviewer agents are defined as

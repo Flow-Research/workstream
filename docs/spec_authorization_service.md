@@ -345,13 +345,14 @@ the 19 historical REV owner values with the exact AUTH activation custodians
 below. Mappings and planned availability are unchanged, and the custodian
 labels grant no reviewer, Operator, or service authority. Before any review
 action activates, its dedicated AUTH custodian must integrate the complete
-feature proof according to `ACTIVATION_CUSTODY.md` and the reviewed
-`.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_REV_HANDOFF.md`.
+feature proof according to the
+[activation-custody contract](engineering/authorization_activation_custody.md)
+and the canonical review custody contract below.
 
 The AUTH-REV table immediately below is retained as runtime catalogue history.
 For all future work, the canonical planning custody, principals, resource
 families, fixed identities, and exact XINT-003 waves are in
-`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+`engineering/review_authorization_action_custody.md`.
 Chunk 01 changes no runtime owner or availability.
 
 | AUTH activation custodian | Exact planned ActionIds |
@@ -494,10 +495,9 @@ change availability. Its principal-class and
 canonical-resource columns are not AUTH
 registry fields and are not executable authority; the owning WS-ART chunk adopts
 them with its hidden canonical resource composer, guards, surface declaration,
-and behavior tests. The complete AUTH activation-custody transfer is separately
-canonical in
-`.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md`.
-A mapping is not a permission alias.
+and behavior tests. This specification is the canonical activation-custody
+source; the former planning handoff is historical Git evidence only. A mapping
+is not a permission alias.
 
 | AUTH activation custodian | Exact ActionIds and current availability |
 |---|---|

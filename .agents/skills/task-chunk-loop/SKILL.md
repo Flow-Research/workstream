@@ -12,7 +12,7 @@ work and optional for small changes.
 
 - Chunk contract or PR-stated intent and scope.
 - Initiative artifacts when they exist.
-- Policies under `.agent-loop/policies/`.
+- Current repository instructions, specifications, ADRs, and architecture boundaries.
 
 ## Required process
 
@@ -39,9 +39,10 @@ work and optional for small changes.
     head, verdict, compatible proof boundary, proof strength, execution custody,
     discriminating probe, and uncertainty without copying private session
     receipts into Git.
-13. Summarize material reviewer findings in the PR or a durable note when useful.
+13. Summarize material reviewer findings in the same Commitrail change record
+    or PR; add another record only when independently useful.
 14. Stop after two failed repair cycles on the same class of issue.
-15. Produce a PR trust bundle.
+15. Complete the change record and PR trust summary without duplicating them.
 16. Stop for human review.
 
 ## Hard stops

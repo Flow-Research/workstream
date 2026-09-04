@@ -1,9 +1,0 @@
-{
-  "chunk_id": "WS-ENG-007-00R2",
-  "chunk_title": "Canonical Check Evidence Recovery",
-  "initiative_id": "WS-ENG-007",
-  "next_chunk_id": "WS-ENG-007-01",
-  "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
-  "next_requires_explicit_start": true,
-  "schema_version": 2
-}

@@ -1081,7 +1081,7 @@ separate explicit start after fresh review.
 ## Conformance And Proof
 
 Every implementation chunk MUST bind its changed symbols and tests to the
-initiative [conformance matrix](../.agent-loop/initiatives/WS-CON-001-contribution-compensation-boundary/CONFORMANCE_MATRIX.md).
+initiative [conformance matrix](../.commitrail/initiatives/WS-CON-001/CONFORMANCE.md).
 At minimum, final proof covers:
 
 - immutable policy publication and both-order freeze races;

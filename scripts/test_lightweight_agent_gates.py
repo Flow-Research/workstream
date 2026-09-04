@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from scripts.check_markdown_links import local_target
+from scripts.check_markdown_links import should_check_links
 from scripts.check_stale_artifact_contracts import phase_index
 from scripts.check_stale_artifact_contracts import scan_text as scan_artifact_text
 from scripts.check_stale_authorization_docs import scan_text as scan_authorization_text
@@ -21,6 +22,12 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertEqual(local_target("<docs/a file.md>"), "docs/a file.md")
         self.assertIsNone(local_target("https://example.com"))
         self.assertIsNone(local_target("#local-heading"))
+
+    def test_exact_pre_cutover_records_are_not_rewritten_for_old_links(self) -> None:
+        self.assertFalse(
+            should_check_links(Path(".commitrail/initiatives/WS-AUTH-001/pre-cutover/STATUS.md"))
+        )
+        self.assertTrue(should_check_links(Path(".commitrail/initiatives/WS-AUTH-001/OVERVIEW.md")))
 
     def test_tool_specific_agent_paths_are_rejected(self) -> None:
         failures = forbidden_path_failures([Path(".claude/settings.json"), Path("docs/guide.md")])
@@ -139,9 +146,11 @@ class LightweightAgentGateTests(unittest.TestCase):
             "run: python3 backend/scripts/check_guide_extractor_dependencies.py",
             agent_gates,
         )
-        self.assertIn("python3 scripts/check_chunk_state_sync.py", agent_gates)
+        self.assertIn("python3 scripts/check_commitrail_records.py", agent_gates)
+        self.assertNotIn("python3 scripts/check_chunk_state_sync.py", agent_gates)
+        self.assertIn("scripts.test_commitrail_contracts", agent_gates)
         self.assertIn('WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}', agent_gates)
-        self.assertIn("scripts.test_chunk_state_sync", agent_gates)
+        self.assertNotIn("scripts.test_chunk_state_sync", agent_gates)
         self.assertIn("--require-hashes", agent_gates)
         self.assertIn("-r .github/requirements/agent-gates.txt", agent_gates)
         for package in (

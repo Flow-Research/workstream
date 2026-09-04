@@ -8,15 +8,15 @@ here is not yet available in the production API. Each owning REV chunk must
 merge hidden behavior, AUTH must activate the exact registered actions, and
 `WS-REV-001-13C` must pass the joint release gate before any surface is exposed.
 
-The WS-REV chunk map under `.agent-loop` records feature-owned hidden behavior.
-For current REV-AUTH integration and activation order, the WS-XINT-003 chunk
-map and canonical action custody supersede its historical activation labels.
-This contract defines product behavior and subsystem boundaries; it does not itself
+The [Commitrail engineering index](../.commitrail/INDEX.md) identifies the next
+durable REV boundary. The canonical action-custody contract owns current
+REV-AUTH integration and activation order. This contract defines product
+behavior and subsystem boundaries; it does not itself
 implement a route, database table, job, authorization evaluator, artifact
 capability, contribution participant, or frontend.
 
 The canonical REV-AUTH action custody is
-`.agent-loop/initiatives/WS-XINT-003-rev-auth-end-to-end/ACTION_CUSTODY.md`.
+`engineering/review_authorization_action_custody.md`.
 REV owns lifecycle and immutable policy semantics; AUTH owns evaluation, PREP,
 and decision evidence. ReviewPolicy and RevisionPolicy use immutable,
 append-only identities installed by XINT-003-02A; their only writer is the

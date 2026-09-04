@@ -16,8 +16,6 @@ DOCUMENT_SUFFIXES = {".html", ".json", ".md", ".puml"}
 # Exact reviewed history/archive paths. New files are active unless added here
 # with an explicit rationale through normal review.
 HISTORICAL_PATHS = {
-    ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md": "merged transitional implementation contract",
-    ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/WS-POL-001-11-actor-identity-profile-registry.md": "merged transitional implementation contract",
     "docs/checker_trial_failure_catalog.md": "closed checker-trial evidence",
     "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md": "closed internal review",
     "docs/internal_reviews/2026-06-11_revision_context_rebase.md": "closed internal review",
@@ -262,9 +260,9 @@ ACTIVATION_CUSTODY_RULES = (
 
 ACTIVATION_CUSTODY_EXACT_PATHS = (
     "AGENTS.md",
-    ".agent-loop/LOOP_STATE.md",
-    ".agent-loop/WORK_QUEUE.md",
     "docs/spec_authorization_service.md",
+    "docs/engineering/authorization_activation_custody.md",
+    "docs/engineering/review_authorization_action_custody.md",
 )
 TECHNICAL_WORKER_PREFIX = re.compile(
     r"(?:celery(?:[- ]backed)?|checker|setup|system|background|reconciliation|"
@@ -281,16 +279,6 @@ MATCH_EXEMPTIONS = {
     ): re.compile(
         r"^archival input uses `/v1`\. WS-AUTH-001 takes precedence over the current$"
     ),
-    (
-        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
-        "chunks/WS-AUTH-001-12B2-project-setup-service-cutover.md",
-        "HUMAN_WORKER_VOCABULARY",
-    ): re.compile(r"^backend/app/workers/project_setup\.py$"),
-    (
-        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
-        "chunks/WS-AUTH-001-12F3-submission-policy-service-derivation.md",
-        "HUMAN_WORKER_VOCABULARY",
-    ): re.compile(r"^backend/app/workers/project_setup\.py$"),
 }
 
 
@@ -312,14 +300,8 @@ def discover_documents(root: Path = ROOT) -> list[Path]:
     raw_paths.extend(git_lines(root, "ls-files", "--others", "--exclude-standard"))
     documents: list[Path] = []
     for raw_path in dict.fromkeys(raw_paths):
-        path_parts = Path(raw_path).parts
         is_public_document = raw_path == "README.md" or raw_path.startswith("docs/")
-        is_policy = raw_path.startswith(".agent-loop/policies/")
-        is_initiative_contract = (
-            raw_path.startswith(".agent-loop/initiatives/")
-            and "reviews" not in path_parts
-        )
-        if not (is_public_document or is_policy or is_initiative_contract):
+        if not is_public_document:
             continue
         if Path(raw_path).suffix.lower() not in DOCUMENT_SUFFIXES:
             continue
@@ -339,19 +321,6 @@ def discover_activation_custody_documents(root: Path = ROOT) -> list[Path]:
         for relative_path in ACTIVATION_CUSTODY_EXACT_PATHS
         if (root / relative_path).is_file()
     )
-    policy_root = root / ".agent-loop/policies"
-    if policy_root.is_dir():
-        documents.update(policy_root.glob("*.md"))
-    initiative_root = root / ".agent-loop/initiatives"
-    if initiative_root.is_dir():
-        documents.update(
-            candidate
-            for candidate in initiative_root.rglob("*")
-            if candidate.is_file()
-            and candidate.suffix in {".json", ".md"}
-            and "reviews" not in candidate.relative_to(initiative_root).parts
-            and candidate.relative_to(root).as_posix() not in HISTORICAL_PATHS
-        )
     return sorted(documents)
 
 
@@ -464,7 +433,7 @@ def scan_text(
                 text, max(match.start(), match.end() - 1)
             )
             enforce_full_initiative = (
-                relative_path.startswith(".agent-loop/initiatives/")
+                relative_path.startswith(".commitrail/initiatives/")
                 and rule.code in FULL_INITIATIVE_RULE_CODES
             )
             if (
@@ -490,7 +459,7 @@ def initiative_changed_line_numbers(
     root: Path, relative_path: str
 ) -> frozenset[int] | None:
     """Return changed initiative lines, or ``None`` for a new/non-initiative file."""
-    if not relative_path.startswith(".agent-loop/initiatives/"):
+    if not relative_path.startswith(".commitrail/initiatives/"):
         return None
     baseline = subprocess.run(
         ["git", "-C", str(root), "cat-file", "-e", f"origin/main:{relative_path}"],
