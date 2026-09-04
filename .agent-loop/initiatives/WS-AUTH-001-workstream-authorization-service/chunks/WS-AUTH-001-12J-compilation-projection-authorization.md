@@ -217,7 +217,7 @@ proves a schema change necessary, stop and amend this contract before coding it.
 
 | Criterion | Required focused proof |
 |---|---|
-| Exact fixed service, action, permission, active profile/link, and matrix row are required independently for each port | `test_sufficiency_projection_requires_exact_project_setup_authority`; `test_artifact_policy_projection_requires_exact_project_setup_authority`; parametrized inactive/revoked/wrong-service/action/matrix tests |
+| Exact fixed service, action, permission, active profile/link, and matrix row are required independently for each port | parametrized `test_projection_requires_exact_project_setup_authority`; `test_projection_requires_active_action_matrix` |
 | Deterministic identities and both public digest helpers match AUTH's resource contexts byte-for-byte | `test_projection_identity_matches_public_contract`; `test_projection_resource_digests_match_public_contract` |
 | Kernel evidence uses the exact projection resource type, operation ID, project, actor, action, permission, and public authority digest rather than the legacy mutation or generic project shape | `test_projection_allowed_evidence_has_exact_resource_custody` for both components |
 | Preparation is bound to the current session, root transaction, actor/link, locator, action, component, and generation | `test_projection_prepare_binds_complete_authority`; parametrized wrong-session/transaction/actor/link/locator/action/component/generation tests |
