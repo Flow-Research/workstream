@@ -371,7 +371,6 @@ def has_canonical_shared_protocol_directive(skill: str) -> bool:
         structure = _markdown_structure(skill, "specialty skill")
     except CommitrailError:
         return False
-    structure = re.sub(r"<!--.*?(?:-->|\Z)", "", structure, flags=re.DOTALL)
     headings = list(re.finditer(r"^## Shared evidence[ \t]*$", structure, re.MULTILINE))
     if len(headings) != 1:
         return False

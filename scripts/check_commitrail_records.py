@@ -88,12 +88,22 @@ def _masked_markdown_line(line: str) -> str:
     return "".join(character if character in "\r\n" else " " for character in line)
 
 
+def _mask_html_comments(text: str) -> str:
+    """Hide comments, including an unclosed tail, without changing source offsets."""
+    return re.sub(
+        r"<!--.*?(?:-->|\Z)",
+        lambda match: _masked_markdown_line(match.group()),
+        text,
+        flags=re.DOTALL,
+    )
+
+
 def _markdown_structure(text: str, source: str) -> str:
-    """Mask fenced content while preserving offsets used to slice source Markdown."""
+    """Mask comments and fences while preserving offsets into source Markdown."""
     masked: list[str] = []
     fence_character: str | None = None
     fence_length = 0
-    for line in text.splitlines(keepends=True):
+    for line in _mask_html_comments(text).splitlines(keepends=True):
         candidate = line.rstrip("\r\n")
         if fence_character is None:
             opening = FENCE_OPEN.fullmatch(candidate)
@@ -188,7 +198,7 @@ def _required_section_body(
         raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
     next_heading = re.search(r"^##\s+", structure[match.end() :], re.MULTILINE)
     end = match.end() + next_heading.start() if next_heading is not None else len(text)
-    body = text[match.end() : end]
+    body = _mask_html_comments(text[match.end() : end])
     substantive_lines = [
         line
         for line in body.splitlines()
