@@ -32,7 +32,9 @@ plan, status, risk, decision, and chunk-map files by default.
    chosen design, rejected alternatives, risks, verification strategy, and
    proposed PR boundaries.
 5. Add or update its one row in `.commitrail/INDEX.md`.
-6. Mark its durable disposition `Planned` and stop for human approval.
+6. Mark its durable disposition `Planned`. If implementation is already
+   authorized and no material choice is missing, proceed within that authority.
+   Otherwise explain the specific decision needed; the record is not permission.
 
 ## Chunking rules
 
@@ -52,4 +54,4 @@ End with:
 3. Main risks
 4. Human decisions needed
 5. Recommended first bounded change
-6. Explicit stop: "Planning complete. Awaiting human approval before implementation."
+6. Next action within existing authority, or the precise missing human decision.

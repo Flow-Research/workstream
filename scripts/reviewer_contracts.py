@@ -28,6 +28,8 @@ PROOF_PATTERNS_PATH = (
     ROOT
     / ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md"
 )
+SHARED_PROTOCOL_PATH = ROOT / ".agents/skills/reviewer-evidence-protocol/SKILL.md"
+CODEX_CONFIG_PATH = ROOT / ".codex/config.toml"
 CASE_CLASSES = {"positive", "negative", "stale_replay", "output_contract", "handoff"}
 OUTCOMES = {"finding", "clear", "replayed", "provisional", "handoff"}
 RECEIPT_SCHEMA = json.loads(RECEIPT_SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -132,10 +134,17 @@ SEMANTIC_SKILL_REQUIREMENTS = {
     "semantic.residual_escape": "residual escape",
     "semantic.fail_closed": "Missing or narrative-only rows block PASS",
 }
-SEMANTIC_AGENT_REQUIREMENTS = {
-    **SEMANTIC_SKILL_REQUIREMENTS,
-    "semantic.atomization": "Atomize material criteria",
-    "semantic.ownership": "to owner",
+SHARED_PROTOCOL_REQUIREMENTS = {
+    "protocol.target": "python3 scripts/review_target.py",
+    "protocol.start_end": "start/end inspection",
+    "protocol.prior_findings": "Replay every prior finding",
+    "protocol.evidence_provenance": (
+        "Distinguish commands actually executed from evidence merely inspected"
+    ),
+    "protocol.uncertainty": "State uncertainty and unavailable proof explicitly",
+    "protocol.freshness": "freshness",
+    "protocol.handoff": "Route another specialty's issue",
+    "protocol.advisory": "advisory session evidence",
 }
 PROOF_QUALITY_SHARED_REQUIREMENTS = {
     "proof.shared_model": (
@@ -157,14 +166,6 @@ PROOF_QUALITY_SHARED_REQUIREMENTS = {
         "Incompatible or unavailable proof blocks PASS for the claimed behavior"
     ),
 }
-PROOF_QUALITY_AGENT_LIFECYCLE = (
-    "These obligations are adopted through the blind evaluation recorded by "
-    "WS-CI-005-03"
-)
-PROOF_QUALITY_SKILL_LIFECYCLE = (
-    "These obligations are adopted through the blind evaluation recorded by "
-    "`WS-CI-005-03`"
-)
 PROOF_QUALITY_MATRIX_LIFECYCLE = (
     "Specialty additions are adopted through the blind evaluation recorded by "
     "`WS-CI-005-03`"
@@ -337,6 +338,13 @@ def failure_pattern_ids(patterns: str) -> list[str]:
     return FAILURE_PATTERN_ROW.findall(patterns)
 
 
+def has_skill_reference(text: str, skill_name: str) -> bool:
+    """Match one exact skill name, rejecting aliases and prefixed lookalikes."""
+    return re.search(
+        rf"(?<![A-Za-z0-9_-]){re.escape(skill_name)}(?![A-Za-z0-9_-])", text
+    ) is not None
+
+
 REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
@@ -348,6 +356,38 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             workflow_path.read_text(encoding="utf-8").split()
         ):
             failures.append(f"trust workflow: {relative_path} missing summary custody")
+
+    config_path = root / CODEX_CONFIG_PATH.relative_to(ROOT)
+    if not config_path.is_file():
+        failures.append("codex config: missing project configuration")
+    else:
+        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        if config.get("model") != "gpt-6-astra":
+            failures.append("codex config: lead model must be gpt-6-astra")
+        agent_defaults = config.get("agents", {})
+        if agent_defaults.get("default_subagent_model") != "gpt-5.6-sol":
+            failures.append("codex config: default reviewer model must be gpt-5.6-sol")
+        if agent_defaults.get("default_subagent_reasoning_effort") != "high":
+            failures.append("codex config: default reviewer reasoning must be high")
+
+    protocol_path = root / SHARED_PROTOCOL_PATH.relative_to(ROOT)
+    if not protocol_path.is_file():
+        failures.append("shared protocol: missing reviewer-evidence-protocol")
+        normalized_protocol = ""
+    else:
+        normalized_protocol = " ".join(
+            protocol_path.read_text(encoding="utf-8").split()
+        )
+    for requirement_id, token in {
+        **SHARED_PROTOCOL_REQUIREMENTS,
+        **SEMANTIC_SKILL_REQUIREMENTS,
+        **PROOF_QUALITY_SHARED_REQUIREMENTS,
+    }.items():
+        if token not in normalized_protocol:
+            failures.append(
+                f"shared protocol: missing {requirement_id} ({token!r})"
+            )
+
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
     if PROOF_QUALITY_MATRIX_LIFECYCLE not in " ".join(matrix.split()):
@@ -403,78 +443,28 @@ def contract_failures(root: Path = ROOT) -> list[str]:
         if not agent_path.is_file() or not skill_path.is_file():
             failures.append(f"{reviewer}: missing agent or skill")
             continue
-        agent = tomllib.loads(agent_path.read_text(encoding="utf-8"))[
-            "developer_instructions"
-        ]
+        agent_config = tomllib.loads(agent_path.read_text(encoding="utf-8"))
+        agent = agent_config["developer_instructions"]
         skill = skill_path.read_text(encoding="utf-8")
         normalized_agent = " ".join(agent.split())
         normalized_skill = " ".join(skill.split())
-        for token in (
-            "reviewer-evidence-protocol",
-            skill_name,
-            "scripts/review_target.py",
-            "start and end",
-            "prior finding",
-            "executed from inspected",
-            "uncertainty",
-            "freshness",
-            "hand off",
-            "python3 scripts/review_target.py",
-            "Atomize material criteria",
-            "traceability",
-            "residual escape hypothesis",
-            "Missing or narrative-only rows block PASS",
-        ):
-            if token not in normalized_agent:
-                failures.append(f"{reviewer}: agent missing {token!r}")
-        for requirement_id, token in SEMANTIC_AGENT_REQUIREMENTS.items():
-            if token not in normalized_agent:
-                failures.append(
-                    f"{reviewer}: agent missing {requirement_id} ({token!r})"
-                )
-        for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
-            if token not in normalized_agent:
-                failures.append(
-                    f"{reviewer}: agent missing {requirement_id} ({token!r})"
-                )
-        if PROOF_QUALITY_AGENT_LIFECYCLE not in normalized_agent:
-            failures.append(f"{reviewer}: agent missing proof.lifecycle")
+        if agent_config.get("sandbox_mode") != "read-only":
+            failures.append(f"{reviewer}: agent sandbox must be read-only")
+        if agent_config.get("model") != "gpt-5.6-sol":
+            failures.append(f"{reviewer}: agent model must be gpt-5.6-sol")
+        if agent_config.get("model_reasoning_effort") != "high":
+            failures.append(f"{reviewer}: agent reasoning must be high")
+        if not has_skill_reference(normalized_agent, "reviewer-evidence-protocol"):
+            failures.append(f"{reviewer}: agent missing shared protocol reference")
+        if not has_skill_reference(normalized_agent, skill_name):
+            failures.append(f"{reviewer}: agent missing specialty skill reference")
         specialty_token = SPECIALTY_PROOF_REQUIREMENTS.get(reviewer)
         if specialty_token is None:
             failures.append(f"{reviewer}: missing proof.specialty requirement")
-        elif specialty_token not in normalized_agent:
-            failures.append(f"{reviewer}: agent missing proof.specialty")
-        completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer, {}).get(
-            "agent"
-        )
-        if completion is None or completion not in normalized_agent:
-            failures.append(f"{reviewer}: agent missing proof.specialty_completion")
-        for token in (
-            "reviewer-evidence-protocol",
-            "exact target",
-            "prior findings",
-            "executed from inspected",
-            "uncertainty",
-            "freshness",
-            "hand off",
-            "Medium",
-            "Low/Informational",
-            "Protocol envelope",
-        ):
-            if token not in normalized_skill:
-                failures.append(f"{reviewer}: skill missing {token!r}")
-        for requirement_id, token in SEMANTIC_SKILL_REQUIREMENTS.items():
-            if token not in normalized_skill:
-                failures.append(
-                    f"{reviewer}: skill missing {requirement_id} ({token!r})"
-                )
-        for requirement_id, token in PROOF_QUALITY_SHARED_REQUIREMENTS.items():
-            if token not in normalized_skill:
-                failures.append(
-                    f"{reviewer}: skill missing {requirement_id} ({token!r})"
-                )
-        if PROOF_QUALITY_SKILL_LIFECYCLE not in normalized_skill:
-            failures.append(f"{reviewer}: skill missing proof.lifecycle")
+        if not has_skill_reference(normalized_skill, "reviewer-evidence-protocol"):
+            failures.append(f"{reviewer}: skill missing shared protocol reference")
+        if "## Output" not in skill:
+            failures.append(f"{reviewer}: skill missing '## Output'")
         if specialty_token is not None and specialty_token not in normalized_skill:
             failures.append(f"{reviewer}: skill missing proof.specialty")
         completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer, {}).get(

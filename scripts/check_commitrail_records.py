@@ -17,8 +17,7 @@ except ModuleNotFoundError:  # Direct `python scripts/...` execution.
 ROOT = Path(__file__).resolve().parents[1]
 DISPOSITIONS = {"Planned", "Complete", "Stopped", "Superseded"}
 PRE_CUTOVER_MANIFEST_DIGESTS = {
-    "7f7ec4e15bd85fe76d52f5f69c85308bd12b777d":
-        "ce604b34e7d4c3a6b5a24841143a1213a640ba3aa30cada9e8418bc1a25f6cde",
+    "7f7ec4e15bd85fe76d52f5f69c85308bd12b777d": "ce604b34e7d4c3a6b5a24841143a1213a640ba3aa30cada9e8418bc1a25f6cde",
 }
 RECORD_REQUIRED_PREFIXES = (
     ".agents/skills/",
@@ -48,6 +47,7 @@ REQUIRED_HEADINGS = (
     "## Risk and review routing",
     "## Evidence",
 )
+CHANGE_TEMPLATE_PATH = ".commitrail/CHANGE_TEMPLATE.md"
 TRANSIENT_DECLARATION = re.compile(
     r"^\s*(?:[-*]\s*)?(?:status|review|ci|approval|merge)\s*:"
     r"\s*(?:in review|pending|passing|passed|approved|ready(?: to merge)?)\s*$",
@@ -119,6 +119,48 @@ def _validate_index_dispositions(index: str) -> None:
             raise CommitrailError(f"COMMITRAIL_INDEX_DISPOSITION_INVALID: {cells[0]}")
 
 
+def _tree_blob_map(output: str) -> dict[str, str]:
+    blobs: dict[str, str] = {}
+    for line in output.splitlines():
+        try:
+            metadata, path = line.split("\t", 1)
+            _mode, object_type, blob = metadata.split()
+        except ValueError as exc:
+            raise CommitrailError("COMMITRAIL_RELOCATION_BASE_INVALID") from exc
+        if (
+            object_type != "blob"
+            or not re.fullmatch(r"[0-9a-f]{40}", blob)
+            or path in blobs
+        ):
+            raise CommitrailError("COMMITRAIL_RELOCATION_BASE_INVALID")
+        blobs[path] = blob
+    return blobs
+
+
+def _required_section_body(text: str, heading: str, record_path: str) -> None:
+    match = re.search(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
+    if match is None:
+        raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
+    next_heading = re.search(r"^##\s+", text[match.end() :], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading is not None else len(text)
+    body = text[match.end() : end]
+    substantive_lines = [
+        line
+        for line in body.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not substantive_lines:
+        raise CommitrailError(f"COMMITRAIL_FIELD_EMPTY: {record_path}: {heading}")
+
+
+def _template_markers(root: Path) -> tuple[str, ...]:
+    template = _read(root, CHANGE_TEMPLATE_PATH)
+    first_line = template.splitlines()[0] if template.splitlines() else ""
+    markers = set(re.findall(r"`(<[^`\n]+>)`", template))
+    markers.update(re.findall(r"<[^>\n]+>", first_line))
+    return tuple(sorted(markers))
+
+
 def _validate_relocation_inventory(
     root: Path,
     comparison_base_ref: str | None = None,
@@ -134,12 +176,13 @@ def _validate_relocation_inventory(
     match = re.search(r"^Base: `([0-9a-f]{40})`\.$", text, re.MULTILINE)
     if match is None:
         raise CommitrailError("COMMITRAIL_RELOCATION_BASE_INVALID")
-    expected = set(
-        run_checked(
-            ["git", "ls-tree", "-r", "--name-only", match.group(1), "--", ".agent-loop"],
-            repository_root=root,
-        ).splitlines()
+    base = match.group(1)
+    declared_tree = run_checked(
+        ["git", "ls-tree", "-r", base, "--", ".agent-loop"],
+        repository_root=root,
     )
+    source_blobs = _tree_blob_map(declared_tree)
+    expected = set(source_blobs)
     recorded = {
         line.split("\t", 1)[0]
         for line in text.splitlines()
@@ -148,12 +191,7 @@ def _validate_relocation_inventory(
     if recorded != expected:
         raise CommitrailError("COMMITRAIL_RELOCATION_INVENTORY_INCOMPLETE")
 
-    base = match.group(1)
     if comparison_base_ref is not None:
-        declared_tree = run_checked(
-            ["git", "ls-tree", "-r", base, "--", ".agent-loop"],
-            repository_root=root,
-        )
         comparison_tree = run_checked(
             ["git", "ls-tree", "-r", comparison_base_ref, "--", ".agent-loop"],
             repository_root=root,
@@ -175,9 +213,7 @@ def _validate_relocation_inventory(
     try:
         manifest_digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     except OSError as exc:
-        raise CommitrailError(
-            f"COMMITRAIL_UNREADABLE: {manifest_relative}"
-        ) from exc
+        raise CommitrailError(f"COMMITRAIL_UNREADABLE: {manifest_relative}") from exc
     if manifest_digest != expected_digest:
         raise CommitrailError("COMMITRAIL_PRE_CUTOVER_MANIFEST_CHANGED")
     rows: dict[str, tuple[str, str]] = {}
@@ -222,19 +258,29 @@ def _validate_relocation_inventory(
     if set(indexed_destinations) != destinations:
         raise CommitrailError("COMMITRAIL_PRE_CUTOVER_DESTINATIONS_INVALID")
 
-    for source, (destination, declared_blob) in rows.items():
+    ordered_destinations = sorted(destinations)
+    for destination in ordered_destinations:
         destination_path = root / destination
-        destination_mode, indexed_blob = indexed_destinations[destination]
+        destination_mode, _indexed_blob = indexed_destinations[destination]
         if destination_path.is_symlink() or destination_mode != "100644":
             raise CommitrailError(
                 f"COMMITRAIL_PRE_CUTOVER_DESTINATION_NOT_REGULAR: {destination}"
             )
-        source_blob = run_checked(
-            ["git", "rev-parse", f"{base}:{source}"], repository_root=root
-        ).strip()
-        destination_blob = run_checked(
-            ["git", "hash-object", destination], repository_root=root
-        ).strip()
+
+    destination_hashes = run_checked(
+        ["git", "hash-object", "--", *ordered_destinations],
+        repository_root=root,
+    ).splitlines()
+    if len(destination_hashes) != len(ordered_destinations) or any(
+        not re.fullmatch(r"[0-9a-f]{40}", blob) for blob in destination_hashes
+    ):
+        raise CommitrailError("COMMITRAIL_PRE_CUTOVER_DESTINATIONS_INVALID")
+    worktree_blobs = dict(zip(ordered_destinations, destination_hashes, strict=True))
+
+    for source, (destination, declared_blob) in rows.items():
+        _destination_mode, indexed_blob = indexed_destinations[destination]
+        source_blob = source_blobs[source]
+        destination_blob = worktree_blobs[destination]
         if (
             declared_blob != source_blob
             or indexed_blob != source_blob
@@ -290,12 +336,23 @@ def validate(
         record = _read(root, record_path)
         _disposition(record, "Durable disposition")
         for heading in REQUIRED_HEADINGS:
-            if heading not in record:
-                raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
-        if "- Intended merge outcome:" not in record:
+            _required_section_body(record, heading, record_path)
+        outcome = re.search(
+            r"^- Intended merge outcome:[ \t]*(.*)$", record, re.MULTILINE
+        )
+        if outcome is None:
             raise CommitrailError(
                 f"COMMITRAIL_FIELD_MISSING: {record_path}: Intended merge outcome"
             )
+        if not outcome.group(1).strip():
+            raise CommitrailError(
+                f"COMMITRAIL_FIELD_EMPTY: {record_path}: Intended merge outcome"
+            )
+        for marker in _template_markers(root):
+            if marker in record:
+                raise CommitrailError(
+                    f"COMMITRAIL_TEMPLATE_MARKER: {record_path}: {marker}"
+                )
         if TRANSIENT_DECLARATION.search(record):
             raise CommitrailError(f"COMMITRAIL_TRANSIENT_STATE: {record_path}")
         initiative = match.group("initiative")

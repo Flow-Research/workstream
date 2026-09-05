@@ -1,5 +1,7 @@
 # WS-POL-003 — Unified project-guide compilation
 
+Current change record: [POL-04A2 hidden finalization](WS-POL-003-04A2.md).
+
 Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 [`CHUNK_MAP.md`](pre-cutover/CHUNK_MAP.md), and
 [`planning/chunk contracts`](pre-cutover/chunks/).

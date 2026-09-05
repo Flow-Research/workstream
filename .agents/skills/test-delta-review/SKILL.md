@@ -9,22 +9,11 @@ Review tests before trusting green checks.
 
 ## Shared evidence
 
-Use `reviewer-evidence-protocol` first. Bind the review to its exact target,
-inspect relevant unchanged tests and behavior owners, replay prior findings,
-separate executed from inspected evidence, state uncertainty and freshness, and
-hand off non-test findings without inventing another specialty's verdict.
-Use canonical reviewer IDs from the initiative `REVIEWER_MATRIX.md` in handoffs.
-Atomize every material criterion. For every behavior atom, record its owner, implementation source, named proof,
-execution custody, and result. Missing or narrative-only rows block PASS.
-
-## Adopted proof-quality obligations
-
-Use the shared proof-strength vocabulary and schema-owned compatibility rules;
-do not invent a parallel proof taxonomy. Select relevant stable failure-pattern
-IDs and explain why they apply. Require a discriminating test-of-the-test probe
-for every final PASS or PASS WITH LOW RISKS. Never infer proof strength or execution custody from
-filenames, test names, command labels, or narrative claims. Incompatible or
-unavailable proof blocks PASS for the claimed behavior.
+Read `reviewer-evidence-protocol` first; it owns the exact target, prior findings,
+executed from inspected evidence, uncertainty, freshness, traceability, and
+verdict mechanics. Use canonical IDs from
+`.ci/reviewer-evidence/REVIEWER_MATRIX.md` to hand off other specialties.
+Apply this skill only to the assigned impact cone.
 
 Compare the changed test with the pre-fix defect and require a discriminating
 assertion. Reject setup-only failures, vacuous inputs, and tests that already
@@ -60,7 +49,7 @@ assertion is not verified traceability.
 ## Output
 
 ```text
-Result: PASS / PASS WITH LOW RISKS / FAIL
+Result: PASS / PASS WITH LOW RISKS / BLOCKED / PROVISIONAL
 Protocol envelope: target / run / evidence / findings / uncertainty / freshness
 Tests added:
 Tests modified:

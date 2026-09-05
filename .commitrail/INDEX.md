@@ -32,8 +32,8 @@ for current product capability.
 | WS-AUTH-002 | Complete | Future lint changes are independently bounded |
 | FN-ART-002 | Stopped | Reconsider for a later version only through explicit future intent |
 | WS-ENG-001–008 | Superseded | Historical evidence remains in Git history |
-| [WS-ENG-009](initiatives/WS-ENG-009/OVERVIEW.md) | Complete | Run the first blind Commitrail stress test |
+| [WS-ENG-009](initiatives/WS-ENG-009/OVERVIEW.md) | Complete | Apply scoped reviewer improvements to POL-04A2; whole-product stress testing remains separate |
 
-Last reconciled against `main`: the merge candidate that commissions
-`WS-ENG-009-01`. Git history is authoritative if this durable index conflicts
-with a merged change.
+Reconciled through merged PR #363 and the WS-ENG-009-02 reviewer-efficiency
+change. Git history is authoritative if this durable index conflicts with a
+merged change; inspect GitHub for transient work.

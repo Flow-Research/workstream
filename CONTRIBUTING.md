@@ -39,8 +39,8 @@ Before implementation, update from current `main` and read:
 2. [v0.1 Roadmap And Capability Status](docs/roadmap_status.md) for implemented,
    hidden, in-progress, and remaining capabilities.
 3. [Commitrail Engineering Index](.commitrail/INDEX.md) for durable
-   initiative dispositions, remaining boundaries, and the live pull-request
-   view of transient work.
+   initiative dispositions and remaining boundaries. Inspect GitHub separately
+   for the live pull-request view of transient work.
 4. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
    the canonical specification for the subsystem being changed.
 
@@ -84,7 +84,8 @@ active queue or approval gate.
   Never commit transient review or CI state, and never create a second
   post-merge memory PR.
 
-Run the same atomic check locally before pushing:
+Commit/freeze the candidate, then run the same atomic check locally before
+pushing. Its base-to-HEAD comparison does not validate uncommitted edits:
 
 ```bash
 python3 scripts/check_commitrail_records.py --base-ref origin/main

@@ -1,11 +1,17 @@
 ---
 name: evidence-gate
-description: Check deterministic proof before expensive reviewer fanout: tests, lint, typecheck, scope, CI integrity, test delta, dependencies, and PR size.
+description: "Check deterministic proof before expensive reviewer fanout: tests, lint, typecheck, scope, CI integrity, test delta, dependencies, and PR size."
 ---
 
 # Evidence Gate
 
 Run deterministic proof checks before reviewer fanout.
+
+The lead runs shared checks once per clean candidate and supplies the exact
+target, command, exit status, producer, and artifact location. Reviewers inspect
+that evidence and run only discriminating probes their specialty still needs.
+Keep full backend/coverage runs in hosted CI; do not duplicate them locally.
+Unavailable hosted evidence remains pending, never an inferred pass.
 
 ## Check
 

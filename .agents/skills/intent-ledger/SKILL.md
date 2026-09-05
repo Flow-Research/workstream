@@ -7,6 +7,9 @@ description: Capture human intent, rationale, non-goals, alternatives, boundarie
 
 Use this before code is written and again before PR creation.
 
+Reuse the current Commitrail change record or overview. These are content
+questions, not a requirement for another file, repeated prose, or approval gate.
+
 ## Required sections
 
 ```text

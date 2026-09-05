@@ -43,9 +43,12 @@ Describe the smallest chosen design and material rejected alternatives.
 |---|---|---|---|
 | `<claim>` | `<test/check/inspection>` | `<result>` | `<honest limit>` |
 
-Review conclusions bind to one exact committed candidate. A later push
-invalidates only affected conclusions. Never copy private session receipts,
-credentials, tokens, or unnecessary personal data into this record.
+Use the risk-router definitions (L0 highest, L1 bounded high risk, L2 routine).
+Keep durable proof requirements/results here; link the PR for transient command
+results and exact-head review freshness. Review conclusions bind to one exact
+committed candidate. A later push invalidates only affected conclusions. Never
+copy private session receipts, credentials, tokens, or unnecessary personal data
+into this record.
 
 ## Review findings
 
@@ -54,7 +57,6 @@ GitHub; do not duplicate transient approval state here.
 
 ## Reconciliation
 
-- Base reviewed: `<commit>`
-- Candidate reviewed: `<commit>`
-- Rebase impact: `<affected evidence rerun or None>`
+- Current-source reconciliation: `<relevant main changes and their impact>`
+- Next usable boundary: `<remaining work or None>`
 - Remaining risks: `<risks accepted by the human or None>`
