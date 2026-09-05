@@ -205,7 +205,12 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
             self._validate()
 
     def test_inline_code_comment_opener_does_not_hide_later_sections(self) -> None:
-        for literal in ("`<!--`", "`` ` <!-- ``", "`literal\n<!-- span`", r"\<!--"):
+        for literal in (
+            "`<!--`",
+            "`` ` <!-- ``",
+            "`literal\ntext <!-- span`",
+            r"\<!--",
+        ):
             with self.subTest(literal=literal):
                 record = self._record().replace(
                     "Small intent.", f"Document {literal} syntax."
@@ -231,6 +236,57 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         )
         self._write(self.RECORD_PATH, record)
         with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_block_interruption_keeps_delayed_backtick_from_exposing_comment(
+        self,
+    ) -> None:
+        for block in ("## Note", "- A new list", "---"):
+            with self.subTest(block=block):
+                record = self._record().replace(
+                    "- Intended merge outcome: Example is bounded.\n",
+                    f"Unmatched ` in this paragraph.\n{block}\n<!--\n"
+                    "- Intended merge outcome: Concealed.\n-->\n`\n",
+                )
+                self._write(self.RECORD_PATH, record)
+                with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+                    self._validate()
+
+    def test_commonmark_heading_interrupts_unmatched_backtick_paragraph(self) -> None:
+        record = self._record().replace(
+            "## Evidence\nObserved proof.",
+            "`literal span\n## Evidence\nObserved proof.`",
+        )
+        self._write(self.RECORD_PATH, record)
+        self._validate()
+
+    def test_html_block_interrupts_unmatched_code_span(self) -> None:
+        record = self._record().replace(
+            "Small intent.", "Unmatched ` opener.\n<!-- hidden `"
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_empty_code_fence_is_not_substantive_evidence(self) -> None:
+        self._write(self.RECORD_PATH, self._record("```text\n```"))
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_EMPTY"):
+            self._validate()
+
+    def test_reference_definition_is_not_visible_evidence(self) -> None:
+        self._write(self.RECORD_PATH, self._record("[unused]: https://example.invalid"))
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_EMPTY"):
+            self._validate()
+
+    def test_inline_code_table_row_does_not_supply_index_entry(self) -> None:
+        self._write(
+            ".commitrail/INDEX.md",
+            "| Initiative | Durable disposition | Next |\n|---|---|---|\n\n"
+            "`literal span\n"
+            "| [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) | Planned | Next |\n"
+            "end`\n",
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "INDEX_ROW_INVALID"):
             self._validate()
 
     def test_shorter_closing_fence_fails_closed(self) -> None:

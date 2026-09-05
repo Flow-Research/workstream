@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 
+from markdown_it import MarkdownIt
+
 try:
     from scripts.git_delta import GitCommandError, committed_changed_files, run_checked
 except ModuleNotFoundError:  # Direct `python scripts/...` execution.
@@ -88,91 +90,49 @@ def _masked_markdown_line(line: str) -> str:
     return "".join(character if character in "\r\n" else " " for character in line)
 
 
-def _comment_line(
-    line: str, in_comment: bool, code_width: int, remaining: str
-) -> tuple[str, bool, int]:
-    """Mask comments while respecting escaped openers and inline code spans."""
-    parts: list[str] = []
-    cursor = 0
-    while cursor < len(line):
-        if in_comment:
-            closing = line.find("-->", cursor)
-            end = len(line) if closing < 0 else closing + 3
-            parts.append(_masked_markdown_line(line[cursor:end]))
-            cursor = end
-            in_comment = closing < 0
-            continue
-        prefix = line[:cursor]
-        escaped = (len(prefix) - len(prefix.rstrip("\\"))) % 2 == 1
-        if not code_width and not escaped and line.startswith("<!--", cursor):
-            in_comment = True
-            continue
-        if line[cursor] == "`" and (code_width or not escaped):
-            end = cursor + 1
-            while end < len(line) and line[end] == "`":
-                end += 1
-            width = end - cursor
-            if code_width == width:
-                code_width = 0
-            elif not code_width:
-                paragraph_tail = re.split(
-                    r"\r?\n[ \t]*\r?\n", remaining[end:], maxsplit=1
-                )[0]
-                if re.search(rf"(?<!`)`{{{width}}}(?!`)", paragraph_tail):
-                    code_width = width
-            parts.append(line[cursor:end])
-            cursor = end
-            continue
-        parts.append(line[cursor])
-        cursor += 1
-    return "".join(parts), in_comment, code_width
-
-
 def _markdown_views(text: str, source: str) -> tuple[str, str]:
-    """Return offset-preserving structure and visible content in one stateful scan."""
-    masked: list[str] = []
-    visible: list[str] = []
-    fence_character: str | None = None
-    fence_length = 0
-    in_comment = False
-    code_width = 0
-    offset = 0
-    for line in text.splitlines(keepends=True):
-        remaining = text[offset:]
-        offset += len(line)
-        candidate = line.rstrip("\r\n")
-        if fence_character is None:
-            opening = (
-                None if in_comment or code_width else FENCE_OPEN.fullmatch(candidate)
-            )
-            if opening is None:
-                content, in_comment, code_width = _comment_line(
-                    line, in_comment, code_width, remaining
-                )
-                masked.append(content)
-                visible.append(content)
-                continue
-            fence = opening.group("fence")
-            if fence[0] == "`" and "`" in opening.group("info"):
-                raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_INVALID: {source}")
-            fence_character = fence[0]
-            fence_length = len(fence)
-            masked.append(_masked_markdown_line(line))
-            visible.append(line)
+    """Project CommonMark tokens onto source lines without rendering or executing HTML."""
+    lines = text.splitlines(keepends=True)
+    masked = [_masked_markdown_line(line) for line in lines]
+    visible = masked.copy()
+    tokens = MarkdownIt("commonmark").enable("table").parse(text)
+    table_rows = {
+        token.map[0] for token in tokens if token.type == "tr_open" and token.map
+    }
+    for token in tokens:
+        if token.map is None:
             continue
-
-        masked.append(_masked_markdown_line(line))
-        visible.append(line)
-        closing = FENCE_CLOSE.fullmatch(candidate)
-        if closing is None:
-            continue
-        fence = closing.group("fence")
-        if fence[0] == fence_character and len(fence) >= fence_length:
-            fence_character = None
-            fence_length = 0
-
-    if fence_character is not None:
-        raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_UNCLOSED: {source}")
+        start, end = token.map
+        if token.type == "inline":
+            # Records require well-formed fences even when CommonMark would
+            # interpret the malformed opener as ordinary paragraph text.
+            for line in lines[start:end]:
+                opening = FENCE_OPEN.fullmatch(line.rstrip("\r\n"))
+                if (
+                    opening
+                    and opening.group("fence")[0] == "`"
+                    and "`" in opening.group("info")
+                ):
+                    raise CommitrailError(
+                        f"COMMITRAIL_MARKDOWN_FENCE_INVALID: {source}"
+                    )
+            masked[start:end] = lines[start:end]
+            visible[start:end] = lines[start:end]
+            for index in range(start, end):
+                if lines[index].startswith("|") and index not in table_rows:
+                    masked[index] = _masked_markdown_line(lines[index])
+        elif token.type == "code_block":
+            visible[start:end] = lines[start:end]
+        elif token.type == "fence":
+            closing = FENCE_CLOSE.fullmatch(lines[end - 1].rstrip("\r\n"))
+            if (
+                end - start < 2
+                or closing is None
+                or closing.group("fence")[0] != token.markup[0]
+                or len(closing.group("fence")) < len(token.markup)
+            ):
+                raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_UNCLOSED: {source}")
+            visible[start + 1 : end - 1] = lines[start + 1 : end - 1]
     return "".join(masked), "".join(visible)
 
 
