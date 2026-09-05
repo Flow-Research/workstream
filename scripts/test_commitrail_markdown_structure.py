@@ -178,6 +178,32 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         self._write(self.RECORD_PATH, self._record(evidence))
         self._validate()
 
+    def test_comment_syntax_inside_fence_remains_literal_evidence(self) -> None:
+        for literal in (
+            "rg '<!--' docs",
+            "<div><!-- literal sample\n</div>",
+            "<!-- closed -->",
+        ):
+            with self.subTest(literal=literal):
+                evidence = f"```html\n{literal}\n```"
+                record = self._record(evidence)
+                structure, visible = gate._markdown_views(record, self.RECORD_PATH)
+                self.assertEqual(len(structure), len(record))
+                self.assertIn(literal, visible)
+                self.assertNotIn(literal, structure)
+                self._write(self.RECORD_PATH, record)
+                self._validate()
+
+    def test_real_comment_after_literal_fence_cannot_supply_outcome(self) -> None:
+        record = self._record().replace(
+            "- Intended merge outcome: Example is bounded.\n",
+            "```html\n<!-- literal\n```\n"
+            "<!--\n- Intended merge outcome: Concealed.\n-->\n",
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
     def test_shorter_closing_fence_fails_closed(self) -> None:
         evidence = "````text\ncommand\n```"
         self._write(self.RECORD_PATH, self._record(evidence))

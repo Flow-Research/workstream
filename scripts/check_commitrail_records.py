@@ -88,27 +88,43 @@ def _masked_markdown_line(line: str) -> str:
     return "".join(character if character in "\r\n" else " " for character in line)
 
 
-def _mask_html_comments(text: str) -> str:
-    """Hide comments, including an unclosed tail, without changing source offsets."""
-    return re.sub(
-        r"<!--.*?(?:-->|\Z)",
-        lambda match: _masked_markdown_line(match.group()),
-        text,
-        flags=re.DOTALL,
-    )
+def _comment_line(line: str, in_comment: bool) -> tuple[str, bool]:
+    """Mask comment spans on a non-fenced line, retaining multiline state."""
+    parts: list[str] = []
+    cursor = 0
+    while cursor < len(line):
+        if in_comment:
+            closing = line.find("-->", cursor)
+            end = len(line) if closing < 0 else closing + 3
+            parts.append(_masked_markdown_line(line[cursor:end]))
+            cursor = end
+            in_comment = closing < 0
+        else:
+            opening = line.find("<!--", cursor)
+            if opening < 0:
+                parts.append(line[cursor:])
+                break
+            parts.append(line[cursor:opening])
+            cursor = opening
+            in_comment = True
+    return "".join(parts), in_comment
 
 
-def _markdown_structure(text: str, source: str) -> str:
-    """Mask comments and fences while preserving offsets into source Markdown."""
+def _markdown_views(text: str, source: str) -> tuple[str, str]:
+    """Return offset-preserving structure and visible content in one stateful scan."""
     masked: list[str] = []
+    visible: list[str] = []
     fence_character: str | None = None
     fence_length = 0
-    for line in _mask_html_comments(text).splitlines(keepends=True):
+    in_comment = False
+    for line in text.splitlines(keepends=True):
         candidate = line.rstrip("\r\n")
         if fence_character is None:
-            opening = FENCE_OPEN.fullmatch(candidate)
+            opening = None if in_comment else FENCE_OPEN.fullmatch(candidate)
             if opening is None:
-                masked.append(line)
+                content, in_comment = _comment_line(line, in_comment)
+                masked.append(content)
+                visible.append(content)
                 continue
             fence = opening.group("fence")
             if fence[0] == "`" and "`" in opening.group("info"):
@@ -116,9 +132,11 @@ def _markdown_structure(text: str, source: str) -> str:
             fence_character = fence[0]
             fence_length = len(fence)
             masked.append(_masked_markdown_line(line))
+            visible.append(line)
             continue
 
         masked.append(_masked_markdown_line(line))
+        visible.append(line)
         closing = FENCE_CLOSE.fullmatch(candidate)
         if closing is None:
             continue
@@ -129,7 +147,12 @@ def _markdown_structure(text: str, source: str) -> str:
 
     if fence_character is not None:
         raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_UNCLOSED: {source}")
-    return "".join(masked)
+    return "".join(masked), "".join(visible)
+
+
+def _markdown_structure(text: str, source: str) -> str:
+    """Return live structure without interpreting literal comments inside fences."""
+    return _markdown_views(text, source)[0]
 
 
 def _disposition(text: str, label: str) -> str:
@@ -198,7 +221,7 @@ def _required_section_body(
         raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
     next_heading = re.search(r"^##\s+", structure[match.end() :], re.MULTILINE)
     end = match.end() + next_heading.start() if next_heading is not None else len(text)
-    body = _mask_html_comments(text[match.end() : end])
+    body = text[match.end() : end]
     substantive_lines = [
         line
         for line in body.splitlines()
@@ -391,10 +414,12 @@ def validate(
         match = RECORD_PATH.fullmatch(record_path)
         assert match is not None
         record = _read(root, record_path)
-        record_structure = _markdown_structure(record, record_path)
+        record_structure, record_visible = _markdown_views(record, record_path)
         _disposition(record_structure, "Durable disposition")
         for heading in REQUIRED_HEADINGS:
-            _required_section_body(record, record_structure, heading, record_path)
+            _required_section_body(
+                record_visible, record_structure, heading, record_path
+            )
         outcome = re.search(
             r"^- Intended merge outcome:[ \t]*(.*)$",
             record_structure,
