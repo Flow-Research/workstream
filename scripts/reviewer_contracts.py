@@ -354,20 +354,31 @@ def canonical_agent_instructions(skill_name: str) -> str:
     return " ".join(instructions.split())
 
 
+CANONICAL_SHARED_PROTOCOL_PARAGRAPH = " ".join(
+    """
+Read `reviewer-evidence-protocol` first; it owns the exact target, prior findings,
+executed from inspected evidence, uncertainty, freshness, traceability, and
+verdict mechanics. Use canonical IDs from
+`.ci/reviewer-evidence/REVIEWER_MATRIX.md` to hand off other specialties.
+Apply this skill only to the assigned impact cone.
+""".split()
+)
+
+
 def has_canonical_shared_protocol_directive(skill: str) -> bool:
     """Require the positive catalog directive at the shared-evidence boundary."""
     try:
         structure = _markdown_structure(skill, "specialty skill")
     except CommitrailError:
         return False
+    structure = re.sub(r"<!--.*?(?:-->|\Z)", "", structure, flags=re.DOTALL)
     headings = list(re.finditer(r"^## Shared evidence[ \t]*$", structure, re.MULTILINE))
     if len(headings) != 1:
         return False
-    return (
-        structure[headings[0].end() :]
-        .lstrip()
-        .startswith("Read `reviewer-evidence-protocol` first;")
-    )
+    paragraph = re.split(
+        r"\n[ \t]*\n", structure[headings[0].end() :].lstrip(), maxsplit=1
+    )[0]
+    return " ".join(paragraph.split()) == CANONICAL_SHARED_PROTOCOL_PARAGRAPH
 
 
 REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))

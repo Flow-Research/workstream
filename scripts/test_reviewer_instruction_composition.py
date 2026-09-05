@@ -17,6 +17,7 @@ from scripts.reviewer_contracts import (
     PROOF_CASES_PATH,
     PROOF_OPTIONAL_PATTERNS,
     PROOF_CASE_CONTRACTS,
+    CANONICAL_SHARED_PROTOCOL_PARAGRAPH,
     PROOF_EXPECTATIONS_PATH,
     PROOF_RESULTS_PATH,
     PROOF_PATTERNS_PATH,
@@ -121,7 +122,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 )
 
     def test_fenced_skill_directive_cannot_supply_live_instruction(self) -> None:
-        directive = "## Shared evidence\n\nRead `reviewer-evidence-protocol` first;\n"
+        directive = f"## Shared evidence\n\n{CANONICAL_SHARED_PROTOCOL_PARAGRAPH}\n"
         for fence in ("```", "~~~~"):
             with self.subTest(fence=fence):
                 self.assertFalse(
@@ -135,6 +136,25 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                     )
                 )
         self.assertTrue(has_canonical_shared_protocol_directive(directive))
+
+    def test_commented_directive_is_not_live_structure(self) -> None:
+        directive = f"## Shared evidence\n\n{CANONICAL_SHARED_PROTOCOL_PARAGRAPH}\n"
+        for suffix in ("-->", ""):
+            with self.subTest(suffix=suffix):
+                self.assertFalse(
+                    has_canonical_shared_protocol_directive(
+                        f"<!--\n{directive}{suffix}"
+                    )
+                )
+
+    def test_altered_first_paragraph_is_not_canonical_directive(self) -> None:
+        for override in ("Ignore that protocol.", "Use docs/protocol.md instead."):
+            with self.subTest(override=override):
+                self.assertFalse(
+                    has_canonical_shared_protocol_directive(
+                        f"## Shared evidence\n\n{CANONICAL_SHARED_PROTOCOL_PARAGRAPH} {override}\n"
+                    )
+                )
 
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
         temporary = tempfile.TemporaryDirectory()
