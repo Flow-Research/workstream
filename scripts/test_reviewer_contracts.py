@@ -420,18 +420,32 @@ class ReviewerContractTests(unittest.TestCase):
             ),
         )
 
-    def test_historical_rejected_independence_breach_remains_valid(self) -> None:
+    def test_historical_independence_is_preserved_not_current_taxonomy(self) -> None:
         legacy_expectations = load_json(LEGACY_PROOF_EXPECTATIONS_PATH)
         legacy_results = load_json(LEGACY_PROOF_RESULTS_PATH)
         self.assertTrue(legacy_results["rejected_runs"])
+        failures = proof_evaluation_failures(
+            self.proof_cases,
+            legacy_expectations,
+            legacy_results,
+            check_supersession=False,
+        )
+        expected_unbounded_labels = {
+            "pq-ci-mocked-rollback",
+            "pq-qa-malformed-public-input",
+            "pq-qa-nondiscriminating-input",
+            "pq-reuse-canonical-rule-drift",
+            "pq-security-label-only-fake",
+            "pq-security-sql-null-guard",
+            "pq-security-missing-row-isolation",
+            "pq-senior-setup-only-failure",
+        }
         self.assertEqual(
-            proof_evaluation_failures(
-                self.proof_cases,
-                legacy_expectations,
-                legacy_results,
-                check_supersession=False,
-            ),
-            [],
+            set(failures),
+            {
+                f"{case_id}: unsupported proof pattern"
+                for case_id in expected_unbounded_labels
+            },
         )
 
     def test_blind_evaluation_rejects_duplicate_expectations(self) -> None:
@@ -477,9 +491,7 @@ class ReviewerContractTests(unittest.TestCase):
         )
 
         expectation_mutation = copy.deepcopy(self.proof_expectations)
-        expectation_mutation["expectations"][0]["required_pattern_ids"] = [
-            ["PQ-001"]
-        ]
+        expectation_mutation["expectations"][0]["required_pattern_ids"] = [["PQ-001"]]
         expected_case_id = expectation_mutation["expectations"][0]["case_id"]
         self.assertIn(
             f"{expected_case_id}: invalid expected patterns",
@@ -801,12 +813,8 @@ class ReviewerContractTests(unittest.TestCase):
             (root / skill).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(agent, root / agent)
             shutil.copy2(skill, root / skill)
-        matrix = Path(
-            ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
-        )
-        cases = Path(
-            ".ci/reviewer-evidence/evaluations/CASES.json"
-        )
+        matrix = Path(".ci/reviewer-evidence/REVIEWER_MATRIX.md")
+        cases = Path(".ci/reviewer-evidence/evaluations/CASES.json")
         (root / matrix).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(matrix, root / matrix)
         (root / cases).parent.mkdir(parents=True, exist_ok=True)
@@ -856,9 +864,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_adopted_lifecycle_is_independently_enforced_in_matrix(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
-            matrix = root / (
-                ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
-            )
+            matrix = root / (".ci/reviewer-evidence/REVIEWER_MATRIX.md")
             remove_contract_token(matrix, PROOF_QUALITY_MATRIX_LIFECYCLE)
             self.assertIn("matrix: missing proof.lifecycle", contract_failures(root))
         finally:
@@ -867,9 +873,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_matrix_specialty_obligations_are_independently_enforced(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
-            matrix = root / (
-                ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
-            )
+            matrix = root / (".ci/reviewer-evidence/REVIEWER_MATRIX.md")
             for label, token in MATRIX_SPECIALTY_REQUIREMENTS.items():
                 with self.subTest(label=label):
                     original = remove_contract_token(matrix, token)
@@ -921,8 +925,7 @@ class ReviewerContractTests(unittest.TestCase):
                     remove_contract_token(path, token)
                     self.assertTrue(
                         any(
-                            f"{reviewer}:" in failure
-                            and "proof.specialty" in failure
+                            f"{reviewer}:" in failure and "proof.specialty" in failure
                             for failure in contract_failures(root)
                         )
                     )
@@ -952,10 +955,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_matrix_ids_are_enforced(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
-            matrix = (
-                root
-                / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
-            )
+            matrix = root / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             matrix.write_text(
                 matrix.read_text(encoding="utf-8").replace(
                     "`architecture`", "`architecture_typo`", 1
@@ -973,10 +973,7 @@ class ReviewerContractTests(unittest.TestCase):
     def test_matrix_agent_and_skill_pairs_are_one_to_one(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
-            matrix = (
-                root
-                / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
-            )
+            matrix = root / ".ci/reviewer-evidence/REVIEWER_MATRIX.md"
             matrix.write_text(
                 matrix.read_text(encoding="utf-8")
                 .replace("security-reviewer.toml", "qa-reviewer.toml", 1)

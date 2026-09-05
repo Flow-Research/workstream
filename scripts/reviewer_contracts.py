@@ -14,6 +14,11 @@ from pathlib import Path
 
 import jsonschema
 
+try:
+    from scripts.check_commitrail_records import CommitrailError, _markdown_structure
+except ModuleNotFoundError:  # Direct `python scripts/...` execution.
+    from check_commitrail_records import CommitrailError, _markdown_structure
+
 
 ROOT = Path(__file__).resolve().parents[1]
 INITIATIVE = ROOT / ".ci/reviewer-evidence"
@@ -79,6 +84,14 @@ PROOF_CASE_IDS = set(PROOF_CASE_CONTRACTS)
 PROOF_PATTERN_ALTERNATIVES = {
     "pq-product-partial-owner-handoff": ({"PQ-004"},),
 }
+# Optional labels describe additional defects supported by these exact raw cases.
+# They never replace the required defect, and clear controls have no allowed IDs.
+PROOF_OPTIONAL_PATTERNS = {
+    "pq-ci-mocked-rollback": {"PQ-012"},  # Failure before rollback is exercised.
+    "pq-security-label-only-fake": {"PQ-003"},  # No foreign tenant is stored.
+    "pq-security-missing-row-isolation": {"PQ-002"},  # Repository is mocked.
+    "pq-senior-setup-only-failure": {"PQ-001"},  # Any exception counts as success.
+}
 LEGACY_PROOF_SUBJECT_PATHS = {
     *{
         f".agents/skills/{name}-review/SKILL.md"
@@ -120,14 +133,11 @@ PROOF_SUBJECT_PATHS = {
 }
 LEGACY_PROOF_SUBJECT_EVALUATED_PATH = {
     ".ci/reviewer-evidence/REVIEWER_MATRIX.md": (
-        ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
-        "REVIEWER_MATRIX.md"
+        ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/REVIEWER_MATRIX.md"
     ),
 }
 PROOF_SUPERSESSION_MODE = "evaluated-current-subjects-exact"
-LEGACY_PROOF_SUPERSESSION_MODE = (
-    "evaluated-ancestor-with-lifecycle-only-normalization"
-)
+LEGACY_PROOF_SUPERSESSION_MODE = "evaluated-ancestor-with-lifecycle-only-normalization"
 ANSWER_LEAK_RE = re.compile(
     r"expected\s+(?:answer|outcome|classification)|required\s+(?:pattern|finding)|"
     r"(?:classification|outcome|result|finding\s+id)\s*:|"
@@ -346,9 +356,17 @@ def canonical_agent_instructions(skill_name: str) -> str:
 
 def has_canonical_shared_protocol_directive(skill: str) -> bool:
     """Require the positive catalog directive at the shared-evidence boundary."""
-    _, marker, shared_section = skill.partition("## Shared evidence")
-    return bool(marker) and shared_section.lstrip().startswith(
-        "Read `reviewer-evidence-protocol` first;"
+    try:
+        structure = _markdown_structure(skill, "specialty skill")
+    except CommitrailError:
+        return False
+    headings = list(re.finditer(r"^## Shared evidence[ \t]*$", structure, re.MULTILINE))
+    if len(headings) != 1:
+        return False
+    return (
+        structure[headings[0].end() :]
+        .lstrip()
+        .startswith("Read `reviewer-evidence-protocol` first;")
     )
 
 
@@ -391,9 +409,7 @@ def contract_failures(root: Path = ROOT) -> list[str]:
         **PROOF_QUALITY_SHARED_REQUIREMENTS,
     }.items():
         if token not in normalized_protocol:
-            failures.append(
-                f"shared protocol: missing {requirement_id} ({token!r})"
-            )
+            failures.append(f"shared protocol: missing {requirement_id} ({token!r})")
 
     matrix = (root / MATRIX_PATH.relative_to(ROOT)).read_text(encoding="utf-8")
     reviewers = matrix_reviewers(matrix)
@@ -824,6 +840,11 @@ def proof_evaluation_failures(
             )
             if not any(option.issubset(pattern_ids) for option in pattern_options):
                 failures.append(f"{case_id}: required proof pattern missing")
+            allowed_patterns = set().union(
+                *pattern_options, PROOF_OPTIONAL_PATTERNS.get(case_id, set())
+            )
+            if not set(pattern_ids).issubset(allowed_patterns):
+                failures.append(f"{case_id}: unsupported proof pattern")
             if not set(pattern_ids).issubset(FAILURE_PATTERN_IDS):
                 failures.append(f"{case_id}: unknown proof pattern")
         expected_patterns = expected.get("required_pattern_ids", [])

@@ -15,6 +15,8 @@ from scripts.reviewer_contracts import (
     CODEX_CONFIG_PATH,
     MATRIX_PATH,
     PROOF_CASES_PATH,
+    PROOF_OPTIONAL_PATTERNS,
+    PROOF_CASE_CONTRACTS,
     PROOF_EXPECTATIONS_PATH,
     PROOF_RESULTS_PATH,
     PROOF_PATTERNS_PATH,
@@ -33,6 +35,7 @@ from scripts.reviewer_contracts import (
     _proof_subjects_match,
     proof_supersession_failures,
     proof_evaluation_failures,
+    has_canonical_shared_protocol_directive,
 )
 
 
@@ -56,6 +59,9 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             (["PQ-007"], True),
             ([], False),
             (["PQ-001"], False),
+            (["PQ-004", "PQ-001"], False),
+            (["PQ-007", "PQ-001"], False),
+            (["PQ-004", "PQ-007"], True),
         ):
             with self.subTest(patterns=patterns):
                 results = copy.deepcopy(baseline)
@@ -69,6 +75,66 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                     cases, expectations, results, check_supersession=False
                 )
                 self.assertEqual(not failures, accepted, failures)
+
+    def test_clear_control_rejects_any_failure_pattern(self) -> None:
+        cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
+        expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+        results = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
+        row = next(
+            row
+            for row in results["results"]
+            if row["case_id"] == "pq-security-real-isolation-control"
+        )
+        row["failure_pattern_ids"] = ["PQ-011"]
+        self.assertIn(
+            "pq-security-real-isolation-control: unsupported proof pattern",
+            proof_evaluation_failures(
+                cases, expectations, results, check_supersession=False
+            ),
+        )
+
+    def test_optional_source_labels_cannot_replace_required_defect(self) -> None:
+        cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
+        expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+        baseline = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
+        for case_id, optional in PROOF_OPTIONAL_PATTERNS.items():
+            with self.subTest(case_id=case_id):
+                results = copy.deepcopy(baseline)
+                row = next(
+                    row for row in results["results"] if row["case_id"] == case_id
+                )
+                row["failure_pattern_ids"] = sorted(optional)
+                self.assertIn(
+                    f"{case_id}: required proof pattern missing",
+                    proof_evaluation_failures(
+                        cases, expectations, results, check_supersession=False
+                    ),
+                )
+                row["failure_pattern_ids"] = sorted(
+                    PROOF_CASE_CONTRACTS[case_id][3] | optional | {"PQ-011"}
+                )
+                self.assertIn(
+                    f"{case_id}: unsupported proof pattern",
+                    proof_evaluation_failures(
+                        cases, expectations, results, check_supersession=False
+                    ),
+                )
+
+    def test_fenced_skill_directive_cannot_supply_live_instruction(self) -> None:
+        directive = "## Shared evidence\n\nRead `reviewer-evidence-protocol` first;\n"
+        for fence in ("```", "~~~~"):
+            with self.subTest(fence=fence):
+                self.assertFalse(
+                    has_canonical_shared_protocol_directive(
+                        f"{fence}markdown\n{directive}{fence}\n"
+                    )
+                )
+                self.assertFalse(
+                    has_canonical_shared_protocol_directive(
+                        f"{fence}markdown\n{directive}"
+                    )
+                )
+        self.assertTrue(has_canonical_shared_protocol_directive(directive))
 
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
         temporary = tempfile.TemporaryDirectory()
