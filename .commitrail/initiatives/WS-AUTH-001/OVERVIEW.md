@@ -9,7 +9,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   and service identities and attributable audit evidence.
 - Current boundary: hidden POL-04A3 projections and their exact request-local
   AUTH-12J authority are complete.
-- Next usable boundary: implement 12B2 after POL-04A2 finalization.
+- Next usable boundary: implement 12B2 after POL-04A2 finalization; 12B2 owns
+  concrete current-service revocation and production receipt-integrity proof.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
 - Preserve: Flow token verification only, no Workstream login/session system,
@@ -28,7 +29,9 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 
 ## Remaining v0.1 sequence
 
-1. POL-04A2 then `12B2`: hidden setup finalization and its exact authority.
+1. POL-04A2 then `12B2`: hidden setup finalization followed by its exact
+   authority. The concrete adapter's revocation and receipt-integrity proof
+   belongs to 12B2, not to hidden POL-04A2.
 2. `12F4`, `12G`, and `12H`: activate stored pre-submit/post-submit and final
    guide behavior only after their owner implementations and CON CP05-CP07.
 3. Reframe `13`-`16` against then-current TASK, checker, cleanup, and

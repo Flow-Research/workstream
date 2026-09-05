@@ -8,8 +8,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 - Completed boundary: hidden execution and deterministic projections.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
-- Next usable boundary: build 04A2 finalization and exact AUTH gates before
-  04B live cutover.
+- Next usable boundary: implement the reviewed 04A2 hidden finalization
+  contract, then its exact AUTH gate before 04B live cutover.
 - Governing sources: project-guide specifications, authorization and
   contribution-policy specifications, code, migrations, and tests.
 - Preserve: deterministic compilation, explicit ownership, atomic persistence,
@@ -23,8 +23,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 
 ## Remaining v0.1 sequence
 
-1. POL-04A2 hidden setup-ledger finalization; AUTH-12J projection authority is
-   already complete.
+1. Implement the planned POL-04A2 hidden setup-ledger finalization contract;
+   AUTH-12J projection authority is already complete.
 2. AUTH-12B2 exact finalization authority, then POL-04B live explicit-manager
    cutover with every legacy inference call removed from reachability.
 3. POL-05/06 approval and post-submit manifests with AUTH-12F4/12G.

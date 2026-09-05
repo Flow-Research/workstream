@@ -1180,7 +1180,10 @@ the zero-activation PREP/replay/provenance foundation; 12F2 owns explicitly
 manual Project Manager drafts; 12F3 owns automatic fixed
 `workstream.project.setup` derivation and removes public inline derivation; and
 12F4 owns Project Manager approval plus the atomic effective/pre-submit chain.
-12G and the final setup-service cutover depend on merged 12F4.
+AUTH-12B2 depends only on complete POL-04A2 hidden setup finalization plus
+complete AUTH-12J projection authority, and precedes POL-04B live setup
+cutover. AUTH-12F4 and AUTH-12G are later approval and deterministic
+post-submit-policy gates; neither is a prerequisite for setup finalization.
 
 The 12F1 foundation binds each future submission-policy handle to the exact
 project/guide/source lineage, mutation target, operation and request digests,
