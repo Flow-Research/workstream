@@ -204,6 +204,35 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
             self._validate()
 
+    def test_inline_code_comment_opener_does_not_hide_later_sections(self) -> None:
+        for literal in ("`<!--`", "`` ` <!-- ``", "`literal\n<!-- span`", r"\<!--"):
+            with self.subTest(literal=literal):
+                record = self._record().replace(
+                    "Small intent.", f"Document {literal} syntax."
+                )
+                self._write(self.RECORD_PATH, record)
+                self._validate()
+
+    def test_real_comment_after_inline_code_cannot_supply_outcome(self) -> None:
+        record = self._record().replace(
+            "- Intended merge outcome: Example is bounded.\n",
+            "Document `<!--` literally.\n<!--\n"
+            "- Intended merge outcome: Concealed.\n-->\n",
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_unmatched_backtick_does_not_disable_real_comment(self) -> None:
+        record = self._record().replace(
+            "- Intended merge outcome: Example is bounded.\n",
+            "An unmatched ` delimiter.\n<!--\n"
+            "- Intended merge outcome: Concealed.\n-->\n",
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
     def test_shorter_closing_fence_fails_closed(self) -> None:
         evidence = "````text\ncommand\n```"
         self._write(self.RECORD_PATH, self._record(evidence))

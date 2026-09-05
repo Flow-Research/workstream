@@ -88,8 +88,10 @@ def _masked_markdown_line(line: str) -> str:
     return "".join(character if character in "\r\n" else " " for character in line)
 
 
-def _comment_line(line: str, in_comment: bool) -> tuple[str, bool]:
-    """Mask comment spans on a non-fenced line, retaining multiline state."""
+def _comment_line(
+    line: str, in_comment: bool, code_width: int, remaining: str
+) -> tuple[str, bool, int]:
+    """Mask comments while respecting escaped openers and inline code spans."""
     parts: list[str] = []
     cursor = 0
     while cursor < len(line):
@@ -99,15 +101,31 @@ def _comment_line(line: str, in_comment: bool) -> tuple[str, bool]:
             parts.append(_masked_markdown_line(line[cursor:end]))
             cursor = end
             in_comment = closing < 0
-        else:
-            opening = line.find("<!--", cursor)
-            if opening < 0:
-                parts.append(line[cursor:])
-                break
-            parts.append(line[cursor:opening])
-            cursor = opening
+            continue
+        prefix = line[:cursor]
+        escaped = (len(prefix) - len(prefix.rstrip("\\"))) % 2 == 1
+        if not code_width and not escaped and line.startswith("<!--", cursor):
             in_comment = True
-    return "".join(parts), in_comment
+            continue
+        if line[cursor] == "`" and (code_width or not escaped):
+            end = cursor + 1
+            while end < len(line) and line[end] == "`":
+                end += 1
+            width = end - cursor
+            if code_width == width:
+                code_width = 0
+            elif not code_width:
+                paragraph_tail = re.split(
+                    r"\r?\n[ \t]*\r?\n", remaining[end:], maxsplit=1
+                )[0]
+                if re.search(rf"(?<!`)`{{{width}}}(?!`)", paragraph_tail):
+                    code_width = width
+            parts.append(line[cursor:end])
+            cursor = end
+            continue
+        parts.append(line[cursor])
+        cursor += 1
+    return "".join(parts), in_comment, code_width
 
 
 def _markdown_views(text: str, source: str) -> tuple[str, str]:
@@ -117,12 +135,20 @@ def _markdown_views(text: str, source: str) -> tuple[str, str]:
     fence_character: str | None = None
     fence_length = 0
     in_comment = False
+    code_width = 0
+    offset = 0
     for line in text.splitlines(keepends=True):
+        remaining = text[offset:]
+        offset += len(line)
         candidate = line.rstrip("\r\n")
         if fence_character is None:
-            opening = None if in_comment else FENCE_OPEN.fullmatch(candidate)
+            opening = (
+                None if in_comment or code_width else FENCE_OPEN.fullmatch(candidate)
+            )
             if opening is None:
-                content, in_comment = _comment_line(line, in_comment)
+                content, in_comment, code_width = _comment_line(
+                    line, in_comment, code_width, remaining
+                )
                 masked.append(content)
                 visible.append(content)
                 continue
