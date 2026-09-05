@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,8 @@ from scripts.reviewer_contracts import (
     PROOF_QUALITY_SHARED_REQUIREMENTS,
     PROOF_QUALITY_STATE_REQUIREMENTS,
     PROOF_STRENGTHS,
+    PROOF_SUBJECT_PATHS,
+    PROOF_SUPERSESSION_MODE,
     REVIEWERS,
     ROOT as CONTRACT_ROOT,
     SEMANTIC_SKILL_REQUIREMENTS,
@@ -22,6 +25,7 @@ from scripts.reviewer_contracts import (
     SHARED_PROTOCOL_REQUIREMENTS,
     TRUST_WORKFLOW_REQUIREMENTS,
     contract_failures,
+    proof_supersession_failures,
 )
 
 
@@ -217,6 +221,39 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
 
     def test_contract_inspection_is_a_schema_owned_proof_strength(self) -> None:
         self.assertIn("contract_inspection", PROOF_STRENGTHS)
+
+    def test_current_evaluation_binds_exact_complete_subject_set(self) -> None:
+        self.assertTrue(
+            {
+                ".agents/skills/reviewer-evidence-protocol/SKILL.md",
+                ".agents/skills/reviewer-evidence-protocol/references/"
+                "proof-quality-patterns.md",
+                ".codex/config.toml",
+                ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
+            }.issubset(PROOF_SUBJECT_PATHS)
+        )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=CONTRACT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        results = {
+            "evaluated_head": head,
+            "supersession": {
+                "mode": PROOF_SUPERSESSION_MODE,
+                "subject_paths": sorted(PROOF_SUBJECT_PATHS),
+            },
+        }
+        self.assertEqual(proof_supersession_failures(results), [])
+        results["supersession"]["subject_paths"].remove(
+            ".agents/skills/reviewer-evidence-protocol/SKILL.md"
+        )
+        self.assertIn(
+            "proof supersession: subject coverage mismatch",
+            proof_supersession_failures(results),
+        )
 
 
 if __name__ == "__main__":

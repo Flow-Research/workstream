@@ -14,6 +14,8 @@ from scripts.reviewer_contracts import (
     CASE_CLASSES,
     CODEX_CONFIG_PATH,
     FAILURE_PATTERN_IDS,
+    LEGACY_PROOF_EXPECTATIONS_PATH,
+    LEGACY_PROOF_RESULTS_PATH,
     MATRIX_SPECIALTY_REQUIREMENTS,
     PROOF_PATTERNS_PATH,
     PROOF_CASES_PATH,
@@ -284,6 +286,23 @@ class ReviewerContractTests(unittest.TestCase):
             _normalized_proof_subject(changed),
         )
 
+    def test_legacy_proof_evidence_is_auditable_but_not_current_adoption(self) -> None:
+        legacy_results = load_json(LEGACY_PROOF_RESULTS_PATH)
+        self.assertIn(
+            "proof supersession: invalid mode",
+            proof_supersession_failures(legacy_results),
+        )
+        self.assertTrue(
+            any(
+                failure.startswith(
+                    "proof supersession: behavior changed after evaluation:"
+                )
+                for failure in proof_supersession_failures(
+                    legacy_results, allow_legacy=True
+                )
+            )
+        )
+
     def assert_blind_case(self, case_id: str, outcome: str) -> None:
         self.assertEqual(
             proof_evaluation_failures(
@@ -341,17 +360,78 @@ class ReviewerContractTests(unittest.TestCase):
             with self.subTest(case_id=case_id):
                 self.assert_blind_case(case_id, "clear")
 
-    def test_blind_evaluation_rejects_independence_breach(self) -> None:
+    def test_blind_evaluation_allows_no_rejected_runs_when_none_occurred(self) -> None:
         mutated = copy.deepcopy(self.proof_results)
         mutated["rejected_runs"] = []
-        self.assertIn(
-            "proof evaluation: rejected independence breach not recorded",
+        self.assertEqual(
             proof_evaluation_failures(
                 self.proof_cases,
                 self.proof_expectations,
                 mutated,
                 check_supersession=False,
             ),
+            [],
+        )
+
+    def test_blind_evaluation_rejects_missing_or_malformed_rejected_runs(self) -> None:
+        for rejected_runs, expected in (
+            (None, "proof evaluation: invalid rejected runs"),
+            ({}, "proof evaluation: invalid rejected runs"),
+            (
+                [{"reviewer": "unknown", "reason": "boundary breach"}],
+                "proof evaluation: malformed rejected run at index 0",
+            ),
+            (
+                [{"reviewer": [], "reason": "boundary breach"}],
+                "proof evaluation: malformed rejected run at index 0",
+            ),
+            (
+                [{"reviewer": "qa", "reason": ""}],
+                "proof evaluation: malformed rejected run at index 0",
+            ),
+        ):
+            with self.subTest(rejected_runs=rejected_runs):
+                mutated = copy.deepcopy(self.proof_results)
+                if rejected_runs is None:
+                    mutated.pop("rejected_runs", None)
+                else:
+                    mutated["rejected_runs"] = rejected_runs
+                self.assertIn(
+                    expected,
+                    proof_evaluation_failures(
+                        self.proof_cases,
+                        self.proof_expectations,
+                        mutated,
+                        check_supersession=False,
+                    ),
+                )
+
+    def test_rerun_acceptance_requires_matching_rejected_run(self) -> None:
+        mutated = copy.deepcopy(self.proof_results)
+        mutated["rejected_runs"] = []
+        mutated["results"][0]["independence"] = "accepted_after_rerun"
+        self.assertIn(
+            f"{mutated['results'][0]['case_id']}: rerun acceptance has no rejected run",
+            proof_evaluation_failures(
+                self.proof_cases,
+                self.proof_expectations,
+                mutated,
+                check_supersession=False,
+            ),
+        )
+
+    def test_historical_rejected_independence_breach_remains_valid(self) -> None:
+        legacy_expectations = load_json(LEGACY_PROOF_EXPECTATIONS_PATH)
+        legacy_results = load_json(LEGACY_PROOF_RESULTS_PATH)
+        self.assertTrue(legacy_results["rejected_runs"])
+        self.assertEqual(
+            proof_evaluation_failures(
+                self.proof_cases,
+                legacy_expectations,
+                legacy_results,
+                check_supersession=False,
+            ),
+            [],
         )
 
     def test_blind_evaluation_rejects_duplicate_expectations(self) -> None:

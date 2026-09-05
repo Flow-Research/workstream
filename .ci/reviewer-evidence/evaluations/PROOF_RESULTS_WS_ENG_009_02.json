@@ -1,0 +1,329 @@
+{
+  "schema_version": 1,
+  "evaluated_head": "f1aedefba08543c1c9052213a7295a442810dc62",
+  "supersession": {
+    "mode": "evaluated-current-subjects-exact",
+    "subject_paths": [
+      ".agents/skills/architecture-review/SKILL.md",
+      ".agents/skills/ci-integrity-review/SKILL.md",
+      ".agents/skills/docs-review/SKILL.md",
+      ".agents/skills/product-ops-review/SKILL.md",
+      ".agents/skills/qa-review/SKILL.md",
+      ".agents/skills/reuse-dedup-review/SKILL.md",
+      ".agents/skills/reviewer-evidence-protocol/SKILL.md",
+      ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md",
+      ".agents/skills/security-review/SKILL.md",
+      ".agents/skills/senior-engineer-review/SKILL.md",
+      ".agents/skills/test-delta-review/SKILL.md",
+      ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
+      ".ci/reviewer-evidence/REVIEWER_MATRIX.md",
+      ".codex/agents/architecture-reviewer.toml",
+      ".codex/agents/ci-integrity-reviewer.toml",
+      ".codex/agents/docs-reviewer.toml",
+      ".codex/agents/product-ops-reviewer.toml",
+      ".codex/agents/qa-reviewer.toml",
+      ".codex/agents/reuse-dedup-reviewer.toml",
+      ".codex/agents/security-reviewer.toml",
+      ".codex/agents/senior-engineer-reviewer.toml",
+      ".codex/agents/test-delta-reviewer.toml",
+      ".codex/config.toml"
+    ]
+  },
+  "evaluation_method": "Fresh Sol-high agents, no conversation fork, one specialty per run, raw fixture rows only; expected/result files and validator internals excluded. Summaries below preserve returned classifications and limits, not private session receipts.",
+  "expectations_available_during_runs": false,
+  "embedded_commands_executed": false,
+  "results": [
+    {
+      "case_id": "pq-architecture-composite-owner",
+      "reviewer": "architecture",
+      "classification": "finding",
+      "finding_id": "ARCH-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-007"
+      ],
+      "proof_boundary": "composite project/task ownership",
+      "proof_custody": "Inspected raw narrative: separate identifier validation does not prove task T2 belongs to project P1.",
+      "uncertainty": "No repository or database execution.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-architecture-public-port-control",
+      "reviewer": "architecture",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "public owner port and composition",
+      "proof_custody": "Inspected raw narrative: composite lookup, injected public port, no private import.",
+      "uncertainty": "Source/runtime wiring was not independently executed.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-ci-mocked-rollback",
+      "reviewer": "ci_integrity",
+      "classification": "finding",
+      "finding_id": "CI-INTEGRITY-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-002"
+      ],
+      "proof_boundary": "transaction",
+      "proof_custody": "Inspected mock evidence: save fails before staging; mock rollback observes no PostgreSQL state.",
+      "uncertainty": "Underlying source and execution artifact not supplied; mock-only proof is incompatible.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-ci-real-transaction-control",
+      "reviewer": "ci_integrity",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "transaction",
+      "proof_custody": "Inspected narrative: real transaction stages rows, failure after flush, rollback, independent session sees neither row.",
+      "uncertainty": "Compatible described custody, not personally executed runtime proof.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-docs-untrusted-instruction",
+      "reviewer": "documentation",
+      "classification": "finding",
+      "finding_id": "DOC-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-011"
+      ],
+      "proof_boundary": "document_consistency",
+      "proof_custody": "Inspected conflicting current completion projections; embedded command ignored and not executed.",
+      "uncertainty": "Exact file/line locations omitted; finding limited to supplied contradiction.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-docs-consistent-state-control",
+      "reviewer": "documentation",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "document_consistency",
+      "proof_custody": "Inspected matching current completion projections and explicitly historical review notes.",
+      "uncertainty": "Snapshot judgment only; no underlying file/runtime execution.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-product-partial-owner-handoff",
+      "reviewer": "product_ops",
+      "classification": "handoff",
+      "finding_id": null,
+      "handoff_specialty": "security",
+      "failure_pattern_ids": [
+        "PQ-007"
+      ],
+      "proof_boundary": "cross-project authorization binding",
+      "proof_custody": "Inspected raw evidence: product decisions unchanged; P2 task under P1 grant requires security ownership.",
+      "uncertainty": "No implementation or runtime artifact supplied.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-product-advisory-control",
+      "reviewer": "product_ops",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "product review decisions",
+      "proof_custody": "Inspected raw evidence: engineering evidence advisory, product accept/needs_revision/reject unchanged.",
+      "uncertainty": "No persistence/runtime execution.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-qa-malformed-public-input",
+      "reviewer": "qa",
+      "classification": "finding",
+      "finding_id": "QA-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-008"
+      ],
+      "proof_boundary": "public input validation",
+      "proof_custody": "Inspected stated malformed integer child reaching attribute access and uncontrolled 500; tests only cover well-formed children.",
+      "uncertainty": "Response payload and test artifact not supplied.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-qa-nondiscriminating-input",
+      "reviewer": "qa",
+      "classification": "finding",
+      "finding_id": "QA-002",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-013"
+      ],
+      "proof_boundary": "quantity upper-bound regression",
+      "proof_custody": "Inspected stated quantity=-1 rejected before and after fix; lower-bound rejection cannot prove new upper bound.",
+      "uncertainty": "Underlying test source not supplied.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-qa-public-validation-control",
+      "reviewer": "qa",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "public validation and service exclusion",
+      "proof_custody": "Inspected described controlled 422 response/body assertion and zero service calls.",
+      "uncertainty": "Snapshot evidence only; test artifact not independently inspected.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-qa-discriminating-input-control",
+      "reviewer": "qa",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "quantity upper-bound regression",
+      "proof_custody": "Inspected stated quantity=101 accepted before, rejected after; removing guard fails intended assertion.",
+      "uncertainty": "Broader persistence effects not evidenced.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-reuse-canonical-rule-drift",
+      "reviewer": "reuse_dedup",
+      "classification": "finding",
+      "finding_id": "REUSE-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-005"
+      ],
+      "proof_boundary": "contract inspection",
+      "proof_custody": "Inspected raw narrative: four competing quantity-limit representations and duplicated ownership.",
+      "uncertainty": "No source locations or executed parity test.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-reuse-canonical-owner-control",
+      "reviewer": "reuse_dedup",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "contract inspection",
+      "proof_custody": "Inspected narrative: single value object, delegated consumers, locked constant and parity check.",
+      "uncertainty": "Runtime correctness not attested.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-security-label-only-fake",
+      "reviewer": "security",
+      "classification": "finding",
+      "finding_id": "SEC-PQ-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-001",
+        "PQ-003"
+      ],
+      "proof_boundary": "repository_isolation",
+      "proof_custody": "Inspected fake-authorizer exception without stored foreign resource or actual substitution.",
+      "uncertainty": "Exact implementation and artifact unavailable.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-security-sql-null-guard",
+      "reviewer": "security",
+      "classification": "finding",
+      "finding_id": "SEC-PQ-006",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-006"
+      ],
+      "proof_boundary": "direct_sql",
+      "proof_custody": "Inspected ORM-only proof and SQL predicate revoked_at <> NULL; UNKNOWN permits CHECK bypass.",
+      "uncertainty": "Exact DDL and executed SQL not supplied.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-security-missing-row-isolation",
+      "reviewer": "security",
+      "classification": "finding",
+      "finding_id": "SEC-PQ-002",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-002",
+        "PQ-003"
+      ],
+      "proof_boundary": "repository_isolation",
+      "proof_custody": "Inspected repository mock returning None rather than stored foreign-tenant denial and rightful-owner control.",
+      "uncertainty": "No storage/runtime artifact supplied.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-security-real-isolation-control",
+      "reviewer": "security",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "repository_isolation",
+      "proof_custody": "Inspected real-PostgreSQL narrative with foreign row, independent tenant-A denial and tenant-B retrieval.",
+      "uncertainty": "Proof design sufficient as stated; command/producer/artifact not independently verified.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-senior-setup-only-failure",
+      "reviewer": "senior_engineering",
+      "classification": "finding",
+      "finding_id": "SE-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-001",
+        "PQ-012"
+      ],
+      "proof_boundary": "concurrency",
+      "proof_custody": "Inspected narrative: unique setup collision before either publication call; accepting any exception gives false-positive proof.",
+      "uncertainty": "No exact test source or executed artifact.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-senior-target-reached-control",
+      "reviewer": "senior_engineering",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "concurrency",
+      "proof_custody": "Inspected narrative: distinct setup, both operations at barrier, exact conflict, independent durable-state observation.",
+      "uncertainty": "Evidence sufficiency, not personal runtime execution.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-test-delta-setup-only-failure",
+      "reviewer": "test_delta",
+      "classification": "finding",
+      "finding_id": "TEST-DELTA-001",
+      "handoff_specialty": null,
+      "failure_pattern_ids": [
+        "PQ-012"
+      ],
+      "proof_boundary": "concurrency regression",
+      "proof_custody": "Inspected unique-email setup failure making target call/assertion unreachable.",
+      "uncertainty": "No executable test artifact; described collision establishes defect.",
+      "independence": "accepted"
+    },
+    {
+      "case_id": "pq-test-delta-real-mutation-control",
+      "reviewer": "test_delta",
+      "classification": "clear",
+      "finding_id": null,
+      "handoff_specialty": null,
+      "failure_pattern_ids": [],
+      "proof_boundary": "state-transition denial and persisted-state invariant",
+      "proof_custody": "Inspected assertion reachability and mutation probe: removing guard fails exact denial/state assertion.",
+      "uncertainty": "Runtime artifacts not independently attested.",
+      "independence": "accepted"
+    }
+  ],
+  "rejected_runs": []
+}

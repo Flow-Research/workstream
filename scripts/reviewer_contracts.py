@@ -20,8 +20,12 @@ INITIATIVE = ROOT / ".ci/reviewer-evidence"
 CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 PROOF_CASES_PATH = INITIATIVE / "evaluations/PROOF_CASES.json"
-PROOF_EXPECTATIONS_PATH = INITIATIVE / "evaluations/PROOF_EXPECTATIONS.json"
-PROOF_RESULTS_PATH = INITIATIVE / "evaluations/PROOF_RESULTS.json"
+PROOF_EXPECTATIONS_PATH = (
+    INITIATIVE / "evaluations/PROOF_EXPECTATIONS_WS_ENG_009_02.json"
+)
+PROOF_RESULTS_PATH = INITIATIVE / "evaluations/PROOF_RESULTS_WS_ENG_009_02.json"
+LEGACY_PROOF_EXPECTATIONS_PATH = INITIATIVE / "evaluations/PROOF_EXPECTATIONS.json"
+LEGACY_PROOF_RESULTS_PATH = INITIATIVE / "evaluations/PROOF_RESULTS.json"
 MATRIX_PATH = INITIATIVE / "REVIEWER_MATRIX.md"
 RECEIPT_SCHEMA_PATH = ROOT / ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json"
 PROOF_PATTERNS_PATH = (
@@ -68,7 +72,7 @@ PROOF_CASE_CONTRACTS = {
     "pq-test-delta-real-mutation-control": ("test_delta", "clear", None, set()),
 }
 PROOF_CASE_IDS = set(PROOF_CASE_CONTRACTS)
-PROOF_SUBJECT_PATHS = {
+LEGACY_PROOF_SUBJECT_PATHS = {
     *{
         f".agents/skills/{name}-review/SKILL.md"
         for name in (
@@ -99,13 +103,23 @@ PROOF_SUBJECT_PATHS = {
     },
     ".ci/reviewer-evidence/REVIEWER_MATRIX.md",
 }
-PROOF_SUBJECT_EVALUATED_PATH = {
+PROOF_SUBJECT_PATHS = {
+    *LEGACY_PROOF_SUBJECT_PATHS,
+    ".agents/skills/reviewer-evidence-protocol/SKILL.md",
+    ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md",
+    ".codex/config.toml",
+    ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
+}
+LEGACY_PROOF_SUBJECT_EVALUATED_PATH = {
     ".ci/reviewer-evidence/REVIEWER_MATRIX.md": (
         ".agent-loop/initiatives/WS-CI-004-review-evidence-integrity/"
         "REVIEWER_MATRIX.md"
     ),
 }
-PROOF_SUPERSESSION_MODE = "evaluated-ancestor-with-lifecycle-only-normalization"
+PROOF_SUPERSESSION_MODE = "evaluated-current-subjects-exact"
+LEGACY_PROOF_SUPERSESSION_MODE = (
+    "evaluated-ancestor-with-lifecycle-only-normalization"
+)
 ANSWER_LEAK_RE = re.compile(
     r"expected\s+(?:answer|outcome|classification)|required\s+(?:pattern|finding)|"
     r"(?:classification|outcome|result|finding\s+id)\s*:|"
@@ -648,7 +662,10 @@ def _normalized_proof_subject(text: str) -> str:
 
 
 def proof_supersession_failures(
-    results: object, current_head: str = "HEAD"
+    results: object,
+    current_head: str = "HEAD",
+    *,
+    allow_legacy: bool = False,
 ) -> list[str]:
     """Bind evaluated reviewer behavior to the current adoption target safely."""
     if not isinstance(results, dict):
@@ -660,14 +677,27 @@ def proof_supersession_failures(
     if not re.fullmatch(r"[0-9a-f]{40}", evaluated_head):
         return ["proof supersession: invalid evaluated head"]
     failures: list[str] = []
-    if supersession.get("mode") != PROOF_SUPERSESSION_MODE:
+    mode = supersession.get("mode")
+    if mode == PROOF_SUPERSESSION_MODE:
+        subject_paths = PROOF_SUBJECT_PATHS
+        evaluated_paths: dict[str, str] = {}
+        normalize_legacy_lifecycle = False
+    elif mode == LEGACY_PROOF_SUPERSESSION_MODE and allow_legacy:
+        subject_paths = LEGACY_PROOF_SUBJECT_PATHS
+        evaluated_paths = LEGACY_PROOF_SUBJECT_EVALUATED_PATH
+        normalize_legacy_lifecycle = True
+    else:
         failures.append("proof supersession: invalid mode")
-    subject_paths = supersession.get("subject_paths")
+        subject_paths = PROOF_SUBJECT_PATHS
+        evaluated_paths = {}
+        normalize_legacy_lifecycle = False
+    declared_subject_paths = supersession.get("subject_paths")
     if (
-        not isinstance(subject_paths, list)
-        or not all(isinstance(path, str) for path in subject_paths)
-        or set(subject_paths)
-        != {PROOF_SUBJECT_EVALUATED_PATH.get(path, path) for path in PROOF_SUBJECT_PATHS}
+        not isinstance(declared_subject_paths, list)
+        or not all(isinstance(path, str) for path in declared_subject_paths)
+        or len(declared_subject_paths) != len(set(declared_subject_paths))
+        or set(declared_subject_paths)
+        != {evaluated_paths.get(path, path) for path in subject_paths}
     ):
         failures.append("proof supersession: subject coverage mismatch")
     reachable = subprocess.run(
@@ -690,13 +720,14 @@ def proof_supersession_failures(
     if ancestor.returncode != 0:
         failures.append("proof supersession: evaluated head is not an ancestor")
         return failures
-    for path in sorted(PROOF_SUBJECT_PATHS):
+    for path in sorted(subject_paths):
         try:
-            evaluated_path = PROOF_SUBJECT_EVALUATED_PATH.get(path, path)
-            evaluated = _normalized_proof_subject(
-                _git_text(evaluated_head, evaluated_path)
-            )
-            current = _normalized_proof_subject(_git_text(current_head, path))
+            evaluated_path = evaluated_paths.get(path, path)
+            evaluated = _git_text(evaluated_head, evaluated_path)
+            current = _git_text(current_head, path)
+            if normalize_legacy_lifecycle:
+                evaluated = _normalized_proof_subject(evaluated)
+                current = _normalized_proof_subject(current)
         except subprocess.CalledProcessError:
             failures.append(f"proof supersession: unavailable subject {path}")
             continue
@@ -816,13 +847,29 @@ def proof_evaluation_failures(
     ) != "finding" or "PQ-011" not in docs_result.get("failure_pattern_ids", []):
         failures.append("proof evaluation: untrusted instruction was not detected")
     rejected = results.get("rejected_runs")
-    if not isinstance(rejected, list) or not any(
-        isinstance(row, dict)
-        and row.get("reviewer") == "ci_integrity"
-        and "outside the blind case boundary" in row.get("reason", "")
-        for row in rejected
-    ):
-        failures.append("proof evaluation: rejected independence breach not recorded")
+    rejected_reviewers: set[str] = set()
+    if not isinstance(rejected, list):
+        failures.append("proof evaluation: invalid rejected runs")
+    else:
+        for index, row in enumerate(rejected):
+            if (
+                not isinstance(row, dict)
+                or not isinstance(row.get("reviewer"), str)
+                or row["reviewer"] not in REVIEWERS
+                or not isinstance(row.get("reason"), str)
+                or not row["reason"].strip()
+            ):
+                failures.append(
+                    f"proof evaluation: malformed rejected run at index {index}"
+                )
+                continue
+            rejected_reviewers.add(row["reviewer"])
+    for case_id, result in result_rows.items():
+        if (
+            result.get("independence") == "accepted_after_rerun"
+            and result.get("reviewer") not in rejected_reviewers
+        ):
+            failures.append(f"{case_id}: rerun acceptance has no rejected run")
     return failures
 
 
