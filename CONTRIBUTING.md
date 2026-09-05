@@ -31,7 +31,7 @@ CPython 3.12, Git, and uv (see the native quickstart for uv installation).
 From the repository root, install it with:
 
 ```bash
-uv venv .venv --python python3
+uv venv .venv --python cpython3.12
 uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: \
   -r .github/requirements/agent-gates.txt
 ```
@@ -40,7 +40,7 @@ The root `.venv/` is ignored and separate from `backend/.venv/`. If you already
 use that path for another environment, choose another unused path and use its
 Python consistently below.
 
-Other hosts use the required hosted Agent Gates check on the pull request.
+On other hosts, use the required Agent Gates check in GitHub Actions.
 The backend Docker service mounts only `backend/`; it is not a repository-root
 tooling environment. Do not change dependency hashes to force a host install.
 
