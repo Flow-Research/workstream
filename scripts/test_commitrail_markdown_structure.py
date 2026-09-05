@@ -308,12 +308,13 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
             self._validate()
 
-    def test_inline_html_cannot_supply_index_identity(self) -> None:
+    def test_inline_html_cell_invalidates_an_otherwise_valid_index_row(self) -> None:
+        self._write(self.RECORD_PATH, self._record())
         self._write(
             ".commitrail/INDEX.md",
             "| Initiative | Durable disposition | Next |\n|---|---|---|\n"
-            "| actual <!-- [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) --> "
-            "| Planned | Next |\n",
+            "| [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) "
+            "| Planned | <x-empty></x-empty> |\n",
         )
         with self.assertRaisesRegex(gate.CommitrailError, "INDEX_ROW_INVALID"):
             self._validate()
