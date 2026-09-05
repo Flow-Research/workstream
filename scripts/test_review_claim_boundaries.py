@@ -90,6 +90,23 @@ def finding(
 
 
 class ReviewClaimBoundaryTests(unittest.TestCase):
+    def test_fixed_or_not_valid_findings_require_nonblank_verification(self) -> None:
+        for severity in ("Critical", "High", "Medium"):
+            for disposition in ("fixed", "not_valid"):
+                for verification in ("", " ", "\n\t"):
+                    with self.subTest(
+                        severity=severity,
+                        disposition=disposition,
+                        verification=repr(verification),
+                    ):
+                        receipt = valid_receipt()
+                        row = finding(severity, disposition)
+                        row["verification"] = verification
+                        receipt["findings"] = [row]
+                        with self.assertRaises(jsonschema.ValidationError):
+                            self.validator.validate(receipt)
+                        self.assertTrue(receipt_failures(receipt, "architecture", SHA))
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))

@@ -1,4 +1,4 @@
-"""Regression tests for reviewer protocol adoption contracts."""
+"""Regression tests for current reviewer contracts and historical evidence."""
 
 from __future__ import annotations
 
@@ -932,13 +932,13 @@ class ReviewerContractTests(unittest.TestCase):
     def test_specialty_completion_obligations_are_independently_enforced(
         self,
     ) -> None:
-        for reviewer, tokens in SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.items():
+        for reviewer, token in SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.items():
             _, skill_name = REVIEWERS[reviewer]
             with self.subTest(reviewer=reviewer):
                 temporary, root = self.copied_contract_root()
                 try:
                     path = Path(".agents/skills") / skill_name / "SKILL.md"
-                    remove_contract_token(root / path, tokens["skill"])
+                    remove_contract_token(root / path, token)
                     self.assertTrue(
                         any(
                             f"{reviewer}: skill missing "

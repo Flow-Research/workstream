@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import json
 import re
 import shutil
 import subprocess
@@ -12,6 +14,7 @@ from pathlib import Path
 from scripts.reviewer_contracts import (
     CODEX_CONFIG_PATH,
     MATRIX_PATH,
+    PROOF_CASES_PATH,
     PROOF_PATTERNS_PATH,
     PROOF_QUALITY_SHARED_REQUIREMENTS,
     PROOF_QUALITY_STATE_REQUIREMENTS,
@@ -25,6 +28,7 @@ from scripts.reviewer_contracts import (
     SHARED_PROTOCOL_REQUIREMENTS,
     TRUST_WORKFLOW_REQUIREMENTS,
     contract_failures,
+    _proof_subjects_match,
     proof_supersession_failures,
 )
 
@@ -98,19 +102,19 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                         "agent_protocol",
                         agent,
                         "reviewer-evidence-protocol",
-                        f"{reviewer}: agent missing shared protocol reference",
+                        f"{reviewer}: agent instructions differ from canonical loader",
                     ),
                     (
                         "agent_specialty",
                         agent,
                         skill_name,
-                        f"{reviewer}: agent missing specialty skill reference",
+                        f"{reviewer}: agent instructions differ from canonical loader",
                     ),
                     (
                         "skill_protocol",
                         skill,
                         "reviewer-evidence-protocol",
-                        f"{reviewer}: skill missing shared protocol reference",
+                        f"{reviewer}: skill missing canonical shared protocol directive",
                     ),
                 ):
                     with self.subTest(reviewer=reviewer, surface=surface):
@@ -120,11 +124,11 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
         finally:
             temporary.cleanup()
 
-    def test_wrong_references_do_not_pass_by_substring(self) -> None:
+    def test_extra_tokens_do_not_rescue_wrong_agent_loader(self) -> None:
         temporary, root = self.copied_contract_root()
         try:
             agent = root / ".codex/agents/architecture-reviewer.toml"
-            agent.write_text(
+            mutated = (
                 agent.read_text(encoding="utf-8")
                 .replace(
                     "reviewer-evidence-protocol",
@@ -133,16 +137,57 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 .replace(
                     "architecture-review/SKILL.md",
                     "wrong-architecture-review/SKILL.md",
-                ),
+                )
+                .replace(
+                    '\n"""\n',
+                    "\nreviewer-evidence-protocol architecture-review\n" + '"""\n',
+                    1,
+                )
+            )
+            agent.write_text(mutated, encoding="utf-8")
+            self.assertIn(
+                "architecture: agent instructions differ from canonical loader",
+                contract_failures(root),
+            )
+        finally:
+            temporary.cleanup()
+
+    def test_negated_or_prefixed_loaders_fail_structurally(self) -> None:
+        temporary, root = self.copied_contract_root()
+        try:
+            agent = root / ".codex/agents/architecture-reviewer.toml"
+            original_agent = agent.read_text(encoding="utf-8")
+            agent.write_text(
+                original_agent.replace("Read and follow", "Do not read and follow", 1),
                 encoding="utf-8",
             )
-            failures = contract_failures(root)
             self.assertIn(
-                "architecture: agent missing shared protocol reference", failures
+                "architecture: agent instructions differ from canonical loader",
+                contract_failures(root),
             )
-            self.assertIn(
-                "architecture: agent missing specialty skill reference", failures
-            )
+            agent.write_text(original_agent, encoding="utf-8")
+
+            skill = root / ".agents/skills/architecture-review/SKILL.md"
+            original_skill = skill.read_text(encoding="utf-8")
+            for replacement in (
+                "Do not read `reviewer-evidence-protocol` first;",
+                "Read `wrong/reviewer-evidence-protocol` first;",
+            ):
+                with self.subTest(replacement=replacement):
+                    skill.write_text(
+                        original_skill.replace(
+                            "Read `reviewer-evidence-protocol` first;",
+                            replacement,
+                            1,
+                        )
+                        + "\nRead `reviewer-evidence-protocol` first;\n",
+                        encoding="utf-8",
+                    )
+                    self.assertIn(
+                        "architecture: skill missing canonical shared protocol directive",
+                        contract_failures(root),
+                    )
+            skill.write_text(original_skill, encoding="utf-8")
         finally:
             temporary.cleanup()
 
@@ -230,6 +275,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 "proof-quality-patterns.md",
                 ".codex/config.toml",
                 ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
+                ".ci/reviewer-evidence/evaluations/PROOF_CASES.json",
             }.issubset(PROOF_SUBJECT_PATHS)
         )
         head = subprocess.run(
@@ -254,6 +300,26 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             "proof supersession: subject coverage mismatch",
             proof_supersession_failures(results),
         )
+
+    def test_proof_case_task_or_evidence_change_breaks_exact_binding(self) -> None:
+        original = PROOF_CASES_PATH.read_bytes()
+        parsed = json.loads(original)
+        original_ids = [row["id"] for row in parsed["cases"]]
+        for field in ("task", "evidence"):
+            with self.subTest(field=field):
+                mutated = copy.deepcopy(parsed)
+                mutated["cases"][0][field] += " Material mutation."
+                self.assertEqual(
+                    [row["id"] for row in mutated["cases"]], original_ids
+                )
+                mutated_bytes = json.dumps(mutated, indent=2).encode() + b"\n"
+                self.assertFalse(
+                    _proof_subjects_match(
+                        original,
+                        mutated_bytes,
+                        normalize_legacy_lifecycle=False,
+                    )
+                )
 
 
 if __name__ == "__main__":

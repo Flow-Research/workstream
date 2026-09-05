@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate reviewer adoption contracts and isolated evaluation output."""
+"""Validate reviewer contracts and the current proof-quality exercise output."""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ import jsonschema
 
 ROOT = Path(__file__).resolve().parents[1]
 INITIATIVE = ROOT / ".ci/reviewer-evidence"
+# The five-class general suite is a historical fixture archive whose integrity
+# remains validated. PROOF_* is the current proof-quality exercise.
 CASES_PATH = INITIATIVE / "evaluations/CASES.json"
 EXPECTATIONS_PATH = INITIATIVE / "evaluations/EXPECTATIONS.json"
 PROOF_CASES_PATH = INITIATIVE / "evaluations/PROOF_CASES.json"
@@ -109,6 +111,7 @@ PROOF_SUBJECT_PATHS = {
     ".agents/skills/reviewer-evidence-protocol/references/proof-quality-patterns.md",
     ".codex/config.toml",
     ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
+    ".ci/reviewer-evidence/evaluations/PROOF_CASES.json",
 }
 LEGACY_PROOF_SUBJECT_EVALUATED_PATH = {
     ".ci/reviewer-evidence/REVIEWER_MATRIX.md": (
@@ -231,66 +234,35 @@ SPECIALTY_PROOF_REQUIREMENTS = {
     ),
 }
 SPECIALTY_PROOF_COMPLETION_REQUIREMENTS = {
-    "architecture": {
-        "agent": "Require database custody only when the claim crosses that boundary",
-        "skill": "Require database custody only when the claim crosses that boundary",
-    },
-    "ci_integrity": {
-        "agent": "Green status or a command label alone is not custody",
-        "skill": "Green status or a command label alone is not custody",
-    },
-    "documentation": {
-        "agent": "Use compatible inspection or structure proof",
-        "skill": (
-            "Use compatible inspection or structure proof and keep product/runtime "
-            "conclusions with their owning reviewers"
-        ),
-    },
-    "product_ops": {
-        "agent": "Use product lifecycle evidence without inventing engineering verdicts",
-        "skill": (
-            "Use product lifecycle evidence without inventing an engineering specialty "
-            "verdict"
-        ),
-    },
-    "qa": {
-        "agent": "Reject setup-only failures and vacuous inputs",
-        "skill": (
-            "Reject fixtures that abort before the intended assertion or inputs the "
-            "pre-fix code already rejects"
-        ),
-    },
-    "reuse_dedup": {
-        "agent": "Prove why reuse or extension is invalid before accepting another owner",
-        "skill": (
-            "Prove whether one owner can be reused before accepting another representation"
-        ),
-    },
-    "security": {
-        "agent": (
-            "Require repository-isolation evidence for stored ownership, direct-SQL "
-            "evidence for ORM-bypassed database enforcement, and schema-compatible "
-            "service or composition evidence for application authorization"
-        ),
-        "skill": (
-            "Require repository-isolation evidence for stored ownership, direct-SQL "
-            "evidence for ORM-bypassed database enforcement, and schema-compatible "
-            "service or composition evidence for application authorization"
-        ),
-    },
-    "senior_engineering": {
-        "agent": "Do not substitute cheap proof for required custody",
-        "skill": (
-            "Do not substitute cheap proof for custody required by the claimed boundary"
-        ),
-    },
-    "test_delta": {
-        "agent": "Reject setup-only failures and vacuous inputs",
-        "skill": (
-            "Reject setup-only failures, vacuous inputs, and tests that already passed "
-            "against the broken implementation"
-        ),
-    },
+    "architecture": "Require database custody only when the claim crosses that boundary",
+    "ci_integrity": "Green status or a command label alone is not custody",
+    "documentation": (
+        "Use compatible inspection or structure proof and keep product/runtime "
+        "conclusions with their owning reviewers"
+    ),
+    "product_ops": (
+        "Use product lifecycle evidence without inventing an engineering specialty "
+        "verdict"
+    ),
+    "qa": (
+        "Reject fixtures that abort before the intended assertion or inputs the "
+        "pre-fix code already rejects"
+    ),
+    "reuse_dedup": (
+        "Prove whether one owner can be reused before accepting another representation"
+    ),
+    "security": (
+        "Require repository-isolation evidence for stored ownership, direct-SQL "
+        "evidence for ORM-bypassed database enforcement, and schema-compatible "
+        "service or composition evidence for application authorization"
+    ),
+    "senior_engineering": (
+        "Do not substitute cheap proof for custody required by the claimed boundary"
+    ),
+    "test_delta": (
+        "Reject setup-only failures, vacuous inputs, and tests that already passed "
+        "against the broken implementation"
+    ),
 }
 MATRIX_SPECIALTY_REQUIREMENTS = {
     "Architecture": (
@@ -352,11 +324,27 @@ def failure_pattern_ids(patterns: str) -> list[str]:
     return FAILURE_PATTERN_ROW.findall(patterns)
 
 
-def has_skill_reference(text: str, skill_name: str) -> bool:
-    """Match one exact skill name, rejecting aliases and prefixed lookalikes."""
-    return re.search(
-        rf"(?<![A-Za-z0-9_-]){re.escape(skill_name)}(?![A-Za-z0-9_-])", text
-    ) is not None
+def canonical_agent_instructions(skill_name: str) -> str:
+    """Build the only accepted normalized wrapper for one specialty skill."""
+    role = skill_name.removesuffix("-review")
+    instructions = f"""
+    You are a read-only {role} reviewer. Read and follow
+    .agents/skills/reviewer-evidence-protocol/SKILL.md, then
+    .agents/skills/{skill_name}/SKILL.md.
+    The shared protocol owns target, evidence, freshness, and verdict mechanics;
+    the specialty skill owns the review questions. Review only the assigned impact
+    cone and relevant unchanged owners. Do not edit files, write GitHub comments,
+    resolve threads, or spawn additional agents. Return findings to the lead.
+    """
+    return " ".join(instructions.split())
+
+
+def has_canonical_shared_protocol_directive(skill: str) -> bool:
+    """Require the positive catalog directive at the shared-evidence boundary."""
+    _, marker, shared_section = skill.partition("## Shared evidence")
+    return bool(marker) and shared_section.lstrip().startswith(
+        "Read `reviewer-evidence-protocol` first;"
+    )
 
 
 REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
@@ -468,22 +456,22 @@ def contract_failures(root: Path = ROOT) -> list[str]:
             failures.append(f"{reviewer}: agent model must be gpt-5.6-sol")
         if agent_config.get("model_reasoning_effort") != "high":
             failures.append(f"{reviewer}: agent reasoning must be high")
-        if not has_skill_reference(normalized_agent, "reviewer-evidence-protocol"):
-            failures.append(f"{reviewer}: agent missing shared protocol reference")
-        if not has_skill_reference(normalized_agent, skill_name):
-            failures.append(f"{reviewer}: agent missing specialty skill reference")
+        if normalized_agent != canonical_agent_instructions(skill_name):
+            failures.append(
+                f"{reviewer}: agent instructions differ from canonical loader"
+            )
         specialty_token = SPECIALTY_PROOF_REQUIREMENTS.get(reviewer)
         if specialty_token is None:
             failures.append(f"{reviewer}: missing proof.specialty requirement")
-        if not has_skill_reference(normalized_skill, "reviewer-evidence-protocol"):
-            failures.append(f"{reviewer}: skill missing shared protocol reference")
+        if not has_canonical_shared_protocol_directive(skill):
+            failures.append(
+                f"{reviewer}: skill missing canonical shared protocol directive"
+            )
         if "## Output" not in skill:
             failures.append(f"{reviewer}: skill missing '## Output'")
         if specialty_token is not None and specialty_token not in normalized_skill:
             failures.append(f"{reviewer}: skill missing proof.specialty")
-        completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer, {}).get(
-            "skill"
-        )
+        completion = SPECIALTY_PROOF_COMPLETION_REQUIREMENTS.get(reviewer)
         if completion is None or completion not in normalized_skill:
             failures.append(f"{reviewer}: skill missing proof.specialty_completion")
         if agent_path.as_posix().replace(f"{root.as_posix()}/", "") not in matrix:
@@ -633,13 +621,12 @@ def proof_fixture_failures(
     return failures
 
 
-def _git_text(revision: str, path: str) -> str:
+def _git_bytes(revision: str, path: str) -> bytes:
     return subprocess.run(
         ["git", "show", f"{revision}:{path}"],
         cwd=ROOT,
         check=True,
         capture_output=True,
-        text=True,
     ).stdout
 
 
@@ -661,13 +648,23 @@ def _normalized_proof_subject(text: str) -> str:
     return normalized
 
 
+def _proof_subjects_match(
+    evaluated: bytes, current: bytes, *, normalize_legacy_lifecycle: bool
+) -> bool:
+    """Compare exact current bytes or the historical lifecycle-only projection."""
+    if normalize_legacy_lifecycle:
+        evaluated = _normalized_proof_subject(evaluated.decode()).encode()
+        current = _normalized_proof_subject(current.decode()).encode()
+    return hashlib.sha256(evaluated).digest() == hashlib.sha256(current).digest()
+
+
 def proof_supersession_failures(
     results: object,
     current_head: str = "HEAD",
     *,
     allow_legacy: bool = False,
 ) -> list[str]:
-    """Bind evaluated reviewer behavior to the current adoption target safely."""
+    """Bind the current proof-quality exercise to its exact instruction target."""
     if not isinstance(results, dict):
         return ["proof supersession: invalid results"]
     evaluated_head = results.get("evaluated_head")
@@ -723,17 +720,15 @@ def proof_supersession_failures(
     for path in sorted(subject_paths):
         try:
             evaluated_path = evaluated_paths.get(path, path)
-            evaluated = _git_text(evaluated_head, evaluated_path)
-            current = _git_text(current_head, path)
-            if normalize_legacy_lifecycle:
-                evaluated = _normalized_proof_subject(evaluated)
-                current = _normalized_proof_subject(current)
+            evaluated = _git_bytes(evaluated_head, evaluated_path)
+            current = _git_bytes(current_head, path)
         except subprocess.CalledProcessError:
             failures.append(f"proof supersession: unavailable subject {path}")
             continue
-        if (
-            hashlib.sha256(evaluated.encode()).digest()
-            != hashlib.sha256(current.encode()).digest()
+        if not _proof_subjects_match(
+            evaluated,
+            current,
+            normalize_legacy_lifecycle=normalize_legacy_lifecycle,
         ):
             failures.append(
                 f"proof supersession: behavior changed after evaluation: {path}"
@@ -748,7 +743,7 @@ def proof_evaluation_failures(
     *,
     check_supersession: bool = True,
 ) -> list[str]:
-    """Validate post-run expectations and one-head blind evaluation results."""
+    """Validate the current proof-quality exercise and its post-run expectations."""
     if not isinstance(cases, dict) or not isinstance(cases.get("cases"), list):
         return ["proof evaluation: invalid cases"]
     if not isinstance(expectations, dict) or not isinstance(

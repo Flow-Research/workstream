@@ -53,6 +53,8 @@ TRANSIENT_DECLARATION = re.compile(
     r"\s*(?:in review|pending|passing|passed|approved|ready(?: to merge)?)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+FENCE_OPEN = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>[^\r\n]*)$")
+FENCE_CLOSE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})[ \t]*$")
 
 
 class CommitrailError(RuntimeError):
@@ -80,6 +82,44 @@ def _read(root: Path, relative: str) -> str:
         return (root / relative).read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         raise CommitrailError(f"COMMITRAIL_UNREADABLE: {relative}") from exc
+
+
+def _masked_markdown_line(line: str) -> str:
+    return "".join(character if character in "\r\n" else " " for character in line)
+
+
+def _markdown_structure(text: str, source: str) -> str:
+    """Mask fenced content while preserving offsets used to slice source Markdown."""
+    masked: list[str] = []
+    fence_character: str | None = None
+    fence_length = 0
+    for line in text.splitlines(keepends=True):
+        candidate = line.rstrip("\r\n")
+        if fence_character is None:
+            opening = FENCE_OPEN.fullmatch(candidate)
+            if opening is None:
+                masked.append(line)
+                continue
+            fence = opening.group("fence")
+            if fence[0] == "`" and "`" in opening.group("info"):
+                raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_INVALID: {source}")
+            fence_character = fence[0]
+            fence_length = len(fence)
+            masked.append(_masked_markdown_line(line))
+            continue
+
+        masked.append(_masked_markdown_line(line))
+        closing = FENCE_CLOSE.fullmatch(candidate)
+        if closing is None:
+            continue
+        fence = closing.group("fence")
+        if fence[0] == fence_character and len(fence) >= fence_length:
+            fence_character = None
+            fence_length = 0
+
+    if fence_character is not None:
+        raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_UNCLOSED: {source}")
+    return "".join(masked)
 
 
 def _disposition(text: str, label: str) -> str:
@@ -137,11 +177,16 @@ def _tree_blob_map(output: str) -> dict[str, str]:
     return blobs
 
 
-def _required_section_body(text: str, heading: str, record_path: str) -> None:
-    match = re.search(rf"^{re.escape(heading)}\s*$", text, re.MULTILINE)
+def _required_section_body(
+    text: str,
+    structure: str,
+    heading: str,
+    record_path: str,
+) -> None:
+    match = re.search(rf"^{re.escape(heading)}[ \t]*$", structure, re.MULTILINE)
     if match is None:
         raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
-    next_heading = re.search(r"^##\s+", text[match.end() :], re.MULTILINE)
+    next_heading = re.search(r"^##\s+", structure[match.end() :], re.MULTILINE)
     end = match.end() + next_heading.start() if next_heading is not None else len(text)
     body = text[match.end() : end]
     substantive_lines = [
@@ -314,31 +359,36 @@ def validate(
 
     index_path = ".commitrail/INDEX.md"
     index = _read(root, index_path)
-    _validate_index_dispositions(index)
+    index_structure = _markdown_structure(index, index_path)
+    _validate_index_dispositions(index_structure)
     _validate_relocation_inventory(root, comparison_base_ref)
-    if TRANSIENT_DECLARATION.search(index):
+    if TRANSIENT_DECLARATION.search(index_structure):
         raise CommitrailError("COMMITRAIL_TRANSIENT_STATE: INDEX.md")
 
     overview_root = root / ".commitrail" / "initiatives"
     for overview_path in overview_root.glob("*/OVERVIEW.md"):
         relative = overview_path.relative_to(root).as_posix()
         overview = _read(root, relative)
-        if TRANSIENT_DECLARATION.search(overview):
+        overview_structure = _markdown_structure(overview, relative)
+        if TRANSIENT_DECLARATION.search(overview_structure):
             raise CommitrailError(f"COMMITRAIL_TRANSIENT_STATE: {relative}")
         initiative = overview_path.parent.name
-        disposition = _disposition(overview, "Disposition")
-        if _index_disposition(index, initiative) != disposition:
+        disposition = _disposition(overview_structure, "Disposition")
+        if _index_disposition(index_structure, initiative) != disposition:
             raise CommitrailError(f"COMMITRAIL_INDEX_OVERVIEW_MISMATCH: {initiative}")
 
     for record_path in records:
         match = RECORD_PATH.fullmatch(record_path)
         assert match is not None
         record = _read(root, record_path)
-        _disposition(record, "Durable disposition")
+        record_structure = _markdown_structure(record, record_path)
+        _disposition(record_structure, "Durable disposition")
         for heading in REQUIRED_HEADINGS:
-            _required_section_body(record, heading, record_path)
+            _required_section_body(record, record_structure, heading, record_path)
         outcome = re.search(
-            r"^- Intended merge outcome:[ \t]*(.*)$", record, re.MULTILINE
+            r"^- Intended merge outcome:[ \t]*(.*)$",
+            record_structure,
+            re.MULTILINE,
         )
         if outcome is None:
             raise CommitrailError(
@@ -349,11 +399,11 @@ def validate(
                 f"COMMITRAIL_FIELD_EMPTY: {record_path}: Intended merge outcome"
             )
         for marker in _template_markers(root):
-            if marker in record:
+            if marker in record_structure:
                 raise CommitrailError(
                     f"COMMITRAIL_TEMPLATE_MARKER: {record_path}: {marker}"
                 )
-        if TRANSIENT_DECLARATION.search(record):
+        if TRANSIENT_DECLARATION.search(record_structure):
             raise CommitrailError(f"COMMITRAIL_TRANSIENT_STATE: {record_path}")
         initiative = match.group("initiative")
         if not match.group("record").startswith(f"{initiative}-"):
@@ -361,7 +411,7 @@ def validate(
         overview = f".commitrail/initiatives/{initiative}/OVERVIEW.md"
         if not (root / overview).is_file():
             raise CommitrailError(f"COMMITRAIL_OVERVIEW_MISSING: {initiative}")
-        _index_disposition(index, initiative)
+        _index_disposition(index_structure, initiative)
 
 
 def main() -> int:

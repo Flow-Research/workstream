@@ -1,0 +1,137 @@
+"""Regression tests for fenced Markdown in current Commitrail structures."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts import check_commitrail_records as gate
+
+
+class CommitrailMarkdownStructureTests(unittest.TestCase):
+    RECORD_PATH = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self._write(
+            ".commitrail/CHANGE_TEMPLATE.md",
+            "# <Change ID> — <Outcome>\n\n- [ ] `<observable result>`\n",
+        )
+        self._write(
+            ".commitrail/INDEX.md",
+            "| Initiative | Durable disposition | Next |\n"
+            "|---|---|---|\n"
+            "| [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) "
+            "| Planned | Next |\n",
+        )
+        self._write(
+            ".commitrail/initiatives/WS-EXAMPLE-001/OVERVIEW.md",
+            "# Example\n\n- Disposition: Planned\n",
+        )
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def _write(self, path: str, text: str) -> None:
+        target = self.root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    @staticmethod
+    def _record(evidence: str = "Observed proof.") -> str:
+        return (
+            "# WS-EXAMPLE-001-01 — Example\n\n"
+            "- Durable disposition: Planned\n"
+            "- Intended merge outcome: Example is bounded.\n\n"
+            "## Intent\nSmall intent.\n\n"
+            "## Bounded change\nSmall scope.\n\n"
+            "## Acceptance criteria\n- [ ] Future behavior.\n\n"
+            "## Risk and review routing\n- Risk: L1.\n\n"
+            f"## Evidence\n{evidence}\n"
+        )
+
+    def _validate(self) -> None:
+        with patch.object(gate, "tracked_legacy_paths", return_value=[]):
+            gate.validate(
+                self.root,
+                ["backend/app/example.py", self.RECORD_PATH],
+            )
+
+    def test_fenced_overview_disposition_does_not_count(self) -> None:
+        self._write(
+            ".commitrail/initiatives/WS-EXAMPLE-001/OVERVIEW.md",
+            "# Example\n\n```markdown\n- Disposition: Planned\n```\n",
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "DISPOSITION_INVALID"):
+            self._validate()
+
+    def test_fenced_index_row_does_not_count(self) -> None:
+        self._write(
+            ".commitrail/INDEX.md",
+            "| Initiative | Durable disposition | Next |\n"
+            "|---|---|---|\n"
+            "   ~~~~markdown\n"
+            "| [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) "
+            "| Planned | Next |\n"
+            "   ~~~~\n",
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "INDEX_ROW_INVALID"):
+            self._validate()
+
+    def test_fenced_merge_outcome_does_not_count(self) -> None:
+        record = self._record().replace(
+            "- Intended merge outcome: Example is bounded.\n",
+            "```markdown\n- Intended merge outcome: Impersonated.\n```\n",
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_fenced_required_headings_do_not_count(self) -> None:
+        record = (
+            "# WS-EXAMPLE-001-01 — Example\n\n"
+            "- Durable disposition: Planned\n"
+            "- Intended merge outcome: Example is bounded.\n\n"
+            "```markdown\n"
+            "## Intent\nFake.\n"
+            "## Bounded change\nFake.\n"
+            "## Acceptance criteria\nFake.\n"
+            "## Risk and review routing\nFake.\n"
+            "## Evidence\nFake.\n"
+            "```\n"
+        )
+        self._write(self.RECORD_PATH, record)
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_real_evidence_section_accepts_fenced_command_content(self) -> None:
+        evidence = (
+            "```bash\n"
+            "python3 -m unittest scripts.test_example\n"
+            "## Intent\n"
+            "- Intended merge outcome: This is command output, not structure.\n"
+            "- CI: pending\n"
+            "`<observable result>`\n"
+            "````"
+        )
+        self._write(self.RECORD_PATH, self._record(evidence))
+        self._validate()
+
+    def test_shorter_closing_fence_fails_closed(self) -> None:
+        evidence = "````text\ncommand\n```"
+        self._write(self.RECORD_PATH, self._record(evidence))
+        with self.assertRaisesRegex(gate.CommitrailError, "FENCE_UNCLOSED"):
+            self._validate()
+
+    def test_invalid_backtick_fence_info_fails_closed(self) -> None:
+        evidence = "```text`malformed\ncommand\n```"
+        self._write(self.RECORD_PATH, self._record(evidence))
+        with self.assertRaisesRegex(gate.CommitrailError, "FENCE_INVALID"):
+            self._validate()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -260,7 +260,7 @@
         "source_target": {"$ref": "#/$defs/sha"},
         "blocks_pr": {"type": "boolean"},
         "disposition": {"enum": ["unresolved", "fixed", "accepted_risk", "deferred_with_owner", "not_valid"]},
-        "verification": {"type": "string"},
+        "verification": {"type": "string", "minLength": 1, "pattern": "\\S"},
         "failure_pattern_ids": {
           "type": "array",
           "uniqueItems": true,
