@@ -25,6 +25,20 @@ host setup is supported only on the Linux/glibc/Python matrix documented there.
 Do not replace the approved Pillow artifacts to make an unsupported host install
 pass.
 
+Repository engineering checks use a separate, hash-pinned tooling environment,
+not the backend environment. From the repository root on supported Linux (or
+inside the Linux development container), install it with:
+
+```bash
+uv venv .venv --python python3
+uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: \
+  -r .github/requirements/agent-gates.txt
+```
+
+The root `.venv/` is ignored and separate from `backend/.venv/`. If you already
+use that path for another environment, choose another unused path and use its
+Python consistently below.
+
 For an obvious low-risk correction, record intent and scope in the pull
 request. A meaningful implementation change uses one record based on
 `.commitrail/CHANGE_TEMPLATE.md`. Multi-PR work also uses one concise initiative
@@ -88,7 +102,7 @@ Commit/freeze the candidate, then run the same atomic check locally before
 pushing. Its base-to-HEAD comparison does not validate uncommitted edits:
 
 ```bash
-python3 scripts/check_commitrail_records.py --base-ref origin/main
+.venv/bin/python scripts/check_commitrail_records.py --base-ref origin/main
 ```
 
 Security, authorization, payments, workflow, architecture, and other high-risk

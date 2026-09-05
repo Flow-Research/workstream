@@ -95,6 +95,7 @@ def _markdown_views(text: str, source: str) -> tuple[str, str]:
     lines = text.splitlines(keepends=True)
     masked = [_masked_markdown_line(line) for line in lines]
     visible = masked.copy()
+    html_lines: set[int] = set()
     tokens = MarkdownIt("commonmark").enable("table").parse(text)
     table_rows = {
         token.map[0] for token in tokens if token.type == "tr_open" and token.map
@@ -116,8 +117,16 @@ def _markdown_views(text: str, source: str) -> tuple[str, str]:
                     raise CommitrailError(
                         f"COMMITRAIL_MARKDOWN_FENCE_INVALID: {source}"
                     )
+            children = token.children or []
+            if any(child.type == "html_inline" for child in children):
+                html_lines.update(range(start, end))
             masked[start:end] = lines[start:end]
-            visible[start:end] = lines[start:end]
+            if any(
+                child.type == "image"
+                or (child.type in {"text", "code_inline"} and child.content.strip())
+                for child in children
+            ):
+                visible[start:end] = lines[start:end]
             for index in range(start, end):
                 if lines[index].startswith("|") and index not in table_rows:
                     masked[index] = _masked_markdown_line(lines[index])
@@ -133,6 +142,10 @@ def _markdown_views(text: str, source: str) -> tuple[str, str]:
             ):
                 raise CommitrailError(f"COMMITRAIL_MARKDOWN_FENCE_UNCLOSED: {source}")
             visible[start + 1 : end - 1] = lines[start + 1 : end - 1]
+    # Multiple inline table cells share a source line. No later cell may
+    # restore authoritative structure supplied by an HTML-bearing cell.
+    for index in html_lines:
+        masked[index] = _masked_markdown_line(lines[index])
     return "".join(masked), "".join(visible)
 
 

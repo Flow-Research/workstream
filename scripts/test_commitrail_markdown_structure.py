@@ -289,6 +289,35 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.CommitrailError, "INDEX_ROW_INVALID"):
             self._validate()
 
+    def test_inline_html_only_is_not_substantive_evidence(self) -> None:
+        for evidence in ("<span><!-- hidden evidence --></span>", "<x-empty></x-empty>"):
+            with self.subTest(evidence=evidence):
+                self._write(self.RECORD_PATH, self._record(evidence))
+                with self.assertRaisesRegex(gate.CommitrailError, "FIELD_EMPTY"):
+                    self._validate()
+
+    def test_visible_text_inside_inline_html_is_substantive_evidence(self) -> None:
+        self._write(self.RECORD_PATH, self._record("<span>Visible evidence.</span>"))
+        self._validate()
+
+    def test_inline_html_cannot_supply_merge_outcome(self) -> None:
+        self._write(
+            self.RECORD_PATH,
+            self._record().replace("Example is bounded.", "<x-empty></x-empty>"),
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
+            self._validate()
+
+    def test_inline_html_cannot_supply_index_identity(self) -> None:
+        self._write(
+            ".commitrail/INDEX.md",
+            "| Initiative | Durable disposition | Next |\n|---|---|---|\n"
+            "| actual <!-- [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) --> "
+            "| Planned | Next |\n",
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "INDEX_ROW_INVALID"):
+            self._validate()
+
     def test_shorter_closing_fence_fails_closed(self) -> None:
         evidence = "````text\ncommand\n```"
         self._write(self.RECORD_PATH, self._record(evidence))
