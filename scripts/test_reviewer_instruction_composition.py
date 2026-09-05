@@ -15,6 +15,8 @@ from scripts.reviewer_contracts import (
     CODEX_CONFIG_PATH,
     MATRIX_PATH,
     PROOF_CASES_PATH,
+    PROOF_EXPECTATIONS_PATH,
+    PROOF_RESULTS_PATH,
     PROOF_PATTERNS_PATH,
     PROOF_QUALITY_SHARED_REQUIREMENTS,
     PROOF_QUALITY_STATE_REQUIREMENTS,
@@ -30,6 +32,7 @@ from scripts.reviewer_contracts import (
     contract_failures,
     _proof_subjects_match,
     proof_supersession_failures,
+    proof_evaluation_failures,
 )
 
 
@@ -44,6 +47,29 @@ def remove_contract_token(path: Path, token: str) -> str:
 
 
 class ReviewerInstructionCompositionTests(unittest.TestCase):
+    def test_handoff_taxonomy_accepts_only_source_supported_alternatives(self) -> None:
+        cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
+        expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
+        baseline = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
+        for patterns, accepted in (
+            (["PQ-004"], True),
+            (["PQ-007"], True),
+            ([], False),
+            (["PQ-001"], False),
+        ):
+            with self.subTest(patterns=patterns):
+                results = copy.deepcopy(baseline)
+                row = next(
+                    row
+                    for row in results["results"]
+                    if row["case_id"] == "pq-product-partial-owner-handoff"
+                )
+                row["failure_pattern_ids"] = patterns
+                failures = proof_evaluation_failures(
+                    cases, expectations, results, check_supersession=False
+                )
+                self.assertEqual(not failures, accepted, failures)
+
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
@@ -309,9 +335,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             with self.subTest(field=field):
                 mutated = copy.deepcopy(parsed)
                 mutated["cases"][0][field] += " Material mutation."
-                self.assertEqual(
-                    [row["id"] for row in mutated["cases"]], original_ids
-                )
+                self.assertEqual([row["id"] for row in mutated["cases"]], original_ids)
                 mutated_bytes = json.dumps(mutated, indent=2).encode() + b"\n"
                 self.assertFalse(
                     _proof_subjects_match(

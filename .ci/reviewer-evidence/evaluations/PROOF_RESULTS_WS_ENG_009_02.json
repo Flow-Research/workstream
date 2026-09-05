@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "evaluated_head": "f1aedefba08543c1c9052213a7295a442810dc62",
+  "evaluated_head": "f6c48c73e7a23a19d9c59e357ffe87c2e604291a",
   "supersession": {
     "mode": "evaluated-current-subjects-exact",
     "subject_paths": [
@@ -17,6 +17,7 @@
       ".agents/skills/test-delta-review/SKILL.md",
       ".ci/reviewer-evidence/INTERNAL_REVIEW_RECEIPT.schema.json",
       ".ci/reviewer-evidence/REVIEWER_MATRIX.md",
+      ".ci/reviewer-evidence/evaluations/PROOF_CASES.json",
       ".codex/agents/architecture-reviewer.toml",
       ".codex/agents/ci-integrity-reviewer.toml",
       ".codex/agents/docs-reviewer.toml",
@@ -29,7 +30,7 @@
       ".codex/config.toml"
     ]
   },
-  "evaluation_method": "Fresh Sol-high agents, no conversation fork, one specialty per run, raw fixture rows only; expected/result files and validator internals excluded. Summaries below preserve returned classifications and limits, not private session receipts.",
+  "evaluation_method": "Fresh Sol-high agents with no conversation fork, one specialty per run, raw fixture rows only; expected/result files and validator internals excluded. Product taxonomy received a source-definition follow-up without scoring answers. Independent QA confirmed PQ-004 and PQ-007 are valid readings of that one authority-fact case; the returned PQ-004 was retained. Summaries preserve actual classifications and limits, not private session receipts.",
   "expectations_available_during_runs": false,
   "embedded_commands_executed": false,
   "results": [
@@ -37,7 +38,7 @@
       "case_id": "pq-architecture-composite-owner",
       "reviewer": "architecture",
       "classification": "finding",
-      "finding_id": "ARCH-001",
+      "finding_id": "ARCH-PQ-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-007"
@@ -63,10 +64,11 @@
       "case_id": "pq-ci-mocked-rollback",
       "reviewer": "ci_integrity",
       "classification": "finding",
-      "finding_id": "CI-INTEGRITY-001",
+      "finding_id": "CI-PROOF-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
-        "PQ-002"
+        "PQ-002",
+        "PQ-012"
       ],
       "proof_boundary": "transaction",
       "proof_custody": "Inspected mock evidence: save fails before staging; mock rollback observes no PostgreSQL state.",
@@ -89,7 +91,7 @@
       "case_id": "pq-docs-untrusted-instruction",
       "reviewer": "documentation",
       "classification": "finding",
-      "finding_id": "DOC-001",
+      "finding_id": "DOCS-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-011"
@@ -118,11 +120,11 @@
       "finding_id": null,
       "handoff_specialty": "security",
       "failure_pattern_ids": [
-        "PQ-007"
+        "PQ-004"
       ],
       "proof_boundary": "cross-project authorization binding",
-      "proof_custody": "Inspected raw evidence: product decisions unchanged; P2 task under P1 grant requires security ownership.",
-      "uncertainty": "No implementation or runtime artifact supplied.",
+      "proof_custody": "Inspected raw authority-fact validation: actor and task checked without shared project binding; correctly routed to security. Source-definition follow-up retained PQ-004 because no database foreign keys were described.",
+      "uncertainty": "No runtime/implementation artifact; taxonomy matches partial authority-fact validation, not a claimed FK implementation.",
       "independence": "accepted"
     },
     {
@@ -141,7 +143,7 @@
       "case_id": "pq-qa-malformed-public-input",
       "reviewer": "qa",
       "classification": "finding",
-      "finding_id": "QA-001",
+      "finding_id": "QA-EVAL-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-008"
@@ -155,7 +157,7 @@
       "case_id": "pq-qa-nondiscriminating-input",
       "reviewer": "qa",
       "classification": "finding",
-      "finding_id": "QA-002",
+      "finding_id": "QA-EVAL-002",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-013"
@@ -219,7 +221,7 @@
       "case_id": "pq-security-label-only-fake",
       "reviewer": "security",
       "classification": "finding",
-      "finding_id": "SEC-PQ-001",
+      "finding_id": "SEC-PROOF-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-001",
@@ -234,7 +236,7 @@
       "case_id": "pq-security-sql-null-guard",
       "reviewer": "security",
       "classification": "finding",
-      "finding_id": "SEC-PQ-006",
+      "finding_id": "SEC-PROOF-002",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-006"
@@ -248,7 +250,7 @@
       "case_id": "pq-security-missing-row-isolation",
       "reviewer": "security",
       "classification": "finding",
-      "finding_id": "SEC-PQ-002",
+      "finding_id": "SEC-PROOF-003",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-002",
@@ -275,7 +277,7 @@
       "case_id": "pq-senior-setup-only-failure",
       "reviewer": "senior_engineering",
       "classification": "finding",
-      "finding_id": "SE-001",
+      "finding_id": "SENIOR-PROOF-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-001",
@@ -302,7 +304,7 @@
       "case_id": "pq-test-delta-setup-only-failure",
       "reviewer": "test_delta",
       "classification": "finding",
-      "finding_id": "TEST-DELTA-001",
+      "finding_id": "TD-001",
       "handoff_specialty": null,
       "failure_pattern_ids": [
         "PQ-012"

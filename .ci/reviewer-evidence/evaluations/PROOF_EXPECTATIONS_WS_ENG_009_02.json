@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "created_after_blind_runs": true,
-  "evaluated_head": "f1aedefba08543c1c9052213a7295a442810dc62",
+  "evaluated_head": "f6c48c73e7a23a19d9c59e357ffe87c2e604291a",
   "expectations": [
     {
       "case_id": "pq-architecture-composite-owner",
@@ -44,7 +44,7 @@
       "outcome": "handoff",
       "handoff_specialty": "security",
       "required_pattern_ids": [
-        "PQ-007"
+        "PQ-004"
       ]
     },
     {

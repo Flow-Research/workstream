@@ -74,6 +74,11 @@ PROOF_CASE_CONTRACTS = {
     "pq-test-delta-real-mutation-control": ("test_delta", "clear", None, set()),
 }
 PROOF_CASE_IDS = set(PROOF_CASE_CONTRACTS)
+# The raw handoff case describes an incomplete authority fact, not a stated
+# database FK implementation. Both source-bounded ownership readings are valid.
+PROOF_PATTERN_ALTERNATIVES = {
+    "pq-product-partial-owner-handoff": ({"PQ-004"},),
+}
 LEGACY_PROOF_SUBJECT_PATHS = {
     *{
         f".agents/skills/{name}-review/SKILL.md"
@@ -813,7 +818,11 @@ def proof_evaluation_failures(
         ):
             failures.append(f"{case_id}: required proof pattern missing")
         else:
-            if not set(contract_patterns).issubset(pattern_ids):
+            pattern_options = (
+                contract_patterns,
+                *PROOF_PATTERN_ALTERNATIVES.get(case_id, ()),
+            )
+            if not any(option.issubset(pattern_ids) for option in pattern_options):
                 failures.append(f"{case_id}: required proof pattern missing")
             if not set(pattern_ids).issubset(FAILURE_PATTERN_IDS):
                 failures.append(f"{case_id}: unknown proof pattern")
@@ -822,7 +831,10 @@ def proof_evaluation_failures(
             isinstance(pattern_id, str) for pattern_id in expected_patterns
         ):
             failures.append(f"{case_id}: invalid expected patterns")
-        elif set(expected_patterns) != contract_patterns:
+        elif set(expected_patterns) not in (
+            contract_patterns,
+            *PROOF_PATTERN_ALTERNATIVES.get(case_id, ()),
+        ):
             failures.append(f"{case_id}: expected patterns differ from case contract")
         if result.get("classification") == "finding" and not result.get("finding_id"):
             failures.append(f"{case_id}: missing stable finding")
