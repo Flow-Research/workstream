@@ -7,7 +7,8 @@
 - First bounded change: [01 — first proof cleanup](WS-QUAL-003-01.md).
 - PROJECT slice: [02 — readiness and retired-route proof](WS-QUAL-003-02.md).
 - PROJECT custody slice: [03 — fixtures and locked-context transactions](WS-QUAL-003-03.md).
-- Next usable boundary after 03: continue PROJECT guide/bundle fixture
+- CI slice: [04 — rebalance seven hosted workers](WS-QUAL-003-04.md).
+- Next usable boundary after 04: continue PROJECT guide/bundle fixture
   decomposition and remaining behavior audit, then AUTH.
   The full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
