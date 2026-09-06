@@ -27,6 +27,9 @@ Allowed files:
   relocate catalogue/partition proof into a file below 500 lines, update exact
   owner expectations and add workflow/artifact parity and partition rejection
   cases. Existing runner/isolation assertions remain intact.
+- `scripts/test_lightweight_agent_gates.py`: reconcile its exact lane-label
+  assertions with the seven-worker topology, preserving all required fan-in,
+  coverage, cancellation, MinIO and gate integrity assertions.
 - `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`: reconcile moved spans only;
   no new debt or exemptions.
 - `.ci/behavior-ownership/partition.v1.json` and
@@ -109,6 +112,8 @@ GitHub Actions. Use a deliberate wrong-owner mutation to prove partition checks
 fail; inspect existing missing-bundle and omitted-node negative tests for final
 aggregation discrimination. Final exact-head checks/reviewer freshness and timing
 artifacts belong in the PR summary, not a transient repository work queue.
+Also run the root lightweight Agent Gates regression suite, including
+`test_backend_uses_distributed_semantic_lanes_and_stable_fan_in`.
 
 Plan review CI-PLAN-01/02/03 found the missing exact ownership registration,
 direct-file import proof and ambiguous paths. This scope includes those narrow
@@ -128,3 +133,10 @@ comparison survives module-count validation but fails the new manifest rejection
 test at `DID NOT RAISE`, proving the intended guard rather than fixture failure.
 This is pure tooling evidence; hosted execution still owns real PostgreSQL,
 coverage, complete node reconciliation and timing comparisons.
+
+Implementation review CI04-ROOT-01 and hosted Agent Gates caught the root
+lightweight test's stale three-schema labels. The same failure was reproduced
+locally at its exact assertion. The reviewed scope correction includes that
+consumer; its assertions now name all seven lanes. No fan-in or coverage guard
+was removed. This was a missed consumer in discovery, not an infrastructure
+outage or a reason to bypass the gate.
