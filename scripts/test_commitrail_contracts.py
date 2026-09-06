@@ -37,11 +37,13 @@ class CommitrailContractTests(unittest.TestCase):
         self.temp.cleanup()
 
     def _write(self, path: str, text: str) -> None:
+        """Write text to a file relative to the test root directory."""
         target = self.root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
 
     def _record(self, disposition: str = "Complete") -> str:
+        """Generate a minimal valid Commitrail record for testing."""
         return (
             "# WS-EXAMPLE-001-01 — Example\n\n"
             f"- Durable disposition: {disposition}\n"
@@ -56,6 +58,7 @@ class CommitrailContractTests(unittest.TestCase):
         *,
         comparison_base_ref: str | None = None,
     ) -> None:
+        """Run Commitrail validation with mocked legacy paths."""
         with patch.object(gate, "tracked_legacy_paths", return_value=[]):
             gate.validate(
                 self.root,
@@ -88,6 +91,7 @@ class CommitrailContractTests(unittest.TestCase):
             self._validate(["backend/app/example.py", path])
 
     def test_empty_required_sections_fail(self) -> None:
+        """Verify that required sections with no content are rejected."""
         path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
         for heading in gate.REQUIRED_HEADINGS:
             with self.subTest(heading=heading):
@@ -97,6 +101,7 @@ class CommitrailContractTests(unittest.TestCase):
                     self._validate(["backend/app/example.py", path])
 
     def test_empty_intended_merge_outcome_fails(self) -> None:
+        """Verify that an empty intended merge outcome field is rejected."""
         path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
         self._write(
             path,
@@ -109,6 +114,7 @@ class CommitrailContractTests(unittest.TestCase):
             self._validate(["backend/app/example.py", path])
 
     def test_untouched_template_marker_fails(self) -> None:
+        """Verify that unsubstituted template markers are rejected."""
         path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
         self._write(
             path,
@@ -121,6 +127,7 @@ class CommitrailContractTests(unittest.TestCase):
             self._validate(["backend/app/example.py", path])
 
     def test_concise_and_planned_record_content_remains_valid(self) -> None:
+        """Verify that template markers in planned future content are allowed."""
         path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
         record = self._record().replace(
             "## Acceptance criteria\nX",
@@ -258,6 +265,7 @@ class CommitrailContractTests(unittest.TestCase):
             self._validate([])
 
     def _write_snapshot_contract(self) -> None:
+        """Create a minimal pre-cutover manifest and archive snapshot."""
         self._write(
             ".commitrail/initiatives/WS-ENG-009/RELOCATION_INVENTORY.md",
             "# Inventory\n\nBase: `0000000000000000000000000000000000000000`.\n\n"
@@ -276,6 +284,7 @@ class CommitrailContractTests(unittest.TestCase):
 
     @staticmethod
     def _snapshot_git(command: list[str], **_: object) -> str:
+        """Mock git commands for pre-cutover manifest tests."""
         if "ls-tree" in command:
             return (
                 "100644 blob 1111111111111111111111111111111111111111\t"
@@ -359,6 +368,7 @@ class CommitrailContractTests(unittest.TestCase):
         )
 
     def test_pre_cutover_manifest_rejects_non_regular_index_mode(self) -> None:
+        """Verify that executable files are rejected as pre-cutover destinations."""
         self._write_snapshot_contract()
 
         def executable_mode(command: list[str], **kwargs: object) -> str:

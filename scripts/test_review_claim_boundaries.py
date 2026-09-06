@@ -19,6 +19,7 @@ SHA = "a" * 40
 
 
 def valid_receipt() -> dict[str, object]:
+    """Generate a minimal valid review receipt for testing."""
     return {
         "schema_version": 3,
         "custody": "advisory_session",
@@ -77,6 +78,7 @@ def valid_receipt() -> dict[str, object]:
 def finding(
     severity: str, disposition: str, *, blocks_pr: bool = False
 ) -> dict[str, object]:
+    """Generate a finding object for review receipt testing."""
     return {
         "id": f"{severity.upper()}-{disposition}",
         "severity": severity,
@@ -91,6 +93,7 @@ def finding(
 
 class ReviewClaimBoundaryTests(unittest.TestCase):
     def test_fixed_or_not_valid_findings_require_nonblank_verification(self) -> None:
+        """Verify that fixed or not-valid findings require a verification statement."""
         for severity in ("Critical", "High", "Medium"):
             for disposition in ("fixed", "not_valid"):
                 for verification in ("", " ", "\n\t"):
@@ -114,15 +117,18 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
         cls.validator = jsonschema.Draft202012Validator(cls.schema)
 
     def assert_schema_valid(self, receipt: dict[str, object]) -> None:
+        """Assert that a receipt passes JSON schema validation."""
         self.validator.validate(receipt)
 
     def assert_schema_invalid(self, receipt: dict[str, object]) -> None:
+        """Assert that a receipt fails JSON schema validation."""
         with self.assertRaises(jsonschema.ValidationError):
             self.validator.validate(receipt)
 
     def inspected_receipt(
         self, boundary: str, observation: str
     ) -> dict[str, object]:
+        """Generate a receipt with inspection-based proof custody."""
         receipt = valid_receipt()
         receipt["traceability"][0].update(
             claimed_boundary=boundary,
@@ -134,11 +140,13 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
         return receipt
 
     def test_plan_contract_inspection_is_compatible(self) -> None:
+        """Verify that plan contract inspection proof is accepted as compatible."""
         receipt = self.inspected_receipt("plan_contract", "contract_counterexample")
         self.assert_schema_valid(receipt)
         self.assertEqual(receipt_failures(receipt, "architecture", SHA), [])
 
     def test_document_consistency_inspection_is_compatible(self) -> None:
+        """Verify that document consistency inspection proof is accepted as compatible."""
         receipt = self.inspected_receipt(
             "document_consistency", "source_comparison"
         )
@@ -146,6 +154,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
         self.assertEqual(receipt_failures(receipt, "architecture", SHA), [])
 
     def test_inspection_claim_requires_its_concrete_observation(self) -> None:
+        """Verify that inspection proof requires boundary-specific observations."""
         mismatches = (
             ("plan_contract", "source_comparison"),
             ("document_consistency", "contract_counterexample"),
@@ -160,6 +169,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                 )
 
     def test_inspection_proof_cannot_launder_a_runtime_claim(self) -> None:
+        """Verify that inspection proof cannot satisfy runtime boundary claims."""
         runtime_boundaries = (
             "pure",
             "service",
@@ -180,6 +190,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                 )
 
     def test_existing_runtime_custody_remains_executed_and_compatible(self) -> None:
+        """Verify that runtime boundaries accept executed proof with required observations."""
         runtime_contracts = {
             "pure": ("pure", ["pure_result"]),
             "service": ("service", ["service_orchestration"]),
@@ -208,6 +219,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                 self.assertEqual(receipt_failures(receipt, "architecture", SHA), [])
 
     def test_unresolved_material_finding_blocks_every_passing_verdict(self) -> None:
+        """Verify that unresolved material findings prevent passing verdicts."""
         for verdict in PASSING_VERDICTS:
             for severity in ("Critical", "High", "Medium"):
                 with self.subTest(verdict=verdict, severity=severity):
@@ -217,6 +229,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                     self.assert_schema_invalid(receipt)
 
     def test_critical_or_high_risk_cannot_be_accepted_or_deferred_for_pass(self) -> None:
+        """Verify that critical or high findings cannot be accepted or deferred for PASS."""
         for verdict in PASSING_VERDICTS:
             for severity in ("Critical", "High"):
                 for disposition in ("accepted_risk", "deferred_with_owner"):
@@ -231,6 +244,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                         self.assert_schema_invalid(receipt)
 
     def test_critical_or_high_finding_must_be_fixed_or_not_valid_for_pass(self) -> None:
+        """Verify that critical or high findings must be fixed or not-valid for PASS."""
         for severity in ("Critical", "High"):
             for disposition in ("fixed", "not_valid"):
                 with self.subTest(severity=severity, disposition=disposition):
@@ -239,6 +253,7 @@ class ReviewClaimBoundaryTests(unittest.TestCase):
                     self.assert_schema_valid(receipt)
 
     def test_medium_accepted_or_deferred_and_low_unresolved_remain_passable(self) -> None:
+        """Verify that medium accepted/deferred and low unresolved findings allow PASS."""
         allowed = (
             finding("Medium", "accepted_risk"),
             finding("Medium", "deferred_with_owner"),

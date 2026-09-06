@@ -87,6 +87,7 @@ def _read(root: Path, relative: str) -> str:
 
 
 def _masked_markdown_line(line: str) -> str:
+    """Replace all non-newline characters with spaces to preserve offsets."""
     return "".join(character if character in "\r\n" else " " for character in line)
 
 
@@ -192,6 +193,7 @@ def _validate_index_dispositions(index: str) -> None:
 
 
 def _tree_blob_map(output: str) -> dict[str, str]:
+    """Parse git ls-tree output into a mapping of paths to blob SHAs."""
     blobs: dict[str, str] = {}
     for line in output.splitlines():
         try:
@@ -215,6 +217,7 @@ def _required_section_body(
     heading: str,
     record_path: str,
 ) -> None:
+    """Validate that a required section heading has non-empty visible content."""
     match = re.search(rf"^{re.escape(heading)}[ \t]*$", structure, re.MULTILINE)
     if match is None:
         raise CommitrailError(f"COMMITRAIL_FIELD_MISSING: {record_path}: {heading}")
@@ -231,6 +234,7 @@ def _required_section_body(
 
 
 def _template_markers(root: Path) -> tuple[str, ...]:
+    """Extract all placeholder markers from the change template for validation."""
     template = _read(root, CHANGE_TEMPLATE_PATH)
     first_line = template.splitlines()[0] if template.splitlines() else ""
     markers = set(re.findall(r"`(<[^`\n]+>)`", template))

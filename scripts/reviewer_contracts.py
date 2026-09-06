@@ -323,6 +323,7 @@ MATRIX_ROW = re.compile(
 
 
 def load_json(path: Path) -> dict[str, object]:
+    """Load and parse a JSON file from the given path."""
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -384,6 +385,7 @@ REVIEWERS = matrix_reviewers(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
 def contract_failures(root: Path = ROOT) -> list[str]:
+    """Validate all reviewer contract requirements and return any failures."""
     failures: list[str] = []
     for relative_path, token in TRUST_WORKFLOW_REQUIREMENTS.items():
         workflow_path = root / relative_path
@@ -517,6 +519,7 @@ def fixture_failures(
     expectations: dict[str, object] | None,
     canonical_ids: set[str] | None = None,
 ) -> list[str]:
+    """Validate evaluation fixtures for completeness and correctness."""
     failures: list[str] = []
     canonical_ids = set(REVIEWERS) if canonical_ids is None else canonical_ids
     rows = cases.get("cases")
@@ -653,6 +656,7 @@ def proof_fixture_failures(
 
 
 def _git_bytes(revision: str, path: str) -> bytes:
+    """Retrieve the raw bytes of a file at a specific Git revision."""
     return subprocess.run(
         ["git", "show", f"{revision}:{path}"],
         cwd=ROOT,
@@ -662,6 +666,7 @@ def _git_bytes(revision: str, path: str) -> bytes:
 
 
 def _normalized_proof_subject(text: str) -> str:
+    """Normalize lifecycle text variations for historical comparison."""
     patterns = (
         r"These obligations\s+remain\s+candidates\s+until\s+blind\s+evaluation\s+in\s+`WS-CI-005-03`\.",
         r"These obligations\s+are\s+adopted\s+through\s+the\s+blind\s+evaluation\s+recorded\s+by\s+`WS-CI-005-03`\.",
@@ -914,6 +919,7 @@ def proof_evaluation_failures(
 def receipt_failures(
     receipt: object, reviewer: object, evaluated_head: object
 ) -> list[str]:
+    """Validate a review receipt against schema and proof compatibility rules."""
     if not isinstance(receipt, dict):
         return ["output: missing protocol receipt"]
     try:
@@ -966,6 +972,7 @@ def receipt_failures(
 def output_failures(
     output: object, expectation: dict[str, object], receipt: object | None = None
 ) -> list[str]:
+    """Validate evaluation output against expectations and receipt contracts."""
     if not isinstance(output, dict):
         return ["output: expected an object"]
     failures: list[str] = []
@@ -1066,6 +1073,7 @@ def output_set_failures(
 
 
 def print_failures(failures: list[str]) -> int:
+    """Print validation failures to stderr and return exit code."""
     if failures:
         for failure in failures:
             print(failure, file=sys.stderr)
@@ -1075,6 +1083,7 @@ def print_failures(failures: list[str]) -> int:
 
 
 def _main(argv: list[str] | None = None) -> int:
+    """Execute the reviewer contract validator with parsed arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("validate-fixtures")

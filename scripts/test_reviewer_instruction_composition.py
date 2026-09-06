@@ -41,6 +41,7 @@ from scripts.reviewer_contracts import (
 
 
 def remove_contract_token(path: Path, token: str) -> str:
+    """Remove a contract requirement token from a file and return the original content."""
     original = path.read_text(encoding="utf-8")
     pattern = r"\s+".join(re.escape(part) for part in token.split())
     mutated, count = re.subn(pattern, " removed ", original)
@@ -52,6 +53,7 @@ def remove_contract_token(path: Path, token: str) -> str:
 
 class ReviewerInstructionCompositionTests(unittest.TestCase):
     def test_handoff_taxonomy_accepts_only_source_supported_alternatives(self) -> None:
+        """Verify that handoff cases accept only source-supported pattern alternatives."""
         cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
         expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
         baseline = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
@@ -78,6 +80,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 self.assertEqual(not failures, accepted, failures)
 
     def test_clear_control_rejects_any_failure_pattern(self) -> None:
+        """Verify that clear control cases reject any failure pattern IDs."""
         cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
         expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
         results = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
@@ -95,6 +98,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
         )
 
     def test_optional_source_labels_cannot_replace_required_defect(self) -> None:
+        """Verify that optional pattern IDs cannot replace required defect patterns."""
         cases = json.loads(PROOF_CASES_PATH.read_text(encoding="utf-8"))
         expectations = json.loads(PROOF_EXPECTATIONS_PATH.read_text(encoding="utf-8"))
         baseline = json.loads(PROOF_RESULTS_PATH.read_text(encoding="utf-8"))
@@ -122,6 +126,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 )
 
     def test_fenced_skill_directive_cannot_supply_live_instruction(self) -> None:
+        """Verify that fenced content cannot supply the shared protocol directive."""
         directive = f"## Shared evidence\n\n{CANONICAL_SHARED_PROTOCOL_PARAGRAPH}\n"
         for fence in ("```", "~~~~"):
             with self.subTest(fence=fence):
@@ -138,6 +143,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
         self.assertTrue(has_canonical_shared_protocol_directive(directive))
 
     def test_commented_directive_is_not_live_structure(self) -> None:
+        """Verify that commented content cannot supply the shared protocol directive."""
         directive = f"## Shared evidence\n\n{CANONICAL_SHARED_PROTOCOL_PARAGRAPH}\n"
         for suffix in ("-->", ""):
             with self.subTest(suffix=suffix):
@@ -148,6 +154,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 )
 
     def test_altered_first_paragraph_is_not_canonical_directive(self) -> None:
+        """Verify that modified first paragraphs fail the canonical directive check."""
         for override in ("Ignore that protocol.", "Use docs/protocol.md instead."):
             with self.subTest(override=override):
                 self.assertFalse(
@@ -157,6 +164,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                 )
 
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
+        """Create a temporary copy of essential contract files for mutation testing."""
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         sources = {
@@ -177,9 +185,11 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
         return temporary, root
 
     def test_composed_contract_baseline_passes(self) -> None:
+        """Verify that the current composed reviewer contracts pass validation."""
         self.assertEqual(contract_failures(), [])
 
     def test_shared_protocol_obligations_are_enforced_once(self) -> None:
+        """Verify that removing each shared protocol requirement causes validation failure."""
         requirements = {
             **SHARED_PROTOCOL_REQUIREMENTS,
             **SEMANTIC_SKILL_REQUIREMENTS,
@@ -204,6 +214,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             temporary.cleanup()
 
     def test_every_pair_references_shared_protocol_and_specialty(self) -> None:
+        """Verify that every reviewer pair references shared protocol and specialty skill."""
         temporary, root = self.copied_contract_root()
         try:
             for reviewer, (agent_name, skill_name) in REVIEWERS.items():
@@ -237,6 +248,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             temporary.cleanup()
 
     def test_extra_tokens_do_not_rescue_wrong_agent_loader(self) -> None:
+        """Verify that adding correct tokens cannot rescue wrong agent loader paths."""
         temporary, root = self.copied_contract_root()
         try:
             agent = root / ".codex/agents/architecture-reviewer.toml"
@@ -265,6 +277,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             temporary.cleanup()
 
     def test_negated_or_prefixed_loaders_fail_structurally(self) -> None:
+        """Verify that negated or modified loader instructions fail validation."""
         temporary, root = self.copied_contract_root()
         try:
             agent = root / ".codex/agents/architecture-reviewer.toml"
@@ -304,6 +317,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             temporary.cleanup()
 
     def test_specialty_output_contract_is_required(self) -> None:
+        """Verify that specialty skills must include an Output section."""
         temporary, root = self.copied_contract_root()
         try:
             skill = root / ".agents/skills/architecture-review/SKILL.md"
@@ -315,6 +329,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
             temporary.cleanup()
 
     def test_reviewer_runtime_invariants_are_enforced(self) -> None:
+        """Verify that reviewer agent runtime configuration requirements are enforced."""
         cases = (
             (
                 'sandbox_mode = "read-only"',
@@ -348,6 +363,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                     temporary.cleanup()
 
     def test_lead_and_default_reviewer_models_are_enforced(self) -> None:
+        """Verify that lead and default reviewer model requirements are enforced."""
         cases = (
             ('model = "gpt-6-astra"', 'model = "gpt-5.6-sol"', "lead model"),
             (
@@ -377,9 +393,11 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
                     temporary.cleanup()
 
     def test_contract_inspection_is_a_schema_owned_proof_strength(self) -> None:
+        """Verify that contract inspection is registered as a schema-owned proof strength."""
         self.assertIn("contract_inspection", PROOF_STRENGTHS)
 
     def test_current_evaluation_binds_exact_complete_subject_set(self) -> None:
+        """Verify that the current evaluation binds the exact complete subject path set."""
         self.assertTrue(
             {
                 ".agents/skills/reviewer-evidence-protocol/SKILL.md",
@@ -414,6 +432,7 @@ class ReviewerInstructionCompositionTests(unittest.TestCase):
         )
 
     def test_proof_case_task_or_evidence_change_breaks_exact_binding(self) -> None:
+        """Verify that proof case task or evidence changes break exact binding."""
         original = PROOF_CASES_PATH.read_bytes()
         parsed = json.loads(original)
         original_ids = [row["id"] for row in parsed["cases"]]

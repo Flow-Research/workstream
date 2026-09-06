@@ -36,12 +36,14 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         self.temp.cleanup()
 
     def _write(self, path: str, text: str) -> None:
+        """Write text to a file relative to the test root directory."""
         target = self.root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
 
     @staticmethod
     def _record(evidence: str = "Observed proof.") -> str:
+        """Generate a minimal valid Commitrail record for Markdown structure tests."""
         return (
             "# WS-EXAMPLE-001-01 — Example\n\n"
             "- Durable disposition: Planned\n"
@@ -54,6 +56,7 @@ class CommitrailMarkdownStructureTests(unittest.TestCase):
         )
 
     def _validate(self) -> None:
+        """Run Commitrail validation with mocked legacy paths."""
         with patch.object(gate, "tracked_legacy_paths", return_value=[]):
             gate.validate(
                 self.root,

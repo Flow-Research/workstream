@@ -51,6 +51,7 @@ from scripts.reviewer_contracts import CASES_PATH, EXPECTATIONS_PATH
 
 
 def valid_receipt() -> dict[str, object]:
+    """Generate a minimal valid review receipt for testing."""
     sha = "a" * 40
     return {
         "schema_version": 3,
@@ -108,6 +109,7 @@ def valid_receipt() -> dict[str, object]:
 
 
 def remove_contract_token(path: Path, token: str) -> str:
+    """Remove a contract requirement token from a file and return the original content."""
     original = path.read_text(encoding="utf-8")
     pattern = r"\s+".join(re.escape(part) for part in token.split())
     mutated, count = re.subn(pattern, " removed ", original)
@@ -126,6 +128,7 @@ class ReviewerContractTests(unittest.TestCase):
         cls.proof_results = load_json(PROOF_RESULTS_PATH)
 
     def test_proof_quality_fixture_classes_are_mandatory(self) -> None:
+        """Verify that all required proof case IDs are present."""
         self.assertEqual(proof_fixture_failures(self.proof_cases), [])
         self.assertEqual(
             {row["id"] for row in self.proof_cases["cases"]}, PROOF_CASE_IDS
@@ -304,6 +307,7 @@ class ReviewerContractTests(unittest.TestCase):
         )
 
     def assert_blind_case(self, case_id: str, outcome: str) -> None:
+        """Verify that a blind evaluation case produced the expected outcome."""
         self.assertEqual(
             proof_evaluation_failures(
                 self.proof_cases,
@@ -514,6 +518,7 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertEqual(contract_failures(), [])
 
     def assert_receipt_invalid(self, receipt: dict[str, object], message: str) -> None:
+        """Assert that a receipt produces validation failures containing the expected message."""
         self.assertTrue(
             any(
                 message in failure
@@ -800,6 +805,7 @@ class ReviewerContractTests(unittest.TestCase):
             temporary.cleanup()
 
     def copied_contract_root(self) -> tuple[tempfile.TemporaryDirectory, Path]:
+        """Create a temporary copy of essential contract files for mutation testing."""
         temporary = tempfile.TemporaryDirectory()
         root = Path(temporary.name)
         for source in (SHARED_PROTOCOL_PATH, CODEX_CONFIG_PATH):
@@ -886,6 +892,7 @@ class ReviewerContractTests(unittest.TestCase):
             temporary.cleanup()
 
     def assert_specialty_pair(self, reviewer: str) -> None:
+        """Verify that a reviewer's skill contains its required specialty token."""
         _, skill_name = REVIEWERS[reviewer]
         token = SPECIALTY_PROOF_REQUIREMENTS[reviewer]
         self.assertIn(
