@@ -1,7 +1,7 @@
 # WS-QUAL-003-02 — Decompose PROJECT readiness proof and prune retired-route duplication
 
 - Initiative: WS-QUAL-003
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Reduce the PROJECT test monolith while preserving its
   readiness matrix and strongest retired-route isolation proof.
 
@@ -117,6 +117,21 @@ relocations preserve cases, five duplicates disappear, two absence tests appear.
 Run one temporary route-registration mutation and one readiness-guard bypass
 probe to verify intended assertions fail rather than setup failing.
 Run the existing exact lane ownership/inventory tests after adding both paths.
+
+Implementation proof: all 39 relocated readiness cases pass, together with the
+two composition checks and two existing lane-integrity tests (43 focused cases).
+An AST comparison confirms the field setter, matrix and valid-control test are
+unchanged. Deterministic UUID/clock execution confirms every old/new fixture
+value is identical. The new modules contain 287 and 21 lines; the old monolith
+shrinks from 15,700 to 15,272. The 118-line helper is genuinely decomposed; all
+new helpers remain below 100 lines.
+
+In-memory mutation checks distinguish the proofs: a hidden registered endpoint
+fails registration proof while passing OpenAPI absence; a visible endpoint fails
+OpenAPI absence. Normalizing a wrong project in the real readiness method makes
+the expected-denial assertion fail. No mutation or bypass is committed. Full
+hosted execution, warning-status persistence, retained database proof and coverage
+remain separately recorded PR evidence, not inferred from the focused run.
 
 ## Plan review corrections
 
