@@ -186,6 +186,28 @@ from projects.client_fixtures import (
     project_client as project_client,
     project_database_env as project_database_env,
 )
+from projects.guide_fixtures import (
+    complete_guide_payload,
+    create_project,
+    add_project_manager_admin_grant,
+    source_snapshot_payload,
+    create_source_snapshot,
+    create_guide,
+)
+from projects.submission_policy_fixtures import (
+    project_submission_artifact_policy_body,
+    create_sufficiency_report,
+    create_submission_artifact_policy,
+    approve_submission_artifact_policy,
+    load_pre_submit_checker_policy,
+)
+from projects.post_submit_fixtures import (
+    create_generated_post_submit_setup_output,
+    approve_post_submit_checker_policy,
+)
+from projects.policy_bundle_fixtures import (
+    create_approved_policy_bundle,
+)
 
 
 from app.modules.projects.post_submit_policy import (
@@ -1858,36 +1880,6 @@ async def test_project_diagnostic_read_composer_locks_post_submit_policy_binding
         )
 
 
-async def add_project_manager_admin_grant(project_id: str) -> UUID:
-    """Grant the default registered human exact project diagnostic authority."""
-    async with db_session.get_session_factory()() as session:
-        existing = await session.scalar(
-            select(AdminRoleGrant).where(
-                AdminRoleGrant.role == "project_manager",
-                AdminRoleGrant.scope_project_id == project_id,
-                AdminRoleGrant.status == "active",
-            )
-        )
-        if existing is not None:
-            return existing.id
-    actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
-    async with db_session.get_session_factory()() as session:
-        grant = AdminRoleGrant(
-            id=uuid4(),
-            target_actor_profile_id=actor_id,
-            role="project_manager",
-            scope_type="project",
-            scope_project_id=project_id,
-            status="active",
-            version=1,
-            granted_by_actor_profile_id=actor_id,
-            granted_by_admin_role_grant_id=grantor_id,
-            grant_reason="AUTH-11C1 diagnostic read fixture",
-        )
-        session.add(grant)
-        await session.commit()
-        return grant.id
-
 
 async def add_local_admin_role_for_default_actor(role: str, *, project_id: str | None) -> UUID:
     """Add one valid local administrative grant through the fixture grantor."""
@@ -2513,33 +2505,6 @@ def test_post_submit_checker_policy_approval_requires_setup_role_provenance() ->
     assert "approved_at" in constraint_sql
 
 
-def complete_guide_payload(version: str = "v1") -> dict:
-    return {
-        "version": version,
-        "content_markdown": (
-            f"# Guide {version}\n\n"
-            "Contributors submit a complete project packet with original work, artifact "
-            "hashes, evidence references, and an attestation. Reviewers use the "
-            "locked policy bundle for automated checks and the guide body for human "
-            "context."
-        ),
-        "change_summary": f"Initial {version}",
-    }
-
-
-async def create_project(client: AsyncClient, *, name: str = "STEM Eval") -> dict:
-    slug = f"{name.lower().replace(' ', '-')}-{uuid4()}"
-    response = await client.post(
-        "/api/v1/projects",
-        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
-        json={
-            "name": name,
-            "slug": slug,
-            "description": "Internal STEM evaluation tasks",
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 async def revoke_system_project_manager_for_default_actor() -> None:
@@ -2710,91 +2675,6 @@ async def test_project_create_concurrent_exact_replay_commits_once(
         )
     assert project_count == replay_count == 1
 
-
-async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> dict:
-    request_payload = dict(payload)
-    source_snapshot = request_payload.pop("source_snapshot", None)
-    review_policy = request_payload.pop("review_policy", "default")
-    revision_policy = request_payload.pop("revision_policy", "default")
-    payment_policy = request_payload.pop("payment_policy", "default")
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides",
-        headers=auth_headers(),
-        json=request_payload,
-    )
-    assert response.status_code == 201, response.text
-    guide = response.json()
-    if review_policy is not None:
-        values = (
-            dict(review_policy)
-            if isinstance(review_policy, dict)
-            else {
-                "requires_second_review": False,
-                "allowed_decisions": ["accept", "needs_revision", "reject"],
-                "minimum_finding_fields": ["issue", "required_fix"],
-            }
-        )
-        values.pop("sla_hours", None)
-        values = {
-            "review_preference_window_seconds": 3600,
-            "review_lease_duration_seconds": 1800,
-            "max_active_review_leases_per_reviewer": 1,
-            "self_review_allowed": False,
-            "reject_policy": "close_task",
-            "finding_evidence_requirement": "optional",
-            **values,
-        }
-        policy_response = await client.put(
-            f"/api/v1/projects/{project_id}/guides/{guide['id']}/review-policy",
-            headers=auth_headers() | {"If-Match": '"no-current-policy"'},
-            json=values,
-        )
-        assert policy_response.status_code == 200, policy_response.text
-    if revision_policy is not None:
-        values = (
-            dict(revision_policy)
-            if isinstance(revision_policy, dict)
-            else {
-                "max_revision_rounds": 7,
-                "revision_deadline_hours": 48,
-                "allowed_resubmission_states": ["needs_revision"],
-                "reviewer_reassignment_rule": "same reviewer preferred",
-            }
-        )
-        values.pop("auto_reject_after_limit", None)
-        policy_response = await client.put(
-            f"/api/v1/projects/{project_id}/guides/{guide['id']}/revision-policy",
-            headers=auth_headers() | {"If-Match": '"no-current-policy"'},
-            json=values,
-        )
-        assert policy_response.status_code == 200, policy_response.text
-    async with db_session.get_session_factory()() as session:
-        if payment_policy is not None:
-            values = (
-                payment_policy
-                if isinstance(payment_policy, dict)
-                else {
-                    "base_amount": "25.00",
-                    "currency": "USD",
-                    "payout_type": "fixed",
-                    "revision_payment_rule": "none",
-                    "rejection_payment_rule": "none",
-                    "accepted_payment_rule": "pay base amount",
-                }
-            )
-            session.add(
-                PaymentPolicy(
-                    id=str(uuid4()),
-                    project_id=project_id,
-                    guide_version=guide["version"],
-                    **values,
-                )
-            )
-        await session.commit()
-    await add_project_manager_admin_grant(project_id)
-    if source_snapshot is not None:
-        await create_source_snapshot(client, project_id, guide["id"], source_snapshot)
-    return guide
 
 
 @pytest.mark.asyncio
@@ -3410,83 +3290,7 @@ def sha256_hash(seed: str) -> str:
     return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
 
 
-def source_snapshot_payload(*, source_label: str = "guide.md") -> dict:
-    return {
-        "items": [
-            {
-                "source_kind": "url_doc",
-                "source_label": source_label,
-                "ingestion_adapter": "manual_import",
-                "media_type": "text/markdown",
-            },
-            {
-                "source_kind": "rubric",
-                "source_label": "rubric.md",
-                "ingestion_adapter": "manual_import",
-                "media_type": "text/markdown",
-            },
-        ]
-    }
 
-
-def project_submission_artifact_policy_body(
-    *,
-    artifact_path: str = "outputs/answer.md",
-    manifest_required: bool = True,
-    artifact_hash_required: bool = True,
-    rule_hash_required: bool = True,
-    packaging: dict | None = None,
-) -> dict:
-    return {
-        "required_artifacts": [
-            {
-                "key": "answer",
-                "path": artifact_path,
-                "hash_required": rule_hash_required,
-                "required": True,
-                "description": "Final answer artifact.",
-            }
-        ],
-        "required_evidence": [
-            {
-                "key": "reasoning_trace",
-                "label": "Reasoning trace",
-                "hash_required": rule_hash_required,
-                "required": True,
-                "description": "Evidence that supports the answer.",
-            }
-        ],
-        "forbidden_artifacts": [
-            {
-                "pattern": "*.tmp",
-                "reason": "Temporary files are not reviewable.",
-                "worker_facing_fix": "Remove temporary files before submission.",
-            }
-        ],
-        "attestation_terms": ["project_specific_originality"],
-        "manifest_required": manifest_required,
-        "artifact_hash_required": artifact_hash_required,
-        "artifact_hash_algorithm": "sha256",
-        "allowed_storage_schemes": ["local", "s3", "r2"],
-        "maximum_file_size_bytes": 1_000_000,
-        "maximum_package_size_bytes": 5_000_000,
-        "packaging": packaging if packaging is not None else {"package_required": False},
-    }
-
-
-async def create_source_snapshot(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    payload: dict | None = None,
-) -> dict:
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-        headers=auth_headers(),
-        json=payload if payload is not None else source_snapshot_payload(),
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
 async def prepare_verified_sufficiency_route(
@@ -4599,340 +4403,12 @@ async def test_guide_source_metadata_database_rejects_unattributed_and_mismatche
         await session.rollback()
 
 
-async def create_sufficiency_report(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    snapshot_id: str,
-    *,
-    status: str = "passed",
-) -> dict:
-    findings = []
-    if status == "blocked":
-        findings = [
-            {
-                "severity": "blocking_gap",
-                "code": "missing_rubric",
-                "message": "The guide needs a rubric.",
-            }
-        ]
-    if status == "passed_with_warnings":
-        findings = [
-            {
-                "severity": "warning",
-                "code": "thin_examples",
-                "message": "Examples are thin but usable.",
-            }
-        ]
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
-        headers=auth_headers(),
-        json={
-            "source_snapshot_id": snapshot_id,
-            "status": status,
-            "findings": findings,
-            "summary": "Guide reviewed.",
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
-async def create_submission_artifact_policy(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    snapshot_id: str,
-    *,
-    policy_body: dict | None = None,
-    policy_version: str = "v1",
-) -> dict:
-    async with db_session.get_session_factory()() as session:
-        authoritative = await session.scalar(
-            select(GuideSufficiencyReport).where(
-                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
-                GuideSufficiencyReport.project_setup_run_id.is_not(None),
-            )
-        )
-        diagnostic = await session.scalar(
-            select(GuideSufficiencyReport).where(
-                GuideSufficiencyReport.source_snapshot_id == snapshot_id,
-                GuideSufficiencyReport.project_setup_run_id.is_(None),
-            )
-        )
-    if authoritative is None and diagnostic is not None:
-        await create_verified_report_fixture(diagnostic.id, snapshot_id)
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
-        headers=auth_headers(),
-        json={
-            "source_snapshot_id": snapshot_id,
-            "policy_version": policy_version,
-            "policy_body": policy_body or project_submission_artifact_policy_body(),
-            "change_summary": "Initial artifact intake policy.",
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
 
 
-async def approve_submission_artifact_policy(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    policy_id: str | None,
-) -> dict:
-    if policy_id is None:
-        setup_response = await client.get(
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
-            headers=auth_headers(),
-        )
-        assert setup_response.status_code == 200, setup_response.text
-        setup_run = setup_response.json()
-        await create_sufficiency_report(
-            client,
-            project_id,
-            guide_id,
-            setup_run["source_snapshot_id"],
-        )
-        policy = await create_submission_artifact_policy(
-            client,
-            project_id,
-            guide_id,
-            setup_run["source_snapshot_id"],
-        )
-        async with db_session.get_session_factory()() as session:
-            authoritative_report = await session.scalar(
-                select(GuideSufficiencyReport).where(
-                    GuideSufficiencyReport.source_snapshot_id == setup_run["source_snapshot_id"],
-                    GuideSufficiencyReport.project_setup_run_id.is_not(None),
-                )
-            )
-            assert authoritative_report is not None
-            persisted_run = await session.get(ProjectSetupRun, setup_run["id"])
-            assert persisted_run is not None
-            persisted_run.status = "policy_draft_ready"
-            persisted_run.current_step = "submission_artifact_policy_derivation"
-            persisted_run.output_sufficiency_report_id = authoritative_report.id
-            persisted_run.output_submission_artifact_policy_id = policy["id"]
-            await session.commit()
-        policy_id = policy["id"]
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
-        f"{policy_id}/approve",
-        headers=auth_headers(),
-        json={"approval_note": "Approved by Workstream project manager."},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
 
 
-async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
-    """Load the compiled project pre-submit checker policy for an effective policy."""
-    async with db_session.get_session_factory()() as session:
-        pre_submit_checker_policy = await session.scalar(
-            select(PreSubmitCheckerPolicy).where(
-                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
-            )
-        )
-        assert pre_submit_checker_policy is not None
-        return {
-            "id": pre_submit_checker_policy.id,
-            "effective_policy_id": pre_submit_checker_policy.effective_policy_id,
-            "effective_policy_hash": pre_submit_checker_policy.effective_policy_hash,
-            "lifecycle_status": pre_submit_checker_policy.lifecycle_status,
-            "compiler_version": pre_submit_checker_policy.compiler_version,
-            "compiled_bundle": pre_submit_checker_policy.compiled_bundle,
-            "compiled_bundle_hash": pre_submit_checker_policy.compiled_bundle_hash,
-            "checker_names": pre_submit_checker_policy.checker_names,
-            "checker_configs": pre_submit_checker_policy.checker_configs,
-        }
-
-
-async def force_pre_submit_checker_policy_pending(effective_policy: dict) -> None:
-    """Force a compiled pre-submit checker row back to pending for guard tests."""
-    async with db_session.get_session_factory()() as session:
-        pre_submit_checker_policy = await session.scalar(
-            select(PreSubmitCheckerPolicy).where(
-                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
-            )
-        )
-        assert pre_submit_checker_policy is not None
-        pre_submit_checker_policy.lifecycle_status = "pending_compilation"
-        pre_submit_checker_policy.compiler_version = None
-        pre_submit_checker_policy.compiled_bundle = None
-        pre_submit_checker_policy.compiled_bundle_hash = None
-        pre_submit_checker_policy.checker_names = []
-        pre_submit_checker_policy.checker_configs = {}
-        await session.commit()
-
-
-async def create_approved_policy_bundle(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    *,
-    sufficiency_status: str = "passed",
-    compile_pre_submit_checker: bool = True,
-    compile_post_submit_checker: bool = True,
-    approve_post_submit_checker: bool = True,
-) -> dict:
-    snapshot = await create_source_snapshot(client, project_id, guide_id)
-    report = await create_sufficiency_report(
-        client,
-        project_id,
-        guide_id,
-        snapshot["id"],
-        status=sufficiency_status,
-    )
-    verified_report_id = await create_verified_report_fixture(report["id"], snapshot["id"])
-    report = {**report, "id": verified_report_id}
-    policy = await create_submission_artifact_policy(client, project_id, guide_id, snapshot["id"])
-    effective = await approve_submission_artifact_policy(
-        client,
-        project_id,
-        guide_id,
-        policy["id"],
-    )
-    compiled_pre_submit_checker = await load_pre_submit_checker_policy(effective)
-    if compile_pre_submit_checker:
-        assert compiled_pre_submit_checker["lifecycle_status"] == "compiled"
-        if compile_post_submit_checker:
-            post_submit_checker_policy = await create_generated_post_submit_setup_output(
-                project_id=project_id,
-                guide_id=guide_id,
-                source_snapshot=snapshot,
-                sufficiency_report=report,
-                submission_artifact_policy=policy,
-                pre_submit_checker_policy=compiled_pre_submit_checker,
-            )
-            if approve_post_submit_checker:
-                post_submit_checker_policy = await approve_post_submit_checker_policy(
-                    client,
-                    project_id,
-                    guide_id,
-                )
-        else:
-            post_submit_checker_policy = None
-    else:
-        await force_pre_submit_checker_policy_pending(effective)
-        compiled_pre_submit_checker = None
-        post_submit_checker_policy = None
-    return {
-        "source_snapshot": snapshot,
-        "sufficiency_report": report,
-        "submission_artifact_policy": policy,
-        "effective_policy": effective,
-        "pre_submit_checker_policy": compiled_pre_submit_checker,
-        "post_submit_checker_policy": post_submit_checker_policy,
-    }
-
-
-async def create_generated_post_submit_setup_output(
-    *,
-    project_id: str,
-    guide_id: str,
-    source_snapshot: dict,
-    sufficiency_report: dict,
-    submission_artifact_policy: dict,
-    pre_submit_checker_policy: dict,
-) -> dict:
-    """Persist the generated post-submit setup output used by activation tests."""
-    async with db_session.get_session_factory()() as session:
-        guide = await session.get(ProjectGuide, guide_id)
-        assert guide is not None
-        spec = build_project_post_submit_checker_spec(
-            project_id=project_id,
-            guide_version=guide.version,
-            required_checkers=["check_policy_context_present"],
-            warning_checkers=[],
-            blocking_severities=["critical", "high"],
-        )
-        compiled = compile_project_post_submit_checker_spec(
-            project_id=project_id,
-            guide_version=guide.version,
-            spec=spec,
-        )
-        post_submit_policy = PostSubmitCheckerPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide.version,
-            source_snapshot_id=source_snapshot["id"],
-            source_snapshot_hash=source_snapshot["bundle_hash"],
-            effective_policy_id=pre_submit_checker_policy["effective_policy_id"],
-            effective_policy_hash=pre_submit_checker_policy["effective_policy_hash"],
-            pre_submit_checker_policy_id=pre_submit_checker_policy["id"],
-            pre_submit_checker_bundle_hash=pre_submit_checker_policy["compiled_bundle_hash"],
-            required_checkers=compiled.required_checkers,
-            warning_checkers=compiled.warning_checkers,
-            blocking_severities=compiled.blocking_severities,
-            policy_hash=compiled.policy_hash,
-            policy_body=compiled.policy_body,
-            lifecycle_status="compiled",
-            created_by="project-manager-subject",
-        )
-        setup_run = await session.scalar(
-            select(ProjectSetupRun)
-            .where(ProjectSetupRun.source_snapshot_id == source_snapshot["id"])
-            .order_by(ProjectSetupRun.setup_generation.desc())
-            .limit(1)
-        )
-        if setup_run is None:
-            setup_run = ProjectSetupRun(
-                id=str(uuid4()),
-                project_id=project_id,
-                guide_id=guide_id,
-                guide_version=guide.version,
-                source_snapshot_id=source_snapshot["id"],
-                source_snapshot_hash=source_snapshot["bundle_hash"],
-                setup_generation=source_snapshot["manifest_json"]["generation"],
-                status="queued",
-                current_step="queued",
-                created_by="test-project-manager",
-            )
-            session.add(setup_run)
-            await session.commit()
-        setup_run.status = "post_submit_policy_compiled"
-        setup_run.current_step = "post_submit_checker_policy_compilation"
-        setup_run.output_sufficiency_report_id = sufficiency_report["id"]
-        setup_run.output_submission_artifact_policy_id = submission_artifact_policy["id"]
-        setup_run.output_post_submit_checker_policy_id = post_submit_policy.id
-        setup_run.post_submit_derivation_summary = {
-            "status": "compiled",
-            "post_submit_checker_policy_id": post_submit_policy.id,
-            "required_checkers": post_submit_policy.required_checkers,
-            "warning_checkers": post_submit_policy.warning_checkers,
-            "blocking_severities": post_submit_policy.blocking_severities,
-        }
-        session.add(post_submit_policy)
-        await session.commit()
-        return {
-            "id": post_submit_policy.id,
-            "required_checkers": post_submit_policy.required_checkers,
-            "warning_checkers": post_submit_policy.warning_checkers,
-            "blocking_severities": post_submit_policy.blocking_severities,
-            "policy_hash": post_submit_policy.policy_hash,
-            "policy_body": post_submit_policy.policy_body,
-            "lifecycle_status": post_submit_policy.lifecycle_status,
-        }
-
-
-async def approve_post_submit_checker_policy(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-) -> dict:
-    """Approve the current compiled project post-submit checker policy by API."""
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/approve",
-        headers=auth_headers(),
-        json={},
-    )
-    assert response.status_code == 200, response.text
-    policy = response.json()["post_submit_checker_policy"]
-    assert policy is not None
-    return policy
 
 
 def test_project_setup_run_status_constraint_metadata() -> None:

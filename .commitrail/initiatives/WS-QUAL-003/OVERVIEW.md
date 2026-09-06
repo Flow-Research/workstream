@@ -8,8 +8,9 @@
 - PROJECT slice: [02 — readiness and retired-route proof](WS-QUAL-003-02.md).
 - PROJECT custody slice: [03 — fixtures and locked-context transactions](WS-QUAL-003-03.md).
 - CI slice: [04 — rebalance seven hosted workers](WS-QUAL-003-04.md).
-- Next usable boundary after 04: continue PROJECT guide/bundle fixture
-  decomposition and remaining behavior audit, then AUTH.
+- PROJECT setup slice: [05 — detach guide/bundle support](WS-QUAL-003-05.md).
+- Next usable boundary after 05: continue PROJECT behavior audit and cohesive
+  test-body extraction, then AUTH.
   The full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
   concurrency proof, current coverage floors, full hosted execution, human merge.
@@ -83,7 +84,10 @@ No fixed reduction percentage or same-day completion claim overrides safety.
 - PROJECT slice 02 removed five redundant retired-route journeys while retaining
   service-seam, runtime/database and warning translation proof. Slice 03 isolates
   client fixtures and locked-policy contracts and proves both project-inactivation
-  transaction orderings. Larger guide/bundle fixture dependencies remain to audit.
+  transaction orderings. Slice 05 isolates the guide/bundle helper graph and
+  removes the remaining locked-context import from the PROJECT test monolith.
+  It preserves all helper behavior and test cases; this dependency cleanup is
+  not a completed semantic audit of their consumers.
 - AUTH projection replay uses a nonexistent decision in its negative test;
   add existing-but-tampered stored decision coverage, not more random-ID cases.
 - CON publication non-reuse and reverse-order concurrency test names overstate

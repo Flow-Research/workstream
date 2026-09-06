@@ -105,10 +105,23 @@ Hosted CI owns PostgreSQL and coverage. An in-memory reintroduced test-module
 dependency must fail the import trap; this probe tests dependency isolation,
 not product behavior. Run Commitrail, Markdown/stale scans and diff checks.
 
+Implementation inspection preserves all 15 helper ASTs and their recursively
+referenced global bindings, mapping moved-function references to their single
+new owners. All retained monolith definitions and locked-context definitions,
+including decorators and parameter rows, are AST-identical. Fresh-process support
+imports pass with a trap rejecting collected-test dependencies; deliberately
+reintroducing `import test_projects` is rejected at that trap. No test is removed.
+The support modules contain 193, 224, 123 and 80 lines; the monolith shrinks from
+15,141 to 14,617 lines. Existing oversized test bodies remain audit work, not
+debt falsely marked retired. Hosted execution custody is recorded on the PR.
+
 ## Review findings
 
 No test deletion is justified by this dependency extraction. The broader
 semantic audit and oversized-test decomposition remain open.
+Plan inspection confirmed the helper graph and monkeypatch/global-binding
+strategy are feasible; similarly named TASK helpers are not equivalent reuse
+targets because their states, return projections and customization differ.
 
 ## Reconciliation
 

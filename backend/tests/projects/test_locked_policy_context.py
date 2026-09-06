@@ -24,12 +24,12 @@ from app.modules.projects.models import (
     Project,
 )
 from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
-from test_projects import (
+from projects.guide_fixtures import (
     complete_guide_payload,
-    create_approved_policy_bundle,
     create_guide,
     create_project,
 )
+from projects.policy_bundle_fixtures import create_approved_policy_bundle
 from project_create_fixtures import activate_guide_for_downstream_test
 from projects.client_fixtures import (
     project_client as project_client,
