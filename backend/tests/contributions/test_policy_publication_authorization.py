@@ -93,8 +93,20 @@ async def test_publish_prepare_denial_has_no_product_effect() -> None:
 
 @pytest.mark.asyncio
 async def test_publish_denies_without_composed_authority() -> None:
-    authorization = await _assert_failure_has_no_effect("prepare")
-    assert authorization.closed == 0
+    fixture = service_fixture(use_default_mutation_authority=True)
+    request = _request(fixture)
+    policy, version = _install_complete_draft(fixture, request)
+    prior_policy_status = policy.status
+    prior_selected_version = policy.current_published_version_id
+    with pytest.raises(
+        ContributionPolicyUnavailable, match="^contribution_policy_unavailable$"
+    ):
+        await fixture.service.publish(request)
+    assert policy.status == prior_policy_status
+    assert policy.current_published_version_id == prior_selected_version
+    assert version.status == "draft"
+    fixture.repository.create_transition_custody.assert_not_awaited()
+    fixture.repository.flush_transition_event.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -197,13 +209,17 @@ async def test_cross_project_binding_publish_is_concealed_without_effect() -> No
 
 @pytest.mark.asyncio
 async def test_retire_denies_without_composed_authority() -> None:
-    fixture = service_fixture()
-    fixture.service._publication._mutation_authorization = _FailureAuthorization(  # noqa: SLF001
-        fixture.actor_id, phase="prepare"
-    )
-    request, _, _ = _install_active_policy(fixture)
-    with pytest.raises(ContributionPolicyUnavailable):
+    fixture = service_fixture(use_default_mutation_authority=True)
+    request, policy, version = _install_active_policy(fixture)
+    with pytest.raises(
+        ContributionPolicyUnavailable, match="^contribution_policy_unavailable$"
+    ):
         await fixture.service.retire(request)
+    assert policy.status == "active"
+    assert policy.current_published_version_id == version.id
+    assert version.status == "published"
+    fixture.repository.create_transition_custody.assert_not_awaited()
+    fixture.repository.flush_transition_event.assert_not_awaited()
 
 
 @pytest.mark.asyncio

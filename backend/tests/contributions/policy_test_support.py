@@ -97,13 +97,13 @@ class AllowBinding:
         )
 
 
-def service_fixture() -> SimpleNamespace:
+def service_fixture(*, use_default_mutation_authority: bool = False) -> SimpleNamespace:
     actor_id, project_id = uuid4(), uuid4()
     authorization = AllowAuthorization(actor_id)
     service = ContributionPolicyService(
         FakeSession(),  # type: ignore[arg-type]
         read_authorization=authorization,
-        mutation_authorization=authorization,
+        mutation_authorization=None if use_default_mutation_authority else authorization,
         projects=AllowProject(),
         bindings=AllowBinding(),
     )

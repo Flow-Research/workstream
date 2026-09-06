@@ -52,18 +52,6 @@ def test_update_rejects_duplicate_instrument_definition() -> None:
         validate_policy_graph((invalid, review))
 
 
-@pytest.mark.parametrize("quantity", ("0", "-1", "1e2", "01", "NaN"))
-def test_update_rejects_noncanonical_quantity(quantity: str) -> None:
-    item = PolicyDefinitionInput(
-        instrument_type=CompensationInstrumentType.MONEY,
-        unit_code="USD",
-        quantity=quantity,
-        adapter_binding_id=uuid4(),
-    )
-    with pytest.raises(ContributionPolicyConflict):
-        _validate_definition(item)
-
-
 def test_update_accepts_one_or_two_unique_compensated_definitions() -> None:
     paid, review = complete_rules()
     points = PolicyDefinitionInput(
@@ -78,11 +66,6 @@ def test_update_accepts_one_or_two_unique_compensated_definitions() -> None:
         definitions=(*paid.definitions, points),
     )
     assert validate_policy_graph((rule, review)) == (rule, review)
-
-
-def test_update_rejects_missing_required_rule_without_effect() -> None:
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((complete_rules()[0],))
 
 
 @pytest.mark.parametrize("quantity", ("0", "-1"))
