@@ -85,11 +85,11 @@ jobs:
         lane:
           - shared_foundations_a
           - shared_foundations_b
-          - schema_contracts_a
-          - schema_contracts_b
-          - schema_contracts_c
-          - project_lifecycle
-          - task_lifecycle
+          - schema_contracts
+          - project_lifecycle_a
+          - project_lifecycle_b
+          - task_lifecycle_a
+          - task_lifecycle_b
 
     services:
       postgres:
@@ -163,26 +163,6 @@ jobs:
           done
           docker logs workstream-minio
           exit 1
-
-      - name: Collect canonical semantic-lane inventory
-        working-directory: backend
-        env:
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -d -m 700 .ci/test-lanes
-          python scripts/run_test_lanes.py \
-            --collect-only \
-            --metadata-dir .ci/test-lanes/collect \
-            --summary-json .ci/test-lanes/collect-summary.json
-
-      - name: Validate canonical semantic-lane inventory
-        working-directory: backend
-        run: >-
-          python scripts/validate_test_lane_evidence.py
-          --metadata-dir .ci/test-lanes/collect
-          --summary-json .ci/test-lanes/collect-summary.json
 
       - name: Execute semantic lane ${{ matrix.lane }}
         working-directory: backend
@@ -307,40 +287,40 @@ jobs:
           name: backend-lane-${{ github.sha }}-shared_foundations_b
           path: backend/.ci/download/shared_foundations_b
 
-      - name: Download schema contracts A evidence
+      - name: Download schema contracts evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: backend-lane-${{ github.sha }}-schema_contracts_a
-          path: backend/.ci/download/schema_contracts_a
+          name: backend-lane-${{ github.sha }}-schema_contracts
+          path: backend/.ci/download/schema_contracts
 
-      - name: Download schema contracts B evidence
+      - name: Download project lifecycle A evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: backend-lane-${{ github.sha }}-schema_contracts_b
-          path: backend/.ci/download/schema_contracts_b
+          name: backend-lane-${{ github.sha }}-project_lifecycle_a
+          path: backend/.ci/download/project_lifecycle_a
 
-      - name: Download schema contracts C evidence
+      - name: Download project lifecycle B evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: backend-lane-${{ github.sha }}-schema_contracts_c
-          path: backend/.ci/download/schema_contracts_c
+          name: backend-lane-${{ github.sha }}-project_lifecycle_b
+          path: backend/.ci/download/project_lifecycle_b
 
-      - name: Download project lifecycle evidence
+      - name: Download task lifecycle A evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: backend-lane-${{ github.sha }}-project_lifecycle
-          path: backend/.ci/download/project_lifecycle
+          name: backend-lane-${{ github.sha }}-task_lifecycle_a
+          path: backend/.ci/download/task_lifecycle_a
 
-      - name: Download task lifecycle evidence
+      - name: Download task lifecycle B evidence
         if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: backend-lane-${{ github.sha }}-task_lifecycle
-          path: backend/.ci/download/task_lifecycle
+          name: backend-lane-${{ github.sha }}-task_lifecycle_b
+          path: backend/.ci/download/task_lifecycle_b
 
       - name: Require every semantic lane
         if: ${{ always() }}
@@ -773,11 +753,11 @@ jobs:
           for lane_name in (
               "shared_foundations_a",
               "shared_foundations_b",
-              "schema_contracts_a",
-              "schema_contracts_b",
-              "schema_contracts_c",
-              "project_lifecycle",
-              "task_lifecycle",
+              "schema_contracts",
+              "project_lifecycle_a",
+              "project_lifecycle_b",
+              "task_lifecycle_a",
+              "task_lifecycle_b",
           ):
               timing_path = Path(".ci/download") / lane_name / "job-start-epoch.txt"
               if timing_path.is_symlink() or not timing_path.is_file():

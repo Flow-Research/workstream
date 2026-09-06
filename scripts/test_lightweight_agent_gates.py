@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -116,13 +117,20 @@ class LightweightAgentGateTests(unittest.TestCase):
 
         self.assertNotIn("pull_request_review:", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
-        self.assertIn("matrix:\n        lane:", workflow)
-        self.assertNotIn("          - shared_foundations\n", workflow)
-        self.assertEqual(workflow.count("          - shared_foundations_a\n"), 1)
-        self.assertEqual(workflow.count("          - shared_foundations_b\n"), 1)
-        self.assertEqual(workflow.count("          - schema_contracts_a"), 1)
-        self.assertEqual(workflow.count("          - schema_contracts_b"), 1)
-        self.assertEqual(workflow.count("          - schema_contracts_c"), 1)
+        self.assertEqual(len(re.findall(r"(?m)^      matrix:$", workflow)), 1)
+        matrix = re.search(r"(?m)^      matrix:\n((?: {8,}[^\n]*\n|\n)+)", workflow)
+        self.assertIsNotNone(matrix)
+        self.assertEqual(
+            matrix[1].strip(),
+            "lane:\n"
+            "          - shared_foundations_a\n"
+            "          - shared_foundations_b\n"
+            "          - schema_contracts\n"
+            "          - project_lifecycle_a\n"
+            "          - project_lifecycle_b\n"
+            "          - task_lifecycle_a\n"
+            "          - task_lifecycle_b",
+        )
         self.assertIn("  test:\n    if: ${{ always() }}\n    needs: lanes", workflow)
         self.assertIn("Require every semantic lane", workflow)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)

@@ -90,20 +90,22 @@ and exactly one dependency lane. A step-level curl health loop admits MinIO
 before collection. This is semantic fan-out, not arbitrary test-count sharding:
 lane ownership remains repository-defined and exact.
 
-The lanes are balanced by measured dependency ownership: `project_lifecycle`
-owns project tests, `task_lifecycle` owns task and checker tests,
-`schema_contracts_a`, `schema_contracts_b`, and `schema_contracts_c`
-deterministically partition exact node IDs from the baseline and PostgreSQL
-schema-contract suites;
-`schema_contracts_a` also owns reset and isolated-runner contracts. The
+The explicit inventory lives in `backend/scripts/test_lane_catalogue.py`.
+The `project_lifecycle_a`/`project_lifecycle_b` pair partitions PROJECT nodes;
+`task_lifecycle_a`/`task_lifecycle_b` partitions TASK and checker nodes. The single
+`schema_contracts` lane owns all baseline/PostgreSQL schema, reset and
+isolated-runner contracts. The
 `shared_foundations_a` and `shared_foundations_b` lanes deterministically
 partition exact node IDs from the remaining authorization, artifact, API, and
 infrastructure modules. Every collected test node, including each Alembic and
 shared-foundation node, belongs to exactly one lane.
 
 Each matrix job binds its checkout to `GITHUB_SHA`, installs and asserts exact
-Ruff `0.15.22`, runs lint and docstrings, starts MinIO, and validates the full
-canonical inventory before executing its one lane. Each lane receives a distinct
+Ruff `0.15.22`, runs lint and docstrings, and starts MinIO. The runner discovers,
+validates and collects the full canonical inventory before executing its one
+lane; the aggregate independently recollects and validates complete execution.
+There is no duplicate standalone inventory pass in each matrix job.
+Each lane receives a distinct
 runner-created database and role plus a distinct MinIO prefix custody record.
 Both shared-foundation jobs run in separate MinIO containers, use the actual
 `workstream-artifacts` test bucket, and receive distinct run prefixes; other
