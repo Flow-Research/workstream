@@ -114,9 +114,6 @@ from app.modules.projects import sufficiency_mutation_service as sufficiency_mut
 from app.modules.projects import guide_mutation_router as guide_mutation_router_module
 from app.modules.projects import guide_mutation_service as guide_mutation_service_module
 from app.modules.projects import setup_queue as project_setup_queue_module
-from app.modules.projects.authorization_reads import (
-    authorize_project_diagnostic_read,
-)
 from app.modules.projects.create_repository import ProjectCreateRepository
 from app.modules.projects.create_router import (
     create_project as create_project_route,
@@ -213,12 +210,6 @@ from app.modules.projects.post_submit_policy import (
 )
 
 
-class _DiagnosticAuthorization:
-    def __init__(self) -> None:
-        self.calls: list[tuple[ActionId, Any]] = []
-
-    async def require(self, action_id: ActionId, resource: Any) -> None:
-        self.calls.append((action_id, resource))
 
 
 @pytest.mark.asyncio
@@ -367,40 +358,6 @@ def test_policy_identity_shape_metadata_matches_migration_contract() -> None:
         assert "legacy_incomplete" in sql
 
 
-class _DiagnosticRepository:
-    def __init__(self, *, project_id: str, guide_id: str, target: Any) -> None:
-        self.project = types.SimpleNamespace(id=project_id)
-        self.guide = types.SimpleNamespace(id=guide_id, project_id=project_id, version="v1")
-        self.target = target
-        self.post_policy = None
-
-    async def get_project(self, _project_id: str, *, for_update: bool = False) -> Any:
-        assert for_update is True
-        return self.project
-
-    async def lock_project_guide(self, _guide_id: str) -> Any:
-        return self.guide
-
-    async def lock_latest_project_setup_run(self, *_args: Any) -> Any:
-        return self.target
-
-    async def lock_guide_sufficiency_reports(self, *_args: Any) -> list[Any]:
-        return [self.target]
-
-    async def lock_guide_sufficiency_report(self, *_args: Any) -> Any:
-        return self.target
-
-    async def lock_submission_artifact_policies(self, *_args: Any) -> list[Any]:
-        return [self.target]
-
-    async def lock_submission_artifact_policy(self, *_args: Any) -> Any:
-        return self.target
-
-    async def lock_submission_artifact_policy_diagnostic(self, *_args: Any) -> Any:
-        return self.target
-
-    async def lock_post_submit_checker_policy(self, *_args: Any) -> Any:
-        return self.post_policy
 
 
 class _DiagnosticStatementCaptureSession:
@@ -1392,154 +1349,10 @@ async def test_project_diagnostic_collection_locks_are_bounded(
     assert f"FOR UPDATE OF {locked_table}" in compiled
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "action_id,target_kind,is_collection",
-    [
-        (ActionId.PROJECT_SETUP_RUN_READ, "setup_run", False),
-        (
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
-            "sufficiency_report_collection",
-            True,
-        ),
-        (ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ, "sufficiency_report", False),
-        (
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
-            "submission_artifact_policy_collection",
-            True,
-        ),
-        (
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-            "submission_artifact_policy",
-            False,
-        ),
-        (
-            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-            "post_submit_checker_policy_setup",
-            False,
-        ),
-    ],
-)
-async def test_project_diagnostic_read_composer_binds_each_action(
-    action_id: ActionId, target_kind: str, is_collection: bool
-) -> None:
-    project_id, guide_id, target_id, snapshot_id = (str(uuid4()) for _ in range(4))
-    target = types.SimpleNamespace(
-        id=target_id,
-        project_id=project_id,
-        guide_id=guide_id,
-        guide_version="v1",
-        source_snapshot_id=snapshot_id,
-        source_snapshot_hash=f"sha256:{'a' * 64}",
-        output_post_submit_checker_policy_id=None,
-    )
-    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=target)
-    authorization = _DiagnosticAuthorization()
-
-    result = await authorize_project_diagnostic_read(
-        authorization=cast(Any, authorization),
-        repository=cast(Any, repository),
-        action_id=action_id,
-        project_id=project_id,
-        guide_id=guide_id,
-        target_id=target_id,
-    )
-
-    expected = (
-        (target, None)
-        if action_id is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ
-        else ([target] if is_collection else target)
-    )
-    assert result == expected
-    assert len(authorization.calls) == 1
-    called_action, context = authorization.calls[0]
-    assert called_action is action_id
-    assert context.target_kind == target_kind
-    assert context.target_exists is True
-    assert context.target_binding_digest.startswith("sha256:")
 
 
-@pytest.mark.asyncio
-async def test_project_diagnostic_read_composer_fails_closed_for_invalid_or_missing() -> None:
-    project_id, guide_id = str(uuid4()), str(uuid4())
-    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=None)
-    authorization = _DiagnosticAuthorization()
-    with pytest.raises(ValueError, match="unsupported"):
-        await authorize_project_diagnostic_read(
-            authorization=cast(Any, authorization),
-            repository=cast(Any, repository),
-            action_id=ActionId.PROJECT_READ,
-            project_id=project_id,
-            guide_id=guide_id,
-        )
-    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
-        await authorize_project_diagnostic_read(
-            authorization=cast(Any, authorization),
-            repository=cast(Any, repository),
-            action_id=ActionId.PROJECT_SETUP_RUN_READ,
-            project_id=project_id,
-            guide_id=guide_id,
-        )
-    assert authorization.calls[-1][1].target_exists is False
-
-    repository.project = None
-    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
-        await authorize_project_diagnostic_read(
-            authorization=cast(Any, authorization),
-            repository=cast(Any, repository),
-            action_id=ActionId.PROJECT_SETUP_RUN_READ,
-            project_id=project_id,
-            guide_id=guide_id,
-        )
-    repository.project = types.SimpleNamespace(id=project_id)
-    repository.guide = types.SimpleNamespace(id=guide_id, project_id=str(uuid4()), version="v1")
-    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
-        await authorize_project_diagnostic_read(
-            authorization=cast(Any, authorization),
-            repository=cast(Any, repository),
-            action_id=ActionId.PROJECT_SETUP_RUN_READ,
-            project_id=project_id,
-            guide_id=guide_id,
-        )
 
 
-@pytest.mark.asyncio
-async def test_project_diagnostic_read_composer_locks_post_submit_policy_binding() -> None:
-    project_id, guide_id, run_id, policy_id, snapshot_id = (str(uuid4()) for _ in range(5))
-    shared = {
-        "project_id": project_id,
-        "guide_id": guide_id,
-        "guide_version": "v1",
-        "source_snapshot_id": snapshot_id,
-        "source_snapshot_hash": f"sha256:{'c' * 64}",
-    }
-    run = types.SimpleNamespace(id=run_id, output_post_submit_checker_policy_id=policy_id, **shared)
-    policy = types.SimpleNamespace(id=policy_id, **shared)
-    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=run)
-    repository.post_policy = policy
-    authorization = _DiagnosticAuthorization()
-
-    result = await authorize_project_diagnostic_read(
-        authorization=cast(Any, authorization),
-        repository=cast(Any, repository),
-        action_id=ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-        project_id=project_id,
-        guide_id=guide_id,
-    )
-    assert result == (run, policy)
-    assert authorization.calls[-1][1].target_binding_digest.startswith("sha256:")
-
-    repository.post_policy = types.SimpleNamespace(
-        id=policy_id, **{**shared, "guide_version": "stale"}
-    )
-    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
-        await authorize_project_diagnostic_read(
-            authorization=cast(Any, authorization),
-            repository=cast(Any, repository),
-            action_id=ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-            project_id=project_id,
-            guide_id=guide_id,
-        )
 
 
 

@@ -552,9 +552,8 @@ jobs:
         working-directory: backend
         run: |
           COVERAGE_FILE=.coverage-project-auth-read pytest -q \
-            tests/test_projects.py::test_project_diagnostic_read_composer_binds_each_action \
-            tests/test_projects.py::test_project_diagnostic_read_composer_fails_closed_for_invalid_or_missing \
-            tests/test_projects.py::test_project_diagnostic_read_composer_locks_post_submit_policy_binding \
+            tests/projects/test_diagnostic_read_composition.py \
+            tests/projects/test_diagnostic_read_rejections.py \
             tests/projects/test_policy_read_composition.py \
             tests/projects/test_active_guide_read_composition.py \
             --cov=app.modules.projects.authorization_reads \

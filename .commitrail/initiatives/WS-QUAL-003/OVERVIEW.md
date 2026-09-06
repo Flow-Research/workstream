@@ -10,7 +10,8 @@
 - CI slice: [04 — rebalance seven hosted workers](WS-QUAL-003-04.md).
 - PROJECT setup slice: [05 — detach guide/bundle support](WS-QUAL-003-05.md).
 - PROJECT read slice: [06 — exact policy-read proof](WS-QUAL-003-06.md).
-- Next usable boundary after 06: continue PROJECT diagnostic/mutation behavior
+- PROJECT diagnostic slice: [07 — independent diagnostic-read proof](WS-QUAL-003-07.md).
+- Next usable boundary after 07: continue PROJECT mutation behavior
   audit and cohesive test-body extraction, then AUTH.
   The full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
@@ -96,6 +97,11 @@ No fixed reduction percentage or same-day completion claim overrides safety.
   composer. Repository/transaction proof remains separate and unchanged.
 - AUTH projection replay uses a nonexistent decision in its negative test;
   add existing-but-tampered stored decision coverage, not more random-ID cases.
+- PROJECT slice 07 replaces the remaining mixed diagnostic composer tests with
+  exact facts/digests and owner selectors. Each invalid-parent case now starts
+  with a valid record, so a pre-existing missing target cannot hide a broken
+  guide guard. Post-submit lineage and empty collections have independent proof.
+  These mocks prove composition/delegation, not PostgreSQL locks or tenant filters.
 - Before routine AUTH decomposition, diagnose the intermittent three-admin
   suspension race in `test_actor_profile_lifecycle_real_postgres_concurrency`.
   Main run `34032455068` returned `[500, 200]` rather than `[200, 200]`; unchanged
