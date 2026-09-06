@@ -15,6 +15,15 @@ PostgreSQL checks; its public-value test and database state matrix each combine
 independent behaviors. `ProjectLockedPolicyRepository` already rejects projects
 whose status is not active, but the stored inactive-project case is absent.
 
+The audit must judge relevance before relocation: passing or old tests are not
+automatically useful or obsolete. For this selected locked-context surface,
+public immutability/closed errors, exact historical lineage, successor isolation
+and database locking remain current contracts. Keep their distinct assertions;
+replace mixed test bodies with focused cases. Remove an assertion only when its
+behavior is retired or a named retained proof covers it at the same boundary.
+No reduction quota overrides that decision. A larger named-test count after
+splitting compound tests is not new product scope or evidence of more behaviors.
+
 ## Bounded change
 
 ### Allowed
