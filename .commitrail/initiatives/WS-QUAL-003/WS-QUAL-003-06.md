@@ -35,13 +35,16 @@ Existing real database/transaction/race tests remain unchanged and hosted.
   cases and propagated authorizer exceptions.
 - `backend/scripts/test_lane_catalogue.py` and
   `backend/tests/test_ci_lane_catalogue.py`: explicitly select the two new test
-  files in the existing PROJECT owner pair, retaining exact catalogue parity.
+  files in the existing PROJECT owner pair, retaining exact catalogue parity;
+  prove the dedicated coverage command selects the relocated read tests.
+- `.github/workflows/backend.yml`: update only the dedicated PROJECT read
+  coverage command's test locations; retain its source, branch mode and 90% floor.
 - `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`: regenerate current inventory;
   remove the retired oversized helper entry and shrink monolith debt, no new debt.
 
 ### Not allowed
 
-Production, migrations, workflows, dependencies, grants/actions, public API
+Production, migrations, other workflow changes, dependencies, grants/actions, public API
 activation, selection weakening, skips, coverage floors, global conftest or test
 modules imported as support. Do not replace real database tests with these fakes.
 The remaining diagnostic-read fake/consumer tests stay untouched.
@@ -110,6 +113,16 @@ functions; normalize only documented run-generated UUID labels when comparing
 different hosted runs. No global deadlock-freedom or exhaustive audit claim.
 
 ## Review findings
+
+QA06-01 / CI06-SELECTOR-01 identified a missed secondary consumer: the dedicated
+coverage command still selected the old monolith names, even though the full
+lanes selected the new files. This is a reviewed scope correction, not part of
+the original allowed-file set. The command now names the three unchanged
+diagnostic functions and both new modules explicitly, with its coverage target,
+branch measurement and 90% floor preserved. The exact command passes 25 cases
+at 90.17% locally. `test_project_read_coverage_gate_selects_relocated_proof`
+rejects the old selector, protecting this focused gate independently of broad
+lane inventory. Hosted verification remains required after this correction.
 
 The selected old tests are current and necessary but their grouping and weak
 digest assertions need repair. No selected behavior is obsolete or redundant.

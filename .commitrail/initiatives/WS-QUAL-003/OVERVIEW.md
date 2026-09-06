@@ -96,6 +96,14 @@ No fixed reduction percentage or same-day completion claim overrides safety.
   composer. Repository/transaction proof remains separate and unchanged.
 - AUTH projection replay uses a nonexistent decision in its negative test;
   add existing-but-tampered stored decision coverage, not more random-ID cases.
+- Before routine AUTH decomposition, diagnose the intermittent three-admin
+  suspension race in `test_actor_profile_lifecycle_real_postgres_concurrency`.
+  Main run `34032455068` returned `[500, 200]` rather than `[200, 200]`; unchanged
+  source passed another run. A test-only lock-observer timeout/assertion is a
+  plausible cause, not a confirmed diagnosis. Capture the exception class and
+  hook phase, then observe the exact waiter PID on a fresh database to distinguish
+  harness failure from a runtime fault. Preserve the success assertion, rollback
+  checks and real concurrent sessions; do not retry away, skip or weaken it.
 - CON publication non-reuse and reverse-order concurrency test names overstate
   their actual one-call assertions; preserve real races and repair the claims.
 - Guide extraction has a parent-coverage bucket mixing limits, seccomp and

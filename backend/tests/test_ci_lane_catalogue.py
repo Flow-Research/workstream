@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 
@@ -362,6 +363,29 @@ def test_workflow_lane_inventory_matches_catalogue() -> None:
     timing = re.search(r"for lane_name in (\([\s\S]*?\)):", source)
     assert timing is not None
     assert Counter(ast.literal_eval(timing[1])) == expected
+
+
+def test_project_read_coverage_gate_selects_relocated_proof() -> None:
+    """The dedicated gate must run all read proof at its current locations."""
+    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
+    step = re.search(
+        r"      - name: Project authorization-read composer coverage\n"
+        r"        working-directory: backend\n        run: \|\n"
+        r"(?P<command>(?:          [^\n]*\n)+)",
+        source,
+    )
+    assert step is not None
+    command = shlex.split(step["command"].replace("\\\n", " "))
+    assert command == [
+        "COVERAGE_FILE=.coverage-project-auth-read", "pytest", "-q",
+        "tests/test_projects.py::test_project_diagnostic_read_composer_binds_each_action",
+        "tests/test_projects.py::test_project_diagnostic_read_composer_fails_closed_for_invalid_or_missing",
+        "tests/test_projects.py::test_project_diagnostic_read_composer_locks_post_submit_policy_binding",
+        "tests/projects/test_policy_read_composition.py",
+        "tests/projects/test_active_guide_read_composition.py",
+        "--cov=app.modules.projects.authorization_reads", "--cov-branch",
+        "--cov-report=term-missing", "--cov-fail-under=90",
+    ]
 
 
 @pytest.mark.parametrize(
