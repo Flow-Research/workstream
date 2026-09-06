@@ -113,6 +113,18 @@ Discovery confirms the masked invalid-parent cases and mislabeled lock proof.
 Only the selected controlled-row proof is repaired; no global security or
 exhaustive test-audit claim is made.
 
+QA07-01 / SEC07-01 found that negative assertions initially omitted parent and
+selector facts: a fabricated `project_exists=True` survived the missing-project
+case. The shared negative assertion now compares the complete serialized context
+against explicit expected selectors, parent flags, guide version and target kind.
+The valid control passes; the same fabricated-parent probe now fails at the
+complete-context equality assertion.
+
+CodeRabbit's suggested decorator-inclusive debt range is not applied. The
+canonical inventory measures `node.lineno` through `node.end_lineno`, excluding
+decorators. The questioned function is 1442–1602 (161 lines); including decorator
+1441 while retaining the recorded count/hash would make the ledger inconsistent.
+
 Plan review confirmed all 35 proposed cases reach their intended guards with
 valid controls. The original eight cases pass; their assertions map to 35
 focused cases. The exact four-module coverage invocation passes 52 cases at
@@ -124,7 +136,7 @@ guide-project predicate still passes the old mixed rejection test but fails
 the new fresh-target test at its missing-denial assertion. Wrong owner guide
 selectors and the old workflow command fail their exact call/token assertions.
 Unrelated monolith definitions, assertions, decorators and parameters remain
-AST-identical. The controlled fixture is 64 lines; test files are 147 and 125
+AST-identical. The controlled fixture is 64 lines; test files remain below 500
 lines. The monolith shrinks from 14,279 to 14,092 lines with no new debt entry.
 Hosted full-suite evidence and current-head reviews belong in the PR summary.
 

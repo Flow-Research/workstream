@@ -14,16 +14,29 @@ from projects.diagnostic_read_fixtures import (
 )
 
 
-def _assert_concealed(case: SimpleNamespace, action: ActionId) -> None:
-    """One authorization request contains no diagnostic record or digest facts."""
+def _assert_concealed(
+    case: SimpleNamespace, action: ActionId, *,
+    project_exists: bool = True, guide_exists: bool = True,
+) -> None:
+    """Bind every negative authorization fact to the explicit expected context."""
     case.authorization.require.assert_awaited_once()
     called_action, context = case.authorization.require.await_args.args
     assert called_action is action
-    assert str(context.scope_project_id) == case.project_id
-    assert context.target_exists is False
-    assert context.target_binding_digest is None
-    assert context.source_snapshot_id is None
-    assert context.source_snapshot_hash is None
+    assert action in {
+        ActionId.PROJECT_SETUP_RUN_READ, ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+    }
+    assert context.model_dump(mode="json") == {
+        "resource_type": "project_diagnostic", "resource_id": case.target_id,
+        "scope_project_id": case.project_id, "guide_id": case.guide_id,
+        "guide_version": "v1" if guide_exists else None,
+        "target_kind": (
+            "post_submit_checker_policy_setup"
+            if action is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ else "setup_run"
+        ),
+        "project_exists": project_exists, "guide_exists": guide_exists,
+        "target_exists": False, "target_binding_digest": None,
+        "source_snapshot_id": None, "source_snapshot_hash": None,
+    }
 
 
 @pytest.mark.asyncio
@@ -54,7 +67,10 @@ async def test_invalid_diagnostic_parent_conceals_target(invalid: str) -> None:
     with pytest.raises(RuntimeError, match="missing diagnostic authorization unexpectedly allowed"):
         await read_diagnostic(case, ActionId.PROJECT_SETUP_RUN_READ)
 
-    _assert_concealed(case, ActionId.PROJECT_SETUP_RUN_READ)
+    _assert_concealed(
+        case, ActionId.PROJECT_SETUP_RUN_READ,
+        project_exists=invalid != "missing-project", guide_exists=False,
+    )
     if invalid == "missing-project":
         case.repository.lock_project_guide.assert_not_awaited()
     case.repository.lock_latest_project_setup_run.assert_not_awaited()
