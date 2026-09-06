@@ -9,7 +9,7 @@
 
 Continue behavior-first cleanup, not deletion to meet a count target. At main
 `d95a70bb`, `test_projects.py` has 15,272 lines. Its client, settings and bootstrap
-fixtures are imported by the 511-line `projects/test_locked_policy_context.py`.
+fixtures are imported by the 499-line `projects/test_locked_policy_context.py`.
 That file mixes public value validation, fake-session lineage checks and real
 PostgreSQL checks; its public-value test and database state matrix each combine
 independent behaviors. `ProjectLockedPolicyRepository` already rejects projects
@@ -43,7 +43,8 @@ splitting compound tests is not new product scope or evidence of more behaviors.
 - `backend/scripts/run_test_lanes.py` and `backend/tests/test_ci_test_lanes.py`:
   add the new contract module to existing PROJECT lane and exact ownership test.
 - `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`: regenerate exact inventory;
-  remove the decomposed locked-context file debt, shrink monolith spans, add no debt.
+  shrink monolith fixture spans/hashes and add no debt. The 499-line locked-context
+  file has no existing debt entry to remove.
 
 ### Not allowed
 
@@ -67,12 +68,20 @@ wrapper exports solely for compatibility.
 
 For the new database test, build the existing fully valid active lineage and
 resolve it successfully. Keep a Project instance loaded in an observer session,
-release its transaction locks, then use a separate writer session to commit the
+commit its observer transaction without expiring the object to release its locks,
+then use a separate writer session to commit the
 valid inactive `draft` state. Call the real repository in the observer and require
 the exact bounded unavailable error, refreshed draft status, and no staged ORM
-mutation. This tests persisted-state rejection and stale identity-map refresh,
-not simultaneous revocation ordering. The existing independent-session lock test
-continues to prove its narrower pre-submit-row lock boundary.
+mutation (`new`, `dirty` and `deleted` empty). This tests the writer-commits-first
+ordering and stale identity-map refresh. Separately test holder-first ordering:
+while the real repository holds the project lock, a named independent writer's
+status UPDATE must visibly wait in `pg_stat_activity`. Only releasing the holder
+transaction permits that write to complete and commit. Observe lock wait, not
+elapsed sleep. Preserve bounded wait and finally cancellation/gather/session-close
+cleanup. The existing lock test still proves its narrower pre-submit-row boundary.
+Inspect the repository's project -> guide -> snapshot -> effective -> pre-submit
+order and contender paths for cycles; these tests do not prove global deadlock
+freedom across all product writers.
 
 ## Acceptance and proof mapping
 
@@ -96,6 +105,9 @@ continues to prove its narrower pre-submit-row lock boundary.
   project-state guard may supply the negative result.
 - `...does_not_substitute_successors` and `...serializes_race` retain exact
   assertions and transaction/cleanup order.
+- `test_locked_policy_repository_postgresql_serializes_project_status_change`
+  proves project inactivation cannot complete while the observer owns the
+  locked-context transaction; after release, the committed draft row is observed.
 - Every new/rewritten file is below 500 lines; new helpers below 100 lines.
   No new frozen structural debt. Large monolith remains explicitly incomplete.
 - Exact hosted node reconciliation explains splits/additions; no cases vanish
@@ -121,6 +133,10 @@ local mutation discrimination from hosted repository custody, and do not infer
 database behavior from the fake-session test.
 
 ## Reconciliation
+
+Plan review PLAN-01 corrected the initial file-size/debt claim: this file already
+has 499 lines and no debt entry. Its split is responsibility isolation, not debt
+retirement. The monolith fixture extraction is the actual line-count reduction.
 
 - Baseline: merged PROJECT slice 02, PR #367, main `d95a70bb`.
 - Next: continue PROJECT guide/bundle fixture decomposition and remaining
