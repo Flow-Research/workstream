@@ -117,6 +117,7 @@ class LightweightAgentGateTests(unittest.TestCase):
 
         self.assertNotIn("pull_request_review:", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
+        self.assertEqual(len(re.findall(r"(?m)^      matrix:$", workflow)), 1)
         matrix = re.search(r"(?m)^      matrix:\n((?: {8,}[^\n]*\n|\n)+)", workflow)
         self.assertIsNotNone(matrix)
         self.assertEqual(

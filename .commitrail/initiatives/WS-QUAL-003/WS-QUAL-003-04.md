@@ -147,3 +147,5 @@ already rejected that, but the lightweight gate now asserts the entire canonical
 flat matrix block so the defect fails earlier. Extra retired, quoted, and
 blank-separated rows must fail the same root assertion; no unrelated integrity
 assertion is removed.
+The focused replay also requires exactly one canonical matrix key so a second
+flat matrix definition cannot hide behind the first regex match.
