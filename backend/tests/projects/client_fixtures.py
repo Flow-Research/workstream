@@ -155,4 +155,3 @@ async def ensure_access_administrator_bootstrap() -> tuple[UUID, UUID, UUID]:
             control.version = 1
             await session.commit()
         return link.actor_profile_id, link.id, grant.id
-

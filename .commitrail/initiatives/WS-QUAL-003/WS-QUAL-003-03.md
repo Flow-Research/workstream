@@ -136,7 +136,7 @@ Implementation inspection: all five moved fixture bodies/decorators are
 AST-identical, as are both retained PostgreSQL successor/lock tests and their
 helpers. The original ten invalid-lineage rows remain, with inactive project
 added separately from draft guide. The monolith falls from 15,272 to 15,141 lines;
-client support is 158 lines, pure/service contracts 296 and PostgreSQL tests 339.
+client support is 157 lines, pure/service contracts 296 and PostgreSQL tests 339.
 The client fixture imports use explicit same-name exports for pytest discovery,
 not alternate runtime API paths. The obsolete file-wide unused-import exemption
 in the PostgreSQL module is removed.
