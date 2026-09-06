@@ -25,13 +25,16 @@ test additionally proves zero runtime calls and no derived policy rows.
 
 - This record and `OVERVIEW.md` for the next usable boundary.
 - `backend/tests/test_projects.py`: remove only the five named duplicates and
-  relocate the readiness bundle, field setter, matrix and success test below.
+  relocate the readiness bundle, field setter, matrix and success test below;
+  preserve live warning-status translation in the existing report-coexistence test.
 - `backend/tests/projects/test_activation_readiness.py`: cohesive relocated
   readiness proof, with small dependency-focused fixture builders.
 - `backend/tests/projects/test_retired_submission_derivation_route.py`: actual
   app route registration and OpenAPI absence assertions, no database setup.
 - `backend/scripts/run_test_lanes.py`: register the two new modules in the
   existing project lane only; preserve execution and collection integrity.
+- `backend/tests/test_ci_test_lanes.py`: add only the two corresponding expected
+  paths in `test_measured_hotspots_have_explicit_semantic_owners`.
 - `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`: reconcile exact inventory;
   remove the extracted oversized helper debt and shrink the monolith entry.
 
@@ -69,6 +72,13 @@ Setup observations in removed tests are not evidence that the absent route can
 process warnings, read bytes, or reuse a policy. Preserve the separate sufficiency,
 source-usage and approval tests that actually own those behaviors.
 
+Before deleting the two warning-bearing route setups, change the existing
+`test_sufficiency_agent_coexists_with_manual_diagnostic_report` to use their
+hostile guide input and assert the live result status is `passed_with_warnings`.
+Keep all its existing coexistence and persisted-report assertions. This retains
+the otherwise-unique mapping from agent `guide_sufficient_with_warnings` to
+report `passed_with_warnings`; manually seeded warning reports do not prove it.
+
 Add distinct registration and OpenAPI tests: a hidden registered route must fail
 registration proof even though it remains absent from OpenAPI. Temporarily adding
 the route in memory must break the relevant assertion. Do not ship a fake route.
@@ -83,6 +93,8 @@ the route in memory must break the relevant assertion. Do not ship a fake route.
   or moved beyond the inventory's scope. Remaining ledger changes are exact spans
   and hashes; no new or increased structural debt.
 - Strongest runtime/database route proof and independent approval proof remain.
+- Live warning-status translation remains asserted in the report-coexistence
+  journey, not inferred from manually seeded report states.
 - Real app registration/OpenAPI absence are each discriminating.
 - The project lane collects every new module and full hosted coverage passes.
 
@@ -104,6 +116,15 @@ Use hosted PROJECT execution for retained database proofs; never run the full
 relocations preserve cases, five duplicates disappear, two absence tests appear.
 Run one temporary route-registration mutation and one readiness-guard bypass
 probe to verify intended assertions fail rather than setup failing.
+Run the existing exact lane ownership/inventory tests after adding both paths.
+
+## Plan review corrections
+
+- PLAN-01: explicitly include the exact CI membership assertion's file above.
+- PLAN-02: preserve automatic warning-status translation through live sufficiency
+  execution before deleting the obsolete endpoint setups. All original
+  report-coexistence assertions remain. These are bounded scope corrections,
+  not permission to change production or weaken gates.
 
 ## Reconciliation
 
