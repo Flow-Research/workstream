@@ -166,6 +166,8 @@ PROJECT_MODULES = (
     "tests/projects/test_activation_readiness.py",
     "tests/projects/test_policy_read_composition.py",
     "tests/projects/test_active_guide_read_composition.py",
+    "tests/projects/test_diagnostic_read_composition.py",
+    "tests/projects/test_diagnostic_read_rejections.py",
     "tests/projects/test_retired_submission_derivation_route.py",
     "tests/test_projects.py",
 )

@@ -83,6 +83,8 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/projects/test_activation_readiness.py",
             "tests/projects/test_policy_read_composition.py",
             "tests/projects/test_active_guide_read_composition.py",
+            "tests/projects/test_diagnostic_read_composition.py",
+            "tests/projects/test_diagnostic_read_rejections.py",
             "tests/projects/test_retired_submission_derivation_route.py",
             "tests/test_projects.py",
         }
@@ -378,9 +380,8 @@ def test_project_read_coverage_gate_selects_relocated_proof() -> None:
     command = shlex.split(step["command"].replace("\\\n", " "))
     assert command == [
         "COVERAGE_FILE=.coverage-project-auth-read", "pytest", "-q",
-        "tests/test_projects.py::test_project_diagnostic_read_composer_binds_each_action",
-        "tests/test_projects.py::test_project_diagnostic_read_composer_fails_closed_for_invalid_or_missing",
-        "tests/test_projects.py::test_project_diagnostic_read_composer_locks_post_submit_policy_binding",
+        "tests/projects/test_diagnostic_read_composition.py",
+        "tests/projects/test_diagnostic_read_rejections.py",
         "tests/projects/test_policy_read_composition.py",
         "tests/projects/test_active_guide_read_composition.py",
         "--cov=app.modules.projects.authorization_reads", "--cov-branch",

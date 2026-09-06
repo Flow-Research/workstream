@@ -1,7 +1,7 @@
 # WS-QUAL-003-07 — Isolate diagnostic-read behavior and repair masked rejection proof
 
 - Initiative: WS-QUAL-003
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Replace mixed diagnostic-read tests with exact scoped
   composition, digest, delegation and independent rejection proof.
 
@@ -112,6 +112,21 @@ command regression. Temporary mutants remain outside Git.
 Discovery confirms the masked invalid-parent cases and mislabeled lock proof.
 Only the selected controlled-row proof is repaired; no global security or
 exhaustive test-audit claim is made.
+
+Plan review confirmed all 35 proposed cases reach their intended guards with
+valid controls. The original eight cases pass; their assertions map to 35
+focused cases. The exact four-module coverage invocation passes 52 cases at
+91.88% branch coverage, and all 26 catalogue checks pass locally.
+
+Temporary defect probes confirm all six old action cases accept a wrong
+well-formed digest while the new exact assertions reject it. Bypassing the
+guide-project predicate still passes the old mixed rejection test but fails
+the new fresh-target test at its missing-denial assertion. Wrong owner guide
+selectors and the old workflow command fail their exact call/token assertions.
+Unrelated monolith definitions, assertions, decorators and parameters remain
+AST-identical. The controlled fixture is 64 lines; test files are 147 and 125
+lines. The monolith shrinks from 14,279 to 14,092 lines with no new debt entry.
+Hosted full-suite evidence and current-head reviews belong in the PR summary.
 
 ## Reconciliation
 
