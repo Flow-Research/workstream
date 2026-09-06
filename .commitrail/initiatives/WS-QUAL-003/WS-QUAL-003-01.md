@@ -1,7 +1,7 @@
 # WS-QUAL-003-01 — Remove duplicated proof and exercise real authority defaults
 
 - Initiative: WS-QUAL-003
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Remove proven AUTH/CON duplication while strengthening
   service-default denial and prepared-fact binding without changing production.
 
@@ -36,7 +36,8 @@ audit or the decomposition of the existing monoliths.
 - `backend/tests/contributions/test_policy_negative_scope.py`.
 - `backend/tests/contributions/policy_test_support.py`.
 - `.ci/behavior-contracts/contribution-policy-draft-behavior.md` only to map
-  a removed duplicate's criterion to its retained exact test.
+  removed duplicates to retained exact tests and narrow static API-shape claims
+  that incorrectly implied runtime side-effect proof.
 
 ### Not allowed
 
@@ -111,6 +112,26 @@ Markdown links, Commitrail checks, and `git diff --check`. Full coverage and
 database lanes run only in hosted CI. Record precise baseline/new node counts,
 surviving assertions, targeted mutation observations and limits in the PR.
 Only service/in-process custody is claimed for these fixtures.
+
+Focused baseline: 87 collected cases across the five modules. The changed
+modules pass 72 cases (44 CONTRIBUTIONS, 28 AUTH): 22 redundant executions
+removed and seven consume-fact mismatch cases added. All five invalid quantity
+values survive; the scope/action success matrix remains. Changed Python files
+are below 500 lines. This does not decompose the existing large monoliths.
+
+Temporary permissive-default mutations make each canonical publish/retire
+denial test fail at its `DID NOT RAISE` assertion. Normalizing the substituted
+route key in AUTH's real adapter similarly makes the new mismatch case fail
+at its expected-denial assertion. These are in-memory test-of-test checks;
+no mutation or bypass is shipped. Other fact cases passed normally, but are
+not individually claimed as mutation-tested. Hosted coverage is separate
+PR evidence, not inferred from these focused runs.
+
+Implementation inspection found current CP04A negative-scope mappings still
+referencing retired static probes through CP04B name translation. Reconcile
+those mappings to the surviving exact API-shape assertion; do not claim it
+proves downstream runtime isolation. This is a documentation scope correction,
+not removal of a runtime guarantee or permission to weaken product behavior.
 
 ## Reconciliation
 

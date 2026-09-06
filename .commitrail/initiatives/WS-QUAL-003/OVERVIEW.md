@@ -5,8 +5,8 @@
   replace weak assertions, add missing critical behavior, and dismantle oversized
   test files before resuming product implementation.
 - First bounded change: [01 — first proof cleanup](WS-QUAL-003-01.md).
-- Next usable boundary: complete the initial AUTH/CON proof cleanup, then audit
-  and decompose the PROJECT and AUTH monoliths in independently reviewed batches.
+- Next usable boundary after 01: audit and decompose the PROJECT and AUTH
+  monoliths in independently reviewed batches; the full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
   concurrency proof, current coverage floors, full hosted execution, human merge.
 - Product work: POL-04A2 remains planned; this initiative does not implement it.

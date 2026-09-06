@@ -111,21 +111,6 @@ async def test_publish_closes_authority_before_product_transition() -> None:
 
 
 @pytest.mark.asyncio
-async def test_publish_is_hidden_deny_default() -> None:
-    fixture = service_fixture()
-    request = _request(fixture)
-    _install_complete_draft(fixture, request)
-    fixture.service._publication._mutation_authorization = fixture.service.__class__(  # noqa: SLF001
-        fixture.service._session  # noqa: SLF001
-    )._mutation_authorization  # noqa: SLF001
-
-    with pytest.raises(RuntimeError, match="contribution_policy_unavailable"):
-        await fixture.service.publish(request)
-
-    fixture.repository.create_transition_custody.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_replacement_publication_is_one_atomic_event() -> None:
     fixture = service_fixture()
     request = _request(fixture)

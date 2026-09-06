@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -320,20 +321,17 @@ async def test_non_human_context_cannot_receive_finance_authority() -> None:
 
 
 @pytest.mark.asyncio
-async def test_project_finance_authority_reads_and_consumes_exact_create_once() -> None:
+async def test_project_finance_authority_rejects_create_replay_without_extra_evidence() -> None:
     project_id = uuid4()
     adapter, context, _session, evidence = _adapter(project_id)
-    await adapter.authorize_read(
-        actor_profile_id=context.actor_profile_id,
-        facts=AdapterBindingReadFacts(project_id=project_id, adapter_binding_id=uuid4()),
-    )
     facts = _create_facts(context.actor_profile_id, project_id)
     prepared = await adapter.prepare_mutation(facts)
     assert await adapter.consume_mutation(prepared, facts) == context.actor_profile_id
-    adapter.close_mutation(prepared)
-    assert len(evidence.events) == 2
+    assert len(evidence.events) == 1
     with pytest.raises(PreparedAuthorizationInvalid):
         await adapter.consume_mutation(prepared, facts)
+    assert len(evidence.events) == 1
+    adapter.close_mutation(prepared)
 
 
 @pytest.mark.asyncio
@@ -350,22 +348,48 @@ async def test_wrong_actor_and_cross_project_deny_before_authority_issuance() ->
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "action",
+    "field_name",
     (
-        "compensation.adapter_binding.suspend",
-        "compensation.adapter_binding.resume",
+        "operation_id",
+        "request_digest",
+        "project_id",
+        "adapter_binding_id",
+        "instrument_type",
+        "adapter_actor_id",
+        "route_key",
     ),
 )
-async def test_system_finance_authority_consumes_exact_transition(
-    action: str,
+async def test_consume_rejects_changed_facts_without_allowed_evidence(
+    field_name: str,
 ) -> None:
     project_id = uuid4()
-    adapter, context, _session, evidence = _adapter(None)
-    facts = _transition_facts(context.actor_profile_id, project_id, action)
+    adapter, context, _session, evidence = _adapter(project_id)
+    facts = _create_facts(context.actor_profile_id, project_id)
     prepared = await adapter.prepare_mutation(facts)
-    assert await adapter.consume_mutation(prepared, facts) == context.actor_profile_id
+    replacements = {
+        "operation_id": uuid4(),
+        "request_digest": "sha256:" + "b" * 64,
+        "project_id": uuid4(),
+        "adapter_binding_id": uuid4(),
+        "instrument_type": "project_points",
+        "adapter_actor_id": uuid4(),
+        "route_key": "stripe.secondary",
+    }
+    changed = replace(facts, **{field_name: replacements[field_name]})
+
+    with pytest.raises(PreparedAuthorizationInvalid):
+        await adapter.consume_mutation(prepared, changed)
+    assert evidence.events == []
     adapter.close_mutation(prepared)
+
+    control = _create_facts(context.actor_profile_id, project_id)
+    control_prepared = await adapter.prepare_mutation(control)
+    assert (
+        await adapter.consume_mutation(control_prepared, control)
+        == context.actor_profile_id
+    )
     assert len(evidence.events) == 1
+    adapter.close_mutation(control_prepared)
 
 
 @pytest.mark.asyncio
