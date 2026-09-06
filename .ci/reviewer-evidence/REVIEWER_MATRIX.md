@@ -32,6 +32,29 @@ fields. Human-readable labels may still appear in prose.
 
 ## Adopted proof-quality responsibilities
 
+### Dispatch and shared work
+
+The lead selects specialties from the changed behavior, not a fixed nine-agent
+checklist. Architecture/public ports route to architecture; authorization or
+untrusted evidence to security; test/proof changes to QA and test delta; CI or
+deterministic gates to CI integrity; current documentation to documentation.
+Add product/operations, reuse, or senior engineering only for their actual
+impact. One bounded assignment may cover related tracks, but must explicitly
+apply each named skill and report each track's findings without inventing a
+second independent review.
+
+Give each reviewer a clean base/head, current record, owned impact cone, bounded
+prior findings, and shared command artifacts—not the full conversation. The
+shared protocol is loaded once, then the specialty skill. The lead owns common
+checks and GitHub monitoring; reviewers independently inspect and run only
+needed falsification probes. Collect findings before batching fixes and replay
+only affected tracks against the new frozen target, including formerly passing
+ones. Configure delegates as `gpt-5.6-sol` high and the lead as `gpt-6-astra`.
+
+Historical blind adoption results below prove their original instruction
+versions, not every later edit. Instruction changes need fresh scoped blind
+exercises before claiming improved reviewer effectiveness.
+
 All nine pairs consume the shared proof vocabulary, compatibility rules,
 failure-pattern IDs, and discriminating test-of-the-test contract. They must not
 infer custody from names or narrative evidence. Specialty additions are adopted

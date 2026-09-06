@@ -11,7 +11,9 @@
     "concurrency": {"proof_strength": "concurrency", "kind": "executed", "required_observations": ["independent_sessions"]},
     "direct_sql": {"proof_strength": "direct_sql", "kind": "executed", "required_observations": ["orm_bypassed"]},
     "composition": {"proof_strength": "composition", "kind": "executed", "required_observations": ["composition_root"]},
-    "negative_structure": {"proof_strength": "negative_structure", "kind": "inspected", "required_observations": ["syntax_or_registry"]}
+    "negative_structure": {"proof_strength": "negative_structure", "kind": "inspected", "required_observations": ["syntax_or_registry"]},
+    "plan_contract": {"proof_strength": "contract_inspection", "kind": "inspected", "required_observations": ["contract_counterexample"]},
+    "document_consistency": {"proof_strength": "contract_inspection", "kind": "inspected", "required_observations": ["source_comparison"]}
   },
   "type": "object",
   "additionalProperties": false,
@@ -181,6 +183,30 @@
           },
           "residual_escape": {
             "properties": {"result": {"const": "falsified"}}
+          },
+          "findings": {
+            "not": {
+              "contains": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["severity", "disposition"],
+                    "properties": {
+                      "severity": {"enum": ["Critical", "High", "Medium"]},
+                      "disposition": {"const": "unresolved"}
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["severity", "disposition"],
+                    "properties": {
+                      "severity": {"enum": ["Critical", "High"]},
+                      "disposition": {"enum": ["accepted_risk", "deferred_with_owner"]}
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       }
@@ -188,9 +214,9 @@
   ],
   "$defs": {
     "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "proof_strength": {"enum": ["pure", "service", "repository", "transaction", "concurrency", "direct_sql", "composition", "negative_structure"]},
-    "claimed_boundary": {"enum": ["pure", "service", "repository", "repository_isolation", "transaction", "concurrency", "direct_sql", "composition", "negative_structure"]},
-    "proof_observation": {"enum": ["pure_result", "service_orchestration", "stored_row", "stored_foreign_resource", "staged_state", "final_state", "independent_sessions", "orm_bypassed", "composition_root", "syntax_or_registry"]},
+    "proof_strength": {"enum": ["pure", "service", "repository", "transaction", "concurrency", "direct_sql", "composition", "negative_structure", "contract_inspection"]},
+    "claimed_boundary": {"enum": ["pure", "service", "repository", "repository_isolation", "transaction", "concurrency", "direct_sql", "composition", "negative_structure", "plan_contract", "document_consistency"]},
+    "proof_observation": {"enum": ["pure_result", "service_orchestration", "stored_row", "stored_foreign_resource", "staged_state", "final_state", "independent_sessions", "orm_bypassed", "composition_root", "syntax_or_registry", "contract_counterexample", "source_comparison"]},
     "proof_custody": {
       "type": "object",
       "additionalProperties": false,
@@ -234,7 +260,7 @@
         "source_target": {"$ref": "#/$defs/sha"},
         "blocks_pr": {"type": "boolean"},
         "disposition": {"enum": ["unresolved", "fixed", "accepted_risk", "deferred_with_owner", "not_valid"]},
-        "verification": {"type": "string"},
+        "verification": {"type": "string", "minLength": 1, "pattern": "\\S"},
         "failure_pattern_ids": {
           "type": "array",
           "uniqueItems": true,

@@ -22,6 +22,10 @@ definition or ownership boundary of Workstream.
 - Keep the engineering loop separate from the Workstream product lifecycle. Workstream product review decisions remain `accept`, `needs_revision`, and `reject`; internal engineering reviewer findings are process evidence, not product decisions.
 - Codex-discoverable repository skills live under `.agents/skills/`.
 - Codex custom reviewer agents live under `.codex/agents/`.
+- The lead uses the repository's Astra default; delegated work uses Sol with
+  high reasoning. `.codex/config.toml` and the custom agent files own executable
+  settings. Explicit user/session selections take precedence; do not silently
+  escalate models or claim an existing session changed model after editing TOML.
 - Durable engineering context uses the smallest applicable Commitrail record
   under `.commitrail/`. `.commitrail/INDEX.md` is durable navigation; GitHub
   open pull requests are the transient-work view. Review evidence is never an
@@ -90,6 +94,16 @@ definition or ownership boundary of Workstream.
 - Use internal sub-agent review proportionate to risk. Security, authorization,
   payment, architecture, workflow, and broad product changes require focused
   review; small low-risk changes do not require ceremonial fanout.
+- Select reviewers through `.ci/reviewer-evidence/REVIEWER_MATRIX.md` and the
+  current change's impact. The lead runs shared checks once, freezes a clean
+  candidate, and supplies bounded context. Reviewers independently inspect their
+  assigned risks and relevant unchanged owners. Batch valid repairs before
+  asking affected reviewers to replay; do not push between each reviewer finding.
+- Continue authorized work through fixes and verification. Repeated failure
+  requires a diagnosis of the failing assumption and a discriminating check.
+  Ask for direction only when a material decision or new authority is missing;
+  a repair counter, planning artifact, or reviewer session error is not a new
+  permission boundary.
 - For architecture, CI/workflow, docs, or reuse-sensitive chunks, add the matching reviewer track from `.codex/agents/`.
 - Do not report work complete while requested reviewer agents are still running. Wait for them, address valid findings, and close any open sub-agent sessions.
 - CodeRabbit, CI, and GitHub review are external checks. They supplement internal reviewer agents; they do not replace them.

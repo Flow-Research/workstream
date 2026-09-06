@@ -17,11 +17,19 @@ Review the plan before implementation.
 - Are security/payment/auth/data risks addressed?
 - Are acceptance criteria testable?
 - Is the verification strategy enough?
+- Can each proposed fixture reach the assertion under existing guards? Trace a
+  concrete counterexample and valid control through the actual sequence. A test
+  name or plausible matrix row alone does not prove feasibility.
+- Are verification commands real, or explicitly named future implementation
+  tests? Are owner boundaries and dependencies unambiguous and acyclic?
+- Does the evidence distinguish inspected contract feasibility from future
+  runtime execution?
 
 ## Output
 
 - PASS
-- PASS WITH CONDITIONS
-- FAIL
+- PASS WITH LOW RISKS
+- BLOCKED
+- PROVISIONAL (required evidence unavailable)
 
 Include concrete required changes if not PASS.

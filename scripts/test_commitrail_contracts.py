@@ -24,6 +24,10 @@ class CommitrailContractTests(unittest.TestCase):
             "| [WS-EXAMPLE-001](initiatives/WS-EXAMPLE-001/OVERVIEW.md) | Planned | Next |\n",
         )
         self._write(
+            ".commitrail/CHANGE_TEMPLATE.md",
+            "# <Change ID> — <Outcome>\n\n- [ ] `<observable result>`\n",
+        )
+        self._write(
             ".commitrail/initiatives/WS-EXAMPLE-001/OVERVIEW.md",
             "# Example\n\n- Disposition: Planned\n",
         )
@@ -82,6 +86,48 @@ class CommitrailContractTests(unittest.TestCase):
         self._write(path, self._record().replace("## Evidence", "## Proof"))
         with self.assertRaisesRegex(gate.CommitrailError, "FIELD_MISSING"):
             self._validate(["backend/app/example.py", path])
+
+    def test_empty_required_sections_fail(self) -> None:
+        path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
+        for heading in gate.REQUIRED_HEADINGS:
+            with self.subTest(heading=heading):
+                record = self._record().replace(f"{heading}\nX", heading)
+                self._write(path, record)
+                with self.assertRaisesRegex(gate.CommitrailError, "FIELD_EMPTY"):
+                    self._validate(["backend/app/example.py", path])
+
+    def test_empty_intended_merge_outcome_fails(self) -> None:
+        path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
+        self._write(
+            path,
+            self._record().replace(
+                "- Intended merge outcome: Example completes.",
+                "- Intended merge outcome:",
+            ),
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "FIELD_EMPTY"):
+            self._validate(["backend/app/example.py", path])
+
+    def test_untouched_template_marker_fails(self) -> None:
+        path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
+        self._write(
+            path,
+            self._record().replace(
+                "## Acceptance criteria\nX",
+                "## Acceptance criteria\n- [ ] `<observable result>`",
+            ),
+        )
+        with self.assertRaisesRegex(gate.CommitrailError, "TEMPLATE_MARKER"):
+            self._validate(["backend/app/example.py", path])
+
+    def test_concise_and_planned_record_content_remains_valid(self) -> None:
+        path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
+        record = self._record().replace(
+            "## Acceptance criteria\nX",
+            "## Acceptance criteria\n- [ ] Prove `<setup-run-id>` behavior later.",
+        )
+        self._write(path, record)
+        self._validate(["backend/app/example.py", path])
 
     def test_invalid_disposition_fails(self) -> None:
         path = ".commitrail/initiatives/WS-EXAMPLE-001/WS-EXAMPLE-001-01.md"
@@ -142,7 +188,12 @@ class CommitrailContractTests(unittest.TestCase):
 
         def incomplete_base_tree(command: list[str], **kwargs: object) -> str:
             if "ls-tree" in command:
-                return ".agent-loop/one.md\n.agent-loop/two.md\n"
+                return (
+                    "100644 blob 1111111111111111111111111111111111111111\t"
+                    ".agent-loop/one.md\n"
+                    "100644 blob 2222222222222222222222222222222222222222\t"
+                    ".agent-loop/two.md\n"
+                )
             return self._snapshot_git(command, **kwargs)
 
         with (
@@ -226,14 +277,15 @@ class CommitrailContractTests(unittest.TestCase):
     @staticmethod
     def _snapshot_git(command: list[str], **_: object) -> str:
         if "ls-tree" in command:
-            return ".agent-loop/one.md\n"
+            return (
+                "100644 blob 1111111111111111111111111111111111111111\t"
+                ".agent-loop/one.md\n"
+            )
         if "ls-files" in command:
             return (
                 "100644 1111111111111111111111111111111111111111 0\t"
                 ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md\n"
             )
-        if "rev-parse" in command:
-            return "1111111111111111111111111111111111111111"
         if "hash-object" in command:
             return "1111111111111111111111111111111111111111"
         raise AssertionError(command)
@@ -251,7 +303,9 @@ class CommitrailContractTests(unittest.TestCase):
 
     def test_pre_cutover_manifest_rejects_missing_destination(self) -> None:
         self._write_snapshot_contract()
-        (self.root / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md").unlink()
+        (
+            self.root / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md"
+        ).unlink()
         with (
             patch.object(gate, "run_checked", side_effect=self._snapshot_git),
             patch.dict(
@@ -283,15 +337,16 @@ class CommitrailContractTests(unittest.TestCase):
     def test_pre_cutover_manifest_rejects_symlink_destination(self) -> None:
         self._write_snapshot_contract()
         destination = (
-            self.root
-            / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md"
+            self.root / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md"
         )
         payload = self.root / "identical.md"
         payload.write_text("exact\n", encoding="utf-8")
         destination.unlink()
         destination.symlink_to(payload)
         with (
-            patch.object(gate, "run_checked", side_effect=self._snapshot_git),
+            patch.object(
+                gate, "run_checked", side_effect=self._snapshot_git
+            ) as git_commands,
             patch.dict(
                 gate.PRE_CUTOVER_MANIFEST_DIGESTS,
                 {self.SNAPSHOT_BASE: self.SNAPSHOT_DIGEST},
@@ -299,6 +354,33 @@ class CommitrailContractTests(unittest.TestCase):
             self.assertRaisesRegex(gate.CommitrailError, "DESTINATION_NOT_REGULAR"),
         ):
             self._validate([])
+        self.assertFalse(
+            any("hash-object" in call.args[0] for call in git_commands.call_args_list)
+        )
+
+    def test_pre_cutover_manifest_rejects_non_regular_index_mode(self) -> None:
+        self._write_snapshot_contract()
+
+        def executable_mode(command: list[str], **kwargs: object) -> str:
+            output = self._snapshot_git(command, **kwargs)
+            return (
+                output.replace("100644", "100755") if "ls-files" in command else output
+            )
+
+        with (
+            patch.object(
+                gate, "run_checked", side_effect=executable_mode
+            ) as git_commands,
+            patch.dict(
+                gate.PRE_CUTOVER_MANIFEST_DIGESTS,
+                {self.SNAPSHOT_BASE: self.SNAPSHOT_DIGEST},
+            ),
+            self.assertRaisesRegex(gate.CommitrailError, "DESTINATION_NOT_REGULAR"),
+        ):
+            self._validate([])
+        self.assertFalse(
+            any("hash-object" in call.args[0] for call in git_commands.call_args_list)
+        )
 
     def test_pre_cutover_manifest_rejects_extra_destination(self) -> None:
         self._write_snapshot_contract()
@@ -317,7 +399,9 @@ class CommitrailContractTests(unittest.TestCase):
 
     def test_pre_cutover_manifest_rejects_row_and_file_deletion(self) -> None:
         self._write_snapshot_contract()
-        (self.root / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md").unlink()
+        (
+            self.root / ".commitrail/initiatives/WS-EXAMPLE-001/pre-cutover/one.md"
+        ).unlink()
         self._write(
             ".commitrail/initiatives/WS-ENG-009/PRE_CUTOVER_MANIFEST.tsv",
             "source\tdestination\tbase_blob_sha\n",

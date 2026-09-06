@@ -65,10 +65,14 @@ jobs:
         run: >-
           python3 -m unittest -v
           scripts.test_reviewer_contracts
+          scripts.test_reviewer_instruction_composition
+          scripts.test_review_claim_boundaries
           scripts.test_review_target
 
       - name: Lightweight gate regression tests
         run: >-
           python3 -m unittest -v
           scripts.test_commitrail_contracts
+          scripts.test_commitrail_archive_batch
+          scripts.test_commitrail_markdown_structure
           scripts.test_lightweight_agent_gates

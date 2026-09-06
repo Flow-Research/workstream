@@ -33,6 +33,12 @@ change uses one combined change record. Multi-PR work adds one concise
 initiative overview. Extra assurance or decision records are exceptional and
 must earn their maintenance cost.
 
+The combined record owns durable intent, design, scope, acceptance criteria, and
+remaining risks. Its PR links those sections and owns exact-head command/review
+results and transient GitHub state. The overview links the current change record
+before historical material. Do not put a record's own candidate SHA inside it;
+keep freshness in the PR/session evidence to avoid self-invalidating commits.
+
 ## Review layers
 
 Every meaningful change receives implementation and evidence-adequacy review.
@@ -40,6 +46,18 @@ Specialty review runs only for affected security, authorization, payment,
 architecture, CI, documentation, product-operations, reuse, or test-delta
 surfaces. Protection-delta review is mandatory when tests, workflows,
 evaluators, coverage, thresholds, or reviewer machinery change.
+
+The lead uses Astra and delegates scoped work to Sol high through repository
+configuration. Each reviewer loads the shared protocol plus its specialty, not
+copied instructions in three locations. The lead supplies a frozen clean target,
+bounded prior findings, and shared check artifacts. Reviewers independently
+inspect their impact cone and run additional falsification probes as needed.
+The lead collects a complete wave, batches repairs, and replays affected tracks;
+a formerly passing review is not fresh if the repair invalidated its evidence.
+
+Full backend/coverage checks run in hosted CI. A failed command or reviewer
+session requires diagnosis/recovery, not an arbitrary permission gate or a false
+completion claim. Scope or missing product intent may still require the human.
 
 ## Evidence and privacy
 

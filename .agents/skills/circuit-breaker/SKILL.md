@@ -22,9 +22,14 @@ Use before deep review.
 
 - L1 infrastructure: prefer under 500 changed lines.
 - L2 bug/refactor: prefer under 300 changed lines.
-- L3 maintenance/docs: flexible, but still reviewable.
+- Maintenance/docs: flexible, but still reviewable; classify semantic risk using
+  `risk-router`, not a separate risk scale.
 
 These are guidelines, not laws. Explain exceptions.
+
+An authorized cross-file repair may be one cohesive change. Diagnose missing
+scope/evidence and repair the current record rather than creating ceremonial
+PRs. Stop for a human only when authority or a material decision is missing.
 
 ## Output
 

@@ -25,6 +25,25 @@ host setup is supported only on the Linux/glibc/Python matrix documented there.
 Do not replace the approved Pillow artifacts to make an unsupported host install
 pass.
 
+Repository engineering checks use a separate, hash-pinned tooling environment,
+not the backend environment. The tested local tooling setup is Linux x86_64,
+CPython 3.12, Git, and uv (see the native quickstart for uv installation).
+From the repository root, install it with:
+
+```bash
+uv venv .venv --python cpython3.12
+uv pip install --python .venv/bin/python --require-hashes --only-binary=:all: \
+  -r .github/requirements/agent-gates.txt
+```
+
+The root `.venv/` is ignored and separate from `backend/.venv/`. If you already
+use that path for another environment, choose another unused path and use its
+Python consistently below.
+
+On other hosts, use the required Agent Gates check in GitHub Actions.
+The backend Docker service mounts only `backend/`; it is not a repository-root
+tooling environment. Do not change dependency hashes to force a host install.
+
 For an obvious low-risk correction, record intent and scope in the pull
 request. A meaningful implementation change uses one record based on
 `.commitrail/CHANGE_TEMPLATE.md`. Multi-PR work also uses one concise initiative
@@ -39,8 +58,8 @@ Before implementation, update from current `main` and read:
 2. [v0.1 Roadmap And Capability Status](docs/roadmap_status.md) for implemented,
    hidden, in-progress, and remaining capabilities.
 3. [Commitrail Engineering Index](.commitrail/INDEX.md) for durable
-   initiative dispositions, remaining boundaries, and the live pull-request
-   view of transient work.
+   initiative dispositions and remaining boundaries. Inspect GitHub separately
+   for the live pull-request view of transient work.
 4. [Architecture Lockdown](docs/architecture_lockdown.md), accepted ADRs, and
    the canonical specification for the subsystem being changed.
 
@@ -84,10 +103,12 @@ active queue or approval gate.
   Never commit transient review or CI state, and never create a second
   post-merge memory PR.
 
-Run the same atomic check locally before pushing:
+Commit/freeze the candidate. With the local tooling setup above, run the same
+atomic check before pushing; other hosts inspect the required hosted result.
+Its base-to-HEAD comparison does not validate uncommitted edits:
 
 ```bash
-python3 scripts/check_commitrail_records.py --base-ref origin/main
+.venv/bin/python scripts/check_commitrail_records.py --base-ref origin/main
 ```
 
 Security, authorization, payments, workflow, architecture, and other high-risk

@@ -32,18 +32,30 @@ work and optional for small changes.
 6. Run relevant tests/checks.
 7. Run deterministic proof checks before reviewer fanout.
 8. If deterministic checks fail, fix cheap blockers before reviewer fanout.
-9. Run required reviewer agents or skills based on risk routing.
-10. Fix all Critical and High findings.
-11. Re-run failed reviewers.
+9. Freeze a clean review candidate. Supply impact-routed reviewers its base/head,
+   current change record, bounded file list, prior finding IDs, and shared check
+   evidence. Use an isolated clean checkout if unrelated work must be preserved.
+   Do not forward the full conversation or bulk-read archives by default.
+10. Collect the review wave before batching valid repairs. Do not change the
+    target underneath running reviewers. Fix Critical/High findings; resolve or
+    explicitly disposition every other valid finding.
+11. Re-run affected reviewers, including previously passing tracks when their
+    evidence was invalidated. Supply the delta and prior findings. Never relabel
+    an old review with the new SHA.
 12. Before a passing readiness claim, summarize each required reviewer's exact
     head, verdict, compatible proof boundary, proof strength, execution custody,
     discriminating probe, and uncertainty without copying private session
     receipts into Git.
 13. Summarize material reviewer findings in the same Commitrail change record
     or PR; add another record only when independently useful.
-14. Stop after two failed repair cycles on the same class of issue.
-15. Complete the change record and PR trust summary without duplicating them.
-16. Stop for human review.
+14. Repeated failure requires root-cause diagnosis and a narrower reproducer,
+    not another speculative patch or an arbitrary stop. Recover failed reviewer
+    sessions with a bounded replacement; unavailable evidence is not a pass.
+15. Keep durable intent/decisions in the change record and current head, checks,
+    reviewer freshness, and external conversations in the PR trust summary.
+16. Continue authorized repairs and hosted-check monitoring until complete or
+    genuinely blocked. Keep the human informed. Wait for required reviewers and
+    checks before reporting completion; leave merge to the authorized human.
 
 ## Hard stops
 
@@ -54,7 +66,11 @@ Stop immediately if:
 - auth/payment/policy/data boundary changes beyond contract
 - tests or CI must be weakened to pass
 - secrets or production credentials are required
-- same blocker remains after two repair attempts
+
+A failed command, reviewer crash, or repair count does not create a new
+permission requirement. Stop only when safe progress requires missing authority,
+a material human decision, or an unavailable prerequisite. Do not start the next
+product change automatically after completing this one.
 
 ## Output
 
@@ -67,4 +83,4 @@ Return:
 5. Reviewer results
 6. Remaining risks
 7. PR trust bundle draft
-8. Explicit stop: "Chunk complete or blocked. Awaiting human review."
+8. Actual disposition and the precise remaining human action or blocker.

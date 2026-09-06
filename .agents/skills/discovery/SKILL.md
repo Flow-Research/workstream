@@ -19,7 +19,9 @@ Perform read-only discovery. Do not edit application code.
 
 ## Produce
 
-Update `DISCOVERY.md` with:
+Return read-only findings to the lead or user. When planning is authorized,
+incorporate useful findings into the current combined change record or initiative
+overview; do not create a separate `DISCOVERY.md` by default. Cover:
 
 - Current behavior
 - Relevant files/modules

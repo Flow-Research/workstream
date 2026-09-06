@@ -7,28 +7,12 @@ description: Create a human-readable PR trust bundle containing intent, design, 
 
 Create the PR body or trust bundle after implementation and review.
 
-## Required sections
+## Canonical format
 
-- Chunk
-- Goal
-- Human-approved intent
-- What changed
-- Why it changed
-- Design chosen
-- Alternatives rejected
-- Scope control
-- Product behavior
-- Acceptance criteria proof
-- Tests/checks run
-- Test delta
-- CI integrity
-- Reviewer results
-- External review
-- Remaining risks
-- Follow-up work
-- Human review focus
-- Human merge ownership
-- Proof quality and uncertainty
+Use `.github/pull_request_template.md`; do not invent a second twenty-section
+report. Link the combined Commitrail record for durable intent, boundaries,
+design, acceptance criteria, and remaining risks. Keep current diff, command
+results, exact-head review freshness, CI, and external conversations in the PR.
 
 ## Rules
 
@@ -41,6 +25,9 @@ Create the PR body or trust bundle after implementation and review.
   manual-trigger-required review is `not fresh`, never reviewer approval.
 - Internal reviewer summaries are non-authoritative mirrors of private session
   receipts and must name the exact reviewed head.
+- After a push, mark affected old results historical until replayed. Never just
+  replace a SHA while keeping old reviewer results. Description-only corrections
+  do not change the code target or require rerunning unaffected runtime tests.
 - Summarize proof quality by behavior boundary, proof strength/custody,
   compatibility, discriminating probe, and uncertainty. Never copy private
   session receipts into Git or imply that a summary owns their custody.

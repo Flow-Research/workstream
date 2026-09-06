@@ -2,6 +2,8 @@
 
 Use this summary with the smallest applicable Commitrail record. Do not copy
 transient check or approval state into durable repository files.
+Link durable design/scope sections rather than duplicating them. Omit empty
+optional headings; report unavailable evidence honestly until ready.
 
 ## Change
 
@@ -77,7 +79,10 @@ change, state the intent directly here.
 ## Impact-Routed Reviewer Results
 
 List only reviewers required by the affected risks. Do not add fixed ceremonial
-rows. Allowed results are `PASS`, `PASS AFTER FIXES`, or `PASS WITH LOW RISKS`.
+rows. Use the receipt vocabulary: `PASS`, `PASS AFTER FIXES`,
+`PASS WITH LOW RISKS`, `BLOCKED`, `PROVISIONAL`, or
+`N/A - with approved reason`. Pending or unavailable proof is not a passing
+readiness claim. Mark old affected results historical after a push.
 
 Reviewed code SHA:
 
@@ -114,6 +119,9 @@ Please inspect:
 -
 
 ## Human Merge Ownership
+
+The human completes the acceptance/merge checks; agents must not tick them on
+the human's behalf or infer approval from a passing CI status.
 
 - [ ] I can explain what changed.
 - [ ] I can explain why it changed.

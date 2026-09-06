@@ -36,6 +36,18 @@ Do not commit transient labels such as “in review,” “CI pending,” or “
 merge.” GitHub already owns those facts. Durable dispositions are `Planned`,
 `Complete`, `Stopped`, and `Superseded`.
 
+The record owns durable intent, boundaries, design decisions, acceptance claims,
+and remaining risk. The PR links that record and owns current diff, command
+results, exact-head reviewer freshness, CI, and conversations. Do not repeat the
+same narrative or store the record's own candidate SHA inside it: that forces
+another commit and immediately makes the SHA stale. Each overview links the
+current usable change record before historical discovery. Read archives only
+when the current boundary adopts or needs a specific source.
+
+Risk classes are defined once in
+[`risk-router`](../.agents/skills/risk-router/SKILL.md): L0 highest, L1 bounded
+high risk, L2 routine low risk. Documentation uses its semantic risk.
+
 ## Starting work
 
 1. Pull current `main` and read `CONTRIBUTING.md`.
