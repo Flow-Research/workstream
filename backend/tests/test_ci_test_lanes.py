@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from collections import Counter
 import hashlib
 import json
 import os
@@ -16,222 +14,6 @@ import pytest  # type: ignore[import-not-found]
 
 import scripts.run_test_lanes as runner
 from scripts.run_test_lanes import LANES, LaneError, TestLane as LaneDefinition
-
-
-def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
-    discovered = runner.discover_test_modules()
-    runner.validate_lane_inventory(discovered)
-
-    assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 7
-    assert all(lane.requires_postgres for lane in LANES)
-    assert Counter(assigned)[runner.PARTITIONED_SCHEMA_MODULE] == 3
-    assert all(
-        count
-        == (
-            len(runner.PARTITIONED_SCHEMA_LANES)
-            if module == runner.PARTITIONED_SCHEMA_MODULE
-            else 2
-            if module in runner.SHARED_FOUNDATION_MODULES
-            else 1
-        )
-        for module, count in Counter(assigned).items()
-    )
-    assert set(assigned) == set(discovered)
-    assert runner.ADMIN_RUNNER_MODULE in next(
-        lane.modules for lane in LANES if lane.name == "schema_contracts_a"
-    )
-
-
-def test_measured_hotspots_have_explicit_semantic_owners() -> None:
-    """Keep lane balance tied to subsystem ownership and measured schema cost."""
-    modules_by_lane = {lane.name: set(lane.modules) for lane in LANES}
-
-    assert modules_by_lane["project_lifecycle"] == {
-        "tests/projects/guide_compilation/test_authorized_concurrency_postgresql.py",
-        "tests/projects/guide_compilation/test_authorized_execution_service.py",
-        "tests/projects/guide_compilation/test_authorized_recovery_postgresql.py",
-        "tests/projects/guide_compilation/test_authorized_request_service.py",
-        "tests/projects/guide_compilation/test_contracts.py",
-        "tests/projects/guide_compilation/test_context_builder.py",
-        "tests/projects/guide_compilation/test_database_guards.py",
-        "tests/projects/guide_compilation/test_durable_dispatch_handoff.py",
-        "tests/projects/guide_compilation/test_hidden_call_graph.py",
-        "tests/projects/guide_compilation/test_hidden_orchestrator.py",
-        "tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py",
-        "tests/projects/guide_compilation/test_migration_authorized_persistence.py",
-        "tests/projects/guide_compilation/test_migration_contract.py",
-        "tests/projects/guide_compilation/test_public_authorization.py",
-        "tests/projects/guide_compilation/test_projection_call_graph.py",
-        "tests/projects/guide_compilation/test_projection_contracts.py",
-        "tests/projects/guide_compilation/test_projection_migration.py",
-        "tests/projects/guide_compilation/test_projection_policy.py",
-        "tests/projects/guide_compilation/test_projection_postgresql.py",
-        "tests/projects/guide_compilation/test_projection_authorization_postgresql.py",
-        "tests/projects/guide_compilation/test_projection_service.py",
-        "tests/projects/guide_compilation/test_request_operation_postgresql.py",
-        "tests/projects/guide_compilation/test_repository_attempts.py",
-        "tests/projects/guide_compilation/test_repository_persistence.py",
-        "tests/projects/test_locked_policy_context.py",
-        "tests/projects/test_locked_policy_contract.py",
-        "tests/projects/test_activation_readiness.py",
-        "tests/projects/test_retired_submission_derivation_route.py",
-        "tests/test_projects.py",
-    }
-    assert modules_by_lane["task_lifecycle"] == {
-        "tests/test_checker_catalogue.py",
-        "tests/test_checkers.py",
-        "tests/test_default_pre_submit_execution.py",
-        "tests/test_effective_pre_submit_execution.py",
-        "tests/test_project_guide_compilation_contracts.py",
-        "tests/test_review_lease_persistence.py",
-        "tests/test_review_queue_persistence.py",
-        "tests/test_tasks.py",
-    }
-    shared_a = modules_by_lane[runner.PARTITIONED_SHARED_LANES[0]]
-    shared_b = modules_by_lane[runner.PARTITIONED_SHARED_LANES[1]]
-    assert shared_a == shared_b == set(runner.SHARED_FOUNDATION_MODULES)
-    assert {
-        "tests/test_alembic.py",
-        "tests/test_database_reset.py",
-        runner.ADMIN_RUNNER_MODULE,
-    } == modules_by_lane["schema_contracts_a"]
-    assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_b"]
-    assert {"tests/test_alembic.py"} == modules_by_lane["schema_contracts_c"]
-    assert {
-        "tests/test_actors.py",
-        "tests/test_artifact_admission.py",
-        "tests/test_submission_bundle_admission.py",
-        "tests/test_authorization.py",
-        "tests/test_guide_artifacts.py",
-        "tests/test_mutation_policy.py",
-    } <= shared_a
-
-
-def test_discovery_is_recursive_and_lexically_canonical(tmp_path: Path) -> None:
-    tests = tmp_path / "tests"
-    nested = tests / "nested"
-    nested.mkdir(parents=True)
-    (nested / "test_z.py").write_text("def test_z(): pass\n", encoding="utf-8")
-    (tests / "test_a.py").write_text("def test_a(): pass\n", encoding="utf-8")
-
-    assert runner.discover_test_modules(tests, tmp_path) == (
-        "tests/nested/test_z.py",
-        "tests/test_a.py",
-    )
-
-
-@pytest.mark.parametrize("kind", ("file", "directory"))
-def test_discovery_rejects_symlinks(tmp_path: Path, kind: str) -> None:
-    tests = tmp_path / "tests"
-    tests.mkdir()
-    if kind == "file":
-        target = tmp_path / "target.py"
-        target.write_text("def test_x(): pass\n", encoding="utf-8")
-        (tests / "test_link.py").symlink_to(target)
-    else:
-        target = tmp_path / "target"
-        target.mkdir()
-        (tests / "nested").symlink_to(target, target_is_directory=True)
-
-    with pytest.raises(LaneError, match="symlink"):
-        runner.discover_test_modules(tests, tmp_path)
-
-
-@pytest.mark.parametrize(
-    ("mutation", "error"),
-    (
-        ("missing", "missing_lane_modules"),
-        ("duplicate", "duplicate_lane_modules"),
-        ("foreign", "foreign_lane_modules"),
-        ("unsafe", "invalid_lane_module"),
-        ("name", "invalid_lane_names"),
-    ),
-)
-def test_inventory_fails_closed(mutation: str, error: str) -> None:
-    discovered = runner.discover_test_modules()
-    lanes = list(LANES)
-    first = lanes[0]
-    if mutation == "missing":
-        lanes[0] = replace(first, modules=first.modules[1:])
-        lanes[1] = replace(lanes[1], modules=lanes[1].modules[1:])
-    elif mutation == "duplicate":
-        lanes[0] = replace(first, modules=(*first.modules, lanes[1].modules[0]))
-    elif mutation == "foreign":
-        lanes[0] = replace(first, modules=(*first.modules, "tests/test_foreign.py"))
-    elif mutation == "unsafe":
-        lanes[0] = replace(first, modules=(*first.modules, "../test_escape.py"))
-    else:
-        lanes[0] = replace(first, name="Invalid Lane")
-    with pytest.raises(LaneError, match=error):
-        runner.validate_lane_inventory(discovered, lanes=tuple(lanes))
-
-
-def test_manifest_contains_sorted_exact_node_ids() -> None:
-    nodes = [
-        f"{LANES[0].modules[0]}::test_b[value::x]",
-        f"{LANES[0].modules[0]}::test_a",
-    ]
-    manifest = runner.build_manifest("a" * 40, sorted(nodes))
-
-    assert set(manifest) == {"schema_version", "head_sha", "nodes"}
-    assert manifest["head_sha"] == "a" * 40
-    assert [row["nodeid"] for row in manifest["nodes"]] == sorted(nodes)
-    assert set(manifest["nodes"][0]) == {"execution_kind", "nodeid", "module", "lane"}
-    assert all(row["execution_kind"] == runner.ORDINARY_KIND for row in manifest["nodes"])
-
-
-def test_manifest_classifies_only_runner_self_tests_as_admin_kind() -> None:
-    ordinary = f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration"
-    admin = f"{runner.ADMIN_RUNNER_MODULE}::test_admin_owner"
-    rows = runner.build_manifest("a" * 40, sorted((ordinary, admin)))["nodes"]
-
-    assert {row["nodeid"]: row["execution_kind"] for row in rows} == {
-        admin: runner.ADMIN_KIND,
-        ordinary: runner.ORDINARY_KIND,
-    }
-    assert next(row for row in rows if row["nodeid"] == admin)["lane"] == "schema_contracts_a"
-
-
-def test_alembic_nodes_partition_deterministically_across_schema_lanes() -> None:
-    nodes = [f"{runner.PARTITIONED_SCHEMA_MODULE}::test_migration_{index}" for index in range(100)]
-
-    first = runner.build_manifest("a" * 40, nodes)
-    second = runner.build_manifest("a" * 40, list(reversed(nodes)))
-    first_by_node = {row["nodeid"]: row["lane"] for row in first["nodes"]}
-    second_by_node = {row["nodeid"]: row["lane"] for row in second["nodes"]}
-
-    assert first_by_node == second_by_node
-    assert set(first_by_node.values()) == set(runner.PARTITIONED_SCHEMA_LANES)
-    assert all(lane in runner.PARTITIONED_SCHEMA_LANES for lane in first_by_node.values())
-
-
-def test_shared_nodes_partition_deterministically_across_shared_lanes() -> None:
-    module = runner.SHARED_FOUNDATION_MODULES[0]
-    nodes = [f"{module}::test_shared_{index}" for index in range(100)]
-
-    first = runner.build_manifest("a" * 40, nodes)
-    second = runner.build_manifest("a" * 40, list(reversed(nodes)))
-    first_by_node = {row["nodeid"]: row["lane"] for row in first["nodes"]}
-    second_by_node = {row["nodeid"]: row["lane"] for row in second["nodes"]}
-
-    assert first_by_node == second_by_node
-    assert set(first_by_node.values()) == set(runner.PARTITIONED_SHARED_LANES)
-
-
-def test_manifest_has_no_exclusion_escape_hatch() -> None:
-    admin = f"{runner.ADMIN_RUNNER_MODULE}::test_admin_owner"
-    manifest = runner.build_manifest("a" * 40, [admin])
-
-    assert "excluded_modules" not in manifest
-    assert manifest["nodes"] == [
-        {
-            "execution_kind": runner.ADMIN_KIND,
-            "lane": "schema_contracts_a",
-            "module": runner.ADMIN_RUNNER_MODULE,
-            "nodeid": admin,
-        }
-    ]
 
 
 def test_deterministic_uuid_nodeids_match_across_full_subset_and_repeat(
@@ -344,7 +126,7 @@ def test_admin_runner_environment_retains_only_admin_database_url(
     monkeypatch.setenv(
         "WORKSTREAM_TEST_DATABASE_URL", "postgresql+asyncpg://test:secret@localhost/test"
     )
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
 
     env = runner.admin_runner_environment(lane, tmp_path, tmp_path / ".coverage", "admin")
 
@@ -381,7 +163,7 @@ def test_admin_wrapper_redacts_admin_url_before_persisted_output() -> None:
 def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverage(
     tmp_path: Path,
 ) -> None:
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
     isolation = tmp_path / f"{lane.name}.database.json"
     isolation.write_text("{}\n", encoding="utf-8")
     ordinary_coverage = tmp_path / ".coverage.unit.schema_contracts"
@@ -468,81 +250,6 @@ def test_failed_lane_preserves_evidence_without_isolation_metadata(
     assert row["execution_exit_code"] == 1
     assert evidence["isolation_metadata_file"] is None
     assert evidence["isolation_metadata_sha256"] is None
-
-
-def test_run_lanes_reports_collection_failure_before_manifest_validation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A failed pytest collection keeps its stable top-level error."""
-    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
-    monkeypatch.setattr(runner, "discover_test_modules", lambda: modules)
-    monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
-    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (2, [], []))
-
-    with pytest.raises(LaneError, match="pytest_collection_failed"):
-        runner.run_lanes(tmp_path / "metadata", tmp_path / "summary.json", 10)
-
-
-def test_collect_only_writes_raw_digest_bound_validator_schema(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
-    nodes = sorted(f"{module}::test_one" for module in modules)
-    monkeypatch.setattr(runner, "discover_test_modules", lambda: tuple(sorted(modules)))
-    monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
-    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (0, nodes, []))
-    metadata = tmp_path / "metadata"
-    summary_path = tmp_path / "summary.json"
-
-    assert runner.run_lanes(metadata, summary_path, 10, collect_only=True) == 0
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    manifest_bytes = (metadata / summary["manifest_file"]).read_bytes()
-    assert set(summary) == {
-        "aggregate_runner_seconds",
-        "canonical_node_count",
-        "elapsed_seconds",
-        "head_sha",
-        "lanes",
-        "manifest_file",
-        "manifest_sha256",
-        "mode",
-        "schema_version",
-        "slowest_lane_seconds",
-    }
-    assert summary["mode"] == "collect"
-    assert summary["canonical_node_count"] == len(nodes)
-    assert summary["manifest_sha256"] == hashlib.sha256(manifest_bytes).hexdigest()
-    assert len(summary["lanes"]) == len(LANES)
-    assert summary["slowest_lane_seconds"] == max(
-        lane["elapsed_seconds"] for lane in summary["lanes"]
-    )
-    assert summary["aggregate_runner_seconds"] == sum(
-        lane["elapsed_seconds"] for lane in summary["lanes"]
-    )
-    for lane in summary["lanes"]:
-        assert lane["coverage_file"] is None
-        assert lane["execution_exit_code"] is None
-        evidence = metadata / lane["evidence_file"]
-        assert lane["evidence_sha256"] == hashlib.sha256(evidence.read_bytes()).hexdigest()
-
-
-def test_collect_only_rejects_selected_lane(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    modules = tuple(sorted({module for lane in LANES for module in lane.modules}))
-    nodes = sorted(f"{module}::test_one" for module in modules)
-    monkeypatch.setattr(runner, "discover_test_modules", lambda: tuple(sorted(modules)))
-    monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
-    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (0, nodes, []))
-
-    with pytest.raises(LaneError, match="collect_with_selected_lane"):
-        runner.run_lanes(
-            tmp_path / "metadata",
-            tmp_path / "summary.json",
-            10,
-            collect_only=True,
-            selected_lane=LANES[0].name,
-        )
 
 
 def test_collection_rejects_duplicate_or_foreign_nodes(

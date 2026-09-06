@@ -978,6 +978,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/test_lane_catalogue.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/test_structure_boundary.py"
     },
     {
@@ -989,7 +993,7 @@
       "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "d9c594e1b7dc6c5ed1cd1215481eb70304da1f94d77a6123ee6c3dc569d8925a",
+  "authority_digest": "9c2e78c44a6052a132beb7be381b3acfd71d8ebdf39386ba09dfdcb919d17842",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
