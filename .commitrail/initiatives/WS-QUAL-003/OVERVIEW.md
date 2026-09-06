@@ -90,6 +90,12 @@ No fixed reduction percentage or same-day completion claim overrides safety.
   their actual one-call assertions; preserve real races and repair the claims.
 - Guide extraction has a parent-coverage bucket mixing limits, seccomp and
   format parsing; preserve unique behavior in focused tests before pruning it.
+- CI slice 04 exposed two pre-existing incidental coverage paths, not omitted
+  product tests. During AUTH/ACTORS audit, force both first-access sessions past
+  the initial miss and prove the contender waits then returns the winner's
+  persisted identity after lock release (`actors/service.py` post-lock branch).
+  During CON audit, persist prior policy versions and assert the real repository's
+  `next_version_number` result; entering its awaited query is not completed proof.
 
 ## Risks and verification
 

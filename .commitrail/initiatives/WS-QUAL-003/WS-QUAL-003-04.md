@@ -140,3 +140,10 @@ locally at its exact assertion. The reviewed scope correction includes that
 consumer; its assertions now name all seven lanes. No fan-in or coverage guard
 was removed. This was a missed consumer in discovery, not an infrastructure
 outage or a reason to bypass the gate.
+
+External finding CR-3943706913 correctly noted that individual root matrix-label
+counts admitted an extra eighth lane. The later backend Counter parity test
+already rejected that, but the lightweight gate now asserts the entire canonical
+flat matrix block so the defect fails earlier. Extra retired, quoted, and
+blank-separated rows must fail the same root assertion; no unrelated integrity
+assertion is removed.
