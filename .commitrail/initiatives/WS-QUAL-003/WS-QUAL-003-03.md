@@ -138,7 +138,7 @@ Implementation inspection: all five moved fixture bodies/decorators are
 AST-identical, as are both retained PostgreSQL successor/lock tests and their
 helpers. The original ten invalid-lineage rows remain, with inactive project
 added separately from draft guide. The monolith falls from 15,272 to 15,141 lines;
-client support is 157 lines, pure/service contracts 296 and PostgreSQL tests 339.
+client support is 157 lines, pure/service contracts 298 and PostgreSQL tests 339.
 The client fixture imports use explicit same-name exports for pytest discovery,
 not alternate runtime API paths. The obsolete file-wide unused-import exemption
 in the PostgreSQL module is removed.
@@ -150,6 +150,12 @@ The full hosted PostgreSQL ordering/fixture/coverage evidence is recorded on
 the PR separately; these local probes do not stand in for database execution.
 
 ## Reconciliation
+
+Implementation review QA-01/SEC-QUAL03-01 caught a lost post-mutation hash
+assertion during the split. The dedicated hash test now mutates the original
+nested input after constructing the canonical object, then verifies the pristine
+hash. A fake that snapshots value but computes its hash from a retained mutable
+input must fail that test. The value-copy and hash-stability proofs stay separate.
 
 Plan review PLAN-01 corrected the initial file-size/debt claim: this file already
 has 499 lines and no debt entry. Its split is responsibility isolation, not debt

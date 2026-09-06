@@ -96,9 +96,11 @@ def test_project_locked_policy_copies_nested_input() -> None:
     assert canonical.value == '{"nested":{"values":[1,2]}}'
 
 
-def test_project_locked_policy_hash_matches_canonical_input() -> None:
+def test_project_locked_policy_hash_retains_copied_input() -> None:
     source = {"nested": {"values": [1, 2]}}
-    assert CanonicalJsonObject.from_mapping(source).sha256 == canonical_json_hash(source)
+    canonical = CanonicalJsonObject.from_mapping(source)
+    cast(dict[str, Any], source["nested"])["values"] = [3]
+    assert canonical.sha256 == canonical_json_hash({"nested": {"values": [1, 2]}})
 
 
 def test_project_locked_policy_exposes_no_mutable_projection() -> None:
