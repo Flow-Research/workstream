@@ -9,8 +9,9 @@
 - PROJECT custody slice: [03 — fixtures and locked-context transactions](WS-QUAL-003-03.md).
 - CI slice: [04 — rebalance seven hosted workers](WS-QUAL-003-04.md).
 - PROJECT setup slice: [05 — detach guide/bundle support](WS-QUAL-003-05.md).
-- Next usable boundary after 05: continue PROJECT behavior audit and cohesive
-  test-body extraction, then AUTH.
+- PROJECT read slice: [06 — exact policy-read proof](WS-QUAL-003-06.md).
+- Next usable boundary after 06: continue PROJECT diagnostic/mutation behavior
+  audit and cohesive test-body extraction, then AUTH.
   The full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
   concurrency proof, current coverage floors, full hosted execution, human merge.
@@ -88,6 +89,11 @@ No fixed reduction percentage or same-day completion claim overrides safety.
   removes the remaining locked-context import from the PROJECT test monolith.
   It preserves all helper behavior and test cases; this dependency cleanup is
   not a completed semantic audit of their consumers.
+- PROJECT slice 06 replaces four mixed/weak read tests with focused exact-fact,
+  exact-digest, validator-delegation and rejection proof. A well-formed wrong
+  digest passed the old prefix assertions; the new equality checks reject it.
+  The fake validator no longer repeats a composer guard that could mask a broken
+  composer. Repository/transaction proof remains separate and unchanged.
 - AUTH projection replay uses a nonexistent decision in its negative test;
   add existing-but-tampered stored decision coverage, not more random-ID cases.
 - CON publication non-reuse and reverse-order concurrency test names overstate

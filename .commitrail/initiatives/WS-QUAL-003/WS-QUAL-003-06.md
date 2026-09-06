@@ -65,7 +65,7 @@ compute its own expected result. Keep fact-projection and validator-delegation
 proof separate. Validator call capture must assert the actual rows, source items,
 exception type and `require_payment_policy=False`, not just booleans.
 
-## Acceptance criteria and proof map
+## Acceptance criteria
 
 | Existing or missing atom | Named proof in the new modules | Boundary |
 | --- | --- | --- |
@@ -113,6 +113,24 @@ different hosted runs. No global deadlock-freedom or exhaustive audit claim.
 
 The selected old tests are current and necessary but their grouping and weak
 digest assertions need repair. No selected behavior is obsolete or redundant.
+PLAN06-DOC-01 corrected the acceptance heading to the canonical record format.
+Plan review confirmed the negative fixtures reach the real composer guards,
+the hash oracle adds discrimination beyond runtime shape validation, and the
+malformed-body test reaches the real service guard. Preserve the originating
+autouse settings-cache cleanup explicitly in both new modules.
+
+Implementation comparison preserves every unrelated top-level definition,
+decorator and parameter row. The fake's three initialization phases concatenate
+to its exact original statements; seeded UUID/clock construction produces equal
+rows, identities and hash inputs. Its repository getter bodies are unchanged.
+The source fixture is 186 lines; read test modules are 172 and 208 lines.
+
+Focused execution passes 42 combined read-composition and catalogue cases. Valid controls pass;
+wrong well-formed binding digests still pass the old prefix-only tests but fail
+the new equality assertions. Bypassed effective-guide and post-submit binding
+guards fail at missing-denial assertions. Wrong delegated source items and
+compensation flag fail the exact call assertions. These temporary mutants are
+not committed. Hosted exact-head coverage and case custody remain PR evidence.
 
 ## Reconciliation
 
