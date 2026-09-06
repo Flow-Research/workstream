@@ -14,6 +14,7 @@ for current product capability.
 | [WS-POL-003](initiatives/WS-POL-003/OVERVIEW.md) | Planned | Build 04A2 finalization and exact AUTH gates before live cutover |
 | [WS-REV-001](initiatives/WS-REV-001/OVERVIEW.md) | Planned | Continue dependency-gated hidden review behavior |
 | [WS-QUAL-002](initiatives/WS-QUAL-002/OVERVIEW.md) | Planned | Populate subsystem ownership before changed-line mutation work |
+| [WS-QUAL-003](initiatives/WS-QUAL-003/OVERVIEW.md) | Planned | Audit and prune test proof, add missing safety cases, decompose oversized test modules |
 | [WS-XINT-002](initiatives/WS-XINT-002/OVERVIEW.md) | Planned | Remaining ART/AUTH activation edges only |
 | [WS-XINT-003](initiatives/WS-XINT-003/OVERVIEW.md) | Planned | Resume activation only against exact merged REV behavior |
 | WS-POL-002 | Superseded | Future guide inference belongs to WS-POL-003; reframe remaining executor work against current specifications |
