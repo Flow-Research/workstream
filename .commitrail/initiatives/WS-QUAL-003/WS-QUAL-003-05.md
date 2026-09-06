@@ -5,7 +5,7 @@
 - Intended merge outcome: Move the complete guide/bundle setup dependency graph
   into cohesive PROJECT support modules without changing product proof.
 
-## Intent and current behavior
+## Intent
 
 Continue the behavior-first test audit after the seven-lane CI rebalance.
 At main `7105dda1`, `backend/tests/test_projects.py` contains 15,141 lines.
