@@ -11,13 +11,13 @@ Begin actual PROJECT file decomposition, not just a test-count reduction.
 Separate one cohesive readiness boundary, remove proven duplicate route setup,
 and add direct composition proof for the retired endpoint.
 
-## Current behavior
+## Baseline behavior
 
-`backend/tests/test_projects.py` has 15,700 lines. Its activation-ready bundle
-helper is itself frozen structural debt (118 lines). The readiness matrix has
-distinct lineage/status/provenance cases that must survive. Five database-heavy
-retired derivation-route tests ultimately repeat 404; the strongest existing
-test additionally proves zero runtime calls and no derived policy rows.
+Before this change, `backend/tests/test_projects.py` had 15,700 lines. Its
+activation-ready bundle helper was frozen structural debt (118 lines). The
+readiness matrix contained distinct lineage/status/provenance cases to preserve.
+Five database-heavy retired derivation-route tests repeated 404; the strongest
+existing test additionally proved zero runtime calls and no derived policy rows.
 
 ## Bounded change
 
@@ -122,13 +122,14 @@ Implementation proof: all 39 relocated readiness cases pass, together with the
 two composition checks and two existing lane-integrity tests (43 focused cases).
 An AST comparison confirms the field setter, matrix and valid-control test are
 unchanged. Deterministic UUID/clock execution confirms every old/new fixture
-value is identical. The new modules contain 287 and 21 lines; the old monolith
+value is identical. The new modules contain 287 and 23 lines; the old monolith
 shrinks from 15,700 to 15,272. The 118-line helper is genuinely decomposed; all
 new helpers remain below 100 lines.
 
 In-memory mutation checks distinguish the proofs: a hidden registered endpoint
 fails registration proof while passing OpenAPI absence; a visible endpoint fails
-OpenAPI absence. Normalizing a wrong project in the real readiness method makes
+OpenAPI absence. Both slash and no-slash route variants are checked. Normalizing
+a wrong project in the real readiness method makes
 the expected-denial assertion fail. No mutation or bypass is committed. Full
 hosted execution, warning-status persistence, retained database proof and coverage
 remain separately recorded PR evidence, not inferred from the focused run.
@@ -140,6 +141,12 @@ remain separately recorded PR evidence, not inferred from the focused run.
   execution before deleting the obsolete endpoint setups. All original
   report-coexistence assertions remain. These are bounded scope corrections,
   not permission to change production or weaken gates.
+
+Implementation review also found that trailing-slash routes escaped the initial
+absence predicates (QA-01/SEC-QUAL02-01, also reported by CodeRabbit). Both paths
+now normalize terminal slashes before comparison. The hidden/visible mutation
+matrix includes each spelling. DOC-WSQUAL00302-01 clarified the baseline tense;
+neither repair changes product behavior.
 
 ## Reconciliation
 
