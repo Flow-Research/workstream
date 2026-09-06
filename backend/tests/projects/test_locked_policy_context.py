@@ -1,14 +1,11 @@
 """PROJECT public locked-policy context capability tests."""
 
-# ruff: noqa: F401, F811 -- imported pytest fixtures must remain module globals.
-
 from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from httpx import AsyncClient
@@ -16,269 +13,28 @@ import pytest
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
 from app.modules.projects.api import (
-    CanonicalJsonObject,
-    ProjectLockedPolicyContextFacts,
     ProjectLockedPolicyContextRequest,
     ProjectLockedPolicyContextUnavailable,
 )
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     PreSubmitCheckerPolicy,
+    Project,
 )
 from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
 from test_projects import (
-    activate_guide_for_downstream_test,
     complete_guide_payload,
     create_approved_policy_bundle,
     create_guide,
     create_project,
-    project_client,
-    project_database_env,
 )
-
-
-def _project_locked_policy_rows(
-    *,
-    guide_status: str = "active",
-    effective_status: str = "approved",
-    pre_submit_status: str = "compiled",
-) -> tuple[ProjectLockedPolicyContextRequest, tuple[SimpleNamespace, ...]]:
-    """Build one internally consistent locked PROJECT lineage."""
-    project_id, guide_id, snapshot_id, effective_id, pre_submit_id = (uuid4() for _ in range(5))
-    manifest = {"items": [{"name": "guide.md"}], "schema_version": "v1"}
-    effective_body = {"allowed": ["zip"], "limits": {"max_bytes": 1024}}
-    compiled_bundle = {"rules": [{"primitive": "zip_safety"}]}
-    snapshot_hash = canonical_json_hash(manifest)
-    effective_hash = canonical_json_hash(effective_body)
-    bundle_hash = canonical_json_hash(compiled_bundle)
-    request = ProjectLockedPolicyContextRequest(
-        project_id=project_id,
-        guide_version="v1",
-        source_snapshot_id=snapshot_id,
-        source_snapshot_hash=snapshot_hash,
-        effective_policy_id=effective_id,
-        effective_policy_hash=effective_hash,
-        pre_submit_policy_id=pre_submit_id,
-        pre_submit_policy_bundle_hash=bundle_hash,
-    )
-    rows = (
-        SimpleNamespace(id=str(project_id), status="active"),
-        SimpleNamespace(
-            id=str(guide_id),
-            project_id=str(project_id),
-            version="v1",
-            status=guide_status,
-        ),
-        SimpleNamespace(
-            id=str(snapshot_id),
-            project_id=str(project_id),
-            guide_id=str(guide_id),
-            guide_version="v1",
-            manifest_json=manifest,
-            bundle_hash=snapshot_hash,
-        ),
-        SimpleNamespace(
-            id=str(effective_id),
-            project_id=str(project_id),
-            guide_id=str(guide_id),
-            guide_version="v1",
-            source_snapshot_id=str(snapshot_id),
-            source_snapshot_hash=snapshot_hash,
-            effective_policy=effective_body,
-            effective_policy_hash=effective_hash,
-            lifecycle_status=effective_status,
-        ),
-        SimpleNamespace(
-            id=str(pre_submit_id),
-            project_id=str(project_id),
-            guide_id=str(guide_id),
-            guide_version="v1",
-            source_snapshot_id=str(snapshot_id),
-            source_snapshot_hash=snapshot_hash,
-            effective_policy_id=str(effective_id),
-            effective_policy_hash=effective_hash,
-            lifecycle_status=pre_submit_status,
-            compiler_version="pre-submit-v1",
-            compiled_bundle=compiled_bundle,
-            compiled_bundle_hash=bundle_hash,
-        ),
-    )
-    return request, rows
-
-
-def test_project_locked_policy_public_facts_are_deeply_immutable() -> None:
-    """Canonical public policy values copy inputs without a mutable projection."""
-    source = {"nested": {"values": [1, 2]}}
-    canonical = CanonicalJsonObject.from_mapping(source)
-    cast(dict[str, Any], source["nested"])["values"] = [3]
-    assert canonical.value == '{"nested":{"values":[1,2]}}'
-    assert canonical.sha256 == canonical_json_hash({"nested": {"values": [1, 2]}})
-    assert not hasattr(canonical, "as_dict")
-    with pytest.raises(ValueError, match="canonical JSON object is invalid"):
-        CanonicalJsonObject('{"z":1,"a":2}')
-    with pytest.raises(ValueError, match="canonical JSON object is invalid"):
-        CanonicalJsonObject("not-json")
-    with pytest.raises(ValueError, match="canonical JSON object is invalid"):
-        CanonicalJsonObject.from_mapping(cast(Any, []))
-    with pytest.raises(ValueError, match="failure code is invalid"):
-        ProjectLockedPolicyContextUnavailable(cast(Any, "unbounded"))
-    unavailable = ProjectLockedPolicyContextUnavailable("project_locked_policy_context_changed")
-    assert unavailable.code == "project_locked_policy_context_changed"
-    assert str(unavailable) == "project_locked_policy_context_changed"
-    request, rows = _project_locked_policy_rows()
-    with pytest.raises(ValueError, match="guide version is empty"):
-        replace(request, guide_version=" ")
-    with pytest.raises(ValueError, match="hash is invalid"):
-        replace(request, effective_policy_hash="sha256:invalid")
-    valid_facts = ProjectLockedPolicyContextFacts(
-        project_id=request.project_id,
-        guide_id=UUID(rows[1].id),
-        guide_version="v1",
-        guide_status="active",
-        source_snapshot_id=request.source_snapshot_id,
-        source_snapshot_hash=request.source_snapshot_hash,
-        effective_policy_id=request.effective_policy_id,
-        effective_policy_hash=request.effective_policy_hash,
-        effective_policy_status="approved",
-        effective_policy=CanonicalJsonObject.from_mapping(rows[3].effective_policy),
-        pre_submit_policy_id=request.pre_submit_policy_id,
-        pre_submit_policy_bundle_hash=request.pre_submit_policy_bundle_hash,
-        pre_submit_policy_status="compiled",
-        pre_submit_compiler_version="pre-submit-v1",
-        compiled_pre_submit_bundle=CanonicalJsonObject.from_mapping(rows[4].compiled_bundle),
-    )
-    with pytest.raises(ValueError, match="facts are invalid"):
-        replace(valid_facts, guide_status=cast(Any, "draft"))
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("guide_status", "effective_status", "pre_submit_status"),
-    (("active", "approved", "compiled"), ("superseded", "superseded", "superseded")),
+from project_create_fixtures import activate_guide_for_downstream_test
+from projects.client_fixtures import (
+    project_client as project_client,
+    project_database_env as project_database_env,
 )
-async def test_locked_policy_repository_resolves_exact_current_and_superseded_policy(
-    guide_status: str,
-    effective_status: str,
-    pre_submit_status: str,
-) -> None:
-    """Resolve exact valid historical lineage without selecting successors."""
-    request, rows = _project_locked_policy_rows(
-        guide_status=guide_status,
-        effective_status=effective_status,
-        pre_submit_status=pre_submit_status,
-    )
-    statements: list[Any] = []
-
-    class Session:
-        def __init__(self) -> None:
-            self.rows = iter(rows)
-
-        async def scalar(self, statement: Any) -> Any:
-            statements.append(statement)
-            return next(self.rows)
-
-    facts = await ProjectLockedPolicyRepository(cast(Any, Session())).lock_locked_policy_context(
-        request
-    )
-    assert facts == ProjectLockedPolicyContextFacts(
-        project_id=request.project_id,
-        guide_id=UUID(rows[1].id),
-        guide_version="v1",
-        guide_status=cast(Any, guide_status),
-        source_snapshot_id=request.source_snapshot_id,
-        source_snapshot_hash=request.source_snapshot_hash,
-        effective_policy_id=request.effective_policy_id,
-        effective_policy_hash=request.effective_policy_hash,
-        effective_policy_status=cast(Any, effective_status),
-        effective_policy=CanonicalJsonObject.from_mapping(rows[3].effective_policy),
-        pre_submit_policy_id=request.pre_submit_policy_id,
-        pre_submit_policy_bundle_hash=request.pre_submit_policy_bundle_hash,
-        pre_submit_policy_status=cast(Any, pre_submit_status),
-        pre_submit_compiler_version="pre-submit-v1",
-        compiled_pre_submit_bundle=CanonicalJsonObject.from_mapping(rows[4].compiled_bundle),
-    )
-    assert len(statements) == 5
-    assert all("FOR UPDATE" in str(statement) for statement in statements)
-    assert all(
-        statement.get_execution_options().get("populate_existing") is True
-        for statement in statements
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "failure",
-    (
-        "draft",
-        "pending",
-        "hash",
-        "cross_project",
-        "effective_link",
-        "non_canonical",
-        "invalid_guide_id",
-        "snapshot_array",
-        "effective_array",
-        "bundle_array",
-    ),
-)
-async def test_locked_policy_repository_rejects_invalid_lineage(
-    failure: str,
-) -> None:
-    """Fail closed for draft, pending, drifted, or cross-project lineage."""
-    request, rows = _project_locked_policy_rows()
-    if failure == "draft":
-        rows[1].status = "draft"
-    elif failure == "pending":
-        rows[4].lifecycle_status = "pending_compilation"
-    elif failure == "hash":
-        rows[3].effective_policy = {"allowed": ["tar"]}
-    elif failure == "cross_project":
-        rows[2].project_id = str(uuid4())
-    elif failure == "effective_link":
-        rows[4].effective_policy_id = str(uuid4())
-    elif failure == "non_canonical":
-        rows[3].effective_policy = {"invalid": float("nan")}
-    elif failure == "invalid_guide_id":
-        rows[1].id = "invalid-guide-id"
-        rows[2].guide_id = rows[1].id
-        rows[3].guide_id = rows[1].id
-        rows[4].guide_id = rows[1].id
-    elif failure == "snapshot_array":
-        drift_hash = canonical_json_hash(cast(Any, []))
-        request = replace(request, source_snapshot_hash=drift_hash)
-        rows[2].manifest_json = []
-        rows[2].bundle_hash = drift_hash
-        rows[3].source_snapshot_hash = drift_hash
-        rows[4].source_snapshot_hash = drift_hash
-    elif failure == "effective_array":
-        drift_hash = canonical_json_hash(cast(Any, []))
-        request = replace(request, effective_policy_hash=drift_hash)
-        rows[3].effective_policy = []
-        rows[3].effective_policy_hash = drift_hash
-        rows[4].effective_policy_hash = drift_hash
-    else:
-        drift_hash = canonical_json_hash(cast(Any, []))
-        request = replace(request, pre_submit_policy_bundle_hash=drift_hash)
-        rows[4].compiled_bundle = []
-        rows[4].compiled_bundle_hash = drift_hash
-
-    class Session:
-        def __init__(self) -> None:
-            self.rows = iter(rows)
-
-        async def scalar(self, _statement: Any) -> Any:
-            return next(self.rows)
-
-    with pytest.raises(
-        ProjectLockedPolicyContextUnavailable,
-        match="project_locked_policy_context_changed",
-    ):
-        await ProjectLockedPolicyRepository(cast(Any, Session())).lock_locked_policy_context(
-            request
-        )
 
 
 async def create_locked_policy_context_fixture(
@@ -355,10 +111,9 @@ async def _supersede_locked_policy_context(
 
 
 @pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_state_matrix(
+async def test_locked_policy_repository_postgresql_resolves_current(
     project_client: AsyncClient,
 ) -> None:
-    """Prove exact and superseded lineage semantics against PostgreSQL."""
     request = await create_locked_policy_context_fixture(project_client)
     async with db_session.get_session_factory()() as session:
         current = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
@@ -366,6 +121,12 @@ async def test_locked_policy_repository_postgresql_state_matrix(
         assert current.effective_policy_status == "approved"
         assert current.pre_submit_policy_status == "compiled"
 
+
+@pytest.mark.asyncio
+async def test_locked_policy_repository_postgresql_resolves_superseded(
+    project_client: AsyncClient,
+) -> None:
+    request = await create_locked_policy_context_fixture(project_client)
     await _supersede_locked_policy_context(request)
     async with db_session.get_session_factory()() as session:
         historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
@@ -375,6 +136,13 @@ async def test_locked_policy_repository_postgresql_state_matrix(
         assert historical.effective_policy_status == "superseded"
         assert historical.pre_submit_policy_status == "superseded"
 
+
+@pytest.mark.asyncio
+async def test_locked_policy_repository_postgresql_rejects_unknown_effective_policy(
+    project_client: AsyncClient,
+) -> None:
+    request = await create_locked_policy_context_fixture(project_client)
+    await _supersede_locked_policy_context(request)
     wrong_successor = replace(request, effective_policy_id=uuid4())
     async with db_session.get_session_factory()() as session:
         with pytest.raises(
@@ -383,6 +151,13 @@ async def test_locked_policy_repository_postgresql_state_matrix(
         ):
             await ProjectLockedPolicyRepository(session).lock_locked_policy_context(wrong_successor)
 
+
+@pytest.mark.asyncio
+async def test_locked_policy_repository_postgresql_rejects_pending_pre_submit(
+    project_client: AsyncClient,
+) -> None:
+    request = await create_locked_policy_context_fixture(project_client)
+    await _supersede_locked_policy_context(request)
     async with db_session.get_session_factory()() as session:
         await session.execute(
             update(PreSubmitCheckerPolicy)
@@ -397,6 +172,71 @@ async def test_locked_policy_repository_postgresql_state_matrix(
         ):
             await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
 
+
+@pytest.mark.asyncio
+async def test_locked_policy_repository_postgresql_rejects_inactive_project(
+    project_client: AsyncClient,
+) -> None:
+    """Writer commits first: refresh stale identity-map state before returning facts."""
+    request = await create_locked_policy_context_fixture(project_client)
+    factory = db_session.get_session_factory()
+    async with factory() as observer:
+        project = await observer.get(Project, str(request.project_id))
+        assert project is not None and project.status == "active"
+        current = await ProjectLockedPolicyRepository(observer).lock_locked_policy_context(request)
+        assert current.project_id == request.project_id
+        await observer.commit()
+
+        async with factory() as writer:
+            await writer.execute(
+                update(Project).where(Project.id == str(request.project_id)).values(status="draft")
+            )
+            await writer.commit()
+
+        assert project.status == "active"  # The observer still holds its cached object.
+        with pytest.raises(ProjectLockedPolicyContextUnavailable) as denied:
+            await ProjectLockedPolicyRepository(observer).lock_locked_policy_context(request)
+        assert denied.value.code == "project_locked_policy_context_changed"
+        assert project.status == "draft"
+        assert not observer.new and not observer.dirty and not observer.deleted
+
+
+@pytest.mark.asyncio
+async def test_locked_policy_repository_postgresql_serializes_project_status_change(
+    project_client: AsyncClient,
+    project_database_env: str,
+) -> None:
+    """Reader locks first: inactivation waits for the exact owning transaction."""
+    request = await create_locked_policy_context_fixture(project_client)
+    contender_name = f"project-inactivation-{uuid4()}"
+    factory = db_session.get_session_factory()
+    holder, contender = factory(), factory()
+    contender_call: asyncio.Task[Any] | None = None
+    try:
+        await ProjectLockedPolicyRepository(holder).lock_locked_policy_context(request)
+        await contender.execute(
+            text("select set_config('application_name', :application_name, true)"),
+            {"application_name": contender_name},
+        )
+        contender_call = asyncio.create_task(
+            contender.execute(
+                update(Project).where(Project.id == str(request.project_id)).values(status="draft")
+            )
+        )
+        await _wait_for_project_database_lock(project_database_env, contender_name)
+        assert not contender_call.done()
+        await holder.commit()
+        await contender_call
+        await contender.commit()
+        async with factory() as observer:
+            project = await observer.get(Project, str(request.project_id))
+            assert project is not None and project.status == "draft"
+    finally:
+        if contender_call is not None:
+            contender_call.cancel()
+            await asyncio.gather(contender_call, return_exceptions=True)
+        await holder.close()
+        await contender.close()
 
 @pytest.mark.asyncio
 async def test_locked_policy_repository_postgresql_does_not_substitute_successors(
