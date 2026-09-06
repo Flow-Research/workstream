@@ -6,8 +6,9 @@
   test files before resuming product implementation.
 - First bounded change: [01 — first proof cleanup](WS-QUAL-003-01.md).
 - PROJECT slice: [02 — readiness and retired-route proof](WS-QUAL-003-02.md).
-- Next usable boundary after 02: continue PROJECT fixture/test decomposition
-  and add the inactive-project locked-context PostgreSQL proof, then AUTH.
+- PROJECT custody slice: [03 — fixtures and locked-context transactions](WS-QUAL-003-03.md).
+- Next usable boundary after 03: continue PROJECT guide/bundle fixture
+  decomposition and remaining behavior audit, then AUTH.
   The full suite audit remains open.
 - Preserve: production semantics, public boundaries, real database/isolation/
   concurrency proof, current coverage floors, full hosted execution, human merge.
@@ -78,9 +79,10 @@ No fixed reduction percentage or same-day completion claim overrides safety.
 
 ## Concrete follow-up findings
 
-- PROJECT has five fixture-heavy variants of one uncomposed route's 404; preserve
-  the independent service-seam and strongest no-runtime/no-row proof, and test
-  actual OpenAPI absence before removing redundant variants.
+- PROJECT slice 02 removed five redundant retired-route journeys while retaining
+  service-seam, runtime/database and warning translation proof. Slice 03 isolates
+  client fixtures and locked-policy contracts and proves both project-inactivation
+  transaction orderings. Larger guide/bundle fixture dependencies remain to audit.
 - AUTH projection replay uses a nonexistent decision in its negative test;
   add existing-but-tampered stored decision coverage, not more random-ID cases.
 - CON publication non-reuse and reverse-order concurrency test names overstate

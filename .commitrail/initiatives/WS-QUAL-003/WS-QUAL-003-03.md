@@ -132,6 +132,21 @@ global/subsystem coverage. Do not run the full suite locally. Reviewers distingu
 local mutation discrimination from hosted repository custody, and do not infer
 database behavior from the fake-session test.
 
+Implementation inspection: all five moved fixture bodies/decorators are
+AST-identical, as are both retained PostgreSQL successor/lock tests and their
+helpers. The original ten invalid-lineage rows remain, with inactive project
+added separately from draft guide. The monolith falls from 15,272 to 15,141 lines;
+client support is 158 lines, pure/service contracts 296 and PostgreSQL tests 339.
+The client fixture imports use explicit same-name exports for pytest discovery,
+not alternate runtime API paths. The obsolete file-wide unused-import exemption
+in the PostgreSQL module is removed.
+
+The 26 focused contract/lane checks pass. Temporary in-memory removal of only
+the active-project predicate fails with `DID NOT RAISE`; disabling query refresh
+fails the existing execution-options assertion. Neither mutant is committed.
+The full hosted PostgreSQL ordering/fixture/coverage evidence is recorded on
+the PR separately; these local probes do not stand in for database execution.
+
 ## Reconciliation
 
 Plan review PLAN-01 corrected the initial file-size/debt claim: this file already
