@@ -5,7 +5,7 @@
 - Intended merge outcome: Extract cohesive PROJECT test support and close the
   inactive-project locked-policy repository proof gap without runtime changes.
 
-## Intent and baseline
+## Intent
 
 Continue behavior-first cleanup, not deletion to meet a count target. At main
 `d95a70bb`, `test_projects.py` has 15,272 lines. Its client, settings and bootstrap
@@ -83,7 +83,7 @@ Inspect the repository's project -> guide -> snapshot -> effective -> pre-submit
 order and contender paths for cycles; these tests do not prove global deadlock
 freedom across all product writers.
 
-## Acceptance and proof mapping
+## Acceptance criteria
 
 - Client/settings/bootstrap function bodies and decorators are AST-identical
   after relocation; all existing PROJECT hosted journeys remain selected.
@@ -113,7 +113,7 @@ freedom across all product writers.
 - Exact hosted node reconciliation explains splits/additions; no cases vanish
   without their assertions mapped. All global/subsystem coverage gates pass.
 
-## Risk, verification and review
+## Risk and review routing
 
 - L1: security-sensitive proof and shared fixture relocation, no product change.
 - Plan review before implementation; QA/test-delta, security/CI integrity and
@@ -122,6 +122,8 @@ freedom across all product writers.
   PostgreSQL proof, and explicitly remaining test-module dependency.
 - Size exception: relocation dominates the diff; compare function AST and exact
   case mappings rather than treating moved lines as rewritten product behavior.
+
+## Evidence
 
 Locally run the new contract module, two lane inventory tests, Ruff on touched
 Python, structural inventory/validation, Commitrail, Markdown/stale scans and
