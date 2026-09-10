@@ -557,11 +557,11 @@ async def policy_field_cases(drill, manager, outsider, route, path, kind, requir
         await drill.call(kind + "_fields_" + label, "PUT", route, path=path, token=manager,
                          payload=payload, headers={"If-Match": selector}, expected=422)
     for label, headers, status, code in (
-        ("missing_selector", {"If-Match": None}, 422, "validation_error"),
+        ("missing_selector", {"If-Match": None}, 422, "invalid_request"),
         ("unquoted_selector", {"If-Match": selector[1:-1]}, 409, "policy_precondition_invalid"),
         ("foreign_selector", {"If-Match": f'"{uuid4()}.2.{"0" * 64}"'},
          409, "policy_precondition_failed"),
-        ("missing_key", {"If-Match": selector, "Idempotency-Key": None}, 422, "validation_error"),
+        ("missing_key", {"If-Match": selector, "Idempotency-Key": None}, 422, "invalid_request"),
         ("malformed_key", {"If-Match": selector, "Idempotency-Key": "not-a-uuid"},
          422, "validation_error"),
     ):
@@ -577,7 +577,7 @@ async def policy_field_cases(drill, manager, outsider, route, path, kind, requir
     if kind == "review-policy":
         expected |= {"human_review_required": current["human_review_required"], "semantics_format": "v2"}
     next_policy = await policy_successor(drill, manager, route, path, kind + "_fields_omission",
-                                        omitted, expected, current)
+                                        omitted, expected, current, hash_changed=True)
     if kind == "review-policy":
         explicit = required | {"finding_evidence_requirement": "required_for_blocking",
                                "minimum_finding_fields": ["summary"]}
@@ -587,10 +587,10 @@ async def policy_field_cases(drill, manager, outsider, route, path, kind, requir
                                "reviewer_reassignment_rule": None}
         expected = defaults | explicit
     await policy_successor(drill, manager, route, path, kind + "_fields_explicit",
-                           explicit, expected, next_policy)
+                           explicit, expected, next_policy, hash_changed=kind == "review-policy")
 
 
-async def policy_successor(drill, token, route, path, name, payload, semantics, previous):
+async def policy_successor(drill, token, route, path, name, payload, semantics, previous, *, hash_changed):
     """Require exact next selected generation, identity and full policy semantics."""
     return await drill.call(name, "PUT", route, path=path, token=token, payload=payload,
         headers={"If-Match": policy_selector(previous)},
@@ -600,7 +600,8 @@ async def policy_successor(drill, token, route, path, name, payload, semantics, 
         checks={"id": lambda value: uuid_value(value) and value != previous["id"],
                 "created_at": timestamp_value,
                 "policy_hash": lambda value: isinstance(value, str) and
-                re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None},
+                re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None and
+                (value != previous["policy_hash"]) == hash_changed},
         exact_fields=previous.keys(), fields=tuple("body." + field for field in payload))
 
 

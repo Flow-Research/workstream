@@ -66,3 +66,12 @@ actual prior head; rerun only if its shared execution boundary changes.
 
 Human focus: usable public API proof, not unfinished product activation or a
 claim that every discovered endpoint belongs in the MCP adapter.
+
+## Review corrections
+
+The first live extension run exposed a harness expectation mismatch: missing
+required headers use `invalid_request`, whereas a malformed policy UUID key
+uses its explicit `validation_error` handler. Expected codes follow those owners.
+Review also required hash-relation proof: changed semantics must change the
+policy hash; the intentionally equivalent revision replacement must preserve it.
+Helper mutants cover both directions. These are drill fixes, not product defects.

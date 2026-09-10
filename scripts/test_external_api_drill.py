@@ -159,9 +159,11 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                     "supersedes_policy_id": None, "semantics_status": "complete",
                     "human_review_required": False, "created_at": "2026-01-01T00:00:00Z"}
         good = previous | {"id": str(uuid4()), "policy_generation": 3,
+                           "policy_hash": "sha256:" + "b" * 64,
                            "supersedes_policy_id": previous["id"]}
         for change in ({}, {"policy_generation": 4}, {"human_review_required": True},
-                       {"supersedes_policy_id": str(uuid4())}, {"id": previous["id"]}):
+                       {"supersedes_policy_id": str(uuid4())}, {"id": previous["id"]},
+                       {"policy_hash": previous["policy_hash"]}):
             def handler(request):
                 self.assertEqual(request.headers["If-Match"], drill.policy_selector(previous))
                 return httpx.Response(200, json=good | change, headers={
@@ -172,7 +174,7 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                 probe = drill.Drill(client, {"paths": {"/policy": {"put": {}}}}, report)
                 async def run_case():
                     return await drill.policy_successor(probe, "manager", "/policy", "/policy",
-                        "successor", {}, {"human_review_required": False}, previous)
+                        "successor", {}, {"human_review_required": False}, previous, hash_changed=True)
                 if change:
                     with self.assertRaises(drill.ProbeFailure):
                         await run_case()
@@ -180,6 +182,20 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(report["cases"][0]["result"], "failed")
                 else:
                     self.assertEqual(await run_case(), good)
+        for returned_hash in (previous["policy_hash"], "sha256:" + "b" * 64):
+            def handler(request):
+                return httpx.Response(200, json=good | {"policy_hash": returned_hash}, headers={
+                    key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")})
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                         base_url="http://127.0.0.1") as client:
+                probe = drill.Drill(client, {"paths": {"/policy": {"put": {}}}}, {})
+                call = drill.policy_successor(probe, "manager", "/policy", "/policy", "same_semantics",
+                    {}, {"human_review_required": False}, previous, hash_changed=False)
+                if returned_hash == previous["policy_hash"]:
+                    self.assertEqual((await call)["policy_hash"], returned_hash)
+                else:
+                    with self.assertRaises(drill.ProbeFailure):
+                        await call
 
     async def test_actual_response_assertions_are_mapped_and_header_can_be_omitted(self):
         def handler(request):
