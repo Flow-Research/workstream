@@ -146,8 +146,8 @@ establish policy configuration behavior, not runtime review or acceptance.
 The random-selector probe is not evidence of stored cross-project isolation.
 
 The endpoint-by-endpoint extension stays within the 29 canonical operations
-already exercised by these two drills. Obsolete `/auth/me`, `/workers/me/profile`
-and old task surfaces are not MCP candidates or targets of this extension;
+already exercised by these two drills. Superseded identity, eligibility
+and task surfaces are not MCP candidates or targets of this extension;
 their removal belongs to the task owner. Do not expand this set merely because
 an operation appears in OpenAPI.
 
@@ -162,12 +162,16 @@ These cases do not certify the remaining endpoint contracts automatically.
 Actor administration additionally checks complete human profile identity and
 lifecycle output fields, exact mutation receipts, same-key replay, and unchanged
 target readbacks after invalid reasons. Lifecycle reasons use a 500-byte UTF-8
-positive boundary and reject 502-byte and NUL inputs. A denied self read/write
-must remain denied while its actor is suspended or deactivated.
+positive boundary and reject 502-byte and NUL inputs. Suspended actors may read
+their own profile, including their suspended status, but may not update it;
+that allowed read advances admission timestamps. Deactivated actors may do neither.
 Embedded-NUL self-profile cases preserve
 [API-DRILL-007](external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
 as a failing expectation; independent checks continue only after an unchanged
 profile readback. A run containing that failure is not a passing API handoff.
+The context selector similarly preserves
+[API-DRILL-008](external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
+with a valid-selector and unchanged-project control before continuing.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

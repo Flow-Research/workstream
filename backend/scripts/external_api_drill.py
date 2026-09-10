@@ -508,6 +508,17 @@ async def authorization_context_input_cases(drill, manager, outsider, project):
         expected=404, values={"error.code": "project_authorization_resource_not_found"})
     await drill.call("context_unauthenticated", "GET", route,
         path=route + "?" + urlencode({"project_id": project["id"]}), expected=401)
+    try:
+        await drill.call("context_selector_nul", "GET", route, token=manager,
+            path=route + "?" + urlencode({"project_id": "before\x00after"}), expected=422,
+            values={"error.code": "invalid_request"}, fields=("query.project_id",))
+    except ProbeFailure:
+        pass
+    await drill.call("context_selector_valid_control", "GET", route, token=manager,
+        path=route + "?" + urlencode({"project_id": project["id"]}),
+        values={"project_id": project["id"], "status": "active", "project_roles": []})
+    await drill.call("context_invalid_project_unchanged", "GET", "/api/v1/projects/{project_id}",
+        path=f'/api/v1/projects/{project["id"]}', token=manager, values=project)
 
 
 async def policy_cases(drill, manager, groute, gpath, outsider):
@@ -831,14 +842,30 @@ async def authority_cases(drill, admin, manager, outsider, manager_id, project):
                 checks={"updated_at": timestamp_value, "last_seen_at": timestamp_value},
                 exact_fields=current.keys())
         else:
-            await drill.call(action + "_self_read_denied", "GET", "/api/v1/actors/me", token=outsider,
-                expected=403, values={"error.code": "actor_suspended" if action == "suspend" else "actor_deactivated"})
+            if action == "suspend":
+                await drill.call("suspended_self_read_allowed", "GET", "/api/v1/actors/me", token=outsider,
+                    values={"actor_profile_id": scoped_id, "status": "suspended", "display_name": None,
+                            "contact_email": None, "actor_kind": "human", "domains": ["contributor"],
+                            "admin_roles": ["project_manager"], "project_role_grants": [],
+                            "created_at": outsider_body["created_at"]},
+                    checks={"updated_at": timestamp_value, "last_seen_at": timestamp_value})
+                # A legitimate self read touches admission timestamps, unlike
+                # an administrator reading a different target.
+                current = await drill.call("suspended_self_read_admin_baseline", "GET", actor_route,
+                    path=actor_path, token=admin,
+                    values={key: value for key, value in current.items()
+                            if key not in {"updated_at", "last_seen_at"}},
+                    checks={"updated_at": timestamp_value, "last_seen_at": timestamp_value},
+                    exact_fields=current.keys())
+            else:
+                await drill.call("deactivated_self_read_denied", "GET", "/api/v1/actors/me", token=outsider,
+                    expected=403, values={"error.code": "actor_deactivated"})
             await drill.call(action + "_self_write_denied", "PATCH", "/api/v1/actors/me", token=outsider,
                 payload={"display_name": "Forbidden change"}, expected=403,
                 values={"error.code": "actor_suspended" if action == "suspend" else "actor_deactivated"})
             await drill.call(action + "_write_unchanged", "GET", "/api/v1/actors/{actor_profile_id}",
                 path=f"/api/v1/actors/{scoped_id}", token=admin,
-                values={"display_name": None if action == "suspend" else "Reactivated owner"})
+                values=current, exact_fields=current.keys())
     await drill.call("deactivated_actor_cannot_reactivate", "POST", "/api/v1/actors/{actor_profile_id}/reactivate",
         path=f"/api/v1/actors/{scoped_id}/reactivate", token=admin,
         payload={"reason": "Attempt forbidden terminal transition"}, expected=409,

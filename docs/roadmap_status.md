@@ -209,6 +209,9 @@ cannot be reused as post-submission review-gate evidence. See the
   records an unresolved self-profile validation defect: embedded NUL in either
   editable text field returns 503 rather than 422; HTTP readback shows no
   business-field mutation. The profile field contract is not yet signed off.
+  [API-DRILL-008](engineering/external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
+  records the same storage-invalid character reaching the authorization-context
+  project selector as 503; that input boundary also needs repair before sign-off.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions

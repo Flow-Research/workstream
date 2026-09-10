@@ -12,7 +12,7 @@ and local evidence cases; they are not endpoint or exhaustive field counts.
 The orchestrator is extending the remaining client field checks before handing
 the verified endpoint-and-field list to the MCP adapter agent. The descriptions
 for repaired items remain historical observations, not claims that those defects
-persist. API-DRILL-007 below is a separate newly reproduced repair item.
+persist. API-DRILL-007 and API-DRILL-008 below are separate newly reproduced repair items.
 
 Human-confirmed v0.1 project roles are **submitter** and **reviewer**.
 Adjudication is deferred. Do not implement adjudicator functionality, widen an
@@ -259,6 +259,31 @@ Git. This repair does not certify every other API field or deployed provider.
   writes or bypassed guards; isolated database/role cleanup completed. These
   temporary files are not shared evidence URLs; the inputs above suffice to
   reproduce the defect.
+
+## API-DRILL-008: NUL project selector becomes 503
+
+- Route: `GET /api/v1/actors/me/authorization-context` with the URL-encoded query
+  `project_id=before%00after`, authenticated through the normal canonical human
+  identity path.
+- Expected: bounded 422 `invalid_request` for a selector PostgreSQL cannot
+  represent, not retryable service unavailability.
+- Observed on clean `321cb0b64b86853442cc33f6a643a73873888a88`: 503
+  `service_unavailable`. A normal absent-project UUID returned the expected
+  concealed 404; subsequent profile readback preserved every business field.
+- Cause: the public query validates length only. `ProjectService.find_project`
+  sends a non-UUID selector to the slug lookup, where embedded NUL reaches the
+  PostgreSQL text parameter before authorization can return its bounded result.
+- Repair: validate storage-safe selector input at the canonical public boundary,
+  preserve supported UUID/slug selectors and concealment, and add real HTTP/
+  PostgreSQL regressions. Do not mask a database failure as a successful read or
+  broaden project access.
+- Permanent drill case: `context_selector_nul`, followed by a valid selector and
+  full unchanged-project readback. Keep the 422 expectation and failed exit
+  until the product is repaired.
+- Private original evidence: `/tmp/workstream-field-drill.l3LIo4/context-nul.json`,
+  `context-nul-db.json`, and `probe_context_nul.py`. Five HTTP cases: four passing
+  controls and one failure. Fresh migrated database and normal verifier; no
+  product-state seeding or disabled guards; database/role cleanup completed.
 
 ## Retest and handoff criteria
 
