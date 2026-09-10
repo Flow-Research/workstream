@@ -14,8 +14,8 @@ field and conditional-update probes without repeating unchanged work by default.
 
 The human expanded this same PR to drill the 29 already exercised canonical
 operations, one by one. Obsolete API removal belongs to the task agent; this
-change neither exercises nor removes those routes. No new product behavior is
-authorized. Each endpoint is assessed against its actual schema, authority and
+change neither exercises nor removes those routes. The human additionally authorized
+repairing reproduced API-DRILL-007/008 in this same PR. Each endpoint is assessed against its actual schema, authority and
 service owner before adding cases, with meaningful omissions, type/boundary
 cases, response values, persistence, replay and denied side effects where
 applicable. A passing example or aggregate count is not endpoint completion.
@@ -27,11 +27,21 @@ Allowed: `backend/scripts/external_api_drill.py`,
 `docs/engineering/external-api-drill-findings.md`, `docs/roadmap_status.md`,
 `backend/scripts/admin_api_drill.py`, `scripts/test_admin_api_drill.py`,
 this record, and existing ignored local roadmap exports if present.
+The bounded NUL repairs also allow `backend/app/modules/actors/schemas.py`,
+`backend/app/api/routes/auth.py`, and `backend/tests/test_api_drill_repairs.py`.
 
-Prohibited: product code, public schema changes, migrations, hidden routes,
+Prohibited: other product changes, migrations, hidden routes,
 direct product SQL writes, enabled unavailable actions, disabled guards, provider
 fakes, CI/coverage changes, and product-builder files. Newly reproduced product
 defects stay failing and are communicated before deciding repair ownership.
+
+Repair design: reject embedded NUL in the existing self-profile text validator
+and authorization-context query constraint before PostgreSQL receives it. Do not
+sanitize it into another value, change UUID/slug selection, narrow ordinary
+Unicode text, alter authority or introduce a new validation subsystem. Prove
+422 `invalid_request` with `retryable: false`, unchanged profile business fields,
+and subsequent valid profile/project-selector controls through HTTP and the live
+drill. Existing exact 503 reproductions are the pre-fix negative evidence.
 
 ## Design and alternatives
 
@@ -77,7 +87,7 @@ Reuse existing valid controls and the normal token verifier and rate budget.
 
 ## Risk and review routing
 
-Risk L1: authorization/policy evidence integrity, no product change.
+Risk L1: authorization/policy evidence integrity and bounded request validation repairs.
 Plan review checks fixture/selector feasibility. Implementation review covers
 security plus QA/test-delta and documentation, combined proportionately.
 

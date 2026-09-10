@@ -43,6 +43,63 @@ def maximum_qualification() -> dict:
     }
 
 
+@pytest.mark.parametrize("field", ["display_name", "contact_email"])
+async def test_profile_nul_rejected_without_partial_update(project_client: AsyncClient, field: str) -> None:
+    route = "/api/v1/actors/me"
+    control = await project_client.patch(route, headers=auth_headers(),
+        json={"display_name": "Original 名", "contact_email": "opaque contact"})
+    assert control.status_code == 200, control.text
+    before = control.json()
+    other = "contact_email" if field == "display_name" else "display_name"
+    rejected = await project_client.patch(route, headers=auth_headers(),
+        json={field: "before\x00after", other: "Must not persist"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    readback = await project_client.get(route, headers=auth_headers())
+    assert readback.status_code == 200
+    def stable(body: dict) -> dict:
+        return {key: value for key, value in body.items()
+                if key not in {"updated_at", "last_seen_at"}}
+    assert stable(readback.json()) == stable(before)
+    valid = await project_client.patch(route, headers=auth_headers(), json={field: "  Valid 名  "})
+    assert valid.status_code == 200, valid.text
+    assert valid.json()[field] == "Valid 名"
+    assert valid.json()[other] == before[other]
+
+
+async def test_context_nul_rejected_without_breaking_uuid_or_slug(
+    project_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_project(project_client, name="Selector control")
+    route = "/api/v1/actors/me/authorization-context"
+    rejected = await project_client.get(route, headers=auth_headers(), params={"project_id": "before\x00after"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert "before" not in rejected.text
+    bodies = []
+    for selector in (project["id"], project["slug"]):
+        response = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
+        assert response.status_code == 200, response.text
+        assert response.json()["project_id"] == project["id"]
+        assert response.json()["admin_roles"] == ["project_manager"]
+        bodies.append(response.json())
+    assert bodies[0] == bodies[1]
+    missing = await project_client.get(route, headers=auth_headers(), params={"project_id": str(uuid4())})
+    assert missing.status_code == 404, missing.text
+    assert missing.json()["error"]["code"] == "project_authorization_resource_not_found"
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", f"ungranted-selector-{uuid4()}")
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "contributor")
+    get_settings.cache_clear()
+    admitted = await project_client.get("/api/v1/actors/me", headers=auth_headers())
+    assert admitted.status_code == 200
+    for selector in (project["id"], project["slug"]):
+        concealed = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
+        assert concealed.status_code == 404, concealed.text
+        assert concealed.json()["error"]["code"] == "project_authorization_resource_not_found"
+
+
 def maximum_role_request(role: str):
     body = ProjectRoleGrantIssueBody(target_actor_profile_id=uuid4(), role=role,
         qualification=maximum_qualification(), reason="Maximum qualification regression")

@@ -206,12 +206,12 @@ cannot be reused as post-submission review-gate evidence. See the
   evidence within the selected 29 canonical operations, not obsolete routes or
   an exhaustive API-completion claim.
   [API-DRILL-007](engineering/external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
-  records an unresolved self-profile validation defect: embedded NUL in either
-  editable text field returns 503 rather than 422; HTTP readback shows no
-  business-field mutation. The profile field contract is not yet signed off.
+  records the reproduced self-profile NUL defect and its repair: both editable
+  fields reject the unsupported character at request validation with 422 rather
+  than passing it to storage. The drill retains unchanged-business-state controls.
   [API-DRILL-008](engineering/external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
-  records the same storage-invalid character reaching the authorization-context
-  project selector as 503; that input boundary also needs repair before sign-off.
+  records the matching authorization-context selector repair: NUL is rejected
+  with 422 while ordinary UUID/slug selection and project concealment remain intact.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions

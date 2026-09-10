@@ -167,11 +167,13 @@ their own profile, including their suspended status, but may not update it;
 that allowed read advances admission timestamps. Deactivated actors may do neither.
 Embedded-NUL self-profile cases preserve
 [API-DRILL-007](external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
-as a failing expectation; independent checks continue only after an unchanged
-profile readback. A run containing that failure is not a passing API handoff.
+as a permanent 422 regression expectation after the request-validator repair;
+independent checks continue only after an unchanged profile readback. A run
+containing that failure is not a passing API handoff.
 The context selector similarly preserves
 [API-DRILL-008](external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
-with a valid-selector and unchanged-project control before continuing.
+with a valid-selector and unchanged-project control before continuing. The
+query now rejects NUL before lookup; neither fix changes authorization or storage.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

@@ -12,7 +12,8 @@ and local evidence cases; they are not endpoint or exhaustive field counts.
 The orchestrator is extending the remaining client field checks before handing
 the verified endpoint-and-field list to the MCP adapter agent. The descriptions
 for repaired items remain historical observations, not claims that those defects
-persist. API-DRILL-007 and API-DRILL-008 below are separate newly reproduced repair items.
+persist. API-DRILL-007 and API-DRILL-008 below preserve the NUL defect
+reproductions and their bounded request-validation repairs.
 
 Human-confirmed v0.1 project roles are **submitter** and **reviewer**.
 Adjudication is deferred. Do not implement adjudicator functionality, widen an
@@ -231,6 +232,9 @@ Git. This repair does not certify every other API field or deployed provider.
 
 ## API-DRILL-007: embedded NUL in canonical profile fields becomes 503
 
+- Repair: the existing profile validator now rejects NUL before normalization
+  or persistence. `test_profile_nul_rejected_without_partial_update` covers both
+  fields, mixed valid/invalid atomicity and a subsequent valid Unicode update.
 - Route: `PATCH /api/v1/actors/me`, authenticated human self-profile update.
 - Inputs: `{"display_name":"before\u0000after"}` and, independently,
   `{"contact_email":"before\u0000after"}`.
@@ -262,6 +266,9 @@ Git. This repair does not certify every other API field or deployed provider.
 
 ## API-DRILL-008: NUL project selector becomes 503
 
+- Repair: the existing query constraint now excludes NUL without replacing
+  UUID/slug lookup. `test_context_nul_rejected_without_breaking_uuid_or_slug`
+  covers rejection, valid selectors and concealed access for an ungranted actor.
 - Route: `GET /api/v1/actors/me/authorization-context` with the URL-encoded query
   `project_id=before%00after`, authenticated through the normal canonical human
   identity path.
