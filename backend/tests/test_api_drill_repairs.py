@@ -5,6 +5,7 @@ import json
 from uuid import UUID, uuid4
 
 from httpx import AsyncClient
+from pydantic import ValidationError
 import pytest
 from sqlalchemy import func, select
 
@@ -23,12 +24,90 @@ from app.modules.projects.models import (
     ProjectCreateIdempotencyRecord,
     ProjectGuide,
 )
+from app.modules.projects.schemas import ProjectCreate, ProjectGuideCreate, ProjectGuideUpdate
 from projects.client_fixtures import (
     auth_headers,
     project_client as project_client,
     project_database_env as project_database_env,
 )
 from projects.guide_fixtures import complete_guide_payload, create_guide, create_project
+
+
+PROJECT_TEXT_CASES = [
+    ("project", "name"), ("project", "slug"), ("project", "description"),
+    ("guide_create", "version"), ("guide_create", "content_markdown"),
+    ("guide_create", "change_summary"), ("guide_update", "content_markdown"),
+    ("guide_update", "change_summary"),
+]
+
+
+@pytest.mark.parametrize(("operation", "field"), PROJECT_TEXT_CASES)
+def test_project_text_schema_rejects_nul_preserving_valid_values(operation: str, field: str) -> None:
+    schema, payload = {
+        "project": (ProjectCreate, {"name": "Name", "slug": "slug"}),
+        "guide_create": (ProjectGuideCreate, {"version": "initial", "content_markdown": "# Guide"}),
+        "guide_update": (ProjectGuideUpdate, {}),
+    }[operation]
+    for value in ("\x00leading", "embedded\x00nul", "trailing\x00", "line\n\x00"):
+        with pytest.raises(ValidationError) as caught:
+            schema.model_validate(payload | {field: value})
+        assert caught.value.errors()[0]["loc"] == (field,)
+        assert caught.value.errors()[0]["type"] == "string_pattern_mismatch"
+    for value in ("", "  Unicode 名 é\nline\ttext  "):
+        assert getattr(schema.model_validate(payload | {field: value}), field) == value
+    if field in {"description", "change_summary"}:
+        assert getattr(schema.model_validate(payload | {field: None}), field) is None
+    else:
+        with pytest.raises(ValidationError):
+            schema.model_validate(payload | {field: None})
+    assert ProjectGuideUpdate().model_dump(exclude_unset=True) == {}
+
+
+async def project_text_state() -> list:
+    """Selected product/replay tables only; includes hidden guide generation."""
+    async with db_session.get_session_factory()() as session:
+        return [(await session.execute(select(model.__table__).order_by(model.id))).mappings().all()
+                for model in (Project, ProjectGuide, ProjectCreateIdempotencyRecord,
+                              GuideMutationIdempotencyRecord)]
+
+
+@pytest.mark.parametrize(("operation", "field"), PROJECT_TEXT_CASES)
+async def test_project_text_nul_rejected_without_state_and_same_key_recovers(
+    project_client: AsyncClient, operation: str, field: str,
+) -> None:
+    route, method, status = "/api/v1/projects", "POST", 201
+    payload = {"name": "Unicode 名 project", "slug": "nul-" + uuid4().hex,
+               "description": "Valid é description"}
+    if operation != "project":
+        project = await create_project(project_client)
+        route += f"/{project['id']}/guides"
+        payload = {"version": "initial", "content_markdown": "# Unicode 名\nGuide",
+                   "change_summary": "Initial é summary"}
+        if operation == "guide_update":
+            created = await project_client.post(route, headers=auth_headers(), json=payload)
+            assert created.status_code == 201, created.text
+            route += "/" + created.json()["id"]
+            method, status = "PATCH", 200
+            payload = {"content_markdown": "# Updated 名\nGuide", "change_summary": "Updated é summary"}
+    headers = auth_headers()
+    before = await project_text_state()
+    rejected = await project_client.request(method, route, headers=headers,
+        json=payload | {field: "PRIVATE_BAD\x00TEXT"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert "PRIVATE_BAD" not in rejected.text
+    assert await project_text_state() == before
+    recovered = await project_client.request(method, route, headers=headers, json=payload)
+    assert recovered.status_code == status, recovered.text
+    for name, value in payload.items():
+        assert recovered.json()[name] == value
+    after = await project_text_state()
+    assert after != before
+    replay = await project_client.request(method, route, headers=headers, json=payload)
+    assert replay.status_code == status, replay.text
+    assert replay.json() == recovered.json()
+    assert await project_text_state() == after
 
 
 def maximum_qualification() -> dict:

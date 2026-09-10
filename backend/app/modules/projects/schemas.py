@@ -445,9 +445,9 @@ class ProjectCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(max_length=200)
-    slug: str = Field(max_length=120)
-    description: str | None = None
+    name: str = Field(max_length=200, pattern=r"^[^\x00]*$")
+    slug: str = Field(max_length=120, pattern=r"^[^\x00]*$")
+    description: str | None = Field(default=None, pattern=r"^[^\x00]*$")
 
 
 class ProjectResponse(BaseModel):
@@ -479,9 +479,9 @@ class ProjectGuideCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str = Field(max_length=50)
-    content_markdown: str
-    change_summary: str | None = None
+    version: str = Field(max_length=50, pattern=r"^[^\x00]*$")
+    content_markdown: str = Field(pattern=r"^[^\x00]*$")
+    change_summary: str | None = Field(default=None, pattern=r"^[^\x00]*$")
 
 
 class ProjectGuideUpdate(BaseModel):
@@ -489,8 +489,8 @@ class ProjectGuideUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    content_markdown: str = Field(default_factory=str)
-    change_summary: str | None = None
+    content_markdown: str = Field(default_factory=str, pattern=r"^[^\x00]*$")
+    change_summary: str | None = Field(default=None, pattern=r"^[^\x00]*$")
 
 
 class ProjectGuideResponse(BaseModel):

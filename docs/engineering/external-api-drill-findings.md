@@ -294,7 +294,7 @@ Git. This repair does not certify every other API field or deployed provider.
 
 ## API-DRILL-009: project and guide text NUL becomes 503
 
-- Unrepaired reproduction on clean `60ab744792bc64327040f20fb14a72c26e9dd7c8`.
+- Original reproduction on clean `60ab744792bc64327040f20fb14a72c26e9dd7c8`.
   This finding is separate from the repaired self-profile and context inputs.
 - With a normally authenticated, system-scoped Project Manager and a fresh
   UUID `Idempotency-Key`, replace exactly one text field with JSON
@@ -320,8 +320,16 @@ Git. This repair does not certify every other API field or deployed provider.
   existing length limits, optional nulls, omission semantics, authority and
   idempotency. Reject unsupported input; do not strip it or relabel a storage
   error as successful input validation after the write.
-- Coordinate with the product-builder owner before editing these setup files.
-  No product repair for this finding is included in the drill extension yet.
+- Repair: all eight request fields exclude NUL using Pydantic field constraints,
+  before the mutation handlers run. Existing limits, Unicode, nullable values
+  and PATCH omission behavior remain intact. The parameterized
+  `test_project_text_nul_rejected_without_state_and_same_key_recovers` checks
+  422/non-retryability, unchanged selected project/guide and idempotency tables
+  (including hidden guide generation), corrected same-key recovery and replay.
+  No claim is made about every authority/audit table remaining unchanged.
+- The product-builder's separate guide-contract changes must not be overwritten.
+  On integration, preserve these constraints on surviving fields without
+  restoring any removed guide fields.
 - Private reproducer: `probe_project_guide_nul_v2.py` under
   `/tmp/workstream-field-drill.l3LIo4/`; corresponding
   `project-guide-nul-v2.json` and `project-guide-nul-v2-db.json` record 25 HTTP
@@ -330,10 +338,10 @@ Git. This repair does not certify every other API field or deployed provider.
   clean Git target are recorded. The initial probe stopped at the legitimate
   `self_grant_forbidden` guard; the corrected fixture uses distinct bootstrap
   administrator and Project Manager actors. No guard was bypassed.
-- This diagnostic is not yet a committed executable regression. The inputs and
-  controls above are the durable repair handoff; temporary files are not shared
-  evidence links. Preserve the eight 422 expectations in the permanent drill
-  when incorporating the coordinated repair.
+- `project_guide_nul_cases` in the committed external drill preserves all eight
+  422 expectations and their corrected same-key controls. It retains independent
+  failures instead of changing expectations to match observed server errors.
+  Temporary reproduction files are not shared evidence links.
 
 ## Retest and handoff criteria
 

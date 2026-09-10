@@ -1,5 +1,13 @@
 # External-client API drill
 
+Project/guide text probes include all eight NUL-input regressions from
+[API-DRILL-009](external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503).
+They require non-retryable 422 responses and valid same-key recovery. Fresh-key
+guide PATCH controls compare public fields except `updated_at`; they are real
+mutations, not proof of unchanged hidden history. The PostgreSQL regression
+tests separately verify selected product and idempotency tables remain unchanged
+after rejection, including the guide's internal mutation generation.
+
 `backend/scripts/external_api_drill.py` is separate from the older API contract
 drill. It uses a real local HTTP server, real token verification and PostgreSQL.
 It does not seed product rows, disable guards, import the old drill or fake

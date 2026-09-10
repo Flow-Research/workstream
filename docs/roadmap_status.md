@@ -217,9 +217,10 @@ cannot be reused as post-submission review-gate evidence. See the
   records the matching authorization-context selector repair: NUL is rejected
   with 422 while project-ID lookup and project concealment remain intact.
   [API-DRILL-009](engineering/external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503)
-  remains unrepaired: eight project/guide create/update text inputs containing
-  NUL return 503 instead of bounded validation errors. Valid controls pass, but
-  these surfaces are not yet certified for the all-field external-client handoff.
+  records the project/guide text repair: eight create/update fields reject NUL
+  at request validation instead of returning a storage failure. Dedicated
+  regressions check selected stored-state preservation, same-key recovery and
+  replay. This does not certify the unfinished all-field external-client handoff.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions

@@ -551,6 +551,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
         fields=("body.content_markdown", "body.change_summary"))
     await policy_cases(drill, manager, groute, gpath, outsider)
     await project_field_cases(drill, manager, outsider, project, guide, manager_id)
+    await project_guide_nul_cases(drill, manager)
     await project_role_cases(drill, manager, outsider, project, manager_id)
     await authority_cases(drill, admin, manager, outsider, manager_id, project)
     await drill.call("revoke_manager", "POST", "/api/v1/admin-role-grants/{grant_id}/revoke",
@@ -731,6 +732,58 @@ async def policy_successor(drill, token, route, path, name, payload, semantics, 
                 re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None and
                 (value != previous["policy_hash"]) == hash_changed},
         exact_fields=previous.keys(), fields=tuple("body." + field for field in payload))
+
+
+async def project_guide_nul_cases(drill, token):
+    """Reject invalid text; PATCH {} checks public fields, not hidden history."""
+    route = "/api/v1/projects"
+    for field in ("name", "slug", "description"):
+        body = {"name": "Unicode é project", "slug": "probe-" + uuid4().hex,
+                "description": "Valid description"}
+        headers = {"Idempotency-Key": str(uuid4())}
+        try:
+            await drill.call("project_nul_" + field, "POST", route, token=token,
+                payload=body | {field: "before\x00after"}, headers=headers, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        project = await drill.call("project_control_" + field, "POST", route, token=token,
+            payload=body, headers=headers, expected=201, values=body)
+        await drill.call("project_readback_" + field, "GET", route + "/{project_id}",
+            path=route + "/" + project["id"], token=token,
+            values=project, exact_fields=project.keys())
+    groute, gpath = route + "/{project_id}/guides", route + "/" + project["id"] + "/guides"
+    for field in ("version", "content_markdown", "change_summary"):
+        body = {"version": "probe-" + uuid4().hex, "content_markdown": "# Valid é guide",
+                "change_summary": "Valid summary"}
+        headers = {"Idempotency-Key": str(uuid4())}
+        try:
+            await drill.call("guide_create_nul_" + field, "POST", groute, path=gpath, token=token,
+                payload=body | {field: "before\x00after"}, headers=headers, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        guide = await drill.call("guide_create_control_" + field, "POST", groute, path=gpath,
+            token=token, payload=body, headers=headers, expected=201, values=body)
+    for field in ("content_markdown", "change_summary"):
+        headers = {"Idempotency-Key": str(uuid4())}
+        try:
+            await drill.call("guide_patch_nul_" + field, "PATCH", groute + "/{guide_id}",
+                path=gpath + "/" + guide["id"], token=token,
+                payload={field: "before\x00after"}, headers=headers, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        guide = await drill.call("guide_patch_unchanged_" + field, "PATCH", groute + "/{guide_id}",
+            path=gpath + "/" + guide["id"], token=token, payload={},
+            values={key: value for key, value in guide.items() if key != "updated_at"},
+            exact_fields=guide.keys())
+        guide = await drill.call("guide_patch_control_" + field, "PATCH", groute + "/{guide_id}",
+            path=gpath + "/" + guide["id"], token=token,
+            payload={field: "Valid updated é text"}, headers=headers,
+            values={key: ("Valid updated é text" if key == field else value)
+                    for key, value in guide.items() if key != "updated_at"},
+            exact_fields=guide.keys())
 
 
 async def project_field_cases(drill, manager, outsider, project, guide, manager_id):
