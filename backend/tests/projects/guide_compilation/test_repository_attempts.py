@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 import asyncio
 
 import pytest
@@ -25,10 +27,11 @@ async def test_concurrent_reservation_converges_on_one_key(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+
         async def reserve():
             async with factory() as session, session.begin():
                 return await GuideCompilationRepository(session).reserve_attempt(
-                    attempt_identity
+                    attempt_identity, runtime_configuration=runtime_configuration()
                 )
 
         first, second = await asyncio.gather(reserve(), reserve())
@@ -52,12 +55,20 @@ async def test_reservation_identity_mismatch_reuses_no_key(
     try:
         async with factory() as session, session.begin():
             _, original = await GuideCompilationRepository(session).reserve_attempt(
-                attempt_identity
+                attempt_identity, runtime_configuration=runtime_configuration()
             )
-        changed = attempt_identity.model_copy(update={"instruction_version": "v2"})
+        changed_context = context(values).model_copy(
+            update={
+                "instruction_version": "changed",
+                "runtime_configuration": runtime_configuration().model_copy(
+                    update={"instruction_version": "changed"}
+                ),
+            }
+        )
+        changed = identity(changed_context)
         async with factory() as session, session.begin():
             outcome, preserved = await GuideCompilationRepository(session).reserve_attempt(
-                changed
+                changed, runtime_configuration=changed_context.runtime_configuration
             )
         assert outcome == "mismatch"
         assert preserved.id == original.id
@@ -78,7 +89,7 @@ async def test_uncertain_to_invalid_terminal_preserves_one_attempt(
     try:
         async with factory() as session, session.begin():
             _, attempt = await GuideCompilationRepository(session).reserve_attempt(
-                attempt_identity
+                attempt_identity, runtime_configuration=runtime_configuration()
             )
             key = attempt.provider_idempotency_key
         async with factory() as session, session.begin():

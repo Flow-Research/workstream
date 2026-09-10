@@ -186,6 +186,7 @@ def test_artifact_adapter_builds_configured_local_bootstrap(tmp_path) -> None:
     root = tmp_path / "objects"
     root.mkdir(mode=0o700)
     settings = Settings(
+        _env_file=None,
         **artifact_admission_limit_settings(),
         environment="test",
         artifact_store_backend="local",
@@ -760,7 +761,7 @@ async def test_observed_confirmed_write_receipt_is_supported() -> None:
 
 
 @pytest.mark.asyncio
-async def test_verified_guide_content_does_not_publish_submission_admission() -> None:
+async def test_retained_guide_verification_cannot_publish_submission_admission() -> None:
     job = SimpleNamespace(id=str(uuid4()), originating_put_attempt_id=str(uuid4()))
     attempt = SimpleNamespace(id=job.originating_put_attempt_id, producer_request_type="guide")
     session = SimpleNamespace(

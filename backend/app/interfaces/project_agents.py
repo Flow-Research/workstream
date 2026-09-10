@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
 from enum import StrEnum
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
 from pydantic import (
@@ -22,15 +21,27 @@ from pydantic import (
     model_validator,
 )
 
+from app.modules.projects.api.task_examples import ProjectGuideTaskExamples
 from app.modules.checkers.api import PostSubmitCatalogue, PostSubmitDefinition
+from app.modules.checkers.api.pre_submit_catalogue import (
+    PreSubmissionCapabilityDefinition,
+    PreSubmissionCapabilityProjection,
+)
+from app.interfaces.external_services import (
+    ExternalServiceAdapter,
+    ExternalServiceAdapterError,
+    ExternalServiceConfigurationError,
+)
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
+from app.modules.projects.api.guide_documents import GuideRuntimeCleanupCustody, GuideDocumentManifest, GuideRuntimeCapabilities
 
 
-MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES = 12 * 1024 * 1024
-MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES = 16 * 1024 * 1024
+MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES = 1_000_000
 MAXIMUM_COMPILATION_FINDINGS = 100
 MAXIMUM_COMPILATION_REQUIREMENTS = 200
-MAXIMUM_COMPILATION_BINDINGS = 100
-MAXIMUM_COMPILATION_SUGGESTIONS = 50
+MAXIMUM_COMPILATION_BINDINGS = MAXIMUM_COMPILATION_REQUIREMENTS
+MAXIMUM_COMPILATION_SUGGESTIONS = MAXIMUM_COMPILATION_REQUIREMENTS
+MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES = 4_194_304
 MAXIMUM_COMPILATION_NOTES = 20
 MAXIMUM_EVIDENCE_REFS = 20
 PROJECT_GUIDE_COMPILATION_AGENT_IDENTITY = "project-guide-compilation-agent-v1"
@@ -50,6 +61,19 @@ _UNSAFE_MODEL_TEXT = re.compile(
     r"curl|wget|powershell|bash|sh)\b",
     re.IGNORECASE,
 )
+
+
+_MODEL_PROSE_SCHEMA = {
+    "minLength": 1,
+    "maxLength": 1000,
+    "description": (
+        "Plain prose only. No URLs, email addresses, credentials, filesystem paths, "
+        "slash-separated words, code, or executable command names. Spell alternatives "
+        "with words (for example, 'training and evaluation', not a slash expression). "
+        "Describe shell instructions and module loading without literal command tokens."
+    ),
+}
+ModelProse = Annotated[str, Field(json_schema_extra=_MODEL_PROSE_SCHEMA)]
 
 
 def _validated_safe_model_text(value: str) -> str:
@@ -87,173 +111,35 @@ class RequirementDisposition(StrEnum):
     INFORMATIONAL = "informational"
 
 
-class ResourceBudget(BaseModel):
-    """Frozen canonical ART resource budget."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    maximum_results: StrictInt = Field(ge=1)
-
-
-class PreSubmissionCapabilityDefinition(BaseModel):
-    """Exact read-only projection of one ART catalogue definition."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    stable_id: str
-    version: str
-    public_name: str
-    owner: str
-    phase: str
-    order: int = Field(ge=0)
-    dependencies: tuple[str, ...]
-    classification: str
-    typed_inputs: tuple[str, ...]
-    result_schema: str
-    failure_code: str
-    resource_budget: ResourceBudget
-    state: Literal["enabled", "disabled"]
-    disabled_behavior: str
-    policy_trace_source: str
-    dispatch_kind: Literal["platform_capability", "policy_primitive"]
-    dispatch_capability: str
-    primitive: str | None = None
-    policy_fields: tuple[str, ...] = ()
-    selectable: bool
-
-
-class PreSubmissionCapabilityProjection(BaseModel):
-    """Complete immutable ART catalogue plus model-facing selectability."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    catalogue_id: Literal["workstream.pre_submission_checkers"]
-    version: Literal["v0.1"]
-    schema_version: Literal["pre_submission_checker_catalogue.v1"]
-    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    available: bool
-    definitions: tuple[PreSubmissionCapabilityDefinition, ...]
-
-
-class PostSubmissionCapabilityProjection(PostSubmitCatalogue):
-    """Agent-facing projection of CHECKERS canonical fields and validators."""
-
-
-class RepresentativeTaskPolicyContext(BaseModel):
-    """Bounded server-redacted task shape; never task or actor content."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    task_kind: str = Field(max_length=100)
-    deliverable_kinds: tuple[str, ...] = Field(default=(), max_length=20)
-    required_evidence_kinds: tuple[str, ...] = Field(default=(), max_length=20)
-
-    @field_validator("task_kind")
-    @classmethod
-    def validate_task_kind(cls, value: str) -> str:
-        """Require a canonical redacted task-kind identifier."""
-        return _validated_identifier(value)
-
-    @field_validator("deliverable_kinds", "required_evidence_kinds")
-    @classmethod
-    def validate_task_identifiers(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        """Require unique canonical task policy identifiers."""
-        if len(values) != len(set(values)):
-            raise ValueError("task policy identifiers must be unique")
-        return tuple(_validated_identifier(value) for value in values)
-
-
 class GuideEvidenceRef(BaseModel):
-    """Server-minted reference to immutable extracted guide content."""
+    """Untrusted page/section attribution bound to an exact original document version."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source_item_id: UUID
-    extraction_usage_id: UUID
-    canonical_output_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    start_ordinal: StrictInt = Field(ge=0, le=10_000_000)
-    end_ordinal: StrictInt = Field(gt=0, le=10_000_000)
+    document_version_id: UUID
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    start_page: StrictInt | None = Field(default=None, ge=1, le=100_000)
+    end_page: StrictInt | None = Field(default=None, ge=1, le=100_000)
+    section: str | None = Field(default=None, max_length=200, description=(
+        "Optional plain-prose section label. Paraphrase headings; do not copy URLs, "
+        "paths, slash-separated phrases, credentials or executable command tokens."
+    ))
 
-    @model_validator(mode="after")
-    def validate_ordinals(self) -> GuideEvidenceRef:
-        """Require a non-empty ordered evidence range."""
-        if self.end_ordinal <= self.start_ordinal:
-            raise ValueError("evidence ordinals are invalid")
-        return self
-
-
-class GuideSourceLineageRef(BaseModel):
-    """Immutable source lineage available for evidence resolution."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    source_item_id: UUID
-    extraction_usage_id: UUID
-    canonical_output_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-
-
-class VerifiedGuideMaterialSnapshot(BaseModel):
-    """Deeply immutable canonical snapshot of exact ART-verified material."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    project_id: str
-    guide_id: str
-    guide_version: str
-    source_snapshot_id: str
-    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    canonical_payload: bytes = Field(max_length=MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES)
-    canonical_payload_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    source_lineage: tuple[GuideSourceLineageRef, ...]
-
-    @model_validator(mode="after")
-    def validate_snapshot_integrity(self) -> VerifiedGuideMaterialSnapshot:
-        """Bind the immutable payload to its hash and unique lineage."""
-        expected_hash = "sha256:" + hashlib.sha256(self.canonical_payload).hexdigest()
-        if self.canonical_payload_sha256 != expected_hash:
-            raise ValueError("canonical guide material hash is invalid")
-        identities = {
-            (item.source_item_id, item.extraction_usage_id) for item in self.source_lineage
-        }
-        if len(identities) != len(self.source_lineage):
-            raise ValueError("canonical guide source lineage contains duplicates")
-        return self
-
+    @field_validator("section")
     @classmethod
-    def from_material(cls, material: GuideSourceMaterial) -> VerifiedGuideMaterialSnapshot:
-        """Snapshot exact verified material after rejecting legacy open shapes."""
-        if not material.verified_artifact_material:
-            raise ValueError("compilation requires ART-verified guide material")
-        if material.representative_task_material.items:
-            raise ValueError("raw representative-task material is forbidden")
-        if set(material.guide_material) != {"content_markdown"}:
-            raise ValueError("guide material contains non-canonical fields")
-        if not isinstance(material.guide_material["content_markdown"], str):
-            raise ValueError("canonical guide content must be text")
-        payload = canonical_guide_source_material_bytes(material)
-        if len(payload) > MAXIMUM_VERIFIED_GUIDE_AGENT_MATERIAL_BYTES:
-            raise ValueError("canonical guide material exceeds the bounded input")
-        lineage = tuple(
-            GuideSourceLineageRef(
-                source_item_id=UUID(item.source_item_id),
-                extraction_usage_id=UUID(item.extraction_usage_id),
-                canonical_output_sha256=item.canonical_output_sha256,
-            )
-            for item in material.source_items
-            if item.source_item_id and item.extraction_usage_id and item.canonical_output_sha256
-        )
-        if not lineage or len(lineage) != len(material.source_items):
-            raise ValueError("compilation material requires complete source lineage")
-        return cls(
-            project_id=material.project_id,
-            guide_id=material.guide_id,
-            guide_version=material.guide_version,
-            source_snapshot_id=material.source_snapshot_id,
-            source_snapshot_hash=material.source_snapshot_hash,
-            canonical_payload=payload,
-            canonical_payload_sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
-            source_lineage=lineage,
-        )
+    def validate_section(cls, value: str | None) -> str | None:
+        """Keep section labels bounded and safe; they are not independently verified."""
+        return _validated_safe_model_text(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def validate_pages(self) -> GuideEvidenceRef:
+        """Require both ends of a coherent optional page range."""
+        if (self.start_page is None) != (self.end_page is None):
+            raise ValueError("evidence page range is incomplete")
+        if self.start_page is not None and self.end_page < self.start_page:
+            raise ValueError("evidence page range is invalid")
+        return self
 
 
 CapabilityScalar = Annotated[
@@ -267,8 +153,8 @@ class CapabilityParameter(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: str
-    value: CapabilityScalar | tuple[CapabilityScalar, ...]
+    name: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    value: CapabilityScalar | Annotated[tuple[CapabilityScalar, ...], Field(min_length=1, max_length=50)]
 
     @field_validator("name")
     @classmethod
@@ -296,16 +182,15 @@ class CapabilityParameter(BaseModel):
         return value
 
 
-class CapabilityBindingProposal(BaseModel):
+class _CapabilityBindingIdentity(BaseModel):
     """One stage-bound proposal against canonical capability truth."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    requirement_id: str
-    capability_id: str
-    capability_version: str
+    requirement_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    capability_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    capability_version: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
     stage: CompilationStage
-    parameters: tuple[CapabilityParameter, ...] = Field(default=(), max_length=50)
 
     @field_validator("requirement_id", "capability_id", "capability_version")
     @classmethod
@@ -313,8 +198,17 @@ class CapabilityBindingProposal(BaseModel):
         """Require canonical requirement and capability identity fields."""
         return _validated_identifier(value)
 
+class PreSubmissionBindingProposal(_CapabilityBindingIdentity):
+    """Reference intake capability; its settings live only in the artifact policy."""
+
+
+class PostSubmissionBindingProposal(_CapabilityBindingIdentity):
+    """Reference work evaluation capability with its own typed configuration."""
+
+    parameters: tuple[CapabilityParameter, ...] = Field(default=(), max_length=50)
+
     @model_validator(mode="after")
-    def validate_parameter_names(self) -> CapabilityBindingProposal:
+    def validate_parameter_names(self) -> PostSubmissionBindingProposal:
         """Reject duplicate parameter names within one binding."""
         names = [parameter.name for parameter in self.parameters]
         if len(names) != len(set(names)):
@@ -328,8 +222,8 @@ class CompilationFinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     severity: Literal["blocking_gap", "warning", "info"]
-    code: str
-    message: str
+    code: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    message: ModelProse
     evidence_refs: tuple[GuideEvidenceRef, ...] = Field(
         default=(), max_length=MAXIMUM_EVIDENCE_REFS
     )
@@ -343,8 +237,8 @@ class PlatformCoverageRef(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    capability_id: str
-    capability_version: str
+    capability_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    capability_version: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
     stage: CompilationStage
 
     _capability_identity = field_validator("capability_id", "capability_version")(
@@ -357,9 +251,15 @@ class AtomicGuideRequirement(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    requirement_id: str
-    statement: str
-    disposition: RequirementDisposition
+    requirement_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    statement: ModelProse
+    disposition: RequirementDisposition = Field(description=(
+        "Use human_review for work assigned to an authorized human reviewer. "
+        "Use a capability gap only for required unsupported automated evaluation. "
+        "Any guide_blocker, pre_submit_capability_gap or post_submit_capability_gap "
+        "requires guide_blocked and no artifact policy. Exact supported binding "
+        "proposals may remain as catalogue-match evidence without being projected."
+    ))
     platform_coverage: PlatformCoverageRef | None = None
     evidence_refs: tuple[GuideEvidenceRef, ...] = Field(
         default=(), max_length=MAXIMUM_EVIDENCE_REFS
@@ -378,10 +278,10 @@ class SubmissionArtifactPolicyProposal(BaseModel):
     maximum_file_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
     maximum_package_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
     allowed_storage_schemes: tuple[Literal["artifact"], ...] = ("artifact",)
-    required_artifacts: tuple[str, ...] = Field(default=(), max_length=100)
-    forbidden_artifacts: tuple[str, ...] = Field(default=(), max_length=100)
-    required_evidence: tuple[str, ...] = Field(default=(), max_length=100)
-    attestation_terms: tuple[str, ...] = Field(default=(), max_length=50)
+    required_artifacts: tuple[ModelProse, ...] = Field(default=(), max_length=100)
+    forbidden_artifacts: tuple[ModelProse, ...] = Field(default=(), max_length=100)
+    required_evidence: tuple[ModelProse, ...] = Field(default=(), max_length=100)
+    attestation_terms: tuple[ModelProse, ...] = Field(default=(), max_length=50)
 
     @field_validator(
         "required_artifacts", "forbidden_artifacts", "required_evidence", "attestation_terms"
@@ -408,12 +308,15 @@ class CapabilitySuggestion(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    title: str
-    rationale: str
+    requirement_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    stage: CompilationStage
+    title: ModelProse
+    rationale: ModelProse
     evidence_refs: tuple[GuideEvidenceRef, ...] = Field(
-        default=(), max_length=MAXIMUM_EVIDENCE_REFS
+        min_length=1, max_length=MAXIMUM_EVIDENCE_REFS
     )
 
+    _requirement_id = field_validator("requirement_id")(_validated_identifier)
     _title = field_validator("title")(_validated_safe_model_text)
     _rationale = field_validator("rationale")(_validated_safe_model_text)
 
@@ -423,15 +326,30 @@ class ProjectGuideCompilationContext(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    material: VerifiedGuideMaterialSnapshot
+    material: GuideDocumentManifest
     setup_run_id: UUID
     setup_generation: StrictInt = Field(ge=1)
     instruction_version: str = Field(max_length=100)
     agent_identity: str = Field(max_length=100)
-    agent_version: str = Field(max_length=100)
+    agent_version: str = Field(max_length=100, json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    runtime_configuration: ProjectGuideRuntimeConfiguration
     pre_submission_capabilities: PreSubmissionCapabilityProjection
-    post_submission_capabilities: PostSubmissionCapabilityProjection
-    representative_task: RepresentativeTaskPolicyContext | None = None
+    post_submission_capabilities: PostSubmitCatalogue
+    task_examples: ProjectGuideTaskExamples
+
+    @model_validator(mode="after")
+    def validate_instruction_configuration(self) -> ProjectGuideCompilationContext:
+        """Bind the semantic instruction version to its exact execution snapshot."""
+        configuration = self.runtime_configuration
+        if (self.material.setup_run_id != self.setup_run_id
+                or self.material.setup_generation != self.setup_generation
+                or len(self.material.documents) > configuration.maximum_documents
+                or any(item.byte_count > configuration.maximum_document_bytes for item in self.material.documents)
+                or sum(item.byte_count for item in self.material.documents) > configuration.maximum_total_document_bytes):
+            raise ValueError("compilation document manifest exceeds its execution boundary")
+        if self.instruction_version != self.runtime_configuration.instruction_version:
+            raise ValueError("compilation instruction configuration mismatch")
+        return self
 
 
 def canonical_project_guide_compilation_context_bytes(
@@ -439,13 +357,22 @@ def canonical_project_guide_compilation_context_bytes(
 ) -> bytes:
     """Serialize one context without double-encoding canonical guide JSON."""
     body = context.model_dump(mode="json")
-    body["material"]["canonical_payload"] = json.loads(context.material.canonical_payload)
     return json.dumps(
         body,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
         allow_nan=False,
+    ).encode("utf-8")
+
+
+def project_guide_compilation_prompt_bytes(context: ProjectGuideCompilationContext) -> bytes:
+    """Serialize only source and capability input, excluding trusted runtime settings."""
+    body = json.loads(canonical_project_guide_compilation_context_bytes(context))
+    del body["runtime_configuration"]
+    body["material"] = context.material.agent_projection()
+    return json.dumps(
+        body, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     ).encode("utf-8")
 
 
@@ -462,18 +389,18 @@ class ProjectGuideCompilationResult(BaseModel):
     requirements: tuple[AtomicGuideRequirement, ...] = Field(
         default=(), max_length=MAXIMUM_COMPILATION_REQUIREMENTS
     )
-    pre_submit_bindings: tuple[CapabilityBindingProposal, ...] = Field(
+    pre_submit_bindings: tuple[PreSubmissionBindingProposal, ...] = Field(
         default=(), max_length=MAXIMUM_COMPILATION_BINDINGS
     )
-    post_submit_bindings: tuple[CapabilityBindingProposal, ...] = Field(
+    post_submit_bindings: tuple[PostSubmissionBindingProposal, ...] = Field(
         default=(), max_length=MAXIMUM_COMPILATION_BINDINGS
     )
     capability_suggestions: tuple[CapabilitySuggestion, ...] = Field(
         default=(), max_length=MAXIMUM_COMPILATION_SUGGESTIONS
     )
-    setup_notes: tuple[str, ...] = Field(default=(), max_length=MAXIMUM_COMPILATION_NOTES)
+    setup_notes: tuple[ModelProse, ...] = Field(default=(), max_length=MAXIMUM_COMPILATION_NOTES)
     agent_name: Literal["ProjectGuideCompilationAgent"] = "ProjectGuideCompilationAgent"
-    agent_version: str = Field(max_length=100)
+    agent_version: str = Field(max_length=100, json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
     schema_version: Literal["project_guide_compilation_result.v1"] = (
         "project_guide_compilation_result.v1"
     )
@@ -503,18 +430,17 @@ def validate_project_guide_compilation_result(
     result: ProjectGuideCompilationResult,
 ) -> None:
     """Fail closed when an untrusted result diverges from canonical capability truth."""
+    if project_guide_compilation_result_storage_bytes(result) > MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES:
+        raise ValueError("compilation result exceeds storage byte limit")
     if not context.pre_submission_capabilities.available:
         raise ValueError("pre-submit capability projection is unavailable")
     requirements = {item.requirement_id: item for item in result.requirements}
     if len(requirements) != len(result.requirements):
         raise ValueError("compilation requirements must be unique")
     _validate_status_consistency(result)
+    _validate_capability_suggestions(result.capability_suggestions, requirements)
     if result.status == "guide_blocked":
-        if (
-            result.submission_artifact_policy
-            or result.pre_submit_bindings
-            or result.post_submit_bindings
-        ):
+        if result.submission_artifact_policy is not None:
             raise ValueError("blocked guide cannot publish policy proposals")
     elif result.submission_artifact_policy is None:
         raise ValueError("draft-ready compilation requires artifact policy")
@@ -524,17 +450,21 @@ def validate_project_guide_compilation_result(
         for definition in context.pre_submission_capabilities.definitions
     }
     post_capabilities = context.post_submission_capabilities
-    post_capabilities = PostSubmissionCapabilityProjection.model_validate(post_capabilities)
-    if any(item.platform_default and item.state != "enabled" for item in post_capabilities.definitions):
+    post_capabilities = PostSubmitCatalogue.model_validate(post_capabilities)
+    if any(
+        item.platform_default and item.state != "enabled" for item in post_capabilities.definitions
+    ):
         raise ValueError("post-submit capability projection is unavailable")
     post_definitions = {
-        definition.capability_id: definition
-        for definition in post_capabilities.definitions
+        definition.capability_id: definition for definition in post_capabilities.definitions
     }
     _validate_platform_coverage(result.requirements, pre_definitions, post_definitions)
     _validate_evidence_lineage(context, result)
     pre_bound_requirements = _validate_bindings(
-        result.pre_submit_bindings, requirements, pre_definitions, "pre_submit"
+        result.pre_submit_bindings,
+        requirements,
+        pre_definitions,
+        "pre_submit",
     )
     post_bound_requirements = _validate_bindings(
         result.post_submit_bindings, requirements, post_definitions, "post_submit"
@@ -551,6 +481,34 @@ def validate_project_guide_compilation_result(
     }
     if pre_bound_requirements != expected_pre or post_bound_requirements != expected_post:
         raise ValueError("supported compilation requirements must have one binding")
+
+
+def project_guide_compilation_result_storage_bytes(result: ProjectGuideCompilationResult) -> int:
+    """Measure the default SQLAlchemy PostgreSQL JSON representation, not hash encoding."""
+    return len(json.dumps(result.model_dump(mode="json"), ensure_ascii=True,
+                          allow_nan=False).encode("utf-8"))
+
+
+def _validate_capability_suggestions(
+    suggestions: tuple[CapabilitySuggestion, ...],
+    requirements: dict[str, AtomicGuideRequirement],
+) -> None:
+    """Require one evidence-backed engineering handoff for each exact staged gap."""
+    stages = {
+        RequirementDisposition.PRE_SUBMIT_CAPABILITY_GAP: CompilationStage.PRE_SUBMIT,
+        RequirementDisposition.POST_SUBMIT_CAPABILITY_GAP: CompilationStage.POST_SUBMIT,
+    }
+    gaps = {key: stages[item.disposition] for key, item in requirements.items()
+            if item.disposition in stages}
+    seen: set[str] = set()
+    for suggestion in suggestions:
+        if (suggestion.requirement_id in seen
+                or gaps.get(suggestion.requirement_id) != suggestion.stage
+                or not suggestion.evidence_refs):
+            raise ValueError("compilation capability suggestion is invalid")
+        seen.add(suggestion.requirement_id)
+    if seen != set(gaps):
+        raise ValueError("capability gaps must have exactly one suggestion")
 
 
 def _validate_status_consistency(result: ProjectGuideCompilationResult) -> None:
@@ -620,10 +578,10 @@ def _validate_evidence_lineage(
     source_lineage = {
         (
             str(item.source_item_id),
-            str(item.extraction_usage_id),
-            item.canonical_output_sha256,
+            str(item.ingest_id),
+            item.sha256,
         )
-        for item in context.material.source_lineage
+        for item in context.material.documents
     }
     evidence_refs = (
         *(ref for finding in result.findings for ref in finding.evidence_refs),
@@ -633,15 +591,15 @@ def _validate_evidence_lineage(
     for evidence in evidence_refs:
         lineage = (
             str(evidence.source_item_id),
-            str(evidence.extraction_usage_id),
-            evidence.canonical_output_sha256,
+            str(evidence.document_version_id),
+            evidence.sha256,
         )
         if lineage not in source_lineage:
             raise ValueError("compilation evidence does not resolve to source lineage")
 
 
 def _validate_bindings(
-    bindings: tuple[CapabilityBindingProposal, ...],
+    bindings: tuple[PreSubmissionBindingProposal | PostSubmissionBindingProposal, ...],
     requirements: dict[str, AtomicGuideRequirement],
     definitions: dict[str, PreSubmissionCapabilityDefinition | PostSubmitDefinition],
     expected_stage: Literal["pre_submit", "post_submit"],
@@ -672,21 +630,29 @@ def _validate_bindings(
         )
         if binding.capability_version != version:
             raise ValueError("compilation capability version is stale")
-        if isinstance(definition, PreSubmissionCapabilityDefinition):
-            allowed_fields = set(definition.policy_fields)
-            if any(parameter.name not in allowed_fields for parameter in binding.parameters):
-                raise ValueError("pre-submit capability parameters are invalid")
-        else:
-            definition.validate_configuration({item.name: item.value for item in binding.parameters})
+        if isinstance(definition, PostSubmitDefinition):
+            if not isinstance(binding, PostSubmissionBindingProposal):
+                raise ValueError("compilation capability binding is invalid")
+            definition.validate_configuration(
+                {item.name: item.value for item in binding.parameters}
+            )
         seen_requirements.add(binding.requirement_id)
     return seen_requirements
 
 
-class ProjectAgentRuntimeError(Exception):
+
+class ProjectAgentRuntimeError(ExternalServiceAdapterError):
     """Raised when a project-agent runtime cannot complete a trusted operation."""
 
+    def __init__(self, message: str) -> None:
+        """Expose only a caller-supplied stable error, never provider exception text."""
+        self.identity = None
+        Exception.__init__(self, message)
 
-class ProjectAgentRuntimeConfigurationError(ProjectAgentRuntimeError):
+
+class ProjectAgentRuntimeConfigurationError(
+    ProjectAgentRuntimeError, ExternalServiceConfigurationError
+):
     """Raised when a configured project-agent runtime is unavailable or incomplete."""
 
 
@@ -698,223 +664,24 @@ class ProjectGuideCompilationInvalidOutputError(ProjectAgentRuntimeError):
         super().__init__("Project guide compilation returned invalid structured output")
 
 
-class GuideSourceItemMaterial(BaseModel):
-    """One immutable source item made available to setup agents."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    source_kind: str
-    ingestion_adapter: str
-    media_type: str | None = None
-    source_item_id: str | None = None
-    item_order: int | None = None
-    binding_id: str | None = None
-    artifact_content_id: str | None = None
-    artifact_sha256: str | None = None
-    artifact_byte_count: int | None = None
-    classification_id: str | None = None
-    detected_format: str | None = None
-    extraction_attempt_id: str | None = None
-    extraction_usage_id: str | None = None
-    extracted_content_id: str | None = None
-    extractor_name: str | None = None
-    extractor_version: str | None = None
-    extraction_policy_version: str | None = None
-    canonical_output_sha256: str | None = None
-    omission_facts: dict[str, Any] | None = None
-    canonical_content: str | None = None
-    structural_metadata: dict[str, Any] | None = None
-    untrusted_data: bool = False
-    untrusted_data_label: Literal["UNTRUSTED_GUIDE_SOURCE_DATA"] | None = None
-
-
-class RepresentativeTaskMaterialContext(BaseModel):
-    """Representative task material used for guide sufficiency analysis."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[GuideSourceItemMaterial] = Field(default_factory=list)
-
-
-class GuideSourceMaterial(BaseModel):
-    """Immutable project and task-context material made available to setup agents."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str
-    guide_id: str
-    guide_version: str
-    source_snapshot_id: str
-    source_snapshot_hash: str
-    guide_material: dict[str, Any]
-    verified_artifact_material: bool = False
-    source_items: list[GuideSourceItemMaterial] = Field(default_factory=list)
-    representative_task_material: RepresentativeTaskMaterialContext = Field(
-        default_factory=RepresentativeTaskMaterialContext
-    )
-
-
-def canonical_guide_source_material_bytes(material: GuideSourceMaterial) -> bytes:
-    """Serialize the exact deterministic UTF-8 payload supplied to the agent."""
-    return json.dumps(
-        material.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
-
-
-class AgentFinding(BaseModel):
-    """Structured finding emitted by a project setup agent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    severity: Literal["blocking_gap", "warning", "info"]
-    code: str = Field(max_length=100)
-    message: str = Field(max_length=1000)
-    location: str | None = Field(default=None, max_length=500)
-
-
-class GuideSufficiencyAgentResult(BaseModel):
-    """Structured output from the project guide sufficiency agent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    status: Literal[
-        "guide_sufficient",
-        "guide_blocked",
-        "guide_sufficient_with_warnings",
-    ]
-    findings: list[AgentFinding] = Field(default_factory=list)
-    summary: str | None = Field(default=None, max_length=2000)
-    agent_name: str = Field(default="ProjectGuideSufficiencyAgent", max_length=100)
-    agent_version: str = Field(max_length=50)
-
-
-class SubmissionArtifactPolicyDerivationResult(BaseModel):
-    """Structured output from the submission artifact policy derivation agent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    policy_version: str = Field(max_length=50)
-    policy_body: dict[str, Any]
-    change_summary: str | None = Field(default=None, max_length=2000)
-    agent_name: str = Field(default="SubmissionArtifactPolicyDerivationAgent", max_length=100)
-    agent_version: str = Field(max_length=100)
-
-
-class PostSubmitCheckerCatalogEntry(BaseModel):
-    """One registered deterministic checker available for post-submit setup."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(max_length=100)
-    platform_default: bool = False
-
-
-class PostSubmitCheckerPolicyEvidenceRef(BaseModel):
-    """Bounded source-evidence reference for post-submit derivation reasons."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    ref: str = Field(max_length=200)
-
-
-class PostSubmitCheckerPolicyReason(BaseModel):
-    """Reason tying a requested checker to bounded source evidence."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    checker_name: str = Field(max_length=100)
-    rationale: str = Field(max_length=1000)
-    evidence_refs: list[PostSubmitCheckerPolicyEvidenceRef] = Field(
-        default_factory=list,
-        max_length=10,
-    )
-
-
-class UnsupportedPostSubmitCheckerGap(BaseModel):
-    """Unsupported required post-submit checker requirement from guide setup."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    requested_checker: str = Field(max_length=500)
-    reason: str = Field(max_length=1000)
-    evidence_refs: list[PostSubmitCheckerPolicyEvidenceRef] = Field(
-        default_factory=list,
-        max_length=10,
-    )
-
-
-class PostSubmitCheckerPolicyCorrectionFeedback(BaseModel):
-    """Bounded operator feedback for replacing one superseded checker policy."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    superseded_policy_id: str = Field(max_length=36)
-    superseded_policy_hash: str = Field(max_length=71)
-    required_checkers: list[str] = Field(default_factory=list, max_length=100)
-    warning_checkers: list[str] = Field(default_factory=list, max_length=100)
-    blocking_severities: list[str] = Field(default_factory=list, max_length=10)
-    correction_reason: str = Field(max_length=500)
-
-
-class PostSubmitCheckerPolicyDerivationContext(BaseModel):
-    """Server-owned context supplied to the post-submit policy derivation agent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    sufficiency_report_summary: dict[str, Any]
-    effective_policy_summary: dict[str, Any]
-    pre_submit_checker_summary: dict[str, Any]
-    registered_checker_catalog: list[PostSubmitCheckerCatalogEntry]
-    correction_feedback: PostSubmitCheckerPolicyCorrectionFeedback | None = None
-
-
-class PostSubmitCheckerPolicyDerivationResult(BaseModel):
-    """Structured output from the post-submit checker policy derivation agent."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    required_checkers: list[str] = Field(default_factory=list, max_length=100)
-    warning_checkers: list[str] = Field(default_factory=list, max_length=100)
-    blocking_severities: list[str] | None = Field(default=None, max_length=10)
-    reasons: list[PostSubmitCheckerPolicyReason] = Field(default_factory=list, max_length=100)
-    unsupported_required_checks: list[UnsupportedPostSubmitCheckerGap] = Field(
-        default_factory=list,
-        max_length=100,
-    )
-    setup_notes: list[str] = Field(default_factory=list, max_length=20)
-    agent_name: str = Field(default="PostSubmitCheckerPolicyDerivationAgent", max_length=100)
-    agent_version: str = Field(max_length=100)
-
-
-class ProjectGuideAgentRuntime(Protocol):
+class ProjectGuideAgentRuntime(ExternalServiceAdapter, Protocol):
     """Port implemented by project guide setup agent runtimes."""
+
+    def admit_execution(self) -> None:
+        """Acquire provider availability admission before the durable execution fence."""
+        ...
+
+    async def cleanup_resources(self, custody: GuideRuntimeCleanupCustody) -> bool:
+        """Reconcile exact owned resources without admitting or executing inference."""
+        ...
+
+    async def aclose(self) -> None:
+        """Release runtime admission even if dispatch loses before execution."""
+        ...
 
     async def compile_project_guide(
         self,
         context: ProjectGuideCompilationContext,
+        capabilities: GuideRuntimeCapabilities,
     ) -> ProjectGuideCompilationResult:
         """Compile one complete untrusted project-guide proposal."""
-
-    async def analyze_guide_sufficiency(
-        self,
-        material: GuideSourceMaterial,
-    ) -> GuideSufficiencyAgentResult:
-        """Assess whether guide material is sufficient for project setup."""
-
-    async def derive_submission_artifact_policy(
-        self,
-        material: GuideSourceMaterial,
-        sufficiency_report: GuideSufficiencyAgentResult,
-    ) -> SubmissionArtifactPolicyDerivationResult:
-        """Derive the machine-readable submission artifact policy."""
-
-    async def derive_post_submit_checker_policy(
-        self,
-        material: GuideSourceMaterial,
-        context: PostSubmitCheckerPolicyDerivationContext,
-    ) -> PostSubmitCheckerPolicyDerivationResult:
-        """Derive the constrained project post-submit checker policy spec."""

@@ -13,9 +13,9 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: hidden projections and atomic setup finalization have exact
   request-local authority through AUTH-12J and AUTH-12B2; the five hidden
   ContributionPolicy actions have exact Finance Authority through CP05.
-- Next usable boundary: unavailable dispatcher contracts; POL-04B
-  consumes completed finalization authority after catalogue/schema reconciliation.
-  AUTH-12F4 supplies exact review/correction/approval over proven POL behavior.
+- Next usable boundary: POL-05A proposal review/correction behavior → AUTH-12F4
+  exact review/correction/approval authority → POL-05B manager-facing composition.
+  Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
 - Preserve: Flow token verification only, no Workstream login/session system,
@@ -33,7 +33,8 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
   POL projection ports exist through POL-04A3.
 - AUTH-12B2 activates only fixed setup-service finalization of exact locked
   facts, with current lifecycle checks, immutable receipt binding, and exact
-  historical replay. Its explicit adapter remains outside live HTTP/Celery wiring.
+  historical replay. POL-04B composes its explicit adapter in the live Celery worker; default and
+  public mutation ports remain unavailable.
 
 ## Remaining v0.1 sequence
 
@@ -41,8 +42,9 @@ Follow the [current cross-owner dependency contract](../WS-ARCH-001/planning/PLA
 Hidden owner behavior precedes exact AUTH authority; neither guide activation
 nor policy selection is authorized by the sufficiency action.
 
-1. POL-04B connects the complete hidden finalization and exact AUTH-12B2 adapter
-   to live setup execution after ARCH-04A catalogue/schema reconciliation.
+1. POL-04B delivers live automatic compilation and exact AUTH-12B2 finalization.
+   Next, POL-05A → AUTH-12F4 → POL-05B delivers authorized manager review,
+   correction, explicit fresh-generation rerun and approval.
 2. `12F4`, `12G`, and `12H`: activate stored pre-submit/post-submit and final
    guide behavior only after their owner implementations and remaining CON CP06-CP07.
 3. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.

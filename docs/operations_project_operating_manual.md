@@ -28,7 +28,8 @@ Target v0.1 checklist before releasing tasks. The
 remaining setup/activation work:
 
 - project name and slug exist
-- project guide imported
+- project guide metadata created with at least one ordinary-text task example
+- every assigned PDF/DOCX/PPTX guide original uploaded to ArtifactStore/S3
 - guide source snapshot captured
 - project owner setup material captured
 - latest project setup run visible through covered Project Manager or authorized
@@ -105,44 +106,38 @@ grants are non-authoritative for these reads:
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}`
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
-- `GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup`
 
 Guide-sufficiency mutations are separate Project Manager operations and require
 a UUID `Idempotency-Key` on every request:
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
   records an explicitly human-authored report.
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent`
-  authorizes an asynchronous recovery request and returns `202 Accepted` with
-  stable, committed setup-run dispatch custody. Authorization evidence, replay
-  response, and the deterministic dispatch claim commit before broker
-  publication, so uncertain delivery remains recoverable. The route never reads
-  ART material or invokes the agent inside the HTTP request.
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
   records the Project Manager and exact authorization provenance.
 
 Issuer role claims, contributor grants, and service tokens cannot invoke these
 public routes. A manual report is not an agent-run replay and does not occupy
-the authoritative verified-report slot. Automatic verified-material readiness
-and an authorized manual request converge on the same deterministic Celery
-task. The fixed setup service creates a distinct
-verified report from canonical ART material; the diagnostic row is neither
-reused nor linked as setup output.
-The manual request is rejected as `guide_sufficiency_run_not_needed` when the
-exact current setup generation already has a terminal authoritative report or
-compiled policy; changing the idempotency key cannot spend agent tokens again.
-The fixed `workstream.project.setup` service may use only the run action through
-internal command resolution with fresh setup custody; it cannot call the HTTP
-route or create manual reports or acknowledgements.
+the authoritative verified-report slot. Committed original-document readiness dispatches one unified compilation under
+the fixed setup service. Its report binds exact opened document versions; a
+manual diagnostic report is neither reused nor linked as compilation output.
+The three former inference steps and sufficiency-run endpoint are removed.
 
-Unified compilation projections are currently hidden and route-unreachable.
-They can materialize an exact persisted compilation into one canonical
-sufficiency report and, when permitted by that result, one draft submission
-artifact policy. They do not call a model, change setup status or output
-pointers, approve policy, or enqueue work. Operators should continue to rely on
-the existing setup APIs; no manual repair or direct database invocation of the
-hidden projector is supported before the authorization and background-execution
-cutover.
+A ready compilation persists separate pre-submission and post-submission
+proposals and stops at a draft. An insufficient guide stops with findings.
+The latest setup diagnostic reflects durable invalid or unresolved provider
+outcomes without rewriting setup evidence. An uncertain attempt is never
+invoked again. Transport failures retry the same task and attempt. After bounded Celery retries
+exhaust, Beat can reclaim stale queued deliveries with the same deterministic task
+ID. Repair configuration or infrastructure, then allow that continuation to resume;
+it cannot create a new provider attempt. Invalid, uncertain and finalized attempts
+and retained attempts without runtime configuration are excluded from reclaim. Accepted
+results resume persistence and projection without another model call.
+
+Project Manager proposal visibility, editing, explicit fresh-generation reruns
+and approval remain POL-05. Generic artifact-policy approval rejects unified
+drafts before creating effective policy. Neither warning acknowledgement nor
+post-submit policy correction dispatches inference. Operators must not invoke
+projectors directly or rewrite retained attempt evidence.
 
 AUTH-11C2 separately exposes current active-guide configuration through the
 following endpoints:
@@ -165,12 +160,16 @@ The active review/revision policy setup endpoints are:
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy`
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy`
 
-Other policy mutation endpoints follow their separately owned activation
-chunks:
+The manual submission-policy approval endpoint remains separate from unified
+proposal approval:
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/approve`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/request-correction`
+
+Unified post-submit setup, approval and correction routes are unavailable.
+The latest setup run exposes bounded outcome/status diagnostics and output IDs.
+Complete compilation proposals and the catalogue-growth handoff are not exposed
+there. Their manager-facing visibility, review, correction, approval and manual
+rerun belong to POL-05; post-submit policy projection belongs to POL-06.
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
 `If-Match` value. Use `"no-current-policy"` for the first version and the quoted

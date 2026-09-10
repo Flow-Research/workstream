@@ -10,6 +10,8 @@ from tests.authorization.runtime_support import (
     _DecisionEvidence,
     _runtime_service,
     _PreparedTestSession,
+    _GuideMutationAuthorityFacts,
+    _guide_mutation_resources,
 )
 
 
@@ -75,7 +77,6 @@ from app.modules.authorization import prepared as authorization_prepared
 from app.modules.authorization import router as authorization_router
 import app.modules.artifacts.authorization as artifact_authorization
 from app.modules.artifacts.authorization import (
-    PreparedGuideSourceBindingAuthorization,
     PreparedGuideSourceReadAuthorization,
     PreparedPreSubmitMaterializationAuthorization,
 )
@@ -84,7 +85,6 @@ from app.modules.artifacts.submission_materialization import (
 )
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
-    GuideSourceBindingAuthorityFacts,
     GuideSourceReadAuthorityFacts,
 )
 from app.modules.authorization.admin_schemas import AdminRoleGrantRevokeBody
@@ -204,7 +204,6 @@ from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
     ActorStatus,
     ArtifactVerificationJobResourceContext,
-    GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
     PreSubmitCheckerInputPreparationContext,
     PreSubmitCheckerInputResourceContext,
@@ -854,7 +853,6 @@ async def test_candidate_service_cursor_uses_last_visible_equal_timestamp_bounda
         "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}",
         "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
         "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
-        "/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup",
     ),
 )
 async def test_authorization_read_rate_failure_precedes_project_lookup(
@@ -945,7 +943,6 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
                 f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/sufficiency-reports/{uuid4()}",
                 f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies",
                 f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies/{uuid4()}",
-                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/post-submit-checker-policy/setup",
             ):
                 response = await client.get(path)
                 assert response.status_code == 404
@@ -953,7 +950,7 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
                     "project_authorization_resource_not_found"
                 )
 
-        assert consumptions == 9
+        assert consumptions == 8
         assert lookups == 0
 
 
@@ -990,13 +987,12 @@ async def test_diagnostic_authentication_failure_precedes_private_lookup(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{uuid4()}",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{uuid4()}",
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup",
     )
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         responses = [await client.get(path) for path in paths]
-    assert [response.status_code for response in responses] == [401] * 6
+    assert [response.status_code for response in responses] == [401] * 5
     assert lookups == 0
 
 
@@ -1692,7 +1688,6 @@ ART_ACTIVATION_CUSTODY_EXPECTATIONS = {
     "artifact.put_attempt.resolve": "WS-AUTH-001-ART-02D-INTERNAL",
     "artifact.guide_source.ingest": "WS-XINT-002-04A",
     "artifact.guide_source.read": "WS-XINT-002-04B",
-    "artifact.guide_source.binding.create": "WS-XINT-002-04B",
     "artifact.submission_bundle.prepare": "WS-XINT-002-05A",
     "artifact.pre_submit.checker_input.materialize": "WS-XINT-002-06A",
     "artifact.submission.binding.create": "WS-AUTH-001-ART-05",
@@ -1734,7 +1729,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 112
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 110
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -1777,7 +1772,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     } == {
         ActionOwner.AUTH_ART_02D_OPERATOR: 8,
         ActionOwner.AUTH_ART_02D_INTERNAL: 3,
-        ActionOwner.XINT_002_04B: 2,
+        ActionOwner.XINT_002_04B: 1,
         ActionOwner.XINT_002_06A: 1,
         ActionOwner.AUTH_ART_05: 1,
         ActionOwner.AUTH_ART_06A: 1,
@@ -1813,7 +1808,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 68,
+        ActionAvailability.ACTIVE: 66,
         ActionAvailability.PLANNED: 44,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
@@ -1853,30 +1848,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
         requested_project_id=requested_project_id,
         operation_generation=1,
     )
-    guide_resources = {
-        ActionId.PROJECT_GUIDE_CREATE: ProjectGuideMutationResourceContext(
-            resource_type="project_guide_mutation",
-            resource_id=guide_id,
-            operation_id=operation_id,
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            target_kind="create",
-            guide_exists=False,
-            operation_generation=1,
-        ),
-        ActionId.PROJECT_GUIDE_UPDATE: ProjectGuideMutationResourceContext(
-            resource_type="project_guide_mutation",
-            resource_id=guide_id,
-            operation_id=operation_id,
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            target_kind="update",
-            guide_exists=True,
-            guide_status="draft",
-            guide_version="1",
-            operation_generation=1,
-        ),
-    }
+    guide_resources = _guide_mutation_resources(project_id, guide_id, operation_id, DIGEST)
     source_resource = ProjectGuideSourceSnapshotMutationResourceContext(
         resource_type="project_guide_source_snapshot_mutation",
         resource_id=snapshot_id,
@@ -2250,7 +2222,6 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
         ServiceIdentity.ARTIFACT_SCHEDULER: {"artifact.pending_work.scan"},
         ServiceIdentity.ARTIFACT_BINDING: {
-            "artifact.guide_source.binding.create",
             "artifact.submission.binding.create",
             "artifact.checker_output.binding.create",
             "artifact.review_evidence.binding.create",
@@ -2284,7 +2255,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 24
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 23
     assert FUTURE_INTENT_REQUIRED_ACTIONS == {
         ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
         ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
@@ -2348,7 +2319,6 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionId.ARTIFACT_VERIFICATION_EXECUTE, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
@@ -2410,7 +2380,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     expected_owner_counts = {
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
-        "WS-XINT-002-04B": 2,
+        "WS-XINT-002-04B": 1,
         "WS-XINT-002-04A": 1,
         "WS-XINT-002-05A": 1,
         "WS-XINT-002-06A": 1,
@@ -3375,52 +3345,6 @@ class _ProjectCreateAuthorityFacts:
         return self.grant
 
 
-class _GuideMutationAuthorityFacts:
-    def __init__(
-        self,
-        context: HumanAuthorizationContext,
-        *,
-        grant=None,
-        permission_id: PermissionId = PermissionId.PROJECT_GUIDE_MANAGE,
-    ) -> None:
-        self.context = context
-        self.grant = grant
-        self.permission_id = permission_id
-
-    async def lock_request_actor(self, identity_link_id, actor_profile_id):
-        assert identity_link_id == self.context.identity_link_id
-        assert actor_profile_id == self.context.actor_profile_id
-        return (
-            SimpleNamespace(
-                id=str(identity_link_id),
-                actor_profile_id=str(actor_profile_id),
-                status="active",
-            ),
-            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
-        )
-
-    async def find_effective_grant(
-        self,
-        actor_profile_id,
-        permission_id,
-        *,
-        scope_project_id,
-        for_update,
-        allowed_roles,
-        exact_project_scope=False,
-    ):
-        assert actor_profile_id == self.context.actor_profile_id
-        assert permission_id is self.permission_id
-        assert scope_project_id is not None
-        assert for_update is True
-        assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
-        if self.grant is None or self.grant.scope_project_id not in {None, scope_project_id}:
-            return None
-        if exact_project_scope and self.grant.scope_project_id != scope_project_id:
-            return None
-        return self.grant
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "action_id,target_kind,resource_type",
@@ -3469,6 +3393,8 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
             "guide_id": str(guide_id),
             "target_resource_id": str(target_resource_id),
             "operation_id": str(operation_id),
+            **({"request_digest": DIGEST, "task_examples_hash": DIGEST, "task_examples_count": 1}
+               if action_id is ActionId.PROJECT_GUIDE_CREATE else {}),
         },
     )
     scope = PreparedAuthorityScope(
@@ -3501,7 +3427,17 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
             guide_status="draft" if target_kind == "update" else None,
             guide_version="v1" if target_kind == "update" else None,
             operation_generation=1,
+            **({"request_digest": DIGEST, "task_examples_hash": DIGEST, "task_examples_count": 1}
+               if target_kind == "create" else {}),
         )
+    if action_id is ActionId.PROJECT_GUIDE_CREATE:
+        for field, changed in {
+            "request_digest": "sha256:" + "0" * 64,
+            "task_examples_hash": "sha256:" + "0" * 64,
+            "task_examples_count": 2,
+        }.items():
+            with pytest.raises(PreparedAuthorizationHandleInvalid):
+                await prepared.consume(handle, action_id, caller, resource.model_copy(update={field: changed}))
     if resource_type == "snapshot":
         wrong_id = uuid4()
         wrong_resource = resource.model_copy(
@@ -3646,6 +3582,9 @@ async def test_guide_metadata_preparation_denies_wrong_scope_missing_grant_and_s
             "guide_id": str(guide_id),
             "target_resource_id": str(guide_id),
             "operation_id": str(uuid4()),
+            "request_digest": "sha256:" + "1" * 64,
+            "task_examples_hash": "sha256:" + "2" * 64,
+            "task_examples_count": 1,
         },
     )
 
@@ -4210,7 +4149,6 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
@@ -4229,7 +4167,6 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
     assert archived.effective_action_ids == (
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
@@ -5103,11 +5040,6 @@ async def test_prepared_fixed_service_rejects_generic_scope_before_actor_lock():
     ("action_id", "service_identity", "resource_type"),
     [
         (
-            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-            ServiceIdentity.ARTIFACT_BINDING,
-            "guide_source_binding",
-        ),
-        (
             ActionId.ARTIFACT_GUIDE_SOURCE_READ,
             ServiceIdentity.ARTIFACT_GUIDE_READER,
             "guide_source_read",
@@ -5167,44 +5099,17 @@ async def test_prepared_guide_service_authority_is_exact_and_single_use(
     setup_run_id = uuid4()
     content_id = uuid4()
     replica_id = uuid4()
-    if resource_type == "guide_source_binding":
-        resource = GuideSourceBindingResourceContext(
-            resource_type="guide_source_binding",
-            resource_id=item_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_source_snapshot_id=snapshot_id,
-            guide_source_item_id=item_id,
-            project_setup_run_id=setup_run_id,
-            setup_generation=1,
-            content_id=content_id,
-            verified_replica_id=replica_id,
-            sha256="sha256:" + "1" * 64,
-            byte_count=10,
-            logical_role="guide_source_original",
-        )
-    else:
-        binding_id = uuid4()
-        resource = GuideSourceReadResourceContext(
-            resource_type="guide_source_read",
-            resource_id=binding_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_source_snapshot_id=snapshot_id,
-            guide_source_item_id=item_id,
-            project_setup_run_id=setup_run_id,
-            setup_generation=1,
-            binding_id=binding_id,
-            content_id=content_id,
-            verified_replica_id=replica_id,
-            storage_namespace_id="guide-source",
-            namespace_fingerprint="sha256:" + "2" * 64,
-            verification_receipt_id=uuid4(),
-            verification_generation=1,
-            sha256="sha256:" + "1" * 64,
-            byte_count=10,
-            media_type="application/pdf",
-        )
+    resource = GuideSourceReadResourceContext(
+        resource_type="guide_source_read", resource_id=item_id,
+        project_id=project_id, guide_id=guide_id,
+        guide_source_snapshot_id=snapshot_id, guide_source_item_id=item_id,
+        project_setup_run_id=setup_run_id, setup_generation=1,
+        compilation_attempt_id=uuid4(), manifest_sha256="sha256:" + "3" * 64,
+        document_version_id=uuid4(), put_attempt_id=uuid4(),
+        content_id=content_id, replica_id=replica_id,
+        storage_namespace_id="guide-source", namespace_fingerprint="sha256:" + "2" * 64,
+        sha256="sha256:" + "1" * 64, byte_count=10, media_type="application/pdf",
+    )
     caller_input = PreparedAuthorizationInput(
         idempotency_key=uuid4(), request_value=resource.model_dump(mode="json")
     )
@@ -5216,10 +5121,7 @@ async def test_prepared_guide_service_authority_is_exact_and_single_use(
     handle = await prepared.prepare(action_id, caller_input, scope)
     wrong_resource_id = uuid4()
     selector_update = {"resource_id": wrong_resource_id}
-    if isinstance(resource, GuideSourceBindingResourceContext):
-        selector_update["guide_source_item_id"] = wrong_resource_id
-    else:
-        selector_update["binding_id"] = wrong_resource_id
+    selector_update["guide_source_item_id"] = wrong_resource_id
     mismatched = resource.model_copy(update=selector_update)
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(handle, action_id, caller_input, mismatched)
@@ -5576,18 +5478,12 @@ async def test_prepared_sufficiency_missing_grant_commits_bounded_denial() -> No
     assert evidence.events[0].denial_code == AuthorizationDenialCode.PERMISSION_NOT_GRANTED.value
 
 
-@pytest.mark.parametrize("authority_kind", ["binding", "read"])
 @pytest.mark.asyncio
 async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_replay(
-    authority_kind: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = _PreparedTestSession()
-    service_identity = (
-        ServiceIdentity.ARTIFACT_BINDING
-        if authority_kind == "binding"
-        else ServiceIdentity.ARTIFACT_GUIDE_READER
-    )
+    service_identity = ServiceIdentity.ARTIFACT_GUIDE_READER
     context = _runtime_context(
         actor_kind=ActorKind.SERVICE,
         service_identity=service_identity,
@@ -5620,43 +5516,17 @@ async def test_production_guide_service_adapter_rejects_every_fact_mismatch_and_
     )
     monkeypatch.setattr(artifact_authorization, "PreparedAuthorizationService", FakePrepared)
 
-    common = {
-        "project_id": uuid4(),
-        "guide_id": uuid4(),
-        "guide_source_snapshot_id": uuid4(),
-        "guide_source_item_id": uuid4(),
-        "project_setup_run_id": uuid4(),
-        "setup_generation": 1,
-        "content_id": uuid4(),
-        "verified_replica_id": uuid4(),
-        "sha256": "sha256:" + "1" * 64,
-        "byte_count": 10,
-    }
-    if authority_kind == "binding":
-        facts = GuideSourceBindingAuthorityFacts(
-            **common,
-            logical_role="guide_source_original",
-        )
-        authority = PreparedGuideSourceBindingAuthorization(
-            session,  # type: ignore[arg-type]
-            request_id=uuid4(),
-            correlation_id=uuid4(),
-        )
-    else:
-        facts = GuideSourceReadAuthorityFacts(
-            **common,
-            binding_id=uuid4(),
-            storage_namespace_id="guide-source",
-            namespace_fingerprint="sha256:" + "2" * 64,
-            verification_receipt_id=uuid4(),
-            verification_generation=1,
-            media_type="application/pdf",
-        )
-        authority = PreparedGuideSourceReadAuthorization(
-            session,  # type: ignore[arg-type]
-            request_id=uuid4(),
-            correlation_id=uuid4(),
-        )
+    facts = GuideSourceReadAuthorityFacts(
+        project_id=uuid4(), guide_id=uuid4(), guide_source_snapshot_id=uuid4(),
+        guide_source_item_id=uuid4(), project_setup_run_id=uuid4(), setup_generation=1,
+        compilation_attempt_id=uuid4(), manifest_sha256="sha256:" + "3" * 64,
+        document_version_id=uuid4(), put_attempt_id=uuid4(), content_id=uuid4(), replica_id=uuid4(),
+        storage_namespace_id="guide-source", namespace_fingerprint="sha256:" + "2" * 64,
+        sha256="sha256:" + "1" * 64, byte_count=10, media_type="application/pdf",
+    )
+    authority = PreparedGuideSourceReadAuthorization(
+        session, request_id=uuid4(), correlation_id=uuid4(),
+    )
 
     handle = await authority.prepare(facts=facts, idempotency_key=uuid4())
     with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
@@ -5827,11 +5697,6 @@ async def test_fixed_service_context_rejects_mismatched_loaded_identity(
     ("action_id", "resource_type", "wrong_identity"),
     [
         (
-            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-            "guide_source_binding",
-            ServiceIdentity.ARTIFACT_GUIDE_READER,
-        ),
-        (
             ActionId.ARTIFACT_GUIDE_SOURCE_READ,
             "guide_source_read",
             ServiceIdentity.ARTIFACT_BINDING,
@@ -5887,10 +5752,6 @@ async def test_prepared_guide_actions_deny_wrong_fixed_service_before_actor_lock
 @pytest.mark.parametrize(
     ("action_id", "resource_type"),
     [
-        (
-            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-            "guide_source_binding",
-        ),
         (
             ActionId.ARTIFACT_GUIDE_SOURCE_READ,
             "guide_source_read",

@@ -350,7 +350,10 @@ class ProjectRepository:
     async def lock_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
         """Load one project setup run with a transactional row lock."""
         result = await self._session.execute(
-            select(ProjectSetupRun).where(ProjectSetupRun.id == setup_run_id).with_for_update()
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.id == setup_run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -503,12 +506,15 @@ class ProjectRepository:
     ) -> GuideSufficiencyReport | None:
         """Load the newest verified report bound to a guide-source snapshot."""
         result = await self._session.execute(
-            select(GuideSufficiencyReport).where(
+            select(GuideSufficiencyReport)
+            .where(
                 GuideSufficiencyReport.source_snapshot_id == snapshot_id,
                 GuideSufficiencyReport.project_setup_run_id.is_not(None),
-            ).order_by(
+            )
+            .order_by(
                 GuideSufficiencyReport.setup_generation.desc(),
-            ).limit(1)
+            )
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -549,25 +555,6 @@ class ProjectRepository:
         """Load one submission artifact policy by primary key."""
         return await self._session.get(SubmissionArtifactPolicy, policy_id)
 
-    async def list_submission_artifact_policies(
-        self,
-        project_id: str,
-        guide_id: str,
-    ) -> Sequence[SubmissionArtifactPolicy]:
-        """List submission artifact policies for one project guide."""
-        result = await self._session.execute(
-            select(SubmissionArtifactPolicy)
-            .where(
-                SubmissionArtifactPolicy.project_id == project_id,
-                SubmissionArtifactPolicy.guide_id == guide_id,
-            )
-            .order_by(
-                SubmissionArtifactPolicy.created_at.desc(),
-                SubmissionArtifactPolicy.id.desc(),
-            )
-        )
-        return result.scalars().all()
-
     async def lock_submission_artifact_policies(
         self, project_id: str, guide_id: str, guide_version: str
     ) -> Sequence[SubmissionArtifactPolicy]:
@@ -594,31 +581,6 @@ class ProjectRepository:
             .with_for_update(of=SubmissionArtifactPolicy)
         )
         return result.scalars().all()
-
-    async def get_agent_derived_submission_artifact_policy_for_snapshot(
-        self,
-        project_id: str,
-        guide_version: str,
-        source_snapshot_id: str,
-    ) -> SubmissionArtifactPolicy | None:
-        """Load the current agent-derived policy for one guide source snapshot."""
-        result = await self._session.execute(
-            select(SubmissionArtifactPolicy).where(
-                SubmissionArtifactPolicy.project_id == project_id,
-                SubmissionArtifactPolicy.guide_version == guide_version,
-                SubmissionArtifactPolicy.source_snapshot_id == source_snapshot_id,
-                SubmissionArtifactPolicy.derivation_source == "agent_derivation",
-                SubmissionArtifactPolicy.lifecycle_status.in_(["draft", "approved"]),
-            )
-        )
-        rows = result.scalars().all()
-        if len(rows) > 1:
-            raise ProjectRepositoryIntegrityError(
-                "multiple current agent-derived submission artifact policies found"
-            )
-        if not rows:
-            return None
-        return rows[0]
 
     async def lock_submission_artifact_policy(
         self,
@@ -964,46 +926,6 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
-    async def upsert_post_submit_checker_policy(
-        self,
-        policy: PostSubmitCheckerPolicy,
-    ) -> PostSubmitCheckerPolicy:
-        """Create or replace a post-submit checker policy for one guide version.
-
-        Args:
-            policy: Post-submit checker policy model carrying the desired values.
-
-        Returns:
-            Persisted post-submit checker policy model.
-        """
-        existing = await self.get_post_submit_checker_policy(
-            policy.project_id,
-            policy.guide_version,
-        )
-        if existing is None:
-            self._session.add(policy)
-            await self._session.flush()
-            await self._session.refresh(policy)
-            return policy
-        if (
-            existing.required_checkers != policy.required_checkers
-            or existing.warning_checkers != policy.warning_checkers
-            or existing.blocking_severities != policy.blocking_severities
-            or existing.policy_hash != policy.policy_hash
-            or existing.policy_body != policy.policy_body
-            or existing.guide_id != policy.guide_id
-            or existing.source_snapshot_id != policy.source_snapshot_id
-            or existing.source_snapshot_hash != policy.source_snapshot_hash
-            or existing.effective_policy_id != policy.effective_policy_id
-            or existing.effective_policy_hash != policy.effective_policy_hash
-            or existing.pre_submit_checker_policy_id != policy.pre_submit_checker_policy_id
-            or existing.pre_submit_checker_bundle_hash != policy.pre_submit_checker_bundle_hash
-        ):
-            raise ProjectRepositoryIntegrityError(
-                "post-submit checker policy already exists with different content"
-            )
-        return existing
-
     async def get_post_submit_checker_policy(
         self,
         project_id: str,
@@ -1027,80 +949,6 @@ class ProjectRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_latest_superseded_post_submit_checker_policy(
-        self,
-        project_id: str,
-        guide_id: str,
-        guide_version: str,
-        source_snapshot_id: str,
-        source_snapshot_hash: str,
-        effective_policy_id: str,
-        effective_policy_hash: str,
-        pre_submit_checker_policy_id: str,
-        pre_submit_checker_bundle_hash: str,
-    ) -> PostSubmitCheckerPolicy | None:
-        """Load the latest rejected policy retained for correction provenance."""
-        result = await self._session.execute(
-            select(PostSubmitCheckerPolicy)
-            .where(
-                PostSubmitCheckerPolicy.project_id == project_id,
-                PostSubmitCheckerPolicy.guide_id == guide_id,
-                PostSubmitCheckerPolicy.guide_version == guide_version,
-                PostSubmitCheckerPolicy.source_snapshot_id == source_snapshot_id,
-                PostSubmitCheckerPolicy.source_snapshot_hash == source_snapshot_hash,
-                PostSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
-                PostSubmitCheckerPolicy.effective_policy_hash == effective_policy_hash,
-                PostSubmitCheckerPolicy.pre_submit_checker_policy_id
-                == pre_submit_checker_policy_id,
-                PostSubmitCheckerPolicy.pre_submit_checker_bundle_hash
-                == pre_submit_checker_bundle_hash,
-                PostSubmitCheckerPolicy.lifecycle_status == "superseded",
-            )
-            .order_by(
-                PostSubmitCheckerPolicy.superseded_at.desc(),
-                PostSubmitCheckerPolicy.id.desc(),
-            )
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-
-    async def list_superseded_post_submit_checker_policies(
-        self,
-        project_id: str,
-        guide_id: str,
-        guide_version: str,
-        source_snapshot_id: str,
-        source_snapshot_hash: str,
-        effective_policy_id: str,
-        effective_policy_hash: str,
-        pre_submit_checker_policy_id: str,
-        pre_submit_checker_bundle_hash: str,
-    ) -> Sequence[PostSubmitCheckerPolicy]:
-        """List retained correction records newest first for operator visibility."""
-        result = await self._session.execute(
-            select(PostSubmitCheckerPolicy)
-            .where(
-                PostSubmitCheckerPolicy.project_id == project_id,
-                PostSubmitCheckerPolicy.guide_id == guide_id,
-                PostSubmitCheckerPolicy.guide_version == guide_version,
-                PostSubmitCheckerPolicy.source_snapshot_id == source_snapshot_id,
-                PostSubmitCheckerPolicy.source_snapshot_hash == source_snapshot_hash,
-                PostSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
-                PostSubmitCheckerPolicy.effective_policy_hash == effective_policy_hash,
-                PostSubmitCheckerPolicy.pre_submit_checker_policy_id
-                == pre_submit_checker_policy_id,
-                PostSubmitCheckerPolicy.pre_submit_checker_bundle_hash
-                == pre_submit_checker_bundle_hash,
-                PostSubmitCheckerPolicy.lifecycle_status == "superseded",
-                PostSubmitCheckerPolicy.supersession_kind == "correction_requested",
-            )
-            .order_by(
-                PostSubmitCheckerPolicy.superseded_at.desc(),
-                PostSubmitCheckerPolicy.id.desc(),
-            )
-            .limit(100)
-        )
-        return result.scalars().all()
 
     async def get_post_submit_checker_policy_by_id(
         self,
@@ -1109,17 +957,6 @@ class ProjectRepository:
         """Load a post-submit checker policy by id."""
         return await self._session.get(PostSubmitCheckerPolicy, policy_id)
 
-    async def lock_post_submit_checker_policy(
-        self,
-        policy_id: str,
-    ) -> PostSubmitCheckerPolicy | None:
-        """Load one post-submit checker policy with a transactional row lock."""
-        result = await self._session.execute(
-            select(PostSubmitCheckerPolicy)
-            .where(PostSubmitCheckerPolicy.id == policy_id)
-            .with_for_update()
-        )
-        return result.scalar_one_or_none()
 
     async def get_review_policy(self, project_id: str, guide_version: str) -> ReviewPolicy | None:
         """Load a review policy by project and guide version.

@@ -5,6 +5,9 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+from tests.architecture_ast import imported_symbols_and_calls
+
 from app.interfaces import artifact_operations
 from app.db.base import Base
 from app.main import create_app
@@ -18,6 +21,8 @@ SUBMISSION_PREPARATION_API = (
 )
 SUBMISSION_ADMISSION_API = APP_ROOT / "modules" / "artifacts" / "api" / "submission_admission.py"
 COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
+AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
+AGENT_ADAPTER_MODULE = "app.adapters.project_agents.openai_agent_sdk"
 S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
 CLOSED_PORTS = {
     "GuideArtifactIngestCommand",
@@ -27,37 +32,24 @@ CLOSED_PORTS = {
     "CheckerArtifactOutputPort",
     "ArtifactOperatorReadPort",
     "ArtifactOperatorRecoveryPort",
-    "GuideSufficiencyMaterialPort",
 }
 CANONICAL_REQUESTS = {
     "GuideArtifactIngestRequest",
-    "GuideSourceBindingRequest",
-    "GuideSourceMaterializationRequest",
     "CheckerOutputBindingRequest",
     "BindingMaterializationRequest",
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
-    "GuideSufficiencyMaterialRequest",
 }
 CANONICAL_RESULTS = {
     "GuideArtifactIngestResult",
-    "GuideSourceBindingResult",
-    "GuideSourceMaterializationResult",
-    "GuideSufficiencyMaterialResult",
 }
 CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
 }
-CANONICAL_VALUE_TYPES = {
-    "GuideSufficiencyExtractionProvenance",
-    "GuideSufficiencyMaterialUnavailable",
-    "GuideSufficiencySourceItem",
-}
+CANONICAL_VALUE_TYPES = set()
 PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {
     "ArtifactRecoveryRequest",
-    "GuideSufficiencyMaterialRequest",
-    "GuideSourceMaterializationRequest",
 }
 PREPARED_HANDLE_FORBIDDEN_ROOTS = (
     APP_ROOT / "adapters",
@@ -211,7 +203,7 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
             node.name: node
             for node in tree.body
             if isinstance(node, ast.ClassDef)
-            and node.name in {"ArtifactStorageOrchestrator", "ArtifactMaterializationService"}
+            and node.name in {"ArtifactStorageOrchestrator", "ScopedGuideDocumentGrant"}
         }
         for node in ast.walk(tree):
             if (
@@ -232,7 +224,7 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                     None,
                 )
                 if owner is None or (
-                    owner.name == "ArtifactMaterializationService" and node.func.attr != "open"
+                    owner.name == "ScopedGuideDocumentGrant" and node.func.attr != "open"
                 ):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
@@ -284,34 +276,41 @@ def test_concrete_adapter_construction_has_one_composition_path() -> None:
     factory_calls: list[Path] = []
     adapter_calls: list[Path] = []
     concrete_imports: list[Path] = []
+    agent_imports: list[Path] = []
+    agent_calls: list[Path] = []
     for path in _python_files(APP_ROOT):
-        tree = _tree(path)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module in CONCRETE_ADAPTER_MODULES:
-                concrete_imports.append(path)
-            if isinstance(node, ast.Import) and any(
-                alias.name in CONCRETE_ADAPTER_MODULES for alias in node.names
-            ):
-                concrete_imports.append(path)
-            if not isinstance(node, ast.Call):
-                continue
-            called = node.func
-            if isinstance(called, ast.Subscript):
-                called = called.value
-            if isinstance(called, ast.Name):
-                name = called.id
-            elif isinstance(called, ast.Attribute):
-                name = called.attr
-            else:
-                name = None
-            if name == "ExternalServiceAdapterFactory":
-                factory_calls.append(path)
-            if name in {"LocalStorageAdapter", "S3CompatibleArtifactStore"}:
-                adapter_calls.append(path)
-
-    assert factory_calls == [COMPOSITION_ROOT]
+        imports, calls = imported_symbols_and_calls(_tree(path))
+        if imports & CONCRETE_ADAPTER_MODULES:
+            concrete_imports.append(path)
+        if AGENT_ADAPTER_MODULE in imports:
+            agent_imports.append(path)
+        factory_calls.extend(path for name in calls if name == "ExternalServiceAdapterFactory")
+        adapter_calls.extend(path for name in calls if name in {"LocalStorageAdapter", "S3CompatibleArtifactStore"})
+        agent_calls.extend(path for name in calls if name == "OpenAIAgentSdkProjectGuideRuntime")
+    assert set(factory_calls) == {COMPOSITION_ROOT, AGENT_COMPOSITION_ROOT}
+    assert len(factory_calls) == 2
     assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE]
     assert set(concrete_imports) == {COMPOSITION_ROOT}
+    assert agent_imports == [AGENT_COMPOSITION_ROOT]
+    assert agent_calls == [AGENT_COMPOSITION_ROOT]
+
+
+@pytest.mark.parametrize("source", [
+    "from app.interfaces.external_services import ExternalServiceAdapterFactory as factory\nfactory[object]('extra')\n",
+    "from app.interfaces.external_services import ExternalServiceAdapterFactory\nfactory: object = ExternalServiceAdapterFactory\nfactory[object]('extra')\n",
+    "import app.interfaces.external_services as external\nexternal.ExternalServiceAdapterFactory[object]('extra')\n",
+    "from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime as runtime\nruntime(configuration)\n",
+    "import app.adapters.project_agents.openai_agent_sdk as sdk\nsdk.OpenAIAgentSdkProjectGuideRuntime(configuration)\n",
+])
+def test_composition_proof_rejects_aliased_factories_and_concrete_runtimes(tmp_path, monkeypatch, source):
+    import sys
+
+    paths = _python_files(APP_ROOT)
+    injected = tmp_path / "extra.py"
+    injected.write_text(source)
+    monkeypatch.setattr(sys.modules[__name__], "_python_files", lambda *_: (*paths, injected))
+    with pytest.raises(AssertionError):
+        test_concrete_adapter_construction_has_one_composition_path()
 
 
 def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
@@ -499,36 +498,19 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
     assert "ReadyUploadSetRequest" not in source
     assert "ActionId" not in source
 
-    materialization = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "GuideSourceMaterializationRequest"
-    )
-    materialization_fields = {
-        node.target.id: _annotation_names(node.annotation)
-        for node in materialization.body
-        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
-    }
-    assert materialization_fields["idempotency_key"] == {"UUID"}
-    assert "prepared_authorization" not in materialization_fields
-
     expected_methods = {
         "GuideArtifactIngestPort": {"ingest"},
         "ArtifactBindingPort": {
-            "bind_guide_source",
             "bind_checker_output",
         },
         "ArtifactMaterializationPort": {
-            "materialize_guide_source",
             "materialize_bindings",
         },
         "CheckerArtifactOutputPort": {"store"},
     }
     expected_request_by_method = {
         "ingest": "GuideArtifactIngestRequest",
-        "bind_guide_source": "GuideSourceBindingRequest",
         "bind_checker_output": "CheckerOutputBindingRequest",
-        "materialize_guide_source": "GuideSourceMaterializationRequest",
         "materialize_bindings": "BindingMaterializationRequest",
         "store": "CheckerOutputArtifactRequest",
     }
@@ -629,185 +611,23 @@ def test_artifact_repository_does_not_own_actor_persistence() -> None:
     assert "actor_identity_links" not in path.read_text()
 
 
-def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None:
-    extraction_paths = (
-        APP_ROOT / "modules" / "artifacts" / "guide_extraction.py",
-        APP_ROOT / "modules" / "artifacts" / "guide_extraction_worker.py",
-        APP_ROOT / "modules" / "artifacts" / "guide_pdf.py",
-        APP_ROOT / "modules" / "artifacts" / "guide_xlsx.py",
-        APP_ROOT / "modules" / "artifacts" / "guide_images.py",
-        APP_ROOT / "modules" / "artifacts" / "guide_extraction_service.py",
-    )
-    forbidden_prefixes = (
-        "app.adapters",
-        "app.interfaces.artifacts",
-        "app.modules.authorization",
-        "app.modules.agents",
-        "boto",
-        "celery",
-    )
-    for path in extraction_paths:
-        imported_modules: set[str] = set()
+
+
+def test_guide_original_runtime_keeps_provider_sdk_out_of_product_modules() -> None:
+    """Product owners depend on ports; hosted inspection belongs to the SDK adapter."""
+    for path in (APP_ROOT / "modules").rglob("*.py"):
         for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.ImportFrom):
-                if node.level:
-                    package = "app.modules.artifacts".split(".")
-                    base = package[: len(package) - node.level + 1]
-                    if node.module is not None:
-                        imported_modules.add(".".join((*base, *node.module.split("."))))
-                    else:
-                        imported_modules.update(
-                            ".".join((*base, alias.name)) for alias in node.names
-                        )
-                elif node.module is not None:
-                    imported_modules.add(node.module)
-            elif isinstance(node, ast.Import):
-                imported_modules.update(alias.name for alias in node.names)
-        assert not any(module.startswith(forbidden_prefixes) for module in imported_modules), (
-            path.name
-        )
-        source = path.read_text(encoding="utf-8")
-        assert "ArtifactStore" not in source
-        assert "PreparedAuthorizationHandle" not in source
-        assert "APIRouter" not in source
+            modules = ([node.module] if isinstance(node, ast.ImportFrom) and node.module
+                       else [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
+            assert not any(module.split(".")[0] in {"openai", "agents", "pypdf", "PIL"} for module in modules), str(path)
 
 
-def test_pdf_parser_dependency_is_confined_to_the_format_adapter() -> None:
-    parser_importers: list[str] = []
+def test_safe_xml_dependency_has_one_ingress_consumer() -> None:
+    importers = set()
     for path in APP_ROOT.rglob("*.py"):
         for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name.split(".", 1)[0] == "pypdf" for alias in node.names
-            ):
-                parser_importers.append(path.relative_to(APP_ROOT).as_posix())
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module is not None
-                and node.module.split(".", 1)[0] == "pypdf"
-            ):
-                parser_importers.append(path.relative_to(APP_ROOT).as_posix())
-
-    assert set(parser_importers) == {"modules/artifacts/guide_pdf.py"}
-
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "app.modules.artifacts.guide_pdf" for alias in node.names
-            ):
-                adapter_importers.add(path.relative_to(APP_ROOT).as_posix())
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "app.modules.artifacts.guide_pdf"
-            ):
-                adapter_importers.add(path.relative_to(APP_ROOT).as_posix())
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
-
-
-def test_docx_adapter_is_confined_to_the_isolated_worker() -> None:
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        relative = path.relative_to(APP_ROOT).as_posix()
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "app.modules.artifacts.guide_docx" for alias in node.names
-            ):
-                adapter_importers.add(relative)
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "app.modules.artifacts.guide_docx"
-            ):
-                adapter_importers.add(relative)
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
-
-
-def test_pptx_adapter_is_confined_to_the_isolated_worker() -> None:
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        relative = path.relative_to(APP_ROOT).as_posix()
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "app.modules.artifacts.guide_pptx" for alias in node.names
-            ):
-                adapter_importers.add(relative)
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "app.modules.artifacts.guide_pptx"
-            ):
-                adapter_importers.add(relative)
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
-
-
-def test_xlsx_adapter_is_confined_to_the_isolated_worker() -> None:
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        relative = path.relative_to(APP_ROOT).as_posix()
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "app.modules.artifacts.guide_xlsx" for alias in node.names
-            ):
-                adapter_importers.add(relative)
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "app.modules.artifacts.guide_xlsx"
-            ):
-                adapter_importers.add(relative)
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
-
-
-def test_image_adapter_is_confined_to_the_isolated_worker() -> None:
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        relative = path.relative_to(APP_ROOT).as_posix()
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name == "app.modules.artifacts.guide_images" for alias in node.names
-            ):
-                adapter_importers.add(relative)
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module == "app.modules.artifacts.guide_images"
-            ):
-                adapter_importers.add(relative)
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
-
-
-def test_pillow_is_confined_to_the_worker_and_image_adapter() -> None:
-    pillow_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import) and any(
-                alias.name.split(".", 1)[0] == "PIL" for alias in node.names
-            ):
-                pillow_importers.add(path.relative_to(APP_ROOT).as_posix())
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module is not None
-                and node.module.split(".", 1)[0] == "PIL"
-            ):
-                pillow_importers.add(path.relative_to(APP_ROOT).as_posix())
-    assert pillow_importers == {
-        "modules/artifacts/guide_extraction_worker.py",
-        "modules/artifacts/guide_images.py",
-    }
-
-
-def test_ooxml_parser_dependency_and_adapter_are_confined_to_the_isolated_worker() -> None:
-    dependency_importers: set[str] = set()
-    adapter_importers: set[str] = set()
-    for path in APP_ROOT.rglob("*.py"):
-        relative = path.relative_to(APP_ROOT).as_posix()
-        for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.Import):
-                if any(alias.name.split(".", 1)[0] == "defusedxml" for alias in node.names):
-                    dependency_importers.add(relative)
-                if any(alias.name == "app.modules.artifacts.guide_ooxml" for alias in node.names):
-                    adapter_importers.add(relative)
-            elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                if node.module.split(".", 1)[0] == "defusedxml":
-                    dependency_importers.add(relative)
-                if node.module == "app.modules.artifacts.guide_ooxml":
-                    adapter_importers.add(relative)
-
-    assert dependency_importers == {"modules/artifacts/guide_ooxml.py"}
-    assert adapter_importers == {"modules/artifacts/guide_extraction_worker.py"}
+            modules = ([node.module] if isinstance(node, ast.ImportFrom) and node.module
+                       else [alias.name for alias in node.names] if isinstance(node, ast.Import) else [])
+            if any(module.split(".")[0] == "defusedxml" for module in modules):
+                importers.add(path.relative_to(APP_ROOT).as_posix())
+    assert importers == {"modules/artifacts/guide_formats.py"}

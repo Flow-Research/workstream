@@ -161,9 +161,11 @@ capabilities, not by calendar weeks or promised dates.
 Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
 submission packets, immutable artifact storage, automated checker execution,
-and the pre-review gate. Project-guide ingestion has typed source handling,
-bounded extraction, security controls, persisted sufficiency evidence, and
-authorized fixed-service guide-source binding and reads.
+and the pre-review gate. Project-guide ingestion stores original documents,
+records immutable metadata and provides authorized exact-file reads to the
+unified setup agent. Guide metadata in PostgreSQL also holds at least one required
+task example; the agent assesses the examples with the uploaded guide documents.
+Findings and policy proposals retain document-access evidence.
 
 Active work is connecting those foundations into the remaining production
 lifecycle: the remaining artifact custody chain, review and revision,
@@ -308,11 +310,10 @@ Independent initiatives and branches may proceed concurrently. Start with
 
 ## Developer Quickstart
 
-Workstream's image-extraction boundary is intentionally Linux-only. The
-supported runtime is CPython 3.11 or 3.12 on Linux glibc 2.27 or newer, using
-either x86_64 or aarch64. macOS and Windows contributors should run the backend
-through Docker; do not install a different Pillow build to bypass the approved
-artifact boundary.
+The supported backend setup uses CPython 3.11 or 3.12. The pinned Docker image
+provides the Linux environment for macOS and Windows contributors. Guide
+originals are stored in ArtifactStore and read by the configured agent runtime;
+the backend does not run a separate guide extractor.
 
 ### Docker Workflow (Recommended)
 
@@ -342,18 +343,13 @@ uses explicit local-only development auth and key material. Artifact storage is
 disabled in this first-run profile; integration tests configure MinIO when they
 exercise the S3-compatible path.
 
-The image uses Linux glibc on the Docker host's native x86_64 or aarch64
-architecture. On Docker Desktop, this is the Docker VM's native architecture.
-Do not force `--platform linux/amd64` on an ARM host: CPU emulation does not
-provide equivalent evidence for Workstream's inner seccomp isolation filter. If
-your shell sets `DOCKER_DEFAULT_PLATFORM`, clear it before building; the
-Dockerfile rejects a foreign target architecture.
+The pinned image supports Linux x86_64 and aarch64. On Docker Desktop, it runs
+inside the Docker VM.
 
 Run focused checks in the same containerized environment:
 
 ```bash
-docker compose run --rm --no-deps backend python scripts/check_guide_extractor_dependencies.py
-docker compose run --rm --no-deps backend python -m pytest -q tests/test_app.py tests/test_guide_extractor_dependencies.py
+docker compose run --rm --no-deps backend python -m pytest -q tests/test_app.py tests/test_guide_formats.py tests/test_guide_runtime_workspace.py
 docker compose run --rm --no-deps backend ruff check app tests scripts
 ```
 
@@ -368,9 +364,7 @@ docker compose build backend
 Use this path only with CPython 3.11 or 3.12 on Linux glibc 2.27 or newer and
 an x86_64 or aarch64 machine. Docker is still used for backing services.
 Confirm that `python3 --version` reports Python 3.11 or 3.12 before creating
-the environment. Native extraction also requires `libseccomp.so.2` and a normal
-Linux `/proc`; install `libseccomp2` on Debian/Ubuntu or the equivalent
-`libseccomp` package for your distribution. Install uv 0.12.3 and use the
+the environment. Install uv 0.12.3 and use the
 committed lockfile; an unconstrained pip install is not a supported setup path.
 
 ```bash
@@ -398,6 +392,30 @@ curl --fail http://127.0.0.1:8000/api/v1/health
 `backend/.env` is ignored. Its checked-in example contains only public,
 local-development values; replace those values when specifically testing key
 rotation, and never reuse them in a shared or hosted environment.
+
+### Native Unified Guide Inference
+
+Set `WORKSTREAM_PROJECT_AGENT_MODEL=gpt-5.6-terra` (or your chosen supported model)
+and `OPENAI_API_KEY` in ignored `backend/.env`. Runtime, provider/API protocol,
+model and instructions are separate settings in `backend/.env.example`.
+Start backing services using the port settings in that same file, then install
+the agent runtime and load the environment into API and Celery worker:
+
+```bash
+docker compose --env-file backend/.env up -d --wait postgres redis minio
+cd backend
+uv sync --locked --extra dev --extra agents
+uv run --env-file .env uvicorn app.main:app --reload
+# In another terminal, from backend/:
+uv run --env-file .env celery -A app.workers.celery_app worker --beat --loglevel=info
+```
+
+The model key must be in the process environment; `--env-file` supplies it without
+shell-exporting or printing it. For connected guide testing, start Postgres,
+Redis and MinIO, create the private bucket as described below, and enable the
+S3-compatible settings in `.env`. The disabled-store first-run profile does not
+support guide artifact ingestion. Committed original-document readiness runs one compilation
+and stops at findings and draft proposals; manager review/approval remains separate.
 
 ### Logs, Shutdown, And Reset
 
@@ -460,46 +478,38 @@ Destructive real API drills use the separate local test database:
 postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 ```
 
-Project guide sufficiency, submission artifact policy derivation, and
-post-submit checker policy derivation run through the OpenAI Agents SDK adapter.
-Install the backend agent extra and set the model explicitly before running
-automatic project setup:
+One project-guide compilation proposes sufficiency findings and separate
+pre-submission and post-submission policies through the OpenAI Agents SDK adapter.
+Use the locked installation and environment-loading commands in
+[Native Unified Guide Inference](#native-unified-guide-inference).
 
-```bash
-cd backend
-.venv/bin/pip install -e ".[agents]"
-```
+The Celery worker captures runtime, model provider, model, API, instructions,
+timeout, document limits and tool budgets on the attempt before execution. Credentials stay in
+the Celery worker environment. `WORKSTREAM_PROJECT_AGENT_INSTRUCTIONS` and
+`WORKSTREAM_PROJECT_AGENT_INSTRUCTION_VERSION` configure trusted instructions;
+omitting the text selects the repository's canonical compilation instructions.
+The current adapter uses OpenAI Responses with a private Code Interpreter
+workspace. `WORKSTREAM_PROJECT_AGENT_MODEL=gpt-5.6-terra` selects the model
+independently of the runtime and instructions. Changing that setting requires
+verifying the chosen model supports the configured tools and structured output.
+`WORKSTREAM_PROJECT_AGENT_REQUEST_TIMEOUT_SECONDS` defaults to 300 seconds per
+provider request. `WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS` defaults to 1,800
+seconds for the whole run, including retry waits. The Agents SDK retries a model
+request at most twice, with exponential backoff and jitter capped at 30 seconds.
+Only proven pre-transmission failures, explicit temporary rate limits, or
+provider-confirmed safe replay are eligible. Billing, authentication, invalid
+output, denied document access, and unknown dispatched outcomes do not retry.
+A process-local circuit opens after three exhausted transient model requests,
+then admits one recovery probe after 60 seconds. Cleanup remains available.
+The corresponding retry and circuit settings are listed in `backend/.env.example`.
+The runtime adapter is selected through the shared typed adapter factory.
 
-```text
-WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL=<approved-model>
-WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS=1800
-WORKSTREAM_PROJECT_AGENT_MAX_PROMPT_BYTES=2000000
-OPENAI_API_KEY=<runtime-secret>
-WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART=true
-WORKSTREAM_CELERY_BROKER_URL=redis://localhost:6379/0
-```
-
-The Celery project setup pipeline uses the OpenAI Agents SDK runtime. The Celery worker
-environment must include `OPENAI_API_KEY` and the approved model settings.
-Persisted sufficiency and derivation agent identity is Workstream-owned; runtime
-or provider-returned identity fields are not trusted as audit provenance.
-
-Run the Celery worker before creating guide-source snapshots that should automatically
-prepare pre-submit policy, continue into post-submit policy derivation after setup
-submission artifact policy approval, and advance locked submissions through the
-automatic pre-review checker gate:
-
-```bash
-cd backend
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream \
-WORKSTREAM_AUTH_PROVIDER=flow \
-WORKSTREAM_ENVIRONMENT=local \
-WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL=<approved-model> \
-OPENAI_API_KEY=<runtime-secret> \
-WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART=true \
-WORKSTREAM_CELERY_BROKER_URL=redis://localhost:6379/0 \
-.venv/bin/celery -A app.workers.celery_app.celery_app worker --beat --loglevel=INFO
-```
+Verified guide-source readiness automatically delivers one compilation. A ready
+result records both policy proposals and stops at a draft; an insufficient guide
+stops with findings. Automatic compilation ends without approving the proposals.
+Project Manager proposal editing, explicit reruns and approval are the remaining
+POL-05 boundary. The separate post-submission Celery worker evaluates submitted work.
+The local Celery command above includes Beat; start it before creating guide sources.
 
 The Beat scheduler must run alongside the Celery execution processes so
 artifact pending-work and verified guide-continuation scans can recover

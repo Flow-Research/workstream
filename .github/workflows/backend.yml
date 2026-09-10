@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,agents]"
           python -m pip install ruff==0.15.22
           test "$(ruff --version)" = "ruff 0.15.22"
 
@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,agents]"
           python -m pip install ruff==0.15.22
           test "$(ruff --version)" = "ruff 0.15.22"
 
@@ -253,7 +253,7 @@ jobs:
 
       - name: Install backend
         working-directory: backend
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev,agents]"
 
       - name: Start real MinIO API provider
         shell: bash
@@ -505,6 +505,32 @@ jobs:
             coverage report --include="${source}" --precision=2 --fail-under=90
           done
 
+      - name: POL-04B document runtime per-file coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in \
+            app/adapters/project_agents/openai_workspace.py \
+            app/adapters/project_agents/provider_resilience.py \
+            app/core/project_guide_instructions.py \
+            app/interfaces/project_guide_runtime.py \
+            app/modules/projects/api/guide_documents.py \
+            app/modules/projects/api/task_examples.py \
+            app/modules/authorization/domain/guide_mutations.py \
+            app/modules/authorization/domain/prepared_guide_mutations.py \
+            app/modules/artifacts/guide_document_access.py \
+            app/modules/artifacts/guide_documents.py \
+            app/modules/checkers/api/pre_submit_catalogue.py \
+            app/modules/projects/guide_compilation/diagnostics.py \
+            app/modules/projects/guide_compilation/document_scope.py \
+            app/modules/projects/guide_compilation/live.py \
+            app/modules/projects/guide_compilation/runtime_resources.py \
+            app/modules/projects/guide_compilation/source_state.py
+          do
+            coverage report --include="${source}" --precision=2 --fail-under=90
+          done
+
       - name: POL-04A3 hidden projection per-file coverage
         working-directory: backend
         shell: bash
@@ -614,11 +640,8 @@ jobs:
         run: |
           set -euo pipefail
           coverage run --append -m pytest -q -p pytest_asyncio.plugin \
-            tests/test_projects.py::test_verified_worker_composes_fresh_exact_setup_service_authority \
-            tests/test_projects.py::test_setup_service_adoption_requires_exact_report_and_source_provenance \
             tests/projects/sufficiency_mutations/test_authority.py \
             tests/projects/sufficiency_mutations/test_lineage.py \
-            tests/projects/sufficiency_mutations/test_dispatch.py \
             tests/projects/sufficiency_mutations/test_report_create.py \
             tests/projects/sufficiency_mutations/test_acknowledgement.py \
             tests/projects/sufficiency_mutations/test_replay.py \

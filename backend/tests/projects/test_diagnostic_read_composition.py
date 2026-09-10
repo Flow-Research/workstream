@@ -11,7 +11,7 @@ from projects.client_fixtures import (
     clear_project_settings_cache_after_test as clear_project_settings_cache_after_test,
 )
 from projects.diagnostic_read_fixtures import (
-    attach_post_submit_policy, make_diagnostic_case, read_diagnostic,
+    make_diagnostic_case, read_diagnostic,
 )
 
 READ_CASES = [
@@ -26,9 +26,6 @@ READ_CASES = [
                  True, id="submission-policy-list"),
     pytest.param(ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ, "submission_artifact_policy",
                  "lock_submission_artifact_policy_diagnostic", False, id="submission-policy-read"),
-    pytest.param(ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-                 "post_submit_checker_policy_setup", "lock_latest_project_setup_run",
-                 False, id="post-submit-setup"),
 ]
 
 
@@ -51,9 +48,7 @@ async def test_diagnostic_read_binds_exact_facts(
 
     result = await read_diagnostic(case, action)
 
-    if action is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ:
-        assert result == (case.target, None)
-    elif is_collection:
+    if is_collection:
         assert result is getattr(case.repository, method).return_value
     else:
         assert result is case.target
@@ -130,18 +125,3 @@ async def test_empty_diagnostic_collection_remains_readable(action: ActionId, me
     assert context.target_binding_digest == canonical_json_hash([])
     assert context.source_snapshot_id is None
     assert context.source_snapshot_hash is None
-
-
-@pytest.mark.asyncio
-async def test_post_submit_diagnostic_binds_both_rows() -> None:
-    """A setup diagnostic with output binds both the run and exact policy row."""
-    case = make_diagnostic_case()
-    policy = attach_post_submit_policy(case)
-    expected = canonical_json_hash([_expected_stamp(case.target), _expected_stamp(policy)])
-
-    result = await read_diagnostic(case, ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ)
-
-    assert result == (case.target, policy)
-    case.repository.lock_post_submit_checker_policy.assert_awaited_once_with(policy.id)
-    case.authorization.require.assert_awaited_once()
-    assert case.authorization.require.await_args.args[1].target_binding_digest == expected

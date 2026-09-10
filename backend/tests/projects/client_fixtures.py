@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.main import create_app
-from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.actors.models import ActorIdentityLink
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.models import AdminRoleGrant, AuthorityControl
 
@@ -31,14 +31,12 @@ def project_database_env(
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", "project-manager-subject")
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ISSUER", "flow-test")
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "project_manager")
-    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "false")
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "memory://")
     get_settings.cache_clear()
     try:
         yield clean_postgres_database
     finally:
         get_settings.cache_clear()
-
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +46,6 @@ def clear_project_settings_cache_after_test() -> Iterator[None]:
         yield
     finally:
         get_settings.cache_clear()
-
 
 
 @pytest.fixture
@@ -83,31 +80,18 @@ async def project_client(project_database_env: str) -> AsyncIterator[AsyncClient
                     grant_reason="Project test system-scoped manager authority",
                 )
             )
-            setup_profile_id = str(uuid4())
-            session.add(
-                ActorProfile(
-                    id=setup_profile_id,
-                    actor_kind="service",
-                    status="active",
-                    provisioning_method="manual_service_provisioning",
-                    service_identity=ServiceIdentity.PROJECT_SETUP.value,
-                    created_by=str(actor_id),
-                )
-            )
-            session.add(
-                ActorIdentityLink(
-                    id=str(uuid4()),
-                    actor_profile_id=setup_profile_id,
-                    issuer="flow-test",
-                    subject="workstream-project-setup-test-service",
-                    subject_kind="service",
-                    status="active",
-                    linked_by=str(actor_id),
-                )
-            )
             await session.commit()
+        provisioned = await client.post(
+            "/api/v1/service-actors",
+            headers=auth_headers(),
+            json={
+                "service_identity": ServiceIdentity.PROJECT_SETUP.value,
+                "subject": "workstream-project-setup-test-service",
+                "reason": "Provision the isolated project setup worker.",
+            },
+        )
+        assert provisioned.status_code == 201, provisioned.text
         yield client
-
 
 
 def auth_headers(token: str = "project-token") -> dict[str, str]:
@@ -115,7 +99,6 @@ def auth_headers(token: str = "project-token") -> dict[str, str]:
         "Authorization": f"Bearer {token}",
         "Idempotency-Key": str(uuid4()),
     }
-
 
 
 async def ensure_access_administrator_bootstrap() -> tuple[UUID, UUID, UUID]:

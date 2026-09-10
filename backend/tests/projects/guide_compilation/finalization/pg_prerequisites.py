@@ -1,7 +1,9 @@
 """Real compiled/projected parents; finalization authority stays a strict test port."""
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -11,14 +13,13 @@ from app.adapters.auth import (
     artifact_policy_projection_authorization,
     guide_sufficiency_projection_authorization,
 )
-from app.modules.artifacts.guide_sufficiency_material import (
-    SqlAlchemyGuideSufficiencyMaterialAdapter,
+from app.adapters.artifacts import (
+    guide_document_manifest_port,
 )
 from app.modules.authorization.api import (
     ActorIdentityFacts,
     ActorKind,
     ProjectGuideCompilationRequestFacts,
-    project_guide_compilation_execute_resource_digest,
 )
 from app.modules.authorization.guide_compilation import ProjectGuideCompilationAuthorizationAdapter
 from app.modules.authorization.kernel import AuthorizationService
@@ -33,17 +34,13 @@ from app.modules.projects.api import (
     ProjectGuideProjectionCommand,
     ProjectGuideSetupFinalizationCommand,
 )
-from app.modules.projects.guide_compilation.contracts import accepted_compilation_result
 from app.modules.projects.guide_compilation.projections import GuideCompilationProjectionService
-from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
 from app.modules.projects.guide_compilation.service import GuideCompilationService
 from ..helpers import (
     context,
     identity,
-    insert_authorization_evidence,
     persistence_facts,
     result,
-    service_actor,
 )
 
 
@@ -102,7 +99,13 @@ async def request_compilation(factory, values, compilation_context, predecessor_
         prepared = PreparedAuthorizationService(session, ctx, kernel, repository)
         return await GuideCompilationService(
             session, ProjectGuideCompilationAuthorizationAdapter(kernel, prepared)
-        ).authorize_request(origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"), actor=actor, facts=facts, identity=attempt_identity)
+        ).authorize_request(
+            origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
+            actor=actor,
+            facts=facts,
+            identity=attempt_identity,
+            runtime_configuration=runtime_configuration(),
+        )
 
 
 async def compilation_and_projections(
@@ -141,48 +144,20 @@ async def compilation_and_projections(
                 capability_suggestions=(),
             )
         outcome = outcome.model_copy(update=patch)
-    async with factory() as session, session.begin():
-        await GuideCompilationRepository(session).accept_result(
-            attempt_id=requested.attempt_id, context=compilation_context, result=outcome
-        )
-    accepted = accepted_compilation_result(outcome)
-    facts = persistence_facts(
-        values, requested.attempt_id, identity(compilation_context), predecessor_id=predecessor_id
+    from ..test_hidden_orchestrator_postgresql import _Runtime, _port
+    from app.modules.projects.api import (
+        ProjectGuideCompilationExecutionCommand, ProjectGuideCompilationExecutionClassification,
     )
-    hashes = accepted.component_hashes
-    facts = replace(
-        facts,
-        result_hash=accepted.result_hash,
-        sufficiency_component_hash=hashes.sufficiency_hash,
-        artifact_policy_component_hash=hashes.artifact_policy_hash,
-        requirement_inventory_component_hash=hashes.requirement_inventory_hash,
-        pre_submit_policy_component_hash=hashes.pre_submit_hash,
-        post_submit_policy_component_hash=hashes.post_submit_hash,
-        capability_suggestions_component_hash=hashes.capability_suggestions_hash,
-        setup_notes_component_hash=hashes.setup_notes_hash,
+    runtime = _Runtime(outcome)
+    receipt = await _port(factory, runtime).execute(
+        ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
     )
-    facts = replace(
-        facts,
-        resource_context_digest=project_guide_compilation_execute_resource_digest(
-            service_actor(values), facts
-        ),
-    )
-    decision = await insert_authorization_evidence(
-        url, values, requested.attempt_id, resource_context_digest=facts.resource_context_digest
-    )
-    async with factory() as session, session.begin():
-        compilation = await GuideCompilationRepository(session).persist_accepted(
-            attempt_id=requested.attempt_id,
-            context=compilation_context,
-            expected_predecessor_id=predecessor_id,
-            actor=service_actor(values),
-            facts=facts,
-            authorization_decision_event_id=decision,
-        )
+    assert receipt.classification is ProjectGuideCompilationExecutionClassification.PERSISTED
+    assert runtime.calls == 1
     if project:
         projections = GuideCompilationProjectionService(
             factory,
-            material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+            material_factory=guide_document_manifest_port,
             sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
             policy_authorization_factory=artifact_policy_projection_authorization,
         )
@@ -195,5 +170,5 @@ async def compilation_and_projections(
         guide_id=values["guide"],
         setup_run_id=compilation_context.setup_run_id,
         setup_generation=compilation_context.setup_generation,
-        compilation_id=compilation.id,
+        compilation_id=receipt.compilation_id,
     )

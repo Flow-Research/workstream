@@ -69,17 +69,8 @@ async def test_guide_continuation_scan_uses_its_own_bound_and_direct_callback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Guide continuation recovery is independent from pending ART work paging."""
-    from app.modules.projects import guide_setup_continuation
 
     observed: dict[str, int] = {}
-
-    async def retryable_snapshots(_factory, *, page_size: int) -> list[UUID]:
-        observed["snapshot_page_size"] = page_size
-        return [uuid4(), uuid4()]
-
-    class ScalarRows:
-        def all(self) -> list[str]:
-            return ["job-1", "job-2"]
 
     class Session:
         async def __aenter__(self):
@@ -90,14 +81,11 @@ async def test_guide_continuation_scan_uses_its_own_bound_and_direct_callback(
 
         async def scalars(self, statement):
             observed["job_limit"] = statement._limit_clause.value
-            return ScalarRows()
+            return ["put-1", "put-2"]
 
     settings = SimpleNamespace(
         artifact_pending_work_scan_page_size=1,
         guide_setup_continuation_scan_page_size=2,
-    )
-    monkeypatch.setattr(
-        guide_setup_continuation, "retryable_source_snapshot_ids", retryable_snapshots
     )
     monkeypatch.setattr(internal_worker_adapter, "get_settings", lambda: settings)
     monkeypatch.setattr(internal_worker_adapter, "get_session_factory", lambda: Session)
@@ -109,8 +97,8 @@ async def test_guide_continuation_scan_uses_its_own_bound_and_direct_callback(
     count = await internal_worker_adapter.scan_guide_setup_continuations(publish_continuation)
 
     assert count == 2
-    assert published == ["job-1", "job-2"]
-    assert observed == {"snapshot_page_size": 2, "job_limit": 2}
+    assert published == ["put-1", "put-2"]
+    assert observed == {"job_limit": 2}
 
 
 def test_eager_internal_tasks_use_lazy_process_runtime(
@@ -175,7 +163,7 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
     assert initialize.await_count == 2
     orchestrator.resolve_put_attempt.assert_awaited_once_with(attempt_id)
     orchestrator.verify_object.assert_awaited_once_with(job_id)
-    continuation_delay.assert_called_once_with(str(job_id))
+    continuation_delay.assert_called_once_with(str(attempt_id))
     celery_module = importlib.import_module("app.workers.celery_app")
     worker_module = importlib.import_module("app.workers.artifacts")
     celery_app = celery_module.celery_app
@@ -198,7 +186,7 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         return 2
 
     async def scan_guides(publish_job):
-        await publish_job("guide-job-id")
+        await publish_job("guide-put-id")
         return 1
 
     monkeypatch.setattr(worker_module, "run_artifact_internal_operation", operation)
@@ -217,13 +205,13 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
     assert operation.await_count == 2
     assert operation.await_args_list[0].args == ("put", UUID(attempt_id))
     assert operation.await_args_list[1].args == ("verification", UUID(job_id))
-    continuation_delay.assert_called_once_with(job_id)
+    continuation_delay.assert_called_once_with(attempt_id)
     assert worker_module.scan_pending_work() == 2
     assert worker_module.scan_guide_setup_continuations() == 1
     assert scanned == ["called"]
     put_delay.assert_called_once_with("put-id")
     job_delay.assert_called_once_with("job-id")
-    assert continuation_delay.call_args_list == [call(job_id), call("guide-job-id")]
+    assert continuation_delay.call_args_list == [call(attempt_id), call("guide-put-id")]
     get_settings.cache_clear()
 
 
@@ -303,6 +291,7 @@ async def test_process_runtime_uses_concrete_bootstrap_namespace(
     root = tmp_path / "artifacts"
     root.mkdir(mode=0o700)
     settings = Settings(
+        _env_file=None,
         **artifact_admission_limit_settings(),
         environment="test",
         artifact_store_backend="local",

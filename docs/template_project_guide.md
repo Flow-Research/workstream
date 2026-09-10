@@ -12,6 +12,26 @@ Describe what this project produces and why it matters.
 
 - `<task type>`
 
+## Task Examples Supplied With This Guide
+
+Provide at least one nonblank task example in the guide-create request's
+`task_examples` list. A starting idea or short description is enough; title and
+labels are optional. Examples need not repeat this guide's deliverables or
+acceptance criteria. Workstream stores the list with guide metadata in PostgreSQL
+and supplies all examples to the setup agent alongside the uploaded guide files.
+Uploaded guide files are stored in ArtifactStore/S3. Examples do not create
+Workstream Tasks or select one assignment. The agent proposes project-wide
+policy from the guide and the examples together.
+
+The list accepts 1–100 examples, each with up to 65,536 content characters, an
+optional title of up to 500 characters, and up to 20 labels of 1–100 characters
+each. The full canonical UTF-8 JSON list must fit within 128 KiB. Examples are
+immutable for that guide version; a correction uses a new guide version.
+
+```json
+{"task_examples": [{"content": "Repair intermittent memory faults in the claims processing service."}]}
+```
+
 ## Business Terms Summary
 
 Describe compensation expectations in plain language when useful for project
@@ -261,3 +281,20 @@ Keep this section updated as the project runs.
 Each repeated issue becomes a guide update, checker update, review policy update,
 revision policy update, contribution policy update, template update, or
 reviewer training note.
+
+## Catalogue Coverage And Engineering Handoff
+
+Setup compares the guide and its task examples with both current checker
+catalogues. Each required unsupported automated check produces one suggestion
+with its requirement ID, pre-submit or post-submit stage, rationale and guide
+evidence. Supported matches remain exact catalogue references even in a blocked
+report; blocked setup creates no policy. Human review does not imply a missing
+automated checker, and a fully covered project needs no suggestions. Optional
+improvements may appear in setup notes.
+
+The canonical compilation stores this handoff. POL-05 owns its manager-facing
+review, correction and approval surface. A manager can request engineering work;
+engineers implement, test and register accepted capabilities, deploy them, and
+a fresh authorized setup can select them. Suggestions themselves cannot
+implement, register, execute or activate checks. Manager feedback for improving
+the setup agent remains deferred.

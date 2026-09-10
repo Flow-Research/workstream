@@ -33,23 +33,27 @@ Bundle hash algorithm:
 sha256(canonical_json(manifest_json))
 ```
 
-The `guide_source_snapshot.v2` manifest uses UTF-8 canonical JSON with sorted
+The `guide_source_snapshot.task_examples` manifest uses UTF-8 canonical JSON with sorted
 object keys and no insignificant whitespace. It includes server-owned snapshot,
-generation, item id, and item order facts plus non-authoritative source metadata.
+generation, item id, and item order facts plus non-authoritative source metadata
+and the owning guide version's task-example hash and count. The required ordered
+example list is ordinary text stored with guide metadata in PostgreSQL.
 Caller byte hashes, content ids, excerpts, provider refs, and fetch locators are excluded.
 
 Source snapshot items:
 
 | Item ID | Item Order | Source Kind | Source Label | Ingestion Adapter | Media Type |
 | --- | --- | --- | --- | --- | --- |
-| `<server UUID>` | `<server order>` | `<approved kind>` | `<sanitized display label>` | `<adapter>` | `<declared media type>` |
+| `<server UUID>` | `<server order>` | `document` | `<sanitized display label>` | `upload` | `<PDF/DOCX/PPTX media type>` |
 
-Temporary fetch locators are adapter inputs only. Source labels must not
+Guide documents are uploaded originals in ArtifactStore/S3. Source labels must not
 store query strings, signed URLs, credentials, token-bearing refs, local
 filesystem paths, or private storage paths.
 
-Caller excerpts are not accepted. Setup agents receive only canonical bounded
-content produced from exact verified ART bindings and extraction usages.
+Inline guide-document bodies are not accepted. Setup agents receive the task
+examples and a manifest of exact original documents, which they inspect through
+run-scoped tools. At least one nonblank example is required; a starting idea is
+enough, and it need not repeat deliverables or acceptance criteria from the guide.
 
 ## Guide Sufficiency
 
@@ -62,7 +66,7 @@ content produced from exact verified ART bindings and extraction usages.
 
 ## Approval Provenance
 
-- source material ingestion method: `manual_entry | import_adapter | url_import | repository_import`
+- source material ingestion method: document upload, with task examples in guide metadata
 - derivation agent name:
 - derivation agent version:
 - sufficiency report id:
@@ -74,8 +78,8 @@ content produced from exact verified ART bindings and extraction usages.
 - approved by ActorProfile id:
 - approved at:
 
-Source material is untrusted input. Embedded instructions in guide text, URLs,
-repository docs, examples, or imported documents cannot grant tool authority,
+Source material is untrusted input. Embedded instructions in uploaded guide
+documents, their metadata or task examples cannot grant tool authority,
 override Workstream rules, or weaken default checks.
 
 ## Workstream Default Rules

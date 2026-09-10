@@ -87,7 +87,7 @@ from tests.test_tasks import (
     set_dev_actor,
 )
 from project_create_fixtures import (
-    activate_guide_for_downstream_test,
+    seed_active_guide_for_downstream_test,
     grant_system_project_manager,
 )
 
@@ -2884,12 +2884,11 @@ async def create_checker_trial_project(
         post_submit_required_checkers=required_checkers,
         post_submit_blocking_severities=blocking_severities,
     )
-    activation_response = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_response.json()["id"],
     )
-    assert activation_response.status_code == 200, activation_response.text
     return project
 
 
@@ -3617,12 +3616,11 @@ async def test_chunk8_default_blocking_checker_survives_omitted_blocking_severit
         post_submit_required_checkers=[],
         post_submit_blocking_severities=None,
     )
-    activation_response = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_response.json()["id"],
     )
-    assert activation_response.status_code == 200, activation_response.text
     started_task = await create_started_task(checker_client, project["id"], monkeypatch)
     payload = complete_submission_payload()
     payload["artifact_hash_manifest"] = [
@@ -3990,12 +3988,11 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
         guide_response.json()["id"],
         post_submit_required_checkers=["check_acceptance_criteria_present"],
     )
-    activation_response = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_response.json()["id"],
     )
-    assert activation_response.status_code == 200, activation_response.text
     started_task = await create_started_task(checker_client, project["id"], monkeypatch)
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])

@@ -1,7 +1,7 @@
 {
   "behavior_id": "candidate:pol04a2.setup-identity",
   "callables": [
-    "app.modules.projects.api.setup_identity.pre_submit_setup_task_id"
+    "app.modules.projects.api.setup_identity.project_guide_compilation_task_id"
   ],
   "group": "lifecycle",
   "schema": "workstream.behavior-ownership.v1",

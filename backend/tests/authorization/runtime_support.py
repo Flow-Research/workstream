@@ -6,12 +6,15 @@ from uuid import uuid4
 from app.modules.actors.api import ServiceIdentity
 from app.modules.audit.schemas import AuthorityAuditEventInput
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
     IdentityLinkStatus,
     AuthorizationContext,
     HumanAuthorizationContext,
+    ProjectGuideMutationResourceContext,
     ServiceAuthorizationContext,
 )
 
@@ -92,3 +95,80 @@ class _PreparedTestSession:
 
     def in_nested_transaction(self) -> bool:
         return self.nested
+
+
+class _GuideMutationAuthorityFacts:
+    def __init__(
+        self,
+        context: HumanAuthorizationContext,
+        *,
+        grant=None,
+        permission_id: PermissionId = PermissionId.PROJECT_GUIDE_MANAGE,
+    ) -> None:
+        self.context = context
+        self.grant = grant
+        self.permission_id = permission_id
+
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        assert identity_link_id == self.context.identity_link_id
+        assert actor_profile_id == self.context.actor_profile_id
+        return (
+            SimpleNamespace(
+                id=str(identity_link_id),
+                actor_profile_id=str(actor_profile_id),
+                status="active",
+            ),
+            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
+        )
+
+    async def find_effective_grant(
+        self,
+        actor_profile_id,
+        permission_id,
+        *,
+        scope_project_id,
+        for_update,
+        allowed_roles,
+        exact_project_scope=False,
+    ):
+        assert actor_profile_id == self.context.actor_profile_id
+        assert permission_id is self.permission_id
+        assert scope_project_id is not None
+        assert for_update is True
+        assert allowed_roles == frozenset({AdminRole.PROJECT_MANAGER})
+        if self.grant is None or self.grant.scope_project_id not in {None, scope_project_id}:
+            return None
+        if exact_project_scope and self.grant.scope_project_id != scope_project_id:
+            return None
+        return self.grant
+
+
+
+
+def _guide_mutation_resources(project_id, guide_id, operation_id, digest):
+    """Complete create/update controls for the closed resource-contract matrix."""
+    return {
+        ActionId.PROJECT_GUIDE_CREATE: ProjectGuideMutationResourceContext(
+            resource_type="project_guide_mutation",
+            resource_id=guide_id,
+            operation_id=operation_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            target_kind="create",
+            guide_exists=False,
+            operation_generation=1,
+            request_digest=digest, task_examples_hash=digest, task_examples_count=1,
+        ),
+        ActionId.PROJECT_GUIDE_UPDATE: ProjectGuideMutationResourceContext(
+            resource_type="project_guide_mutation",
+            resource_id=guide_id,
+            operation_id=operation_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            target_kind="update",
+            guide_exists=True,
+            guide_status="draft",
+            guide_version="1",
+            operation_generation=1,
+        ),
+    }

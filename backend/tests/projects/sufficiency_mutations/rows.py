@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from app.modules.projects.models import GuideSufficiencyReport
-from app.modules.projects.api.setup_identity import pre_submit_setup_task_id
+from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 PROJECT, GUIDE, SNAPSHOT, SETUP, REPORT, ACTOR, LINK, GRANT, KEY = (
     UUID(int=value) for value in range(1, 10)
@@ -41,7 +41,7 @@ def setup_row():
         source_snapshot_id=str(SNAPSHOT),
         source_snapshot_hash=SNAPSHOT_HASH,
         setup_generation=1,
-        celery_task_id=pre_submit_setup_task_id(str(SETUP), 1),
+        celery_task_id=project_guide_compilation_task_id(str(SETUP), 1),
         continuation_verification_job_id=None,
         continuation_started_at=None,
         status="enqueue_failed",

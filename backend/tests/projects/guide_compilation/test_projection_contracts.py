@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -93,16 +94,19 @@ def test_projection_identities_and_digests_are_component_specific() -> None:
         actor_profile_id=actor_id,
         identity_link_id=link_id,
     )
-    assert len(
-        {
-            sufficiency_identity.operation_id,
-            sufficiency_identity.correlation_id,
-            sufficiency_identity.output_id,
-            policy_identity.operation_id,
-            policy_identity.correlation_id,
-            policy_identity.output_id,
-        }
-    ) == 6
+    assert (
+        len(
+            {
+                sufficiency_identity.operation_id,
+                sufficiency_identity.correlation_id,
+                sufficiency_identity.output_id,
+                policy_identity.operation_id,
+                policy_identity.correlation_id,
+                policy_identity.output_id,
+            }
+        )
+        == 6
+    )
 
     common = _common_facts() | {"attempt_id": attempt_id}
     sufficiency = GuideSufficiencyProjectionFacts(
@@ -146,9 +150,7 @@ def test_projection_identities_and_digests_are_component_specific() -> None:
         ("guide_version", 1),
     ],
 )
-def test_projection_facts_reject_wrong_scalar_types(
-    field: str, value: object
-) -> None:
+def test_projection_facts_reject_wrong_scalar_types(field: str, value: object) -> None:
     """Reject malformed counters, digests, identifiers, and text facts."""
     facts = _common_facts() | {
         "material_sha256": SHA256,
@@ -165,9 +167,7 @@ def test_projection_locator_identity_and_receipt_fail_closed() -> None:
     """Keep caller, service identity, and evidence receipts nominal and exact."""
     attempt_id, actor_id, link_id = uuid4(), uuid4(), uuid4()
     with pytest.raises(ValueError):
-        ProjectGuideProjectionLocator(
-            project_id=cast(UUID, "bad"), attempt_id=attempt_id
-        )
+        ProjectGuideProjectionLocator(project_id=cast(UUID, "bad"), attempt_id=attempt_id)
     identity_values = {
         "operation_id": uuid4(),
         "correlation_id": uuid4(),
@@ -176,13 +176,9 @@ def test_projection_locator_identity_and_receipt_fail_closed() -> None:
         "identity_link_id": link_id,
     }
     with pytest.raises(ValueError):
-        ProjectGuideProjectionIdentity(
-            **identity_values | {"actor_profile_id": cast(UUID, "bad")}
-        )
+        ProjectGuideProjectionIdentity(**identity_values | {"actor_profile_id": cast(UUID, "bad")})
     with pytest.raises(ValueError):
-        ProjectGuideProjectionIdentity(
-            **identity_values, service_identity="other.service"
-        )
+        ProjectGuideProjectionIdentity(**identity_values, service_identity="other.service")
     receipt = {
         "decision_event_id": uuid4(),
         "actor_profile_id": actor_id,
@@ -226,9 +222,7 @@ def test_report_and_policy_transforms_are_exact() -> None:
             "location": None,
         }
     ]
-    policy = _policy_body(
-        cast(AsyncSession, None), compiled.submission_artifact_policy
-    )
+    policy = _policy_body(cast(AsyncSession, None), compiled.submission_artifact_policy)
     assert policy["required_artifacts"] == [
         {
             "key": "required-artifact-001",
@@ -288,3 +282,37 @@ def test_missing_replay_outputs_never_have_a_canonical_digest() -> None:
     """Ensure replay validation cannot treat a missing product row as intact."""
     assert _report_digest(None) is None
     assert _policy_digest(None) is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "error_code",
+        "error_artifact_incident_id",
+        "error_summary",
+        "post_submit_derivation_summary",
+        "started_at",
+        "finished_at",
+        "output_sufficiency_report_id",
+        "output_submission_artifact_policy_id",
+        "output_post_submit_checker_policy_id",
+    ],
+)
+def test_compilation_source_shape_rejects_each_independently_populated_field(field):
+    from app.modules.projects.models import ProjectSetupRun
+    from app.modules.projects.guide_compilation.source_state import is_compilation_source_setup
+
+    setup = ProjectSetupRun(status="queued", current_step="queued", celery_task_id="task", documents_ready_at=datetime.now(timezone.utc))
+    assert is_compilation_source_setup(setup, "task")
+    setattr(setup, field, "populated")
+    assert not is_compilation_source_setup(setup, "task")
+
+
+def test_compilation_source_requires_committed_documents():
+    from app.modules.projects.models import ProjectSetupRun
+    from app.modules.projects.guide_compilation.source_state import is_compilation_source_setup
+    setup = ProjectSetupRun(status="queued", current_step="queued", celery_task_id="task",
+                            documents_ready_at=datetime.now(timezone.utc))
+    assert is_compilation_source_setup(setup, "task")
+    setup.documents_ready_at = None
+    assert not is_compilation_source_setup(setup, "task")

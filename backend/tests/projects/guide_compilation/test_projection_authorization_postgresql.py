@@ -13,8 +13,8 @@ from app.adapters.auth import (
     artifact_policy_projection_authorization,
     guide_sufficiency_projection_authorization,
 )
-from app.modules.artifacts.guide_sufficiency_material import (
-    SqlAlchemyGuideSufficiencyMaterialAdapter,
+from app.adapters.artifacts import (
+    guide_document_manifest_port,
 )
 from app.modules.authorization import prepared as prepared_module
 from app.modules.authorization.runtime import AuthorizationEvidenceUnavailable
@@ -32,7 +32,7 @@ from .test_projection_postgresql import _persist_compilation
 def _service(factory):
     return GuideCompilationProjectionService(
         factory,
-        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+        material_factory=guide_document_manifest_port,
         sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
         policy_authorization_factory=artifact_policy_projection_authorization,
     )

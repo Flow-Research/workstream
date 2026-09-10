@@ -54,7 +54,6 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
-    GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
     SubmissionBindingResourceContext,
     PreSubmitCheckerInputResourceContext,
@@ -143,7 +142,6 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
@@ -158,7 +156,6 @@ _SERIALIZED_ADMIN_READS = frozenset(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
@@ -180,10 +177,6 @@ _ADMIN_MUTATIONS = frozenset(
 ) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS
 
 _ARTIFACT_INTERNAL_RESOURCES = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
-        "guide_source_binding",
-        GuideSourceBindingResourceContext,
-    ),
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
         "guide_source_read",
         GuideSourceReadResourceContext,
@@ -235,9 +228,6 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: ProjectDiagnosticReadResourceContext,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: ProjectDiagnosticReadResourceContext,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: ProjectDiagnosticReadResourceContext,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
-            ProjectDiagnosticReadResourceContext
-        ),
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: (
             ProjectPolicyReadResourceContext
         ),

@@ -1,6 +1,7 @@
 """Current-schema proof for AUTH guide-compilation authority."""
 
 import asyncio
+from tests.migration_fixtures import current_schema_revision
 from uuid import uuid4
 
 import asyncpg
@@ -60,7 +61,7 @@ def test_current_schema_preserves_exact_compilation_registries(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_registry_state(isolated_database_env)) == (
-        "0014_project_role_scope",
+        current_schema_revision(),
         1,
         1,
         1,

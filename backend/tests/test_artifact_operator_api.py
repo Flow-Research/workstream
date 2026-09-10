@@ -358,30 +358,24 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 )
                 assert stale_source.status_code == 409
 
-                retry = await client.post(
-                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
-                    json={
+                retry_payload = {
                         "project_id": project_id,
                         "task_id": task_id,
                         "submission_id": submission_id,
                         "reason": "provider remained unavailable",
                         "client_idempotency_key": "operator-http-retry",
                         "expected_source_job_cas_version": source_job_cas_version,
-                    },
+                }
+                retry = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json=retry_payload,
                 )
                 assert retry.status_code == 202, retry.text
                 recovery_id = retry.json()["recovery_attempt_id"]
                 retry_job_id = retry.json()["retry_verification_job_id"]
                 replay = await client.post(
                     f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
-                    json={
-                        "project_id": project_id,
-                        "task_id": task_id,
-                        "submission_id": submission_id,
-                        "reason": "provider remained unavailable",
-                        "client_idempotency_key": "operator-http-retry",
-                        "expected_source_job_cas_version": source_job_cas_version,
-                    },
+                    json=retry_payload,
                 )
                 assert replay.status_code == 202
                 assert replay.json()["replayed"] is True
@@ -529,6 +523,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     f"/api/v1/operator/artifacts/verification-jobs/{uuid4()}/retry",
                     json={
                         "project_id": project_id,
+                        "task_id": task_id,
                         "reason": "probe",
                         "client_idempotency_key": "denied-probe",
                         "expected_source_job_cas_version": 0,

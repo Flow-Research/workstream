@@ -153,7 +153,7 @@ async def test_policy_read_propagates_authorizer_exception(action: ActionId) -> 
 
 def test_activation_readiness_normalizes_hash_valid_malformed_policy_body() -> None:
     repository = _PolicyReadRepository()
-    repository.submission.derivation_source = "manual"
+    repository.submission.derivation_source = "manual_admin_derivation"
     service = ProjectService(cast(Any, None))
 
     with pytest.raises(GuideActivationBlocked, match="policy body is invalid"):

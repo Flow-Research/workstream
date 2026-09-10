@@ -20,7 +20,6 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideArtifactIngestAuthorityFacts,
-    GuideSourceBindingAuthorityFacts,
     GuideSourceReadAuthorityFacts,
     ArtifactInternalAuthorityFacts,
     ArtifactInternalResourceType,
@@ -54,7 +53,6 @@ from app.modules.authorization.runtime import (
     AuthorizationDecision,
     AuthorizationDenied,
     GuideSourceIngestResourceContext,
-    GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
     PreSubmitCheckerInputResourceContext,
     PreSubmitCheckerInputPreparationContext,
@@ -570,8 +568,7 @@ class _PreparedArtifactServiceAuthorization:
         self._input: PreparedAuthorizationInput | None = None
         self._handle: PreparedAuthorizationHandle | None = None
         self._facts: (
-            GuideSourceBindingAuthorityFacts
-            | GuideSourceReadAuthorityFacts
+            GuideSourceReadAuthorityFacts
             | PreSubmitMaterializationAuthorityFacts
             | PreSubmitMaterializationPreparationFacts
             | SubmissionBindingAuthorityFacts
@@ -581,8 +578,7 @@ class _PreparedArtifactServiceAuthorization:
     async def prepare(
         self,
         *,
-        facts: GuideSourceBindingAuthorityFacts
-        | GuideSourceReadAuthorityFacts
+        facts: GuideSourceReadAuthorityFacts
         | PreSubmitMaterializationPreparationFacts
         | SubmissionBindingAuthorityFacts,
         idempotency_key: UUID,
@@ -643,8 +639,7 @@ class _PreparedArtifactServiceAuthorization:
         self,
         *,
         prepared_authorization: PreparedAuthorizationHandle,
-        facts: GuideSourceBindingAuthorityFacts
-        | GuideSourceReadAuthorityFacts
+        facts: GuideSourceReadAuthorityFacts
         | PreSubmitMaterializationAuthorityFacts
         | SubmissionBindingAuthorityFacts,
     ) -> None:
@@ -681,19 +676,6 @@ class _PreparedArtifactServiceAuthorization:
         self._input = None
         self._handle = None
         self._facts = None
-
-
-class PreparedGuideSourceBindingAuthorization(_PreparedArtifactServiceAuthorization):
-    """Prepared authority reserved to the fixed guide binding service."""
-
-    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
-        super().__init__(
-            session,
-            service_identity=ServiceIdentity.ARTIFACT_BINDING,
-            action_id=ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-            request_id=request_id,
-            correlation_id=correlation_id,
-        )
 
 
 class PreparedSubmissionBindingAuthorization:
@@ -795,14 +777,12 @@ class PreparedPreSubmitMaterializationAuthorization:
 
 
 def _artifact_service_resource_context(
-    facts: GuideSourceBindingAuthorityFacts
-    | GuideSourceReadAuthorityFacts
+    facts: GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationAuthorityFacts
     | PreSubmitMaterializationPreparationFacts
     | SubmissionBindingAuthorityFacts,
 ) -> (
-    GuideSourceBindingResourceContext
-    | GuideSourceReadResourceContext
+    GuideSourceReadResourceContext
     | PreSubmitCheckerInputResourceContext
     | PreSubmitCheckerInputPreparationContext
     | SubmissionBindingResourceContext
@@ -823,12 +803,6 @@ def _artifact_service_resource_context(
             resource_id=facts.prepared_generation_id,
             **values,
         )
-    if isinstance(facts, GuideSourceBindingAuthorityFacts):
-        return GuideSourceBindingResourceContext(
-            resource_type="guide_source_binding",
-            resource_id=facts.guide_source_item_id,
-            **values,
-        )
     if isinstance(facts, SubmissionBindingAuthorityFacts):
         return SubmissionBindingResourceContext(
             resource_type="submission_binding",
@@ -837,19 +811,17 @@ def _artifact_service_resource_context(
         )
     return GuideSourceReadResourceContext(
         resource_type="guide_source_read",
-        resource_id=facts.binding_id,
+        resource_id=facts.guide_source_item_id,
         **values,
     )
 
 
 def _prepared_artifact_facts_match(
-    prepared: GuideSourceBindingAuthorityFacts
-    | GuideSourceReadAuthorityFacts
+    prepared: GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationPreparationFacts
     | PreSubmitMaterializationAuthorityFacts
     | SubmissionBindingAuthorityFacts,
-    final: GuideSourceBindingAuthorityFacts
-    | GuideSourceReadAuthorityFacts
+    final: GuideSourceReadAuthorityFacts
     | PreSubmitMaterializationAuthorityFacts
     | SubmissionBindingAuthorityFacts,
 ) -> bool:

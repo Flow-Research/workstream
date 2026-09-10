@@ -15,8 +15,6 @@ from projects.client_fixtures import (
     project_database_env as project_database_env,
 )
 from projects.guide_fixtures import create_project, create_guide, complete_guide_payload
-from projects.policy_bundle_fixtures import create_approved_policy_bundle
-from project_create_fixtures import activate_guide_for_downstream_test
 
 
 async def _replace(client, project, guide, prior, mode=None, key=None):
@@ -81,31 +79,6 @@ async def test_persisted_false_survives_omitted_update_and_old_version_is_immuta
         await session.rollback()
 
 
-async def test_current_activate_guide_rejects_false_with_complete_true_control(project_client):
-    project = await create_project(project_client)
-    for mode in (True, False):
-        guide = await create_guide(
-            project_client, project["id"], complete_guide_payload("v1" if mode else "v2")
-        )
-        await create_approved_policy_bundle(project_client, project["id"], guide["id"])
-        if not mode:
-            prior = await _selected(project["id"], guide["version"])
-            changed = await _replace(project_client, project["id"], guide["id"], prior, False)
-            assert changed.status_code == 200, changed.text
-        activated = await activate_guide_for_downstream_test(
-            db_session.get_session_factory(), project_id=project["id"], guide_id=guide["id"]
-        )
-        if mode:
-            assert activated.status_code == 200, activated.text
-            assert activated.json()["review_policy"]["human_review_required"] is True
-        else:
-            assert activated.status_code == 422, activated.text
-            assert activated.json()["detail"] == "automated acceptance is unavailable"
-            async with db_session.get_session_factory()() as session:
-                status = await session.scalar(
-                    text("select status from project_guides where id=:id"), {"id": guide["id"]}
-                )
-                assert status == "draft"
 
 
 async def test_cross_project_mode_mutation_cannot_advance_policy(project_client):

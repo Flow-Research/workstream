@@ -12,13 +12,8 @@ dependencies = [
   "defusedxml @ https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl#sha256=a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61",
   "fastapi>=0.115,<1.0",
   "httpx>=0.27,<1.0",
-  "Pillow @ https://files.pythonhosted.org/packages/c8/98/766667a4be768150a202836acd9fad19c06824ca86c4286d3cf6b274964e/pillow-12.3.0-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl#sha256=bcb46e2f9feff8d06323983bd83ed00c201fdcab3d74973e7072a889b3979fcd ; python_version == \"3.11\" and sys_platform == \"linux\" and platform_machine == \"aarch64\" and platform_python_implementation == \"CPython\"",
-  "Pillow @ https://files.pythonhosted.org/packages/3b/2d/ede717bc1144f63886c21fd349bb95860b0d1a21149ff16f2bb362b612b6/pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl#sha256=23d27a3e0307ec2244cc51e7287b919aa68d097504ebe19df4e76a98a3eea5bd ; python_version == \"3.11\" and sys_platform == \"linux\" and platform_machine == \"x86_64\" and platform_python_implementation == \"CPython\"",
-  "Pillow @ https://files.pythonhosted.org/packages/25/27/ac8f99618ffd3dde21db0f4d4b1d2ab00c0880595bfd17df103f7f39fd0c/pillow-12.3.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl#sha256=d9c7f76c0673154f044e9d78c8655fb4213f6ca31a836df48b40fe5d187717b9 ; python_version == \"3.12\" and sys_platform == \"linux\" and platform_machine == \"aarch64\" and platform_python_implementation == \"CPython\"",
-  "Pillow @ https://files.pythonhosted.org/packages/84/21/a35af28dcc61f37ed850a2d64c65c701321dfbf25085e469d5559360cbbf/pillow-12.3.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl#sha256=78cb2c6865a35ab8ff8b75fd122f6033b92a62c82801110e48ddd6c936a45d91 ; python_version == \"3.12\" and sys_platform == \"linux\" and platform_machine == \"x86_64\" and platform_python_implementation == \"CPython\"",
   "PyJWT[crypto]>=2.13,<3.0",
   "pydantic-settings>=2.6,<3.0",
-  "pypdf @ https://files.pythonhosted.org/packages/af/72/ce3067ac31e214a66388159f8462ddb8c13dd00170f24d555a1f1ae8ee91/pypdf-6.15.0-py3-none-any.whl#sha256=14e001d6504822cb1ca9c7ed9a69bccb320f59b320730f55af804361abe4d5ee",
   "sqlalchemy[asyncio]>=2.0,<3.0",
   "uvicorn[standard]>=0.30,<1.0",
 ]
@@ -32,7 +27,9 @@ include = ["app*"]
 
 [project.optional-dependencies]
 agents = [
-  "openai-agents>=0.17,<1.0",
+  "openai-agents==0.22.2",
+  "openai==3.11.0",
+  "httpx2==2.12.0",
 ]
 
 dev = [

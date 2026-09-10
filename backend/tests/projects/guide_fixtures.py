@@ -16,14 +16,8 @@ from projects.client_fixtures import auth_headers, ensure_access_administrator_b
 def complete_guide_payload(version: str = "v1") -> dict:
     return {
         "version": version,
-        "content_markdown": (
-            f"# Guide {version}\n\n"
-            "Contributors submit a complete project packet with original work, artifact "
-            "hashes, evidence references, and an attestation. Reviewers use the "
-            "locked policy bundle for automated checks and the guide body for human "
-            "context."
-        ),
         "change_summary": f"Initial {version}",
+        "task_examples": [{"content": "Review a claim using the project guide."}],
     }
 
 
@@ -73,20 +67,20 @@ async def add_project_manager_admin_grant(project_id: str) -> UUID:
         return grant.id
 
 
-def source_snapshot_payload(*, source_label: str = "guide.md") -> dict:
+def source_snapshot_payload(*, source_label: str = "guide.pdf") -> dict:
     return {
         "items": [
             {
-                "source_kind": "url_doc",
+                "source_kind": "document",
                 "source_label": source_label,
-                "ingestion_adapter": "manual_import",
-                "media_type": "text/markdown",
+                "ingestion_adapter": "upload",
+                "media_type": "application/pdf",
             },
             {
-                "source_kind": "rubric",
-                "source_label": "rubric.md",
-                "ingestion_adapter": "manual_import",
-                "media_type": "text/markdown",
+                "source_kind": "document",
+                "source_label": "rubric.pdf",
+                "ingestion_adapter": "upload",
+                "media_type": "application/pdf",
             },
         ]
     }

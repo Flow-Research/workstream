@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict, replace
+from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
+
+from tests.projects.guide_compilation.helpers import runtime_configuration
 
 import pytest
 from pydantic import ValidationError
@@ -27,7 +30,7 @@ from app.modules.projects.guide_compilation.contracts import (
     CompilationRecoveryClassification,
 )
 from app.modules.projects.guide_compilation.orchestrator import (
-    HiddenGuideCompilationOrchestrator,
+    GuideCompilationOrchestrator,
 )
 
 from .helpers import context, identity, ids, persistence_facts, result
@@ -68,6 +71,10 @@ class _Backend:
         self.calls: list[str] = []
         self.dispatch_permitted = True
         self.state_after_fence: CompilationExecutionState | None = None
+
+    @asynccontextmanager
+    async def capabilities(self, state, context):
+        yield object()
 
     async def load(self, attempt_id):
         self.calls.append("load")
@@ -130,11 +137,19 @@ class _Backend:
 
 
 class _Runtime:
+    identity = runtime_configuration().adapter_identity
+
     def __init__(self, outcome=result()) -> None:
         self.outcome = outcome
         self.calls = 0
 
-    async def compile_project_guide(self, _context):
+    def admit_execution(self):
+        pass
+
+    async def aclose(self):
+        pass
+
+    async def compile_project_guide(self, _context, _capabilities):
         self.calls += 1
         if isinstance(self.outcome, BaseException):
             raise self.outcome
@@ -147,7 +162,7 @@ async def test_reserved_attempt_calls_the_unified_runtime_once_and_persists() ->
     state = _state(values, CompilationRecoveryClassification.RESERVED)
     backend, runtime = _Backend(state), _Runtime()
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -184,7 +199,7 @@ async def test_terminal_or_uncertain_state_never_rebuilds_or_redispatches(
     )
     backend, runtime = _Backend(state), _Runtime()
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -198,7 +213,7 @@ async def test_accepted_recovery_rebuilds_context_but_never_calls_provider() -> 
     state = _state(ids(), CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED)
     backend, runtime = _Backend(state), _Runtime()
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -217,15 +232,12 @@ async def test_existing_dispatch_fence_never_calls_provider() -> None:
         classification=CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
     )
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
-        ProjectGuideCompilationExecutionCommand(
-            attempt_id=state.preflight_facts.attempt_id
-        )
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
+        ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
     assert (
-        receipt.classification
-        is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
+        receipt.classification is ProjectGuideCompilationExecutionClassification.PROVIDER_UNRESOLVED
     )
     assert runtime.calls == 0
     assert backend.calls == ["load", "context", "fence", "load"]
@@ -243,10 +255,8 @@ async def test_lost_dispatch_race_recovers_the_persisted_winner() -> None:
         compilation_id=compilation_id,
     )
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
-        ProjectGuideCompilationExecutionCommand(
-            attempt_id=state.preflight_facts.attempt_id
-        )
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
+        ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
     assert receipt.classification is ProjectGuideCompilationExecutionClassification.PERSISTED
@@ -275,7 +285,7 @@ async def test_known_invalid_output_terminalizes_without_persistence(
     state = _state(ids(), CompilationRecoveryClassification.RESERVED)
     backend, runtime = _Backend(state), _Runtime(provider_failure)
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -300,7 +310,7 @@ async def test_provider_failure_remains_unresolved_and_never_persists(
     state = _state(ids(), CompilationRecoveryClassification.RESERVED)
     backend, runtime = _Backend(state), _Runtime(provider_failure)
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -319,7 +329,7 @@ async def test_incomplete_defaulted_result_is_rejected_after_provider_return() -
     )
     backend, runtime = _Backend(state), _Runtime(partial)
 
-    receipt = await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
     )
 
@@ -333,7 +343,7 @@ async def test_caller_cancellation_propagates_after_the_durable_fence() -> None:
     backend, runtime = _Backend(state), _Runtime(asyncio.CancelledError())
 
     with pytest.raises(asyncio.CancelledError):
-        await HiddenGuideCompilationOrchestrator(backend, runtime).execute(
+        await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
             ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
         )
     assert backend.calls == ["load", "context", "fence"]
@@ -345,3 +355,123 @@ def test_public_command_rejects_caller_supplied_context_or_authority() -> None:
             attempt_id=uuid4(),
             project_id=uuid4(),  # type: ignore[call-arg]
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "classification",
+    [
+        CompilationRecoveryClassification.PROVIDER_UNCERTAIN,
+        CompilationRecoveryClassification.INVALID_TERMINAL,
+        CompilationRecoveryClassification.PERSISTED,
+        CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED,
+    ],
+)
+async def test_recovery_never_constructs_a_runtime(classification) -> None:
+    state = _state(
+        ids(),
+        classification,
+        compilation_id=uuid4()
+        if classification is CompilationRecoveryClassification.PERSISTED
+        else None,
+    )
+    backend = _Backend(state)
+
+    def forbidden(configuration):
+        pytest.fail("durable recovery constructed a provider runtime")
+
+    await GuideCompilationOrchestrator(backend, forbidden).execute(
+        ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["configuration", "identity"])
+async def test_runtime_composition_failure_precedes_dispatch_fence(failure) -> None:
+    from app.modules.projects.api import ProjectGuideCompilationExecutionError
+    from app.interfaces.project_agents import ProjectAgentRuntimeConfigurationError
+
+    state = _state(ids(), CompilationRecoveryClassification.RESERVED)
+    backend = _Backend(state)
+    runtime = _Runtime()
+
+    def factory(configuration):
+        assert configuration == backend.context_value.runtime_configuration
+        if failure == "configuration":
+            raise ProjectAgentRuntimeConfigurationError("unavailable")
+        runtime.identity = None
+        return runtime
+
+    with pytest.raises(ProjectGuideCompilationExecutionError) as error:
+        await GuideCompilationOrchestrator(backend, factory).execute(
+            ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
+        )
+    assert error.value.code == "runtime_unavailable"
+    assert backend.calls == ["load", "context"]
+    assert runtime.calls == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", [False, True])
+async def test_cleanup_failure_preserves_known_result_without_second_inference(invalid):
+    """An ART scope-close failure cannot erase a committed known provider outcome."""
+    state = _state(ids(), CompilationRecoveryClassification.RESERVED)
+    backend = _Backend(state)
+    runtime = _Runtime(ProjectGuideCompilationInvalidOutputError("schema_invalid") if invalid else result())
+
+    @asynccontextmanager
+    async def failing_close(_state, _context):
+        yield object()
+        raise RuntimeError("scratch cleanup unavailable")
+
+    backend.capabilities = failing_close
+    receipt = await GuideCompilationOrchestrator(backend, lambda configuration: runtime).execute(
+        ProjectGuideCompilationExecutionCommand(attempt_id=state.preflight_facts.attempt_id)
+    )
+    expected = (ProjectGuideCompilationExecutionClassification.INVALID_TERMINAL if invalid
+                else ProjectGuideCompilationExecutionClassification.PERSISTED)
+    assert receipt.classification is expected
+    assert runtime.calls == 1
+    if invalid:
+        assert "record_invalid:schema_invalid" in backend.calls
+        assert "persist" not in backend.calls
+    else:
+        assert backend.calls[-2:] == ["record_accepted", "persist"]
+
+
+@pytest.mark.parametrize('operation,fault,code', [
+    ('load', 'missing', 'attempt_unavailable'),
+    ('load', 'storage', 'storage_unavailable'),
+    ('context', 'material', 'context_unavailable'),
+    ('context', 'integrity', 'context_unavailable'),
+    ('context', 'storage', 'storage_unavailable'),
+])
+async def test_execution_backend_sanitizes_owner_failures(monkeypatch, operation, fault, code):
+    from unittest.mock import AsyncMock
+    from sqlalchemy.exc import SQLAlchemyError
+    from app.modules.projects.api import ProjectGuideCompilationExecutionError
+    from app.modules.projects.api.guide_documents import GuideDocumentUnavailable
+    from app.modules.projects.guide_compilation.repository import GuideCompilationIntegrityError
+    from app.modules.projects.guide_compilation.service import CompilationExecutionStateUnavailable
+    from .test_hidden_orchestrator_postgresql import _backend
+
+    @asynccontextmanager
+    async def sessions():
+        yield object()
+
+    errors = {
+        'missing': CompilationExecutionStateUnavailable('attempt_unavailable'),
+        'storage': SQLAlchemyError('private database details'),
+        'material': GuideDocumentUnavailable('private source details'),
+        'integrity': GuideCompilationIntegrityError('private lineage details'),
+    }
+    called = AsyncMock(side_effect=errors[fault])
+    owner = 'app.modules.projects.guide_compilation.orchestrator.'
+    monkeypatch.setattr(owner + ('load_compilation_execution_state' if operation == 'load'
+        else 'build_project_guide_compilation_context'), called)
+    backend = _backend(sessions)
+    with pytest.raises(ProjectGuideCompilationExecutionError) as failure:
+        await getattr(backend, operation)(uuid4())
+    assert failure.value.code == code
+    assert 'private' not in str(failure.value)
+    called.assert_awaited_once()

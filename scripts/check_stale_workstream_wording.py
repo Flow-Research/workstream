@@ -264,9 +264,6 @@ ALLOWLISTED_PATTERN_LINES = {
         "backend/tests/test_alembic.py": (
             'LEGACY_EVALUATION_STATUS = "auto_checking"',
         ),
-        "backend/scripts/week2_api_e2e.py": (
-            'LEGACY_EVALUATION_STATUS = "auto_checking"',
-        ),
     },
     "auto\\s*[\"']?\\s*\\\\?\\s*\\+\\s*[\"']?_checking": {},
 }

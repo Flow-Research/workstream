@@ -21,7 +21,6 @@ def make_diagnostic_case() -> SimpleNamespace:
         guide_version="v1",
         source_snapshot_id=snapshot_id,
         source_snapshot_hash=f"sha256:{'a' * 64}",
-        output_post_submit_checker_policy_id=None,
     )
     repository = SimpleNamespace(
         get_project=AsyncMock(return_value=project),
@@ -31,25 +30,12 @@ def make_diagnostic_case() -> SimpleNamespace:
         lock_guide_sufficiency_report=AsyncMock(return_value=target),
         lock_submission_artifact_policies=AsyncMock(return_value=[target]),
         lock_submission_artifact_policy_diagnostic=AsyncMock(return_value=target),
-        lock_post_submit_checker_policy=AsyncMock(return_value=None),
     )
     return SimpleNamespace(
         project_id=project_id, guide_id=guide_id, target_id=target_id,
         project=project, guide=guide, target=target, repository=repository,
         authorization=SimpleNamespace(require=AsyncMock()),
     )
-
-
-def attach_post_submit_policy(case: SimpleNamespace) -> SimpleNamespace:
-    """Attach one matching output without validating its business rules."""
-    policy = SimpleNamespace(
-        id=str(uuid4()), project_id=case.project_id, guide_id=case.guide_id,
-        guide_version="v1", source_snapshot_id=case.target.source_snapshot_id,
-        source_snapshot_hash=case.target.source_snapshot_hash,
-    )
-    case.target.output_post_submit_checker_policy_id = policy.id
-    case.repository.lock_post_submit_checker_policy.return_value = policy
-    return policy
 
 
 async def read_diagnostic(case: SimpleNamespace, action: ActionId) -> Any:

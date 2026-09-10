@@ -163,6 +163,11 @@ class _Admission:
         self.drift = drift
         self.source = None
 
+    async def guide_document_media_type(self, request):
+        if self.authority is not None:
+            assert self.authority.transaction_active
+        return "application/pdf"
+
     async def admit(
         self,
         request: Any,
@@ -211,6 +216,7 @@ class _Orchestrator:
     ) -> None:
         self.authority = authority
         self.resolution = resolution
+        self.continuations = []
         self.puts = 0
         self.resolutions = 0
 
@@ -234,7 +240,7 @@ class _Orchestrator:
         assert attempt_id == ATTEMPT_ID
         assert source.commitment.sha256.startswith("sha256:")
         self.puts += 1
-        return "stored_pending_verification"
+        return "document_stored"
 
 
 class _UnavailableCommand:
@@ -277,6 +283,7 @@ GUIDE_ID = uuid4()
 SNAPSHOT_ID = uuid4()
 ITEM_ID = uuid4()
 ATTEMPT_ID = uuid4()
+DOCUMENT_BYTES = b"%PDF-1.7\nGuide fixture\n%%EOF"
 
 
 def _service(
@@ -289,7 +296,12 @@ def _service(
     async def runtime():
         yield preparation, admission, orchestrator
 
-    return GuideArtifactIngestService(runtime, authority)
+    async def on_document_stored(attempt_id):
+        assert not authority.transaction_active
+        assert preparation.pending_cleanup_count == 0
+        orchestrator.continuations.append(attempt_id)
+
+    return GuideArtifactIngestService(runtime, authority, on_document_stored)
 
 
 @pytest.mark.asyncio
@@ -537,11 +549,12 @@ async def test_guide_ingest_uses_server_commitment_and_existing_put_path(
             guide_source_snapshot_id=SNAPSHOT_ID,
             source_item_id=ITEM_ID,
             idempotency_key=uuid4(),
-            byte_source=_bytes(b"guide ", b"bytes"),
+            byte_source=_bytes(DOCUMENT_BYTES[:7], DOCUMENT_BYTES[7:]),
         )
         assert result.sha256 == authority.admissions[0].sha256
-        assert result.byte_count == 11
-        assert result.status == "stored_pending_verification"
+        assert result.byte_count == len(DOCUMENT_BYTES)
+        assert orchestrator.continuations == [ATTEMPT_ID]
+        assert result.status == "document_stored"
         assert orchestrator.puts == 1
         assert orchestrator.resolutions == 0
         assert authority.intakes == [(PROJECT_ID, GUIDE_ID, SNAPSHOT_ID, ITEM_ID)]
@@ -574,7 +587,6 @@ async def test_guide_ingest_rejects_invalid_logical_role_before_preparation(
         operation_identity="operation",
         request_digest="sha256:" + "a" * 64,
         logical_role="not-guide-source",
-        media_type="application/octet-stream",
         byte_source=source(),
     )
     try:
@@ -609,7 +621,7 @@ async def test_guide_ingest_cleans_prepared_bytes_when_prep_commit_fails(
                 guide_source_snapshot_id=SNAPSHOT_ID,
                 source_item_id=ITEM_ID,
                 idempotency_key=uuid4(),
-                byte_source=_bytes(b"prepared then rolled back"),
+                byte_source=_bytes(DOCUMENT_BYTES),
             )
         assert orchestrator.puts == 0
         assert authority.closed
@@ -637,7 +649,7 @@ async def test_exact_replay_observes_without_second_provider_put(tmp_path: Path)
             guide_source_snapshot_id=SNAPSHOT_ID,
             source_item_id=ITEM_ID,
             idempotency_key=uuid4(),
-            byte_source=_bytes(b"same bytes"),
+            byte_source=_bytes(DOCUMENT_BYTES),
         )
         assert result.replayed
         assert result.status == "stale"
@@ -651,8 +663,8 @@ async def test_exact_replay_observes_without_second_provider_put(tmp_path: Path)
 @pytest.mark.parametrize(
     ("persisted_status", "resolved_status", "expected_status", "expected_execute"),
     [
-        ("absent_replay_required", "unused", "stored_pending_verification", 1),
-        (None, "missing", "stored_pending_verification", 1),
+        ("absent_replay_required", "unused", "document_stored", 1),
+        (None, "missing", "document_stored", 1),
         ("ambiguous", "stale", "stale", 0),
     ],
 )
@@ -673,7 +685,7 @@ async def test_committed_put_replay_uses_persisted_resolution(
         assert attempt_id == ATTEMPT_ID
         assert source == "source"
         executed += 1
-        return "stored_pending_verification"
+        return "document_stored"
 
     async def resolve_put_attempt(attempt_id: UUID) -> str:
         assert attempt_id == ATTEMPT_ID
@@ -712,7 +724,7 @@ async def test_guide_admission_rejects_partial_lineage_claims(tmp_path: Path) ->
     """Require all three caller lineage claims together or none of them."""
     preparation, manager = _preparation(tmp_path)
     prepared = await preparation.prepare(
-        _bytes(b"guide"),
+        _bytes(DOCUMENT_BYTES),
         media_type="application/octet-stream",
     )
     try:
@@ -752,7 +764,7 @@ async def test_canonical_lineage_drift_stops_before_provider_io(tmp_path: Path) 
                 guide_source_snapshot_id=SNAPSHOT_ID,
                 source_item_id=ITEM_ID,
                 idempotency_key=uuid4(),
-                byte_source=_bytes(b"guide"),
+                byte_source=_bytes(DOCUMENT_BYTES),
             )
         assert orchestrator.puts == 0
         assert preparation.pending_cleanup_count == 0

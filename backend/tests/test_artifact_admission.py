@@ -1,7 +1,10 @@
 """PostgreSQL proofs for atomic durable-byte admission before provider I/O."""
 
 # pyright: reportArgumentType=false, reportAttributeAccessIssue=false
+
 from __future__ import annotations
+
+from project_create_fixtures import guide_example_columns, guide_snapshot_columns
 
 import asyncio
 from collections.abc import Iterator
@@ -186,6 +189,7 @@ def _settings(tmp_path: Path, *, maximum_bytes: int = 1024) -> Settings:
     durable_root = tmp_path / "durable"
     durable_root.mkdir(mode=0o700, parents=True)
     return Settings(
+        _env_file=None,
         **artifact_admission_limit_settings(maximum_bytes),
         environment="test",
         artifact_store_backend="local",
@@ -284,15 +288,15 @@ async def _seed_guide(
     async with suspend_historical_product_custody(
         session,
         table="project_guides",
-        triggers=("guide_mutation_product_custody",),
+        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody"),
     ):
         session.add(
             ProjectGuide(
+                **guide_example_columns(),
                 id=guide_id,
                 project_id=project_id,
                 version="v1",
                 status="draft",
-                content_markdown="# Guide",
                 created_by="test",
             )
         )
@@ -308,9 +312,7 @@ async def _seed_guide(
                 project_id=project_id,
                 guide_id=guide_id,
                 guide_version="v1",
-                manifest_schema_version="v1",
-                manifest_json={"items": [item_id]},
-                bundle_hash=canonical_json_hash({"items": [item_id]}),
+                **guide_snapshot_columns(snapshot_id, items=[item_id]),
                 captured_by=captured_by,
             )
         )
@@ -325,9 +327,9 @@ async def _seed_guide(
                 id=item_id,
                 source_snapshot_id=snapshot_id,
                 item_order=0,
-                source_kind="inline",
-                source_label="guide.md",
-                ingestion_adapter="inline",
+                source_kind="document",
+                source_label="guide.pdf",
+                ingestion_adapter="upload",
                 media_type=media_type,
             )
         )
@@ -353,7 +355,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     contributor_link_id = str(uuid4())
     checker_run_id = str(uuid4())
     guide_version = "v1"
-    snapshot_hash = canonical_json_hash({"items": []})
+    snapshot_hash = guide_snapshot_columns(snapshot_id)["bundle_hash"]
     submission_policy_body = {"required_artifacts": []}
     submission_policy_hash = canonical_json_hash(submission_policy_body)
     effective_policy_body = {"required_artifacts": [], "artifact_hash_algorithm": "sha256"}
@@ -390,15 +392,15 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     async with suspend_historical_product_custody(
         session,
         table="project_guides",
-        triggers=("guide_mutation_product_custody",),
+        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody"),
     ):
         session.add(
             ProjectGuide(
+                **guide_example_columns(),
                 id=guide_id,
                 project_id=project_id,
                 version=guide_version,
                 status="draft",
-                content_markdown="# Checker guide",
                 approved_by="setup-actor",
                 effective_at=now,
                 created_by="setup-actor",
@@ -416,9 +418,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
                 project_id=project_id,
                 guide_id=guide_id,
                 guide_version=guide_version,
-                manifest_schema_version="v1",
-                manifest_json={"items": []},
-                bundle_hash=snapshot_hash,
+                **guide_snapshot_columns(snapshot_id),
                 captured_by="setup-actor",
             )
         )
@@ -743,34 +743,23 @@ async def _admit_guide_source(session, settings, namespace, context, source):
 
 async def _admit_checker_output(session, settings, namespace, source):
     """Create one exact task-scoped checker-output attempt for shared-path tests."""
-    actor_id, link_id = uuid4(), uuid4()
-    context = _context(
-        actor_profile_id=actor_id,
-        identity_link_id=link_id,
-        actor_kind=ActorKind.SERVICE,
-    )
     project_id, task_id, checker_run_id = await _seed_checker_output_relationships(session)
-    session.add(
-        ActorProfile(
-            id=str(actor_id),
-            actor_kind="service",
-            status="active",
+    existing = (await session.execute(
+        select(ActorProfile.id, ActorIdentityLink.id)
+        .join(ActorIdentityLink, ActorIdentityLink.actor_profile_id == ActorProfile.id)
+        .where(ActorProfile.service_identity == ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value)
+    )).one_or_none()
+    if existing is None:
+        actor_id, link_id = uuid4(), uuid4()
+        session.add(ActorProfile(id=str(actor_id), actor_kind="service", status="active",
             provisioning_method="manual_service_provisioning",
-            service_identity=ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value,
-            created_by="test",
-        )
-    )
-    session.add(
-        ActorIdentityLink(
-            id=str(link_id),
-            actor_profile_id=str(actor_id),
-            issuer="https://issuer.example.test",
-            subject=f"checker-output-{actor_id}",
-            subject_kind="service",
-            status="active",
-            linked_by="test",
-        )
-    )
+            service_identity=ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value, created_by="test"))
+        session.add(ActorIdentityLink(id=str(link_id), actor_profile_id=str(actor_id),
+            issuer="https://issuer.example.test", subject=f"checker-output-{actor_id}",
+            subject_kind="service", status="active", linked_by="test"))
+    else:
+        actor_id, link_id = (UUID(value) for value in existing)
+    context = _context(actor_profile_id=actor_id, identity_link_id=link_id, actor_kind=ActorKind.SERVICE)
     await session.commit()
     result = await ArtifactAdmissionService(session, settings, namespace).admit(
         CheckerOutputArtifactAdmissionRequest(
@@ -783,15 +772,8 @@ async def _admit_checker_output(session, settings, namespace, source):
     return project_id, task_id, checker_run_id, result
 
 
-async def test_committed_put_and_independent_verification_are_fenced(
-    admission_database_env: str,
-    tmp_path: Path,
-) -> None:
-    settings = _settings(tmp_path)
-    namespace = _namespace(settings)
-    context = _context()
-    engine = create_async_engine(admission_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+def _local_store(settings, namespace):
+    """Build the local provider through its namespace claim."""
     assert settings.artifact_local_root is not None
     bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
     store = bootstrap.initialize_after_namespace_claim(
@@ -801,31 +783,28 @@ async def test_committed_put_and_independent_verification_are_fenced(
             namespace_fingerprint=namespace.namespace_fingerprint,
         )
     )
+    return bootstrap, store
+
+
+async def test_committed_put_and_independent_verification_are_fenced(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    bootstrap, store = _local_store(settings, namespace)
     authority = _AllowArtifactAuthority()
     try:
         async with factory() as session:
             async with minted_source(
-                tmp_path / "fenced-guide-source",
+                tmp_path / "fenced-checker-output",
                 b"independently verified bytes",
                 media_type="text/plain",
             ) as source:
-                _, guide_item_id = await _seed_guide(
-                    session,
-                    context=context,
-                    content_hash=source.commitment.sha256,
-                    media_type=source.commitment.media_type,
-                )
-                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
-                    GuideArtifactAdmissionRequest(
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                        operation_identity=_guide_operation(guide_item_id),
-                        request_digest="sha256:" + "a" * 64,
-                    ),
-                    guide_prepared_authorization=(
-                        prepared := _AllowGuidePreparedAuthorization(context.actor_profile_id)
-                    ),  # type: ignore[arg-type]
-                    prepared_authorization=prepared.handle,
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, authority
@@ -892,15 +871,7 @@ async def test_every_provider_operation_revalidates_namespace_before_io(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
 
     class DriftStore:
         identity = replace(store.identity, provider_key="drift")
@@ -917,8 +888,8 @@ async def test_every_provider_operation_revalidates_namespace_before_io(
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "namespace-fence", b"fenced") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 drifted = ArtifactStorageOrchestrator(
                     session, DriftStore(), namespace, settings, _AllowArtifactAuthority()
@@ -959,15 +930,7 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
     context = _context()
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     authority = _AllowArtifactAuthority()
     try:
         async with factory() as session:
@@ -1263,15 +1226,7 @@ async def test_terminal_authority_revocation_writes_zero_terminal_facts(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(
@@ -1481,15 +1436,7 @@ async def test_acknowledgement_loss_is_observed_without_second_put(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "ack-loss", b"ack was lost") as source:
@@ -1502,15 +1449,15 @@ async def test_acknowledgement_loss_is_observed_without_second_put(
                 )
                 assert (
                     await orchestrator.resolve_put_attempt(admission.attempt_id)
-                    == "observed_confirmed"
+                    == "document_stored"
                 )
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert attempt is not None
                 assert attempt.status == "object_confirmed"
-                assert attempt.terminal_result_code == "observed_confirmed"
+                assert attempt.terminal_result_code == "document_stored_observed"
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
-                assert await _count(session, ArtifactVerificationJob) == 1
+                assert await _count(session, ArtifactVerificationJob) == 0
                 for operation in ("update", "delete"):
                     statement = (
                         "update artifact_put_observation_receipts set execution_generation = "
@@ -1534,15 +1481,7 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         job_ids: list[str] = []
         async with factory() as seed_session:
@@ -1553,8 +1492,8 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                 async with minted_source(
                     tmp_path / f"verification-scan-{index}", f"job-{index}".encode()
                 ) as source:
-                    admission = await _admit_guide_source(
-                        seed_session, settings, namespace, _context(), source
+                    _, _, _, admission = await _admit_checker_output(
+                        seed_session, settings, namespace, source
                     )
                     await orchestrator.execute_committed_put(
                         attempt_id=admission.attempt_id, source=source
@@ -1667,15 +1606,7 @@ async def test_caller_replay_reacquires_released_capacity_before_put(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "reacquire", b"replay bytes") as source:
@@ -1691,7 +1622,7 @@ async def test_caller_replay_reacquires_released_capacity_before_put(
                         attempt_id=admission.attempt_id,
                         source=source,
                     )
-                    == "stored_pending_verification"
+                    == "document_stored"
                 )
                 charges = (await session.execute(select(ArtifactAdmissionCharge))).scalars().all()
                 scopes = (await session.execute(select(ArtifactAdmissionScope))).scalars().all()
@@ -1704,7 +1635,7 @@ async def test_caller_replay_reacquires_released_capacity_before_put(
                 assert attempt.execution_generation == 2
                 assert attempt.status == "object_confirmed"
                 assert await _count(session, ArtifactOperationReceipt) == 1
-                assert await _count(session, ArtifactVerificationJob) == 1
+                assert await _count(session, ArtifactVerificationJob) == 0
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -1718,15 +1649,7 @@ async def test_existing_replica_immutable_fact_conflict_is_fenced(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "replica-conflict", b"expected bytes") as source:
@@ -1788,22 +1711,14 @@ async def test_verification_resource_drift_after_read_is_stale_without_terminal_
 ) -> None:
     settings = _settings(tmp_path)
     namespace = _namespace(settings)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "verification-drift", b"expected") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -1873,20 +1788,12 @@ async def test_verification_rechecks_relationship_after_prepare_before_io(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "preclaim-drift", b"expected") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -1961,15 +1868,7 @@ async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
 
     class PhaseAuthority(_AllowArtifactAuthority):
         def __init__(self) -> None:
@@ -1985,8 +1884,8 @@ async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
             attempts: list[ArtifactPutAttempt] = []
             for name, value in (("first", b"first"), ("second", b"second")):
                 async with minted_source(tmp_path / name, value) as source:
-                    admission = await _admit_guide_source(
-                        session, settings, namespace, _context(), source
+                    _, _, _, admission = await _admit_checker_output(
+                        session, settings, namespace, source
                     )
                     await ArtifactStorageOrchestrator(
                         session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2037,20 +1936,12 @@ async def test_verification_rechecks_authorized_object_ref_before_io(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "preclaim-object-ref-drift", b"expected") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2100,22 +1991,14 @@ async def test_verification_rechecks_authorized_object_ref_after_io(
 ) -> None:
     settings = _settings(tmp_path)
     namespace = _namespace(settings)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "postread-object-ref-drift", b"expected") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2168,20 +2051,12 @@ async def test_verification_terminal_result_matrix(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / expected, b"verification matrix") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2222,22 +2097,14 @@ async def test_verification_terminal_authority_denial_writes_zero_result_facts(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(
                 tmp_path / f"verify-{denial_reason}", denial_reason.encode()
             ) as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2285,20 +2152,12 @@ async def test_verification_unavailable_retries_then_exhausts(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "unavailable", b"retry") as source:
-                admission = await _admit_guide_source(
-                    session, settings, namespace, _context(), source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
@@ -2338,6 +2197,12 @@ async def test_verification_unavailable_retries_then_exhausts(
         await engine.dispose()
 
 
+async def _assert_no_admission_rows(session, *models):
+    """A refused admission cannot leave any of the named durable side effects."""
+    for model in models:
+        assert await _count(session, model) == 0
+
+
 async def test_guide_admission_derives_three_scopes_without_provider_evidence(
     admission_database_env: str,
     tmp_path: Path,
@@ -2352,7 +2217,7 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
             async with minted_source(
                 tmp_path / "scratch-source",
                 b"guide",
-                media_type="text/markdown",
+                media_type="application/pdf",
             ) as source:
                 expected_sha256 = source.commitment.sha256
                 expected_byte_count = source.commitment.byte_count
@@ -2384,10 +2249,8 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                         guide_prepared_authorization=denied,  # type: ignore[arg-type]
                         prepared_authorization=denied.handle,
                     )
-                assert await _count(session, ArtifactStorageNamespace) == 0
-                assert await _count(session, ArtifactAdmissionScope) == 0
-                assert await _count(session, ArtifactAdmissionCharge) == 0
-                assert await _count(session, ArtifactPutAttempt) == 0
+                await _assert_no_admission_rows(session, ArtifactStorageNamespace,
+                    ArtifactAdmissionScope, ArtifactAdmissionCharge, ArtifactPutAttempt)
                 await session.rollback()
                 mismatched = _AllowGuidePreparedAuthorization(context.actor_profile_id)
                 with pytest.raises(
@@ -2407,9 +2270,8 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                         guide_prepared_authorization=mismatched,  # type: ignore[arg-type]
                         prepared_authorization=mismatched.handle,
                     )
-                assert await _count(session, ArtifactAdmissionScope) == 0
-                assert await _count(session, ArtifactAdmissionCharge) == 0
-                assert await _count(session, ArtifactPutAttempt) == 0
+                await _assert_no_admission_rows(session, ArtifactAdmissionScope,
+                    ArtifactAdmissionCharge, ArtifactPutAttempt)
                 await session.rollback()
                 prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
                 async with session.begin():
@@ -2436,7 +2298,7 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
             async with minted_source(
                 tmp_path / "wrong-source",
                 b"different guide bytes",
-                media_type="text/markdown",
+                media_type="application/pdf",
             ) as wrong_source:
                 with pytest.raises(
                     ArtifactAdmissionRelationshipError,
@@ -2721,7 +2583,7 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                 seed_session,
                 context=context,
                 content_hash="sha256:" + "a" * 64,
-                media_type="text/markdown",
+                media_type="application/pdf",
             )
 
         async with factory() as lock_session:
@@ -3045,15 +2907,7 @@ async def test_checker_output_shared_put_and_verification_lifecycle(
     """Task-scoped checker output survives every shared terminal byte outcome."""
     settings = _settings(tmp_path)
     namespace = _namespace(settings)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:

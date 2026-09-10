@@ -429,3 +429,20 @@ async def test_receipt_actor_identity_link_must_belong_to_actor(clean_postgres_d
                 await session.flush()
         assert await stored_state(factory, command) == before
         await finalize(factory, values, command)
+
+
+@pytest.mark.parametrize("kind", ["actor", "deactivate", "link"])
+async def test_sql_finalization_rejects_revocation_after_valid_evidence(clean_postgres_database, kind):
+    from .pg_authorization import revoke, seed_lifecycle_admin
+    async with database_case(clean_postgres_database) as (values, factory, command):
+        admin = await seed_lifecycle_admin(factory)
+        before = await stored_state(factory, command)
+        with pytest.raises(DBAPIError, match="finalization authority mismatch") as error:
+            async with factory() as session, session.begin():
+                row, _ = await pending_receipt(session, values, command)
+                await revoke(session, admin, values, kind)
+                session.add(row)
+                await session.flush()
+        assert error.value.orig.sqlstate == "23514"
+        assert await stored_state(factory, command) == before
+        await finalize(factory, values, command)

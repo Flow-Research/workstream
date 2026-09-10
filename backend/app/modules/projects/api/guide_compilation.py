@@ -27,6 +27,34 @@ class ProjectGuideCompilationExecutionCommand(BaseModel):
     attempt_id: UUID
 
 
+class ProjectGuideCompilationDelivery(BaseModel):
+    """The broker's actual delivery identity and exact immutable setup selector."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    project_id: UUID
+    guide_id: UUID
+    source_snapshot_id: UUID
+    setup_run_id: UUID
+    setup_generation: Annotated[int, Field(gt=0)]
+    task_id: UUID
+
+
+class ProjectGuideCompilationDeliveryError(RuntimeError):
+    """Reject a broker selector that does not identify the current setup generation."""
+
+    def __init__(self) -> None:
+        super().__init__("stale compilation delivery")
+
+
+class ProjectGuideCompilationDeliveryPort(Protocol):
+    """Deliver the exact generation through the PROJECTS-owned coordinator."""
+
+    async def run(self, delivery: ProjectGuideCompilationDelivery) -> dict:
+        """Return bounded terminal or recoverable diagnostics for this delivery."""
+        ...
+
+
 class ProjectGuideCompilationExecutionResult(BaseModel):
     """Bounded receipt without guide, provider, or authorization material."""
 
@@ -44,6 +72,7 @@ ProjectGuideCompilationExecutionErrorCode = Literal[
     "context_unavailable",
     "service_authority_denied",
     "storage_unavailable",
+    "runtime_unavailable",
 ]
 
 
@@ -94,9 +123,12 @@ class ProjectGuideSetupFinalizationReceipt(BaseModel):
 class ProjectGuideSetupFinalizationError(RuntimeError):
     """Concealed failure; callers must roll back the current root transaction."""
 
-    def __init__(self, code: Literal[
-        "source_state_unavailable", "service_authority_denied", "storage_unavailable"
-    ]) -> None:
+    def __init__(
+        self,
+        code: Literal[
+            "source_state_unavailable", "service_authority_denied", "storage_unavailable"
+        ],
+    ) -> None:
         super().__init__(code)
         self.code = code
 
@@ -110,11 +142,13 @@ class ProjectGuideSetupFinalizationPort(Protocol):
 
 
 __all__ = (
+    "ProjectGuideCompilationDelivery",
+    "ProjectGuideCompilationDeliveryError",
+    "ProjectGuideCompilationDeliveryPort",
     "ProjectGuideSetupFinalizationCommand",
     "ProjectGuideSetupFinalizationReceipt",
     "ProjectGuideSetupFinalizationError",
     "ProjectGuideSetupFinalizationPort",
-
     "ProjectGuideCompilationExecutionClassification",
     "ProjectGuideCompilationExecutionCommand",
     "ProjectGuideCompilationExecutionError",

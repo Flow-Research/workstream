@@ -1,12 +1,15 @@
-"""Project-agent runtime adapter factory."""
-
-from __future__ import annotations
+"""Explicit typed composition for project-guide agent runtimes."""
 
 from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
-from app.core.config import Settings
+from app.interfaces.external_services import ExternalServiceAdapterFactory
 from app.interfaces.project_agents import ProjectGuideAgentRuntime
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 
 
-def build_project_guide_agent_runtime(settings: Settings) -> ProjectGuideAgentRuntime:
-    """Build the configured project guide setup agent runtime."""
-    return OpenAIAgentSdkProjectGuideRuntime(settings)
+def create_project_guide_runtime(
+    configuration: ProjectGuideRuntimeConfiguration,
+) -> ProjectGuideAgentRuntime:
+    """Construct only the explicitly registered runtime chosen by this attempt."""
+    factory = ExternalServiceAdapterFactory[ProjectGuideAgentRuntime]("project_guide_compilation")
+    factory.register("openai_agents_sdk", lambda: OpenAIAgentSdkProjectGuideRuntime(configuration))
+    return factory.create(configuration.runtime_key)

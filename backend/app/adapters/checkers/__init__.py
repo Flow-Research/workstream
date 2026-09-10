@@ -4,11 +4,17 @@ import asyncio
 from typing import Any, BinaryIO, Protocol
 from pathlib import Path
 
+from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
+
 from app.modules.checkers.api import (
     PreSubmissionExecutionFacts,
     PreSubmissionInfrastructureUnavailableError,
 )
-from app.modules.checkers.catalogue import PreSubmissionCheckerCatalogue
+from app.modules.checkers.catalogue import (
+    PreSubmissionCheckerCatalogue,
+    project_guide_pre_submission_capabilities,
+    build_pre_submission_checker_catalogue,
+)
 from app.modules.checkers.pre_submit_execution import (
     DefaultPreSubmissionExecutionError,
     DefaultPreSubmissionExecutionInput,
@@ -36,13 +42,9 @@ class _PublicFactsCheckerProcessor:
     def abort(self) -> None:
         self._processor.abort()
 
-    async def process(
-        self, reader: BinaryIO, workspace: Path
-    ) -> PreSubmissionExecutionFacts:
+    async def process(self, reader: BinaryIO, workspace: Path) -> PreSubmissionExecutionFacts:
         try:
-            result = await asyncio.to_thread(
-                self._processor.process_blocking, reader, workspace
-            )
+            result = await asyncio.to_thread(self._processor.process_blocking, reader, workspace)
             return result.bounded_facts()
         except DefaultPreSubmissionExecutionError as exc:
             raise PreSubmissionInfrastructureUnavailableError(str(exc)) from exc
@@ -76,3 +78,8 @@ class PreSubmitCheckerExecutionAdapter:
                 ),
             )
         )
+
+
+def project_guide_pre_submission_catalogue() -> PreSubmissionCapabilityProjection:
+    """Compose the canonical immutable pre-submit capabilities for guide setup."""
+    return project_guide_pre_submission_capabilities(build_pre_submission_checker_catalogue())

@@ -99,26 +99,8 @@ class GuideArtifactIngestAuthorityFacts:
 
 @final
 @dataclass(frozen=True, slots=True)
-class GuideSourceBindingAuthorityFacts:
-    """Canonical verified guide lineage bound to one setup generation."""
-
-    project_id: UUID
-    guide_id: UUID
-    guide_source_snapshot_id: UUID
-    guide_source_item_id: UUID
-    project_setup_run_id: UUID
-    setup_generation: int
-    content_id: UUID
-    verified_replica_id: UUID
-    sha256: str
-    byte_count: int
-    logical_role: str
-
-
-@final
-@dataclass(frozen=True, slots=True)
 class GuideSourceReadAuthorityFacts:
-    """Canonical fixed-reader facts for one verified guide materialization."""
+    """Exact committed original and already-fenced setup attempt for one file read."""
 
     project_id: UUID
     guide_id: UUID
@@ -126,13 +108,14 @@ class GuideSourceReadAuthorityFacts:
     guide_source_item_id: UUID
     project_setup_run_id: UUID
     setup_generation: int
-    binding_id: UUID
+    compilation_attempt_id: UUID
+    manifest_sha256: str
+    document_version_id: UUID
+    put_attempt_id: UUID
     content_id: UUID
-    verified_replica_id: UUID
+    replica_id: UUID
     storage_namespace_id: str
     namespace_fingerprint: str
-    verification_receipt_id: UUID
-    verification_generation: int
     sha256: str
     byte_count: int
     media_type: str
@@ -310,7 +293,7 @@ class ArtifactRecoveryAuthorityFacts:
     """Canonical facts bound to one exact Operator retry decision."""
 
     project_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     submission_id: UUID | None
     source_verification_job_id: UUID
     expected_source_job_cas_version: int
@@ -405,3 +388,7 @@ class DenyArtifactOperatorAuthority:
     ) -> ArtifactOperatorAuthorizationEvidence:
         del authorization_context, facts
         raise ArtifactAuthorityDeniedError("artifact Operator action is unavailable")
+
+
+# Only these current producers use post-put full-object verification.
+VERIFICATION_PRODUCERS = ("checker_output", "submission_bundle")

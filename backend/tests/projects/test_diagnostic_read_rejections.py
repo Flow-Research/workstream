@@ -10,7 +10,7 @@ from projects.client_fixtures import (
     clear_project_settings_cache_after_test as clear_project_settings_cache_after_test,
 )
 from projects.diagnostic_read_fixtures import (
-    attach_post_submit_policy, make_diagnostic_case, read_diagnostic,
+    make_diagnostic_case, read_diagnostic,
 )
 
 
@@ -22,17 +22,12 @@ def _assert_concealed(
     case.authorization.require.assert_awaited_once()
     called_action, context = case.authorization.require.await_args.args
     assert called_action is action
-    assert action in {
-        ActionId.PROJECT_SETUP_RUN_READ, ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-    }
+    assert action is ActionId.PROJECT_SETUP_RUN_READ
     assert context.model_dump(mode="json") == {
         "resource_type": "project_diagnostic", "resource_id": case.target_id,
         "scope_project_id": case.project_id, "guide_id": case.guide_id,
         "guide_version": "v1" if guide_exists else None,
-        "target_kind": (
-            "post_submit_checker_policy_setup"
-            if action is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ else "setup_run"
-        ),
+        "target_kind": "setup_run",
         "project_exists": project_exists, "guide_exists": guide_exists,
         "target_exists": False, "target_binding_digest": None,
         "source_snapshot_id": None, "source_snapshot_hash": None,
@@ -101,26 +96,6 @@ async def test_foreign_diagnostic_record_is_concealed(field: str) -> None:
     _assert_concealed(case, ActionId.PROJECT_SETUP_RUN_READ)
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("field", [
-    "missing", "project_id", "guide_id", "guide_version", "source_snapshot_id", "source_snapshot_hash",
-])
-async def test_post_submit_diagnostic_rejects_invalid_policy(field: str) -> None:
-    """Each policy lineage mismatch independently conceals the setup diagnostic."""
-    case = make_diagnostic_case()
-    policy = attach_post_submit_policy(case)
-    if field == "missing":
-        case.repository.lock_post_submit_checker_policy.return_value = None
-    else:
-        value = f"sha256:{'b' * 64}" if field == "source_snapshot_hash" else str(uuid4())
-        setattr(policy, field, value)
-    action = ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ
-
-    with pytest.raises(RuntimeError, match="missing diagnostic authorization unexpectedly allowed"):
-        await read_diagnostic(case, action)
-
-    case.repository.lock_post_submit_checker_policy.assert_awaited_once_with(policy.id)
-    _assert_concealed(case, action)
 
 
 @pytest.mark.asyncio

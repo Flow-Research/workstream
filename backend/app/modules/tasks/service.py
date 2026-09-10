@@ -1562,7 +1562,6 @@ class TaskService:
             guide=TaskGuideContext(
                 id=context.guide.id,
                 version=context.guide.version,
-                content_markdown=context.guide.content_markdown,
                 change_summary=context.guide.change_summary,
                 effective_at=context.guide.effective_at,
             ),

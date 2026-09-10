@@ -66,11 +66,6 @@ ART_CUSTODY_EXPECTATIONS = {
         "WS-XINT-002-04B",
         "active",
     ),
-    "artifact.guide_source.binding.create": (
-        "artifact.binding.create",
-        "WS-XINT-002-04B",
-        "active",
-    ),
     "artifact.submission_bundle.prepare": (
         "submission.create",
         "WS-XINT-002-05A",
@@ -297,10 +292,6 @@ expected = {
         "project.effective_policy.read",
         "WS-AUTH-001-11C1",
     ),
-    "project.post_submit_checker_policy_setup.read": (
-        "project.effective_policy.read",
-        "WS-AUTH-001-11C1",
-    ),
     "project.effective_submission_artifact_policy.read": (
         "project.effective_policy.read",
         "WS-AUTH-001-11C2",
@@ -388,7 +379,6 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "admin_role_grant.issue",
     "admin_role_grant.list",
     "admin_role_grant.revoke",
-    "artifact.guide_source.binding.create",
     "artifact.guide_source.ingest",
     "artifact.guide_source.read",
     "artifact.pending_work.scan",
@@ -423,7 +413,6 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "project.guide_sufficiency_report.create",
     "project.guide_sufficiency_report.list",
     "project.guide_sufficiency_report.read",
-    "project.post_submit_checker_policy_setup.read",
     "project.pre_submit_checker_policy.read",
     "project.read",
     "project.review_policy.update",

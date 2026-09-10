@@ -13,7 +13,6 @@
     "app.modules.projects.guide_compilation.projections.GuideCompilationProjectionService.project_submission_artifact_policy",
     "app.modules.projects.guide_compilation.projections._UnavailablePolicyAuthorization.prepare_artifact_policy_projection",
     "app.modules.projects.guide_compilation.projections._UnavailableSufficiencyAuthorization.prepare_sufficiency_projection",
-    "app.modules.projects.guide_compilation.projections._add_source_usages",
     "app.modules.projects.guide_compilation.projections._is_exact_projection_source_state",
     "app.modules.projects.guide_compilation.projections._new_operation",
     "app.modules.projects.guide_compilation.projections._new_policy",
@@ -49,6 +48,6 @@
     "backend/tests/projects/guide_compilation/test_projection_service.py::test_same_component_race_converges_to_one_row_and_event",
     "backend/tests/projects/guide_compilation/test_projection_service.py::test_every_non_unified_setup_shape_denies_without_projection_effects",
     "backend/tests/projects/guide_compilation/test_projection_service.py::test_projection_and_authority_roll_back_together_on_custody_failure",
-    "backend/tests/projects/guide_compilation/test_projection_call_graph.py::test_poisoned_legacy_inference_does_not_affect_projection"
+    "backend/tests/projects/guide_compilation/test_projection_call_graph.py::test_projection_owner_cannot_invoke_provider"
   ]
 }

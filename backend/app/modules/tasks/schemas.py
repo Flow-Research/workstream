@@ -227,7 +227,6 @@ class TaskGuideContext(BaseModel):
 
     id: str
     version: str
-    content_markdown: str
     change_summary: str | None
     effective_at: datetime | None
 

@@ -14,8 +14,8 @@ from app.adapters.auth import (
     guide_sufficiency_projection_authorization,
 )
 
-from app.modules.artifacts.guide_sufficiency_material import (
-    SqlAlchemyGuideSufficiencyMaterialAdapter,
+from app.adapters.artifacts import (
+    guide_document_manifest_port,
 )
 from app.modules.authorization.api import (
     ArtifactPolicyProjectionFacts,
@@ -35,7 +35,13 @@ from app.modules.projects.guide_compilation.projections import (
     GuideCompilationProjectionService,
 )
 
-from .helpers import seed_database
+from .helpers import (
+    seed_database,
+    context,
+    SOURCE_ITEM_ID,
+    DOCUMENT_VERSION_ID,
+    SOURCE_SHA256,
+)
 from .test_hidden_orchestrator_postgresql import (
     _Runtime,
     _authorized_attempt,
@@ -193,7 +199,7 @@ async def _project_both(database_url: str, values: dict[str, UUID]):
 
     service = GuideCompilationProjectionService(
         factory,
-        material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+        material_factory=guide_document_manifest_port,
         sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
         policy_authorization_factory=artifact_policy_projection_authorization,
     )
@@ -247,7 +253,7 @@ async def test_projects_both_components_once_and_replays_without_new_effects(
                     text(
                         "select "
                         "(select count(*) from guide_sufficiency_reports),"
-                        "(select count(*) from guide_sufficiency_report_source_usages),"
+                        "(select count(*) from project_guide_document_accesses),"
                         "(select count(*) from submission_artifact_policies),"
                         "(select count(*) from project_guide_component_projection_operations),"
                         "(select count(*) from audit_events where action_id="
@@ -277,6 +283,31 @@ async def test_projects_both_components_once_and_replays_without_new_effects(
                     )
                 )
             ).all()
+            usage = (
+                (
+                    await session.execute(
+                        text("select * from project_guide_document_accesses")
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            expected_usage = {
+                "source_item_id": str(SOURCE_ITEM_ID),
+                "document_version_id": str(DOCUMENT_VERSION_ID),
+                "manifest_sha256": context(values).material.sha256,
+                "sha256": SOURCE_SHA256,
+            }
+            assert {key: usage[key] for key in expected_usage} == expected_usage
+            material = context(values).material
+            report = (
+                await session.execute(
+                    text(
+                        "select agent_material_sha256,agent_material_byte_count from guide_sufficiency_reports"
+                    )
+                )
+            ).one()
+            assert report == (material.sha256, len(material.model_dump_json().encode("utf-8")))
             await session.rollback()
 
         assert counts == (1, 1, 1, 2, 1, 1)

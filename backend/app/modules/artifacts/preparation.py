@@ -37,7 +37,6 @@ from app.modules.artifacts.sources import (
     CommittedArtifactSource,
     PreparedArtifact,
     PreparedArtifactInspector,
-    PreparedGuideExtractor,
 )
 
 
@@ -1667,32 +1666,6 @@ class ArtifactPreparationService:
         try:
             async with asyncio.timeout_at(active.deadline):
                 return await self._run_io(inspect_and_rewind)
-        except TimeoutError:
-            raise ArtifactPreparationDeadlineError(
-                "artifact preparation deadline exceeded"
-            ) from None
-
-    async def extract_prepared_guide(
-        self,
-        binding: object,
-        extractor: PreparedGuideExtractor[_InspectionResult],
-    ) -> _InspectionResult:
-        """Run one trusted inspector in a private scratch-owned empty directory."""
-        active = self._active.get(binding)
-        if active is None or not active.handle_issued or active.stream_claimed:
-            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
-
-        def inspect_and_cleanup() -> _InspectionResult:
-            with self._manager.extraction_workspace() as workspace:
-                active.reader.seek(0)
-                try:
-                    return extractor.inspect(active.reader, workspace)
-                finally:
-                    active.reader.seek(0)
-
-        try:
-            async with asyncio.timeout_at(active.deadline):
-                return await self._run_io(inspect_and_cleanup)
         except TimeoutError:
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"

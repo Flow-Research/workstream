@@ -3,7 +3,7 @@
 from uuid import NAMESPACE_URL, uuid5
 
 
-def pre_submit_setup_task_id(setup_run_id: str, setup_generation: int) -> str:
+def project_guide_compilation_task_id(setup_run_id: str, setup_generation: int) -> str:
     """Return the stable broker/execution id for one setup generation."""
     return str(
         uuid5(

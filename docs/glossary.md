@@ -27,9 +27,10 @@ published contribution policy, and queue.
 ## Project Owner
 
 The external or internal organization that provides open-ended project material
-and business terms. That material can be markdown, URL-backed documentation,
-repository docs, examples, rubrics, task instructions, compensation business
-terms, or other project-specific source material. The project owner
+and business terms, including rubrics, task instructions and compensation
+expectations. Current guide inputs are uploaded PDF/DOCX/PPTX originals, plus
+at least one ordinary-text task example stored with guide metadata in PostgreSQL.
+The project owner
 does not author or approve Workstream's machine-readable internal policy schema.
 
 ## ContributionPolicy
@@ -180,20 +181,25 @@ A future external task source that can submit tasks into Workstream through an a
 
 ## Project Guide
 
-The human-facing operating guide for a project. It contains the project instructions, quality bar, task examples, reviewer rubric, common rejection reasons, and links or summaries for the approved policies. A project guide may be markdown, an imported document, or a URL-backed guide, but runtime enforcement uses approved machine-readable policies attached to the guide version.
+The human-facing operating guide for a project. Uploaded PDF, DOCX or supported
+PPTX files contain project instructions, quality requirements and review rules.
+ArtifactStore/S3 holds those originals; PostgreSQL holds their metadata and the
+guide version's required task-example list. At least one nonblank example is
+required. An example may be a starting idea or fuller description and need not
+repeat requirements supplied by the guide. Unified setup examines both together;
+runtime enforcement uses approved machine-readable policies attached to the guide
+version.
 
 ## Guide Sufficiency Report
 
-The Workstream-owned sufficiency record for a project guide version and source
-snapshot. It is normally produced by `ProjectGuideSufficiencyAgent`, but an
-authorized covered Project Manager may also request that agent assessment over
-the canonical verified material. A separately created manual report is
-diagnostic and does not replace agent provenance.
-It records
-whether the guide passed, is blocked by gaps, or passed with warnings that an
-authorized covered Project Manager must acknowledge before activation. Manual reports
-clear only the manual policy path; agent derivation requires an agent-created
-sufficiency report for the same snapshot.
+The Workstream-owned sufficiency record for an exact project guide and source
+snapshot. After ART readiness automatically triggers unified compilation, a
+deterministic projection creates the verified report from that compilation's
+sufficiency component. It records whether the guide passed, is blocked by gaps,
+or passed with warnings for Project Manager review. Verified material and exact
+projection custody bind the report to its compilation and setup generation.
+Manual reports and policies retain their separately authorized diagnostic/manual
+provenance; they cannot replace or satisfy unified compilation evidence.
 
 ## Project Setup Run
 

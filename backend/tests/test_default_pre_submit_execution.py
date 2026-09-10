@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from project_create_fixtures import guide_snapshot_columns, seed_guide_snapshot_rows
+
 from app.modules.projects.models import ReviewPolicy
 
 import asyncio
@@ -175,12 +177,13 @@ def _plan(catalogue):
     policy = _effective_policy()
     policy_hash = canonical_json_hash(policy)
     compiled = compile_effective_project_submission_artifact_policy(policy, policy_hash)
+    snapshot_id = uuid4()
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=uuid4(),
         guide_id=uuid4(),
         guide_version=1,
-        source_snapshot_id=uuid4(),
-        source_snapshot_hash=canonical_json_hash({}),
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=guide_snapshot_columns(str(snapshot_id))["bundle_hash"],
         effective_policy_id=uuid4(),
         effective_policy_hash=policy_hash,
         pre_submit_policy_id=uuid4(),
@@ -441,6 +444,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     custody_triggers = (
         ("projects", "project_creation_custody"),
         ("project_guides", "guide_mutation_product_custody"),
+        ("project_guides", "guide_task_examples_create_custody"),
         ("project_guides", "guide_lineage_lifecycle_guard"),
         ("guide_source_snapshots", "source_snapshot_product_custody"),
         ("submission_artifact_policies", "submission_policy_creation_custody"),
@@ -514,23 +518,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            await connection.execute(
-                text(
-                    "insert into project_guides "
-                    "(id,project_id,version,status,content_markdown,created_by) values "
-                    "(:guide,:project,'1','draft','# Guide','test')"
-                ),
-                params,
-            )
-            await connection.execute(
-                text(
-                    "insert into guide_source_snapshots "
-                    "(id,project_id,guide_id,guide_version,manifest_schema_version,"
-                    "manifest_json,bundle_hash,captured_by) values "
-                    "(:snapshot,:project,:guide,'1','1','{}'::json,:snapshot_hash,'test')"
-                ),
-                params,
-            )
+            await seed_guide_snapshot_rows(connection, project_id=str(lineage.project_id),
+                guide_id=str(lineage.guide_id), version="1", snapshot_id=str(lineage.source_snapshot_id))
             await connection.execute(
                 text(
                     "insert into submission_artifact_policies "
@@ -692,7 +681,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 namespace_descriptor={"test": "submission-bundle"},
                 namespace_fingerprint=canonical_json_hash({"test": "submission-bundle"}),
             )
-            admission_settings = Settings(
+            admission_settings = Settings(_env_file=None,
                 **artifact_admission_limit_settings(1024 * 1024),
                 environment="test",
                 artifact_store_backend="local",

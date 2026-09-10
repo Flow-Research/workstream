@@ -229,6 +229,45 @@ POL_04A3_PARTITION_TARGETS = frozenset(
 POL_04B1_PARTITION_TARGETS = frozenset(
     {"backend/app/modules/projects/guide_compilation/automatic_request.py"}
 )
+POL_04B_PARTITION_TARGETS = frozenset({
+    'backend/app/adapters/project_agents/openai_workspace.py',
+    'backend/app/adapters/project_agents/provider_resilience.py',
+    'backend/app/core/project_guide_instructions.py',
+    'backend/app/modules/projects/api/guide_documents.py',
+        'backend/app/modules/projects/api/task_examples.py',
+        'backend/app/modules/authorization/domain/guide_mutations.py',
+        'backend/app/modules/authorization/domain/prepared_guide_mutations.py',
+    'backend/app/modules/projects/guide_compilation/document_scope.py',
+    'backend/app/interfaces/project_guide_runtime.py',
+    'backend/app/modules/artifacts/guide_document_access.py',
+    'backend/app/modules/artifacts/guide_documents.py',
+    'backend/app/modules/checkers/api/pre_submit_catalogue.py',
+    'backend/app/modules/projects/guide_compilation/diagnostics.py',
+    'backend/app/modules/projects/guide_compilation/live.py',
+    'backend/app/modules/projects/guide_compilation/runtime_resources.py',
+    'backend/app/modules/projects/guide_compilation/source_state.py',
+    'backend/scripts/guide_compilation_e2e.py',
+})
+
+POL_04B_REMOVED_TARGETS = frozenset({
+    'backend/app/modules/artifacts/guide_bindings.py',
+    'backend/app/modules/artifacts/guide_docx.py',
+    'backend/app/modules/artifacts/guide_extraction.py',
+    'backend/app/modules/artifacts/guide_extraction_service.py',
+    'backend/app/modules/artifacts/guide_extraction_worker.py',
+    'backend/app/modules/artifacts/guide_images.py',
+    'backend/app/modules/artifacts/guide_materialization.py',
+    'backend/app/modules/artifacts/guide_ooxml.py',
+    'backend/app/modules/artifacts/guide_pdf.py',
+    'backend/app/modules/artifacts/guide_pptx.py',
+    'backend/app/modules/artifacts/guide_setup.py',
+    'backend/app/modules/artifacts/guide_sufficiency_material.py',
+    'backend/app/modules/artifacts/guide_xlsx.py',
+    'backend/scripts/check_guide_extractor_dependencies.py',
+    'backend/scripts/week2_api_e2e.py',
+})
+
+
 API_DRILL_PARTITION_TARGETS = frozenset({
     "backend/scripts/external_api_drill.py",
     "backend/scripts/admin_api_drill.py",
@@ -413,7 +452,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS)
+        or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
@@ -429,6 +468,8 @@ def _validate_additive_partition_transition(
         | POL_04A2_CALLABLE_TARGETS
         | POL_04A3_PARTITION_TARGETS
         | POL_04B1_PARTITION_TARGETS
+        | POL_04B_PARTITION_TARGETS
+
         | API_DRILL_PARTITION_TARGETS
         | AUTH_12I_TARGETS
         | AUTH_12J_TARGETS

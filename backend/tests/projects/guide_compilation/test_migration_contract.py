@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from tests.migration_fixtures import current_schema_revision
 
 import asyncpg
 import pytest
@@ -48,9 +49,9 @@ def test_current_schema_preserves_guide_compilation_schema(
     isolated_database_env: str,
 ) -> None:
     assert asyncio.run(_schema_state(isolated_database_env)) == (
-        "0014_project_role_scope",
+        current_schema_revision(),
         True,
-        4,
+        6,
         1,
         1,
         1,

@@ -1688,6 +1688,56 @@ def test_partition_accepts_only_exact_automatic_request_target() -> None:
         )
 
 
+def test_partition_accepts_only_exact_unified_cutover_replacement():
+    expected = {
+        'backend/app/adapters/project_agents/openai_workspace.py',
+        'backend/app/adapters/project_agents/provider_resilience.py',
+        'backend/app/core/project_guide_instructions.py',
+        'backend/app/modules/projects/api/guide_documents.py',
+        'backend/app/modules/projects/api/task_examples.py',
+        'backend/app/modules/authorization/domain/guide_mutations.py',
+        'backend/app/modules/authorization/domain/prepared_guide_mutations.py',
+    'backend/app/modules/projects/guide_compilation/document_scope.py',
+        'backend/app/interfaces/project_guide_runtime.py',
+        'backend/app/modules/artifacts/guide_document_access.py',
+        'backend/app/modules/artifacts/guide_documents.py',
+        'backend/app/modules/checkers/api/pre_submit_catalogue.py',
+        'backend/app/modules/projects/guide_compilation/diagnostics.py',
+        'backend/app/modules/projects/guide_compilation/live.py',
+        'backend/app/modules/projects/guide_compilation/runtime_resources.py',
+        'backend/app/modules/projects/guide_compilation/source_state.py',
+        'backend/scripts/guide_compilation_e2e.py',
+    }
+    removed = {
+        'backend/app/modules/artifacts/guide_bindings.py',
+        'backend/app/modules/artifacts/guide_docx.py',
+        'backend/app/modules/artifacts/guide_extraction.py',
+        'backend/app/modules/artifacts/guide_extraction_service.py',
+        'backend/app/modules/artifacts/guide_extraction_worker.py',
+        'backend/app/modules/artifacts/guide_images.py',
+        'backend/app/modules/artifacts/guide_materialization.py',
+        'backend/app/modules/artifacts/guide_ooxml.py',
+        'backend/app/modules/artifacts/guide_pdf.py',
+        'backend/app/modules/artifacts/guide_pptx.py',
+        'backend/app/modules/artifacts/guide_setup.py',
+        'backend/app/modules/artifacts/guide_sufficiency_material.py',
+        'backend/app/modules/artifacts/guide_xlsx.py',
+        'backend/scripts/check_guide_extractor_dependencies.py',
+        'backend/scripts/week2_api_e2e.py',
+    }
+    assert ownership.POL_04B_PARTITION_TARGETS == expected
+    assert ownership.POL_04B_REMOVED_TARGETS == removed
+    retained = "backend/app/core/config.py"
+    trusted = _partition(sorted({retained, *removed}))
+    current = _partition(sorted({retained, *expected}))
+    ownership._validate_additive_partition_transition(current, trusted)
+    for invalid in [
+        _partition(sorted(expected)),
+        _partition(sorted({retained, *expected, "backend/app/modules/projects/extra.py"})),
+    ]:
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(invalid, trusted)
+
 
 def test_partition_accepts_only_exact_external_api_drill_target() -> None:
     """Drill enrollment preserves closed target admission for neighboring scripts."""

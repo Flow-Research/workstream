@@ -1,4 +1,4 @@
-"""Deterministic syntactic guide-format detection over verified scratch bytes."""
+"""Bounded ingress inspection for supported original guide documents."""
 
 from __future__ import annotations
 
@@ -8,13 +8,12 @@ from pathlib import PurePosixPath
 import stat
 from typing import BinaryIO
 import zipfile
-from xml.etree import ElementTree
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 
 from app.modules.artifacts.zip_safety import zip_directory_facts
 
 
-DETECTOR_NAME = "workstream.guide_format"
-DETECTOR_VERSION = "1"
 _SAMPLE_BYTES = 64 * 1024
 _MAXIMUM_RELATIONSHIP_BYTES = 1024 * 1024
 _EXECUTABLE_SUFFIXES = {
@@ -46,8 +45,6 @@ class GuideFormatLimits:
     maximum_nested_archive_bytes: int = 16 * 1024 * 1024
     maximum_nesting_depth: int = 8
     maximum_compression_ratio: int = 100
-    maximum_image_pixels: int = 40_000_000
-    maximum_image_dimension: int = 16_384
 
     def archive_totals_exceeded(self, *, entry_count: int, decompressed_bytes: int) -> bool:
         return (
@@ -105,58 +102,9 @@ class GuideFormatDetector:
         reader.seek(0)
         if header.startswith(b"%PDF-"):
             return self._classified("pdf")
-        image = self._image_dimensions(header)
-        if image is not None:
-            image_format, width, height = image
-            if (
-                width > self._limits.maximum_image_dimension
-                or height > self._limits.maximum_image_dimension
-                or width * height > self._limits.maximum_image_pixels
-            ):
-                return GuideFormatResult(
-                    detected_format=image_format,
-                    status="limit_exceeded",
-                    facts={"width": width, "height": height},
-                )
-            return GuideFormatResult(
-                detected_format=image_format,
-                status="classified",
-                facts={"width": width, "height": height},
-            )
-        if self._is_audio_video_signature(header):
-            return GuideFormatResult("audio_video", "unsupported", {})
         if header.startswith(b"PK\x03\x04") or header.startswith(b"PK\x05\x06"):
             return self._inspect_zip(reader)
-        media_type = declared_media_type.split(";", 1)[0].strip().lower()
-        declared = {
-            "application/json": "json",
-            "text/csv": "csv",
-            "text/markdown": "markdown",
-            "text/plain": "plain_text",
-        }.get(media_type)
-        if declared is None:
-            declared = {
-                "csv": "csv",
-                "json": "json",
-                "markdown": "markdown",
-                "text": "plain_text",
-                "plain_text": "plain_text",
-            }.get((ingestion_adapter or "").strip().lower())
-        if declared is not None:
-            try:
-                header.decode("utf-8")
-            except UnicodeDecodeError:
-                return GuideFormatResult(declared, "malformed", {})
-            return self._classified(declared)
-        if media_type.startswith("audio/") or media_type.startswith("video/"):
-            return GuideFormatResult("audio_video", "unsupported", {})
-        try:
-            decoded = header.decode("utf-8")
-        except UnicodeDecodeError:
-            return GuideFormatResult("opaque", "unsupported", {})
-        if "\x00" in decoded:
-            return GuideFormatResult("opaque", "unsupported", {})
-        return self._classified("plain_text")
+        return GuideFormatResult("opaque", "unsupported", {})
 
     def _inspect_zip(self, reader: BinaryIO) -> GuideFormatResult:
         state = {"entries": 0, "decompressed": 0, "compressed": 0, "depth": 0}
@@ -177,7 +125,7 @@ class GuideFormatDetector:
             return GuideFormatResult("zip", "ambiguous", facts)
         if not matches:
             return GuideFormatResult("zip", "unsupported", facts)
-        return GuideFormatResult(matches[0], "classified", facts)
+        return GuideFormatResult(matches[0], "unsupported" if matches[0] == "xlsx" else "classified", facts)
 
     def _inspect_archive(
         self,
@@ -241,8 +189,8 @@ class GuideFormatDetector:
                     if b"<!DOCTYPE" in relationship.upper():
                         return "malformed"
                     try:
-                        relationships = ElementTree.fromstring(relationship)
-                    except ElementTree.ParseError:
+                        relationships = ElementTree.fromstring(relationship, forbid_dtd=True)
+                    except (ElementTree.ParseError, DefusedXmlException):
                         return "malformed"
                     if any(
                         str(element.attrib.get("TargetMode", "")).strip().casefold()
@@ -259,76 +207,6 @@ class GuideFormatDetector:
                     )
                     if nested_result is not None:
                         return nested_result
-        return None
-
-    @staticmethod
-    def _is_audio_video_signature(header: bytes) -> bool:
-        return (
-            header.startswith((b"ID3", b"fLaC", b"OggS"))
-            or (header.startswith(b"RIFF") and header[8:12] in {b"WAVE", b"AVI "})
-            or (len(header) >= 12 and header[4:8] == b"ftyp")
-        )
-
-    @staticmethod
-    def _image_dimensions(header: bytes) -> tuple[str, int, int] | None:
-        if header.startswith(b"\x89PNG\r\n\x1a\n") and len(header) >= 24:
-            return "png", int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
-        if header.startswith(b"RIFF") and header[8:12] == b"WEBP" and len(header) >= 30:
-            if header[12:16] == b"VP8X":
-                return (
-                    "webp",
-                    1 + int.from_bytes(header[24:27], "little"),
-                    1 + int.from_bytes(header[27:30], "little"),
-                )
-            if header[12:16] == b"VP8 " and header[23:26] == b"\x9d\x01\x2a":
-                return (
-                    "webp",
-                    int.from_bytes(header[26:28], "little") & 0x3FFF,
-                    int.from_bytes(header[28:30], "little") & 0x3FFF,
-                )
-            if header[12:16] == b"VP8L" and header[20] == 0x2F:
-                return (
-                    "webp",
-                    1 + header[21] + ((header[22] & 0x3F) << 8),
-                    1
-                    + (header[22] >> 6)
-                    + (header[23] << 2)
-                    + ((header[24] & 0x0F) << 10),
-                )
-        if header.startswith(b"\xff\xd8"):
-            offset = 2
-            while offset + 9 <= len(header):
-                if header[offset] != 0xFF:
-                    offset += 1
-                    continue
-                marker = header[offset + 1]
-                if marker in {0x01, 0xD8, 0xD9} or 0xD0 <= marker <= 0xD7:
-                    offset += 2
-                    continue
-                length = int.from_bytes(header[offset + 2 : offset + 4], "big")
-                if marker in {
-                    0xC0,
-                    0xC1,
-                    0xC2,
-                    0xC3,
-                    0xC5,
-                    0xC6,
-                    0xC7,
-                    0xC9,
-                    0xCA,
-                    0xCB,
-                    0xCD,
-                    0xCE,
-                    0xCF,
-                }:
-                    return (
-                        "jpeg",
-                        int.from_bytes(header[offset + 7 : offset + 9], "big"),
-                        int.from_bytes(header[offset + 5 : offset + 7], "big"),
-                    )
-                if length < 2:
-                    break
-                offset += 2 + length
         return None
 
     @staticmethod

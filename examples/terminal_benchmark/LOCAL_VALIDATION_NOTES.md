@@ -1,5 +1,8 @@
 # Terminal Benchmark Real API Drill Local Validation Notes
 
+Historical record: the referenced setup executable and routes were removed by
+the unified setup cutover. Commands below are not current instructions.
+
 This file records local validation notes for the Terminal Benchmark example
 drill. It is not Workstream internal-review evidence for a product chunk and
 does not make this example part of required CI.

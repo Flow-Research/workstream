@@ -42,7 +42,6 @@ DiagnosticRecord: TypeAlias = ProjectSetupRun | GuideSufficiencyReport | Submiss
 DiagnosticResult: TypeAlias = (
     DiagnosticRecord
     | Sequence[DiagnosticRecord]
-    | tuple[ProjectSetupRun, PostSubmitCheckerPolicy | None]
 )
 
 
@@ -485,36 +484,11 @@ async def authorize_project_diagnostic_read(
         guide = None
 
     target: DiagnosticResult | None = None
-    post_submit_policy = None
     if guide is not None:
-        if action_id in {
-            ActionId.PROJECT_SETUP_RUN_READ,
-            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
-        }:
-            setup_run = await repository.lock_latest_project_setup_run(
+        if action_id is ActionId.PROJECT_SETUP_RUN_READ:
+            target = await repository.lock_latest_project_setup_run(
                 project_id, guide_id, guide.version
             )
-            target = setup_run
-            if (
-                action_id is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ
-                and setup_run is not None
-                and setup_run.output_post_submit_checker_policy_id is not None
-            ):
-                post_submit_policy = await repository.lock_post_submit_checker_policy(
-                    setup_run.output_post_submit_checker_policy_id
-                )
-                if post_submit_policy is None or any(
-                    getattr(post_submit_policy, field) != getattr(setup_run, field)
-                    for field in (
-                        "project_id",
-                        "guide_id",
-                        "guide_version",
-                        "source_snapshot_id",
-                        "source_snapshot_hash",
-                    )
-                ):
-                    target = None
-                    post_submit_policy = None
         elif action_id is ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST:
             target = await repository.lock_guide_sufficiency_reports(
                 project_id, guide_id, guide.version
@@ -544,8 +518,6 @@ async def authorize_project_diagnostic_read(
         target = None
 
     records = list(target) if is_collection and target is not None else ([record] if record else [])
-    if post_submit_policy is not None:
-        records.append(post_submit_policy)
     target_binding_digest = (
         canonical_json_hash(
             [
@@ -603,6 +575,4 @@ async def authorize_project_diagnostic_read(
     )
     if target is None:
         raise RuntimeError("missing diagnostic authorization unexpectedly allowed")
-    if action_id is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ:
-        return (target, post_submit_policy)
     return target

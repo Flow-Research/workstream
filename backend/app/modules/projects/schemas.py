@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.modules.projects.api.guide_documents import GuideDocumentMediaType
+from app.modules.projects.api.task_examples import ProjectGuideTaskExamples
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
@@ -64,10 +67,10 @@ class GuideSourceSnapshotItemInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_kind: str = Field(max_length=50)
+    source_kind: Literal["document"]
     source_label: str = Field(max_length=500)
-    ingestion_adapter: str = Field(max_length=100)
-    media_type: str | None = Field(default=None, max_length=100)
+    ingestion_adapter: Literal["upload"]
+    media_type: GuideDocumentMediaType
 
 
 class GuideSourceSnapshotCreate(BaseModel):
@@ -135,14 +138,11 @@ class ProjectSetupRunResponse(BaseModel):
     source_snapshot_id: str
     setup_generation: int
     celery_task_id: str | None
-    continuation_verification_job_id: str | None
-    continuation_started_at: datetime | None
+    documents_ready_at: datetime | None
     status: str
     current_step: str
     output_sufficiency_report_id: str | None
     output_submission_artifact_policy_id: str | None
-    output_post_submit_checker_policy_id: str | None
-    post_submit_derivation_summary: dict[str, Any] | None
     error_code: str | None
     error_artifact_incident_id: str | None
     error_summary: str | None
@@ -475,13 +475,13 @@ class ContributorProjectResponse(BaseModel):
 
 
 class ProjectGuideCreate(BaseModel):
-    """Request schema for draft guide material only."""
+    """Create guide metadata with at least one illustrative task example."""
 
     model_config = ConfigDict(extra="forbid")
 
     version: str = Field(max_length=50, pattern=r"^[^\x00]*$")
-    content_markdown: str = Field(pattern=r"^[^\x00]*$")
-    change_summary: str | None = Field(default=None, pattern=r"^[^\x00]*$")
+    change_summary: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00]*$")
+    task_examples: ProjectGuideTaskExamples
 
 
 class ProjectGuideUpdate(BaseModel):
@@ -489,8 +489,7 @@ class ProjectGuideUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    content_markdown: str = Field(default_factory=str, pattern=r"^[^\x00]*$")
-    change_summary: str | None = Field(default=None, pattern=r"^[^\x00]*$")
+    change_summary: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00]*$")
 
 
 class ProjectGuideResponse(BaseModel):
@@ -502,8 +501,9 @@ class ProjectGuideResponse(BaseModel):
     project_id: str
     version: str
     status: str
-    content_markdown: str
     change_summary: str | None
+    task_examples: ProjectGuideTaskExamples | None
+    task_examples_hash: str | None
     approved_by: str | None
     effective_at: datetime | None
     created_by: str
@@ -531,78 +531,14 @@ class PostSubmitCheckerPolicyResponse(BaseModel):
     created_at: datetime
 
 
-class PostSubmitCheckerPolicyApproval(BaseModel):
-    """Request schema for approving a compiled post-submit checker policy."""
-
-    model_config = ConfigDict(extra="forbid")
 
 
-class PostSubmitCheckerPolicyCorrectionRequest(BaseModel):
-    """Request schema for requesting correction of a compiled post-submit policy."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    correction_reason: str = Field(min_length=1, max_length=2000)
-
-    @field_validator("correction_reason")
-    @classmethod
-    def normalize_correction_reason(cls, value: str) -> str:
-        """Strip correction feedback and reject an empty normalized reason."""
-        normalized = " ".join(value.split())
-        if not normalized:
-            raise ValueError("correction_reason must contain non-whitespace text")
-        return normalized
 
 
-class PostSubmitCheckerPolicySetupSummaryResponse(BaseModel):
-    """Operator-visible summary for generated post-submit checker setup."""
-
-    id: str
-    project_id: str
-    guide_id: str
-    guide_version: str
-    source_snapshot_id: str
-    source_snapshot_hash_redacted: bool = True
-    effective_policy_id: str
-    effective_policy_hash: str
-    pre_submit_checker_policy_id: str
-    pre_submit_checker_bundle_hash: str
-    required_checkers: list[str]
-    warning_checkers: list[str]
-    blocking_severities: list[str]
-    policy_hash: str | None
-    lifecycle_status: str
-    approved_by_role: str | None
-    approved_by_actor: str | None
-    approved_at: datetime | None
-    created_by: str
-    created_at: datetime
 
 
-class PostSubmitCheckerPolicyCorrectionSummaryResponse(BaseModel):
-    """Operator-visible audit summary for one rejected compiled policy."""
-
-    policy_id: str
-    policy_hash: str | None
-    required_checkers: list[str]
-    warning_checkers: list[str]
-    blocking_severities: list[str]
-    correction_reason: str
-    correction_requested_by_role: str
-    correction_requested_by_actor: str
-    correction_requested_at: datetime
 
 
-class PostSubmitCheckerPolicySetupResponse(BaseModel):
-    """Response schema for current post-submit checker policy setup state."""
-
-    project_id: str
-    guide_id: str
-    guide_version: str
-    setup_run: ProjectSetupRunResponse
-    post_submit_checker_policy: PostSubmitCheckerPolicySetupSummaryResponse | None
-    derivation_input_summary: dict[str, Any]
-    correction_history: list[PostSubmitCheckerPolicyCorrectionSummaryResponse]
 
 
 class ReviewPolicyResponse(BaseModel):
@@ -686,19 +622,6 @@ class PaymentPolicyResponse(BaseModel):
     created_at: datetime
 
 
-class ActiveGuideResponse(BaseModel):
-    """Response schema for an active guide and its policy context."""
-
-    guide: ProjectGuideResponse
-    guide_source_snapshot: GuideSourceSnapshotResponse
-    guide_sufficiency_report: GuideSufficiencyReportResponse
-    submission_artifact_policy: SubmissionArtifactPolicyResponse
-    effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
-    pre_submit_checker_policy: ActiveGuidePreSubmitCheckerPolicyResponse
-    post_submit_checker_policy: PostSubmitCheckerPolicyResponse
-    review_policy: ReviewPolicyResponse
-    revision_policy: RevisionPolicyResponse
-    payment_policy: PaymentPolicyResponse
 
 
 class ActiveGuideReadResponse(BaseModel):

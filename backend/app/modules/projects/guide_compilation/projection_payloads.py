@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.interfaces.artifact_operations import GuideSufficiencyMaterialResult
+from app.modules.projects.api.guide_documents import GuideDocumentManifest
 from app.interfaces.project_agents import (
     ProjectGuideCompilationResult,
     SubmissionArtifactPolicyProposal,
@@ -65,7 +65,7 @@ class ProjectionSeed:
 class LockedProjection:
     """Verified material and source state locked for one transaction."""
 
-    material: GuideSufficiencyMaterialResult
+    material: GuideDocumentManifest
     material_sha256: str
     material_byte_count: int
     celery_task_id: UUID
@@ -200,9 +200,8 @@ def policy_output(
         "policy_hash": policy_hash,
         "derivation_source": "unified_compilation",
         "source_material_refs": [
-            "artifact-content:"
-            f"{item.content_id}#extraction-usage:{item.extraction_usage_id}"
-            for item in locked.material.provenance
+            f"guide-document:{item.ingest_id}#{item.sha256}"
+            for item in locked.material.documents
         ],
         "derivation_agent_name": PROJECTOR_NAME,
         "derivation_agent_version": PROJECTOR_VERSION,

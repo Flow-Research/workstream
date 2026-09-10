@@ -10,19 +10,21 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.interfaces.artifact_operations import (
-    GuideSufficiencyMaterialPort,
-    GuideSufficiencyMaterialUnavailable,
-)
+
+from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentUnavailable
 from app.interfaces.project_agents import (
-    PostSubmissionCapabilityProjection,
-    PreSubmissionCapabilityProjection,
     ProjectGuideAgentRuntime,
     ProjectGuideCompilationContext,
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     require_complete_project_guide_compilation_result,
     validate_project_guide_compilation_result,
+)
+from app.modules.checkers.api.pre_submit_catalogue import (
+    PreSubmissionCapabilityProjection,
+)
+from app.modules.checkers.api.post_submit_catalogue import (
+    PostSubmitCatalogue,
 )
 from app.modules.authorization.api import (
     ActorIdentityFacts,
@@ -53,6 +55,14 @@ from .service import (
     GuideCompilationService,
     load_compilation_execution_state,
 )
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
+from app.modules.projects.api.guide_documents import GuideDocumentAccessFactory, GuideRuntimeCapabilities
+from .runtime_resources import SqlAlchemyGuideRuntimeCustody
+from app.interfaces.external_services import ExternalServiceAdapterError
+from app.interfaces.project_agents import (
+    ProjectAgentRuntimeError,
+    project_guide_compilation_prompt_bytes,
+)
 
 
 class GuideCompilationAuthorizationContext(Protocol):
@@ -78,10 +88,11 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         *,
-        material_factory: Callable[[AsyncSession], GuideSufficiencyMaterialPort],
+        material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
         pre_submission_capabilities: PreSubmissionCapabilityProjection,
-        post_submission_capabilities: PostSubmissionCapabilityProjection,
+        post_submission_capabilities: PostSubmitCatalogue,
         authorization_context: GuideCompilationAuthorizationContext,
+        document_access_factory: GuideDocumentAccessFactory,
     ) -> None:
         """Store the owner-supplied ports used by each short transaction."""
         self._session_factory = session_factory
@@ -89,6 +100,21 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         self._pre_submission_capabilities = pre_submission_capabilities
         self._post_submission_capabilities = post_submission_capabilities
         self._authorization_context = authorization_context
+        self._document_access_factory = document_access_factory
+
+    @asynccontextmanager
+    async def capabilities(self, state, context):
+        """Issue resources only from the orchestrator's winning dispatch branch."""
+        async with self._document_access_factory(
+            state.preflight_facts.attempt_id, context.material, context.runtime_configuration,
+        ) as documents:
+            yield GuideRuntimeCapabilities(
+                documents=documents,
+                resources=SqlAlchemyGuideRuntimeCustody(
+                    self._session_factory, state.preflight_facts.attempt_id, context.material,
+                    context.runtime_configuration.runtime_key,
+                ),
+            )
 
     async def load(self, attempt_id: UUID) -> CompilationExecutionState:
         """Load one exact attempt and translate storage failures safely."""
@@ -111,7 +137,7 @@ class SqlAlchemyGuideCompilationExecutionBackend:
                     pre_submission_capabilities=self._pre_submission_capabilities,
                     post_submission_capabilities=self._post_submission_capabilities,
                 )
-        except GuideSufficiencyMaterialUnavailable:
+        except GuideDocumentUnavailable:
             raise ProjectGuideCompilationExecutionError("context_unavailable") from None
         except GuideCompilationStorageError:
             raise ProjectGuideCompilationExecutionError("storage_unavailable") from None
@@ -189,11 +215,12 @@ class SqlAlchemyGuideCompilationExecutionBackend:
 def project_guide_compilation_execution_port(
     session_factory: async_sessionmaker[AsyncSession],
     *,
-    material_factory: Callable[[AsyncSession], GuideSufficiencyMaterialPort],
+    material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
     pre_submission_capabilities: PreSubmissionCapabilityProjection,
-    post_submission_capabilities: PostSubmissionCapabilityProjection,
+    post_submission_capabilities: PostSubmitCatalogue,
     authorization_context: GuideCompilationAuthorizationContext,
-    runtime: ProjectGuideAgentRuntime,
+    runtime_factory: Callable[[ProjectGuideRuntimeConfiguration], ProjectGuideAgentRuntime],
+    document_access_factory: GuideDocumentAccessFactory,
 ) -> ProjectGuideCompilationExecutionPort:
     """Compose the hidden port from existing owner-supplied dependencies."""
     backend = SqlAlchemyGuideCompilationExecutionBackend(
@@ -202,12 +229,16 @@ def project_guide_compilation_execution_port(
         pre_submission_capabilities=pre_submission_capabilities,
         post_submission_capabilities=post_submission_capabilities,
         authorization_context=authorization_context,
+        document_access_factory=document_access_factory,
     )
-    return HiddenGuideCompilationOrchestrator(backend, runtime)
+    return GuideCompilationOrchestrator(backend, runtime_factory)
 
 
 class GuideCompilationExecutionBackend(Protocol):
     """Exact persistence/context operations required by the state machine."""
+
+    def capabilities(self, state: CompilationExecutionState,
+                     context: ProjectGuideCompilationContext) -> AbstractAsyncContextManager[GuideRuntimeCapabilities]: ...
 
     async def load(self, attempt_id: UUID) -> CompilationExecutionState: ...
 
@@ -231,17 +262,17 @@ class GuideCompilationExecutionBackend(Protocol):
     ) -> CompilationPersistenceReceipt: ...
 
 
-class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
+class GuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
     """Drive one attempt without creating authority or retrying uncertainty."""
 
     def __init__(
         self,
         backend: GuideCompilationExecutionBackend,
-        runtime: ProjectGuideAgentRuntime,
+        runtime_factory: Callable[[ProjectGuideRuntimeConfiguration], ProjectGuideAgentRuntime],
     ) -> None:
         """Bind the durable backend to the single provider runtime."""
         self._backend = backend
-        self._runtime = runtime
+        self._runtime_factory = runtime_factory
 
     async def execute(
         self, command: ProjectGuideCompilationExecutionCommand
@@ -253,27 +284,53 @@ class HiddenGuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
             return recovered
 
         context = await self._backend.context(state)
-        dispatch = await self._backend.fence(state)
-        if not dispatch.dispatch_permitted:
-            raced_state = await self._backend.load(command.attempt_id)
-            recovered = await self._recover(raced_state)
-            if recovered is None:
-                raise ProjectGuideCompilationExecutionError("context_unavailable")
-            return recovered
+        runtime = None
         try:
-            result = await self._runtime.compile_project_guide(context)
-        except ProjectGuideCompilationInvalidOutputError as exc:
-            return _receipt_result(await self._backend.record_invalid(state, exc.failure_code))
-        except Exception:  # noqa: BLE001 - unknown provider outcome stays unresolved
-            return _receipt_result(dispatch)
-
+            if (
+                len(project_guide_compilation_prompt_bytes(context))
+                > context.runtime_configuration.maximum_manifest_bytes
+            ):
+                raise ValueError("configured prompt limit exceeded")
+            runtime = self._runtime_factory(context.runtime_configuration)
+            if runtime.identity != context.runtime_configuration.adapter_identity:
+                raise ValueError("runtime identity mismatch")
+            runtime.admit_execution()
+        except (ExternalServiceAdapterError, ProjectAgentRuntimeError, ValueError):
+            if runtime is not None:
+                await runtime.aclose()
+            raise ProjectGuideCompilationExecutionError("runtime_unavailable") from None
         try:
-            _require_valid_result(context, result)
-        except (TypeError, ValueError):
-            return _receipt_result(await self._backend.record_invalid(state, "schema_invalid"))
-
-        await self._backend.record_accepted(state, context, result)
-        return _receipt_result(await self._backend.persist(state, context))
+            dispatch = await self._backend.fence(state)
+            if not dispatch.dispatch_permitted:
+                raced_state = await self._backend.load(command.attempt_id)
+                recovered = await self._recover(raced_state)
+                if recovered is None:
+                    raise ProjectGuideCompilationExecutionError("context_unavailable")
+                return recovered
+            terminal_receipt = None
+            accepted = False
+            try:
+                async with self._backend.capabilities(state, context) as capabilities:
+                    try:
+                        result = await runtime.compile_project_guide(context, capabilities)
+                    except ProjectGuideCompilationInvalidOutputError as exc:
+                        terminal_receipt = await self._backend.record_invalid(state, exc.failure_code)
+                    else:
+                        try:
+                            _require_valid_result(context, result)
+                        except (TypeError, ValueError):
+                            terminal_receipt = await self._backend.record_invalid(state, "schema_invalid")
+                        else:
+                            await self._backend.record_accepted(state, context, result)
+                            accepted = True
+            except Exception:  # noqa: BLE001 - preserve known evidence across cleanup failure
+                if terminal_receipt is None and not accepted:
+                    return _receipt_result(dispatch)
+            if terminal_receipt is not None:
+                return _receipt_result(terminal_receipt)
+            return _receipt_result(await self._backend.persist(state, context))
+        finally:
+            await runtime.aclose()
 
     async def _recover(
         self, state: CompilationExecutionState

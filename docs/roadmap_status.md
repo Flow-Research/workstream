@@ -133,8 +133,8 @@ cannot be reused as post-submission review-gate evidence. See the
 | --- | --- | --- | --- |
 | Identity and actor resolution | **Live foundation** | Flow-token verification; canonical ActorProfile and ActorIdentityLink; human/service separation; lifecycle controls | Final end-to-end operational and conformance proof |
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
-| Project Guide source custody | **Live foundation** | Project Manager ingestion; immutable snapshots; verified binding and reads; PDF, DOCX, PPTX, XLSX and image handling; bounded extraction | Complete the unified-generation cutover and later remove remaining legacy inference paths |
-| Unified Project Guide compilation | **Hidden and proven** | One immutable model attempt; persisted complete result; crash/recovery custody; deterministic sufficiency and submission-artifact-policy projections; immutable atomic setup finalization; exact AUTH request/execute/projection/finalization adapters | Cut live execution over, add approval and deterministic post-submit projection, expose one checker-service port |
+| Project Guide source custody | **Live foundation** | Project Manager original-document uploads; immutable metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection | Carry the same document generation through manager approval and guide activation; prove each enabled document reader |
+| Unified Project Guide compilation | **Live automatic draft/findings setup** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization | Add manager proposal review, correction, approval and manual rerun; add deterministic post-submit projection and one checker-service port |
 | Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history | Expose selected-policy validation, bind one published complete version to the active guide generation |
 | Task readiness and claim | **Foundation plus planned replacement** | Task records, lifecycle guards, assignments, locked work context, public owner facts | A task must inherit the guide-bound ContributionPolicyVersion before `READY`; claim copies the prepared task context into TaskAssignment without a current-policy lookup; activate exact task authority |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission | Connect only the active unified guide/checker lineage and complete the later public admission-only cutover |
@@ -188,7 +188,7 @@ cannot be reused as post-submission review-gate evidence. See the
   deployed identity-provider certification or exhaustive API-field coverage.
 - The [five API drill defects](engineering/external-api-drill-findings.md) are
   repaired: project name/slug and guide version enforce existing storage limits,
-  guide PATCH rejects explicit null content while preserving omission, and
+  guide PATCH now excludes the superseded inline-content field, and
   unsupported project-role input is rejected before mutation. Both original
   drills passed again on merged main after that repair. The extended drill adds
   populated pagination/cursor checks, nested qualification boundary probes and
@@ -232,7 +232,7 @@ cannot be reused as post-submission review-gate evidence. See the
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions
   cover both roles, persistence, replay, conflict and unauthorized rollback.
-- Guide ingestion, guide binding/read, artifact verification/recovery,
+- Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at
   their current hidden or live boundaries.
@@ -241,13 +241,43 @@ cannot be reused as post-submission review-gate evidence. See the
 
 - Project Managers can authorize guide-source ingestion for projects they are
   permitted to manage.
-- Original bytes are immutable and verified before binding. Classification and
-  extraction occur asynchronously from stored bytes; extracted content never
-  replaces the original artifact.
-- The unified compiler produces sufficiency, submission artifact, pre-submit,
-  and post-submit proposals in one accepted result. The sufficiency and
-  submission-artifact-policy components now project deterministically without
-  another model call.
+- Guide originals remain immutable in ArtifactStore; PostgreSQL holds metadata,
+  versions, custody and the required task-example list. Guide creation requires
+  at least one nonblank example; a starting idea is sufficient and optional
+  example fields do not repeat requirements from the guide. Each snapshot/run
+  binds the exact version's examples. Upload admission checks bounded format, digest and size.
+  Committed originals do not bypass the separate verification required for
+  submission ZIPs. Inline markdown setup and extractors are removed.
+- Committed original-document readiness automatically runs one unified compilation
+  through Celery. It persists sufficiency findings and separate pre-submit and
+  post-submit proposals, then projects the sufficiency and artifact-policy
+  components and atomically finalizes the setup at draft output. A blocked guide
+  ends at sufficiency evidence, with no policy projection. Its canonical result
+  retains exact supported catalogue matches and one evidence-linked engineering
+  suggestion for each required missing pre-submit or post-submit check. Fully
+  covered projects need no suggestions. The manager-facing handoff remains
+  part of POL-05; suggestions cannot register or activate a checker. Runtime, model/provider and instructions are independently
+  configured and bound to the attempt. The agent opens assigned files on demand
+  in an isolated workspace and assesses them with every supplied task example;
+  exact grants exclude other projects and runs. Known
+  invalid output ends terminally, and replay never starts a second inference.
+  Transient pre-send retries use bounded backoff and a circuit breaker; the
+  default request timeout is 300 seconds, separate from the whole-run timeout.
+  Project Manager proposal review, correction and manual rerun remain POL-05.
+  Superseded post-submit setup/approval/correction routes are removed; POL-06
+  owns the remaining post-submit projection. Real Terra runs through API upload,
+  MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
+  draft policy outcomes, with exact replay and provider cleanup. Broker delivery
+  was scripted in these drills; live Celery transport and broad semantic accuracy
+  are not established by them. Earlier probes omitted task examples and establish
+  execution mechanics only. A subsequent real Terra run with assigned private documents
+  and two task examples proved exact example delivery, original access, persisted
+  findings, cleanup and replay. It correctly stopped for absent project-wide
+  file/archive size limits, without demanding one selected paper. This proves
+  that bounded blocked-result flow; it does not establish a ready policy for
+  those inputs or broad semantic accuracy. The dormant activation command is removed; active
+  guide reads and locked policy consumers remain, with activation deferred to
+  AUTH-12H.
 - Contributor ZIP preparation uses one verified byte lineage from scratch
   inspection through durable admission and eventual Submission binding.
 
@@ -277,10 +307,13 @@ validate the canonical policy body and matching stored summaries. Immutable
 phase contracts and structural-handler conformance remain distinct from live
 phase execution, which is still unavailable. POL-04B1 supplies hidden automatic
 request authority and source-operation custody, with current-authority replay
-checks for both triggers. The next selected work is POL-04B connecting those
-contracts and unified finalization to automatic initial setup execution. Runtime adapter, model and instructions remain separate
-configuration concerns. Compilation stops at findings and draft pre/post policies;
-POL-05 supplies manager correction/manual rerun and approval. The reconciled
+checks for both triggers. POL-04B connects those contracts and unified
+finalization to automatic initial setup execution, replacing the separate
+inference methods and prompts. Runtime adapter, model and instructions are
+independently configured. Compilation stops at findings and draft pre/post
+policies. POL-05A is next: hidden complete-proposal review, correction and pre-policy
+approval custody, followed by AUTH-12F4 and POL-05B live manager review,
+approval and manual rerun through the same compiler. The reconciled
 [dependency and ownership plan](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#current-dependency-contract)
 permits selected-policy validation independently after completed CP05. The
 selected delivery order finishes unified setup, separate pre/post approval and
@@ -292,10 +325,9 @@ requires its exact owner-proven prerequisites.
 
 The next dependency-safe product sequence is:
 
-1. **Connect the unified-guide generation.** Cut live execution over to the
-   complete unified compilation, projection, and authorized atomic finalization
-   path. This completes one stored setup result without
-   reviving the three legacy inference calls.
+1. **Complete manager proposal review and correction.** Expose the complete
+   unified result and preserve its distinct pre-submit and post-submit proposals.
+   Authorized manual rerun creates a fresh generation through the same compiler.
 2. **Complete guide policy approval.** Project Manager approval consumes the
    already-produced unified result; it does not run another agent. Persist the
    effective pre-submit policy and deterministically compiled post-submit

@@ -28,15 +28,17 @@ class _PolicyReadRepository:
         source_row = {
             "item_id": str(uuid4()),
             "item_order": 0,
-            "source_kind": "guide",
-            "source_label": "guide.md",
-            "ingestion_adapter": "test",
-            "media_type": "text/markdown",
+            "source_kind": "document",
+            "source_label": "guide.pdf",
+            "ingestion_adapter": "upload",
+            "media_type": "application/pdf",
         }
         manifest = {
-            "schema_version": "guide_source_snapshot.v2",
+            "schema_version": "guide_source_snapshot.task_examples",
             "snapshot_id": self.snapshot_id,
             "generation": 1,
+            "task_examples_hash": "sha256:" + "a" * 64,
+            "task_examples_count": 1,
             "items": [source_row],
         }
         self.snapshot = types.SimpleNamespace(
@@ -44,7 +46,7 @@ class _PolicyReadRepository:
             project_id=self.project_id,
             guide_id=self.guide_id,
             guide_version="v1",
-            manifest_schema_version="guide_source_snapshot.v2",
+            manifest_schema_version="guide_source_snapshot.task_examples",
             creation_generation=1,
             manifest_json=manifest,
             bundle_hash=canonical_json_hash(manifest),

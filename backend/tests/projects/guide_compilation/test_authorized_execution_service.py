@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
 from dataclasses import asdict, replace
 from uuid import UUID, uuid4
 
 import pytest
+from .runtime_fixtures import record_attempt_document_access
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -55,12 +58,8 @@ def _execution_service(
         correlation_id=uuid4(),
     )
     repository = AdminAuthorizationRepository(session)
-    authorization = AuthorizationService(
-        session, context_value, admin_repository=repository
-    )
-    prepared = PreparedAuthorizationService(
-        session, context_value, authorization, repository
-    )
+    authorization = AuthorizationService(session, context_value, admin_repository=repository)
+    prepared = PreparedAuthorizationService(session, context_value, authorization, repository)
     return GuideCompilationService(
         session,
         ProjectGuideCompilationAuthorizationAdapter(authorization, prepared),
@@ -95,6 +94,7 @@ async def test_authorized_execution_fences_accepts_and_persists_atomically(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session:
@@ -103,14 +103,12 @@ async def test_authorized_execution_fences_accepts_and_persists_atomically(
             )
         assert fenced.classification is CompilationRecoveryClassification.PROVIDER_UNCERTAIN
         assert fenced.dispatch_permitted is True
+        await record_attempt_document_access(factory, requested.attempt_id, context(values))
         async with factory() as session:
             accepted = await _execution_service(session, service).record_accepted_result(
                 actor=service, facts=facts, context=context(values), result=result()
             )
-        assert (
-            accepted.classification
-            is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED
-        )
+        assert accepted.classification is CompilationRecoveryClassification.ACCEPTED_NOT_PERSISTED
         async with factory() as session:
             with pytest.raises(GuideCompilationIntegrityError, match="not recordable"):
                 await _execution_service(session, service).record_accepted_result(
@@ -162,12 +160,11 @@ async def test_invalid_provider_result_becomes_one_bounded_terminal_outcome(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session:
-            await _execution_service(session, service).fence_dispatch(
-                actor=service, facts=facts
-            )
+            await _execution_service(session, service).fence_dispatch(actor=service, facts=facts)
         async with factory() as session:
             with pytest.raises(GuideCompilationIntegrityError, match="failure code"):
                 await _execution_service(session, service).record_invalid_result(
@@ -223,6 +220,7 @@ async def test_execution_rejects_nonfresh_session_and_durable_fact_drift(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session, session.begin():
@@ -271,6 +269,7 @@ async def test_execution_rejects_stale_setup_lineage_before_authority_or_transit
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         async with factory() as session, session.begin():
             if stale_change == "new_generation":
@@ -334,12 +333,12 @@ async def test_execution_rechecks_setup_lineage_for_outcome_and_persistence(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session:
-            await _execution_service(session, service).fence_dispatch(
-                actor=service, facts=facts
-            )
+            await _execution_service(session, service).fence_dispatch(actor=service, facts=facts)
+        await record_attempt_document_access(factory, requested.attempt_id, context(values))
         async with factory() as session, session.begin():
             await session.execute(
                 text("update project_setup_runs set status='failed' where id=:setup"),
@@ -418,9 +417,12 @@ async def test_accepted_result_replay_requires_exact_canonical_result(
         async with factory() as session, session.begin():
             repository = GuideCompilationRepository(session)
             _outcome, attempt = await repository.reserve_attempt(
-                identity(compilation_context)
+                identity(compilation_context), runtime_configuration=runtime_configuration()
             )
-            accepted = await repository.accept_result(
+            await repository.mark_provider_uncertain(attempt.id)
+        await record_attempt_document_access(factory, attempt.id, compilation_context)
+        async with factory() as session, session.begin():
+            accepted = await GuideCompilationRepository(session).accept_result(
                 attempt_id=attempt.id,
                 context=compilation_context,
                 result=result(),
@@ -432,8 +434,8 @@ async def test_accepted_result_replay_requires_exact_canonical_result(
                 result=result(),
             )
             assert replay.status == "provider_result_accepted"
-        changed_finding = result().findings[0].model_copy(
-            update={"message": "A different valid finding."}
+        changed_finding = (
+            result().findings[0].model_copy(update={"message": "A different valid finding."})
         )
         changed = result().model_copy(update={"findings": (changed_finding,)})
         async with factory() as session, session.begin():
@@ -457,7 +459,9 @@ async def test_accepted_result_rejects_context_from_another_generation(
     try:
         async with factory() as session, session.begin():
             repository = GuideCompilationRepository(session)
-            _outcome, attempt = await repository.reserve_attempt(identity(context(values)))
+            _outcome, attempt = await repository.reserve_attempt(
+                identity(context(values)), runtime_configuration=runtime_configuration()
+            )
             with pytest.raises(GuideCompilationIntegrityError, match="result is invalid"):
                 await repository.accept_result(
                     attempt_id=attempt.id,
@@ -480,7 +484,9 @@ async def test_reserved_attempt_cannot_persist_without_accepted_custody(
     try:
         async with factory() as session, session.begin():
             repository = GuideCompilationRepository(session)
-            _outcome, attempt = await repository.reserve_attempt(attempt_identity)
+            _outcome, attempt = await repository.reserve_attempt(
+                attempt_identity, runtime_configuration=runtime_configuration()
+            )
             with pytest.raises(GuideCompilationIntegrityError, match="not ready"):
                 await repository.persist_accepted(
                     attempt_id=attempt.id,

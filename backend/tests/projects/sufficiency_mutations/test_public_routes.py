@@ -21,7 +21,6 @@ from projects.sufficiency_mutations.commands import create_payload
     "suffix,body,lookup_method",
     [
         ("sufficiency-reports", create_payload().model_dump(mode="json"), "get_guide"),
-        (f"source-snapshots/{rows.SNAPSHOT}/run-sufficiency-agent", None, "get_guide"),
         (
             f"sufficiency-reports/{rows.REPORT}/acknowledge-warnings",
             {"acknowledgement_note": "Understood"},

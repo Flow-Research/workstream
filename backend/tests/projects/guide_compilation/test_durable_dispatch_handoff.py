@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
 import asyncio
 import json
@@ -34,6 +36,7 @@ async def _requested(database_url: str):
                 actor=actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
     finally:
         await engine.dispose()
@@ -102,7 +105,8 @@ async def test_cancellation_before_fence_commit_leaves_attempt_reserved(
         async with factory() as session:
             with pytest.raises(asyncio.CancelledError):
                 await GuideCompilationService(
-                    session, _CancelledPreflight()  # type: ignore[arg-type]
+                    session,
+                    _CancelledPreflight(),  # type: ignore[arg-type]
                 ).fence_dispatch(actor=service, facts=facts)
         async with factory() as session:
             status = await session.scalar(
@@ -117,8 +121,7 @@ async def test_cancellation_before_fence_commit_leaves_attempt_reserved(
 
 def test_coordinator_cannot_import_or_call_a_provider() -> None:
     source = (
-        Path(__file__).resolve().parents[3]
-        / "app/modules/projects/guide_compilation/service.py"
+        Path(__file__).resolve().parents[3] / "app/modules/projects/guide_compilation/service.py"
     ).read_text(encoding="utf-8")
     assert "compile_project_guide" not in source
     assert "app.workers" not in source

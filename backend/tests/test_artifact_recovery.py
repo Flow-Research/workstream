@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings
-from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import ArtifactRecoveryRequest
 from app.interfaces.artifacts import (
     ArtifactObjectMissingError,
@@ -26,7 +25,6 @@ from app.interfaces.artifacts import (
     ArtifactStoreUnavailableError,
 )
 from app.modules.artifacts.models import (
-    ArtifactPutAttempt,
     ArtifactRecoveryAttempt,
     ArtifactVerificationJob,
 )
@@ -36,10 +34,8 @@ from app.modules.artifacts.schemas import (
     ArtifactRecoveryIneligibleError,
     ArtifactAuthorityDeniedError,
     DenyArtifactRecoveryAuthority,
-    GuideArtifactAdmissionRequest,
 )
 from app.modules.artifacts.service import (
-    ArtifactAdmissionService,
     ArtifactRecoveryService,
     ArtifactStorageOrchestrator,
     artifact_storage_namespace_spec,
@@ -52,14 +48,7 @@ from app.modules.authorization.runtime import (
     HumanAuthorizationContext,
     IdentityLinkStatus,
 )
-from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId, PermissionId
-from app.modules.projects.models import (
-    GuideSourceSnapshot,
-    GuideSourceSnapshotItem,
-    ProjectGuide,
-)
-from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 from app.modules.tasks.models import AuditEvent
 from tests.artifact_store_helpers import artifact_admission_limit_settings, minted_source
 from tests.test_artifact_admission import _admit_checker_output
@@ -71,17 +60,6 @@ class _AllowArtifactAuthority:
     async def consume(self, **_values: object) -> None: ...
 
     def discard(self) -> None: ...
-
-
-class _AllowGuidePreparedAuthorization:
-    def __init__(self, actor_profile_id: UUID) -> None:
-        self.actor_profile_id = actor_profile_id
-        self.handle = object.__new__(PreparedAuthorizationHandle)
-
-    async def consume(self, *, prepared_authorization, facts) -> UUID:
-        assert prepared_authorization is self.handle
-        assert facts.byte_count >= 0
-        return self.actor_profile_id
 
 
 class _DenyTerminalArtifactAuthority(_AllowArtifactAuthority):
@@ -128,6 +106,7 @@ def _settings(tmp_path: Path) -> Settings:
     root = tmp_path / "durable"
     root.mkdir(mode=0o700, parents=True)
     return Settings(
+        _env_file=None,
         **artifact_admission_limit_settings(1024),
         environment="test",
         artifact_store_backend="local",
@@ -174,134 +153,6 @@ async def _seed_recovery_actor(session, context: HumanAuthorizationContext) -> N
             last_verified_at=datetime.now(UTC),
         )
     )
-
-
-async def _seed_guide_owner(session, context: HumanAuthorizationContext) -> str:
-    await _seed_recovery_actor(session, context)
-    project_id = str(uuid4())
-    await seed_historical_project(
-        session,
-        project_id=project_id,
-        name="Guide recovery project",
-        slug=f"guide-recovery-{project_id}",
-    )
-    await session.flush()
-    return project_id
-
-
-async def _exhausted_guide_job(session, settings, tmp_path, context):
-    namespace = artifact_storage_namespace_spec(
-        settings,
-        LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root)),
-    )
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
-    source_cm = minted_source(tmp_path / "guide-source", b"recover guide")
-    source = await source_cm.__aenter__()
-    project_id = await _seed_guide_owner(session, context)
-    guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(3))
-    async with suspend_historical_product_custody(
-        session,
-        table="project_guides",
-        triggers=("guide_mutation_product_custody",),
-    ):
-        session.add(
-            ProjectGuide(
-                id=guide_id,
-                project_id=project_id,
-                version="v1",
-                status="draft",
-                content_markdown="# Guide",
-                created_by="test",
-            )
-        )
-        await session.flush()
-    async with suspend_historical_product_custody(
-        session,
-        table="guide_source_snapshots",
-        triggers=("source_snapshot_product_custody",),
-    ):
-        session.add(
-            GuideSourceSnapshot(
-                id=snapshot_id,
-                project_id=project_id,
-                guide_id=guide_id,
-                guide_version="v1",
-                manifest_schema_version="v1",
-                manifest_json={"items": [item_id]},
-                bundle_hash=canonical_json_hash({"items": [item_id]}),
-                captured_by=str(context.actor_profile_id),
-            )
-        )
-        await session.flush()
-    async with suspend_historical_product_custody(
-        session,
-        table="guide_source_snapshot_items",
-        triggers=("guide_source_snapshot_items_custody",),
-    ):
-        session.add(
-            GuideSourceSnapshotItem(
-                id=item_id,
-                source_snapshot_id=snapshot_id,
-                item_order=0,
-                source_kind="inline",
-                source_label="guide.md",
-                ingestion_adapter="inline",
-                media_type=source.commitment.media_type,
-            )
-        )
-        await session.flush()
-    await session.commit()
-    prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
-    admission = await ArtifactAdmissionService(session, settings, namespace).admit(
-        GuideArtifactAdmissionRequest(
-            guide_source_item_id=UUID(item_id),
-            source=source,
-            operation_identity=canonical_json_hash(
-                {"request_type": "guide", "guide_source_item_id": item_id}
-            ),
-            request_digest="sha256:" + "a" * 64,
-        ),
-        guide_prepared_authorization=prepared,  # type: ignore[arg-type]
-        prepared_authorization=prepared.handle,
-    )
-    orchestrator = ArtifactStorageOrchestrator(
-        session, store, namespace, settings, _AllowArtifactAuthority()
-    )
-    await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-    job = await session.scalar(
-        select(ArtifactVerificationJob).where(
-            ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)
-        )
-    )
-    if job is None:
-        attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-        assert attempt is not None and attempt.replica_id is not None
-        job = ArtifactVerificationJob(
-            id=str(uuid4()),
-            originating_put_attempt_id=attempt.id,
-            replica_id=attempt.replica_id,
-            status="pending",
-            maximum_attempts=1,
-        )
-        session.add(job)
-        await session.commit()
-    job_id = job.id
-    await session.rollback()
-    orchestrator._read_complete = AsyncMock(side_effect=ArtifactStoreUnavailableError("down"))
-    await orchestrator.verify_object(UUID(job_id))
-    job = await session.get(ArtifactVerificationJob, job_id)
-    assert job is not None
-    await session.refresh(job)
-    await session.commit()
-    await source_cm.__aexit__(None, None, None)
-    return project_id, job, orchestrator, bootstrap
 
 
 async def _exhausted_job(session, settings, tmp_path, context):
@@ -352,7 +203,7 @@ async def _exhausted_job(session, settings, tmp_path, context):
 def _request(
     context: HumanAuthorizationContext,
     project_id: str,
-    task_id: str | None,
+    task_id: str,
     job: ArtifactVerificationJob,
     *,
     submission_id: str | None = None,
@@ -362,7 +213,7 @@ def _request(
     return ArtifactRecoveryRequest(
         authorization_context=context,
         project_id=UUID(project_id),
-        task_id=UUID(task_id) if task_id is not None else None,
+        task_id=UUID(task_id),
         submission_id=UUID(submission_id) if submission_id is not None else None,
         source_verification_job_id=UUID(job.id),
         reason=reason,
@@ -391,8 +242,8 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
             ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
             request = _request(context, project_id, task_id, source, submission_id=submission_id)
-            first = await service.create(request)
-            replay = await service.create(request)
+            first = await service.retry_verification(request)
+            replay = await service.retry_verification(request)
             assert first.retry_verification_job_id == replay.retry_verification_job_id
             assert replay.replayed is True
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
@@ -411,7 +262,7 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
 
 
 @pytest.mark.asyncio
-async def test_taskless_recovery_and_deny_only_authority_boundary(
+async def test_checker_recovery_denial_has_no_effects_and_replay_requires_authority(
     recovery_database_env: str, tmp_path: Path
 ) -> None:
     engine = create_async_engine(recovery_database_env)
@@ -420,24 +271,24 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
         async with factory() as session:
             context = _context()
             settings = _settings(tmp_path)
-            project_id, source, _orchestrator, bootstrap = await _exhausted_guide_job(
+            project_id, task_id, submission_id, source, _orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
-            request = _request(context, project_id, None, source)
+            request = _request(context, project_id, task_id, source, submission_id=submission_id)
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(
                     session, settings, DenyArtifactRecoveryAuthority()
-                ).create(request)
+                ).retry_verification(request)
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
             assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 1
             await session.rollback()
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(request)
+            ).retry_verification(request)
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(
                     session, settings, DenyArtifactRecoveryAuthority()
-                ).create(request)
+                ).retry_verification(request)
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
             assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
             assert (
@@ -451,7 +302,7 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
             await session.rollback()
             replay = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(request)
+            ).retry_verification(request)
             assert replay.replayed is True
             assert created.retry_verification_job_id == replay.retry_verification_job_id
             bootstrap.close()
@@ -478,11 +329,11 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
                 bootstrap,
             ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            created = await service.create(
+            created = await service.retry_verification(
                 _request(context, project_id, task_id, source, submission_id=submission_id)
             )
             with pytest.raises(ArtifactRecoveryConflictError):
-                await service.create(
+                await service.retry_verification(
                     _request(
                         context,
                         project_id,
@@ -496,7 +347,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
             source.terminal_result_code = "verified"
             await session.commit()
             with pytest.raises(ArtifactRecoveryConflictError):
-                await service.create(
+                await service.retry_verification(
                     _request(
                         context,
                         project_id,
@@ -522,7 +373,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
             )
             await session.rollback()
             with pytest.raises(ArtifactRecoveryIneligibleError):
-                await service.create(retry_request)
+                await service.retry_verification(retry_request)
             bootstrap.close()
     finally:
         await engine.dispose()
@@ -548,7 +399,7 @@ async def test_terminal_recovery_authority_change_rolls_back_all_facts(
             ) = await _exhausted_job(session, settings, tmp_path, context)
             authority = _AllowThenDenyRecoveryAuthority()
             with pytest.raises(ArtifactAuthorityDeniedError):
-                await ArtifactRecoveryService(session, settings, authority).create(
+                await ArtifactRecoveryService(session, settings, authority).retry_verification(
                     _request(
                         context,
                         project_id,
@@ -593,7 +444,7 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
             ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
+            ).retry_verification(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
             )
@@ -636,7 +487,7 @@ async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
             ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
+            ).retry_verification(_request(context, project_id, task_id, source, submission_id=submission_id))
             orchestrator._authority = _DenyTerminalArtifactAuthority()
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
@@ -696,7 +547,7 @@ async def test_every_failed_retry_outcome_terminalizes_recovery_once(
             ) = await _exhausted_job(session, settings, tmp_path, context)
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(_request(context, project_id, task_id, source, submission_id=submission_id))
+            ).retry_verification(_request(context, project_id, task_id, source, submission_id=submission_id))
             if isinstance(provider_result, Exception):
                 orchestrator._read_complete = AsyncMock(side_effect=provider_result)
             else:
@@ -746,10 +597,10 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
             request = _request(context, project_id, task_id, source, submission_id=submission_id)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
-                ArtifactRecoveryService(first_session, settings, _AllowRecoveryAuthority()).create(
+                ArtifactRecoveryService(first_session, settings, _AllowRecoveryAuthority()).retry_verification(
                     request
                 ),
-                ArtifactRecoveryService(second_session, settings, _AllowRecoveryAuthority()).create(
+                ArtifactRecoveryService(second_session, settings, _AllowRecoveryAuthority()).retry_verification(
                     request
                 ),
             )
@@ -783,7 +634,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 bootstrap,
             ) = await _exhausted_job(session, settings, tmp_path, context)
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
-            first = await service.create(
+            first = await service.retry_verification(
                 _request(context, project_id, task_id, source, submission_id=submission_id)
             )
             orchestrator._read_complete = AsyncMock(
@@ -810,7 +661,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
             )
             first_attempt_id = first_attempt.id
             await session.rollback()
-            second = await service.create(second_request)
+            second = await service.retry_verification(second_request)
             second_attempt = await session.get(
                 ArtifactRecoveryAttempt, str(second.recovery_attempt_id)
             )
@@ -819,4 +670,108 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
             assert second.source_verification_job_id == first.retry_verification_job_id
             bootstrap.close()
     finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replay_path", ["new", "existing", "concurrent_winner"])
+async def test_retained_guide_recovery_is_rejected_before_authority(replay_path, tmp_path):
+    """Neither a retained chain nor a uniqueness-race replay revives guide work."""
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from sqlalchemy.exc import IntegrityError
+
+    @asynccontextmanager
+    async def transaction():
+        yield
+
+    session = Mock()
+    session.begin = transaction
+    authority = Mock()
+    authority.authorize = AsyncMock(side_effect=AssertionError("obsolete recovery requested authority"))
+    service = ArtifactRecoveryService(session, _settings(tmp_path), authority)
+    source_id, put_id = uuid4(), uuid4()
+    source = SimpleNamespace(id=str(source_id), originating_put_attempt_id=str(put_id), cas_version=0)
+    existing = SimpleNamespace(project_id=str(uuid4()))
+    repo = Mock()
+    repo.lock_recovery_by_source = AsyncMock(return_value=existing if replay_path == "existing" else None)
+    if replay_path == "concurrent_winner":
+        repo.lock_recovery_by_source.side_effect = [IntegrityError("fixture", {}, Exception()), existing]
+    repo.lock_verification_job = AsyncMock(return_value=source)
+    repo.lock_put_attempt = AsyncMock(return_value=SimpleNamespace(producer_request_type="guide", task_id=None))
+    service._repo = repo
+    request = _request(_context(), str(uuid4()), str(uuid4()), source)
+    with pytest.raises(ArtifactRecoveryIneligibleError, match="producer does not use verification recovery"):
+        await service.retry_verification(request)
+    authority.authorize.assert_not_awaited()
+    session.add.assert_not_called()
+    assert repo.lock_put_attempt.await_count == 1
+
+
+def test_current_recovery_api_requires_task_scope():
+    from app.modules.artifacts.router import ArtifactRecoveryCreateRequest
+    from pydantic import ValidationError
+
+    payload = dict(project_id=uuid4(), reason="retry", client_idempotency_key="retry-1", expected_source_job_cas_version=0)
+    for fields in (payload, payload | {"task_id": None}):
+        with pytest.raises(ValidationError) as error:
+            ArtifactRecoveryCreateRequest.model_validate(fields)
+        assert error.value.errors()[0]["loc"] == ("task_id",)
+    assert ArtifactRecoveryCreateRequest.model_validate(payload | {"task_id": uuid4()}).submission_id is None
+
+
+async def test_retained_guide_verification_job_cannot_scan_claim_or_execute(
+    recovery_database_env: str, tmp_path: Path,
+) -> None:
+    """An adversarial retained row cannot reactivate the removed guide verifier."""
+    from tests.test_artifact_admission import (
+        _settings, _namespace, _admit_guide_source, _context, _count, _AllowArtifactAuthority,
+    )
+    from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationReceipt
+    from app.modules.artifacts.repository import ArtifactRepository
+    from sqlalchemy import text
+
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(recovery_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(
+        adapter_identity=bootstrap.identity, namespace_identity=bootstrap.namespace_identity,
+        namespace_fingerprint=namespace.namespace_fingerprint,
+    ))
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "assigned.pdf", b"%PDF-1.7\nGuide\n%%EOF", media_type="application/pdf") as source:
+                admission = await _admit_guide_source(session, settings, namespace, _context(), source)
+                orchestrator = ArtifactStorageOrchestrator(session, store, namespace, settings, _AllowArtifactAuthority())
+                assert await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source) == "document_stored"
+                assert await _count(session, ArtifactVerificationJob) == 0
+                put = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                # This represents a retained or fabricated row, never a successful
+                # current upload path. Retained rows are not deleted by cleanup.
+                job = ArtifactVerificationJob(id=str(uuid4()), originating_put_attempt_id=put.id,
+                    replica_id=put.replica_id, status="pending", maximum_attempts=1)
+                session.add(job)
+                await session.commit()
+                job_id = UUID(job.id)
+                before = (await session.execute(text("select to_jsonb(j) from artifact_verification_jobs j where id=:id"), {"id": str(job_id)})).scalar_one()
+                await session.rollback()
+                repo = ArtifactRepository(session)
+                async with session.begin():
+                    assert str(job_id) not in await repo.list_due_verification_job_ids(cutoff=await repo.database_now(), limit=100)
+                    assert await repo.claim_verification_job(job_id=job_id, executor_id=uuid4(), lease_seconds=30, expected_generation=0) is None
+                from unittest.mock import Mock
+                authority = Mock()
+                authority.prepare = AsyncMock(side_effect=AssertionError("retained guide job requested authority"))
+                verifier = ArtifactStorageOrchestrator(session, store, namespace, settings, authority)
+                verifier._read_complete = AsyncMock(side_effect=AssertionError("retained guide job read provider"))
+                assert await verifier.verify_object(job_id) == "stale"
+                authority.prepare.assert_not_awaited()
+                verifier._read_complete.assert_not_awaited()
+                assert (await session.execute(text("select to_jsonb(j) from artifact_verification_jobs j where id=:id"), {"id": str(job_id)})).scalar_one() == before
+                assert await _count(session, ArtifactVerificationReceipt) == 0
+    finally:
+        bootstrap.close()
         await engine.dispose()

@@ -1129,9 +1129,12 @@ serialized state. If broker dispatch fails, inspect the exact setup run for
 `enqueue_failed` and use its bounded recovery path. Retrying the original HTTP
 request returns its recorded response and must not dispatch again.
 
-Source markdown can be corrected only until the first snapshot exists. After
-capture, source changes correctly return 409 while bounded draft metadata may
-still be updated. Embedded review, revision, retired payout/economic, and
+Guide creation requires the ordered task-example list. It is stored with guide
+metadata in PostgreSQL and cannot be edited in place; corrections require a new
+guide version. Upload-only document declarations form the separate immutable
+source snapshot, and original document bytes live in ArtifactStore/S3. Inline
+Markdown and URL/repository ingestion are unavailable. Bounded draft metadata
+such as `change_summary` may still be updated. Embedded review, revision, retired payout/economic, and
 contribution-record configuration fields correctly return 422; do not reintroduce a
 compatibility payload or direct product-service authorization path.
 
@@ -1203,6 +1206,8 @@ POL-04B1 adds the hidden `project.guide_compilation.request_automatic` action
 under the existing `project.guide_compilation.execute` permission, restricted to
 `workstream.project.setup`. It binds the exact committed source mutation and its
 authorization event to one setup generation. Both human and automatic request
-replays recheck current authority inside the receipt transaction. The live Celery
-cutover remains POL-04B; this request boundary does not run inference or approve
-policies.
+replays recheck current authority inside the receipt transaction. POL-04B
+composes this authority with execution, projections and finalization in the live
+Celery worker. The automatic operation stops at findings or draft proposals;
+POL-05A → AUTH-12F4 → POL-05B owns the remaining manager review and approval.
+Default and public mutation ports remain unavailable.

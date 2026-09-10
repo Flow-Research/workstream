@@ -1257,7 +1257,9 @@ class ArtifactOperationReceipt(Base):
         UniqueConstraint("put_attempt_id", name="uq_artifact_receipt_put_attempt"),
         CheckConstraint(SHA256_CHECK.format(column="request_digest"), name="request_digest_shape"),
         CheckConstraint("operation = 'put'", name="operation"),
-        CheckConstraint("outcome = 'stored_pending_verification'", name="outcome"),
+        CheckConstraint("outcome in ('stored_pending_verification', 'document_stored')", name="outcome"),
+        CheckConstraint("outcome <> 'document_stored' or guide_source_item_id is not null",
+                        name="document_outcome"),
         CheckConstraint("attempt_number > 0", name="attempt_positive"),
         CheckConstraint(
             "contract_version = 2 and put_attempt_id is not null and "

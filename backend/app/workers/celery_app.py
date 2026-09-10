@@ -73,6 +73,10 @@ def create_celery_app() -> Celery:
         task_serializer="json",
         timezone="UTC",
         beat_schedule={
+            "guide-runtime-resource-cleanup": {
+                "task": "workstream.project_setup.cleanup_runtime_resources",
+                "schedule": settings.artifact_pending_work_scan_interval_seconds,
+            },
             ARTIFACT_SCRATCH_CLEANUP_SCHEDULE: {
                 "task": ARTIFACT_SCRATCH_CLEANUP_TASK,
                 "schedule": settings.artifact_scratch_cleanup_interval_seconds,

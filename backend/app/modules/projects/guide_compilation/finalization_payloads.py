@@ -32,7 +32,7 @@ from app.modules.projects.models import (
     ProjectSetupRun,
     SubmissionArtifactPolicy,
 )
-from app.modules.projects.api.setup_identity import pre_submit_setup_task_id
+from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 from .contracts import AcceptedCompilationResult
 from .custody_payloads import policy_digest, report_digest, source_state
@@ -92,7 +92,7 @@ def require_lineage(
         or a.persisted_compilation_id != c.id
         or c.attempt_id != a.id
         or request.attempt_id != a.id
-        or s.celery_task_id != pre_submit_setup_task_id(s.id, s.setup_generation)
+        or s.celery_task_id != project_guide_compilation_task_id(s.id, s.setup_generation)
     ):
         deny()
     for row in (a, c, s, snap, request):
@@ -120,7 +120,7 @@ def require_source_shape(view: LockedFinalization) -> str:
     if (
         s.status != "queued"
         or s.current_step != "queued"
-        or (s.continuation_verification_job_id is None) != (s.continuation_started_at is None)
+        or s.documents_ready_at is None
     ):
         deny()
     for name in (

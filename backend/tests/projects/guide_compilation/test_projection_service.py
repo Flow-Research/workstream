@@ -15,8 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
-from app.modules.artifacts.guide_sufficiency_material import (
-    SqlAlchemyGuideSufficiencyMaterialAdapter,
+from app.adapters.artifacts import (
+    guide_document_manifest_port,
 )
 from app.modules.authorization.api import AuthorizationDenied
 from app.modules.projects.api import (
@@ -52,7 +52,7 @@ class _CountingMaterial:
 class _CountingSqlMaterial:
     def __init__(self, session: AsyncSession) -> None:
         self.calls = 0
-        self._inner = SqlAlchemyGuideSufficiencyMaterialAdapter(session)
+        self._inner = guide_document_manifest_port(session)
 
     async def load(self, request):
         self.calls += 1
@@ -102,7 +102,7 @@ def _service(
     factory,
     values: dict[str, UUID],
     *,
-    material_factory=SqlAlchemyGuideSufficiencyMaterialAdapter,
+    material_factory=guide_document_manifest_port,
     authorization_factory=None,
 ):
     if authorization_factory is None:
@@ -579,7 +579,6 @@ async def test_malformed_authority_rolls_back_all_projection_effects(
         "status='failed'",
         "current_step='guide_sufficiency'",
         "celery_task_id='00000000-0000-0000-0000-000000000001'",
-        "continuation_started_at=now()",
         "error_code='projection_error'",
         "error_summary='projection error'",
         "post_submit_derivation_summary='{}'::json",
@@ -784,8 +783,6 @@ async def test_projection_and_authority_roll_back_together_on_custody_failure(
         ("setup", "status", "failed"),
         ("setup", "current_step", "guide_sufficiency"),
         ("setup", "celery_task_id", "wrong"),
-        ("setup", "continuation_verification_job_id", "job"),
-        ("setup", "continuation_started_at", datetime.now(UTC)),
         ("setup", "error_code", "error"),
         ("setup", "error_artifact_incident_id", "incident"),
         ("setup", "error_summary", "error"),
@@ -828,8 +825,7 @@ def test_source_state_predicate_rejects_every_lineage_and_output_drift(
         status="queued",
         current_step="queued",
         celery_task_id="task",
-        continuation_verification_job_id=None,
-        continuation_started_at=None,
+        documents_ready_at=datetime.now(UTC),
         error_code=None,
         error_artifact_incident_id=None,
         error_summary=None,

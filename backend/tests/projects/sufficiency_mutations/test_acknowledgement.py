@@ -132,20 +132,13 @@ async def test_acknowledgement_rejects_report_generation_mismatch(case):
     case.replay.complete.assert_not_awaited()
 
 
-async def test_acknowledgement_resets_continuation(case):
+async def test_acknowledgement_preserves_setup_without_restart(case):
     case.report.project_setup_run_id = str(rows.SETUP)
     case.report.setup_generation = 1
     case.setup.output_sufficiency_report_id = str(rows.REPORT)
     before = vars(case.setup).copy()
     outcome = await invoke(case, "ack")
-    assert vars(case.setup) == {
-        **before,
-        "status": "enqueue_failed",
-        "current_step": "enqueue",
-        "celery_task_id": None,
-        "error_code": None,
-        "error_summary": None,
-    }
+    assert vars(case.setup) == before
     case.projects.lock_project_setup_run.assert_awaited_once_with(str(rows.SETUP))
     case.replay.complete.assert_awaited_once_with(
         case.reservation,

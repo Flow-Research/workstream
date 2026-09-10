@@ -24,7 +24,9 @@ from scripts.schema_baseline_manifest import (
 )
 from scripts.schema_baseline_sql import split_sql_statements
 
-HEAD_REVISION = "0014_project_role_scope"
+from tests.migration_fixtures import current_schema_revision
+
+HEAD_REVISION = current_schema_revision()
 BASELINE_REVISION = "0001_v01_baseline"
 RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this database"
 pytestmark = pytest.mark.postgres_schema_contract
@@ -84,6 +86,8 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0015_guide_runtime_configuration",
+        "0014_project_role_scope",
         "0013_compilation_request_origin",
         "0012_contribution_policy_audit_resource",
         "0011_review_policy_human_review",
@@ -167,17 +171,26 @@ def test_current_head_installs_submission_lineage_contract(
                 "and conname=any($1::text[]) union all "
                 "select indexname as name from pg_indexes where tablename='submissions' "
                 "and schemaname='public' and indexname=any($1::text[])",
-                ["fk_submissions_task_assignment_id_task_assignments",
-                 "ix_submissions_submission_bundle_admission_id",
-                 "uq_submissions_artifact_binding_id", "ix_submissions_artifact_content_id"],
+                [
+                    "fk_submissions_task_assignment_id_task_assignments",
+                    "ix_submissions_submission_bundle_admission_id",
+                    "uq_submissions_artifact_binding_id",
+                    "ix_submissions_artifact_content_id",
+                ],
             )
             package_nullable = await connection.fetchval(
                 "select is_nullable from information_schema.columns where "
                 "table_schema='public' and table_name='submissions' "
                 "and column_name='package_hash'"
             )
-            return (bool(exists), definition, [row["column_name"] for row in columns],
-                    lineage_shape, {row["name"] for row in objects}, package_nullable)
+            return (
+                bool(exists),
+                definition,
+                [row["column_name"] for row in columns],
+                lineage_shape,
+                {row["name"] for row in objects},
+                package_nullable,
+            )
         finally:
             await connection.close()
 
@@ -226,16 +239,20 @@ def test_current_head_installs_compensation_binding_lifecycle(
             triggers = await connection.fetch(
                 "select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid "
                 "where c.relname=any($1::text[]) and not t.tgisinternal",
-                ["project_compensation_adapter_bindings",
-                 "compensation_adapter_binding_lifecycle_events"],
+                [
+                    "project_compensation_adapter_bindings",
+                    "compensation_adapter_binding_lifecycle_events",
+                ],
             )
             functions = await connection.fetch(
                 "select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
                 "where n.nspname='public' and proname=any($1::text[])",
-                ["enforce_compensation_binding_lifecycle",
-                 "guard_compensation_binding_lifecycle_event",
-                 "reject_compensation_binding_lifecycle_event_change",
-                 "require_compensation_binding_lifecycle_event"],
+                [
+                    "enforce_compensation_binding_lifecycle",
+                    "guard_compensation_binding_lifecycle_event",
+                    "reject_compensation_binding_lifecycle_event_change",
+                    "require_compensation_binding_lifecycle_event",
+                ],
             )
             binding_checks = await connection.fetch(
                 "select conname from pg_constraint c join pg_class t on t.oid=c.conrelid "
@@ -262,17 +279,25 @@ def test_current_head_installs_compensation_binding_lifecycle(
         "compensation_binding_event_truncate_guard",
         "compensation_binding_lifecycle_event_required",
     }
-    assert functions == {"enforce_compensation_binding_lifecycle", "guard_compensation_binding_lifecycle_event", "reject_compensation_binding_lifecycle_event_change", "require_compensation_binding_lifecycle_event"}
+    assert functions == {
+        "enforce_compensation_binding_lifecycle",
+        "guard_compensation_binding_lifecycle_event",
+        "reject_compensation_binding_lifecycle_event_change",
+        "require_compensation_binding_lifecycle_event",
+    }
     assert {
         "ck_project_compensation_adapter_bindings_status",
         "ck_project_compensation_adapter_bindings_lifecycle_shape",
         "ck_project_compensation_adapter_bindings_lifecycle_timestamps",
     } <= binding_checks
-    assert not {
-        "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
-        "ck_project_compensation_adapter_bindings_ck_project_com_da73",
-        "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
-    } & binding_checks
+    assert (
+        not {
+            "ck_project_compensation_adapter_bindings_ck_project_com_95ba",
+            "ck_project_compensation_adapter_bindings_ck_project_com_da73",
+            "ck_project_compensation_adapter_bindings_ck_project_com_ade1",
+        }
+        & binding_checks
+    )
 
 
 def test_current_head_installs_compensation_adapter_identity(
@@ -286,9 +311,7 @@ def test_current_head_installs_compensation_adapter_identity(
         command.upgrade(config, HEAD_REVISION)
 
     async def identity_constraint() -> str:
-        connection = await asyncpg.connect(
-            isolated_database_env.replace("+asyncpg", "")
-        )
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
             return await connection.fetchval(
                 "select pg_get_constraintdef(c.oid) from pg_constraint c "
@@ -300,6 +323,7 @@ def test_current_head_installs_compensation_adapter_identity(
             await connection.close()
 
     assert "workstream.compensation.adapter" in asyncio.run(identity_constraint())
+
 
 def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
     isolated_database_env: str, migration_lock
@@ -316,6 +340,7 @@ def test_0004_nonempty_binding_preflight_leaves_0003_unchanged(
             command.upgrade(config, HEAD_REVISION)
 
     assert asyncio.run(snapshot_nonempty_0003_adapter_binding(isolated_database_env)) == before
+
 
 def test_manifest_covers_every_required_object_class() -> None:
     manifest = json.loads(_manifest_path().read_text(encoding="utf-8"))
@@ -517,7 +542,7 @@ def test_root_downgrade_refuses_without_mutation(
 ) -> None:
     config = _alembic_config()
     before = asyncio.run(_database_snapshot(isolated_database_env))
-    with migration_lock(), pytest.raises(RuntimeError, match="cannot be downgraded"):
+    with migration_lock(), pytest.raises(RuntimeError, match="guide document runtime downgrade would discard retained evidence"):
         command.downgrade(config, "base")
     after = asyncio.run(_database_snapshot(isolated_database_env))
     assert before == after

@@ -37,6 +37,14 @@
       "target": "backend/app/adapters/project_agents/openai_agent_sdk.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/project_agents/openai_workspace.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/project_agents/provider_resilience.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/api_controls.py"
     },
@@ -101,6 +109,10 @@
       "target": "backend/app/core/project_agents.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/core/project_guide_instructions.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/core/s3_validation.py"
     },
@@ -139,6 +151,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/interfaces/project_agents.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/interfaces/project_guide_runtime.py"
     },
     {
       "group": "shared",
@@ -206,59 +222,15 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_bindings.py"
+      "target": "backend/app/modules/artifacts/guide_document_access.py"
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_docx.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_extraction.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_extraction_service.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_extraction_worker.py"
+      "target": "backend/app/modules/artifacts/guide_documents.py"
     },
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/guide_formats.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_images.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_materialization.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_ooxml.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_pdf.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_pptx.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_setup.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_sufficiency_material.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/guide_xlsx.py"
     },
     {
       "group": "artifacts",
@@ -438,6 +410,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/guide_mutations.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/prepared_adapter_bindings.py"
     },
     {
@@ -447,6 +423,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/domain/prepared_contribution_policies.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/prepared_guide_mutations.py"
     },
     {
       "group": "auth",
@@ -579,6 +559,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/api/pre_submit.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/pre_submit_catalogue.py"
     },
     {
       "group": "artifacts",
@@ -746,11 +730,19 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_documents.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/locked_policy.py"
     },
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/api/setup_identity.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/task_examples.py"
     },
     {
       "group": "lifecycle",
@@ -794,11 +786,23 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/diagnostics.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/document_scope.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/finalization.py"
     },
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/finalization_payloads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/live.py"
     },
     {
       "group": "lifecycle",
@@ -822,7 +826,15 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/runtime_resources.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/source_state.py"
     },
     {
       "group": "lifecycle",
@@ -1026,15 +1038,15 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/check_guide_extractor_dependencies.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/scripts/coverage_policy.py"
     },
     {
       "group": "shared",
       "target": "backend/scripts/external_api_drill.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/scripts/guide_compilation_e2e.py"
     },
     {
       "group": "shared",
@@ -1079,13 +1091,9 @@
     {
       "group": "shared",
       "target": "backend/scripts/validate_test_lane_evidence.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/scripts/week2_api_e2e.py"
     }
   ],
-  "authority_digest": "e3697e367511cc43827974099af296d7b80c68d5cee1d7e46f91d619307838e6",
+  "authority_digest": "ddf6c3e0221d3e8caddc9b7f556dd75616f5880272552976bbd7b04b167b72f9",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

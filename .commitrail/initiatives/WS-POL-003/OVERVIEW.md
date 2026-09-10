@@ -1,6 +1,6 @@
 # WS-POL-003 — Unified project-guide compilation
 
-Latest completed POL behavior: [POL-04B1 hidden automatic request custody](WS-POL-003-04B1.md).
+Latest completed POL behavior: [POL-04B live unified setup](WS-POL-003-04B.md).
 Current remaining design: [POL plan](planning/PLAN.md) and the
 [cross-owner dependency contract](../WS-ARCH-001/planning/PLAN.md#current-dependency-contract).
 
@@ -9,12 +9,13 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 [`planning/chunk contracts`](pre-cutover/chunks/).
 
 - Disposition: Planned
-- Completed boundary: hidden execution, deterministic projections, immutable setup finalization,
-  and automatic request custody with current-authority replay.
+- Completed boundary: automatic unified execution, deterministic projections,
+  immutable setup finalization and current-authority replay.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
-- Next usable boundary: POL-04B consumes the [consolidated catalogue](../WS-ARCH-001/WS-ARCH-001-04A.md)
-  and connects unified setup with completed AUTH-12B2.
+- Next usable boundary: POL-05A builds hidden complete-proposal review, correction and pre-policy approval custody, followed by AUTH-12F4 and POL-05B approval/manual rerun.
+  Live setup consumes the [consolidated catalogue](../WS-ARCH-001/WS-ARCH-001-04A.md)
+  and completed AUTH-12B2.
   Earlier development schemas require no backward-compatibility paths.
   The existing ReviewPolicy boolean is delivered; automated acceptance remains unavailable.
 - Governing sources: project-guide specifications, authorization and
@@ -29,12 +30,18 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   sufficiency/artifact-policy projections are complete through 04A3.
 - POL-04A2 atomically binds those exact projections to an immutable finalization
   receipt and closes the current setup generation. AUTH-12B2 supplies the exact
-  concrete adapter; the default port remains unavailable and HTTP/Celery have
-  no finalization composition.
+  concrete adapter; POL-04B explicitly composes it in the automatic worker.
+  Default composition and public finalization routes remain unavailable.
 
 - POL-04B1 binds automatic source-ready requests to committed source consent
   and current setup-service authority. Human and service replay hold current
-  authority through receipt classification; live execution remains POL-04B.
+  authority through receipt classification.
+- POL-04B runs one automatic compilation when ART commits all assigned originals, using an
+  immutable runtime/model/instructions snapshot and scoped on-demand document
+  access. Original bytes stay in ArtifactStore; extracted bodies are not stored
+  in PostgreSQL. It replaces all three earlier
+  inference methods and stops at findings and draft pre/post proposals. Unknown
+  provider outcomes are visible and cannot trigger a second invocation.
 
 ## Remaining v0.1 sequence
 
@@ -46,16 +53,11 @@ Configured `false` remains available in draft but cannot activate a guide until
 the authorized automated FinalAcceptance/CON path is proven and available.
 Existing tasks retain their locked rules; adjudication is not included.
 
-1. With POL-04B1 automatic request authority and completed ARCH-04A
-   contracts, POL-04B connects automatic initial compilation with independently
-   configurable runtime/model/instructions and deletes superseded inference paths.
-   The result stops at findings and draft pre/post proposals, without approval.
-   Manager correction/manual rerun in a new generation belongs to POL-05.
-2. POL-05/06 complete proposal visibility, setup-wide correction, approval and
+1. POL-05/06 complete proposal visibility, setup-wide correction, approval and
    post-submit manifests with AUTH-12F4/12G. Immutable
    finalized setup rows require separately reviewed downstream custody before
    live post-submit integration.
-3. POL-07 facade consumes independent ARCH-04A registered-capability proof;
+2. POL-07 facade consumes independent ARCH-04A registered-capability proof;
    ARCH-04C alone owns durable post-submit persistence. AUTH-12H activates
    CP07's hidden complete guide command without a Task/CheckerRun dependency.
    Remove obsolete owner code in each replacement chunk; no compatibility or

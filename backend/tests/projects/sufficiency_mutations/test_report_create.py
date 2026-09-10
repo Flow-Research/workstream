@@ -54,7 +54,7 @@ async def test_create_stages_human_report(case, scope, scope_type):
     case.session.commit.assert_not_awaited()
 
 
-@pytest.mark.parametrize("command", ["create", "ack", "dispatch"])
+@pytest.mark.parametrize("command", ["create", "ack"])
 async def test_mutation_rejects_changed_locked_lineage(case, command):
     case.service._lineage.side_effect = [case.lineage, replace(case.lineage, setup_generation=2)]
     with pytest.raises(module.GuideSufficiencyMutationConflict, match="sufficiency_lineage_stale"):
@@ -67,7 +67,7 @@ async def test_mutation_rejects_changed_locked_lineage(case, command):
     assert case.setup.status == "enqueue_failed"
 
 
-@pytest.mark.parametrize("command", ["create", "ack", "dispatch"])
+@pytest.mark.parametrize("command", ["create", "ack"])
 async def test_mutation_consume_failure_has_no_product_effect(case, command):
     failure = RuntimeError("consume denied")
 
@@ -113,7 +113,7 @@ async def test_create_conceals_insert_conflict(case):
     case.replay.complete.assert_not_awaited()
 
 
-@pytest.mark.parametrize("command", ["create", "ack", "dispatch"])
+@pytest.mark.parametrize("command", ["create", "ack"])
 @pytest.mark.parametrize("disposition", ["pending", "mismatch", "replayed"])
 async def test_mutation_requires_claimed_reservation(case, command, disposition):
     case.replay.reserve.return_value = disposition, case.reservation

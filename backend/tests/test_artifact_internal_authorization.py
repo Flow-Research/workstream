@@ -49,8 +49,10 @@ from app.modules.artifacts.schemas import GuideArtifactAdmissionRequest
 from tests.artifact_store_helpers import minted_source
 from tests.test_artifact_admission import (
     _AllowGuidePreparedAuthorization,
+    _admit_checker_output,
     _context,
     _guide_operation,
+    _local_store,
     _namespace,
     _seed_guide,
     _settings,
@@ -643,15 +645,7 @@ async def test_put_claim_and_terminal_injected_failures_roll_back_both_sides(
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     profile, link = _service_principal(ServiceIdentity.ARTIFACT_PUT_RESOLVER)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
     try:
         async with factory() as session:
             session.add_all((profile, link))
@@ -761,7 +755,7 @@ async def test_put_claim_and_terminal_injected_failures_roll_back_both_sides(
                         correlation_id=final_request_id,
                     ),
                 )
-                assert await final.resolve_put_attempt(admission.attempt_id) == "observed_confirmed"
+                assert await final.resolve_put_attempt(admission.attempt_id) == "document_stored"
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert attempt is not None and attempt.status == "object_confirmed"
                 assert await session.scalar(select(ArtifactReplica)) is not None
@@ -906,7 +900,6 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
 ) -> None:
     settings = _settings(tmp_path)
     namespace = _namespace(settings)
-    actor_context = _context()
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     resolver = _service_principal(ServiceIdentity.ARTIFACT_PUT_RESOLVER)
@@ -925,14 +918,8 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
             session.add_all((*resolver, *verifier))
             await session.commit()
             async with minted_source(tmp_path / "atomic-verify", b"verified") as source:
-                _, guide_item_id = await _seed_guide(
-                    session,
-                    context=actor_context,
-                    content_hash=source.commitment.sha256,
-                    media_type=source.commitment.media_type,
-                )
-                admission = await _admit_guide(
-                    session, settings, namespace, actor_context, guide_item_id, source
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source
                 )
                 put_request_id = uuid4()
                 assert (

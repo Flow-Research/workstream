@@ -29,27 +29,6 @@ async def test_human_authority_requires_matching_grant(case, field, value):
         case.service._prove_human(case.decision, rows.PROJECT)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("matched_authority_kind", module.MatchedAuthorityKind.ADMIN_ROLE_GRANT),
-        ("matched_grant_id", rows.GRANT),
-    ],
-)
-async def test_setup_authority_requires_fixed_service(case, field, value):
-    case.decision.matched_authority_kind = module.MatchedAuthorityKind.FIXED_SERVICE
-    case.decision.matched_grant_id = None
-    setattr(case.decision, field, value)
-    with pytest.raises(RuntimeError, match="lacked fixed setup-service authority"):
-        case.service._prove_authority(case.decision, rows.PROJECT, "setup_service")
-
-
-async def test_setup_authority_accepts_fixed_decision(case):
-    case.decision.matched_authority_kind = module.MatchedAuthorityKind.FIXED_SERVICE
-    case.decision.matched_grant_id = None
-    assert case.service._prove_authority(case.decision, rows.PROJECT, "setup_service") is None
-
-
 async def test_prepare_forwards_exact_unsupported_denial(case):
     caller, resource = object(), object()
     action = module.ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN
@@ -63,44 +42,6 @@ async def test_prepare_forwards_exact_unsupported_denial(case):
         await case.service._prepare(case.prepared, action, caller, rows.PROJECT, resource)
     assert observed.value is denial
     case.prepared.deny_unsupported.assert_awaited_once_with(action, caller, resource, failure)
-
-
-def custody():
-    return module.ProjectSetupServiceCustodyContext(
-        setup_run_id=rows.SETUP,
-        scope_project_id=rows.PROJECT,
-        guide_id=rows.GUIDE,
-        source_snapshot_id=rows.SNAPSHOT,
-        setup_generation=1,
-        expected_step="guide_sufficiency",
-        task_id=UUID(int=20),
-        correlation_id=UUID(int=21),
-        stale_output_digest=rows.STALE_HASH,
-    )
-
-
-async def run_agent(case):
-    return await case.service._run_agent(
-        actor_profile_id=str(rows.ACTOR),
-        identity_link_id=str(rows.LINK),
-        prepared=case.prepared,
-        key=rows.KEY,
-        project_id=rows.PROJECT,
-        guide_id=rows.GUIDE,
-        source_snapshot_id=rows.SNAPSHOT,
-        execution_kind="setup_service",
-        setup_service_custody=custody(),
-    )
-
-
-async def test_agent_requires_material(case):
-    with pytest.raises(
-        module.PolicySetupBlocked, match="verified guide sufficiency is unavailable"
-    ):
-        await run_agent(case)
-    case.service._lineage.assert_not_awaited()
-    case.prepared.prepare.assert_not_awaited()
-    case.prepared.consume.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -124,13 +65,6 @@ async def test_agent_requires_material(case):
             "warning_acknowledgement",
             "sufficiency-reports/{report_id}/acknowledge-warnings",
             {"acknowledgement_note": "Understood"},
-        ),
-        (
-            "dispatch",
-            "project.guide_sufficiency.run",
-            "run",
-            "source-snapshots/{source_snapshot_id}/run-sufficiency-agent",
-            {"source_snapshot_id": str(rows.SNAPSHOT)},
         ),
     ],
 )
@@ -158,20 +92,7 @@ async def test_mutation_passes_exact_prepared_context(case, command, action, tar
     digest = canonical_json_hash(
         {"domain": "workstream.guide_sufficiency.idempotency.v1", **replay_value}
     )
-    stale = (
-        rows.STALE_HASH
-        if command != "dispatch"
-        else canonical_json_hash(
-            {
-                "domain": "workstream.project_setup.manual_dispatch.v1",
-                "project_id": str(rows.PROJECT),
-                "guide_id": str(rows.GUIDE),
-                "source_snapshot_id": str(rows.SNAPSHOT),
-                "setup_run_id": str(rows.SETUP),
-                "setup_generation": 1,
-            }
-        )
-    )
+    stale = rows.STALE_HASH
     assert selected_action.value == consumed_action.value == action
     assert handle is case.handle and consumed_caller is caller
     assert scope == module.PreparedAuthorityScope(

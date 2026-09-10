@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
 from dataclasses import replace
 import json
@@ -42,6 +44,7 @@ async def _create_request(database_url: str) -> tuple[dict[str, UUID], UUID, UUI
                 actor=actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
     finally:
         await engine.dispose()
@@ -136,9 +139,7 @@ async def test_sql_and_python_request_digests_are_byte_identical(
                     },
                 )
                 changed = authority_values | {field_name: mutated}
-                python_digest = project_guide_compilation_request_authority_digest(
-                    **changed
-                )
+                python_digest = project_guide_compilation_request_authority_digest(**changed)
                 assert sql_digest == python_digest
                 assert sql_digest != base_authority
             await connection.rollback()
@@ -225,8 +226,7 @@ async def test_request_insert_guard_rejects_stale_digest_evidence(
             if mutation == "authority":
                 await connection.execute(
                     text(
-                        "alter table audit_events disable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events disable trigger audit_events_reject_update_delete"
                     )
                 )
                 await connection.execute(
@@ -240,8 +240,7 @@ async def test_request_insert_guard_rejects_stale_digest_evidence(
                 )
                 await connection.execute(
                     text(
-                        "alter table audit_events enable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events enable trigger audit_events_reject_update_delete"
                     )
                 )
             nested = await connection.begin_nested()
@@ -345,19 +344,17 @@ async def test_repository_read_views_return_exact_request_and_empty_lineage(
             repository = GuideCompilationRepository(session)
             operation = await repository.matching_request_operation(
                 origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
-                actor=actor, facts=facts, lock=False
+                actor=actor,
+                facts=facts,
+                lock=False,
             )
             assert operation is not None
             assert (
-                await repository.request_operation_for_attempt(
-                    operation.attempt_id, lock=False
-                )
+                await repository.request_operation_for_attempt(operation.attempt_id, lock=False)
                 == operation
             )
             assert (
-                await repository.current_compilation(
-                    values["project"], values["guide"], lock=False
-                )
+                await repository.current_compilation(values["project"], values["guide"], lock=False)
                 is None
             )
     finally:
@@ -391,6 +388,7 @@ async def test_request_failure_rolls_back_attempt_and_authority_event(
                     actor=actor,
                     facts=_request(values),
                     identity=identity(context(values)),
+                    runtime_configuration=runtime_configuration(),
                 )
         async with factory() as session:
             counts = (
@@ -461,7 +459,7 @@ async def test_unknown_request_custody_failure_is_not_reported_as_replay(
                 async with session.begin():
                     repository = GuideCompilationRepository(session)
                     _outcome, attempt = await repository.reserve_attempt(
-                        identity(context(values))
+                        identity(context(values)), runtime_configuration=runtime_configuration()
                     )
                     await repository.insert_request_operation(
                         origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),

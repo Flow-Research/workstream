@@ -151,10 +151,10 @@ async def _definitions(database_url: str) -> dict[str, str]:
 
 
 def test_project_role_scope_round_trip_preserves_unrelated_contracts(
-    isolated_database_env: str, migration_lock
+    isolated_database_env: str, migration_lock, migration_schema_at
 ) -> None:
     with migration_lock():
-        command.downgrade(_config(), PRIOR)
+        migration_schema_at(PRIOR)
         before = asyncio.run(_definitions(isolated_database_env))
         command.upgrade(_config(), OWN)
         narrowed = asyncio.run(_definitions(isolated_database_env))
@@ -207,10 +207,10 @@ def test_project_role_scope_database_accepts_only_current_role_audit_facts(
 
 
 def test_project_role_scope_upgrade_refuses_incompatible_retained_history_atomically(
-    isolated_database_env: str, migration_lock
+    isolated_database_env: str, migration_lock, migration_schema_at
 ) -> None:
     with migration_lock():
-        command.downgrade(_config(), PRIOR)
+        migration_schema_at(PRIOR)
     actor, grantor, project, grant, snapshot = (str(uuid4()) for _ in range(5))
     asyncio.run(
         _seed_incompatible_snapshot(

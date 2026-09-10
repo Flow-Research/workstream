@@ -1,10 +1,7 @@
 """Migration/schema parity and immutable generation fork prevention."""
 
-from pathlib import Path
 from uuid import uuid4
 
-from alembic import command as alembic_command
-from alembic.config import Config
 import pytest
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
@@ -78,11 +75,3 @@ async def test_distinct_operations_cannot_finalize_one_setup_generation(clean_po
                     {"new_id": uuid4(), "operation": uuid4(), "setup": str(command.setup_run_id)},
                 )
         assert await stored_state(factory, command) == before
-
-
-@pytest.mark.postgres_schema_contract
-def test_empty_finalization_migration_roundtrip(isolated_database_env, migration_lock):
-    config = Config(Path(__file__).resolve().parents[4] / "alembic.ini")
-    with migration_lock():
-        alembic_command.downgrade(config, "0009_guide_compilation_projections")
-        alembic_command.upgrade(config, "0010_project_guide_setup_finalization")

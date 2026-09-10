@@ -30,7 +30,7 @@ from projects.guide_fixtures import (
     create_project,
 )
 from projects.policy_bundle_fixtures import create_approved_policy_bundle
-from project_create_fixtures import activate_guide_for_downstream_test
+from project_create_fixtures import seed_active_guide_for_downstream_test
 from projects.client_fixtures import (
     project_client as project_client,
     project_database_env as project_database_env,
@@ -44,12 +44,11 @@ async def create_locked_policy_context_fixture(
     project = await create_project(client, name=f"Locked Context {uuid4()}")
     guide = await create_guide(client, project["id"], complete_guide_payload())
     bundle = await create_approved_policy_bundle(client, project["id"], guide["id"])
-    activation = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide["id"],
     )
-    assert activation.status_code == 200, activation.text
     snapshot = bundle["source_snapshot"]
     effective = bundle["effective_policy"]
     pre_submit = bundle["pre_submit_checker_policy"]

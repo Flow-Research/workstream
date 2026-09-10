@@ -26,6 +26,10 @@ def repo_case():
         id=rows.OPERATION,
         status="pending",
         **values,
+        service_identity=None,
+        setup_run_id=None,
+        setup_task_id=None,
+        correlation_id=None,
         response_json=None,
         committed_policy_id=None,
         committed_at=None,
@@ -34,6 +38,7 @@ def repo_case():
         scalar=AsyncMock(return_value=None), get=AsyncMock(return_value=record)
     )
     repository = SubmissionPolicyMutationReplayRepository(session)
+
     async def find_operation(operation_id):
         return record if operation_id == record.operation_id else None
 
@@ -95,8 +100,8 @@ async def test_reservation_rejects_different_operation_in_human_namespace(repo_c
     selectors = {
         name: values[name]
         for name in (
-            "actor_profile_id", "idempotency_key", "service_identity", "setup_run_id",
-            "setup_generation", "setup_task_id", "correlation_id", "action_id",
+            "actor_profile_id",
+            "idempotency_key",
         )
     }
 
@@ -110,7 +115,8 @@ async def test_reservation_rejects_different_operation_in_human_namespace(repo_c
     lookups.attach_mock(case.repository._find_namespace, "namespace")
     assert await case.repository.reserve(**values) == ("mismatch", case.record)
     assert lookups.mock_calls == [
-        call.operation(values["operation_id"]), call.namespace(**selectors)
+        call.operation(values["operation_id"]),
+        call.namespace(**selectors),
     ]
     case.session.get.assert_not_awaited()
 
@@ -128,6 +134,10 @@ async def test_reservation_insert_binds_exact_values(repo_case):
     assert {key: value for key, value in compiled.params.items() if key != "id"} == {
         **case.values,
         "status": "pending",
+        "service_identity": None,
+        "setup_run_id": None,
+        "setup_task_id": None,
+        "correlation_id": None,
     }
     assert str(compiled).endswith(
         "ON CONFLICT DO NOTHING RETURNING submission_policy_mutation_idempotency_records.id"
@@ -146,43 +156,30 @@ def expected_predicate(field, value):
     return f"{column} = %({field}_1)s" + ("::UUID" if isinstance(value, UUID) else "")
 
 
-@pytest.mark.parametrize("service", [False, True])
-async def test_namespace_query_binds_exact_selectors(repo_case, service):
+async def test_namespace_query_binds_exact_human_selectors(repo_case):
     case = repo_case
-    identity = "workstream.project.setup" if service else None
-    setup = str(rows.SETUP) if service else None
-    task, correlation = (rows.REPORT, rows.OPERATION) if service else (None, None)
-    action = "project.submission_artifact_policy.derive" if service else case.values["action_id"]
     await SubmissionPolicyMutationReplayRepository._find_namespace(
         case.repository,
         actor_profile_id=str(rows.ACTOR),
-        idempotency_key=None if service else rows.KEY,
-        service_identity=identity,
-        setup_run_id=setup,
-        setup_generation=4,
-        setup_task_id=task,
-        correlation_id=correlation,
-        action_id=action,
+        idempotency_key=rows.KEY,
     )
     sql, params = predicates(case.session.scalar.await_args.args[0])
-    table = "submission_policy_mutation_idempotency_records"
-    fields = {"actor_profile_id": str(rows.ACTOR)}
-    if service:
-        fields.update(
-            service_identity=identity,
-            setup_run_id=setup,
-            setup_generation=4,
-            setup_task_id=task,
-            correlation_id=correlation,
-            action_id=action,
-        )
-    else:
-        fields["idempotency_key"] = rows.KEY
-    expected = [expected_predicate(field, value) for field, value in fields.items()]
-    if not service:
-        expected.insert(1, f"{table}.service_identity IS NULL")
-    assert sql == " AND ".join(expected)
-    assert params == {f"{field}_1": value for field, value in fields.items()}
+    assert sql == " AND ".join(
+        [
+            expected_predicate("actor_profile_id", str(rows.ACTOR)),
+            expected_predicate("service_identity", None),
+            expected_predicate("idempotency_key", rows.KEY),
+        ]
+    )
+    assert params == {"actor_profile_id_1": str(rows.ACTOR), "idempotency_key_1": rows.KEY}
+
+
+@pytest.mark.parametrize(
+    "field", ["service_identity", "setup_run_id", "setup_task_id", "correlation_id"]
+)
+async def test_human_reservation_cannot_adopt_retained_service_custody(repo_case, field):
+    setattr(repo_case.record, field, "retained-service-custody")
+    assert await repo_case.repository.reserve(**repo_case.values) == ("mismatch", repo_case.record)
 
 
 async def test_operation_lookup_uses_exact_operation_predicate(repo_case):
@@ -224,7 +221,15 @@ async def test_completion_requires_exact_pending_row(repo_case, matched):
         with pytest.raises(module.ProjectRepositoryIntegrityError, match="invalid.*completion"):
             await call
     sql, params = predicates(case.session.scalar.await_args.args[0])
-    fields = {"operation_id": values["operation_id"], **values, "status": "pending"}
+    fields = {
+        "operation_id": values["operation_id"],
+        **values,
+        "status": "pending",
+        "service_identity": None,
+        "setup_run_id": None,
+        "setup_task_id": None,
+        "correlation_id": None,
+    }
     assert sorted(sql.split(" AND ")) == sorted(
         expected_predicate(field, value) for field, value in fields.items()
     )

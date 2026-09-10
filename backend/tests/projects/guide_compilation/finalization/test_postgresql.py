@@ -116,7 +116,7 @@ async def test_cross_project_finalization_is_concealed(clean_postgres_database, 
             await session.execute(text("alter table project_guides disable trigger user"))
             await session.execute(
                 text(
-                    "insert into project_guides(id,project_id,version,status,content_markdown,created_by) "
+                    "insert into project_guides(id,project_id,version,status,retained_content_markdown,created_by) "
                     "values(:id,:project,'foreign-v1','draft','Foreign guide','test')"
                 ),
                 {

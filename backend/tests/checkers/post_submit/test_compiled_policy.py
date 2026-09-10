@@ -7,12 +7,8 @@ from pydantic import ValidationError
 
 from app.core.hashing import canonical_json_hash
 from app.modules.checkers.api import CompiledPostSubmitPolicy
-from app.modules.projects.post_submit_policy import (
-    build_project_post_submit_checker_spec,
-    compile_project_post_submit_checker_spec,
-    parse_locked_post_submit_checker_policy_body,
-    project_guide_post_submission_capabilities,
-)
+from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
+from app.modules.projects.post_submit_policy import build_project_post_submit_checker_spec, compile_project_post_submit_checker_spec, parse_locked_post_submit_checker_policy_body
 from tests.checkers.post_submit.support import PROJECT, altered_catalogue, catalogue, request
 
 
@@ -133,7 +129,7 @@ def test_recomputed_hash_cannot_hide_invalid_current_body(change, match):
 
 
 def test_agent_projection_is_exact_current_catalogue():
-    projection = project_guide_post_submission_capabilities()
+    projection = current_post_submit_catalogue()
     assert projection.model_dump(mode="json") == catalogue().model_dump(mode="json")
     corrupted = projection.model_dump()
     corrupted["definitions"][0]["state"] = "disabled"

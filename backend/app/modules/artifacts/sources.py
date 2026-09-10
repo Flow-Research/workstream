@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from pathlib import Path
 from typing import BinaryIO, Protocol, TypeVar, final
 from uuid import UUID, uuid4
 
@@ -24,11 +23,6 @@ class PreparedArtifactInspector(Protocol[_InspectionResultCo]):
         """Return bounded structural facts without retaining the reader."""
 
 
-class PreparedGuideExtractor(Protocol[_InspectionResultCo]):
-    """Artifact-owned guide extractor over sealed bytes and ephemeral scratch."""
-
-    def inspect(self, reader: BinaryIO, workspace: Path) -> _InspectionResultCo:
-        """Return bounded facts without retaining either capability."""
 
 
 class _PreparedArtifactOwner(Protocol):
@@ -50,13 +44,6 @@ class _PreparedArtifactOwner(Protocol):
         inspector: PreparedArtifactInspector[_InspectionResult],
     ) -> _InspectionResult:
         """Run a trusted bounded inspector against the owned scratch reader."""
-
-    async def extract_prepared_guide(
-        self,
-        binding: object,
-        extractor: PreparedGuideExtractor[_InspectionResult],
-    ) -> _InspectionResult:
-        """Run a child inspector in one scratch-owned workspace."""
 
     def claim_prepared_commitment(self, binding: object) -> ArtifactCommitment:
         """Claim the server-computed commitment for one registered binding."""
@@ -240,15 +227,6 @@ class PreparedArtifact:
         if self._closed:
             raise RuntimeError("prepared artifact is closed")
         return await self._owner.inspect_prepared_artifact(self._binding, inspector)
-
-    async def extract_guide(
-        self,
-        extractor: PreparedGuideExtractor[_InspectionResult],
-    ) -> _InspectionResult:
-        """Inspect through one scratch-owned workspace without retaining it."""
-        if self._closed:
-            raise RuntimeError("prepared artifact is closed")
-        return await self._owner.extract_prepared_guide(self._binding, extractor)
 
     async def __aenter__(self) -> CommittedArtifactSource:
         """Enter the bounded provider-I/O lifetime."""

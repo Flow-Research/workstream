@@ -48,6 +48,7 @@ from app.modules.authorization.domain.prepared_adapter_bindings import (
     prepared_adapter_binding_matches,
 )
 from app.modules.authorization.domain.prepared_service import project_setup_resource_matches
+from app.modules.authorization.domain.prepared_guide_mutations import parse_prepared_guide_mutation
 from app.modules.authorization.domain.guide_compilation_projections import (
     ProjectGuideProjectionResourceContext,
 )
@@ -62,7 +63,6 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
-    GuideSourceBindingResourceContext,
     GuideSourceReadResourceContext,
     SubmissionBindingResourceContext,
     SubmissionCreationResourceContext,
@@ -144,10 +144,6 @@ class PreparedAuthorizationHandle:
 _HANDLE_CONSTRUCTOR_TOKEN = object()
 
 _EXACT_ARTIFACT_RESOURCE_BY_ACTION = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
-        "guide_source_binding",
-        GuideSourceBindingResourceContext,
-    ),
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
         "guide_source_read",
         GuideSourceReadResourceContext,
@@ -178,6 +174,9 @@ class _PreparedAuthorizationBinding:
     guide_mutation_guide_id: UUID | None = None
     guide_mutation_target_resource_id: UUID | None = None
     guide_mutation_operation_id: UUID | None = None
+    guide_create_request_digest: str | None = None
+    guide_create_task_examples_hash: str | None = None
+    guide_create_task_examples_count: int | None = None
     policy_mutation_project_id: UUID | None = None
     policy_mutation_guide_id: UUID | None = None
     policy_mutation_policy_id: UUID | None = None
@@ -257,6 +256,15 @@ def _guide_mutation_binding_matches(
         and binding.guide_mutation_guide_id == resource.guide_id
         and binding.guide_mutation_target_resource_id == resource.resource_id
         and binding.guide_mutation_operation_id == resource.operation_id
+        and (
+            not isinstance(resource, ProjectGuideMutationResourceContext)
+            or resource.target_kind != "create"
+            or (
+                binding.guide_create_request_digest == resource.request_digest
+                and binding.guide_create_task_examples_hash == resource.task_examples_hash
+                and binding.guide_create_task_examples_count == resource.task_examples_count
+            )
+        )
     )
 
 
@@ -668,9 +676,7 @@ class PreparedAuthorizationService:
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
         operation_id = project_id = operation_generation = None
-        guide_mutation_project_id = guide_mutation_guide_id = guide_mutation_target_resource_id = (
-            guide_mutation_operation_id
-        ) = None
+        guide_bindings = parse_prepared_guide_mutation(action_id, caller_input.request_value)
         policy_mutation_project_id = policy_mutation_guide_id = policy_mutation_policy_id = policy_mutation_operation_id = None
         policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
         policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
@@ -699,39 +705,6 @@ class PreparedAuthorizationService:
             operation_id, project_id, operation_generation = parse_project_create_binding(
                 dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
             )
-        if action_id in {
-            ActionId.PROJECT_GUIDE_CREATE,
-            ActionId.PROJECT_GUIDE_UPDATE,
-            ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
-        }:
-            try:
-                guide_mutation_project_id = UUID(str(caller_input.request_value["project_id"]))
-                raw_guide_id = caller_input.request_value.get("guide_id")
-                guide_mutation_guide_id = (
-                    UUID(str(raw_guide_id)) if raw_guide_id is not None else None
-                )
-                guide_mutation_target_resource_id = UUID(
-                    str(caller_input.request_value["target_resource_id"])
-                )
-                guide_mutation_operation_id = UUID(str(caller_input.request_value["operation_id"]))
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            if (
-                guide_mutation_guide_id is None
-                or guide_mutation_target_resource_id is None
-                or guide_mutation_operation_id is None
-                or (
-                    action_id is ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
-                    and guide_mutation_target_resource_id == guide_mutation_guide_id
-                )
-                or (
-                    action_id is not ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
-                    and guide_mutation_target_resource_id != guide_mutation_guide_id
-                )
-            ):
-                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if not setup_bindings.get("guide_projection_prepare_context") and action_id in {
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
             ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
@@ -885,10 +858,7 @@ class PreparedAuthorizationService:
             project_create_operation_id=operation_id,
             project_create_project_id=project_id,
             project_create_generation=operation_generation,
-            guide_mutation_project_id=guide_mutation_project_id,
-            guide_mutation_guide_id=guide_mutation_guide_id,
-            guide_mutation_target_resource_id=guide_mutation_target_resource_id,
-            guide_mutation_operation_id=guide_mutation_operation_id,
+            **guide_bindings,
             policy_mutation_project_id=policy_mutation_project_id,
             policy_mutation_guide_id=policy_mutation_guide_id,
             policy_mutation_policy_id=policy_mutation_policy_id,

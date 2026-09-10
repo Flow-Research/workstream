@@ -208,6 +208,10 @@ Status:
 
 ## ProjectGuide
 
+Current guide content is the versioned PDF/DOCX/PPTX original-document manifest
+and private ArtifactStore objects. Guide metadata writes do not accept inline
+Markdown; PostgreSQL stores no newly extracted document bodies.
+
 Fields:
 
 - `id`
@@ -216,7 +220,9 @@ Fields:
 - `contribution_policy_version_id`
 - `status`
 - `activation_sequence` (nullable only while draft; immutable after allocation)
-- `content_markdown`
+- `retained_content_markdown` (read-only retained data; excluded from current APIs)
+- `task_examples` (required ordered JSON list on new guide versions)
+- `task_examples_hash` (domain-separated canonical commitment to that list)
 - `change_summary`
 - `approved_by`
 - `effective_at`
@@ -231,10 +237,19 @@ Fields:
 - `selected_revision_policy_generation`
 - `selected_revision_policy_hash`
 
-The guide is versioned and human-facing. Its persisted body is the project
-guide material itself, usually markdown or imported source material. The source
-snapshot may include URL-backed docs, repository docs, examples, rubrics, task
-instructions, reviewer guidance, or other project-specific source material.
+The guide is versioned and human-facing. Uploaded PDF/DOCX/PPTX originals live
+in private ArtifactStore/S3 objects; PostgreSQL stores their metadata and the
+ordinary task-example text. The examples are representative inference inputs,
+not selected assignments, and do not create Workstream Tasks. One project-level
+policy proposal covers the project task set.
+
+New guide versions require 1–100 examples with nonblank `content` (at most 65,536
+characters), optional `title` (500 characters), and optional `labels` (at most
+20, each 1–100 characters). The complete canonical UTF-8 JSON list is bounded at
+128 KiB. Content, order and optional metadata are preserved. The list and its
+hash are immutable; corrections require a new guide version. Retained null
+inputs remain stored but cannot start new inference. No document bodies are
+extracted into PostgreSQL.
 `approved_by` and `effective_at` are server-written activation provenance, not
 request-body fields and not contributor-facing guide content.
 
@@ -286,10 +301,8 @@ Fields:
 - `captured_by`
 
 `GuideSourceSnapshot` is the immutable bundle binding for guide material. It
-captures the exact guide/source material Workstream evaluated as a canonical
-manifest. A guide can point at markdown, imported documents, URL-backed docs,
-repository docs, examples, or rubric material, but downstream records do not
-trust a mutable URL or mutable draft guide body. They bind to
+captures uploaded-document declarations and the owning guide's task-example
+commitment. It accepts document/upload items only. Downstream records bind to
 `source_snapshot_id` and a server-derived `source_snapshot_hash` copied from
 `GuideSourceSnapshot.bundle_hash`.
 
@@ -300,7 +313,8 @@ sha256(canonical_json(manifest_json))
 ```
 
 Canonical JSON uses UTF-8, sorted object keys, and no insignificant whitespace.
-The v2 manifest contains the server-owned snapshot id and generation plus each
+The `guide_source_snapshot.task_examples` manifest contains the example hash
+and count, the server-owned snapshot id and generation plus each
 server-owned item id/order and its non-authoritative source metadata. Caller
 hashes, content identifiers, excerpts, provider references, and fetch locators
 are excluded. Changing a declaration creates a new snapshot and setup generation.
@@ -318,26 +332,14 @@ Fields:
 - `media_type`
 - `created_at`
 
-`GuideSourceSnapshotItem` records each material item included in the guide
-bundle. `source_kind` distinguishes inline markdown, URL-backed documentation,
-repository docs, examples, rubrics, imported files, and other approved source
-types. `source_label` is display metadata, not content identity or a fetch
-locator. Exact bytes become authoritative only through
-`GuideSourceArtifactIngest -> ArtifactContent -> GuideSourceArtifactBinding ->
-GuideSourceExtractionUsage`; provider object references remain replica details.
-
-Guide ingestion keeps temporary retrieval inputs separate from durable facts:
-
-- temporary fetch locator: used only by an approved retrieval adapter
-- snapshot declaration: server-owned item identity/order plus a sanitized,
-  non-authoritative source label
-- durable byte identity: exact verified `ArtifactContent` bound through ART
-
-Ordinary URL query parameters can be used by approved adapters when fetching
-legitimate documentation. Query strings are temporary fetch inputs only.
-Workstream must not persist query strings, signed URLs, credentials,
-token-bearing locators, local filesystem paths, or private storage paths as
-durable source identity.
+`GuideSourceSnapshotItem` records each uploaded document in the guide bundle.
+Its current `source_kind` is `document` and `ingestion_adapter` is `upload`;
+`source_label` is display metadata, never a fetch locator. Exact original bytes
+are bound by committed `GuideSourceArtifactIngest` document custody and
+`ArtifactContent`. The setup agent receives only scoped opaque handles, not S3
+keys or credentials. No URL fetching, Markdown body, or extraction continuation
+is part of this path. File access and provider allocations retain exact original
+identity under the runtime custody contracts below.
 
 Any guide or source-material change creates a new source snapshot. That
 invalidates prior sufficiency reports, derived policies, effective policies,
@@ -348,7 +350,7 @@ that policy context unless an explicit audited rebase occurs.
 
 ## ProjectSetupRun
 
-The field and status inventory below includes retained legacy multi-agent
+The field and status inventory below includes retained superseded setup
 setup diagnostics, not instructions to implement those continuations again.
 The unified path uses the compilation/projection/finalization contracts below:
 after its finalization receipt exists, the run and its output references are
@@ -450,14 +452,14 @@ Fields:
 - `created_by_service`
 - `created_at`
 
-`GuideSourceArtifactBinding` is the immutable, authoritative link from one
-guide-source item and exact setup generation to one independently verified
-`ArtifactContent` and replica. Composite foreign keys preserve the exact
+`GuideSourceArtifactBinding` is retained read-only evidence from the removed
+guide verification flow. Current guide setup uses committed original-document
+metadata and attempt-scoped document access records; it creates no new binding
+or extraction records. The retained binding links a source item and setup
+generation to its recorded `ArtifactContent` and replica. Composite foreign keys preserve the exact
 project, guide, snapshot, item, setup-run, generation, content, and replica
-lineage. One binding may exist per source item and generation. A later
-generation explicitly references the prior binding through
-`supersedes_binding_id`; it never overwrites the earlier fact. Source-item
-metadata alone cannot establish artifact identity.
+lineage. Retained `supersedes_binding_id` references remain intact. Their presence
+does not authorize any current reader or writer.
 
 ## GuideSufficiencyReport
 
@@ -497,35 +499,26 @@ Finding severity:
 - `warning`
 - `info`
 
-`ProjectGuideSufficiencyAgent` creates this report asynchronously for a guide
-version. Blocking gaps stop guide activation and create clarification requests
-for the project owner. Warnings can be acknowledged only by an authorized
-covered Project Manager before activation.
+The unified compiler assesses sufficiency once for the immutable guide material.
+Blocking gaps stop at findings; sufficient guides stop at draft policy review.
+The deterministic sufficiency projector creates the report from the persisted
+`ProjectGuideCompilation`, with server-owned agent identity. Provider-returned
+names and versions never establish provenance. The exact source snapshot hash,
+setup generation, canonical material hash/byte count, document access evidence
+and compilation identity bind the current original-document source evidence.
+The compilation input additionally binds the exact task-example list through
+its canonical input hash; source snapshots commit its hash and count.
 
-`source_snapshot_hash` is server-derived from the referenced
-`GuideSourceSnapshot.bundle_hash`. Clients cannot supply a conflicting hash.
+Manual reports use their separately authorized API and persist null agent name
+and version. They do not execute inference or supply compilation provenance.
+The removed run-sufficiency route is not a manager rerun API; that later workflow
+belongs to POL-05A → AUTH-12F4 → POL-05B.
 
-Agent-created reports also bind to the exact setup run and generation and to
-the SHA-256 and byte count of the canonical material sent to the agent. Their
-source provenance is normalized into `GuideSufficiencyReportSourceUsage` rows.
-
-Manual sufficiency reports persist `agent_name` and `agent_version` as null.
-Only reports created through the automatic fixed-service continuation persist
-Workstream-owned agent identity; provider-returned names or versions are not
-trusted as audit provenance. A Project Manager HTTP request authorizes only
-asynchronous dispatch and converges on the same setup run and deterministic
-task as automatic verified-material readiness. It creates no report inline. A
-source snapshot may have one diagnostic report and one verified agent report.
-Only the verified report, with a complete exact source-usage set, may support
-agent policy derivation or guide activation.
-
-The hidden unified-compilation projector can deterministically create the same
-canonical report from a persisted `ProjectGuideCompilation`. Its immutable
-`ProjectGuideComponentProjectionOperation` binds the report to the exact
-attempt, compilation, setup generation, component and result hashes, verified
-material digest and byte count, and authorization decision. It leaves the
-`ProjectSetupRun` unchanged and remains unreachable until its fixed-service
-authorization and background-execution cutover are activated.
+The live Celery path consumes the sufficiency projector under fresh fixed-service
+authority. Its immutable `ProjectGuideComponentProjectionOperation` binds the
+attempt, compilation, generation, component/result hashes and authorization.
+Projection itself leaves setup unchanged; the separate finalizer atomically
+records permitted outputs and seals the generation.
 
 ## GuideSufficiencyReportSourceUsage
 
@@ -544,7 +537,8 @@ Fields:
 - `setup_generation`
 - `canonical_output_sha256`
 
-Each row proves which exact verified ART binding and extraction lineage supplied
+This table is retained read-only evidence; current compilation writes no rows
+here. Each retained row records which exact ART binding and extraction lineage supplied
 one ordered source item to a sufficiency report. Composite foreign keys prevent
 mixing source items, content, extraction attempts, setup runs, or generations.
 A report cannot consume the same extraction usage twice or assign two items the
@@ -618,42 +612,31 @@ Example:
     }
   },
   "policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "derivation_source": "agent_derivation",
-  "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
-  "derivation_agent_version": "workstream-policy-derivation-agent-v0.1",
-  "source_material_refs": ["project-guide:v1"],
-  "lifecycle_status": "approved",
-  "approved_by_admin_role_grant_id": "00000000-0000-0000-0000-000000000010",
-  "approved_by_actor_profile_id": "00000000-0000-0000-0000-000000000020",
-  "approved_at": "2026-06-22T12:00:00Z"
+  "derivation_source": "unified_compilation",
+  "derivation_agent_name": "ProjectGuideCompilationProjection",
+  "derivation_agent_version": "v1",
+  "source_material_refs": ["artifact-content:00000000-0000-0000-0000-000000000030#extraction-usage:00000000-0000-0000-0000-000000000040"],
+  "lifecycle_status": "draft",
+  "approved_by_admin_role_grant_id": null,
+  "approved_by_actor_profile_id": null,
+  "approved_at": null
 }
 ```
 
-Workstream derives this policy from project guide material after guide
-sufficiency passes or passes with warnings. An authorized covered Project
-Manager approves it after any sufficiency warnings are acknowledged. Project
-owners and contributors do not supply or approve this internal
-policy schema.
-`derivation_source` is server-owned. The legacy technical token
-`manual_admin_derivation` remains historical provenance until its owning
-migration; it does not grant authority. Policies created by the derivation agent persist
-`agent_derivation`. Client requests do not supply derivation provenance, and
-manual `policy_version` values cannot use the reserved `agent-` prefix.
-Agent-derived policy versioning and persisted derivation-agent identity are
-server-owned. The derivation agent can run only from a Workstream-agent
-sufficiency report for the same guide source snapshot; manual sufficiency
-reports can support manual policy creation after clearance, but they do not
-create agent-derivation provenance.
-Agent-derived policy provenance is revalidated before approval and guide
-activation, so seeded or stale rows with spoofed agent identity cannot become
-the active policy context.
+The live unified compiler proposes this policy together with sufficiency and
+separate pre-submission/post-submission policy components. ART readiness starts
+one Celery compilation; sufficient guides stop at draft review and blocked
+guides stop at findings. The deterministic artifact-policy projector consumes
+the persisted component only after its exact sufficiency projection exists.
+Its immutable operation binds inputs, output digest, prior report, generation
+and authorization evidence. Finalization records the exact permitted outputs.
 
-The hidden unified-compilation projector may also create the draft policy from
-the persisted artifact-policy component, but only after the exact sufficiency
-projection exists. The same projection-operation ledger binds its input,
-output digest, prior report, setup generation, and authorization evidence.
-Projection is idempotent and does not approve the policy, derive an effective
-policy, or update setup-run output pointers.
+`derivation_source`, agent identity and generated policy version are server-owned
+provenance. Clients cannot supply them or use the reserved `agent-` version
+prefix. Manual policies retain their own authorized provenance. A unified draft
+cannot use the generic manual-policy approval route: manager proposal review,
+correction, fresh-generation rerun and approval remain POL-05A → AUTH-12F4 →
+POL-05B. Projection creates neither effective policy nor executable checkers.
 
 ## ProjectGuideComponentProjectionOperation
 
@@ -968,16 +951,13 @@ reason, policy hash, and policy body provenance. A replacement links through
 the exact same setup context; bounded correction feedback reaches setup-time
 derivation, and Workstream rejects an identical replacement policy hash.
 
-For generated setup, `PostSubmitCheckerPolicyDerivationAgent` runs only after a
-authorized covered Project Manager approves the derived
-`SubmissionArtifactPolicy`, producing an approved
-`EffectiveProjectSubmissionArtifactPolicy` and compiled project
-`PreSubmitCheckerPolicy`. The agent receives bounded guide-source material,
-guide sufficiency summary, effective policy summary, pre-submit checker
-summary, and the registered post-submit checker catalog. It returns a
-constrained checker specification, unsupported required-check gaps, bounded
-reasons, and setup notes. It does not produce executable code and it does not
-judge contributor submissions at runtime.
+For generated setup, the sole unified guide compiler proposes the post-submit
+component in the same inference as sufficiency and pre-submit policy proposals.
+It receives exact verified guide material and registered capability snapshots.
+POL-04B retains that component in the immutable compilation and stops at draft
+review. Later approval and deterministic post-submit projection/compilation
+consume it without another agent call. The setup runtime does not execute
+checkers or judge contributor submissions.
 
 The constrained derivation output contains:
 

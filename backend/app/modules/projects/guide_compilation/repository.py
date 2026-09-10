@@ -94,9 +94,7 @@ def _persistence_error(exc: DBAPIError) -> GuideCompilationIntegrityError:
         return GuideCompilationConcurrencyError(
             "concurrent compilation append won; reload the lineage tip and retry"
         )
-    return GuideCompilationStorageError(
-        "compilation persistence failed before durable custody"
-    )
+    return GuideCompilationStorageError("compilation persistence failed before durable custody")
 
 
 class GuideCompilationRepository:
@@ -108,31 +106,43 @@ class GuideCompilationRepository:
 
     async def finalization_attempt_id(self, command) -> UUID:
         """Resolve an exact scoped compilation without taking product locks."""
-        attempt_id = await self._session.scalar(select(ProjectGuideCompilation.attempt_id).where(
-            ProjectGuideCompilation.id == command.compilation_id,
-            ProjectGuideCompilation.project_id == str(command.project_id),
-            ProjectGuideCompilation.guide_id == str(command.guide_id),
-            ProjectGuideCompilation.setup_run_id == str(command.setup_run_id),
-            ProjectGuideCompilation.setup_generation == command.setup_generation,
-        ))
+        attempt_id = await self._session.scalar(
+            select(ProjectGuideCompilation.attempt_id).where(
+                ProjectGuideCompilation.id == command.compilation_id,
+                ProjectGuideCompilation.project_id == str(command.project_id),
+                ProjectGuideCompilation.guide_id == str(command.guide_id),
+                ProjectGuideCompilation.setup_run_id == str(command.setup_run_id),
+                ProjectGuideCompilation.setup_generation == command.setup_generation,
+            )
+        )
         if attempt_id is None:
             raise GuideCompilationIntegrityError("finalization source unavailable")
         return attempt_id
 
     async def finalization_receipts(self, command, operation_id):
         """Re-query both operation and generation custody under the setup lock."""
-        rows = await self._session.scalars(select(ProjectGuideSetupFinalization).where(or_(
-            ProjectGuideSetupFinalization.operation_id == operation_id,
-            (ProjectGuideSetupFinalization.setup_run_id == str(command.setup_run_id))
-            & (ProjectGuideSetupFinalization.setup_generation == command.setup_generation),
-        )).with_for_update().execution_options(populate_existing=True))
+        rows = await self._session.scalars(
+            select(ProjectGuideSetupFinalization)
+            .where(
+                or_(
+                    ProjectGuideSetupFinalization.operation_id == operation_id,
+                    (ProjectGuideSetupFinalization.setup_run_id == str(command.setup_run_id))
+                    & (ProjectGuideSetupFinalization.setup_generation == command.setup_generation),
+                )
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         return tuple(rows)
 
     async def lock_finalization(self, command, attempt_id) -> LockedFinalization:
         """Follow the projection lock order and refresh all read-before-lock objects."""
-        attempt = await self._session.scalar(select(ProjectGuideCompilationAttempt).where(
-            ProjectGuideCompilationAttempt.id == attempt_id
-        ).with_for_update().execution_options(populate_existing=True))
+        attempt = await self._session.scalar(
+            select(ProjectGuideCompilationAttempt)
+            .where(ProjectGuideCompilationAttempt.id == attempt_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         request = await self.request_operation_for_attempt(attempt_id, lock=True)
         projects = ProjectRepository(self._session)
         guide = await projects.lock_project_guide(str(command.guide_id))
@@ -140,52 +150,91 @@ class GuideCompilationRepository:
             raise GuideCompilationIntegrityError("finalization guide unavailable")
         await self._session.refresh(guide)
         snapshot = await projects.lock_latest_guide_source_snapshot(
-            str(command.project_id), guide.id, guide.version)
+            str(command.project_id), guide.id, guide.version
+        )
         setup = await projects.lock_latest_project_setup_run(
-            str(command.project_id), guide.id, guide.version)
+            str(command.project_id), guide.id, guide.version
+        )
         if setup is None or snapshot is None:
             raise GuideCompilationIntegrityError("finalization setup unavailable")
         await self._session.refresh(snapshot)
         # Re-fetch the latest setup so a waiting session never uses a cached pre-state.
         await self._session.refresh(setup)
-        compilation = await self._session.scalar(select(ProjectGuideCompilation).where(
-            ProjectGuideCompilation.id == command.compilation_id
-        ).with_for_update().execution_options(populate_existing=True))
+        compilation = await self._session.scalar(
+            select(ProjectGuideCompilation)
+            .where(ProjectGuideCompilation.id == command.compilation_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         current = await self.current_compilation(command.project_id, command.guide_id, lock=True)
-        operations = tuple(await self._session.scalars(
-            select(ProjectGuideComponentProjectionOperation).where(
-                ProjectGuideComponentProjectionOperation.setup_run_id == str(command.setup_run_id),
-                ProjectGuideComponentProjectionOperation.setup_generation == command.setup_generation,
-            ).order_by(ProjectGuideComponentProjectionOperation.component)
-            .with_for_update().execution_options(populate_existing=True)
-        ))
+        operations = tuple(
+            await self._session.scalars(
+                select(ProjectGuideComponentProjectionOperation)
+                .where(
+                    ProjectGuideComponentProjectionOperation.setup_run_id
+                    == str(command.setup_run_id),
+                    ProjectGuideComponentProjectionOperation.setup_generation
+                    == command.setup_generation,
+                )
+                .order_by(ProjectGuideComponentProjectionOperation.component)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
         report_op = next((op for op in operations if op.component == "guide_sufficiency"), None)
-        policy_op = next((op for op in operations if op.component == "submission_artifact_policy"), None)
-        report = (await projects.lock_guide_sufficiency_report(
-            report_op.report_id or "", str(command.project_id), guide.id, guide.version
-        )) if report_op else None
-        policy = (await projects.lock_submission_artifact_policy(policy_op.policy_id or "")) if policy_op else None
+        policy_op = next(
+            (op for op in operations if op.component == "submission_artifact_policy"), None
+        )
+        report = (
+            (
+                await projects.lock_guide_sufficiency_report(
+                    report_op.report_id or "", str(command.project_id), guide.id, guide.version
+                )
+            )
+            if report_op
+            else None
+        )
+        policy = (
+            (await projects.lock_submission_artifact_policy(policy_op.policy_id or ""))
+            if policy_op
+            else None
+        )
         for output in (report, policy):
             if output is not None:
                 await self._session.refresh(output)
-        return LockedFinalization(attempt, request, guide, snapshot, setup, compilation,
-            current is not None and current.id == command.compilation_id, operations, report, policy)
+        return LockedFinalization(
+            attempt,
+            request,
+            guide,
+            snapshot,
+            setup,
+            compilation,
+            current is not None and current.id == command.compilation_id,
+            operations,
+            report,
+            policy,
+        )
 
     async def persist_finalization(self, row, setup) -> None:
         """Insert custody then close the setup using the database transaction clock."""
         self._session.add(row)
         await self._session.flush()
-        await self._session.execute(update(ProjectSetupRun).where(
-            ProjectSetupRun.id == setup.id,
-            ProjectSetupRun.setup_generation == setup.setup_generation,
-        ).values(
-            status=row.setup_outcome,
-            current_step=diagnostic_step(row.setup_outcome),
-            output_sufficiency_report_id=row.sufficiency_report_id,
-            output_submission_artifact_policy_id=row.artifact_policy_id,
-            finished_at=func.transaction_timestamp(),
-            updated_at=setup.updated_at,
-        ).execution_options(synchronize_session=False))
+        await self._session.execute(
+            update(ProjectSetupRun)
+            .where(
+                ProjectSetupRun.id == setup.id,
+                ProjectSetupRun.setup_generation == setup.setup_generation,
+            )
+            .values(
+                status=row.setup_outcome,
+                current_step=diagnostic_step(row.setup_outcome),
+                output_sufficiency_report_id=row.sufficiency_report_id,
+                output_submission_artifact_policy_id=row.artifact_policy_id,
+                finished_at=func.transaction_timestamp(),
+                updated_at=setup.updated_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
         await self._session.flush()
         await self._session.refresh(setup)
 
@@ -211,8 +260,7 @@ class GuideCompilationRepository:
                     == str(actor.actor_profile_id)
                 )
                 & (
-                    ProjectGuideCompilationRequestOperation.idempotency_key
-                    == facts.idempotency_key
+                    ProjectGuideCompilationRequestOperation.idempotency_key == facts.idempotency_key
                 ),
             )
         )
@@ -255,7 +303,8 @@ class GuideCompilationRepository:
             source_mutation_operation_id=origin.source_mutation_operation_id,
             source_authorization_decision_event_id=(
                 str(origin.source_authorization_decision_event_id)
-                if origin.source_authorization_decision_event_id is not None else None
+                if origin.source_authorization_decision_event_id is not None
+                else None
             ),
             request_id=facts.request_id,
             idempotency_key=facts.idempotency_key,
@@ -285,27 +334,33 @@ class GuideCompilationRepository:
         return operation
 
     async def require_automatic_request_origin(
-        self, facts: ProjectGuideCompilationRequestFacts,
+        self,
+        facts: ProjectGuideCompilationRequestFacts,
         origin: ProjectGuideCompilationRequestOrigin,
     ) -> None:
         """Use the same locked origin rule as direct PostgreSQL insertion."""
         try:
-            await self._session.execute(text(
-                "select require_automatic_compilation_origin("
-                ":project, :guide, :snapshot, :setup, :generation, :operation, :event)"
-            ), {
-                "project": str(facts.project_id), "guide": str(facts.guide_id),
-                "snapshot": str(facts.source_snapshot_id), "setup": str(facts.setup_run_id),
-                "generation": facts.setup_generation,
-                "operation": origin.source_mutation_operation_id,
-                "event": str(origin.source_authorization_decision_event_id),
-            })
+            await self._session.execute(
+                text(
+                    "select require_automatic_compilation_origin("
+                    ":project, :guide, :snapshot, :setup, :generation, :operation, :event)"
+                ),
+                {
+                    "project": str(facts.project_id),
+                    "guide": str(facts.guide_id),
+                    "snapshot": str(facts.source_snapshot_id),
+                    "setup": str(facts.setup_run_id),
+                    "generation": facts.setup_generation,
+                    "operation": origin.source_mutation_operation_id,
+                    "event": str(origin.source_authorization_decision_event_id),
+                },
+            )
         except DBAPIError as exc:
-            raise GuideCompilationIntegrityError("automatic compilation origin unavailable") from exc
+            raise GuideCompilationIntegrityError(
+                "automatic compilation origin unavailable"
+            ) from exc
 
-    async def attempt(
-        self, attempt_id: UUID, *, lock: bool
-    ) -> ProjectGuideCompilationAttempt:
+    async def attempt(self, attempt_id: UUID, *, lock: bool) -> ProjectGuideCompilationAttempt:
         """Load an attempt, optionally holding its row for a root transaction."""
         return (
             await self._lock_attempt(attempt_id)
@@ -313,9 +368,7 @@ class GuideCompilationRepository:
             else await self._required_attempt(attempt_id)
         )
 
-    async def require_current_setup_lineage(
-        self, attempt: ProjectGuideCompilationAttempt
-    ) -> None:
+    async def require_current_setup_lineage(self, attempt: ProjectGuideCompilationAttempt) -> None:
         """Lock and require the attempt's exact active, latest setup lineage."""
         guide = await self._session.scalar(
             select(ProjectGuide)
@@ -334,9 +387,7 @@ class GuideCompilationRepository:
             .with_for_update()
         )
         snapshot = await self._session.scalar(
-            select(GuideSourceSnapshot).where(
-                GuideSourceSnapshot.id == attempt.source_snapshot_id
-            )
+            select(GuideSourceSnapshot).where(GuideSourceSnapshot.id == attempt.source_snapshot_id)
         )
         if (
             setup is None
@@ -373,9 +424,7 @@ class GuideCompilationRepository:
         """Return the exact current lineage tip."""
         return await self._current(project_id, guide_id, lock=lock)
 
-    async def persisted_compilation(
-        self, attempt_id: UUID
-    ) -> ProjectGuideCompilation:
+    async def persisted_compilation(self, attempt_id: UUID) -> ProjectGuideCompilation:
         """Return an attempt's required immutable compilation."""
         compilation = await self._compilation_for_attempt(attempt_id)
         if compilation is None:
@@ -383,12 +432,14 @@ class GuideCompilationRepository:
         return compilation
 
     async def reserve_attempt(
-        self, identity: CompilationAttemptIdentity
+        self, identity: CompilationAttemptIdentity, runtime_configuration
     ) -> tuple[Literal["claimed", "existing", "mismatch"], ProjectGuideCompilationAttempt]:
         """Claim or classify the sole attempt for one setup generation."""
         values = _identity_values(identity)
         values.update(
             id=uuid4(),
+            runtime_configuration=runtime_configuration.model_dump(mode="json"),
+            runtime_configuration_hash=runtime_configuration.sha256,
             provider_idempotency_key=identity.provider_idempotency_key(),
             status="compilation_reserved",
         )
@@ -434,29 +485,28 @@ class GuideCompilationRepository:
         result: ProjectGuideCompilationResult,
     ) -> ProjectGuideCompilationAttempt:
         """Store one revalidated canonical result before compilation insertion."""
+        from .runtime_resources import require_compilation_document_access
         attempt = await self._lock_attempt(attempt_id)
         try:
+            await require_compilation_document_access(self._session, attempt_id, context.material, result)
             identity = identity_from_attempt(attempt)
             accepted = accepted_compilation_result(result)
             validate_accepted_compilation_result(
                 identity=identity, context=context, accepted=accepted
             )
         except ValueError as exc:
-            raise GuideCompilationIntegrityError(
-                "accepted compilation result is invalid"
-            ) from exc
+            raise GuideCompilationIntegrityError("accepted compilation result is invalid") from exc
         if attempt.status in {"provider_result_accepted", "compilation_persisted"}:
             if accepted_from_attempt(attempt) != accepted:
                 raise GuideCompilationIntegrityError("accepted result mismatch")
             return attempt
         if attempt.status not in {
-            "compilation_reserved",
             "compilation_provider_uncertain",
         }:
             raise GuideCompilationIntegrityError("invalid accepted transition")
         await self._transition(
             attempt_id,
-            expected=("compilation_reserved", "compilation_provider_uncertain"),
+            expected=("compilation_provider_uncertain",),
             status="provider_result_accepted",
             canonical_result=accepted.canonical_result,
             result_hash=accepted.result_hash,
@@ -495,9 +545,7 @@ class GuideCompilationRepository:
         )
         return await self._required_attempt(attempt_id)
 
-    async def recovery_classification(
-        self, attempt_id: UUID
-    ) -> CompilationRecoveryClassification:
+    async def recovery_classification(self, attempt_id: UUID) -> CompilationRecoveryClassification:
         """Return one bounded hidden recovery classification."""
         attempt = await self._required_attempt(attempt_id)
         if attempt.status == "provider_result_accepted":
@@ -517,12 +565,17 @@ class GuideCompilationRepository:
         authorization_decision_event_id: UUID,
     ) -> ProjectGuideCompilation:
         """CAS-insert one immutable compilation and finish its attempt."""
+        from .runtime_resources import require_compilation_document_access
         attempt = await self._lock_attempt(attempt_id)
         existing = await self._compilation_for_attempt(attempt_id)
         if attempt.status not in {"provider_result_accepted", "compilation_persisted"}:
             raise GuideCompilationIntegrityError("attempt is not ready for persistence")
         try:
             accepted = accepted_from_attempt(attempt)
+            await require_compilation_document_access(
+                self._session, attempt_id, context.material,
+                ProjectGuideCompilationResult.model_validate(accepted.canonical_result),
+            )
             identity = identity_from_attempt(attempt)
             validate_accepted_compilation_result(
                 identity=identity, context=context, accepted=accepted
@@ -536,9 +589,7 @@ class GuideCompilationRepository:
             )
             assert actor.service_identity is not None
         except ValueError as exc:
-            raise GuideCompilationIntegrityError(
-                "accepted compilation custody is invalid"
-            ) from exc
+            raise GuideCompilationIntegrityError("accepted compilation custody is invalid") from exc
         if attempt.status == "compilation_persisted":
             if existing is None or attempt.persisted_compilation_id != existing.id:
                 raise GuideCompilationIntegrityError("persisted compilation is missing")
@@ -621,14 +672,10 @@ class GuideCompilationRepository:
             raise GuideCompilationIntegrityError("compilation attempt disappeared")
         return attempt
 
-    async def _compilation_for_attempt(
-        self, attempt_id: UUID
-    ) -> ProjectGuideCompilation | None:
+    async def _compilation_for_attempt(self, attempt_id: UUID) -> ProjectGuideCompilation | None:
         """Return the immutable compilation already owned by an attempt."""
         return await self._session.scalar(
-            select(ProjectGuideCompilation).where(
-                ProjectGuideCompilation.attempt_id == attempt_id
-            )
+            select(ProjectGuideCompilation).where(ProjectGuideCompilation.attempt_id == attempt_id)
         )
 
     async def _current(
@@ -640,9 +687,7 @@ class GuideCompilationRepository:
             ProjectGuideCompilation.project_id == str(project_id),
             ProjectGuideCompilation.guide_id == str(guide_id),
             ~exists(
-                select(1).where(
-                    child.c.supersedes_compilation_id == ProjectGuideCompilation.id
-                )
+                select(1).where(child.c.supersedes_compilation_id == ProjectGuideCompilation.id)
             ),
         )
         if lock:
@@ -665,9 +710,7 @@ def _identity_values(identity: CompilationAttemptIdentity) -> dict[str, object]:
     return values
 
 
-def _matches(
-    attempt: ProjectGuideCompilationAttempt, identity: CompilationAttemptIdentity
-) -> bool:
+def _matches(attempt: ProjectGuideCompilationAttempt, identity: CompilationAttemptIdentity) -> bool:
     """Return whether a row retains the exact identity and provider key."""
     return identity_from_attempt(attempt) == identity and (
         attempt.provider_idempotency_key == identity.provider_idempotency_key()
@@ -685,9 +728,11 @@ def _request_matches(
         operation.operation_id == facts.operation_id
         and operation.request_trigger == origin.trigger
         and operation.source_mutation_operation_id == origin.source_mutation_operation_id
-        and operation.source_authorization_decision_event_id == (
+        and operation.source_authorization_decision_event_id
+        == (
             str(origin.source_authorization_decision_event_id)
-            if origin.source_authorization_decision_event_id is not None else None
+            if origin.source_authorization_decision_event_id is not None
+            else None
         )
         and operation.request_id == facts.request_id
         and operation.idempotency_key == facts.idempotency_key
@@ -700,8 +745,7 @@ def _request_matches(
         and operation.setup_generation == facts.setup_generation
         and operation.expected_predecessor_compilation_id
         == facts.expected_predecessor_compilation_id
-        and operation.request_facts_digest
-        == project_guide_compilation_facts_digest(facts)
+        and operation.request_facts_digest == project_guide_compilation_facts_digest(facts)
     )
 
 

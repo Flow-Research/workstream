@@ -455,7 +455,7 @@ The paired artifact hidden-behavior matrix is closed:
 | Resource-owning WS-ART chunk | Hidden actions/resources implemented by that chunk |
 |---|---|
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
-| `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`, and `artifact.guide_source.binding.create -> artifact.binding.create`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
+| `WS-ART-001-03` | Hidden guide behavior for `artifact.guide_source.ingest -> artifact.guide_source.ingest`, `artifact.guide_source.read -> artifact.guide_source.read`; AUTH activation custody is split between WS-XINT-002-04A and 04B below |
 | `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
 | `WS-ART-001-04A1` through `04C2` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; 04B1-04B3 implement the sole catalogue/materialization/evidence path and XINT-002-06A activates its fixed pre-submit materializer before 04C1; contributor preparation remains unavailable until WS-ARCH-001-02A-02F establish the complete public owner path, 02G activates preparation, 02H activates consumption/binding, and 02I removes the frozen legacy precheck in the live clean cut |
 | `WS-ART-001-04B2` and `04B3` | hidden `artifact.pre_submit.checker_input.materialize` resource/guard usage mapped to `artifact.checker_input.materialize`; 04B2 owns exact sealed materialization and 04B3 consumes it in the complete effective plan |
@@ -513,7 +513,7 @@ is not a permission alias.
 | `WS-AUTH-001-ART-02D-INTERNAL` | Active: `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
-| `WS-XINT-002-04B` | Active: `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-XINT-002-04B` | Active: `artifact.guide_source.read` |
 | `WS-XINT-002-05A` | Active `artifact.submission_bundle.prepare`; registry custody retained while replacement implementation chunk WS-ARCH-001-02G supplies the executable PREP boundary |
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; activated by replacement implementation chunk WS-ARCH-001-02H for only the fixed artifact-binding service |
@@ -564,9 +564,8 @@ remain planned and unavailable, and add no migration.
 | `artifact.audit.read` | `artifact.audit.read` | Operator | artifact audit scope | `02D` |
 | `operations.artifact_storage_admission.read` | `operations.status.read` | Operator | deployment artifact-storage namespace | `02D` |
 | `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | exact covered Project Manager | guide-source snapshot item | `03` |
-| `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source binding and verified replica | `03` |
+| `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | exact committed document version and fenced compilation attempt | `03` |
 | `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `04C2` |
-| `artifact.guide_source.binding.create` | `artifact.binding.create` | fixed binding service | guide-source snapshot item | `03` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | fixed binding service | submission | `05` |
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | fixed binding service | checker run | `06B` |
 | `artifact.verification.execute` | `artifact.verification.execute` | fixed verifier service | verification job | `02D` |
@@ -591,7 +590,7 @@ closed:
 | `workstream.artifact.verifier` | `artifact.verification.execute` |
 | `workstream.artifact.put_resolver` | `artifact.put_attempt.resolve` |
 | `workstream.artifact.scheduler` | `artifact.pending_work.scan` |
-| `workstream.artifact.binding` | active/activatable v0.1: `artifact.guide_source.binding.create`, `artifact.submission.binding.create`, `artifact.checker_output.binding.create`; planned/unavailable future: `artifact.review_evidence.binding.create` |
+| `workstream.artifact.binding` | active/activatable v0.1: `artifact.submission.binding.create`, `artifact.checker_output.binding.create`; planned/unavailable future: `artifact.review_evidence.binding.create` |
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
@@ -808,8 +807,8 @@ The PREP foundation issues handles for `actor.profile.update_self`, the eight
 active AdminRoleGrant-backed administrative mutations, the three active fixed
 ART foundation service actions, Project Manager
 `artifact.guide_source.ingest`, and the fixed-service
-`artifact.guide_source.binding.create` and `artifact.guide_source.read`
-actions, contributor `artifact.submission_bundle.prepare`, hidden human
+`artifact.guide_source.read`
+action, contributor `artifact.submission_bundle.prepare`, hidden human
 `submission.create`, and fixed-service `artifact.submission.binding.create`.
 Checker, review, generic artifact-read, and the public Submission cutover remain
 planned and issue no handle.
@@ -1104,7 +1103,6 @@ authority.
 | `/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}` | `project.guide_sufficiency_report.read` | `project.setup_diagnostic.read` |
 | `/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` | `project.submission_artifact_policy.list` | `project.effective_policy.read` |
 | `/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` | `project.submission_artifact_policy.read` | `project.effective_policy.read` |
-| `/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup` | `project.post_submit_checker_policy_setup.read` | `project.effective_policy.read` |
 
 AUTH-11C2 hard-cuts three current active-guide reads to local administrative
 authority. Covered Project Manager and Audit Authority grants and system
@@ -1166,10 +1164,14 @@ setup-run queue intent; broker dispatch happens only after commit and never
 carries the prepared handle.
 
 Guide create/update no longer accept embedded review, revision, retired
-payout/economic, or contribution-record configuration fields. Guide source markdown
-may change before the first source snapshot, becomes immutable after capture,
-and bounded metadata such as `change_summary` remains editable while the guide
-is draft. Exact committed retries return the recorded response without another
+payout/economic, or contribution-record configuration fields. Guide create
+requires task examples stored as immutable PostgreSQL JSON with the guide
+metadata. AUTH receives the request digest, example hash and count; the guide
+and exact replay response are committed together. Document/upload snapshots
+bind that commitment and receive original PDF/DOCX/PPTX files through ART.
+Inline Markdown and URL/repository ingestion are unavailable. Only bounded
+metadata such as `change_summary` remains editable while the guide is draft.
+Exact committed retries return the recorded response without another
 mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,
 stale-lineage, revoked, wrong-action, wrong-resource, or wrong-transaction use
 fails closed with no product write.
@@ -1254,8 +1256,10 @@ deny. Preparation binds actual actor/link, project, operation and correlation
 custody. Fresh replay rechecks current lifecycle authority and the exact stored
 allow envelope and digest, including a null denial code, without another allow
 event. POL retains transaction and immutable receipt ownership. The default
-port remains unavailable until POL-04B wires the live setup path. AUTH-12F4 and AUTH-12G are later approval and deterministic
-post-submit-policy gates; neither is a prerequisite for setup finalization.
+port remains unavailable; POL-04B explicitly composes the authorized adapter
+in the live Celery setup path. POL-05A → AUTH-12F4 → POL-05B is the next manager
+review/correction/approval boundary. AUTH-12G later gates deterministic
+post-submit policy work; neither approval gate is required for draft finalization.
 
 The 12F1 foundation binds each future submission-policy handle to the exact
 project/guide/source lineage, mutation target, operation and request digests,

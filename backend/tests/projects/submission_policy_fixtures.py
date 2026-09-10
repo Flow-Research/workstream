@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.modules.projects.models import GuideSufficiencyReport, PreSubmitCheckerPolicy, ProjectSetupRun
 from projects.client_fixtures import auth_headers
-from verified_guide_fixtures import create_verified_report_fixture
+from committed_guide_fixtures import create_compiled_report_fixture
 
 
 def project_submission_artifact_policy_body(
@@ -118,7 +118,7 @@ async def create_submission_artifact_policy(
             )
         )
     if authoritative is None and diagnostic is not None:
-        await create_verified_report_fixture(diagnostic.id, snapshot_id)
+        await create_compiled_report_fixture(diagnostic.id, snapshot_id)
     response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
         headers=auth_headers(),

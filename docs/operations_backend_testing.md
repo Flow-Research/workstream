@@ -1,20 +1,14 @@
 # Backend Testing Operations
 
-## Native guide-extractor runtime
+## Guide document runtime
 
-The approved v0.1 image extractor supports CPython 3.11 or 3.12 on Linux glibc
-2.27 or newer, on x86_64 or aarch64. Its Pillow dependency is installed only
-from the four approved hash-bound manylinux wheels. Python 3.13, macOS,
-Windows, musl, and other architectures intentionally fail the guide-extractor
-dependency gate rather than resolving an unapproved native artifact.
-Native execution also requires `libseccomp.so.2` and the normal Linux `/proc`
-surface used by the fail-closed extraction child.
-
-macOS and Windows contributors use the repository's Docker backend service,
-which runs Linux on the Docker VM's native x86_64 or aarch64 architecture. Do
-not force amd64 emulation on an ARM host: a package install is not proof that
-the extraction child's inner seccomp boundary is available. See the
-[Developer Quickstart](../README.md#developer-quickstart).
+Guide uploads preserve original files in ArtifactStore. Bounded PDF/OOXML
+format admission runs locally; the agent reads documents in its isolated
+provider workspace. There is no local guide extractor or Pillow/PDF
+parser dependency. Use the [Developer Quickstart](../README.md#developer-quickstart)
+for the supported backend environment. Scripted runtime tests prove contracts;
+real-provider document reading requires the explicit live probe and credentials
+from the ignored backend `.env`.
 
 Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
@@ -116,9 +110,9 @@ nodes directly with the admin URL while stripping application database URLs;
 every ordinary node remains behind isolated-runner custody and never receives
 the admin credential.
 
-Backend and Agent Gates do not run on review-state events. Agent Gates validates
-the guide-extractor dependency manifest deterministically for each PR head;
-protected-branch review rules independently enforce exact-head human approval.
+Backend and Agent Gates do not run on review-state events. Agent Gates runs
+the repository process and documentation checks for each PR head; protected-branch
+review rules independently enforce exact-head human approval.
 Superseded Agent Gates runs for the same PR are cancelled without repeating the
 full backend suite.
 

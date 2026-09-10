@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
 from dataclasses import replace
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import pytest
+from .runtime_fixtures import record_attempt_document_access
 
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.projects.guide_compilation.contracts import (
@@ -49,6 +52,7 @@ async def test_uncertain_restart_returns_unresolved_without_redispatch(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session:
@@ -58,7 +62,8 @@ async def test_uncertain_restart_returns_unresolved_without_redispatch(
         _NoAuthorityOrProvider.calls = 0
         async with factory() as restarted_session:
             recovered = await GuideCompilationService(
-                restarted_session, _NoAuthorityOrProvider()  # type: ignore[arg-type]
+                restarted_session,
+                _NoAuthorityOrProvider(),  # type: ignore[arg-type]
             ).fence_dispatch(actor=service, facts=facts)
         assert first.dispatch_permitted is True
         assert recovered.dispatch_permitted is False
@@ -85,7 +90,10 @@ async def test_changed_request_replay_fails_without_new_authority_event(
         async with factory() as session:
             await _authorized_service(session, actor).authorize_request(
                 origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
-                actor=actor, facts=facts, identity=identity(context(values))
+                actor=actor,
+                facts=facts,
+                identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         changed = replace(facts, instruction_version="v2")
         async with factory() as session:
@@ -97,6 +105,7 @@ async def test_changed_request_replay_fails_without_new_authority_event(
                     identity=identity(context(values)).model_copy(
                         update={"instruction_version": "v2"}
                     ),
+                    runtime_configuration=runtime_configuration(),
                 )
     finally:
         await engine.dispose()
@@ -112,12 +121,15 @@ async def test_repeated_terminal_transitions_preserve_one_attempt(
     try:
         async with factory() as session, session.begin():
             repository = GuideCompilationRepository(session)
-            _outcome, attempt = await repository.reserve_attempt(identity(context(values)))
+            _outcome, attempt = await repository.reserve_attempt(
+                identity(context(values)), runtime_configuration=runtime_configuration()
+            )
             uncertain = await repository.mark_provider_uncertain(attempt.id)
             assert await repository.mark_provider_uncertain(attempt.id) == uncertain
             assert await repository.recovery_classification(attempt.id) == (
                 "provider_outcome_unresolved"
             )
+        await record_attempt_document_access(factory, attempt.id, context(values))
         async with factory() as session, session.begin():
             repository = GuideCompilationRepository(session)
             terminal = await repository.mark_invalid_terminal(

@@ -149,7 +149,7 @@ class DatabaseAuthorization:
                 "select count(*) from actor_profiles a join actor_identity_links l on l.actor_profile_id=a.id "
                 "where a.id=:actor and l.id=:link and a.actor_kind='service' and a.status='active' "
                 "and a.service_identity='workstream.project.setup' and l.subject_kind='service' "
-                "and l.subject='workstream.project.setup' and l.status='active'"
+                "and l.status='active'"
             ),
             {"actor": str(self.actor), "link": str(self.link)},
         )

@@ -11,7 +11,7 @@ from app.adapters.artifacts import (
 from app.core.config import get_settings
 from app.workers.async_runner import run_async_task
 from app.adapters.artifacts.internal_workers import (
-    continue_guide_setup_after_verification,
+    continue_guide_setup_after_stored_document,
     run_artifact_internal_operation,
     scan_artifact_pending_work,
     scan_guide_setup_continuations as scan_guide_setup_continuations_page,
@@ -41,6 +41,7 @@ def cleanup_stale_scratch() -> int:
 def resolve_put_attempt(attempt_id: str) -> None:
     """Resolve one exact put attempt as the fixed resolver service."""
     run_async_task(lambda: run_artifact_internal_operation("put", UUID(attempt_id)))
+    continue_guide_setup.delay(attempt_id)
 
 
 @celery_app.task(name=ARTIFACT_VERIFICATION_TASK)
@@ -48,21 +49,20 @@ def verify_object(job_id: str) -> None:
     """Verify one exact object as the fixed verifier service."""
     identifier = UUID(job_id)
     run_async_task(lambda: run_artifact_internal_operation("verification", identifier))
-    continue_guide_setup.delay(job_id)
 
 
 @celery_app.task(name=GUIDE_SETUP_CONTINUATION_TASK)
-def continue_guide_setup(job_id: str) -> None:
-    """Resume one verified guide generation from its durable verification id."""
-    run_async_task(lambda: continue_guide_setup_after_verification(UUID(job_id)))
+def continue_guide_setup(put_attempt_id: str) -> None:
+    """Resume one stored guide generation from its exact committed put identity."""
+    run_async_task(lambda: continue_guide_setup_after_stored_document(UUID(put_attempt_id)))
 
 
 @celery_app.task(name=GUIDE_SETUP_CONTINUATION_SCAN_TASK)
 def scan_guide_setup_continuations() -> int:
-    """Republish a bounded page of stranded verified guide continuations."""
+    """Republish a bounded page of complete stranded document sets."""
 
-    async def publish(job_id: str) -> None:
-        continue_guide_setup.delay(job_id)
+    async def publish(put_attempt_id: str) -> None:
+        continue_guide_setup.delay(put_attempt_id)
 
     return run_async_task(lambda: scan_guide_setup_continuations_page(publish))
 

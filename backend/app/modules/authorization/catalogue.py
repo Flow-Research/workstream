@@ -121,7 +121,6 @@ class ActionId(StrEnum):
     PROJECT_GUIDE_SUFFICIENCY_REPORT_READ = "project.guide_sufficiency_report.read"
     PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST = "project.submission_artifact_policy.list"
     PROJECT_SUBMISSION_ARTIFACT_POLICY_READ = "project.submission_artifact_policy.read"
-    PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ = "project.post_submit_checker_policy_setup.read"
     PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ = (
         "project.effective_submission_artifact_policy.read"
     )
@@ -190,7 +189,6 @@ class ActionId(StrEnum):
     ARTIFACT_GUIDE_SOURCE_INGEST = "artifact.guide_source.ingest"
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
     ARTIFACT_SUBMISSION_BUNDLE_PREPARE = "artifact.submission_bundle.prepare"
-    ARTIFACT_GUIDE_SOURCE_BINDING_CREATE = "artifact.guide_source.binding.create"
     ARTIFACT_SUBMISSION_BINDING_CREATE = "artifact.submission.binding.create"
     ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE = "artifact.checker_output.binding.create"
     ARTIFACT_VERIFICATION_EXECUTE = "artifact.verification.execute"
@@ -445,11 +443,6 @@ ACTION_DEFINITIONS = (
     ),
     _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
-        ActionOwner.AUTH_11C1,
-    ),
-    _active(
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C1,
     ),
@@ -736,11 +729,6 @@ ACTION_DEFINITIONS = (
         ActionOwner.XINT_002_05A,
     ),
     _active(
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
-        PermissionId.ARTIFACT_BINDING_CREATE,
-        ActionOwner.XINT_002_04B,
-    ),
-    _active(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.AUTH_ART_05,
@@ -857,7 +845,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 112:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 110:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 24:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -926,12 +914,10 @@ def _index_actions(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE,
@@ -972,7 +958,6 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.ARTIFACT_SCHEDULER: frozenset({ActionId.ARTIFACT_PENDING_WORK_SCAN}),
     ServiceIdentity.ARTIFACT_BINDING: frozenset(
         {
-            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
             ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
             ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
             ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
@@ -1019,7 +1004,6 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
         (ServiceIdentity.ARTIFACT_VERIFIER, ActionId.ARTIFACT_VERIFICATION_EXECUTE),
         (ServiceIdentity.ARTIFACT_PUT_RESOLVER, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE),
         (ServiceIdentity.ARTIFACT_SCHEDULER, ActionId.ARTIFACT_PENDING_WORK_SCAN),
-        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE),
@@ -1061,7 +1045,6 @@ _ACTIVE_SERVICE_ACTIONS = {
     ActionId.ARTIFACT_VERIFICATION_EXECUTE,
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     ActionId.ARTIFACT_PENDING_WORK_SCAN,
-    ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
     ActionId.ARTIFACT_GUIDE_SOURCE_READ,
     ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
@@ -1079,7 +1062,6 @@ def _index_service_actions(
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (PermissionId.ARTIFACT_VERIFICATION_EXECUTE, ActionOwner.AUTH_ART_02D_INTERNAL),
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE, ActionOwner.AUTH_ART_02D_INTERNAL),
         ActionId.ARTIFACT_PENDING_WORK_SCAN: (PermissionId.ARTIFACT_PENDING_WORK_SCAN, ActionOwner.AUTH_ART_02D_INTERNAL),
-        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (PermissionId.ARTIFACT_BINDING_CREATE, ActionOwner.XINT_002_04B),
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (PermissionId.ARTIFACT_BINDING_CREATE, ActionOwner.AUTH_ART_05),
         ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE: (PermissionId.ARTIFACT_BINDING_CREATE, ActionOwner.AUTH_ART_06B),
         ActionId.ARTIFACT_GUIDE_SOURCE_READ: (PermissionId.ARTIFACT_GUIDE_SOURCE_READ, ActionOwner.XINT_002_04B),

@@ -140,55 +140,25 @@ async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> str:
     raise AssertionError("artifact internal operation did not return")
 
 
-async def continue_guide_setup_after_verification(verification_job_id: UUID) -> None:
-    """Compose ART capabilities for the project-owned setup continuation."""
-    from app.adapters.artifacts import create_artifact_scratch_manager
-    from app.modules.artifacts.guide_setup import GuideSetupPreparationService
-    from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationJob
-    from app.modules.artifacts.preparation import ArtifactPreparationService
+async def continue_guide_setup_after_stored_document(put_attempt_id: UUID) -> None:
+    """Pass committed document metadata to the PROJECTS dispatch owner."""
+    from app.adapters.artifacts import guide_document_manifest_port
+    from app.modules.artifacts.models import ArtifactPutAttempt
     from app.modules.projects.models import GuideSourceSnapshotItem
-    from app.modules.projects.guide_setup_continuation import (
-        continue_setup_after_verified_guide_item,
-    )
+    from app.modules.projects.guide_setup_continuation import continue_setup_after_stored_guide_item
 
-    settings = get_settings()
     async with get_session_factory()() as session:
-        source_snapshot_id = await session.scalar(
-            select(GuideSourceSnapshotItem.source_snapshot_id)
-            .join(
-                ArtifactPutAttempt,
-                ArtifactPutAttempt.guide_source_item_id == GuideSourceSnapshotItem.id,
-            )
-            .join(
-                ArtifactVerificationJob,
-                ArtifactVerificationJob.originating_put_attempt_id == ArtifactPutAttempt.id,
-            )
-            .where(
-                ArtifactVerificationJob.id == str(verification_job_id),
-                ArtifactVerificationJob.status == "verified",
-                ArtifactVerificationJob.terminal_result_code == "verified",
-            )
+        snapshot_id = await session.scalar(select(GuideSourceSnapshotItem.source_snapshot_id)
+            .join(ArtifactPutAttempt, ArtifactPutAttempt.guide_source_item_id == GuideSourceSnapshotItem.id)
+            .where(ArtifactPutAttempt.id == str(put_attempt_id),
+                   ArtifactPutAttempt.producer_request_type == "guide",
+                   ArtifactPutAttempt.status == "object_confirmed",
+                   ArtifactPutAttempt.terminal_result_code.in_(("document_stored", "document_stored_observed"))))
+    if snapshot_id is not None:
+        await continue_setup_after_stored_guide_item(
+            UUID(snapshot_id), session_factory=get_session_factory(),
+            manifest_factory=guide_document_manifest_port,
         )
-    if source_snapshot_id is None:
-        return
-    await initialize_artifact_internal_runtime()
-    manager = create_artifact_scratch_manager(settings)
-    try:
-        with _artifact_internal_runtime() as (store, namespace):
-            preparation_service = GuideSetupPreparationService(
-                get_session_factory(),
-                store,
-                ArtifactPreparationService(manager),
-                namespace,
-            )
-            await continue_setup_after_verified_guide_item(
-                verification_job_id,
-                UUID(source_snapshot_id),
-                session_factory=get_session_factory(),
-                prepare_generation=preparation_service.prepare_generation,
-            )
-    finally:
-        manager.close()
 
 
 async def scan_artifact_pending_work(
@@ -219,51 +189,58 @@ async def scan_artifact_pending_work(
             raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
 
 
-async def scan_guide_setup_continuations(
-    publish_continuation: Callable[[str], Awaitable[None]],
-) -> int:
-    """Publish continuations only for verified jobs on retryable snapshots."""
-    from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactVerificationJob
-    from app.modules.projects.guide_setup_continuation import (
-        retryable_source_snapshot_ids,
+async def scan_guide_setup_continuations(publish_continuation: Callable[[str], Awaitable[None]]) -> int:
+    """Recover complete committed document sets, without scanning verification jobs."""
+    from sqlalchemy import func
+    from sqlalchemy.orm import aliased
+    from app.modules.artifacts.models import ArtifactPutAttempt
+    from app.modules.projects.models import (
+        GuideSourceSnapshotItem, GuideSourceSnapshot, ProjectGuide, ProjectSetupRun,
     )
-    from app.modules.projects.models import GuideSourceSnapshotItem
+    from app.modules.projects.guide_setup_continuation import retryable_compilation_dispatch_predicate
 
-    settings = get_settings()
-    snapshot_ids = await retryable_source_snapshot_ids(
-        get_session_factory(),
-        page_size=settings.guide_setup_continuation_scan_page_size,
-    )
-    if not snapshot_ids:
-        return 0
+    newer_run = aliased(ProjectSetupRun)
+    newer_snapshot = aliased(GuideSourceSnapshot)
+    stale_run = select(newer_run.id).where(
+        newer_run.guide_id == ProjectSetupRun.guide_id,
+        newer_run.setup_generation > ProjectSetupRun.setup_generation,
+    ).exists()
+    stale_snapshot = select(newer_snapshot.id).where(
+        newer_snapshot.guide_id == GuideSourceSnapshot.guide_id,
+        newer_snapshot.guide_version == GuideSourceSnapshot.guide_version,
+        newer_snapshot.id != GuideSourceSnapshot.id,
+        newer_snapshot.captured_at >= GuideSourceSnapshot.captured_at,
+    ).exists()
+    missing_item = aliased(GuideSourceSnapshotItem)
+    matching_put = aliased(ArtifactPutAttempt)
+    committed = select(matching_put.id).where(
+        matching_put.guide_source_item_id == missing_item.id,
+        matching_put.producer_request_type == "guide",
+        matching_put.status == "object_confirmed",
+        matching_put.terminal_result_code.in_(("document_stored", "document_stored_observed")),
+    ).exists()
+    missing = select(missing_item.id).where(
+        missing_item.source_snapshot_id == ProjectSetupRun.source_snapshot_id, ~committed,
+    ).exists()
     async with get_session_factory()() as session:
-        job_ids = list(
-            (
-                await session.scalars(
-                    select(ArtifactVerificationJob.id)
-                    .join(
-                        ArtifactPutAttempt,
-                        ArtifactPutAttempt.id == ArtifactVerificationJob.originating_put_attempt_id,
-                    )
-                    .join(
-                        GuideSourceSnapshotItem,
-                        GuideSourceSnapshotItem.id == ArtifactPutAttempt.guide_source_item_id,
-                    )
-                    .where(
-                        ArtifactVerificationJob.status == "verified",
-                        ArtifactVerificationJob.terminal_result_code == "verified",
-                        GuideSourceSnapshotItem.source_snapshot_id.in_(
-                            [str(value) for value in snapshot_ids]
-                        ),
-                    )
-                    .order_by(
-                        ArtifactVerificationJob.terminal_at.asc(),
-                        ArtifactVerificationJob.id.asc(),
-                    )
-                    .limit(settings.guide_setup_continuation_scan_page_size)
-                )
-            ).all()
-        )
-    for job_id in job_ids:
-        await publish_continuation(job_id)
-    return len(job_ids)
+        ids = list(await session.scalars(
+            select(func.min(ArtifactPutAttempt.id))
+            .join(GuideSourceSnapshotItem, GuideSourceSnapshotItem.id == ArtifactPutAttempt.guide_source_item_id)
+            .join(ProjectSetupRun, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshotItem.source_snapshot_id)
+            .join(GuideSourceSnapshot, GuideSourceSnapshot.id == ProjectSetupRun.source_snapshot_id)
+            .join(ProjectGuide, ProjectGuide.id == ProjectSetupRun.guide_id)
+            .where(retryable_compilation_dispatch_predicate(), ~missing, ~stale_run, ~stale_snapshot,
+                   ProjectGuide.status == "draft", ProjectGuide.version == ProjectSetupRun.guide_version,
+                   GuideSourceSnapshot.project_id == ProjectSetupRun.project_id,
+                   GuideSourceSnapshot.guide_id == ProjectGuide.id,
+                   GuideSourceSnapshot.guide_version == ProjectGuide.version,
+                   GuideSourceSnapshot.bundle_hash == ProjectSetupRun.source_snapshot_hash,
+                   ArtifactPutAttempt.producer_request_type == "guide",
+                   ArtifactPutAttempt.status == "object_confirmed",
+                   ArtifactPutAttempt.terminal_result_code.in_(("document_stored", "document_stored_observed")))
+            .group_by(ProjectSetupRun.id).order_by(func.min(ArtifactPutAttempt.terminal_at), ProjectSetupRun.id)
+            .limit(get_settings().guide_setup_continuation_scan_page_size)
+        ))
+    for identifier in ids:
+        await publish_continuation(identifier)
+    return len(ids)

@@ -58,7 +58,7 @@ async def test_replay_delegates_exact_custody_without_transaction_ownership(case
     if operation == "reserve":
         outcome = await case.service.reserve_replay(facts)
         assert outcome == case.replay.reserve.return_value
-        case.replay.reserve.assert_awaited_once_with(**expected, status="pending")
+        case.replay.reserve.assert_awaited_once_with(**expected)
     else:
         for field in (
             "operation_id",
@@ -111,59 +111,12 @@ async def test_invalid_human_replay_facts_never_reach_repository(case, field, va
     case.replay.reserve.assert_not_awaited()
 
 
-def service_facts():
-    facts = rows.replay_facts()
-    custody = module.ProjectSetupServiceCustodyContext(
-        setup_run_id=rows.SETUP,
-        scope_project_id=rows.PROJECT,
-        guide_id=rows.GUIDE,
-        source_snapshot_id=rows.SNAPSHOT,
-        setup_generation=4,
-        expected_step="submission_artifact_policy",
-        task_id=UUID(int=30),
-        correlation_id=UUID(int=31),
-        stale_output_digest="sha256:" + "c" * 64,
-    )
-    resource = facts.resource_context.model_copy(
-        update={
-            "target_kind": "derive",
-            "execution_kind": "setup_service",
-            "stale_output_digest": custody.stale_output_digest,
-            "setup_service_custody": custody,
-        }
-    )
-    return replace(
-        facts,
-        service_identity="workstream.project.setup",
-        action_id=module.ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE.value,
-        idempotency_key=None,
-        resource_context=resource,
-        setup_run_id=str(rows.SETUP),
-        setup_task_id=custody.task_id,
-        correlation_id=custody.correlation_id,
-    )
-
-
-async def test_fixed_service_replay_preserves_exact_custody(case):
-    facts = service_facts()
-    await case.service.reserve_replay(facts)
-    values = case.replay.reserve.await_args.kwargs
-    assert values["service_identity"] == "workstream.project.setup"
-    assert values["setup_run_id"] == str(rows.SETUP)
-    assert values["setup_task_id"] == UUID(int=30)
-    assert values["correlation_id"] == UUID(int=31)
-    assert values["idempotency_key"] is None
-
-
 @pytest.mark.parametrize(
-    "field,value",
-    [
-        ("setup_run_id", str(UUID(int=99))),
-        ("setup_task_id", UUID(int=99)),
-        ("correlation_id", UUID(int=99)),
-    ],
+    "field,value", [("execution_kind", "setup_service"), ("setup_service_custody", object())]
 )
-async def test_fixed_service_replay_rejects_changed_custody(case, field, value):
-    with pytest.raises(ValueError, match="service replay custody is invalid"):
-        await case.service.reserve_replay(replace(service_facts(), **{field: value}))
+async def test_human_replay_rejects_nonhuman_resource_custody(case, field, value):
+    facts = rows.replay_facts()
+    resource = facts.resource_context.model_copy(update={field: value})
+    with pytest.raises(ValueError, match="human replay custody is invalid"):
+        await case.service.reserve_replay(replace(facts, resource_context=resource))
     case.replay.reserve.assert_not_awaited()

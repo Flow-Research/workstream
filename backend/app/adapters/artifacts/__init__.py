@@ -221,7 +221,8 @@ def get_guide_artifact_ingest_command(
             manager.close()
             bootstrap.close()
 
-    service = GuideArtifactIngestService(runtime, authority)
+    from app.adapters.artifacts.internal_workers import continue_guide_setup_after_stored_document
+    service = GuideArtifactIngestService(runtime, authority, continue_guide_setup_after_stored_document)
     return PreparedGuideArtifactIngestCommand(service, authority)
 
 
@@ -388,5 +389,48 @@ async def cleanup_stale_artifact_scratch(settings: Settings) -> int:
     manager = create_artifact_scratch_manager(settings)
     try:
         return await manager.cleanup_stale()
+    finally:
+        manager.close()
+
+
+def guide_document_manifest_port(session: AsyncSession):
+    """Compose ART's metadata-only current document manifest capability."""
+    from app.modules.artifacts.guide_documents import SqlAlchemyGuideDocumentManifest
+    from app.adapters.projects import project_guide_document_scope_port
+    return SqlAlchemyGuideDocumentManifest(session, project_guide_document_scope_port(session))
+
+
+@asynccontextmanager
+async def guide_document_access_runtime(session_factory, attempt_id, manifest, configuration):
+    """Own ART provider/scratch composition for the already-fenced setup attempt."""
+    from uuid import uuid4
+    from app.core.config import get_settings
+    from app.adapters.artifacts.internal_workers import (
+        initialize_artifact_internal_runtime, _artifact_internal_runtime,
+    )
+    from app.adapters.projects import project_guide_document_scope_port
+    from app.modules.artifacts.guide_document_access import ScopedGuideDocumentGrant
+    from app.modules.artifacts.authorization import PreparedGuideSourceReadAuthorization
+
+    await initialize_artifact_internal_runtime()
+    manager = create_artifact_scratch_manager(get_settings())
+    try:
+        with _artifact_internal_runtime() as (store, namespace):
+            def authority(session):
+                request_id = uuid4()
+                return PreparedGuideSourceReadAuthorization(
+                    session, request_id=request_id, correlation_id=request_id,
+                )
+            grant = ScopedGuideDocumentGrant(
+                session_factory, store, namespace, ArtifactPreparationService(manager), authority,
+                scope_factory=project_guide_document_scope_port, manifest_factory=guide_document_manifest_port,
+                attempt_id=attempt_id, manifest=manifest,
+                lifetime_seconds=configuration.timeout_seconds,
+                maximum_document_bytes=configuration.maximum_document_bytes,
+            )
+            try:
+                yield grant
+            finally:
+                await grant.close()
     finally:
         manager.close()

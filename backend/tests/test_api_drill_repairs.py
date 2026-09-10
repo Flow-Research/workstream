@@ -35,8 +35,8 @@ from projects.guide_fixtures import complete_guide_payload, create_guide, create
 
 PROJECT_TEXT_CASES = [
     ("project", "name"), ("project", "slug"), ("project", "description"),
-    ("guide_create", "version"), ("guide_create", "content_markdown"),
-    ("guide_create", "change_summary"), ("guide_update", "content_markdown"),
+    ("guide_create", "version"),
+    ("guide_create", "change_summary"),
     ("guide_update", "change_summary"),
 ]
 
@@ -45,7 +45,8 @@ PROJECT_TEXT_CASES = [
 def test_project_text_schema_rejects_nul_preserving_valid_values(operation: str, field: str) -> None:
     schema, payload = {
         "project": (ProjectCreate, {"name": "Name", "slug": "slug"}),
-        "guide_create": (ProjectGuideCreate, {"version": "initial", "content_markdown": "# Guide"}),
+        "guide_create": (ProjectGuideCreate, {"version": "initial", "task_examples": [
+            {"content": "Evaluate the assigned claim.", "title": None, "labels": []}]}),
         "guide_update": (ProjectGuideUpdate, {}),
     }[operation]
     for value in ("\x00leading", "embedded\x00nul", "trailing\x00", "line\n\x00"):
@@ -81,14 +82,15 @@ async def test_project_text_nul_rejected_without_state_and_same_key_recovers(
     if operation != "project":
         project = await create_project(project_client)
         route += f"/{project['id']}/guides"
-        payload = {"version": "initial", "content_markdown": "# Unicode 名\nGuide",
+        payload = {"version": "initial", "task_examples": [
+                       {"content": "Evaluate Unicode 名 claims.", "title": None, "labels": []}],
                    "change_summary": "Initial é summary"}
         if operation == "guide_update":
             created = await project_client.post(route, headers=auth_headers(), json=payload)
             assert created.status_code == 201, created.text
             route += "/" + created.json()["id"]
             method, status = "PATCH", 200
-            payload = {"content_markdown": "# Updated 名\nGuide", "change_summary": "Updated é summary"}
+            payload = {"change_summary": "Updated é summary"}
     headers = auth_headers()
     before = await project_text_state()
     rejected = await project_client.request(method, route, headers=headers,
@@ -331,10 +333,8 @@ def test_api_drill_request_limits_are_exposed_in_openapi() -> None:
     assert project["name"]["maxLength"] == 200
     assert project["slug"]["maxLength"] == 120
     assert guide_create["version"]["maxLength"] == 50
-    assert "content_markdown" not in guide_update_schema.get("required", [])
-    assert guide_update["content_markdown"]["type"] == "string"
-    assert "anyOf" not in guide_update["content_markdown"]
-    assert "default" not in guide_update["content_markdown"]
+    assert "content_markdown" not in guide_create
+    assert "content_markdown" not in guide_update
     assert {item.get("type") for item in guide_update["change_summary"]["anyOf"]} == {
         "null",
         "string",
@@ -486,7 +486,7 @@ async def test_guide_content_null_has_no_state_then_recovery_and_omission_succee
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(ProjectGuide, guide["id"])
         assert persisted is not None
-        assert persisted.content_markdown == guide["content_markdown"]
+        assert persisted.change_summary == guide["change_summary"]
         assert persisted.updated_at == seeded_updated_at
         assert (
             await session.scalar(
@@ -497,14 +497,14 @@ async def test_guide_content_null_has_no_state_then_recovery_and_omission_succee
             == 0
         )
 
-    replacement = f"{guide['content_markdown']}\n\nValid replacement."
+    replacement = "Valid metadata replacement."
     recovered = await project_client.patch(
         path,
         headers=auth_headers() | {"Idempotency-Key": str(key)},
-        json={"content_markdown": replacement},
+        json={"change_summary": replacement},
     )
     assert recovered.status_code == 200, recovered.text
-    assert recovered.json()["content_markdown"] == replacement
+    assert recovered.json()["change_summary"] == replacement
 
     summary_only = await project_client.patch(
         path,
@@ -512,13 +512,13 @@ async def test_guide_content_null_has_no_state_then_recovery_and_omission_succee
         json={"change_summary": None},
     )
     assert summary_only.status_code == 200, summary_only.text
-    assert summary_only.json()["content_markdown"] == replacement
+    assert "content_markdown" not in summary_only.json()
     assert summary_only.json()["change_summary"] is None
 
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(ProjectGuide, guide["id"])
         assert persisted is not None
-        assert persisted.content_markdown == replacement
+        assert persisted.retained_content_markdown is None
         assert persisted.change_summary is None
         record = await session.scalar(
             select(GuideMutationIdempotencyRecord).where(

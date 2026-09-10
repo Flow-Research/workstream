@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 from app.modules.authorization.api import ProjectGuideCompilationRequestOrigin
 import asyncio
 
 import pytest
+from .runtime_fixtures import record_attempt_document_access
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -31,7 +34,10 @@ async def test_concurrent_identical_requests_commit_one_attempt_event_and_receip
         async with factory() as session:
             return await _authorized_service(session, actor).authorize_request(
                 origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
-                actor=actor, facts=facts, identity=attempt_identity
+                actor=actor,
+                facts=facts,
+                identity=attempt_identity,
+                runtime_configuration=runtime_configuration(),
             )
 
     try:
@@ -71,11 +77,13 @@ async def test_concurrent_finalization_commits_one_compilation_and_event(
                 actor=human_actor,
                 facts=_request(values),
                 identity=identity(context(values)),
+                runtime_configuration=runtime_configuration(),
             )
         facts = _preflight(values, requested.attempt_id)
         async with factory() as session:
             execution = _execution_service(session, service)
             await execution.fence_dispatch(actor=service, facts=facts)
+        await record_attempt_document_access(factory, requested.attempt_id, context(values))
         async with factory() as session:
             await _execution_service(session, service).record_accepted_result(
                 actor=service, facts=facts, context=context(values), result=result()

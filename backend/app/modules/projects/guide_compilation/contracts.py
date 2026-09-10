@@ -11,6 +11,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.interfaces.project_agents import (
     ProjectGuideCompilationContext,
     ProjectGuideCompilationResult,
@@ -98,17 +99,17 @@ class CompilationAttemptIdentity(BaseModel):
         """Derive server-owned identity from one strict provider context."""
         material = context.material
         return cls(
-            project_id=UUID(material.project_id),
-            guide_id=UUID(material.guide_id),
+            project_id=material.project_id,
+            guide_id=material.guide_id,
             guide_version=material.guide_version,
-            source_snapshot_id=UUID(material.source_snapshot_id),
+            source_snapshot_id=material.source_snapshot_id,
             source_snapshot_hash=material.source_snapshot_hash,
             setup_run_id=context.setup_run_id,
             setup_generation=context.setup_generation,
             canonical_input_hash=canonical_json_hash(
                 json.loads(canonical_project_guide_compilation_context_bytes(context))
             ),
-            guide_material_hash=material.canonical_payload_sha256,
+            guide_material_hash=material.sha256,
             pre_catalogue_id=context.pre_submission_capabilities.catalogue_id,
             pre_catalogue_version=context.pre_submission_capabilities.version,
             pre_catalogue_schema_version=context.pre_submission_capabilities.schema_version,
@@ -139,6 +140,7 @@ class CompilationExecutionState:
     preflight_facts: ProjectGuideCompilationExecutePreflightFacts
     classification: CompilationRecoveryClassification
     compilation_id: UUID | None = None
+    runtime_configuration: ProjectGuideRuntimeConfiguration | None = None
 
 
 class CompilationComponentHashes(BaseModel):
@@ -191,9 +193,7 @@ def accepted_compilation_result(result: ProjectGuideCompilationResult) -> Accept
                 {"status": body["status"], "findings": body["findings"]}
             ),
             artifact_policy_hash=canonical_json_hash(artifact),
-            requirement_inventory_hash=canonical_json_hash(
-                {"requirements": body["requirements"]}
-            ),
+            requirement_inventory_hash=canonical_json_hash({"requirements": body["requirements"]}),
             pre_submit_hash=canonical_json_hash(
                 {"pre_submit_bindings": body["pre_submit_bindings"]}
             ),

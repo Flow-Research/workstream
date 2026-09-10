@@ -30,6 +30,8 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from app.modules.projects.api.guide_documents import DOCUMENT_EXTENSIONS
+from app.modules.artifacts.guide_formats import BoundGuideFormatInspector, GuideFormatDetector, GuideFormatLimits
 from app.interfaces.artifact_operations import (
     ArtifactRecoveryRequest,
     GuideArtifactIngestCommand,
@@ -64,6 +66,7 @@ from app.modules.artifacts.authorization import (
 )
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
+    VERIFICATION_PRODUCERS,
     ArtifactAdmissionRequest,
     ArtifactAdmissionResult,
     ArtifactAuthorityDeniedError,
@@ -215,7 +218,9 @@ class GuideArtifactIngestService:
             ],
         ],
         authority: GuideArtifactPreparedAuthorization,
+        on_document_stored: Callable[[UUID], Awaitable[None]],
     ) -> None:
+        self._on_document_stored = on_document_stored
         self._runtime_factory = runtime_factory
         self._authority = authority
 
@@ -232,11 +237,15 @@ class GuideArtifactIngestService:
         """Prepare bytes and admit them inside the caller's PREP transaction."""
         if request.logical_role != "guide_source":
             raise ArtifactAdmissionRelationshipError("guide artifact logical role is invalid")
-        prepared = await preparation.prepare(
-            request.byte_source,
-            media_type=request.media_type,
-        )
+        media_type = await admission_service.guide_document_media_type(request)
+        prepared = await preparation.prepare(request.byte_source, media_type=media_type)
         try:
+            classification = await prepared.inspect(BoundGuideFormatInspector(
+                GuideFormatDetector(GuideFormatLimits()), media_type, "upload",
+            ))
+            if (classification.status != "classified"
+                    or classification.detected_format != DOCUMENT_EXTENSIONS[media_type]):
+                raise ArtifactAdmissionRelationshipError("guide document format is invalid")
             admission = await admission_service.admit(
                 GuideArtifactAdmissionRequest(
                     project_id=request.project_id,
@@ -256,8 +265,8 @@ class GuideArtifactIngestService:
             await prepared.close()
             raise
 
-    @staticmethod
     async def publish(
+        self,
         prepared: PreparedArtifact,
         admission: ArtifactAdmissionResult,
         orchestrator: ArtifactStorageOrchestrator,
@@ -275,7 +284,7 @@ class GuideArtifactIngestService:
                     attempt_id=admission.attempt_id,
                     source=source,
                 )
-            return GuideArtifactIngestResult(
+            result = GuideArtifactIngestResult(
                 put_attempt_id=admission.attempt_id,
                 operation_identity=admission.operation_identity,
                 sha256=source.commitment.sha256,
@@ -285,6 +294,15 @@ class GuideArtifactIngestService:
             )
         finally:
             await prepared.close()
+
+        if status in {"document_stored", "object_confirmed"}:
+            try:
+                await self._on_document_stored(admission.attempt_id)
+            except Exception:
+                # The committed upload remains successful. The bounded continuation
+                # scanner recovers publication without repeating storage or inference.
+                pass
+        return result
 
 
 class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
@@ -345,7 +363,6 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
                             idempotency_key=idempotency_key,
                         ),
                         logical_role="guide_source",
-                        media_type="application/octet-stream",
                         byte_source=byte_source,
                     ),
                     preparation,
@@ -608,7 +625,6 @@ class ArtifactStorageOrchestrator:
     async def verify_object(self, job_id: UUID) -> str:
         """Run one deadline-bounded complete-object verification claim."""
         async with self._session.begin():
-            persisted_namespace = await self._claim_and_validate_namespace()
             candidate = await self._repo.lock_verification_job(str(job_id))
             if candidate is None:
                 return "stale"
@@ -616,6 +632,9 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(candidate.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
+            if attempt.producer_request_type not in VERIFICATION_PRODUCERS:
+                return "stale"
+            persisted_namespace = await self._claim_and_validate_namespace()
             self._validate_put_execution_namespace(attempt, persisted_namespace)
             self._validate_replica_execution_namespace(replica, persisted_namespace)
             candidate_generation = candidate.execution_generation
@@ -834,6 +853,7 @@ class ArtifactStorageOrchestrator:
                 attempt.terminal_at = now
                 _clear_put_fence(attempt)
                 return "conflict"
+            is_guide_document = attempt.producer_request_type == "guide"
             if observed:
                 observation_receipt = await self._repo.add_put_observation_receipt(
                     ArtifactPutObservationReceipt(
@@ -862,22 +882,23 @@ class ArtifactStorageOrchestrator:
                         request_digest=attempt.request_digest,
                         provider_object_ref=provider_object_ref,
                         replayed=replayed,
-                        outcome="stored_pending_verification",
+                        outcome="document_stored" if is_guide_document else "stored_pending_verification",
                         attempt_number=max(1, attempt.execution_generation),
                         correlation_id=attempt.operation_identity,
                         details=[],
                     )
                 )
                 receipt_id = receipt.id
-            await self._repo.add_verification_job(
-                ArtifactVerificationJob(
-                    id=str(uuid4()),
-                    originating_put_attempt_id=attempt.id,
-                    replica_id=replica.id,
-                    status="pending",
-                    maximum_attempts=self._settings.artifact_provider_observation_maximum_attempts,
+            if not is_guide_document:
+                await self._repo.add_verification_job(
+                    ArtifactVerificationJob(
+                        id=str(uuid4()),
+                        originating_put_attempt_id=attempt.id,
+                        replica_id=replica.id,
+                        status="pending",
+                        maximum_attempts=self._settings.artifact_provider_observation_maximum_attempts,
+                    )
                 )
-            )
             attempt.status = "object_confirmed"
             attempt.replica_id = replica.id
             # observation receipts are not acknowledgement receipts; retain the
@@ -887,10 +908,15 @@ class ArtifactStorageOrchestrator:
             attempt.lease_expires_at = None
             attempt.execution_mode = None
             attempt.next_run_at = None
-            attempt.terminal_result_code = "observed_confirmed" if observed else "acknowledged"
+            attempt.terminal_result_code = (
+                ("document_stored_observed" if observed else "document_stored")
+                if is_guide_document else ("observed_confirmed" if observed else "acknowledged")
+            )
             attempt.terminal_at = now
             attempt.cas_version += 1
-        return "observed_confirmed" if observed else "stored_pending_verification"
+        return "document_stored" if is_guide_document else (
+            "observed_confirmed" if observed else "stored_pending_verification"
+        )
 
     async def _record_put_unavailable(
         self,
@@ -1475,7 +1501,7 @@ class ArtifactRecoveryService:
         self._actors = ActorService(session)
         self._audit = AuditRepository(session)
 
-    async def create(self, request: ArtifactRecoveryRequest) -> ArtifactRecoveryResult:
+    async def retry_verification(self, request: ArtifactRecoveryRequest) -> ArtifactRecoveryResult:
         """Create or replay one envelope, retry job, and initiation audit atomically."""
         self._validate_request(request)
         digest = self._request_digest(request)
@@ -1490,10 +1516,11 @@ class ArtifactRecoveryService:
             async with self._session.begin():
                 existing = await self._repo.lock_recovery_by_source(source_id)
                 if existing is not None:
+                    await self._current_recovery_source(source_id, existing)
                     await self._authorize_request(
                         request,
                         project_id=UUID(existing.project_id),
-                        task_id=UUID(existing.task_id) if existing.task_id else None,
+                        task_id=UUID(existing.task_id),
                         submission_id=(
                             UUID(existing.submission_id) if existing.submission_id else None
                         ),
@@ -1503,30 +1530,34 @@ class ArtifactRecoveryService:
                     raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
             raise
 
-    async def retry_verification(self, request: ArtifactRecoveryRequest) -> ArtifactRecoveryResult:
-        """Implement the approved Operator recovery port."""
-        return await self.create(request)
-
-    async def _create_locked(
-        self, request: ArtifactRecoveryRequest, source_id: str, digest: str
-    ) -> ArtifactRecoveryResult:
-        existing = await self._repo.lock_recovery_by_source(source_id)
-        if existing is not None:
-            await self._authorize_request(
-                request,
-                project_id=UUID(existing.project_id),
-                task_id=UUID(existing.task_id) if existing.task_id else None,
-                submission_id=UUID(existing.submission_id) if existing.submission_id else None,
-            )
-            if self._is_exact_replay(existing, request, digest):
-                return self._result(existing, replayed=True)
-            raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
+    async def _current_recovery_source(self, source_id, existing):
         source = await self._repo.lock_verification_job(source_id)
         if source is None:
             raise ArtifactRecoveryNotFoundError("artifact recovery resource was not found")
         put_attempt = await self._repo.lock_put_attempt(source.originating_put_attempt_id)
         if put_attempt is None:
             raise ArtifactRecoveryNotFoundError("artifact recovery resource was not found")
+        if put_attempt.producer_request_type not in VERIFICATION_PRODUCERS or put_attempt.task_id is None:
+            raise ArtifactRecoveryIneligibleError("artifact producer does not use verification recovery")
+        if existing is not None and (existing.project_id, existing.task_id) != (put_attempt.project_id, put_attempt.task_id):
+            raise ArtifactRecoveryConflictError("artifact recovery resource facts changed")
+        return source, put_attempt
+
+    async def _create_locked(
+        self, request: ArtifactRecoveryRequest, source_id: str, digest: str
+    ) -> ArtifactRecoveryResult:
+        existing = await self._repo.lock_recovery_by_source(source_id)
+        source, put_attempt = await self._current_recovery_source(source_id, existing)
+        if existing is not None:
+            await self._authorize_request(
+                request,
+                project_id=UUID(existing.project_id),
+                task_id=UUID(existing.task_id),
+                submission_id=UUID(existing.submission_id) if existing.submission_id else None,
+            )
+            if self._is_exact_replay(existing, request, digest):
+                return self._result(existing, replayed=True)
+            raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
         checker_run = (
             await self._repo.lock_checker_run(put_attempt.checker_run_id)
             if put_attempt.checker_run_id is not None
@@ -1534,7 +1565,7 @@ class ArtifactRecoveryService:
         )
         canonical_submission_id = checker_run.submission_id if checker_run is not None else None
         canonical_project_id = UUID(put_attempt.project_id)
-        canonical_task_id = UUID(put_attempt.task_id) if put_attempt.task_id else None
+        canonical_task_id = UUID(put_attempt.task_id)
         canonical_submission_uuid = (
             UUID(canonical_submission_id) if canonical_submission_id else None
         )
@@ -1547,7 +1578,7 @@ class ArtifactRecoveryService:
         if (
             put_attempt.project_id != str(request.project_id)
             or put_attempt.task_id
-            != (str(request.task_id) if request.task_id is not None else None)
+            != (str(request.task_id))
             or canonical_submission_id
             != (str(request.submission_id) if request.submission_id is not None else None)
         ):
@@ -1608,7 +1639,7 @@ class ArtifactRecoveryService:
             authorization_request_id=str(context.request_id),
             authorization_correlation_id=str(context.correlation_id),
             project_id=str(canonical_project_id),
-            task_id=str(canonical_task_id) if canonical_task_id is not None else None,
+            task_id=str(canonical_task_id),
             submission_id=(str(canonical_submission_uuid) if canonical_submission_uuid else None),
             source_verification_job_id=source.id,
             retry_verification_job_id=retry_id,
@@ -1628,7 +1659,7 @@ class ArtifactRecoveryService:
         request: ArtifactRecoveryRequest,
         *,
         project_id: UUID,
-        task_id: UUID | None,
+        task_id: UUID,
         submission_id: UUID | None,
     ):
         """Revalidate the human requester and exact Operator action on every call."""
@@ -1675,7 +1706,8 @@ class ArtifactRecoveryService:
         if type(request.authorization_context) is not HumanAuthorizationContext:
             raise TypeError("artifact recovery requires a human requester")
         if (
-            request.reason != request.reason.strip()
+            type(request.task_id) is not UUID
+            or request.reason != request.reason.strip()
             or not request.reason
             or len(request.reason) > 1000
             or request.client_idempotency_key != request.client_idempotency_key.strip()
@@ -1693,7 +1725,7 @@ class ArtifactRecoveryService:
                 "requester_actor_profile_id": str(context.actor_profile_id),
                 "requester_identity_link_id": str(context.identity_link_id),
                 "project_id": str(request.project_id),
-                "task_id": str(request.task_id) if request.task_id is not None else None,
+                "task_id": str(request.task_id),
                 "submission_id": (
                     str(request.submission_id) if request.submission_id is not None else None
                 ),
@@ -1806,6 +1838,21 @@ class ArtifactAdmissionService:
         self._repo = ArtifactRepository(session)
         self._actors = ActorService(session)
         self._metrics = metrics
+
+    async def guide_document_media_type(self, request: GuideArtifactIngestRequest) -> str:
+        """Resolve format from the locked assigned declaration before consuming bytes."""
+        lineage = await self._repo.get_guide_lineage(str(request.source_item_id))
+        if (
+            lineage is None
+            or lineage.project_id != str(request.project_id)
+            or lineage.guide_id != str(request.guide_id)
+            or lineage.guide_source_snapshot_id != str(request.guide_source_snapshot_id)
+            or lineage.source_kind != "document"
+            or lineage.ingestion_adapter != "upload"
+            or lineage.media_type not in DOCUMENT_EXTENSIONS
+        ):
+            raise ArtifactAdmissionRelationshipError("guide document declaration is unavailable")
+        return lineage.media_type
 
     async def admit(
         self,

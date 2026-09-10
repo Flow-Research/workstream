@@ -7,7 +7,6 @@ import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from httpx import Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
@@ -25,9 +24,46 @@ from app.modules.authorization.runtime import (
     ProjectCreateResourceContext,
     authorization_resource_digest,
 )
-from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
-from app.modules.projects.service import ProjectService, ProjectServiceError
-from app.schemas.auth import ActorContext
+from app.modules.projects.models import Project, ProjectGuide, ProjectCreateIdempotencyRecord
+
+
+def guide_example_columns() -> dict:
+    """Current valid guide input for downstream fixtures, without creation authority."""
+    from app.modules.projects.api.task_examples import task_examples_hash, validate_task_examples
+    examples = validate_task_examples([{"content": "Review a claim using the project guide."}])
+    return {"task_examples": [item.model_dump(mode="json") for item in examples],
+            "task_examples_hash": task_examples_hash(examples)}
+
+
+def guide_snapshot_columns(snapshot_id: str, *, items: list | None = None) -> dict:
+    """Current snapshot commitment for tests that seed downstream prerequisites."""
+    from app.modules.projects.service import GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION
+    examples = guide_example_columns()
+    manifest = {"schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
+                "snapshot_id": str(snapshot_id), "generation": 1, "items": items or [],
+                "task_examples_hash": examples["task_examples_hash"], "task_examples_count": 1}
+    return {"manifest_schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
+            "manifest_json": manifest, "bundle_hash": canonical_json_hash(manifest)}
+
+
+async def seed_guide_snapshot_rows(connection, *, project_id: str, guide_id: str,
+                                   version: str, snapshot_id: str) -> None:
+    """Seed current inputs inside a caller's explicit downstream custody fixture."""
+    import json
+    examples, snapshot = guide_example_columns(), guide_snapshot_columns(snapshot_id)
+    params = {"project": project_id, "guide": guide_id, "version": version, "snapshot": snapshot_id,
+              "examples": json.dumps(examples["task_examples"]), "examples_hash": examples["task_examples_hash"],
+              "manifest": json.dumps(snapshot["manifest_json"]), "schema": snapshot["manifest_schema_version"],
+              "hash": snapshot["bundle_hash"]}
+    await connection.execute(text(
+        "insert into project_guides(id,project_id,version,status,created_by,task_examples,task_examples_hash) "
+        "values(:guide,:project,:version,'draft','test',cast(:examples as json),:examples_hash)"
+    ), params)
+    await connection.execute(text(
+        "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,manifest_schema_version,"
+        "manifest_json,bundle_hash,captured_by) values(:snapshot,:project,:guide,:version,:schema,"
+        "cast(:manifest as json),:hash,'test')"
+    ), params)
 
 
 _ISOLATED_DATABASE_RE = re.compile(r"workstream_test_([a-f0-9]{12})")
@@ -45,6 +81,7 @@ async def suspend_historical_product_custody(
     allowed = {
         "project_guides": {
             "guide_mutation_product_custody",
+            "guide_task_examples_create_custody",
             "guide_lineage_lifecycle_guard",
         },
         "guide_source_snapshots": {"source_snapshot_product_custody"},
@@ -80,54 +117,38 @@ async def suspend_historical_product_custody(
         raise
 
 
-async def activate_guide_for_downstream_test(
-    session_factory,
-    *,
-    project_id: str,
-    guide_id: str,
-) -> Response:
-    """Seed the pre-12H active-guide prerequisite without exposing an API route.
-
-    AUTH-12D deliberately removes the legacy activation endpoint. Downstream
-    subsystem tests still need active historical state until AUTH-12H installs
-    the authorized activation mutation, so this fixture exercises the existing
-    product validation while explicitly suspending the
-    ``guide_mutation_product_custody`` and ``guide_lineage_lifecycle_guard``
-    triggers.
-    """
+async def seed_active_guide_for_downstream_test(
+    session_factory, *, project_id: str, guide_id: str,
+) -> dict:
+    """Seed a downstream prerequisite; no activation or approval flow is exercised."""
     async with session_factory() as session:
-        link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.issuer == "flow-test",
-                ActorIdentityLink.subject == "project-manager-subject",
-            )
-        )
+        link = await session.scalar(select(ActorIdentityLink).where(
+            ActorIdentityLink.issuer == "flow-test",
+            ActorIdentityLink.subject == "project-manager-subject",
+        ))
         if link is None:
-            raise RuntimeError("downstream activation fixture requires an admitted actor")
-        actor = ActorContext(
-            actor_id=str(link.actor_profile_id),
-            external_subject=link.subject,
-            external_issuer=link.issuer,
-            roles=("project_manager",),
-            claim_snapshot={},
-            auth_source="dev_mock",
-            is_dev_auth=True,
-        )
-        try:
-            async with suspend_historical_product_custody(
-                session,
-                table="project_guides",
-                triggers=(
-                    "guide_mutation_product_custody",
-                    "guide_lineage_lifecycle_guard",
-                ),
-            ):
-                result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
-            await session.commit()
-            return Response(status_code=200, json=result.model_dump(mode="json"))
-        except ProjectServiceError as exc:
-            await session.rollback()
-            return Response(status_code=exc.status_code, json={"detail": str(exc)})
+            raise RuntimeError("downstream guide fixture requires an admitted actor")
+        guide = await session.get(ProjectGuide, guide_id)
+        project = await session.get(Project, project_id)
+        assert guide is not None and project is not None and guide.project_id == project.id
+        now = datetime.now(UTC)
+        async with suspend_historical_product_custody(session, table="project_guides",
+            triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard")):
+            for prior in await session.scalars(select(ProjectGuide).where(
+                ProjectGuide.project_id == project_id, ProjectGuide.status == "active")):
+                prior.status = "superseded"
+                prior.superseded_at = now
+            await session.flush()
+            guide.status = "active"
+            guide.approved_by = link.actor_profile_id
+            guide.effective_at = now
+            project.status = "active"
+            await session.flush()
+        seeded = {"guide": {"id": guide.id, "version": guide.version,
+            "status": guide.status, "approved_by": guide.approved_by,
+            "effective_at": guide.effective_at.isoformat()}}
+        await session.commit()
+        return seeded
 
 
 async def grant_system_project_manager(

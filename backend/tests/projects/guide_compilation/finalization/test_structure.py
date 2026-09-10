@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.architecture_ast import imported_symbols_and_calls
+
 ROOT = Path(__file__).resolve().parents[4]
 OWNER = ROOT / "app/modules/projects/guide_compilation"
 SOURCES = (
@@ -20,17 +22,9 @@ def imports_and_calls(paths):
     imports = set()
     calls = set()
     for path in paths:
-        for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.ImportFrom):
-                imports.add(node.module or "")
-                imports.update(alias.name for alias in node.names)
-            elif isinstance(node, ast.Import):
-                imports.update(alias.name for alias in node.names)
-            elif isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Attribute):
-                    calls.add(node.func.attr)
-                elif isinstance(node.func, ast.Name):
-                    calls.add(node.func.id)
+        path_imports, path_calls = imported_symbols_and_calls(ast.parse(path.read_text()))
+        imports.update(path_imports)
+        calls.update(path_calls)
     return imports, calls
 
 
@@ -39,9 +33,11 @@ def test_finalization_has_no_route():
     assert not any("finalization" in name.lower() for name in imports | calls)
 
 
-def test_finalization_has_no_queue_composition():
+def test_worker_composes_finalization_authority_without_calling_finalizer():
     imports, calls = imports_and_calls((ROOT / "app/workers/project_setup.py",))
-    assert not any("finalization" in name.lower() for name in imports | calls)
+    assert "setup_finalization_authorization" in imports
+    assert "finalize" not in calls
+    assert "GuideCompilationFinalizationService" not in calls
 
 
 def test_finalization_cannot_call_projection_ports():
@@ -66,7 +62,7 @@ def test_finalization_cannot_import_or_call_provider():
     assert calls.isdisjoint({"compile_project_guide", "run", "run_sync", "create_response"})
 
 
-def test_finalization_cannot_reach_legacy_inference():
+def test_finalization_cannot_reach_superseded_inference():
     imports, calls = imports_and_calls(SOURCES)
     assert "app.modules.projects.service" not in imports
     assert calls.isdisjoint(
@@ -122,8 +118,8 @@ def assert_no_queue_dependency(paths):
     )
     assert calls.isdisjoint(
         {
-            "enqueue_pre_submit_setup_pipeline",
-            "dispatch_pre_submit_setup_pipeline_after_commit",
+            "enqueue_project_guide_compilation",
+            "dispatch_project_guide_compilation_after_commit",
             "apply_async",
             "send_task",
             "delay",
@@ -156,6 +152,6 @@ def test_queue_structure_proof_rejects_injected_enqueue(tmp_path):
     import pytest
 
     source = tmp_path / "queue_mutant.py"
-    source.write_text("enqueue_pre_submit_setup_pipeline(project_id='forged')\n")
+    source.write_text("enqueue_project_guide_compilation(project_id='forged')\n")
     with pytest.raises(AssertionError):
         assert_no_queue_dependency((*SOURCES, source))

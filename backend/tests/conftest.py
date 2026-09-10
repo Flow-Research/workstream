@@ -21,7 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "b6c3bb2e55ee99353806080617565494d4c5aea177dc72ec812c7e52645f18ae"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "b4bea4699ce986c73b023dd310a231609aaaaffb29dc14348e1d01e66faa7e74"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -87,6 +87,8 @@ RESETTABLE_TEST_TABLES = (
     "project_create_idempotency_records",
     "project_guides",
     "project_guide_compilation_attempts",
+    "project_guide_runtime_allocations",
+    "project_guide_document_accesses",
     "project_guide_component_projection_operations",
     "project_guide_setup_finalizations",
     "project_guide_compilations",
@@ -121,6 +123,12 @@ TRUNCATE_GUARDED_TABLES = (
     "guide_sufficiency_report_source_usages",
     "guide_sufficiency_mutation_idempotency_records",
     "guide_source_snapshot_items",
+    "guide_source_artifact_bindings",
+    "guide_source_format_classifications",
+    "guide_source_extraction_attempts",
+    "guide_source_extraction_retry_budgets",
+    "guide_source_extracted_contents",
+    "guide_source_extraction_usages",
     "outbox_events",
     "policy_mutation_idempotency_records",
     "pre_submit_evidence_results",
@@ -131,7 +139,10 @@ TRUNCATE_GUARDED_TABLES = (
     "contribution_rules",
     "project_compensation_units",
     "project_create_idempotency_records",
+    "project_guides",
     "project_guide_compilation_attempts",
+    "project_guide_runtime_allocations",
+    "project_guide_document_accesses",
     "project_guide_component_projection_operations",
     "project_guide_setup_finalizations",
     "project_setup_runs",
@@ -317,6 +328,25 @@ async def _drop_test_database_schema(database_url: str) -> None:
         await connection.execute("create schema public")
     finally:
         await connection.close()
+
+
+
+@pytest.fixture
+def migration_schema_at(request, isolated_database_env):
+    """Build an older schema only in the runner-owned migration-test database.
+
+    Call under migration_lock, like Alembic commands in schema-contract tests.
+    Forward-only custody migrations must not gain destructive downgrades merely
+    to arrange a test. The surrounding schema-contract fixture restores head.
+    """
+    if request.node.get_closest_marker("postgres_schema_contract") is None:
+        raise RuntimeError("historical schema setup requires postgres_schema_contract")
+
+    def build(revision: str) -> None:
+        asyncio.run(_drop_test_database_schema(isolated_database_env))
+        command.upgrade(_alembic_config(), revision)
+
+    return build
 
 
 def _rebuild_test_database_schema(database_url: str) -> None:

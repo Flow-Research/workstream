@@ -157,7 +157,7 @@ class OperatorPageResponse(StrictOperatorResponse, Generic[PageItem]):
 class ArtifactRecoveryCreateRequest(StrictOperatorResponse):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
     project_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     submission_id: UUID | None = None
     reason: str = Field(min_length=1, max_length=1000)
     client_idempotency_key: str = Field(min_length=1, max_length=200)

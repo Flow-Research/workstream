@@ -22,8 +22,6 @@ Use the [Developer Quickstart](README.md#developer-quickstart) before running
 repository checks. Docker is the supported cross-host path for macOS and
 Windows and selects native Linux x86_64 or aarch64 inside the Docker VM. Native
 host setup is supported only on the Linux/glibc/Python matrix documented there.
-Do not replace the approved Pillow artifacts to make an unsupported host install
-pass.
 
 Repository engineering checks use a separate, hash-pinned tooling environment,
 not the backend environment. The tested local tooling setup is Linux x86_64,

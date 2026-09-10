@@ -6,21 +6,12 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm.attributes import InstrumentedAttribute
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.projects.models import SubmissionPolicyMutationIdempotencyRecord
 from app.modules.projects.repository import ProjectRepositoryIntegrityError
-
-
-def _matches(
-    column: InstrumentedAttribute, value: object
-) -> ColumnElement[bool]:
-    """Return exact null-safe equality for one nullable mapped column."""
-    return column.is_(None) if value is None else column == value
 
 
 class SubmissionPolicyMutationReplayRepository:
@@ -44,43 +35,14 @@ class SubmissionPolicyMutationReplayRepository:
         self,
         *,
         actor_profile_id: str,
-        idempotency_key: UUID | None,
-        service_identity: str | None,
-        setup_run_id: str | None,
-        setup_generation: int,
-        setup_task_id: UUID | None,
-        correlation_id: UUID | None,
-        action_id: str,
+        idempotency_key: UUID,
     ) -> SubmissionPolicyMutationIdempotencyRecord | None:
-        """Find the one human or fixed-service replay namespace."""
-        namespace = (
-            and_(
-                SubmissionPolicyMutationIdempotencyRecord.service_identity.is_(None),
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.idempotency_key,
-                    idempotency_key,
-                ),
-            )
-            if service_identity is None
-            else and_(
-                SubmissionPolicyMutationIdempotencyRecord.service_identity == service_identity,
-                SubmissionPolicyMutationIdempotencyRecord.setup_run_id == setup_run_id,
-                SubmissionPolicyMutationIdempotencyRecord.setup_generation == setup_generation,
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.setup_task_id,
-                    setup_task_id,
-                ),
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.correlation_id,
-                    correlation_id,
-                ),
-                SubmissionPolicyMutationIdempotencyRecord.action_id == action_id,
-            )
-        )
+        """Find the current human actor/key namespace, excluding retained service rows."""
         return await self._session.scalar(
             select(SubmissionPolicyMutationIdempotencyRecord).where(
                 SubmissionPolicyMutationIdempotencyRecord.actor_profile_id == actor_profile_id,
-                namespace,
+                SubmissionPolicyMutationIdempotencyRecord.service_identity.is_(None),
+                SubmissionPolicyMutationIdempotencyRecord.idempotency_key == idempotency_key,
             )
         )
 
@@ -89,9 +51,8 @@ class SubmissionPolicyMutationReplayRepository:
         *,
         actor_profile_id: str,
         identity_link_id: str,
-        service_identity: str | None,
         action_id: str,
-        idempotency_key: UUID | None,
+        idempotency_key: UUID,
         request_digest: str,
         resource_context_digest: str,
         resource_context_json: dict,
@@ -100,11 +61,7 @@ class SubmissionPolicyMutationReplayRepository:
         guide_id: str,
         source_snapshot_id: str,
         policy_id: str,
-        setup_run_id: str | None,
         setup_generation: int,
-        setup_task_id: UUID | None,
-        correlation_id: UUID | None,
-        status: Literal["reserved", "pending"] = "pending",
     ) -> tuple[
         Literal["claimed", "mismatch", "pending", "replayed"],
         SubmissionPolicyMutationIdempotencyRecord,
@@ -114,7 +71,7 @@ class SubmissionPolicyMutationReplayRepository:
             "id": uuid4(),
             "actor_profile_id": actor_profile_id,
             "identity_link_id": identity_link_id,
-            "service_identity": service_identity,
+            "service_identity": None,
             "action_id": action_id,
             "idempotency_key": idempotency_key,
             "request_digest": request_digest,
@@ -125,11 +82,11 @@ class SubmissionPolicyMutationReplayRepository:
             "guide_id": guide_id,
             "source_snapshot_id": source_snapshot_id,
             "policy_id": policy_id,
-            "setup_run_id": setup_run_id,
+            "setup_run_id": None,
             "setup_generation": setup_generation,
-            "setup_task_id": setup_task_id,
-            "correlation_id": correlation_id,
-            "status": status,
+            "setup_task_id": None,
+            "correlation_id": None,
+            "status": "pending",
         }
         record_id = await self._session.scalar(
             insert(SubmissionPolicyMutationIdempotencyRecord)
@@ -144,21 +101,13 @@ class SubmissionPolicyMutationReplayRepository:
                 record = await self._find_namespace(
                     actor_profile_id=actor_profile_id,
                     idempotency_key=idempotency_key,
-                    service_identity=service_identity,
-                    setup_run_id=setup_run_id,
-                    setup_generation=setup_generation,
-                    setup_task_id=setup_task_id,
-                    correlation_id=correlation_id,
-                    action_id=action_id,
                 )
             if record is None:
                 raise ProjectRepositoryIntegrityError(
                     "submission-policy replay reservation disappeared"
                 )
         else:
-            record = await self._session.get(
-                SubmissionPolicyMutationIdempotencyRecord, record_id
-            )
+            record = await self._session.get(SubmissionPolicyMutationIdempotencyRecord, record_id)
             if record is None:
                 raise ProjectRepositoryIntegrityError(
                     "submission-policy replay reservation disappeared"
@@ -169,7 +118,7 @@ class SubmissionPolicyMutationReplayRepository:
             (
                 record.actor_profile_id != actor_profile_id,
                 record.identity_link_id != identity_link_id,
-                record.service_identity != service_identity,
+                record.service_identity is not None,
                 record.action_id != action_id,
                 record.idempotency_key != idempotency_key,
                 record.request_digest != request_digest,
@@ -180,47 +129,14 @@ class SubmissionPolicyMutationReplayRepository:
                 record.guide_id != guide_id,
                 record.source_snapshot_id != source_snapshot_id,
                 record.policy_id != policy_id,
-                record.setup_run_id != setup_run_id,
+                record.setup_run_id is not None,
                 record.setup_generation != setup_generation,
-                record.setup_task_id != setup_task_id,
-                record.correlation_id != correlation_id,
+                record.setup_task_id is not None,
+                record.correlation_id is not None,
             )
         ):
             return "mismatch", record
         return ("replayed" if record.status == "committed" else "pending"), record
-
-    async def bind_reserved_execution(
-        self,
-        operation_id: UUID,
-        *,
-        expected_request_digest: str,
-        expected_resource_context_digest: str,
-        request_digest: str,
-        resource_context_digest: str,
-        resource_context_json: dict,
-    ) -> SubmissionPolicyMutationIdempotencyRecord | None:
-        """Advance one durable pre-I/O reservation to exact final replay custody."""
-        record_id = await self._session.scalar(
-            update(SubmissionPolicyMutationIdempotencyRecord)
-            .where(
-                SubmissionPolicyMutationIdempotencyRecord.operation_id == operation_id,
-                SubmissionPolicyMutationIdempotencyRecord.status == "reserved",
-                SubmissionPolicyMutationIdempotencyRecord.request_digest
-                == expected_request_digest,
-                SubmissionPolicyMutationIdempotencyRecord.resource_context_digest
-                == expected_resource_context_digest,
-            )
-            .values(
-                status="pending",
-                request_digest=request_digest,
-                resource_context_digest=resource_context_digest,
-                resource_context_json=resource_context_json,
-            )
-            .returning(SubmissionPolicyMutationIdempotencyRecord.id)
-        )
-        if record_id is None:
-            return None
-        return await self._session.get(SubmissionPolicyMutationIdempotencyRecord, record_id)
 
     async def complete(
         self,
@@ -228,15 +144,11 @@ class SubmissionPolicyMutationReplayRepository:
         *,
         actor_profile_id: str,
         identity_link_id: str,
-        service_identity: str | None,
         action_id: str,
-        idempotency_key: UUID | None,
+        idempotency_key: UUID,
         request_digest: str,
         resource_context_digest: str,
-        setup_run_id: str | None,
         setup_generation: int,
-        setup_task_id: UUID | None,
-        correlation_id: UUID | None,
         response_json: dict,
         committed_policy_id: str,
         committed_effective_policy_id: str | None = None,
@@ -249,31 +161,16 @@ class SubmissionPolicyMutationReplayRepository:
                 SubmissionPolicyMutationIdempotencyRecord.operation_id == operation_id,
                 SubmissionPolicyMutationIdempotencyRecord.actor_profile_id == actor_profile_id,
                 SubmissionPolicyMutationIdempotencyRecord.identity_link_id == identity_link_id,
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.service_identity,
-                    service_identity,
-                ),
+                SubmissionPolicyMutationIdempotencyRecord.service_identity.is_(None),
                 SubmissionPolicyMutationIdempotencyRecord.action_id == action_id,
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.idempotency_key,
-                    idempotency_key,
-                ),
+                SubmissionPolicyMutationIdempotencyRecord.idempotency_key == idempotency_key,
                 SubmissionPolicyMutationIdempotencyRecord.request_digest == request_digest,
                 SubmissionPolicyMutationIdempotencyRecord.resource_context_digest
                 == resource_context_digest,
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.setup_run_id,
-                    setup_run_id,
-                ),
+                SubmissionPolicyMutationIdempotencyRecord.setup_run_id.is_(None),
                 SubmissionPolicyMutationIdempotencyRecord.setup_generation == setup_generation,
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.setup_task_id,
-                    setup_task_id,
-                ),
-                _matches(
-                    SubmissionPolicyMutationIdempotencyRecord.correlation_id,
-                    correlation_id,
-                ),
+                SubmissionPolicyMutationIdempotencyRecord.setup_task_id.is_(None),
+                SubmissionPolicyMutationIdempotencyRecord.correlation_id.is_(None),
                 SubmissionPolicyMutationIdempotencyRecord.status == "pending",
             )
             .values(

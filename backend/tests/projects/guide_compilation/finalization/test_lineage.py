@@ -32,7 +32,7 @@ from .support import scenario
         ("setup", "error_artifact_incident_id", str(uuid4())),
         ("setup", "started_at", "forged"),
         ("setup", "post_submit_derivation_summary", {}),
-        ("setup", "continuation_verification_job_id", str(uuid4())),
+        ("setup", "documents_ready_at", None),
         ("attempt", "status", "compilation_reserved"),
         ("attempt", "persisted_compilation_id", uuid4()),
         ("compilation", "canonical_input_hash", "sha256:" + "f" * 64),

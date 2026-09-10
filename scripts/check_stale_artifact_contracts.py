@@ -237,8 +237,6 @@ LIVE_RULE_PATHS = {
         "backend/app/modules/tasks/",
         "backend/app/modules/checkers/",
         "backend/scripts/api_contract_e2e.py",
-        "backend/scripts/week2_api_e2e.py",
-        "examples/terminal_benchmark/terminal_benchmark_api_e2e.py",
     ),
     "LEGACY_PROJECT_STORAGE_POLICY": (
         "backend/app/adapters/project_agents/",
@@ -247,8 +245,6 @@ LIVE_RULE_PATHS = {
         "backend/app/modules/checkers/",
         "backend/app/modules/tasks/",
         "backend/scripts/api_contract_e2e.py",
-        "backend/scripts/week2_api_e2e.py",
-        "examples/terminal_benchmark/terminal_benchmark_api_e2e.py",
     ),
     "LEGACY_STORAGE_COMPILER_PRIMITIVE": (
         "backend/app/adapters/project_agents/",
@@ -256,8 +252,6 @@ LIVE_RULE_PATHS = {
         "backend/app/modules/projects/",
         "backend/app/modules/checkers/",
         "backend/app/modules/tasks/",
-        "backend/scripts/week2_api_e2e.py",
-        "examples/terminal_benchmark/terminal_benchmark_api_e2e.py",
     ),
     "LEGACY_CHECKER_ARTIFACT_COPY": (
         "backend/app/modules/tasks/",
@@ -453,8 +447,6 @@ def rule_applies_to_path(rule: Rule, relative_path: str, root: Path = ROOT) -> b
                 "backend/app/modules/tasks/",
                 "backend/app/modules/checkers/",
                 "backend/scripts/api_contract_e2e.py",
-                "backend/scripts/week2_api_e2e.py",
-                "examples/terminal_benchmark/terminal_benchmark_api_e2e.py",
             )
         )
     return True

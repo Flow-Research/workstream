@@ -45,9 +45,6 @@ jobs:
       - name: Stale artifact contract check
         run: python3 scripts/check_stale_artifact_contracts.py
 
-      - name: Guide extractor dependency validation
-        run: python3 backend/scripts/check_guide_extractor_dependencies.py
-
       - name: Commitrail record validation
         env:
           WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}

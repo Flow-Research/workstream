@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 from typing import Any
 from uuid import UUID
-from app.interfaces.project_agents import PostSubmissionCapabilityProjection
 from app.modules.checkers.api.post_submit_catalogue import (
     CompiledPostSubmitPolicy,
     EmptyPostSubmitConfiguration,
@@ -33,13 +32,6 @@ PLATFORM_BLOCKING_SEVERITY_SET = frozenset(PLATFORM_BLOCKING_SEVERITIES)
 
 class PostSubmitCheckerCompilerError(ValueError):
     """The supplied policy cannot compile into the current contract."""
-
-
-def project_guide_post_submission_capabilities() -> PostSubmissionCapabilityProjection:
-    """Expose the sole CHECKERS-owned metadata value to guide compilation."""
-    return PostSubmissionCapabilityProjection.model_validate(
-        current_post_submit_catalogue().model_dump()
-    )
 
 
 def build_project_post_submit_checker_spec(

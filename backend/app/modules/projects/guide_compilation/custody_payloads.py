@@ -8,12 +8,11 @@ def source_state(guide, snapshot, setup) -> dict:
     """Build the complete source-state digest payload."""
     return {
         "celery_task_id": setup.celery_task_id,
-        "continuation_started_at": (
-            setup.continuation_started_at.isoformat()
-            if setup.continuation_started_at is not None
+        "documents_ready_at": (
+            setup.documents_ready_at.isoformat()
+            if setup.documents_ready_at is not None
             else None
         ),
-        "continuation_verification_job_id": setup.continuation_verification_job_id,
         "current_step": setup.current_step,
         "error_artifact_incident_id": setup.error_artifact_incident_id,
         "error_code": setup.error_code,

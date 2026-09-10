@@ -19,18 +19,10 @@ from app.modules.projects.service import GuideActivationBlocked, ProjectService
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec, compile_project_post_submit_checker_spec,
 )
-from app.db import session as db_session
-from app.modules.projects.models import PostSubmitCheckerPolicy, ProjectGuide, ProjectSetupRun
-from app.modules.tasks.models import AuditEvent
-from httpx import AsyncClient
-from sqlalchemy import select
 from projects.client_fixtures import (
-    auth_headers, project_client as project_client,
+    project_client as project_client,
     project_database_env as project_database_env,
 )
-from projects.guide_fixtures import create_project, create_guide, complete_guide_payload
-from projects.policy_bundle_fixtures import create_approved_policy_bundle
-from project_create_fixtures import activate_guide_for_downstream_test
 
 
 @pytest.fixture(autouse=True)
@@ -137,7 +129,7 @@ def _activation_ready_bundle() -> dict[str, Any]:
         source_snapshot_id=snapshot_id,
         source_snapshot_hash=snapshot_hash,
         lifecycle_status="approved",
-        derivation_source="manual",
+        derivation_source="manual_admin_derivation",
         policy_body=submission_body,
         policy_hash=submission_hash,
         approved_by_actor="actor-1",
@@ -288,59 +280,3 @@ def test_activation_readiness_accepts_complete_chain_without_payment(
 
     bundle["payment_policy"] = None
     service.validate_activation_ready(**bundle, require_payment_policy=False)
-
-
-@pytest.mark.parametrize("operation", ["approve", "correct", "activate"])
-@pytest.mark.parametrize("field", ["required_checkers", "warning_checkers", "blocking_severities"])
-async def test_persisted_policy_sidecar_cross_denies_project_write(
-    project_client: AsyncClient, operation: str, field: str,
-) -> None:
-    """Valid persisted setup reaches summary validation before any owner mutation."""
-    project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    bundle = await create_approved_policy_bundle(
-        project_client, project["id"], guide["id"],
-        approve_post_submit_checker=operation == "activate",
-    )
-    policy_id = bundle["post_submit_checker_policy"]["id"]
-    async with db_session.get_session_factory()() as session:
-        policy = await session.get(PostSubmitCheckerPolicy, policy_id)
-        setup = await session.scalar(select(ProjectSetupRun).where(
-            ProjectSetupRun.output_post_submit_checker_policy_id == policy_id,
-        ))
-        assert policy is not None and setup is not None
-        persisted_guide = await session.get(ProjectGuide, guide["id"])
-        assert persisted_guide is not None
-        service = ProjectService(session)
-        await service._validate_current_post_submit_policy_setup(persisted_guide, setup, policy)
-        locked_body, locked_hash = policy.policy_body, policy.policy_hash
-        initial_policy_status = policy.lifecycle_status
-        initial_setup = (setup.status, setup.output_post_submit_checker_policy_id)
-        audit_ids = sorted(await session.scalars(select(AuditEvent.id)))
-        setattr(policy, field, [*getattr(policy, field),
-            "medium" if field == "blocking_severities" else "check_acceptance_criteria_present"])
-        await session.commit()
-
-    if operation == "activate":
-        response = await activate_guide_for_downstream_test(
-            db_session.get_session_factory(), project_id=project["id"], guide_id=guide["id"],
-        )
-    else:
-        suffix = "approve" if operation == "approve" else "request-correction"
-        response = await project_client.post(
-            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/{suffix}",
-            headers=auth_headers(),
-            json={} if operation == "approve" else {"correction_reason": "Clarify evidence"},
-        )
-    assert response.status_code == 422, response.text
-    assert response.json()["detail"] == "post-submit checker policy hash is invalid"
-    async with db_session.get_session_factory()() as session:
-        policy = await session.get(PostSubmitCheckerPolicy, policy_id)
-        setup = await session.get(ProjectSetupRun, setup.id)
-        persisted_guide = await session.get(ProjectGuide, guide["id"])
-        assert policy is not None and setup is not None and persisted_guide is not None
-        assert (policy.policy_body, policy.policy_hash) == (locked_body, locked_hash)
-        assert policy.lifecycle_status == initial_policy_status
-        assert (setup.status, setup.output_post_submit_checker_policy_id) == initial_setup
-        assert persisted_guide.status == "draft"
-        assert sorted(await session.scalars(select(AuditEvent.id))) == audit_ids

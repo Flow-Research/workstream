@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 import json
 import re
 
@@ -22,7 +24,7 @@ async def _reserved(database_url: str):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session, session.begin():
         _, attempt = await GuideCompilationRepository(session).reserve_attempt(
-            identity(context(values))
+            identity(context(values)), runtime_configuration=runtime_configuration()
         )
     return engine, attempt
 
@@ -127,9 +129,7 @@ async def test_attempt_truncate_is_rejected(clean_postgres_database: str) -> Non
     try:
         async with engine.begin() as connection:
             with pytest.raises(DBAPIError):
-                await connection.execute(
-                    text("truncate table project_guide_compilation_attempts")
-                )
+                await connection.execute(text("truncate table project_guide_compilation_attempts"))
     finally:
         await engine.dispose()
 
@@ -152,9 +152,7 @@ async def test_live_terminal_constraint_matches_closed_vocabulary(
         assert definition is not None
         allowlist = re.search(r"failure_code.*?ARRAY\[(.*?)\]", definition)
         assert allowlist is not None
-        assert set(re.findall(r"'([^']+)'", allowlist.group(1))) == (
-            TERMINAL_FAILURE_CODES
-        )
+        assert set(re.findall(r"'([^']+)'", allowlist.group(1))) == (TERMINAL_FAILURE_CODES)
         assert "'accepted'" not in definition
         assert "'invalid_terminal'" not in definition
 

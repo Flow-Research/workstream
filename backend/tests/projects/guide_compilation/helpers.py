@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from app.modules.checkers.catalogue import project_guide_pre_submission_capabilities
+
 from dataclasses import replace
 import hashlib
+import json
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -15,24 +18,15 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.db import models as _all_models  # noqa: F401
-from app.modules.artifacts.guide_extraction import EXTRACTION_POLICY_VERSION
 from app.modules.artifacts.models import (
-    ArtifactContent,
-    ArtifactReplica,
-    ArtifactStorageNamespace,
-    GuideSourceArtifactBinding,
-    GuideSourceExtractedContent,
-    GuideSourceExtractionAttempt,
-    GuideSourceExtractionUsage,
-    GuideSourceFormatClassification,
+    ArtifactContent, ArtifactReplica, ArtifactStorageNamespace, ArtifactPutAttempt,
+    ArtifactOperationReceipt,
 )
+from app.modules.projects.models import GuideSourceArtifactIngest
+from app.modules.projects.api.guide_documents import GuideDocumentManifest, GuideDocumentVersion
 from app.interfaces.project_agents import (
-    CompilationFinding,
-    GuideSourceMaterial,
-    ProjectGuideCompilationContext,
-    ProjectGuideCompilationResult,
-    SubmissionArtifactPolicyProposal,
-    VerifiedGuideMaterialSnapshot,
+    CompilationFinding, GuideEvidenceRef, ProjectGuideCompilationContext,
+    ProjectGuideCompilationResult, SubmissionArtifactPolicyProposal,
 )
 from app.modules.authorization.api import (
     ActorIdentityFacts,
@@ -42,28 +36,24 @@ from app.modules.authorization.api import (
 )
 from app.modules.checkers.catalogue import (
     build_pre_submission_checker_catalogue,
-    project_guide_pre_submission_capabilities,
 )
 from app.modules.projects.guide_compilation.contracts import (
     CompilationAttemptIdentity,
     accepted_compilation_result,
 )
-from app.modules.projects.post_submit_policy import (
-    project_guide_post_submission_capabilities,
-)
-from app.modules.projects.api.setup_identity import pre_submit_setup_task_id
+from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
+from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 SHA256 = "sha256:" + "a" * 64
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
-EXTRACTION_USAGE_ID = UUID("22222222-2222-2222-2222-222222222222")
-BINDING_ID = UUID("33333333-3333-3333-3333-333333333333")
+DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
+PUT_ATTEMPT_ID = UUID("33333333-3333-3333-3333-333333333333")
 CONTENT_ID = UUID("44444444-4444-4444-4444-444444444444")
-CLASSIFICATION_ID = UUID("55555555-5555-5555-5555-555555555555")
-EXTRACTION_ATTEMPT_ID = UUID("66666666-6666-6666-6666-666666666666")
-EXTRACTED_CONTENT_ID = UUID("77777777-7777-7777-7777-777777777777")
+RECEIPT_ID = UUID("55555555-5555-5555-5555-555555555555")
 REPLICA_ID = UUID("88888888-8888-8888-8888-888888888888")
-SOURCE_CONTENT = "Verified source content."
-SOURCE_SHA256 = "sha256:" + hashlib.sha256(SOURCE_CONTENT.encode()).hexdigest()
+# Metadata-only fixture; live document reader tests use complete PDF originals.
+SOURCE_BYTES = b"%PDF-1.7\nGuide fixture\n%%EOF"
+SOURCE_SHA256 = "sha256:" + hashlib.sha256(SOURCE_BYTES).hexdigest()
 
 
 def ids() -> dict[str, UUID]:
@@ -88,46 +78,40 @@ def ids() -> dict[str, UUID]:
     }
 
 
+def runtime_configuration():
+    """Return explicit, non-secret execution settings for isolated test attempts."""
+    from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
+
+    instructions = "Inspect assigned originals and propose bounded draft policies."
+    return ProjectGuideRuntimeConfiguration(
+        runtime_key="openai_agents_sdk",
+        model_provider="openai",
+        model="test-model",
+        model_api="responses",
+        instruction_version="v1",
+        instructions=instructions,
+        instructions_sha256="sha256:" + hashlib.sha256(instructions.encode()).hexdigest(),
+        timeout_seconds=30,
+    )
+
+
 def context(values: dict[str, UUID], *, generation: int = 1) -> ProjectGuideCompilationContext:
-    """Build one exact ART-verified compilation context."""
-    material = GuideSourceMaterial(
-        project_id=str(values["project"]),
-        guide_id=str(values["guide"]),
-        guide_version="v1",
-        source_snapshot_id=str(values["snapshot"]),
-        source_snapshot_hash=SHA256,
-        guide_material={"content_markdown": "Canonical project guide."},
-        verified_artifact_material=True,
-        source_items=[
-            {
-                "source_kind": "uploaded_file",
-                "ingestion_adapter": "artifact_store",
-                "media_type": "text/plain",
-                "source_item_id": str(SOURCE_ITEM_ID),
-                "item_order": 0,
-                "binding_id": str(BINDING_ID),
-                "artifact_content_id": str(CONTENT_ID),
-                "artifact_sha256": SOURCE_SHA256,
-                "artifact_byte_count": len(SOURCE_CONTENT.encode()),
-                "classification_id": str(CLASSIFICATION_ID),
-                "detected_format": "plain_text",
-                "extraction_attempt_id": str(EXTRACTION_ATTEMPT_ID),
-                "extraction_usage_id": str(EXTRACTION_USAGE_ID),
-                "extracted_content_id": str(EXTRACTED_CONTENT_ID),
-                "extractor_name": "workstream.plain_text",
-                "extractor_version": "1",
-                "extraction_policy_version": EXTRACTION_POLICY_VERSION,
-                "canonical_output_sha256": SOURCE_SHA256,
-                "omission_facts": {},
-                "canonical_content": SOURCE_CONTENT,
-                "structural_metadata": None,
-                "untrusted_data": True,
-                "untrusted_data_label": "UNTRUSTED_GUIDE_SOURCE_DATA",
-            }
-        ],
+    """Build one exact committed-original metadata context."""
+    material = GuideDocumentManifest(
+        project_id=values["project"], guide_id=values["guide"], guide_version="v1",
+        source_snapshot_id=values["snapshot"], source_snapshot_hash=SHA256,
+        setup_run_id=values[f"setup_{generation}"], setup_generation=generation,
+        documents=(GuideDocumentVersion(
+            source_item_id=SOURCE_ITEM_ID, ingest_id=DOCUMENT_VERSION_ID, item_order=0,
+            put_attempt_id=PUT_ATTEMPT_ID, content_id=CONTENT_ID, replica_id=REPLICA_ID,
+            storage_namespace_id="primary", namespace_fingerprint=SOURCE_SHA256,
+            sha256=SOURCE_SHA256, byte_count=len(SOURCE_BYTES), media_type="application/pdf",
+        ),),
     )
     return ProjectGuideCompilationContext(
-        material=VerifiedGuideMaterialSnapshot.from_material(material),
+        task_examples=({"content": "Review a claim using the project guide."},),
+        runtime_configuration=runtime_configuration(),
+        material=material,
         setup_run_id=values[f"setup_{generation}"],
         setup_generation=generation,
         instruction_version="v1",
@@ -136,7 +120,7 @@ def context(values: dict[str, UUID], *, generation: int = 1) -> ProjectGuideComp
         pre_submission_capabilities=project_guide_pre_submission_capabilities(
             build_pre_submission_checker_catalogue()
         ),
-        post_submission_capabilities=project_guide_post_submission_capabilities(),
+        post_submission_capabilities=current_post_submit_catalogue(),
     )
 
 
@@ -145,9 +129,9 @@ def result() -> ProjectGuideCompilationResult:
     return ProjectGuideCompilationResult(
         status="draft_ready",
         findings=(
-            CompilationFinding(
-                severity="info", code="guide.ready", message="Guide is complete."
-            ),
+            CompilationFinding(severity="info", code="guide.ready", message="Guide is complete.",
+                evidence_refs=(GuideEvidenceRef(source_item_id=SOURCE_ITEM_ID,
+                    document_version_id=DOCUMENT_VERSION_ID, sha256=SOURCE_SHA256),)),
         ),
         submission_artifact_policy=SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=1_000,
@@ -240,7 +224,16 @@ def persistence_facts(
 async def _seed_project_rows(
     engine: AsyncEngine, values: dict[str, UUID], generations: int
 ) -> None:
+    from app.modules.projects.api.task_examples import task_examples_hash, validate_task_examples
+
     sql_values = {name: str(value) for name, value in values.items()}
+    examples = validate_task_examples([{"content": "Review a claim using the project guide."}])
+    example_hash = task_examples_hash(examples)
+    sql_values.update(
+        examples=json.dumps([item.model_dump(mode="json") for item in examples]),
+        examples_hash=example_hash,
+        example_manifest=json.dumps({"task_examples_hash": example_hash, "task_examples_count": len(examples)}),
+    )
     async with engine.begin() as connection:
         await connection.execute(text("alter table projects disable trigger user"))
         await connection.execute(
@@ -271,9 +264,8 @@ async def _seed_project_rows(
             await connection.execute(text(f"alter table {table} disable trigger user"))
         await connection.execute(
             text(
-                "insert into project_guides(id,project_id,version,status,content_markdown,"
-                "created_by) values(:guide,:project,'v1','draft',"
-                "'Canonical project guide.','test')"
+                "insert into project_guides(id,project_id,version,status,"
+                "created_by,task_examples,task_examples_hash) values(:guide,:project,'v1','draft','test',cast(:examples as json),:examples_hash)"
             ),
             sql_values,
         )
@@ -281,7 +273,7 @@ async def _seed_project_rows(
             text(
                 "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
                 "manifest_schema_version,manifest_json,bundle_hash,captured_by) values"
-                "(:snapshot,:project,:guide,'v1','guide_source_snapshot.v1','{}'::json,"
+                "(:snapshot,:project,:guide,'v1','guide_source_snapshot.task_examples',cast(:example_manifest as json),"
                 ":hash,'test')"
             ),
             {**sql_values, "hash": SHA256},
@@ -291,23 +283,21 @@ async def _seed_project_rows(
                 text(
                     "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
                     "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
-                    "current_step,celery_task_id,created_by) values("
+                    "current_step,celery_task_id,documents_ready_at,created_by) values("
                     ":setup,:project,:guide,'v1',:snapshot,:hash,:generation,"
-                    "'queued','queued',:task_id,'test')"
+                    "'queued','queued',:task_id,now(),'test')"
                 ),
                 {
                     **sql_values,
                     "setup": str(values[f"setup_{generation}"]),
                     "hash": SHA256,
                     "generation": generation,
-                    "task_id": pre_submit_setup_task_id(
+                    "task_id": project_guide_compilation_task_id(
                         str(values[f"setup_{generation}"]), generation
                     ),
                 },
             )
-        for table in reversed(
-            ("project_guides", "guide_source_snapshots", "project_setup_runs")
-        ):
+        for table in reversed(("project_guides", "guide_source_snapshots", "project_setup_runs")):
             await connection.execute(text(f"alter table {table} enable trigger user"))
 
 
@@ -322,8 +312,8 @@ async def _seed_snapshot_item(engine: AsyncEngine, values: dict[str, UUID]) -> N
                     "insert into guide_source_snapshot_items("
                     "id,source_snapshot_id,item_order,source_kind,source_label,"
                     "ingestion_adapter,media_type) values("
-                    ":id,:snapshot,0,'uploaded_file','guide.txt',"
-                    "'artifact_store','text/plain')"
+                    ":id,:snapshot,0,'document','guide.pdf',"
+                    "'upload','application/pdf')"
                 ),
                 {"id": str(SOURCE_ITEM_ID), "snapshot": str(values["snapshot"])},
             )
@@ -334,128 +324,45 @@ async def _seed_snapshot_item(engine: AsyncEngine, values: dict[str, UUID]) -> N
             )
 
 
-async def _seed_artifact_custody(
-    session: AsyncSession, values: dict[str, UUID]
-) -> None:
-    session.add_all(
-        [
-            ArtifactStorageNamespace(
-                id="primary",
-                backend="local",
-                adapter="local",
-                provider_profile="test",
-                namespace_descriptor={"root": "guide-compilation-fixture"},
-                namespace_fingerprint=SOURCE_SHA256,
-            ),
-            ArtifactContent(
-                id=str(CONTENT_ID),
-                sha256=SOURCE_SHA256,
-                byte_count=len(SOURCE_CONTENT.encode()),
-                media_type="text/plain",
-                normalized_display_name="guide.txt",
-            ),
-        ]
-    )
+async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID]) -> None:
+    from datetime import datetime, timezone
+    session.add_all([
+        ArtifactStorageNamespace(id="primary", backend="local", adapter="local",
+            provider_profile="test", namespace_descriptor={"root": "guide-compilation-fixture"},
+            namespace_fingerprint=SOURCE_SHA256),
+        ArtifactContent(id=str(CONTENT_ID), sha256=SOURCE_SHA256,
+            byte_count=len(SOURCE_BYTES), media_type="application/pdf",
+            normalized_display_name="guide.pdf"),
+        GuideSourceArtifactIngest(id=str(DOCUMENT_VERSION_ID), source_item_id=str(SOURCE_ITEM_ID),
+            actor_profile_id=str(values["actor"]), sha256=SOURCE_SHA256,
+            byte_count=len(SOURCE_BYTES), media_type="application/pdf"),
+    ])
     await session.flush()
-    session.add(
-        ArtifactReplica(
-            id=str(REPLICA_ID),
-            content_id=str(CONTENT_ID),
-            storage_namespace_id="primary",
-            namespace_fingerprint=SOURCE_SHA256,
-            adapter="local",
-            provider_profile="test",
-            provider_object_ref=f"fixtures/{CONTENT_ID}",
-            verification_state="verified",
-            availability_state="available",
-            integrity_state="valid",
-        )
-    )
+    replica = ArtifactReplica(id=str(REPLICA_ID), content_id=str(CONTENT_ID),
+        storage_namespace_id="primary", namespace_fingerprint=SOURCE_SHA256,
+        adapter="local", provider_profile="test", provider_object_ref=f"fixtures/{CONTENT_ID}",
+        verification_state="pending", availability_state="unknown", integrity_state="unknown")
+    session.add(replica)
     await session.flush()
-    session.add(
-        GuideSourceArtifactBinding(
-            id=str(BINDING_ID),
-            project_id=str(values["project"]),
-            guide_id=str(values["guide"]),
-            source_snapshot_id=str(values["snapshot"]),
-            source_item_id=str(SOURCE_ITEM_ID),
-            project_setup_run_id=str(values["setup_1"]),
-            setup_generation=1,
-            content_id=str(CONTENT_ID),
-            verified_replica_id=str(REPLICA_ID),
-            logical_role="guide_source_original",
-            created_by_service="test.guide_compilation",
-        )
-    )
+    put = ArtifactPutAttempt(id=str(PUT_ATTEMPT_ID), producer_request_type="guide",
+        producer_type="actor_profile", producer_ref=str(values["actor"]),
+        project_id=str(values["project"]), guide_source_item_id=str(SOURCE_ITEM_ID),
+        sha256=SOURCE_SHA256, byte_count=len(SOURCE_BYTES), media_type="application/pdf",
+        storage_namespace_id="primary", namespace_fingerprint=SOURCE_SHA256,
+        canonical_target=f"sha256/{SOURCE_SHA256[7:9]}/{SOURCE_SHA256[9:]}",
+        operation_identity=SOURCE_SHA256, request_digest=SOURCE_SHA256,
+        status="object_confirmed", terminal_result_code="document_stored",
+        replica_id=str(REPLICA_ID), terminal_at=datetime.now(timezone.utc))
+    session.add(put)
     await session.flush()
-    session.add(
-        GuideSourceFormatClassification(
-            id=str(CLASSIFICATION_ID),
-            binding_id=str(BINDING_ID),
-            content_id=str(CONTENT_ID),
-            verified_replica_id=str(REPLICA_ID),
-            setup_generation=1,
-            sha256=SOURCE_SHA256,
-            byte_count=len(SOURCE_CONTENT.encode()),
-            media_type="text/plain",
-            detected_format="plain_text",
-            status="classified",
-            detector_name="workstream.guide_format",
-            detector_version="1",
-            classification_facts={},
-        )
-    )
-
-
-async def _seed_extracted_material(session: AsyncSession, values: dict[str, UUID]) -> None:
+    session.add(ArtifactOperationReceipt(id=str(RECEIPT_ID), contract_version=2,
+        put_attempt_id=put.id, guide_source_item_id=str(SOURCE_ITEM_ID),
+        replica_id=replica.id, operation="put", idempotency_key=put.operation_identity,
+        request_digest=put.request_digest, provider_object_ref=replica.provider_object_ref,
+        replayed=False, outcome="document_stored", attempt_number=1,
+        correlation_id=str(uuid4()), details=[]))
     await session.flush()
-    session.add_all(
-        [
-            GuideSourceExtractionAttempt(
-                id=str(EXTRACTION_ATTEMPT_ID),
-                binding_id=str(BINDING_ID),
-                content_id=str(CONTENT_ID),
-                classification_id=str(CLASSIFICATION_ID),
-                setup_generation=1,
-                detected_format="plain_text",
-                extractor_name="workstream.plain_text",
-                extractor_version="1",
-                policy_version=EXTRACTION_POLICY_VERSION,
-                attempt_number=1,
-                status="extracted",
-                error_code=None,
-                bounded_facts={},
-            ),
-            GuideSourceExtractedContent(
-                id=str(EXTRACTED_CONTENT_ID),
-                content_id=str(CONTENT_ID),
-                detected_format="plain_text",
-                extractor_name="workstream.plain_text",
-                extractor_version="1",
-                policy_version=EXTRACTION_POLICY_VERSION,
-                source_sha256=SOURCE_SHA256,
-                source_byte_count=len(SOURCE_CONTENT.encode()),
-                status="extracted",
-                output_sha256=SOURCE_SHA256,
-                canonical_output=SOURCE_CONTENT,
-                omission_facts={},
-            ),
-        ]
-    )
-    await session.flush()
-    session.add(
-        GuideSourceExtractionUsage(
-            id=str(EXTRACTION_USAGE_ID),
-            extracted_content_id=str(EXTRACTED_CONTENT_ID),
-            extraction_attempt_id=str(EXTRACTION_ATTEMPT_ID),
-            attempt_status="extracted",
-            binding_id=str(BINDING_ID),
-            content_id=str(CONTENT_ID),
-            source_item_id=str(SOURCE_ITEM_ID),
-            project_setup_run_id=str(values["setup_1"]),
-            setup_generation=1,
-        )
-    )
+    put.receipt_id = str(RECEIPT_ID)
 
 
 async def seed_database(database_url: str, *, generations: int = 1) -> dict[str, UUID]:
@@ -468,7 +375,6 @@ async def seed_database(database_url: str, *, generations: int = 1) -> dict[str,
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session, session.begin():
             await _seed_artifact_custody(session, values)
-            await _seed_extracted_material(session, values)
     finally:
         await engine.dispose()
     return values

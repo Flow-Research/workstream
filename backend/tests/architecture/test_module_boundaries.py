@@ -477,8 +477,8 @@ def test_initial_ledgers_capture_high_risk_application_edges() -> None:
         "backend/app/adapters/artifacts/__init__.py",
         "app.modules.actors.service_identities",
     ) in actual
-    assert any(
-        source.startswith("backend/app/workers/")
+    assert not any(
+        source == "backend/app/workers/project_setup.py"
         and target.startswith("app.modules.projects.")
         for source, target in actual
     )

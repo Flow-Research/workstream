@@ -74,7 +74,6 @@ def replay_facts():
     return module.SubmissionPolicyReplayFacts(
         actor_profile_id=str(ACTOR),
         identity_link_id=str(LINK),
-        service_identity=None,
         action_id=module.ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE.value,
         idempotency_key=KEY,
         request_digest=REQUEST_HASH,
@@ -84,10 +83,7 @@ def replay_facts():
         guide_id=str(GUIDE),
         source_snapshot_id=str(SNAPSHOT),
         policy_id=str(POLICY),
-        setup_run_id=None,
         setup_generation=4,
-        setup_task_id=None,
-        correlation_id=None,
     )
 
 

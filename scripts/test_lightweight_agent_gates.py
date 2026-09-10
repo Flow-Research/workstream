@@ -150,10 +150,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("group: agent-gates-${{ github.event.pull_request.number }}", agent_gates)
         self.assertIn("cancel-in-progress: true", agent_gates)
         self.assertIn("ref: ${{ github.event.pull_request.head.sha }}", agent_gates)
-        self.assertIn(
-            "run: python3 backend/scripts/check_guide_extractor_dependencies.py",
-            agent_gates,
-        )
+        self.assertNotIn("check_guide_extractor_dependencies.py", agent_gates)
         self.assertIn("python3 scripts/check_commitrail_records.py", agent_gates)
         self.assertNotIn("python3 scripts/check_chunk_state_sync.py", agent_gates)
         self.assertIn("scripts.test_commitrail_contracts", agent_gates)

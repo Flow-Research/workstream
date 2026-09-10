@@ -178,10 +178,10 @@ async def _verify_upgrade(url, project, before):
 
 
 def test_nonempty_upgrade_preserves_v1_history_hashes_and_selected_locks(
-    isolated_database_env, migration_lock
+    isolated_database_env, migration_lock, migration_schema_at
 ):
     with migration_lock():
-        command.downgrade(_config(), PRIOR)
+        migration_schema_at(PRIOR)
         project = asyncio.run(_history(isolated_database_env))
         before = asyncio.run(_snapshot(isolated_database_env, project))
         command.upgrade(_config(), OWN)
@@ -218,9 +218,9 @@ values (:id,:project,'v2',2,:digest,'legacy_incomplete',false,'[]'::json,'[]'::j
 
 
 @pytest.mark.parametrize("mode", [True, False])
-def test_v2_history_blocks_downgrade_even_for_true(isolated_database_env, migration_lock, mode):
+def test_v2_history_blocks_downgrade_even_for_true(isolated_database_env, migration_lock, migration_schema_at, mode):
     with migration_lock():
-        command.downgrade(_config(), PRIOR)
+        migration_schema_at(PRIOR)
         project = asyncio.run(_history(isolated_database_env))
         command.upgrade(_config(), OWN)
         for bad_mode, bad_format in ((False, "v1"), (True, "v3"), (None, "v2"), (True, None)):

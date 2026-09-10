@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.projects.guide_compilation.helpers import runtime_configuration
+
 import asyncio
 from dataclasses import replace
 
@@ -16,6 +18,8 @@ from app.modules.projects.guide_compilation.repository import (
     GuideCompilationRepository,
     GuideCompilationStorageError,
 )
+
+from .runtime_fixtures import record_attempt_document_access
 
 from .helpers import (
     context,
@@ -33,8 +37,13 @@ async def _accepted_attempt(factory, values, *, generation: int = 1):
     attempt_identity = identity(compilation_context)
     async with factory() as session, session.begin():
         repository = GuideCompilationRepository(session)
-        _, attempt = await repository.reserve_attempt(attempt_identity)
-        await repository.accept_result(
+        _, attempt = await repository.reserve_attempt(
+            attempt_identity, runtime_configuration=runtime_configuration()
+        )
+        await repository.mark_provider_uncertain(attempt.id)
+    await record_attempt_document_access(factory, attempt.id, compilation_context)
+    async with factory() as session, session.begin():
+        await GuideCompilationRepository(session).accept_result(
             attempt_id=attempt.id, context=compilation_context, result=result()
         )
     return attempt, attempt_identity, compilation_context
@@ -69,9 +78,7 @@ async def test_accepted_crash_recovery_persists_exactly_once(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        attempt, attempt_identity, compilation_context = await _accepted_attempt(
-            factory, values
-        )
+        attempt, attempt_identity, compilation_context = await _accepted_attempt(factory, values)
         facts = persistence_facts(values, attempt.id, attempt_identity)
         decision_id = await insert_authorization_evidence(
             clean_postgres_database,
@@ -112,9 +119,7 @@ async def test_concurrent_recovery_persists_one_compilation(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        attempt, attempt_identity, compilation_context = await _accepted_attempt(
-            factory, values
-        )
+        attempt, attempt_identity, compilation_context = await _accepted_attempt(factory, values)
         facts = persistence_facts(values, attempt.id, attempt_identity)
         decision_id = await insert_authorization_evidence(
             clean_postgres_database,
@@ -149,9 +154,7 @@ async def test_wrong_resource_authority_leaves_accepted_attempt_unpersisted(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        attempt, attempt_identity, compilation_context = await _accepted_attempt(
-            factory, values
-        )
+        attempt, attempt_identity, compilation_context = await _accepted_attempt(factory, values)
         facts = replace(
             persistence_facts(values, attempt.id, attempt_identity),
             guide_material_hash="sha256:" + "b" * 64,
@@ -176,9 +179,9 @@ async def test_wrong_resource_authority_leaves_accepted_attempt_unpersisted(
                     authorization_decision_event_id=decision_id,
                 )
         async with factory() as session:
-            classification = await GuideCompilationRepository(
-                session
-            ).recovery_classification(attempt.id)
+            classification = await GuideCompilationRepository(session).recovery_classification(
+                attempt.id
+            )
             assert classification == "provider_result_accepted_not_persisted"
     finally:
         await engine.dispose()
@@ -193,9 +196,7 @@ async def test_unrelated_authority_event_cannot_create_compilation(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        attempt, attempt_identity, compilation_context = await _accepted_attempt(
-            factory, values
-        )
+        attempt, attempt_identity, compilation_context = await _accepted_attempt(factory, values)
         facts = persistence_facts(values, attempt.id, attempt_identity)
         decision_id = await insert_authorization_evidence(
             clean_postgres_database,
@@ -220,18 +221,19 @@ async def test_unrelated_authority_event_cannot_create_compilation(
                 )
         assert "authorization evidence is invalid" in str(caught.value.__cause__)
         async with factory() as session:
-            assert await session.scalar(
-                text(
-                    "select count(*) from project_guide_compilations "
-                    "where attempt_id=:attempt_id"
-                ),
-                {"attempt_id": attempt.id},
-            ) == 0
-            assert await GuideCompilationRepository(
-                session
-            ).recovery_classification(attempt.id) == (
-                "provider_result_accepted_not_persisted"
+            assert (
+                await session.scalar(
+                    text(
+                        "select count(*) from project_guide_compilations "
+                        "where attempt_id=:attempt_id"
+                    ),
+                    {"attempt_id": attempt.id},
+                )
+                == 0
             )
+            assert await GuideCompilationRepository(session).recovery_classification(
+                attempt.id
+            ) == ("provider_result_accepted_not_persisted")
     finally:
         await engine.dispose()
 
@@ -245,9 +247,7 @@ async def test_wrong_authority_digest_cannot_create_compilation(
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        attempt, attempt_identity, compilation_context = await _accepted_attempt(
-            factory, values
-        )
+        attempt, attempt_identity, compilation_context = await _accepted_attempt(factory, values)
         facts = persistence_facts(values, attempt.id, attempt_identity)
         decision_id = await insert_authorization_evidence(
             clean_postgres_database,
@@ -270,18 +270,19 @@ async def test_wrong_authority_digest_cannot_create_compilation(
                 )
         assert "authorization evidence is invalid" in str(caught.value.__cause__)
         async with factory() as session:
-            assert await session.scalar(
-                text(
-                    "select count(*) from project_guide_compilations "
-                    "where attempt_id=:attempt_id"
-                ),
-                {"attempt_id": attempt.id},
-            ) == 0
-            assert await GuideCompilationRepository(
-                session
-            ).recovery_classification(attempt.id) == (
-                "provider_result_accepted_not_persisted"
+            assert (
+                await session.scalar(
+                    text(
+                        "select count(*) from project_guide_compilations "
+                        "where attempt_id=:attempt_id"
+                    ),
+                    {"attempt_id": attempt.id},
+                )
+                == 0
             )
+            assert await GuideCompilationRepository(session).recovery_classification(
+                attempt.id
+            ) == ("provider_result_accepted_not_persisted")
     finally:
         await engine.dispose()
 
@@ -457,9 +458,7 @@ async def test_compilation_update_is_rejected(clean_postgres_database: str) -> N
         async with factory() as session:
             with pytest.raises(DBAPIError):
                 await session.execute(
-                    text(
-                        "update project_guide_compilations set agent_version='v2' where id=:id"
-                    ),
+                    text("update project_guide_compilations set agent_version='v2' where id=:id"),
                     {"id": compilation.id},
                 )
     finally:

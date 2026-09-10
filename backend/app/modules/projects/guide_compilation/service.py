@@ -45,6 +45,8 @@ from .repository import (
     GuideCompilationStorageError,
 )
 from .validation import accepted_from_attempt, identity_from_attempt
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
+from app.core.hashing import canonical_json_hash
 
 
 class GuideCompilationService:
@@ -54,13 +56,16 @@ class GuideCompilationService:
         self,
         session: AsyncSession,
         authorization: ProjectGuideCompilationAuthorizationPort[Any],
-        *, automatic_inputs: AutomaticCompilationInputs | None = None,
+        *,
+        automatic_inputs: AutomaticCompilationInputs | None = None,
     ) -> None:
         self._session = session
         self._authorization = authorization
         self._automatic_inputs = automatic_inputs
 
-    async def request_automatic(self, *, actor: ActorIdentityFacts, setup_run_id: UUID) -> CompilationRequestReceipt:
+    async def request_automatic(
+        self, *, actor: ActorIdentityFacts, setup_run_id: UUID
+    ) -> CompilationRequestReceipt:
         """Resolve a source-ready selector without calling or constructing a provider."""
         self._require_fresh_session()
         if self._automatic_inputs is None:
@@ -69,9 +74,12 @@ class GuideCompilationService:
             setup = await self._session.get(ProjectSetupRun, str(setup_run_id))
             if setup is None:
                 raise GuideCompilationIntegrityError("automatic compilation setup unavailable")
-            operation = await self._session.scalar(select(ProjectGuideCompilationRequestOperation).where(
-                ProjectGuideCompilationRequestOperation.operation_id == automatic_operation_id(setup_run_id, setup.setup_generation)
-            ))
+            operation = await self._session.scalar(
+                select(ProjectGuideCompilationRequestOperation).where(
+                    ProjectGuideCompilationRequestOperation.operation_id
+                    == automatic_operation_id(setup_run_id, setup.setup_generation)
+                )
+            )
             if operation is not None:
                 repository = GuideCompilationRepository(self._session)
                 attempt = await repository.attempt(operation.attempt_id, lock=False)
@@ -80,12 +88,23 @@ class GuideCompilationService:
                 origin = ProjectGuideCompilationRequestOrigin(
                     trigger=operation.request_trigger,
                     source_mutation_operation_id=operation.source_mutation_operation_id,
-                    source_authorization_decision_event_id=UUID(operation.source_authorization_decision_event_id)
-                        if operation.source_authorization_decision_event_id else None,
+                    source_authorization_decision_event_id=UUID(
+                        operation.source_authorization_decision_event_id
+                    )
+                    if operation.source_authorization_decision_event_id
+                    else None,
                 )
             else:
-                facts, identity, origin = await self._automatic_inputs.resolve(self._session, setup_run_id)
-        return await self.authorize_request(actor=actor, facts=facts, identity=identity, origin=origin)
+                facts, identity, origin = await self._automatic_inputs.resolve(
+                    self._session, setup_run_id
+                )
+        return await self.authorize_request(
+            actor=actor,
+            facts=facts,
+            identity=identity,
+            origin=origin,
+            runtime_configuration=self._automatic_inputs.runtime_configuration,
+        )
 
     async def authorize_request(
         self,
@@ -94,6 +113,7 @@ class GuideCompilationService:
         facts: ProjectGuideCompilationRequestFacts,
         identity: CompilationAttemptIdentity,
         origin: ProjectGuideCompilationRequestOrigin,
+        runtime_configuration: ProjectGuideRuntimeConfiguration | None,
     ) -> CompilationRequestReceipt:
         """Atomically persist an authorized request or recover its receipt."""
         self._require_fresh_session()
@@ -106,29 +126,45 @@ class GuideCompilationService:
                 )
                 if existing is not None:
                     await self._authorization.validate_request_replay(
-                        actor=actor, facts=facts, origin=origin,
+                        actor=actor,
+                        facts=facts,
+                        origin=origin,
                     )
                     return await _request_receipt(repository, existing)
                 handle = await self._authorization.prepare_request(
-                    actor=actor, facts=facts, origin=origin,
+                    actor=actor,
+                    facts=facts,
+                    origin=origin,
                 )
                 if origin.trigger == "automatic_source_ready":
                     if self._automatic_inputs is None:
-                        raise GuideCompilationIntegrityError("automatic compilation inputs unavailable")
-                    resolved = await self._automatic_inputs.resolve(self._session, facts.setup_run_id)
-                    if resolved != (facts, identity, origin):
-                        raise GuideCompilationIntegrityError("automatic compilation request input mismatch")
-                outcome, attempt = await repository.reserve_attempt(identity)
-                if outcome == "mismatch":
-                    raise GuideCompilationIntegrityError(
-                        "compilation attempt identity mismatch"
+                        raise GuideCompilationIntegrityError(
+                            "automatic compilation inputs unavailable"
+                        )
+                    resolved = await self._automatic_inputs.resolve(
+                        self._session, facts.setup_run_id
                     )
+                    if resolved != (facts, identity, origin):
+                        raise GuideCompilationIntegrityError(
+                            "automatic compilation request input mismatch"
+                        )
+                if (
+                    runtime_configuration is None
+                    or runtime_configuration.instruction_version != identity.instruction_version
+                ):
+                    raise GuideCompilationIntegrityError("compilation instruction version mismatch")
+                outcome, attempt = await repository.reserve_attempt(identity, runtime_configuration)
+                if outcome == "mismatch":
+                    raise GuideCompilationIntegrityError("compilation attempt identity mismatch")
                 if outcome == "existing":
                     raise GuideCompilationConcurrencyError(
                         "existing attempt has no authorized request custody"
                     )
                 event_id = await self._authorization.consume_request(
-                    handle=handle, actor=actor, facts=facts, origin=origin,
+                    handle=handle,
+                    actor=actor,
+                    facts=facts,
+                    origin=origin,
                 )
                 operation = await repository.insert_request_operation(
                     actor=actor,
@@ -154,21 +190,15 @@ class GuideCompilationService:
             repository = GuideCompilationRepository(self._session)
             operation, attempt = await _locked_exact(repository, facts)
             if attempt.status == "compilation_provider_uncertain":
-                return _dispatch_receipt(
-                    operation, attempt, dispatch_permitted=False
-                )
+                return _dispatch_receipt(operation, attempt, dispatch_permitted=False)
             if attempt.status != "compilation_reserved":
                 return _dispatch_receipt(
                     operation,
                     attempt,
-                    classification=await repository.recovery_classification(
-                        attempt.id
-                    ),
+                    classification=await repository.recovery_classification(attempt.id),
                     dispatch_permitted=False,
                 )
-            await self._authorization.authorize_execute_preflight(
-                actor=actor, facts=facts
-            )
+            await self._authorization.authorize_execute_preflight(actor=actor, facts=facts)
             attempt = await repository.mark_provider_uncertain(attempt.id)
             receipt = _dispatch_receipt(operation, attempt, dispatch_permitted=True)
         return receipt
@@ -188,9 +218,7 @@ class GuideCompilationService:
             operation, attempt = await _locked_exact(repository, facts)
             if attempt.status != "compilation_provider_uncertain":
                 raise GuideCompilationIntegrityError("provider outcome is not recordable")
-            await self._authorization.authorize_execute_preflight(
-                actor=actor, facts=facts
-            )
+            await self._authorization.authorize_execute_preflight(actor=actor, facts=facts)
             attempt = await repository.accept_result(
                 attempt_id=attempt.id, context=context, result=result
             )
@@ -211,9 +239,7 @@ class GuideCompilationService:
             operation, attempt = await _locked_exact(repository, facts)
             if attempt.status != "compilation_provider_uncertain":
                 raise GuideCompilationIntegrityError("provider outcome is not recordable")
-            await self._authorization.authorize_execute_preflight(
-                actor=actor, facts=facts
-            )
+            await self._authorization.authorize_execute_preflight(actor=actor, facts=facts)
             attempt = await repository.mark_invalid_terminal(
                 attempt_id=attempt.id, failure_code=failure_code
             )
@@ -278,7 +304,9 @@ class GuideCompilationService:
                     "concurrent request left no exact durable receipt"
                 )
             await self._authorization.validate_request_replay(
-                actor=actor, facts=facts, origin=origin,
+                actor=actor,
+                facts=facts,
+                origin=origin,
             )
             return await _request_receipt(repository, operation)
 
@@ -304,9 +332,7 @@ async def load_compilation_execution_state(
 ) -> CompilationExecutionState:
     """Load exact current custody without exposing ORM or accepted output."""
     if session.in_transaction():
-        raise GuideCompilationIntegrityError(
-            "guide compilation requires a fresh root transaction"
-        )
+        raise GuideCompilationIntegrityError("guide compilation requires a fresh root transaction")
     async with session.begin():
         repository = GuideCompilationRepository(session)
         try:
@@ -322,11 +348,24 @@ async def load_compilation_execution_state(
             compilation_id = None
             if classification is CompilationRecoveryClassification.PERSISTED:
                 compilation_id = (await repository.persisted_compilation(attempt.id)).id
+            configuration = None
+            if attempt.runtime_configuration is not None:
+                configuration = ProjectGuideRuntimeConfiguration.model_validate(
+                    attempt.runtime_configuration
+                )
+                if (
+                    canonical_json_hash(attempt.runtime_configuration)
+                    != attempt.runtime_configuration_hash
+                ):
+                    raise GuideCompilationIntegrityError(
+                        "compilation runtime configuration hash mismatch"
+                    )
             return CompilationExecutionState(
                 identity=identity_from_attempt(attempt),
                 preflight_facts=_preflight_facts(operation, attempt),
                 classification=classification,
                 compilation_id=compilation_id,
+                runtime_configuration=configuration,
             )
         except GuideCompilationStorageError as exc:
             raise CompilationExecutionStateUnavailable("storage_unavailable") from exc
@@ -394,9 +433,7 @@ def _persist_facts(
     )
     return replace(
         facts,
-        resource_context_digest=project_guide_compilation_execute_resource_digest(
-            actor, facts
-        ),
+        resource_context_digest=project_guide_compilation_execute_resource_digest(actor, facts),
     )
 
 

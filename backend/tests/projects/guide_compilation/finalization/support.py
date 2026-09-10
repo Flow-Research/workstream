@@ -29,7 +29,7 @@ from app.modules.projects.guide_compilation.finalization_payloads import (
     require_source_shape,
 )
 from app.modules.projects.models import ProjectSetupRun
-from app.modules.projects.api.setup_identity import pre_submit_setup_task_id
+from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from ..helpers import result
 
 NOW = datetime(2026, 9, 7, tzinfo=UTC)
@@ -106,7 +106,8 @@ def source_view(classification="draft_ready"):
         created_by="fixture",
         created_at=NOW,
         updated_at=NOW,
-        celery_task_id=pre_submit_setup_task_id(str(setup), 1),
+        documents_ready_at=NOW,
+        celery_task_id=project_guide_compilation_task_id(str(setup), 1),
     )
     s = SimpleNamespace(**state)
     empty = LockedFinalization(a, q, g, snap, s, c, True, (), None, None)
@@ -166,7 +167,7 @@ def projected_view(empty, lineage, outcome, actor, link):
             "guide_blocked": "blocked",
             "draft_ready_with_warnings": "passed_with_warnings",
         }[classification],
-        findings=[x.model_dump() for x in outcome.findings],
+        findings=[x.model_dump(mode="json") for x in outcome.findings],
         summary=None,
         agent_name="ProjectGuideCompilationProjection",
         agent_version="v1",

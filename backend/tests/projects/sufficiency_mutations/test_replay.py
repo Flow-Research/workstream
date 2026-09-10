@@ -31,7 +31,7 @@ async def test_mutation_recovers_committed_response(case, command):
     [
         *(
             (command, field)
-            for command in ("create", "ack", "dispatch")
+            for command in ("create", "ack")
             for field in (
                 "identity_link_id",
                 "request_digest",
@@ -41,10 +41,6 @@ async def test_mutation_recovers_committed_response(case, command):
         ),
         ("create", "source_snapshot_id"),
         ("ack", "report_id"),
-        ("dispatch", "source_snapshot_id"),
-        ("dispatch", "action_id"),
-        ("dispatch", "setup_run_id"),
-        ("dispatch", "setup_generation"),
     ],
 )
 async def test_replay_rejects_changed_identity(case, command, field):
@@ -59,7 +55,7 @@ async def test_replay_rejects_changed_identity(case, command, field):
     case.projects.add_guide_sufficiency_report.assert_not_awaited()
 
 
-@pytest.mark.parametrize("command", ["create", "ack", "dispatch"])
+@pytest.mark.parametrize("command", ["create", "ack"])
 async def test_replay_rejects_pending_record(case, command):
     record = await seed_replay(case, command)
     record.status = "pending"
@@ -73,7 +69,7 @@ async def test_replay_rejects_pending_record(case, command):
     case.replay.complete.assert_not_awaited()
 
 
-@pytest.mark.parametrize("command", ["create", "ack", "dispatch"])
+@pytest.mark.parametrize("command", ["create", "ack"])
 async def test_replay_rejects_changed_resource_digest(case, command):
     record = await seed_replay(case, command)
     record.resource_context_digest = "sha256:" + "d" * 64

@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
 )
 from sqlalchemy.schema import CreateIndex
 
+from projects.guide_fixtures import complete_guide_payload
+
 from app.adapters.auth.dev import actor_id_from_external_identity
 from app.core.config import get_settings
 from app.core.hashing import canonical_json_hash
@@ -76,11 +78,12 @@ from app.modules.tasks.models import (
     TaskAssignment,
     WorkstreamTask,
 )
+from projects.post_submit_fixtures import seed_post_submit_policy_for_downstream_tests
 from project_create_fixtures import (
-    activate_guide_for_downstream_test,
+    seed_active_guide_for_downstream_test,
     grant_system_project_manager,
 )
-from verified_guide_fixtures import create_verified_report_fixture
+from committed_guide_fixtures import create_compiled_report_fixture
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
 from app.modules.tasks.service import (
@@ -178,12 +181,8 @@ async def test_task_repository_locks_initial_and_revision_submission_context() -
         locked_guide_version=references.guide_version,
         locked_guide_source_snapshot_id=str(references.source_snapshot_id),
         locked_guide_source_snapshot_hash=references.source_snapshot_hash,
-        locked_effective_project_submission_artifact_policy_id=str(
-            references.effective_policy_id
-        ),
-        locked_effective_project_submission_artifact_policy_hash=(
-            references.effective_policy_hash
-        ),
+        locked_effective_project_submission_artifact_policy_id=str(references.effective_policy_id),
+        locked_effective_project_submission_artifact_policy_hash=(references.effective_policy_hash),
         locked_pre_submit_checker_policy_id=str(references.pre_submit_policy_id),
         locked_pre_submit_checker_bundle_hash=references.pre_submit_policy_bundle_hash,
     )
@@ -277,9 +276,7 @@ async def test_task_repository_rejects_stale_submission_predecessor() -> None:
     repository = TaskRepository(session)
     repository.get_task = AsyncMock(return_value=task)
     repository.get_latest_submission_for_task = AsyncMock(
-        return_value=MagicMock(
-            id=str(uuid4()), version=1, contributor_id=str(contributor_id)
-        )
+        return_value=MagicMock(id=str(uuid4()), version=1, contributor_id=str(contributor_id))
     )
 
     with pytest.raises(
@@ -924,7 +921,6 @@ def set_dev_actor(
     else:
         monkeypatch.setenv("WORKSTREAM_DEV_AUTH_DISPLAY_NAME", display_name)
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", roles)
-    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "false")
     get_settings.cache_clear()
 
 
@@ -951,19 +947,6 @@ async def fetch_legacy_actor_rows(
             )
         ).all()
     return identity, list(profiles)
-
-
-def complete_guide_payload(version: str = "v1") -> dict:
-    return {
-        "version": version,
-        "content_markdown": (
-            f"# Task Guide {version}\n\n"
-            "Workers submit complete task packets with artifact hashes, evidence "
-            "references, and attestations. The project policy bundle controls "
-            "submission intake while the guide gives human review context."
-        ),
-        "change_summary": f"Initial {version}",
-    }
 
 
 def sha256_hash(seed: str) -> str:
@@ -1009,86 +992,6 @@ async def load_post_submit_checker_policy(project_id: str, guide_version: str = 
         }
 
 
-async def create_generated_post_submit_setup_output(
-    *,
-    project_id: str,
-    guide_id: str,
-    source_snapshot: dict,
-    sufficiency_report: dict,
-    submission_artifact_policy: dict,
-    pre_submit_checker_policy: dict,
-    required_checkers: list[str] | None = None,
-    warning_checkers: list[str] | None = None,
-    blocking_severities: list[str] | None = None,
-) -> dict:
-    """Persist approved generated post-submit setup output for task tests."""
-    async with db_session.get_session_factory()() as session:
-        snapshot = await session.get(GuideSourceSnapshot, source_snapshot["id"])
-        assert snapshot is not None
-        spec = build_project_post_submit_checker_spec(
-            project_id=project_id,
-            guide_version=snapshot.guide_version,
-            required_checkers=(
-                [] if required_checkers is None else required_checkers
-            ),
-            warning_checkers=[] if warning_checkers is None else warning_checkers,
-            blocking_severities=blocking_severities,
-        )
-        compiled = compile_project_post_submit_checker_spec(
-            project_id=project_id,
-            guide_version=snapshot.guide_version,
-            spec=spec,
-        )
-        post_submit_policy = PostSubmitCheckerPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=snapshot.guide_version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            effective_policy_id=pre_submit_checker_policy["effective_policy_id"],
-            effective_policy_hash=pre_submit_checker_policy["effective_policy_hash"],
-            pre_submit_checker_policy_id=pre_submit_checker_policy["id"],
-            pre_submit_checker_bundle_hash=pre_submit_checker_policy["compiled_bundle_hash"],
-            required_checkers=compiled.required_checkers,
-            warning_checkers=compiled.warning_checkers,
-            blocking_severities=list(compiled.blocking_severities),
-            policy_hash=compiled.policy_hash,
-            policy_body=compiled.policy_body,
-            lifecycle_status="approved",
-            approved_by_role="project_manager",
-            approved_by_actor="project-manager-subject",
-            approved_at=datetime.now(UTC),
-            created_by="project-manager-subject",
-        )
-        setup_run = await session.scalar(
-            select(ProjectSetupRun)
-            .where(ProjectSetupRun.source_snapshot_id == snapshot.id)
-            .order_by(ProjectSetupRun.setup_generation.desc())
-            .limit(1)
-        )
-        assert setup_run is not None
-        setup_run.status = "post_submit_policy_compiled"
-        setup_run.current_step = "post_submit_checker_policy_compilation"
-        setup_run.output_sufficiency_report_id = sufficiency_report["id"]
-        setup_run.output_submission_artifact_policy_id = submission_artifact_policy["id"]
-        setup_run.output_post_submit_checker_policy_id = post_submit_policy.id
-        setup_run.post_submit_derivation_summary = {
-            "status": "compiled",
-            "post_submit_checker_policy_id": post_submit_policy.id,
-            "required_checkers": post_submit_policy.required_checkers,
-            "warning_checkers": post_submit_policy.warning_checkers,
-            "blocking_severities": post_submit_policy.blocking_severities,
-        }
-        session.add(post_submit_policy)
-        await session.commit()
-        return {
-            "id": post_submit_policy.id,
-            "policy_hash": post_submit_policy.policy_hash,
-            "policy_body": post_submit_policy.policy_body,
-        }
-
-
 async def delete_generated_post_submit_output_for_pre_submit(
     session,
     pre_submit_checker_policy_id: str,
@@ -1101,17 +1004,6 @@ async def delete_generated_post_submit_output_for_pre_submit(
     )
     if post_submit_policy is None:
         return
-    setup_runs = (
-        await session.scalars(
-            select(ProjectSetupRun).where(
-                ProjectSetupRun.output_post_submit_checker_policy_id == post_submit_policy.id
-            )
-        )
-    ).all()
-    for setup_run in setup_runs:
-        setup_run.output_post_submit_checker_policy_id = None
-        setup_run.post_submit_derivation_summary = None
-    await session.flush()
     await session.delete(post_submit_policy)
     await session.flush()
 
@@ -1259,10 +1151,10 @@ async def create_policy_bundle_for_guide(
         json={
             "items": [
                 {
-                    "source_kind": "inline_markdown",
-                    "source_label": f"guide-{guide_id}.md",
-                    "ingestion_adapter": "manual_import",
-                    "media_type": "text/markdown",
+                    "source_kind": "document",
+                    "source_label": f"guide-{guide_id}.pdf",
+                    "ingestion_adapter": "upload",
+                    "media_type": "application/pdf",
                 }
             ]
         },
@@ -1270,21 +1162,16 @@ async def create_policy_bundle_for_guide(
     assert snapshot_response.status_code == 201, snapshot_response.text
     snapshot = snapshot_response.json()
     async with db_session.get_session_factory()() as session:
-        session.add(
-            ProjectSetupRun(
-                id=str(uuid4()),
-                project_id=project_id,
-                guide_id=guide_id,
-                guide_version=snapshot["guide_version"],
-                source_snapshot_id=snapshot["id"],
-                source_snapshot_hash=snapshot["bundle_hash"],
-                setup_generation=1,
-                status="queued",
-                current_step="queued",
-                created_by="project-manager-subject",
+        setup = await session.scalar(
+            select(ProjectSetupRun).where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+                ProjectSetupRun.source_snapshot_id == snapshot["id"],
             )
         )
-        await session.commit()
+        assert setup is not None
+        assert setup.source_snapshot_hash == snapshot["bundle_hash"]
+        assert setup.setup_generation == 1
 
     report_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
@@ -1297,7 +1184,7 @@ async def create_policy_bundle_for_guide(
         },
     )
     assert report_response.status_code == 201, report_response.text
-    verified_report_id = await create_verified_report_fixture(
+    verified_report_id = await create_compiled_report_fixture(
         report_response.json()["id"], snapshot["id"]
     )
     verified_report = {**report_response.json(), "id": verified_report_id}
@@ -1323,12 +1210,10 @@ async def create_policy_bundle_for_guide(
     assert effective_response.status_code == 200, effective_response.text
     effective_policy = effective_response.json()
     compiled_pre_submit_checker = await load_pre_submit_checker_policy(effective_policy)
-    post_submit_checker_policy = await create_generated_post_submit_setup_output(
+    post_submit_checker_policy = await seed_post_submit_policy_for_downstream_tests(
         project_id=project_id,
         guide_id=guide_id,
         source_snapshot=snapshot,
-        sufficiency_report=verified_report,
-        submission_artifact_policy=policy,
         pre_submit_checker_policy=compiled_pre_submit_checker,
         required_checkers=post_submit_required_checkers,
         warning_checkers=post_submit_warning_checkers,
@@ -1414,12 +1299,11 @@ async def create_active_project(client: AsyncClient) -> dict:
     guide = guide_response.json()
     await create_policy_bundle_for_guide(client, project["id"], guide["id"])
 
-    activation_response = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide["id"],
     )
-    assert activation_response.status_code == 200, activation_response.text
     return project
 
 
@@ -1591,9 +1475,7 @@ async def _submission_context_request_for_started_task(
         assignment_id=UUID(assignment_id),
         contributor_id=UUID(contributor_id),
         predecessor_submission_id=(
-            UUID(predecessor_submission_id)
-            if predecessor_submission_id is not None
-            else None
+            UUID(predecessor_submission_id) if predecessor_submission_id is not None else None
         ),
     )
 
@@ -1609,9 +1491,7 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
     subject = "worker-submission-context"
     task = await create_started_task(task_client, project["id"], monkeypatch, subject)
     contributor_id = actor_id(subject)
-    initial_request = await _submission_context_request_for_started_task(
-        task["id"], contributor_id
-    )
+    initial_request = await _submission_context_request_for_started_task(task["id"], contributor_id)
 
     async with db_session.get_session_factory()() as session:
         initial = await TaskRepository(session).lock_submission_context(initial_request)
@@ -1664,9 +1544,7 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
         task["id"], contributor_id, predecessor_submission_id=predecessor["id"]
     )
     async with db_session.get_session_factory()() as session:
-        revision = await TaskRepository(session).lock_submission_context(
-            revision_request
-        )
+        revision = await TaskRepository(session).lock_submission_context(revision_request)
         assert revision.kind == "revision"
         assert revision.status == "needs_revision"
         assert revision.predecessor == SubmissionPredecessorFacts(
@@ -1729,9 +1607,7 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
             TaskSubmissionContextUnavailable,
             match="task_submission_context_invalid",
         ):
-            await TaskRepository(session).lock_submission_context(
-                cross_contributor_request
-            )
+            await TaskRepository(session).lock_submission_context(cross_contributor_request)
 
 
 @pytest.mark.asyncio
@@ -1744,9 +1620,7 @@ async def test_task_repository_postgresql_submission_context_lock_serializes_rac
     project = await create_active_project(task_client)
     subject = "worker-submission-context-race"
     task = await create_started_task(task_client, project["id"], monkeypatch, subject)
-    request = await _submission_context_request_for_started_task(
-        task["id"], actor_id(subject)
-    )
+    request = await _submission_context_request_for_started_task(task["id"], actor_id(subject))
     contender_name = f"task-context-{uuid4()}"
 
     holder = db_session.get_session_factory()()
@@ -2423,8 +2297,6 @@ async def test_chunk4_migration_creates_expected_tables(task_database_env: str) 
     }.issubset(table_names)
 
 
-
-
 def test_task_assignment_partial_unique_index_metadata_compiles() -> None:
     index = next(
         index
@@ -2959,9 +2831,19 @@ async def test_release_rejects_crossed_post_submit_policy_sidecar(
     assert persisted_task is not None
     assert persisted_task.status == "screening"
     assert persisted_task.locked_post_submit_checker_policy_body == locked_body
-    assert "check_acceptance_criteria_present" not in [entry["checker_id"] for entry in locked_body["entries"] if entry["classification"] == "project_required"]
-    assert "check_acceptance_criteria_present" not in [entry["checker_id"] for entry in locked_body["entries"]]
-    assert "check_required_files" in [entry["checker_id"] for entry in locked_body["entries"] if entry["classification"] == "platform_default"]
+    assert "check_acceptance_criteria_present" not in [
+        entry["checker_id"]
+        for entry in locked_body["entries"]
+        if entry["classification"] == "project_required"
+    ]
+    assert "check_acceptance_criteria_present" not in [
+        entry["checker_id"] for entry in locked_body["entries"]
+    ]
+    assert "check_required_files" in [
+        entry["checker_id"]
+        for entry in locked_body["entries"]
+        if entry["classification"] == "platform_default"
+    ]
     assert "check_required_files" in [entry["checker_id"] for entry in locked_body["entries"]]
 
 
@@ -3033,7 +2915,8 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     work_body = work_context.json()
     assert work_body["task"]["locked_guide_version"] == "v1"
     assert work_body["guide"]["version"] == "v1"
-    assert "# Task Guide v1" in work_body["guide"]["content_markdown"]
+    assert work_body["guide"]["change_summary"] == "Initial v1"
+    assert "content_markdown" not in work_body["guide"]
     assert work_body["payment_policy"]["base_amount"] == "25.00"
     assert work_body["lifecycle"]["can_submit"] is True
     worker_context_json = json.dumps(work_body, sort_keys=True)
@@ -3401,13 +3284,12 @@ async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
         guide_v2.json()["id"],
         policy_v2,
     )
-    activate_v2 = await activate_guide_for_downstream_test(
+    activate_v2 = await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_v2.json()["id"],
     )
-    assert activate_v2.status_code == 200, activate_v2.text
-    assert activate_v2.json()["guide"]["version"] == "v2"
+    assert activate_v2["guide"]["version"] == "v2"
 
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     work_context = await task_client.get(
@@ -5039,9 +4921,19 @@ async def test_submission_rejects_crossed_post_submit_policy_sidecar(
     assert task.status == "in_progress"
     assert submissions == []
     assert task.locked_post_submit_checker_policy_body == locked_body
-    assert "check_acceptance_criteria_present" not in [entry["checker_id"] for entry in locked_body["entries"] if entry["classification"] == "project_required"]
-    assert "check_acceptance_criteria_present" not in [entry["checker_id"] for entry in locked_body["entries"]]
-    assert "check_required_files" in [entry["checker_id"] for entry in locked_body["entries"] if entry["classification"] == "platform_default"]
+    assert "check_acceptance_criteria_present" not in [
+        entry["checker_id"]
+        for entry in locked_body["entries"]
+        if entry["classification"] == "project_required"
+    ]
+    assert "check_acceptance_criteria_present" not in [
+        entry["checker_id"] for entry in locked_body["entries"]
+    ]
+    assert "check_required_files" in [
+        entry["checker_id"]
+        for entry in locked_body["entries"]
+        if entry["classification"] == "platform_default"
+    ]
     assert "check_required_files" in [entry["checker_id"] for entry in locked_body["entries"]]
     assert checker_runs == []
 
@@ -5254,13 +5146,12 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await activate_guide_for_downstream_test(
+    activate_v2 = await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_v2.json()["id"],
     )
-    assert activate_v2.status_code == 200, activate_v2.text
-    assert activate_v2.json()["guide"]["version"] == "v2"
+    assert activate_v2["guide"]["version"] == "v2"
 
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     response = await task_client.post(
@@ -5587,12 +5478,11 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
     )
     assert guide_v2.status_code == 201, guide_v2.text
     await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
-    activate_v2 = await activate_guide_for_downstream_test(
+    await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
         guide_id=guide_v2.json()["id"],
     )
-    assert activate_v2.status_code == 200, activate_v2.text
 
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
@@ -6785,11 +6675,14 @@ async def test_queued_gate_policy_error_is_failed_and_repairable(
         assert failed_run.status == "failed"
         assert failed_run.failure_code == "pre_review_gate_execution_failed"
         assert task.status == "submitted"
-        assert await session.scalar(
-            select(func.count()).select_from(db_models.CheckerResult).where(
-                db_models.CheckerResult.submission_id == submission_id
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(db_models.CheckerResult)
+                .where(db_models.CheckerResult.submission_id == submission_id)
             )
-        ) == 0
+            == 0
+        )
         restored_bundle = dict(pre_submit_policy.compiled_bundle)
         restored_bundle.pop("tampered", None)
         pre_submit_policy.compiled_bundle = restored_bundle

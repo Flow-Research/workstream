@@ -28,8 +28,6 @@ async def invoke(case, command):
             rows.REPORT,
             GuideSufficiencyAcknowledgement(acknowledgement_note="Understood"),
         )
-    if command == "dispatch":
-        return await case.service.authorize_manual_dispatch(*args, rows.SNAPSHOT)
     raise ValueError(command)
 
 

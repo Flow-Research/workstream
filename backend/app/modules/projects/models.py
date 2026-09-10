@@ -398,6 +398,12 @@ class ProjectGuide(Base):
 
     __tablename__ = "project_guides"
     __table_args__ = (
+        CheckConstraint(
+            "(task_examples is null and task_examples_hash is null) or "
+            "(task_examples is not null and task_examples_hash is not null and "
+            "task_examples_hash ~ '^sha256:[0-9a-f]{64}$')",
+            name="task_examples_commitment_shape",
+        ),
         UniqueConstraint("project_id", "version", name="uq_project_guides_project_version"),
         UniqueConstraint(
             "id", "project_id", "version", name="uq_project_guides_id_project_version"
@@ -474,7 +480,9 @@ class ProjectGuide(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
-    content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    retained_content_markdown: Mapped[str | None] = mapped_column(Text)
+    task_examples: Mapped[list[dict] | None] = mapped_column(JSON(none_as_null=True))
+    task_examples_hash: Mapped[str | None] = mapped_column(String(71))
     change_summary: Mapped[str | None] = mapped_column(Text)
     approved_by: Mapped[str | None] = mapped_column(String(100))
     effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -950,6 +958,7 @@ class ProjectSetupRun(Base):
     __table_args__ = (
         CheckConstraint(
             "status in ("
+            "'awaiting_documents', "
             "'queued', "
             "'dispatch_pending', "
             "'enqueue_failed', "
@@ -1006,10 +1015,11 @@ class ProjectSetupRun(Base):
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(155), index=True)
-    continuation_verification_job_id: Mapped[str | None] = mapped_column(
+    retained_continuation_verification_job_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_verification_jobs.id"), index=True
     )
-    continuation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retained_continuation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    documents_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     current_step: Mapped[str] = mapped_column(String(100), nullable=False)
     output_sufficiency_report_id: Mapped[str | None] = mapped_column(

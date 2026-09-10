@@ -16,6 +16,10 @@ from app.modules.authorization.domain.audit import AuthorizationDecisionResource
 from app.modules.authorization.domain.contribution_policies import ContributionPolicyReadResourceContext, ContributionPolicyMutationResourceContext
 from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
+from app.modules.authorization.domain.guide_mutations import (
+    ProjectGuideMutationResourceContext, ProjectGuideMutationPrepareDenialResourceContext,
+    ProjectGuideSourceSnapshotMutationResourceContext,
+)
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
@@ -28,7 +32,6 @@ PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: "sufficiency_report",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: "submission_artifact_policy_collection",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: "submission_artifact_policy",
-    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: ("post_submit_checker_policy_setup"),
 }
 PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: "effective_policy",
@@ -260,7 +263,6 @@ class ProjectDiagnosticReadResourceContext(BaseModel):
         "sufficiency_report",
         "submission_artifact_policy_collection",
         "submission_artifact_policy",
-        "post_submit_checker_policy_setup",
     ]
     project_exists: bool
     guide_exists: bool
@@ -454,90 +456,6 @@ class ProjectActiveGuideReadResourceContext(BaseModel):
             )
         ):
             raise ValueError("missing active-guide target cannot carry policy facts")
-        return self
-
-
-class ProjectGuideMutationResourceContext(BaseModel):
-    """Canonical draft-guide facts for create or update."""
-
-    model_config = _STRICT_FROZEN
-
-    resource_type: Literal["project_guide_mutation"]
-    resource_id: UUID
-    operation_id: UUID
-    scope_project_id: UUID
-    guide_id: UUID
-    target_kind: Literal["create", "update"]
-    guide_exists: bool
-    guide_status: str | None = None
-    guide_version: str | None = None
-    predecessor_snapshot_id: UUID | None = None
-    predecessor_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
-    operation_generation: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def require_guide_identity(self):
-        """Reject cross-resource and partial guide lineage."""
-        if self.resource_id != self.guide_id:
-            raise ValueError("guide mutation resource must match guide")
-        if self.guide_exists != (self.guide_status is not None and self.guide_version is not None):
-            raise ValueError("guide mutation lifecycle facts are inconsistent")
-        if self.guide_exists != (self.target_kind == "update"):
-            raise ValueError("guide mutation operation and existence are inconsistent")
-        if (self.predecessor_snapshot_id is None) != (self.predecessor_snapshot_hash is None):
-            raise ValueError("guide mutation predecessor facts must be bound together")
-        if self.target_kind == "create" and self.predecessor_snapshot_id is not None:
-            raise ValueError("guide creation cannot bind predecessor source lineage")
-        return self
-
-
-class ProjectGuideMutationPrepareDenialResourceContext(BaseModel):
-    """Requested guide target used only to evidence a prepare-time denial."""
-
-    model_config = _STRICT_FROZEN
-
-    resource_type: Literal["project_guide_mutation_request"]
-    resource_id: UUID
-    scope_project_id: UUID
-    requested_guide_id: UUID | None = None
-    requested_target_kind: Literal["guide_create", "guide_update", "source_snapshot_create"]
-
-    @model_validator(mode="after")
-    def require_requested_target(self):
-        """Bind creates to the project and existing-guide requests to a guide id."""
-        if self.requested_target_kind == "guide_create":
-            if self.resource_id != self.scope_project_id or self.requested_guide_id is not None:
-                raise ValueError("guide-create denial must identify only the project")
-        elif self.requested_guide_id is None or self.resource_id != self.requested_guide_id:
-            raise ValueError("guide mutation denial must identify the requested guide")
-        return self
-
-
-class ProjectGuideSourceSnapshotMutationResourceContext(BaseModel):
-    """Canonical guide and source-snapshot lineage for snapshot creation."""
-
-    model_config = _STRICT_FROZEN
-
-    resource_type: Literal["project_guide_source_snapshot_mutation"]
-    resource_id: UUID
-    operation_id: UUID
-    scope_project_id: UUID
-    guide_id: UUID
-    guide_version: str
-    guide_status: str
-    source_snapshot_id: UUID
-    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    predecessor_snapshot_id: UUID | None = None
-    predecessor_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
-    operation_generation: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def require_snapshot_identity(self):
-        """Reject copied snapshot selectors and partial predecessor facts."""
-        if self.resource_id != self.source_snapshot_id:
-            raise ValueError("source snapshot resource must match snapshot")
-        if (self.predecessor_snapshot_id is None) != (self.predecessor_snapshot_hash is None):
-            raise ValueError("source snapshot predecessor facts must be bound together")
         return self
 
 
@@ -1375,34 +1293,8 @@ class ArtifactPendingWorkResourceContext(BaseModel):
         return self
 
 
-class GuideSourceBindingResourceContext(BaseModel):
-    """Exact verified guide-source lineage authorized for one binding write."""
-
-    model_config = _STRICT_FROZEN
-    resource_type: Literal["guide_source_binding"]
-    resource_id: UUID
-    project_id: UUID
-    guide_id: UUID
-    guide_source_snapshot_id: UUID
-    guide_source_item_id: UUID
-    project_setup_run_id: UUID
-    setup_generation: int = Field(gt=0)
-    content_id: UUID
-    verified_replica_id: UUID
-    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    byte_count: int = Field(ge=0)
-    logical_role: Literal["guide_source_original"]
-
-    @model_validator(mode="after")
-    def bind_source_item(self):
-        """Use the exact source item as the prepared resource selector."""
-        if self.resource_id != self.guide_source_item_id:
-            raise ValueError("guide binding resource must match source item")
-        return self
-
-
 class GuideSourceReadResourceContext(BaseModel):
-    """Exact verified binding and replica facts authorized for one provider read."""
+    """Exact committed-document facts for one fenced setup-agent provider read."""
 
     model_config = _STRICT_FROZEN
     resource_type: Literal["guide_source_read"]
@@ -1413,22 +1305,23 @@ class GuideSourceReadResourceContext(BaseModel):
     guide_source_item_id: UUID
     project_setup_run_id: UUID
     setup_generation: int = Field(gt=0)
-    binding_id: UUID
+    compilation_attempt_id: UUID
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    document_version_id: UUID
+    put_attempt_id: UUID
     content_id: UUID
-    verified_replica_id: UUID
+    replica_id: UUID
     storage_namespace_id: str = Field(min_length=1, max_length=255)
     namespace_fingerprint: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    verification_receipt_id: UUID
-    verification_generation: int = Field(ge=0)
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     byte_count: int = Field(ge=0)
     media_type: str = Field(min_length=1, max_length=255)
 
     @model_validator(mode="after")
-    def bind_artifact_binding(self):
-        """Use the exact immutable binding as the prepared resource selector."""
-        if self.resource_id != self.binding_id:
-            raise ValueError("guide read resource must match binding")
+    def bind_source_item(self):
+        """Use the exact assigned source item as the prepared resource selector."""
+        if self.resource_id != self.guide_source_item_id:
+            raise ValueError("guide read resource must match source item")
         return self
 
 
@@ -1513,7 +1406,6 @@ AuthorizationResourceContext = (
     | ArtifactPutAttemptResourceContext
     | ArtifactVerificationJobResourceContext
     | ArtifactPendingWorkResourceContext
-    | GuideSourceBindingResourceContext
     | GuideSourceReadResourceContext
     | SubmissionCreationResourceContext | SubmissionBindingResourceContext
     | PreSubmitCheckerInputResourceContext

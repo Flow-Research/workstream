@@ -163,3 +163,17 @@ table. Test outer request omissions, malformed IDs/reasons and unknown fields
 without weakening existing qualification boundary probes. No product changes.
 Use a focused real-HTTP role scenario plus existing helper falsification tests
 and hosted CI; retain prior execution targets for unchanged drill groups.
+
+Merged guide-contract integration: replace inline-body fixtures with required
+ordered task examples on guide creation; PATCH changes only change_summary.
+Retain NUL rejection for surviving fields, preserve the new 1000-character
+summary bound, and remove positive tests of deleted content fields. Test removed
+fields as unknown-input rejection only. Expand guide evidence across example
+content/title/labels, omission, null/type/length/aggregate limits, immutable input,
+full response shape, authorized replay and foreign/unauthorized mutation.
+Use public guide metadata and policy routes only; do not activate hidden upload,
+compilation, manager-approval or task surfaces. Inventory exposure on merged main
+before changing the selected operation list. Preserve old execution evidence at
+its original target and mark superseded fixtures explicitly. This integration
+does not claim the earlier eight-field NUL fixture still applies unchanged.
+The existing L1 plan/review routing and same-PR allowed paths remain applicable.

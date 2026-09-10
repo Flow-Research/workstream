@@ -5,22 +5,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.hashing import canonical_json_hash
-from app.interfaces.artifact_operations import (
-    GuideSufficiencyMaterialPort,
-    GuideSufficiencyMaterialRequest,
-    GuideSufficiencyMaterialResult,
-    GuideSufficiencyMaterialUnavailable,
-)
+
+from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentManifestRequest, GuideDocumentUnavailable
 from app.interfaces.project_agents import (
     ProjectGuideCompilationResult,
-    VerifiedGuideMaterialSnapshot,
 )
 from app.modules.authorization.api import (
     ArtifactPolicyProjectionAuthorizationPort,
@@ -47,7 +42,6 @@ from app.modules.projects.api import (
 )
 from app.modules.projects.models import (
     GuideSufficiencyReport,
-    GuideSufficiencyReportSourceUsage,
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.repository import ProjectRepository
@@ -56,10 +50,10 @@ from app.modules.projects.schemas import (
 )
 from app.modules.projects.service import (
     PolicySetupBlocked,
-    build_verified_guide_sufficiency_material,
 )
-from app.modules.projects.api.setup_identity import pre_submit_setup_task_id
+from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
+from .source_state import is_compilation_source_setup
 from .contracts import AcceptedCompilationResult
 from .custody_payloads import (
     source_state as _source_state,
@@ -125,7 +119,7 @@ class GuideCompilationProjectionService:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         *,
-        material_factory: Callable[[AsyncSession], GuideSufficiencyMaterialPort],
+        material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
         sufficiency_authorization_factory: Callable[
             [AsyncSession], GuideSufficiencyProjectionAuthorizationPort
         ]
@@ -138,9 +132,8 @@ class GuideCompilationProjectionService:
         """Bind storage, material, and purpose-specific AUTH factories."""
         self._session_factory = session_factory
         self._material_factory = material_factory
-        self._sufficiency_authorization_factory = (
-            sufficiency_authorization_factory
-            or (lambda _session: _UnavailableSufficiencyAuthorization())
+        self._sufficiency_authorization_factory = sufficiency_authorization_factory or (
+            lambda _session: _UnavailableSufficiencyAuthorization()
         )
         self._policy_authorization_factory = policy_authorization_factory or (
             lambda _session: _UnavailablePolicyAuthorization()
@@ -158,9 +151,7 @@ class GuideCompilationProjectionService:
         self, command: ProjectGuideProjectionCommand
     ) -> ProjectGuideProjectionReceipt:
         """Create or replay the exact canonical artifact-policy draft."""
-        seed = await self._preflight(
-            command.attempt_id, "submission_artifact_policy"
-        )
+        seed = await self._preflight(command.attempt_id, "submission_artifact_policy")
         assert seed.policy_body is not None
         return await self._run_policy(seed, retry_conflict=True)
 
@@ -187,9 +178,7 @@ class GuideCompilationProjectionService:
                     result_hash=compilation.result_hash,
                     component_hashes=compilation.component_hashes,
                 )
-                result = ProjectGuideCompilationResult.model_validate(
-                    accepted.canonical_result
-                )
+                result = ProjectGuideCompilationResult.model_validate(accepted.canonical_result)
                 if (
                     attempt.persisted_compilation_id != compilation.id
                     or compilation.attempt_id != attempt.id
@@ -228,9 +217,7 @@ class GuideCompilationProjectionService:
                     compilation_id=compilation.id,
                     result_hash=compilation.result_hash,
                     component_hash=component_hash,
-                    sufficiency_component_hash=(
-                        accepted.component_hashes.sufficiency_hash
-                    ),
+                    sufficiency_component_hash=(accepted.component_hashes.sufficiency_hash),
                     result_schema_version=result.schema_version,
                     compilation_agent_name=result.agent_name,
                     compilation_agent_version=result.agent_version,
@@ -258,12 +245,8 @@ class GuideCompilationProjectionService:
                     locator = ProjectGuideProjectionLocator(
                         project_id=seed.project_id, attempt_id=seed.attempt_id
                     )
-                    async with authorization.prepare_sufficiency_projection(
-                        locator
-                    ) as capability:
-                        return await self._write_sufficiency(
-                            session, seed, capability
-                        )
+                    async with authorization.prepare_sufficiency_projection(locator) as capability:
+                        return await self._write_sufficiency(session, seed, capability)
         except IntegrityError:
             if retry_conflict:
                 return await self._run_sufficiency(seed, retry_conflict=False)
@@ -276,7 +259,7 @@ class GuideCompilationProjectionService:
             PreparedAuthorizationInvalid,
         ):
             raise ProjectGuideProjectionError("service_authority_denied") from None
-        except GuideSufficiencyMaterialUnavailable:
+        except GuideDocumentUnavailable:
             raise ProjectGuideProjectionError("source_state_unavailable") from None
         except GuideCompilationIntegrityError:
             raise ProjectGuideProjectionError("source_state_unavailable") from None
@@ -312,7 +295,7 @@ class GuideCompilationProjectionService:
             PreparedAuthorizationInvalid,
         ):
             raise ProjectGuideProjectionError("service_authority_denied") from None
-        except GuideSufficiencyMaterialUnavailable:
+        except GuideDocumentUnavailable:
             raise ProjectGuideProjectionError("source_state_unavailable") from None
         except GuideCompilationIntegrityError:
             raise ProjectGuideProjectionError("source_state_unavailable") from None
@@ -349,9 +332,7 @@ class GuideCompilationProjectionService:
                 seed.guide_version,
             )
             _require_replay(operation, seed, identity, facts, output_digest, report)
-            await capability.validate_replay(
-                facts, UUID(operation.authorization_decision_event_id)
-            )
+            await capability.validate_replay(facts, UUID(operation.authorization_decision_event_id))
             return _receipt(seed, identity, output_digest, "guide_sufficiency", "replayed")
 
         if await _report_exists(session, seed, identity.output_id):
@@ -360,7 +341,6 @@ class GuideCompilationProjectionService:
         _require_authority(authority, seed, identity, facts, "guide_sufficiency")
         report = _new_report(seed, locked, identity, authority, seed.report_payload)
         session.add(report)
-        _add_source_usages(session, report.id, seed, locked.material)
         await session.flush()
         session.add(
             _new_operation(
@@ -400,9 +380,7 @@ class GuideCompilationProjectionService:
         output = _policy_output(seed, locked, identity, seed.policy_body)
         output_digest = canonical_json_hash(
             {
-                "domain": (
-                    "workstream.project_submission_artifact_policy_projection.output.v1"
-                ),
+                "domain": ("workstream.project_submission_artifact_policy_projection.output.v1"),
                 "facts": output,
             }
         )
@@ -413,9 +391,7 @@ class GuideCompilationProjectionService:
                 str(identity.output_id)
             )
             _require_replay(operation, seed, identity, facts, output_digest, policy)
-            await capability.validate_replay(
-                facts, UUID(operation.authorization_decision_event_id)
-            )
+            await capability.validate_replay(facts, UUID(operation.authorization_decision_event_id))
             return _receipt(
                 seed,
                 identity,
@@ -427,9 +403,7 @@ class GuideCompilationProjectionService:
         if await _policy_exists(session, seed, identity.output_id):
             raise ProjectGuideProjectionError("source_state_unavailable")
         authority = await capability.consume_new(facts)
-        _require_authority(
-            authority, seed, identity, facts, "submission_artifact_policy"
-        )
+        _require_authority(authority, seed, identity, facts, "submission_artifact_policy")
         policy = _new_policy(seed, locked, identity, authority, seed.policy_body)
         session.add(policy)
         await session.flush()
@@ -455,19 +429,15 @@ class GuideCompilationProjectionService:
             "projected",
         )
 
-    async def _lock_common(
-        self, session: AsyncSession, seed: _ProjectionSeed
-    ) -> _LockedProjection:
+    async def _lock_common(self, session: AsyncSession, seed: _ProjectionSeed) -> _LockedProjection:
         """Lock and revalidate the compilation, material, guide, and setup."""
         compilation_repo = GuideCompilationRepository(session)
         attempt = await compilation_repo.attempt(seed.attempt_id, lock=True)
-        request = await compilation_repo.request_operation_for_attempt(
-            seed.attempt_id, lock=True
-        )
+        request = await compilation_repo.request_operation_for_attempt(seed.attempt_id, lock=True)
         if not _seed_matches(attempt, request, seed):
             raise ProjectGuideProjectionError("source_state_unavailable")
         material = await self._material_factory(session).load(
-            GuideSufficiencyMaterialRequest(
+            GuideDocumentManifestRequest(
                 project_id=seed.project_id,
                 guide_id=seed.guide_id,
                 guide_source_snapshot_id=seed.source_snapshot_id,
@@ -487,7 +457,7 @@ class GuideCompilationProjectionService:
         )
         if guide is None or setup is None or snapshot is None:
             raise ProjectGuideProjectionError("source_state_unavailable")
-        expected_task = pre_submit_setup_task_id(setup.id, setup.setup_generation)
+        expected_task = project_guide_compilation_task_id(setup.id, setup.setup_generation)
         if not _is_exact_projection_source_state(
             guide,
             snapshot,
@@ -498,18 +468,13 @@ class GuideCompilationProjectionService:
             expected_task,
         ):
             raise ProjectGuideProjectionError("source_state_unavailable")
-        verified = VerifiedGuideMaterialSnapshot.from_material(
-            build_verified_guide_sufficiency_material(
-                guide, snapshot, material.source_items
-            )
-        )
-        if verified.canonical_payload_sha256 != attempt.guide_material_hash:
+        if material.sha256 != attempt.guide_material_hash:
             raise ProjectGuideProjectionError("source_state_unavailable")
         state = _source_state(guide, snapshot, setup)
         return _LockedProjection(
             material=material,
-            material_sha256=verified.canonical_payload_sha256,
-            material_byte_count=len(verified.canonical_payload),
+            material_sha256=material.sha256,
+            material_byte_count=len(material.model_dump_json().encode("utf-8")),
             celery_task_id=UUID(expected_task),
             source_state_digest=canonical_json_hash(
                 {
@@ -530,10 +495,6 @@ def _is_exact_projection_source_state(
     expected_task: str,
 ) -> bool:
     """Return whether locked product rows match the sole source-state shape."""
-    continuation_pair = (
-        setup.continuation_verification_job_id,
-        setup.continuation_started_at,
-    )
     return not (
         guide.project_id != str(seed.project_id)
         or guide.version != seed.guide_version
@@ -549,19 +510,7 @@ def _is_exact_projection_source_state(
         or setup.source_snapshot_id != snapshot.id
         or setup.source_snapshot_hash != snapshot.bundle_hash
         or setup.setup_generation != seed.setup_generation
-        or setup.status != "queued"
-        or setup.current_step != "queued"
-        or setup.celery_task_id != expected_task
-        or (continuation_pair[0] is None) != (continuation_pair[1] is None)
-        or setup.error_code is not None
-        or setup.error_artifact_incident_id is not None
-        or setup.error_summary is not None
-        or setup.post_submit_derivation_summary is not None
-        or setup.started_at is not None
-        or setup.finished_at is not None
-        or setup.output_sufficiency_report_id is not None
-        or setup.output_submission_artifact_policy_id is not None
-        or setup.output_post_submit_checker_policy_id is not None
+        or not is_compilation_source_setup(setup, expected_task)
     )
 
 
@@ -619,32 +568,6 @@ def _new_policy(
         creation_action_id="project.submission_artifact_policy.derive",
         creation_decision_event_id=str(authority.decision_event_id),
     )
-
-
-def _add_source_usages(
-    session: AsyncSession,
-    report_id: str,
-    seed: _ProjectionSeed,
-    material: GuideSufficiencyMaterialResult,
-) -> None:
-    """Persist ordered ART provenance for the new report."""
-    for item in material.provenance:
-        session.add(
-            GuideSufficiencyReportSourceUsage(
-                id=str(uuid4()),
-                report_id=report_id,
-                item_order=item.item_order,
-                source_item_id=str(item.source_item_id),
-                binding_id=str(item.binding_id),
-                content_id=str(item.content_id),
-                extraction_usage_id=str(item.extraction_usage_id),
-                extraction_attempt_id=str(item.extraction_attempt_id),
-                extracted_content_id=str(item.extracted_content_id),
-                project_setup_run_id=str(seed.setup_run_id),
-                setup_generation=seed.setup_generation,
-                canonical_output_sha256=item.canonical_output_sha256,
-            )
-        )
 
 
 def _new_operation(
@@ -733,12 +656,9 @@ async def _required_sufficiency_operation(
     operation = await session.scalar(
         select(ProjectGuideComponentProjectionOperation)
         .where(
-            ProjectGuideComponentProjectionOperation.setup_run_id
-            == str(seed.setup_run_id),
-            ProjectGuideComponentProjectionOperation.setup_generation
-            == seed.setup_generation,
-            ProjectGuideComponentProjectionOperation.component
-            == "guide_sufficiency",
+            ProjectGuideComponentProjectionOperation.setup_run_id == str(seed.setup_run_id),
+            ProjectGuideComponentProjectionOperation.setup_generation == seed.setup_generation,
+            ProjectGuideComponentProjectionOperation.component == "guide_sufficiency",
         )
         .with_for_update()
     )
@@ -794,9 +714,7 @@ async def _required_sufficiency_operation(
     return operation
 
 
-async def _report_exists(
-    session: AsyncSession, seed: _ProjectionSeed, report_id: UUID
-) -> bool:
+async def _report_exists(session: AsyncSession, seed: _ProjectionSeed, report_id: UUID) -> bool:
     """Detect a conflicting report before inserting custody."""
     from sqlalchemy import exists, select
 
@@ -816,9 +734,7 @@ async def _report_exists(
     )
 
 
-async def _policy_exists(
-    session: AsyncSession, seed: _ProjectionSeed, policy_id: UUID
-) -> bool:
+async def _policy_exists(session: AsyncSession, seed: _ProjectionSeed, policy_id: UUID) -> bool:
     """Detect a conflicting policy before inserting custody."""
     from sqlalchemy import exists, select
 
