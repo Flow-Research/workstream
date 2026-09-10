@@ -47,6 +47,18 @@ def example_commitment(examples):
                          separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
     return normalized, "sha256:" + hashlib.sha256(encoded).hexdigest()
 
+
+def guide_expectations(payload, project_id, manager_id):
+    """Full guide response oracle from caller inputs and independently known identity."""
+    examples, digest = example_commitment(payload["task_examples"])
+    values = {"project_id": project_id, "version": payload["version"], "status": "draft",
+              "change_summary": payload.get("change_summary"), "task_examples": examples,
+              "task_examples_hash": digest, "approved_by": None, "effective_at": None,
+              "superseded_at": None, "created_by": manager_id}
+    return {"values": values, "checks": {"id": uuid_value, "created_at": timestamp_value,
+                                         "updated_at": timestamp_value},
+            "exact_fields": (*values, "id", "created_at", "updated_at")}
+
 # Frozen client expectations from spec_authorization_service.md and the closed
 # administrative role contract. These are test oracles, never runtime policy.
 # Do not derive them from server responses or import the server implementation.
@@ -571,6 +583,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
     await policy_cases(drill, manager, groute, gpath, outsider)
     await project_field_cases(drill, manager, outsider, project, guide, manager_id)
     await project_guide_nul_cases(drill, manager)
+    await guide_field_cases(drill, manager, outsider, project, manager_id)
     await project_role_cases(drill, manager, outsider, project, manager_id, grant["resource_id"])
     await authority_cases(drill, admin, manager, outsider, manager_id, project)
     await drill.call("revoke_manager", "POST", "/api/v1/admin-role-grants/{grant_id}/revoke",
@@ -802,6 +815,96 @@ async def project_guide_nul_cases(drill, token):
             values={key: ("Valid updated é text" if key == field else value)
                     for key, value in guide.items() if key != "updated_at"},
             exact_fields=guide.keys())
+
+
+async def guide_field_cases(drill, manager, outsider, project, manager_id):
+    """Current guide inputs, locked examples, rejection recovery and exact replay."""
+    route = "/api/v1/projects/{project_id}/guides"
+    path = f'/api/v1/projects/{project["id"]}/guides'
+    controls = [
+        ("minimal", [{"content": "Assess the claim."}], None),
+        ("metadata", [{"content": "  名 claim\nDetails  ", "title": "Unicode é", "labels": ["quality", "名"]},
+                      {"content": "Second ordered example", "title": "", "labels": []}], "s" * 1000),
+        ("content_limit", [{"content": "c" * 65536}], ""),
+        ("metadata_limits", [{"content": "Claim", "title": "t" * 500, "labels": ["l" * 100] * 20}], None),
+        ("count_limit", [{"content": str(i)} for i in range(100)], None),
+    ]
+    for label, examples, summary in controls:
+        body = {"version": "fields-" + uuid4().hex, "task_examples": examples}
+        if label != "minimal":
+            body["change_summary"] = summary
+        key = {"Idempotency-Key": str(uuid4())}
+        current = await drill.call("guide_fields_" + label, "POST", route, path=path,
+            token=manager, payload=body, headers=key, expected=201,
+            fields=("body.version", "body.change_summary", "body.task_examples",
+                    "body.task_examples[].content", "body.task_examples[].title", "body.task_examples[].labels"),
+            **guide_expectations(body, project["id"], manager_id))
+        await drill.call("guide_fields_replay_" + label, "POST", route, path=path,
+            token=manager, payload=body, headers=key, expected=201,
+            values=current, exact_fields=current.keys())
+        await drill.call("guide_fields_mismatch_" + label, "POST", route, path=path,
+            token=manager, payload=body | {"change_summary": "Different"}, headers=key, expected=409)
+        await drill.call("guide_fields_current_" + label, "PATCH", route + "/{guide_id}",
+            path=path + "/" + current["id"], token=manager, payload={},
+            values={k: v for k, v in current.items() if k != "updated_at"}, exact_fields=current.keys())
+    invalid = [("examples_null", {"task_examples": None}),
+               ("examples_empty", {"task_examples": []}),
+               ("examples_object", {"task_examples": {}}),
+               ("examples_count", {"task_examples": [{"content": "Claim"}] * 101}),
+               ("examples_aggregate", {"task_examples": [{"content": "c" * 65536}] * 2}),
+               ("removed_inline", {"content_markdown": "Old body"}),
+               ("summary_limit", {"change_summary": "s" * 1001}),
+               ("summary_object", {"change_summary": {}}),
+               ("version_null", {"version": None}), ("version_object", {"version": {}})]
+    example_faults = [("content_missing", {}), ("content_blank", {"content": " \n\t"}),
+                      ("content_null", {"content": None}), ("content_number", {"content": 1}),
+                      ("content_limit", {"content": "c" * 65537}),
+                      ("extra", {"content": "Claim", "private": True})]
+    for field in ("content", "title", "labels"):
+        example_faults.append((field + "_nul", {"content": "Claim", field:
+            ["bad\x00label"] if field == "labels" else "bad\x00text"}))
+    for label, value in (("title_limit", "t" * 501), ("title_object", {})):
+        example_faults.append((label, {"content": "Claim", "title": value}))
+    for label, value in (("labels_null", None), ("labels_type", "label"),
+                         ("labels_count", ["label"] * 21), ("label_empty", [""]),
+                         ("label_limit", ["l" * 101]), ("label_number", [1])):
+        example_faults.append((label, {"content": "Claim", "labels": value}))
+    invalid.extend((label, {"task_examples": [example]}) for label, example in example_faults)
+    for label, changes in invalid:
+        body = guide_payload("invalid-" + uuid4().hex)
+        key = {"Idempotency-Key": str(uuid4())}
+        try:
+            await drill.call("guide_invalid_" + label, "POST", route, path=path,
+                token=manager, payload=body | changes, headers=key, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        await drill.call("guide_recovery_" + label, "POST", route, path=path,
+            token=manager, payload=body, headers=key, expected=201,
+            **guide_expectations(body, project["id"], manager_id))
+    read_route, read_path = route + "/{guide_id}", path + "/" + current["id"]
+    for label, payload in (("examples", {"task_examples": [{"content": "Changed"}]}),
+                           ("version", {"version": "replacement"}),
+                           ("hash", {"task_examples_hash": "sha256:" + "0" * 64}),
+                           ("removed_inline", {"content_markdown": "Removed"}),
+                           ("summary_type", {"change_summary": 1}),
+                           ("summary_limit", {"change_summary": "s" * 1001})):
+        await drill.call("guide_patch_invalid_" + label, "PATCH", read_route, path=read_path,
+            token=manager, payload=payload, expected=422)
+        await drill.call("guide_patch_preserved_" + label, "PATCH", read_route, path=read_path,
+            token=manager, payload={}, values={k: v for k, v in current.items() if k != "updated_at"},
+            exact_fields=current.keys())
+    await drill.call("guide_patch_unauthorized", "PATCH", read_route, path=read_path,
+        token=outsider, payload={"change_summary": "Unauthorized"}, expected=403)
+    for label, value in (("maximum", "s" * 1000), ("null", None), ("empty", "")):
+        key = {"Idempotency-Key": str(uuid4())}
+        body = {"change_summary": value}
+        current = await drill.call("guide_patch_valid_" + label, "PATCH", read_route, path=read_path,
+            token=manager, payload=body, headers=key,
+            values={k: v for k, v in current.items() if k != "updated_at"} | body,
+            checks={"updated_at": timestamp_value}, exact_fields=current.keys())
+        await drill.call("guide_patch_replay_" + label, "PATCH", read_route, path=read_path,
+            token=manager, payload=body, headers=key, values=current, exact_fields=current.keys())
 
 
 async def project_field_cases(drill, manager, outsider, project, guide, manager_id):
