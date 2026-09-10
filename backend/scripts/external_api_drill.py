@@ -511,7 +511,7 @@ async def authorization_context_input_cases(drill, manager, outsider, project):
     try:
         await drill.call("context_selector_nul", "GET", route, token=manager,
             path=route + "?" + urlencode({"project_id": "before\x00after"}), expected=422,
-            values={"error.code": "invalid_request"}, fields=("query.project_id",))
+            values={"error.code": "invalid_request", "error.retryable": False}, fields=("query.project_id",))
     except ProbeFailure:
         pass
     await drill.call("context_selector_valid_control", "GET", route, token=manager,

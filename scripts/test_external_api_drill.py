@@ -17,6 +17,15 @@ SPEC.loader.exec_module(drill)
 
 
 class ContractTests(unittest.TestCase):
+    def test_validation_retryability_is_strict(self):
+        expected = {"error.code": "invalid_request", "error.retryable": False}
+        drill.verify_response(httpx.Response(422, json={"error": {
+            "code": "invalid_request", "retryable": False}}), 422, expected)
+        for retryable in (True, None, 0, "false"):
+            with self.subTest(retryable=retryable), self.assertRaises(drill.ProbeFailure):
+                drill.verify_response(httpx.Response(422, json={"error": {
+                    "code": "invalid_request", "retryable": retryable}}), 422, expected)
+
     def test_openapi_discovery_has_stable_failure_codes(self):
         cases = (
             (httpx.Response(503, json={"paths": {}}), "openapi_document_unavailable"),
