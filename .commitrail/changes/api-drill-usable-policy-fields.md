@@ -151,3 +151,15 @@ existing authorized lifecycle setup or infer candidate listing grants task acces
 Helper mutants must reject leaked extra fields and altered/missing candidate
 values. Preserve all earlier scenarios, full coverage floors and fail-closed
 reports; run the expanded real administrator drill and focused review.
+
+Project-role grant evidence extension: pass the HTTP-issued manager authority
+grant ID into the existing role drill. For both submitter and reviewer, check
+the exact mutation receipt, full grant and qualification-snapshot fields and
+known grantor/capture provenance. Read current state before replay and compare
+the complete response again afterward. Revoke with an explicit key, preserve
+all unchanged grant/snapshot fields, and prove revoke replay/conflict leaves
+that public state unchanged. These HTTP readbacks do not certify every hidden
+table. Test outer request omissions, malformed IDs/reasons and unknown fields
+without weakening existing qualification boundary probes. No product changes.
+Use a focused real-HTTP role scenario plus existing helper falsification tests
+and hosted CI; retain prior execution targets for unchanged drill groups.
