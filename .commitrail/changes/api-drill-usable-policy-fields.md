@@ -121,3 +121,10 @@ uses its explicit `validation_error` handler. Expected codes follow those owners
 Review also required hash-relation proof: changed semantics must change the
 policy hash; the intentionally equivalent revision replacement must preserve it.
 Helper mutants cover both directions. These are drill fixes, not product defects.
+
+The next independent project/guide input diagnostic reproduced API-DRILL-009
+across eight text inputs. Its durable reproduction and repair boundary live in
+the findings document, and the roadmap explicitly retains this unresolved gap.
+The private diagnostic uses distinct administrator/manager actors after an
+initial self-grant fixture was correctly denied. No project-builder product
+files are changed; repair ownership must be coordinated before that expansion.

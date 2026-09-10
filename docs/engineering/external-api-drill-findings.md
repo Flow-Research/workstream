@@ -292,6 +292,49 @@ Git. This repair does not certify every other API field or deployed provider.
   controls and one failure. Fresh migrated database and normal verifier; no
   product-state seeding or disabled guards; database/role cleanup completed.
 
+## API-DRILL-009: project and guide text NUL becomes 503
+
+- Unrepaired reproduction on clean `60ab744792bc64327040f20fb14a72c26e9dd7c8`.
+  This finding is separate from the repaired self-profile and context inputs.
+- With a normally authenticated, system-scoped Project Manager and a fresh
+  UUID `Idempotency-Key`, replace exactly one text field with JSON
+  `"before\u0000after"` in an otherwise valid request:
+  - `POST /api/v1/projects`: `name`, `slug`, or `description`.
+  - `POST /api/v1/projects/{project_id}/guides`: `version`,
+    `content_markdown`, or `change_summary`.
+  - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}` on a draft guide:
+    `content_markdown` or `change_summary`.
+- All eight cases returned 503 `service_unavailable`, rather than the expected
+  non-retryable 422 `invalid_request`. PostgreSQL reported an invalid UTF-8
+  byte sequence containing `0x00`. The request schemas accept the character and
+  the mutation owners pass it to persistence.
+- Controls: corrected requests using each failed request's original key all
+  succeeded (201 for creation, 200 for update). Created projects were read back
+  with their complete response fields. After each failed guide update, a
+  fresh-key no-op PATCH returned the same public fields except `updated_at`,
+  which that successful mutation may advance. These are public-state and key
+  recovery checks, not proof that every internal table was unchanged.
+- Repair boundary: `ProjectCreate`, `ProjectGuideCreate`, and
+  `ProjectGuideUpdate` in `backend/app/modules/projects/schemas.py`, with
+  HTTP/PostgreSQL regressions for all eight inputs. Preserve ordinary Unicode,
+  existing length limits, optional nulls, omission semantics, authority and
+  idempotency. Reject unsupported input; do not strip it or relabel a storage
+  error as successful input validation after the write.
+- Coordinate with the product-builder owner before editing these setup files.
+  No product repair for this finding is included in the drill extension yet.
+- Private reproducer: `probe_project_guide_nul_v2.py` under
+  `/tmp/workstream-field-drill.l3LIo4/`; corresponding
+  `project-guide-nul-v2.json` and `project-guide-nul-v2-db.json` record 25 HTTP
+  cases: 17 successful setup/control/readback calls and eight failures, with
+  overall exit 1 and isolated database/role cleanup completed. Source hash and
+  clean Git target are recorded. The initial probe stopped at the legitimate
+  `self_grant_forbidden` guard; the corrected fixture uses distinct bootstrap
+  administrator and Project Manager actors. No guard was bypassed.
+- This diagnostic is not yet a committed executable regression. The inputs and
+  controls above are the durable repair handoff; temporary files are not shared
+  evidence links. Preserve the eight 422 expectations in the permanent drill
+  when incorporating the coordinated repair.
+
 ## Retest and handoff criteria
 
 Use the [new external-client drill](external-api-drill.md), not the older seeded
