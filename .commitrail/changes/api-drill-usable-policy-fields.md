@@ -140,3 +140,14 @@ Add parameterized HTTP/PostgreSQL rejection and recovery regressions, permanent
 live drill cases with full public-state controls, and schema-level boundary
 checks. All eight original failing cases must pass unchanged 422 expectations.
 The existing L1 plan and security/QA/test-delta/docs review routing applies.
+
+Contributor-discovery evidence extension: reuse the twenty-actor setup and
+existing paging helpers. Require the exact two-field candidate row, including
+a populated Unicode display name while withholding contact data. Exercise
+candidate cursor query binding, malformed query values and caller authority.
+At existing actor/link lifecycle transitions, verify exact candidate membership
+before and after exclusion/restoration. Do not add product mutations beyond the
+existing authorized lifecycle setup or infer candidate listing grants task access.
+Helper mutants must reject leaked extra fields and altered/missing candidate
+values. Preserve all earlier scenarios, full coverage floors and fail-closed
+reports; run the expanded real administrator drill and focused review.
