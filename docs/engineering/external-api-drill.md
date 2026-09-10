@@ -137,12 +137,13 @@ remain diagnostic navigation, not a denominator of APIs to certify.
 
 The next field extension stays on the already usable draft-guide review-policy
 and revision-policy PUT operations. It probes optional-field rejection, explicit
-nondefault values, malformed/missing update headers, foreign selectors and
+nondefault values, malformed/missing update headers, random mismatched selectors and
 unauthorized mutations. Fresh authorized successors prove exact generation and
 supersession after denials, not merely cached replay. Omitted ordinary optional
 fields restore defaults; omitted `human_review_required` preserves the selected
 predecessor's mode. Only an explicit setting changes that mode. These checks
 establish policy configuration behavior, not runtime review or acceptance.
+The random-selector probe is not evidence of stored cross-project isolation.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

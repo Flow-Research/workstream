@@ -1,10 +1,10 @@
 # Usable public API policy-field drill
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Extend evidence for currently usable draft-guide policy APIs without treating unfinished routes as drill targets.
 
-## Intent and current behavior
+## Intent
 
 The human wants a verified external-client contract for usable APIs, not a count
 of every registered route. The merged prior drill proves successful scenarios
@@ -38,7 +38,7 @@ not a readiness list. Bootstrap is operator setup, not an external endpoint.
    values, strict human-review boolean values and omission/default restoration.
    Review-mode omission specifically preserves the current human-review setting;
    it is not ordinary default restoration during replacement.
-2. Probe missing/malformed If-Match and Idempotency-Key, foreign resource selectors,
+2. Probe missing/malformed If-Match and Idempotency-Key, random mismatched selectors,
    and unauthorized mutation using real authorized controls.
 3. Denied/invalid attempts must not advance selected policy state: a fresh successful
    mutation using the previously current selector must succeed and advance exactly
@@ -46,17 +46,21 @@ not a readiness list. Bootstrap is operator setup, not an external endpoint.
    distinguish this evidence from cached replay.
    This does not assert absence of legitimate denial audit events or prove
    every historical table remained unchanged.
+   A nonexistent selector is not a stored foreign-resource or tenant-isolation proof.
 4. Add a falsification helper test that fails if a rejection advances generation
    or a replacement returns wrong values. Retain all previous scenarios.
 5. Run helper tests and the extended real-HTTP drill from a clean candidate,
    applicable hosted checks, and focused review. Never mark unexecuted scenarios
    or hidden/prerequisite-blocked routes as verified.
 
-## Risk, verification and review
+## Risk and review routing
 
 Risk L1: authorization/policy evidence integrity, no product change.
 Plan review checks fixture/selector feasibility. Implementation review covers
 security plus QA/test-delta and documentation, combined proportionately.
+
+## Evidence
+
 Commands: `backend/.venv/bin/python -m unittest scripts.test_external_api_drill
 scripts.test_admin_api_drill`; isolated external drill per its procedure;
 Ruff on changed Python; `python3 scripts/check_commitrail_records.py --base-ref
