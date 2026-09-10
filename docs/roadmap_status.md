@@ -211,7 +211,7 @@ cannot be reused as post-submission review-gate evidence. See the
   than passing it to storage. The drill retains unchanged-business-state controls.
   [API-DRILL-008](engineering/external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
   records the matching authorization-context selector repair: NUL is rejected
-  with 422 while ordinary UUID/slug selection and project concealment remain intact.
+  with 422 while project-ID lookup and project concealment remain intact.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions

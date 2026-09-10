@@ -267,7 +267,7 @@ Git. This repair does not certify every other API field or deployed provider.
 ## API-DRILL-008: NUL project selector becomes 503
 
 - Repair: the existing query constraint now excludes NUL without replacing
-  UUID/slug lookup. `test_context_nul_rejected_without_breaking_uuid_or_slug`
+  primary-key lookup. `test_context_nul_rejected_preserving_id_lookup_and_concealment`
   covers rejection, valid selectors and concealed access for an ungranted actor.
 - Route: `GET /api/v1/actors/me/authorization-context` with the URL-encoded query
   `project_id=before%00after`, authenticated through the normal canonical human
@@ -278,10 +278,10 @@ Git. This repair does not certify every other API field or deployed provider.
   `service_unavailable`. A normal absent-project UUID returned the expected
   concealed 404; subsequent profile readback preserved every business field.
 - Cause: the public query validates length only. `ProjectService.find_project`
-  sends a non-UUID selector to the slug lookup, where embedded NUL reaches the
+  passes the selector to a string primary-key lookup, where embedded NUL reaches the
   PostgreSQL text parameter before authorization can return its bounded result.
 - Repair: validate storage-safe selector input at the canonical public boundary,
-  preserve supported UUID/slug selectors and concealment, and add real HTTP/
+  preserve project-ID lookup and concealment, and add real HTTP/
   PostgreSQL regressions. Do not mask a database failure as a successful read or
   broaden project access.
 - Permanent drill case: `context_selector_nul`, followed by a valid selector and

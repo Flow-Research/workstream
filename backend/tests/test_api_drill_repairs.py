@@ -68,7 +68,7 @@ async def test_profile_nul_rejected_without_partial_update(project_client: Async
     assert valid.json()[other] == before[other]
 
 
-async def test_context_nul_rejected_without_breaking_uuid_or_slug(
+async def test_context_nul_rejected_preserving_id_lookup_and_concealment(
     project_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_project(project_client, name="Selector control")
@@ -78,14 +78,13 @@ async def test_context_nul_rejected_without_breaking_uuid_or_slug(
     assert rejected.json()["error"]["code"] == "invalid_request"
     assert rejected.json()["error"]["retryable"] is False
     assert "before" not in rejected.text
-    bodies = []
-    for selector in (project["id"], project["slug"]):
-        response = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
-        assert response.status_code == 200, response.text
-        assert response.json()["project_id"] == project["id"]
-        assert response.json()["admin_roles"] == ["project_manager"]
-        bodies.append(response.json())
-    assert bodies[0] == bodies[1]
+    response = await project_client.get(route, headers=auth_headers(), params={"project_id": project["id"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["project_id"] == project["id"]
+    assert response.json()["admin_roles"] == ["project_manager"]
+    slug = await project_client.get(route, headers=auth_headers(), params={"project_id": project["slug"]})
+    assert slug.status_code == 404, slug.text
+    assert slug.json()["error"]["code"] == "project_authorization_resource_not_found"
     missing = await project_client.get(route, headers=auth_headers(), params={"project_id": str(uuid4())})
     assert missing.status_code == 404, missing.text
     assert missing.json()["error"]["code"] == "project_authorization_resource_not_found"

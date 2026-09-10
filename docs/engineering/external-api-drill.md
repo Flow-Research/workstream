@@ -174,6 +174,11 @@ The context selector similarly preserves
 [API-DRILL-008](external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
 with a valid-selector and unchanged-project control before continuing. The
 query now rejects NUL before lookup; neither fix changes authorization or storage.
+Identity-link lifecycle probes additionally reject malformed reason fields and
+unknown fields, compare the entire stored public link view after each denial,
+and preserve every unchanged field across revoke/reactivate. Reactivation must
+clear `revoked_at` while recording its own timestamp; a partial status assertion
+does not stand in for the full response contract.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

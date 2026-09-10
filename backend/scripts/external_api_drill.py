@@ -1117,9 +1117,22 @@ async def service_actor_cases(drill, issuer, admin, outsider):
     # An established service identity is not an administrative grant.
     await drill.call("service_cannot_provision", "POST", route, token=service,
                      payload=payload, expected=403)
+    link = await drill.call("service_link_baseline", "GET", actor_route + "/identity-links",
+        path=actor_path + "/identity-links", token=admin,
+        values={key: value for key, value in link.items() if key != "last_verified_at"},
+        checks={"last_verified_at": lambda value: value is None or timestamp_value(value)})
     for action, state in (("revoke", "revoked"), ("reactivate", "active")):
         mutation = "/api/v1/actor-identity-links/{identity_link_id}/" + action
         path = f'/api/v1/actor-identity-links/{link["identity_link_id"]}/{action}'
+        for label, invalid in (("missing", {}), ("null", {"reason": None}),
+                ("bool", {"reason": True}), ("nul", {"reason": "before\x00after"}),
+                ("overflow", {"reason": "é" * 251}),
+                ("extra", {"reason": "Valid", "unexpected": True})):
+            await drill.call(f"link_{action}_{label}", "POST", mutation, path=path,
+                token=admin, payload=invalid, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+            await drill.call(f"link_{action}_{label}_unchanged", "GET", actor_route + "/identity-links",
+                path=actor_path + "/identity-links", token=admin, values=link, exact_fields=link.keys())
         mutation_key = {"Idempotency-Key": str(uuid4())}
         result = await drill.call("service_link_" + action, "POST", mutation,
             path=path, token=admin, payload={"reason": " Verify binding lifecycle "}, headers=mutation_key,
@@ -1128,10 +1141,14 @@ async def service_actor_cases(drill, issuer, admin, outsider):
         await drill.call("service_link_" + action + "_replay", "POST", mutation,
             path=path, token=admin, payload={"reason": " Verify binding lifecycle "},
             headers=mutation_key, values=result)
-        await drill.call("service_link_" + action + "_readback", "GET", actor_route + "/identity-links",
+        changed_timestamp = "revoked_at" if action == "revoke" else "reactivated_at"
+        expected_link = link | {"status": state}
+        if action == "reactivate":
+            expected_link["revoked_at"] = None
+        link = await drill.call("service_link_" + action + "_readback", "GET", actor_route + "/identity-links",
             path=actor_path + "/identity-links", token=admin,
-            values={"identity_link_id": link["identity_link_id"], "actor_profile_id": actor_id,
-                    "status": state}, checks={"revoked_at" if action == "revoke" else "reactivated_at": timestamp_value})
+            values={key: value for key, value in expected_link.items() if key != changed_timestamp},
+            checks={changed_timestamp: timestamp_value}, exact_fields=link.keys())
         await drill.call("service_link_" + action + "_admission", "POST", route, token=service,
             payload=payload, expected=403,
             values={"error.code": "identity_link_revoked" if action == "revoke" else "permission_not_granted"})

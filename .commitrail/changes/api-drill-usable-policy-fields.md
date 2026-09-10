@@ -37,7 +37,7 @@ defects stay failing and are communicated before deciding repair ownership.
 
 Repair design: reject embedded NUL in the existing self-profile text validator
 and authorization-context query constraint before PostgreSQL receives it. Do not
-sanitize it into another value, change UUID/slug selection, narrow ordinary
+sanitize it into another value, change primary-key selection, narrow ordinary
 Unicode text, alter authority or introduce a new validation subsystem. Prove
 422 `invalid_request` with `retryable: false`, unchanged profile business fields,
 and subsequent valid profile/project-selector controls through HTTP and the live
