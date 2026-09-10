@@ -364,6 +364,26 @@ class Drill:
             raise
 
 
+async def health_cases(drill):
+    """The public liveness contract is exact JSON, not database/provider readiness."""
+    await drill.call("health", "GET", "/api/v1/health",
+                     values={"status": "ok"}, exact_fields=("status",))
+
+
+async def profile_readback(drill, token, name, expected, previous=None):
+    """Check all profile fields without mistaking admission timestamps for mutations."""
+    def not_older(value, field):
+        return timestamp_value(value) and (previous is None or
+            datetime.fromisoformat(value.replace("Z", "+00:00")) >=
+            datetime.fromisoformat(previous[field].replace("Z", "+00:00")))
+
+    return await drill.call(name, "GET", "/api/v1/actors/me", token=token,
+        values=expected,
+        checks={"updated_at": lambda value: not_older(value, "updated_at"),
+                "last_seen_at": lambda value: not_older(value, "last_seen_at")},
+        exact_fields=(*expected, "updated_at", "last_seen_at"))
+
+
 async def profile_cases(drill, issuer, token):
     route = "/api/v1/actors/me"
     for name, bad in (("missing", None), ("signature", TokenIssuer().issue("outsider")),
@@ -390,29 +410,38 @@ async def profile_cases(drill, issuer, token):
     await drill.call("profile_patch_omission_preserves_other", "PATCH", route, token=token,
         payload={"display_name": "single"},
         values=stable | {"display_name": "single", "contact_email": "opaque contact"})
-    await drill.call("profile_omission_readback", "GET", route, token=token,
-        values=stable | {"display_name": "single", "contact_email": "opaque contact"})
+    editable = {"display_name": "single", "contact_email": "opaque contact"}
+    previous = await profile_readback(drill, token, "profile_omission_readback",
+                                      stable | editable, actor)
     for field, limit in (("display_name", 200), ("contact_email", 320)):
         for label, value in (("text", "example"), ("limit", "x" * limit), ("null", None)):
             await drill.call(f"{field}_{label}", "PATCH", route, token=token,
                              payload={field: value}, values={field: value},
                              fields=(f"body.{field}",))
-            await drill.call(f"{field}_{label}_readback", "GET", route, token=token,
-                             values={field: value})
+            editable[field] = value
+            previous = await profile_readback(drill, token, f"{field}_{label}_readback",
+                                              stable | editable, previous)
         for label, value in (("too_long", "x" * (limit + 1)), ("blank", "  "), ("empty", ""),
                              ("type", {"unexpected": True}), ("number", 1), ("bool", True),
                              ("array", [])):
             await drill.call(f"{field}_{label}", "PATCH", route, token=token,
-                             payload={field: value}, expected=422, fields=(f"body.{field}",))
-            await drill.call(f"{field}_{label}_unchanged", "GET", route, token=token,
-                             values={field: None})
+                             payload={field: value}, expected=422, fields=(f"body.{field}",),
+                             values={"error.code": "invalid_request", "error.retryable": False})
+            previous = await profile_readback(drill, token, f"{field}_{label}_unchanged",
+                                              stable | editable, previous)
+        other = "contact_email" if field == "display_name" else "display_name"
+        await drill.call(f"{field}_mixed_invalid_atomic", "PATCH", route, token=token,
+            payload={field: "x" * (limit + 1), other: "must not persist"}, expected=422,
+            values={"error.code": "invalid_request", "error.retryable": False})
+        previous = await profile_readback(drill, token, f"{field}_mixed_invalid_unchanged",
+                                          stable | editable, previous)
     await drill.call("empty_profile_patch", "PATCH", route, token=token, payload={}, expected=422)
     await drill.call("unknown_profile_field", "PATCH", route, token=token,
                      payload={"admin_roles": ["access_administrator"]}, expected=422)
     await drill.call("profile_unauthenticated_patch", "PATCH", route,
         payload={"display_name": "unauthorized"}, expected=401)
-    await drill.call("profile_failed_changes_readback", "GET", route, token=token,
-        values=stable | {"display_name": None, "contact_email": None})
+    await profile_readback(drill, token, "profile_failed_changes_readback",
+                           stable | editable, previous)
     return actor["actor_profile_id"]
 
 
@@ -437,6 +466,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
     route, path = "/api/v1/projects/{project_id}", f'/api/v1/projects/{project["id"]}'
     await drill.call("read_project", "GET", route, path=path, token=manager, values=payload)
     await drill.call("ungranted_project_denied", "GET", route, path=path, token=outsider, expected=404)
+    await authorization_context_input_cases(drill, manager, outsider, project)
     guide_route = route + "/guides"
     guide = await drill.call("create_guide", "POST", guide_route, path=path + "/guides",
         token=manager, expected=201, payload={"version": "initial", "content_markdown": "# Task guide",
@@ -457,6 +487,22 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
         payload={"reason": "Verify authority revocation"})
     await drill.call("revoked_project_creation", "POST", "/api/v1/projects", token=manager,
         payload=payload | {"slug": "revoked-" + uuid4().hex}, expected=403)
+
+
+async def authorization_context_input_cases(drill, manager, outsider, project):
+    """Use a real project, normal public validation and concealed ungranted access."""
+    route = "/api/v1/actors/me/authorization-context"
+    for name, query in (("missing", ""), ("empty", "?project_id="),
+                        ("too_long", "?" + urlencode({"project_id": "x" * 101}))):
+        await drill.call("context_selector_" + name, "GET", route, path=route + query,
+            token=manager, expected=422,
+            values={"error.code": "invalid_request", "error.retryable": False},
+            fields=("query.project_id",))
+    await drill.call("context_ungranted", "GET", route,
+        path=route + "?" + urlencode({"project_id": project["id"]}), token=outsider,
+        expected=404, values={"error.code": "project_authorization_resource_not_found"})
+    await drill.call("context_unauthenticated", "GET", route,
+        path=route + "?" + urlencode({"project_id": project["id"]}), expected=401)
 
 
 async def policy_cases(drill, manager, groute, gpath, outsider):
@@ -706,6 +752,9 @@ async def authority_cases(drill, admin, manager, outsider, manager_id, project):
     await drill.call("scoped_authorization_context", "GET", "/api/v1/actors/me/authorization-context",
         path=f'/api/v1/actors/me/authorization-context?project_id={project["id"]}', token=outsider,
         values={"project_id": project["id"], "admin_roles": ["project_manager"]})
+    await drill.call("context_stored_foreign_project", "GET", "/api/v1/actors/me/authorization-context",
+        path=f'/api/v1/actors/me/authorization-context?project_id={other["id"]}', token=outsider,
+        expected=404, values={"error.code": "project_authorization_resource_not_found"})
     for suffix in ("contributor-candidates", "role-grants"):
         await drill.call("list_" + suffix, "GET", route + "/" + suffix,
             path=f'/api/v1/projects/{project["id"]}/{suffix}?limit=1', token=outsider)
@@ -893,7 +942,10 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
         await drill.call("contributor_context_" + role, "GET", "/api/v1/actors/me/authorization-context",
             path=f'/api/v1/actors/me/authorization-context?project_id={project["id"]}', token=contributor,
             values={"actor_profile_id": actor["actor_profile_id"], "project_id": project["id"],
-                    "status": "active", "admin_roles": [], "project_roles": [role]})
+                    "status": "active", "admin_roles": [], "project_roles": [role],
+                    "effective_action_ids": ["project.read"]},
+            exact_fields=("actor_profile_id", "project_id", "status", "admin_roles",
+                          "project_roles", "effective_action_ids"))
         revoked = await drill.call("revoke_project_" + role, "POST", route + "/{grant_id}/revoke",
             path=read_path + "/revoke", token=manager, payload={"reason": "End role probe"},
             values=result | {"status": "revoked", "version": 2})
@@ -905,6 +957,9 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
             checks={"revoked_at": timestamp_value})
         await drill.call("revoked_contributor_read_" + role, "GET", "/api/v1/projects/{project_id}",
             path=f'/api/v1/projects/{project["id"]}', token=contributor, expected=404)
+        await drill.call("revoked_contributor_context_" + role, "GET", "/api/v1/actors/me/authorization-context",
+            path=f'/api/v1/actors/me/authorization-context?project_id={project["id"]}', token=contributor,
+            expected=404, values={"error.code": "project_authorization_resource_not_found"})
     # Human-confirmed v0.1 scope has two roles. Do not implement adjudication to pass this probe.
     try:
         await drill.call("unsupported_adjudicator_rejected", "POST", route, path=path, token=manager,
@@ -1058,7 +1113,7 @@ async def run(args, report, *, scenario=None):
             document = openapi_document(await client.get("/openapi.json"))
             drill = Drill(client, document, report)
             drill.isolation_metadata = args.isolation_metadata
-            await drill.call("health", "GET", "/api/v1/health")
+            await health_cases(drill)
             if scenario is not None:
                 await scenario(drill, issuer, env)
                 return

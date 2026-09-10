@@ -151,6 +151,55 @@ class ContractTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_health_requires_exact_public_body(self):
+        for body in ({"status": "ok"}, {"status": "down"}, {},
+                     {"status": "ok", "secret": "unexpected"}):
+            def handler(request):
+                self.assertNotIn("authorization", request.headers)
+                return httpx.Response(200, json=body, headers={
+                    key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")})
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                         base_url="http://127.0.0.1") as client:
+                report = {}
+                probe = drill.Drill(client, {"paths": {"/api/v1/health": {"get": {}}}}, report)
+                if body == {"status": "ok"}:
+                    await drill.health_cases(probe)
+                    self.assertIn("response.200.status",
+                                  report["operations"]["GET /api/v1/health"]["field_cases"])
+                else:
+                    with self.assertRaises(drill.ProbeFailure):
+                        await drill.health_cases(probe)
+                    self.assertEqual(report["cases"][0]["result"], "failed")
+
+    async def test_profile_readback_rejects_cross_field_and_time_regressions(self):
+        from uuid import uuid4
+        expected = {"actor_profile_id": str(uuid4()), "actor_kind": "human", "status": "active",
+                    "domains": ["contributor"], "admin_roles": [], "project_role_grants": [],
+                    "display_name": None, "contact_email": "unchanged",
+                    "created_at": "2026-01-01T00:00:00Z"}
+        previous = expected | {"updated_at": "2026-01-01T00:00:01Z",
+                               "last_seen_at": "2026-01-01T00:00:01Z"}
+        good = previous | {"updated_at": "2026-01-01T00:00:02Z",
+                           "last_seen_at": "2026-01-01T00:00:02Z"}
+        for change in ({}, {"contact_email": "silently changed"},
+                       {"admin_roles": ["access_administrator"]}, {"status": "suspended"},
+                       {"actor_profile_id": str(uuid4())}, {"unexpected": True},
+                       {"updated_at": "2026-01-01T00:00:00Z"}, {"last_seen_at": None}):
+            def handler(request):
+                return httpx.Response(200, json=good | change, headers={
+                    key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")})
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                         base_url="http://127.0.0.1") as client:
+                report = {}
+                probe = drill.Drill(client, {"paths": {"/api/v1/actors/me": {"get": {}}}}, report)
+                call = drill.profile_readback(probe, "test-token", "readback", expected, previous)
+                if not change:
+                    self.assertEqual(await call, good)
+                else:
+                    with self.assertRaises(drill.ProbeFailure):
+                        await call
+                    self.assertEqual(report["operations"]["GET /api/v1/actors/me"]["field_cases"], {})
+
     async def test_policy_successor_rejects_changed_generation_or_semantics(self):
         """A denied-write mutation or wrong replacement cannot become field proof."""
         from uuid import uuid4

@@ -135,7 +135,7 @@ route with an unmet prerequisite is not automatically a usable adapter tool;
 an operator-only route is not an ordinary contributor tool. Discovery entries
 remain diagnostic navigation, not a denominator of APIs to certify.
 
-The next field extension stays on the already usable draft-guide review-policy
+The policy field extension covers the already usable draft-guide review-policy
 and revision-policy PUT operations. It probes optional-field rejection, explicit
 nondefault values, malformed/missing update headers, random mismatched selectors and
 unauthorized mutations. Fresh authorized successors prove exact generation and
@@ -144,6 +144,21 @@ fields restore defaults; omitted `human_review_required` preserves the selected
 predecessor's mode. Only an explicit setting changes that mode. These checks
 establish policy configuration behavior, not runtime review or acceptance.
 The random-selector probe is not evidence of stored cross-project isolation.
+
+The endpoint-by-endpoint extension stays within the 29 canonical operations
+already exercised by these two drills. Obsolete `/auth/me`, `/workers/me/profile`
+and old task surfaces are not MCP candidates or targets of this extension;
+their removal belongs to the task owner. Do not expand this set merely because
+an operation appears in OpenAPI.
+
+The first checks cover exact unauthenticated health JSON, complete self-profile
+business-field readback after valid and rejected updates, mixed valid/invalid
+PATCH atomicity, and self authorization-context selectors, exact contributor
+actions, revocation and an actual stored foreign project. Health is liveness,
+not database/storage readiness. Profile reads intentionally advance admission
+timestamps, so unchanged-business-state assertions compare every stable field
+and require valid monotonic `updated_at`/`last_seen_at`, not timestamp equality.
+These cases do not certify the remaining endpoint contracts automatically.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

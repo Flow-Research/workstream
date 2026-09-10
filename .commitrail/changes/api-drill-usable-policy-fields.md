@@ -1,8 +1,8 @@
-# Usable public API policy-field drill
+# Canonical public API field drill
 
 - Initiative: None
 - Durable disposition: Complete
-- Intended merge outcome: Extend evidence for currently usable draft-guide policy APIs without treating unfinished routes as drill targets.
+- Intended merge outcome: Extend endpoint-by-endpoint contract evidence for the 29 selected canonical public operations without treating obsolete or unfinished routes as drill targets.
 
 ## Intent
 
@@ -12,11 +12,20 @@ for 29 operations; this does not prove every field combination. Review/revision
 policy creation, replacement and replay already work. Extend missing optional
 field and conditional-update probes without repeating unchanged work by default.
 
+The human expanded this same PR to drill the 29 already exercised canonical
+operations, one by one. Obsolete API removal belongs to the task agent; this
+change neither exercises nor removes those routes. No new product behavior is
+authorized. Each endpoint is assessed against its actual schema, authority and
+service owner before adding cases, with meaningful omissions, type/boundary
+cases, response values, persistence, replay and denied side effects where
+applicable. A passing example or aggregate count is not endpoint completion.
+
 ## Bounded change
 
 Allowed: `backend/scripts/external_api_drill.py`,
 `scripts/test_external_api_drill.py`, `docs/engineering/external-api-drill.md`,
 `docs/engineering/external-api-drill-findings.md`, `docs/roadmap_status.md`,
+`backend/scripts/admin_api_drill.py`, `scripts/test_admin_api_drill.py`,
 this record, and existing ignored local roadmap exports if present.
 
 Prohibited: product code, public schema changes, migrations, hidden routes,
@@ -27,12 +36,25 @@ defects stay failing and are communicated before deciding repair ownership.
 ## Design and alternatives
 
 Reuse the existing client, isolated runner and field indexes. Extend only the
-two usable draft-guide policy PUT operations. Keep existing tests and named
+29 canonical operations selected in the external/admin drills. Keep existing tests and named
 evidence. Do not create another drill framework or treat successful empty reads
 as proof of unavailable populated lifecycles. OpenAPI discovery is navigation,
 not a readiness list. Bootstrap is operator setup, not an external endpoint.
 
 ## Acceptance criteria
+
+The policy criteria below remain required. Additionally, inspect and drill in
+this order: health; self profile GET/PATCH; self authorization context; actor
+and identity-link reads/lifecycle; permission and administrative-role discovery;
+administrative grant reads/issue/revoke; service provisioning; project create/read;
+contributor candidates; project grant reads/issue/revoke; guide create/update;
+review/revision policy PUT. Record unchecked behavior explicitly. Do not claim
+full completion until every selected endpoint's applicable checklist has passing
+named evidence on a compatible target. Keep bootstrap as setup, not a 30th API.
+
+Initial execution step: assert the health body's exact value/shape without
+authentication, and strengthen full-state profile readback after rejected input.
+Reuse existing valid controls and the normal token verifier and rate budget.
 
 1. Probe remaining optional field null/type/closed-value behavior, valid nondefault
    values, strict human-review boolean values and omission/default restoration.

@@ -200,6 +200,11 @@ cannot be reused as post-submission review-gate evidence. See the
   probes additionally cover optional fields, conditional headers and exact
   selected-lineage preservation after rejection, including preservation of the
   human-review mode when omitted during replacement.
+  Endpoint-by-endpoint probes also check exact health output, full self-profile
+  business-state preservation after rejected updates, and contributor context
+  actions/revocation with real foreign-project concealment. These strengthen
+  evidence within the selected 29 canonical operations, not obsolete routes or
+  an exhaustive API-completion claim.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions
